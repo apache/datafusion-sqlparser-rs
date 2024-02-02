@@ -1747,6 +1747,7 @@ pub enum Statement {
         if_exists: bool,
         only: bool,
         operations: Vec<AlterTableOperation>,
+        location: Option<HiveSetLocation>,
     },
     /// ```sql
     /// ALTER INDEX
@@ -2162,7 +2163,7 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute { name: Ident, parameters: Vec<Expr>, using: Option<Expr> },
+    Execute { name: Ident, parameters: Vec<Expr>, using: Vec<Expr> },
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
     /// ```
@@ -2986,7 +2987,12 @@ impl fmt::Display for Statement {
                         Some(HiveRowFormat::SERDE { class }) => {
                             write!(f, " ROW FORMAT SERDE '{class}'")?
                         }
-                        Some(HiveRowFormat::DELIMITED) => write!(f, " ROW FORMAT DELIMITED")?,
+                        Some(HiveRowFormat::DELIMITED { delimiters }) => {
+                            write!(f, " ROW FORMAT DELIMITED")?;
+                            if delimiters.len() > 0 {
+                                write!(f, " {}", display_separated(delimiters, " "))?;
+                            }
+                        },
                         None => (),
                     }
                     match storage {
@@ -3016,12 +3022,10 @@ impl fmt::Display for Statement {
                     }
                 }
                 if *external {
-                    write!(
-                        f,
-                        " STORED AS {} LOCATION '{}'",
-                        file_format.as_ref().unwrap(),
-                        location.as_ref().unwrap()
-                    )?;
+                    if file_format.is_some() {
+                        write!( f, " STORED AS {}", file_format.as_ref().unwrap())?;
+                    }
+                    write!(f, " LOCATION '{}'", location.as_ref().unwrap())?;
                 }
                 if !table_properties.is_empty() {
                     write!(
@@ -3271,6 +3275,7 @@ impl fmt::Display for Statement {
                 if_exists,
                 only,
                 operations,
+                location,
             } => {
                 write!(f, "ALTER TABLE ")?;
                 if *if_exists {
@@ -3283,7 +3288,11 @@ impl fmt::Display for Statement {
                     f,
                     "{name} {operations}",
                     operations = display_comma_separated(operations)
-                )
+                )?;
+                if let Some(loc) = location {
+                    write!(f, " {loc}")?
+                }
+                Ok(())
             }
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
@@ -3595,8 +3604,8 @@ impl fmt::Display for Statement {
                 if !parameters.is_empty() {
                     write!(f, "({})", display_comma_separated(parameters))?;
                 }
-                if let Some(using) = using {
-                    write!(f, " USING {using}")?;
+                if using.len() > 0 {
+                    write!(f, " USING {}", display_comma_separated(using))?;
                 };
                 Ok(())
             }
@@ -4594,7 +4603,50 @@ pub enum HiveDistributionStyle {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum HiveRowFormat {
     SERDE { class: String },
-    DELIMITED,
+    DELIMITED {
+        delimiters: Vec<HiveRowDelimiter>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct HiveRowDelimiter {
+    pub delimiter: HiveDelimiter,
+    pub char: Ident
+}
+
+impl fmt::Display for HiveRowDelimiter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ", self.delimiter)?;
+        write!(f, "{}", self.char)
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum HiveDelimiter {
+    FieldsTerminatedBy,
+    FieldsEscapedBy,
+    CollectionItemsTerminatedBy,
+    MapKeysTerminatedBy,
+    LinesTerminatedBy,
+    NullDefinedAs
+}
+
+impl fmt::Display for HiveDelimiter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use HiveDelimiter::*;
+        f.write_str(match self {
+            FieldsTerminatedBy => { "FIELDS TERMINATED BY" }
+            FieldsEscapedBy => { "ESCAPED BY" }
+            CollectionItemsTerminatedBy => { "COLLECTION ITEMS TERMINATED BY" }
+            MapKeysTerminatedBy => { "MAP KEYS TERMINATED BY" }
+            LinesTerminatedBy => { "LINES TERMINATED BY" }
+            NullDefinedAs => { "NULL DEFINED AS" }
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5507,6 +5559,23 @@ impl fmt::Display for LockTableType {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct HiveSetLocation {
+    pub has_set: bool,
+    pub location: Ident,
+}
+
+impl fmt::Display for HiveSetLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.has_set {
+            write!(f, "SET ")?;
+        }
+        write!(f, "LOCATION {}", self.location)
     }
 }
 

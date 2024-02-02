@@ -125,6 +125,18 @@ fn test_alter_partition() {
 }
 
 #[test]
+fn test_alter_with_location() {
+    let alter = "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1) LOCATION 's3://...'";
+    hive().verified_stmt(alter);
+}
+
+#[test]
+fn test_alter_with_set_location() {
+    let alter = "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1) SET LOCATION 's3://...'";
+    hive().verified_stmt(alter);
+}
+
+#[test]
 fn test_add_partition() {
     let add = "ALTER TABLE db.table ADD IF NOT EXISTS PARTITION (a = 'asdf', b = 2)";
     hive().verified_stmt(add);
@@ -191,6 +203,12 @@ fn create_temp_table() {
 
     hive().verified_stmt(query);
     hive().one_statement_parses_to(query2, query);
+}
+
+#[test]
+fn create_delimited_table() {
+    let query = "CREATE EXTERNAL TABLE tab (cola STRING, colb BIGINT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' ESCAPED BY '\"' MAP KEYS TERMINATED BY '\"' LOCATION 's3://...'";
+    hive().verified_stmt(query);
 }
 
 #[test]

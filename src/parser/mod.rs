@@ -4138,7 +4138,76 @@ impl<'a> Parser<'a> {
                 let class = self.parse_literal_string()?;
                 Ok(HiveRowFormat::SERDE { class })
             }
-            _ => Ok(HiveRowFormat::DELIMITED),
+            _ => {
+                let mut row_delimiters = vec![];
+
+                loop {
+                    match self.parse_one_of_keywords(&[Keyword::FIELDS, Keyword::COLLECTION, Keyword::MAP, Keyword::LINES, Keyword::NULL]) {
+                        Some(Keyword::FIELDS) => {
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::FieldsTerminatedBy,
+                                    char: self.parse_identifier(false)?
+                                });
+
+                                if self.parse_keywords(&[Keyword::ESCAPED, Keyword::BY]) {
+                                    row_delimiters.push(HiveRowDelimiter {
+                                        delimiter: HiveDelimiter::FieldsEscapedBy,
+                                        char: self.parse_identifier(false)?
+                                    });
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        Some(Keyword::COLLECTION) => {
+                            if self.parse_keywords(&[Keyword::ITEMS, Keyword::TERMINATED, Keyword::BY]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
+                                    char: self.parse_identifier(false)?
+                                });
+                            } else {
+                                break;
+                            }
+                        }
+                        Some(Keyword::MAP) => {
+                            if self.parse_keywords(&[Keyword::KEYS, Keyword::TERMINATED, Keyword::BY]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::MapKeysTerminatedBy,
+                                    char: self.parse_identifier(false)?
+                                });
+                            } else {
+                                break;
+                            }
+                        }
+                        Some(Keyword::LINES) => {
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::LinesTerminatedBy,
+                                    char: self.parse_identifier(false)?
+                                });
+                            } else {
+                                break;
+                            }
+                        }
+                        Some(Keyword::NULL) => {
+                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::NullDefinedAs,
+                                    char: self.parse_identifier(false)?
+                                });
+                            } else {
+                                break;
+                            }
+                        }
+                        _ => { break; }
+                    }
+                }
+
+                Ok(HiveRowFormat::DELIMITED {
+                    delimiters: row_delimiters
+                })
+            },
         }
     }
 
@@ -5172,11 +5241,26 @@ impl<'a> Parser<'a> {
                 let table_name = self.parse_object_name(false)?;
 
                 let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
+
+                let mut location = None;
+                if self.parse_keyword(Keyword::LOCATION) {
+                    location = Some(HiveSetLocation{
+                        has_set: false,
+                        location: self.parse_identifier(false)?
+                    });
+                } else if self.parse_keywords(&[Keyword::SET, Keyword::LOCATION]) {
+                    location = Some(HiveSetLocation{
+                        has_set: true,
+                        location: self.parse_identifier(false)?
+                    });
+                }
+
                 Ok(Statement::AlterTable {
                     name: table_name,
                     if_exists,
                     only,
                     operations,
+                    location
                 })
             }
             Keyword::INDEX => {
@@ -8634,10 +8718,13 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
         }
 
-        let using = if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_expr()?)
-        } else {
-            None
+        let mut using = vec![];
+        if self.parse_keyword(Keyword::USING) {
+            using.push(self.parse_expr()?);
+
+            while self.consume_token(&Token::Comma) {
+                using.push(self.parse_expr()?);
+            }
         };
 
         Ok(Statement::Execute { name, parameters, using })

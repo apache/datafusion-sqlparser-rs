@@ -106,6 +106,9 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+
+    // allow parenthesis query after insert into
+    verified_stmt("INSERT INTO tbla (cola) (SELECT cola FROM tblb)");
 }
 
 #[test]

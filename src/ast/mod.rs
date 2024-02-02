@@ -1404,6 +1404,211 @@ pub enum Password {
     NullPassword,
 }
 
+/// Represents an expression assignment within a variable `DECLARE` statement.
+///
+/// Examples:
+/// ```sql
+/// DECLARE variable_name := 42
+/// DECLARE variable_name DEFAULT 42
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DeclareAssignment {
+    /// Plain expression specified.
+    Expr(Box<Expr>),
+
+    /// Expression assigned via the `DEFAULT` keyword
+    Default(Box<Expr>),
+
+    /// Expression assigned via the `:=` syntax
+    ///
+    /// Example:
+    /// ```sql
+    /// DECLARE variable_name := 42;
+    /// ```
+    DuckAssignment(Box<Expr>),
+
+    /// Expression via the `FOR` keyword
+    ///
+    /// Example:
+    /// ```sql
+    /// DECLARE c1 CURSOR FOR res
+    /// ```
+    For(Box<Expr>),
+}
+
+impl fmt::Display for DeclareAssignment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DeclareAssignment::Expr(expr) => {
+                write!(f, "{expr}")
+            }
+            DeclareAssignment::Default(expr) => {
+                write!(f, "DEFAULT {expr}")
+            }
+            DeclareAssignment::DuckAssignment(expr) => {
+                write!(f, ":= {expr}")
+            }
+            DeclareAssignment::For(expr) => {
+                write!(f, "FOR {expr}")
+            }
+        }
+    }
+}
+
+/// Represents the type of a `DECLARE` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DeclareType {
+    /// Cursor variable type. e.g. [Snowflake] [Postgres]
+    ///
+    /// [Snowflake]: https://docs.snowflake.com/en/developer-guide/snowflake-scripting/cursors#declaring-a-cursor
+    /// [Postgres]: https://www.postgresql.org/docs/current/plpgsql-cursors.html
+    Cursor,
+
+    /// Result set variable type. [Snowflake]
+    ///
+    /// Syntax:
+    /// ```text
+    /// <resultset_name> RESULTSET [ { DEFAULT | := } ( <query> ) ] ;
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/snowflake-scripting/declare#resultset-declaration-syntax
+    ResultSet,
+
+    /// Exception declaration syntax. [Snowflake]
+    ///
+    /// Syntax:
+    /// ```text
+    /// <exception_name> EXCEPTION [ ( <exception_number> , '<exception_message>' ) ] ;
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/snowflake-scripting/declare#exception-declaration-syntax
+    Exception,
+}
+
+impl fmt::Display for DeclareType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DeclareType::Cursor => {
+                write!(f, "CURSOR")
+            }
+            DeclareType::ResultSet => {
+                write!(f, "RESULTSET")
+            }
+            DeclareType::Exception => {
+                write!(f, "EXCEPTION")
+            }
+        }
+    }
+}
+
+/// A `DECLARE` statement.
+/// [Postgres] [Snowflake] [BigQuery]
+///
+/// Examples:
+/// ```sql
+/// DECLARE variable_name := 42
+/// DECLARE liahona CURSOR FOR SELECT * FROM films;
+/// ```
+///
+/// [Postgres]: https://www.postgresql.org/docs/current/sql-declare.html
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/snowflake-scripting/declare
+/// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#declare
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Declare {
+    /// The name(s) being declared.
+    /// Example: `DECLARE a, b, c DEFAULT 42;
+    pub names: Vec<Ident>,
+    /// Data-type assigned to the declared variable.
+    /// Example: `DECLARE x INT64 DEFAULT 42;
+    pub data_type: Option<DataType>,
+    /// Expression being assigned to the declared variable.
+    pub assignment: Option<DeclareAssignment>,
+    /// Represents the type of the declared variable.
+    pub declare_type: Option<DeclareType>,
+    /// Causes the cursor to return data in binary rather than in text format.
+    pub binary: Option<bool>,
+    /// None = Not specified
+    /// Some(true) = INSENSITIVE
+    /// Some(false) = ASENSITIVE
+    pub sensitive: Option<bool>,
+    /// None = Not specified
+    /// Some(true) = SCROLL
+    /// Some(false) = NO SCROLL
+    pub scroll: Option<bool>,
+    /// None = Not specified
+    /// Some(true) = WITH HOLD, specifies that the cursor can continue to be used after the transaction that created it successfully commits
+    /// Some(false) = WITHOUT HOLD, specifies that the cursor cannot be used outside of the transaction that created it
+    pub hold: Option<bool>,
+    /// `FOR <query>` clause in a CURSOR declaration.
+    pub for_query: Option<Box<Query>>,
+}
+
+impl fmt::Display for Declare {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Declare {
+            names,
+            data_type,
+            assignment,
+            declare_type,
+            binary,
+            sensitive,
+            scroll,
+            hold,
+            for_query,
+        } = self;
+        write!(f, "{}", display_comma_separated(names))?;
+
+        if let Some(true) = binary {
+            write!(f, " BINARY")?;
+        }
+
+        if let Some(sensitive) = sensitive {
+            if *sensitive {
+                write!(f, " INSENSITIVE")?;
+            } else {
+                write!(f, " ASENSITIVE")?;
+            }
+        }
+
+        if let Some(scroll) = scroll {
+            if *scroll {
+                write!(f, " SCROLL")?;
+            } else {
+                write!(f, " NO SCROLL")?;
+            }
+        }
+
+        if let Some(declare_type) = declare_type {
+            write!(f, " {declare_type}")?;
+        }
+
+        if let Some(hold) = hold {
+            if *hold {
+                write!(f, " WITH HOLD")?;
+            } else {
+                write!(f, " WITHOUT HOLD")?;
+            }
+        }
+
+        if let Some(query) = for_query {
+            write!(f, " FOR {query}")?;
+        }
+
+        if let Some(data_type) = data_type {
+            write!(f, " {data_type}")?;
+        }
+
+        if let Some(expr) = assignment {
+            write!(f, " {expr}")?;
+        }
+        Ok(())
+    }
+}
+
 /// Sql options of a `CREATE TABLE` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1824,25 +2029,7 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Declare {
-        /// Cursor name
-        name: Ident,
-        /// Causes the cursor to return data in binary rather than in text format.
-        binary: bool,
-        /// None = Not specified
-        /// Some(true) = INSENSITIVE
-        /// Some(false) = ASENSITIVE
-        sensitive: Option<bool>,
-        /// None = Not specified
-        /// Some(true) = SCROLL
-        /// Some(false) = NO SCROLL
-        scroll: Option<bool>,
-        /// None = Not specified
-        /// Some(true) = WITH HOLD, specifies that the cursor can continue to be used after the transaction that created it successfully commits
-        /// Some(false) = WITHOUT HOLD, specifies that the cursor cannot be used outside of the transaction that created it
-        hold: Option<bool>,
-        query: Box<Query>,
-    },
+    Declare { stmts: Vec<Declare> },
     /// ```sql
     /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
     ///     [ WITH ] [ SCHEMA schema_name ]
@@ -2388,47 +2575,9 @@ impl fmt::Display for Statement {
                 write!(f, "{statement}")
             }
             Statement::Query(s) => write!(f, "{s}"),
-            Statement::Declare {
-                name,
-                binary,
-                sensitive,
-                scroll,
-                hold,
-                query,
-            } => {
-                write!(f, "DECLARE {name} ")?;
-
-                if *binary {
-                    write!(f, "BINARY ")?;
-                }
-
-                if let Some(sensitive) = sensitive {
-                    if *sensitive {
-                        write!(f, "INSENSITIVE ")?;
-                    } else {
-                        write!(f, "ASENSITIVE ")?;
-                    }
-                }
-
-                if let Some(scroll) = scroll {
-                    if *scroll {
-                        write!(f, "SCROLL ")?;
-                    } else {
-                        write!(f, "NO SCROLL ")?;
-                    }
-                }
-
-                write!(f, "CURSOR ")?;
-
-                if let Some(hold) = hold {
-                    if *hold {
-                        write!(f, "WITH HOLD ")?;
-                    } else {
-                        write!(f, "WITHOUT HOLD ")?;
-                    }
-                }
-
-                write!(f, "FOR {query}")
+            Statement::Declare { stmts } => {
+                write!(f, "DECLARE ")?;
+                write!(f, "{}", display_separated(stmts, "; "))
             }
             Statement::Fetch {
                 name,

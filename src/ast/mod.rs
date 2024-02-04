@@ -1436,6 +1436,23 @@ impl fmt::Display for CreateTableOptions {
     }
 }
 
+/// A `FROM` clause within a `DELETE` statement.
+///
+/// Syntax
+/// ```sql
+/// [FROM] table
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FromTable {
+    /// An explicit `FROM` keyword was specified.
+    WithFromKeyword(Vec<TableWithJoins>),
+    /// BigQuery: `FROM` keyword was omitted.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement>
+    WithoutKeyword(Vec<TableWithJoins>),
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1599,7 +1616,7 @@ pub enum Statement {
         /// Multi tables delete are supported in mysql
         tables: Vec<ObjectName>,
         /// FROM
-        from: Vec<TableWithJoins>,
+        from: FromTable,
         /// USING (Snowflake, Postgres, MySQL)
         using: Option<Vec<TableWithJoins>>,
         /// WHERE
@@ -2702,7 +2719,14 @@ impl fmt::Display for Statement {
                 if !tables.is_empty() {
                     write!(f, "{} ", display_comma_separated(tables))?;
                 }
-                write!(f, "FROM {}", display_comma_separated(from))?;
+                match from {
+                    FromTable::WithFromKeyword(from) => {
+                        write!(f, "FROM {}", display_comma_separated(from))?;
+                    }
+                    FromTable::WithoutKeyword(from) => {
+                        write!(f, "{}", display_comma_separated(from))?;
+                    }
+                }
                 if let Some(using) = using {
                     write!(f, " USING {}", display_comma_separated(using))?;
                 }

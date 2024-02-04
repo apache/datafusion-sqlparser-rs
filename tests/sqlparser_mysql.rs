@@ -289,6 +289,36 @@ fn parse_show_columns() {
 }
 
 #[test]
+fn parse_show_status() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW SESSION STATUS LIKE 'ssl_cipher'"),
+        Statement::ShowStatus {
+            filter: Some(ShowStatementFilter::Like("ssl_cipher".into())),
+            session: true,
+            global: false
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW GLOBAL STATUS LIKE 'ssl_cipher'"),
+        Statement::ShowStatus {
+            filter: Some(ShowStatementFilter::Like("ssl_cipher".into())),
+            session: false,
+            global: true
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW STATUS WHERE value = 2"),
+        Statement::ShowStatus {
+            filter: Some(ShowStatementFilter::Where(
+                mysql_and_generic().verified_expr("value = 2")
+            )),
+            session: false,
+            global: false
+        }
+    );
+}
+
+#[test]
 fn parse_show_tables() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW TABLES"),

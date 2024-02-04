@@ -324,6 +324,7 @@ fn parse_update_set_from() {
             Box::new(SnowflakeDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(MsSqlDialect {}),
+            Box::new(SQLiteDialect {}),
         ],
         options: None,
     };

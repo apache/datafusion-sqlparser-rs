@@ -8407,3 +8407,16 @@ fn test_buffer_reuse() {
     p.parse_statements().unwrap();
     let _ = p.into_tokens();
 }
+
+#[test]
+fn parse_json_table() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: None,
+    };
+
+    // JSON_TABLE is not supported in the generic dialect.
+    assert!(dialects
+        .parse_sql_statements("SELECT * FROM JSON_TABLE('[[1, 2], [3, 4]]', '$[*]' COLUMNS(a INT PATH '$[0]', b INT PATH '$[1]')) AS t")
+        .is_err());
+}

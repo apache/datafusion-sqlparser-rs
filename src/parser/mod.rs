@@ -7506,7 +7506,9 @@ impl<'a> Parser<'a> {
                 with_offset,
                 with_offset_alias,
             })
-        } else if self.parse_keyword(Keyword::JSON_TABLE) {
+        } else if dialect_of!(self is MySqlDialect)
+            && self.parse_keyword(Keyword::JSON_TABLE)
+        {
             self.expect_token(&Token::LParen)?;
             let json_expr = self.parse_expr()?;
             self.expect_token(&Token::Comma)?;

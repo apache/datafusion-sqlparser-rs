@@ -3,29 +3,34 @@ use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::spanned::Spanned;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input, parse_quote, Attribute, Data, DeriveInput,
-    Fields, GenericParam, Generics, Ident, Index, LitStr, Meta, Token
+    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Generics,
+    Ident, Index, LitStr, Meta, Token,
 };
-
 
 /// Implementation of `[#derive(Visit)]`
 #[proc_macro_derive(VisitMut, attributes(visit))]
 pub fn derive_visit_mut(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    derive_visit(input, &VisitType {
-        visit_trait: quote!(VisitMut),
-        visitor_trait: quote!(VisitorMut),
-        modifier: Some(quote!(mut)),
-    })
+    derive_visit(
+        input,
+        &VisitType {
+            visit_trait: quote!(VisitMut),
+            visitor_trait: quote!(VisitorMut),
+            modifier: Some(quote!(mut)),
+        },
+    )
 }
 
 /// Implementation of `[#derive(Visit)]`
 #[proc_macro_derive(Visit, attributes(visit))]
 pub fn derive_visit_immutable(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    derive_visit(input, &VisitType {
-        visit_trait: quote!(Visit),
-        visitor_trait: quote!(Visitor),
-        modifier: None,
-    })
+    derive_visit(
+        input,
+        &VisitType {
+            visit_trait: quote!(Visit),
+            visitor_trait: quote!(Visitor),
+            modifier: None,
+        },
+    )
 }
 
 struct VisitType {
@@ -34,15 +39,16 @@ struct VisitType {
     modifier: Option<TokenStream>,
 }
 
-fn derive_visit(
-    input: proc_macro::TokenStream,
-    visit_type: &VisitType,
-) -> proc_macro::TokenStream {
+fn derive_visit(input: proc_macro::TokenStream, visit_type: &VisitType) -> proc_macro::TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
 
-    let VisitType { visit_trait, visitor_trait, modifier } = visit_type;
+    let VisitType {
+        visit_trait,
+        visitor_trait,
+        modifier,
+    } = visit_type;
 
     let attributes = Attributes::parse(&input.attrs);
     // Add a bound `T: Visit` to every type parameter T.
@@ -87,7 +93,10 @@ impl Parse for WithIdent {
         let mut result = WithIdent { with: None };
         let ident = input.parse::<Ident>()?;
         if ident != "with" {
-            return Err(syn::Error::new(ident.span(), "Expected identifier to be `with`"));
+            return Err(syn::Error::new(
+                ident.span(),
+                "Expected identifier to be `with`",
+            ));
         }
         input.parse::<Token!(=)>()?;
         let s = input.parse::<LitStr>()?;
@@ -131,17 +140,26 @@ impl Attributes {
 }
 
 // Add a bound `T: Visit` to every type parameter T.
-fn add_trait_bounds(mut generics: Generics, VisitType{visit_trait, ..}: &VisitType) -> Generics {
+fn add_trait_bounds(mut generics: Generics, VisitType { visit_trait, .. }: &VisitType) -> Generics {
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {
-            type_param.bounds.push(parse_quote!(sqlparser::ast::#visit_trait));
+            type_param
+                .bounds
+                .push(parse_quote!(sqlparser::ast::#visit_trait));
         }
     }
     generics
 }
 
 // Generate the body of the visit implementation for the given type
-fn visit_children(data: &Data, VisitType{visit_trait, modifier, ..}: &VisitType) -> TokenStream {
+fn visit_children(
+    data: &Data,
+    VisitType {
+        visit_trait,
+        modifier,
+        ..
+    }: &VisitType,
+) -> TokenStream {
     match data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => {

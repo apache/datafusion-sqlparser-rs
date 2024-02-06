@@ -654,8 +654,9 @@ impl<'a> Parser<'a> {
         let table = self.parse_keyword(Keyword::TABLE);
         let only = self.parse_keyword(Keyword::ONLY);
 
-        let table_name = self.parse_object_name()?;
         let table_name = self.parse_object_name(false)?;
+        let table_names = self.parse_comma_separated(Parser::parse_object_name)?;
+
         let mut partitions = None;
         if self.parse_keyword(Keyword::PARTITION) {
             self.expect_token(&Token::LParen)?;
@@ -680,7 +681,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::Truncate {
-            table_name,
+            table_names,
             partitions,
             table,
             only,

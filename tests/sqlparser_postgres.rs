@@ -597,6 +597,13 @@ fn parse_alter_table_enable() {
 }
 
 #[test]
+fn parse_truncate_table() {
+    pg_and_generic()
+        .verified_stmt("TRUNCATE TABLE \"users\", \"orders\" RESTART IDENTITY RESTRICT");
+    pg_and_generic().verified_stmt("TRUNCATE users, orders RESTART IDENTITY");
+}
+
+#[test]
 fn parse_create_extension() {
     pg_and_generic().verified_stmt("CREATE EXTENSION extension_name");
     pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH SCHEMA schema_name");
@@ -3592,7 +3599,7 @@ fn parse_truncate() {
     let truncate = pg_and_generic().verified_stmt("TRUNCATE db.table_name");
     assert_eq!(
         Statement::Truncate {
-            table_name: ObjectName(vec![Ident::new("db"), Ident::new("table_name")]),
+            table_names: vec![ObjectName(vec![Ident::new("db"), Ident::new("table_name")])],
             partitions: None,
             table: false,
             only: false,
@@ -3609,7 +3616,7 @@ fn parse_truncate_with_options() {
         .verified_stmt("TRUNCATE TABLE ONLY db.table_name RESTART IDENTITY CASCADE");
     assert_eq!(
         Statement::Truncate {
-            table_name: ObjectName(vec![Ident::new("db"), Ident::new("table_name")]),
+            table_names: vec![ObjectName(vec![Ident::new("db"), Ident::new("table_name")])],
             partitions: None,
             table: true,
             only: true,

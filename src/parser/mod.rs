@@ -8767,15 +8767,15 @@ impl<'a> Parser<'a> {
             })
         }
     }
-    // INSTALL [extension_name]
+    
+    /// INSTALL [extension_name]
     pub fn parse_install(&mut self) -> Result<Statement, ParserError> {
         let extension_name = self.parse_identifier(false)?;
 
         Ok(Statement::Install { extension_name })
     }
 
-    // LOAD [extension_name]
-
+    /// LOAD [extension_name]
     pub fn parse_load(&mut self) -> Result<Statement, ParserError> {
         let extension_name = self.parse_identifier(false)?;
         Ok(Statement::Load { extension_name })

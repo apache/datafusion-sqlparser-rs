@@ -460,6 +460,7 @@ impl<'a> Parser<'a> {
         }
 
         let next_token = self.next_token();
+        println!("next_token: {:?}", next_token);
         match &next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::KILL => Ok(self.parse_kill()?),
@@ -516,6 +517,15 @@ impl<'a> Parser<'a> {
                 Keyword::MERGE => Ok(self.parse_merge()?),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => Ok(self.parse_pragma()?),
+                // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
+                Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                    Ok(self.parse_install()?)
+                }
+                // `LOAD` is duckdb specific https://duckdb.org/docs/extensions/overview
+                Keyword::LOAD if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                    Ok(self.parse_load()?)
+                }
+
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -8756,6 +8766,19 @@ impl<'a> Parser<'a> {
                 is_eq: false,
             })
         }
+    }
+    // INSTALL [extension_name]
+    pub fn parse_install(&mut self) -> Result<Statement, ParserError> {
+        let extension_name = self.parse_identifier(false)?;
+
+        Ok(Statement::Install { extension_name })
+    }
+
+    // LOAD [extension_name]
+
+    pub fn parse_load(&mut self) -> Result<Statement, ParserError> {
+        let extension_name = self.parse_identifier(false)?;
+        Ok(Statement::Load { extension_name })
     }
 
     /// ```sql

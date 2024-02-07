@@ -1520,6 +1520,20 @@ pub enum Statement {
         /// Only for mysql
         priority: Option<MysqlInsertPriority>,
     },
+    /// ```sql
+    /// INSTALL
+    /// ```
+    Install {
+        /// Only for DuckDB
+        extension_name: Ident,
+    },
+    /// ```sql
+    /// LOAD
+    /// ```
+    Load {
+        /// Only for DuckDB
+        extension_name: Ident,
+    },
     // TODO: Support ROW FORMAT
     Directory {
         overwrite: bool,
@@ -2610,6 +2624,13 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
+            Statement::Install {
+                extension_name: name,
+            } => write!(f, "INSTALL {name}"),
+
+            Statement::Load {
+                extension_name: name,
+            } => write!(f, "LOAD {name}"),
 
             Statement::Call(function) => write!(f, "CALL {function}"),
 

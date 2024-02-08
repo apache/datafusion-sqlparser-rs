@@ -8409,7 +8409,7 @@ fn test_buffer_reuse() {
 }
 
 #[test]
-fn parse_json_table() {
+fn parse_json_table_err() {
     let dialects = TestedDialects {
         dialects: vec![Box::new(GenericDialect {})],
         options: None,
@@ -8419,4 +8419,13 @@ fn parse_json_table() {
     assert!(dialects
         .parse_sql_statements("SELECT * FROM JSON_TABLE('[[1, 2], [3, 4]]', '$[*]' COLUMNS(a INT PATH '$[0]', b INT PATH '$[1]')) AS t")
         .is_err());
+}
+
+#[test]
+fn parse_json_table_as_identifier() {
+    let supported_dialects = all_dialects_except(|d| d.is::<AnsiDialect>() || d.is::<MySqlDialect>());
+
+    assert!(supported_dialects
+        .parse_sql_statements("SELECT * FROM json_table")
+        .is_ok());
 }

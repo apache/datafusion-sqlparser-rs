@@ -8410,7 +8410,8 @@ fn test_buffer_reuse() {
 
 #[test]
 fn parse_json_table_err() {
-    let unsupported_dialects = all_dialects_except(|d| d.is::<AnsiDialect>() || d.is::<MySqlDialect>());
+    let unsupported_dialects =
+        all_dialects_except(|d| d.is::<AnsiDialect>() || d.is::<MySqlDialect>());
 
     // JSON_TABLE table function is not supported in the above dialects.
     assert!(unsupported_dialects
@@ -8420,7 +8421,8 @@ fn parse_json_table_err() {
 
 #[test]
 fn parse_json_table_as_identifier() {
-    let supported_dialects = all_dialects_except(|d| d.is::<AnsiDialect>() || d.is::<MySqlDialect>());
+    let supported_dialects =
+        all_dialects_except(|d| d.is::<AnsiDialect>() || d.is::<MySqlDialect>());
 
     assert!(supported_dialects
         .parse_sql_statements("SELECT * FROM json_table")

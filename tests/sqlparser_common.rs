@@ -8410,13 +8410,10 @@ fn test_buffer_reuse() {
 
 #[test]
 fn parse_json_table_err() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
-        options: None,
-    };
+    let unsupported_dialects = all_dialects_except(|d| d.is::<AnsiDialect>() || d.is::<MySqlDialect>());
 
-    // JSON_TABLE is not supported in the generic dialect.
-    assert!(dialects
+    // JSON_TABLE table function is not supported in the above dialects.
+    assert!(unsupported_dialects
         .parse_sql_statements("SELECT * FROM JSON_TABLE('[[1, 2], [3, 4]]', '$[*]' COLUMNS(a INT PATH '$[0]', b INT PATH '$[1]')) AS t")
         .is_err());
 }

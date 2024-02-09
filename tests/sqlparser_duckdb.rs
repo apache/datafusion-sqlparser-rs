@@ -216,3 +216,31 @@ fn test_select_union_by_name() {
         assert_eq!(ast.body, expected);
     }
 }
+
+#[test]
+fn test_duckdb_install() {
+    let stmt = duckdb().verified_stmt("INSTALL tpch");
+    assert_eq!(
+        stmt,
+        Statement::Install {
+            extension_name: Ident {
+                value: "tpch".to_string(),
+                quote_style: None
+            }
+        }
+    );
+}
+
+#[test]
+fn test_duckdb_load_extension() {
+    let stmt = duckdb().verified_stmt("LOAD my_extension");
+    assert_eq!(
+        Statement::Load {
+            extension_name: Ident {
+                value: "my_extension".to_string(),
+                quote_style: None
+            }
+        },
+        stmt
+    );
+}

@@ -3492,7 +3492,7 @@ impl<'a> Parser<'a> {
     ) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword(Keyword::VIEW)?;
-        let if_not_exists = dialect_of!(self is SQLiteDialect|GenericDialect)
+        let if_not_exists = dialect_of!(self is BigQueryDialect|SQLiteDialect|GenericDialect)
             && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
@@ -6334,12 +6334,18 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
-        let tables = if !self.parse_keyword(Keyword::FROM) {
-            let tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;
-            self.expect_keyword(Keyword::FROM)?;
-            tables
+        let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
+            // `FROM` keyword is optional in BigQuery SQL.
+            // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
+            if dialect_of!(self is BigQueryDialect | GenericDialect) {
+                (vec![], false)
+            } else {
+                let tables = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+                self.expect_keyword(Keyword::FROM)?;
+                (tables, true)
+            }
         } else {
-            vec![]
+            (vec![], true)
         };
 
         let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
@@ -6371,7 +6377,11 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::Delete {
             tables,
-            from,
+            from: if with_from_keyword {
+                FromTable::WithFromKeyword(from)
+            } else {
+                FromTable::WithoutKeyword(from)
+            },
             using,
             selection,
             returning,
@@ -7103,6 +7113,14 @@ impl<'a> Parser<'a> {
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
             Ok(Statement::ShowVariables {
+                filter: self.parse_show_statement_filter()?,
+                session,
+                global,
+            })
+        } else if self.parse_keyword(Keyword::STATUS)
+            && dialect_of!(self is MySqlDialect | GenericDialect)
+        {
+            Ok(Statement::ShowStatus {
                 filter: self.parse_show_statement_filter()?,
                 session,
                 global,
@@ -8058,7 +8076,7 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
         let from = if self.parse_keyword(Keyword::FROM)
-            && dialect_of!(self is GenericDialect | PostgreSqlDialect | DuckDbDialect | BigQueryDialect | SnowflakeDialect | RedshiftSqlDialect | MsSqlDialect)
+            && dialect_of!(self is GenericDialect | PostgreSqlDialect | DuckDbDialect | BigQueryDialect | SnowflakeDialect | RedshiftSqlDialect | MsSqlDialect | SQLiteDialect )
         {
             Some(self.parse_table_and_joins()?)
         } else {

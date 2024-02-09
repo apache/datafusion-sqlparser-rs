@@ -1436,6 +1436,23 @@ impl fmt::Display for CreateTableOptions {
     }
 }
 
+/// A `FROM` clause within a `DELETE` statement.
+///
+/// Syntax
+/// ```sql
+/// [FROM] table
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FromTable {
+    /// An explicit `FROM` keyword was specified.
+    WithFromKeyword(Vec<TableWithJoins>),
+    /// BigQuery: `FROM` keyword was omitted.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement>
+    WithoutKeyword(Vec<TableWithJoins>),
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1613,7 +1630,7 @@ pub enum Statement {
         /// Multi tables delete are supported in mysql
         tables: Vec<ObjectName>,
         /// FROM
-        from: Vec<TableWithJoins>,
+        from: FromTable,
         /// USING (Snowflake, Postgres, MySQL)
         using: Option<Vec<TableWithJoins>>,
         /// WHERE
@@ -1968,6 +1985,16 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Vec<Ident> },
+    /// ```sql
+    /// SHOW [GLOBAL | SESSION] STATUS [LIKE 'pattern' | WHERE expr]
+    /// ```
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowStatus {
+        filter: Option<ShowStatementFilter>,
+        global: bool,
+        session: bool,
+    },
     /// ```sql
     /// SHOW VARIABLES
     /// ```
@@ -2713,7 +2740,14 @@ impl fmt::Display for Statement {
                 if !tables.is_empty() {
                     write!(f, "{} ", display_comma_separated(tables))?;
                 }
-                write!(f, "FROM {}", display_comma_separated(from))?;
+                match from {
+                    FromTable::WithFromKeyword(from) => {
+                        write!(f, "FROM {}", display_comma_separated(from))?;
+                    }
+                    FromTable::WithoutKeyword(from) => {
+                        write!(f, "{}", display_comma_separated(from))?;
+                    }
+                }
                 if let Some(using) = using {
                     write!(f, " USING {}", display_comma_separated(using))?;
                 }
@@ -3405,6 +3439,24 @@ impl fmt::Display for Statement {
                 write!(f, "SHOW")?;
                 if !variable.is_empty() {
                     write!(f, " {}", display_separated(variable, " "))?;
+                }
+                Ok(())
+            }
+            Statement::ShowStatus {
+                filter,
+                global,
+                session,
+            } => {
+                write!(f, "SHOW")?;
+                if *global {
+                    write!(f, " GLOBAL")?;
+                }
+                if *session {
+                    write!(f, " SESSION")?;
+                }
+                write!(f, " STATUS")?;
+                if filter.is_some() {
+                    write!(f, " {}", filter.as_ref().unwrap())?;
                 }
                 Ok(())
             }

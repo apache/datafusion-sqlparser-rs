@@ -403,7 +403,7 @@ fn parse_show_extended_full() {
 fn parse_show_create() {
     let obj_name = ObjectName(vec![Ident::new("myident")]);
 
-    for obj_type in &vec![
+    for obj_type in &[
         ShowCreateObject::Table,
         ShowCreateObject::Trigger,
         ShowCreateObject::Event,

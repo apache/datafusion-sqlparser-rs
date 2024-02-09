@@ -3971,12 +3971,48 @@ fn parse_named_argument_function() {
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "1".to_owned()
                     ))),
+                    operator: FunctionArgOperator::RightArrow
                 },
                 FunctionArg::Named {
                     name: Ident::new("b"),
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "2".to_owned()
                     ))),
+                    operator: FunctionArgOperator::RightArrow
+                },
+            ],
+            null_treatment: None,
+            filter: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![],
+        }),
+        expr_from_projection(only(&select.projection))
+    );
+}
+
+#[test]
+fn parse_named_argument_function_with_eq_operator() {
+    let sql = "SELECT FUN(a = '1', b = '2') FROM foo";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("FUN")]),
+            args: vec![
+                FunctionArg::Named {
+                    name: Ident::new("a"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "1".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Equals
+                },
+                FunctionArg::Named {
+                    name: Ident::new("b"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "2".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Equals
                 },
             ],
             null_treatment: None,

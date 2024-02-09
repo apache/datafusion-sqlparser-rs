@@ -2800,7 +2800,6 @@ impl<'a> Parser<'a> {
         let index = self.index;
         for &keyword in keywords {
             if !self.parse_keyword(keyword) {
-                // println!("parse_keywords aborting .. did not find {:?}", keyword);
                 // reset index and return immediately
                 self.index = index;
                 return false;

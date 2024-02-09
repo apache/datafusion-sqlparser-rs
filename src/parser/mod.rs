@@ -7553,7 +7553,7 @@ impl<'a> Parser<'a> {
                 if ident.quote_style.is_none() {
                     if ident.find_keyword().is_some() {
                         return parser_err!(
-                            "Cannot specify a reserved keyword as identifier of table factor",
+                            "Cannot specify a reserved keyword as identifier for table factor",
                             loc
                         );
                     }

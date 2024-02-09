@@ -8424,7 +8424,7 @@ fn parse_json_table_as_identifier() {
     let parsed = all_dialects().parse_sql_statements("SELECT * FROM json_table");
     assert_eq!(
         ParserError::ParserError(
-            "Cannot specify a reserved keyword as identifier of table factor".to_string()
+            "Cannot specify a reserved keyword as identifier for table factor".to_string()
         ),
         parsed.unwrap_err()
     );

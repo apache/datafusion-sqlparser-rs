@@ -8409,7 +8409,7 @@ fn test_buffer_reuse() {
 }
 
 #[test]
-fn parse_json_table_err() {
+fn parse_json_table_function_err() {
     let unsupported_dialects =
         all_dialects_except(|d| d.is::<AnsiDialect>() || d.is::<MySqlDialect>());
 
@@ -8421,10 +8421,11 @@ fn parse_json_table_err() {
 
 #[test]
 fn parse_json_table_as_identifier() {
-    let supported_dialects =
-        all_dialects_except(|d| d.is::<AnsiDialect>() || d.is::<MySqlDialect>());
-
-    assert!(supported_dialects
-        .parse_sql_statements("SELECT * FROM json_table")
-        .is_ok());
+    let parsed = all_dialects().parse_sql_statements("SELECT * FROM json_table");
+    assert_eq!(
+        ParserError::ParserError(
+            "Cannot specify a reserved keyword as identifier of table factor".to_string()
+        ),
+        parsed.unwrap_err()
+    );
 }

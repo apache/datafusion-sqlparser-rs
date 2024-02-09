@@ -2771,6 +2771,27 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// If the current token is the `expected` keyword followed by
+    /// specified tokens, and consume them and returns true.
+    /// Otherwise, no tokens are consumed and returns false.
+    pub fn parse_keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token]) -> bool {
+        let index = self.index;
+        match self.peek_token().token {
+            Token::Word(w) if expected == w.keyword => {
+                self.next_token();
+                for token in tokens {
+                    if !self.consume_token(token) {
+                        // reset index and return immediately
+                        self.index = index;
+                        return false;
+                    }
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// If the current and subsequent tokens exactly match the `keywords`
     /// sequence, consume them and returns true. Otherwise, no tokens are
     /// consumed and returns false
@@ -7507,9 +7528,8 @@ impl<'a> Parser<'a> {
                 with_offset_alias,
             })
         } else if dialect_of!(self is MySqlDialect | AnsiDialect)
-            && self.parse_keyword(Keyword::JSON_TABLE)
+            && self.parse_keyword_with_tokens(Keyword::JSON_TABLE, &[Token::LParen])
         {
-            self.expect_token(&Token::LParen)?;
             let json_expr = self.parse_expr()?;
             self.expect_token(&Token::Comma)?;
             let json_path = self.parse_value()?;
@@ -7526,7 +7546,19 @@ impl<'a> Parser<'a> {
                 alias,
             })
         } else {
+            let loc = self.peek_token().location;
             let name = self.parse_object_name(true)?;
+
+            for ident in &name.0 {
+                if ident.quote_style.is_none() {
+                    if ident.find_keyword().is_some() {
+                        return parser_err!(
+                            "Cannot specify a reserved keyword as identifier of table factor",
+                            loc
+                        );
+                    }
+                }
+            }
 
             let partitions: Vec<Ident> = if dialect_of!(self is MySqlDialect | GenericDialect)
                 && self.parse_keyword(Keyword::PARTITION)

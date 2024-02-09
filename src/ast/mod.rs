@@ -23,6 +23,7 @@ use core::fmt::{self, Display};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use sqlparser::keywords::{ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -54,6 +55,7 @@ pub use self::value::{
 use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
 };
+use crate::keywords::Keyword;
 #[cfg(feature = "visitor")]
 pub use visitor::*;
 
@@ -140,6 +142,21 @@ impl Ident {
             value: value.into(),
             quote_style: Some(quote),
         }
+    }
+
+    /// Returns the defined `Keyword` enum for this identifier if it is a keyword.
+    pub fn find_keyword(&self) -> Option<Keyword> {
+        ALL_KEYWORDS
+            .iter()
+            .enumerate()
+            .find_map(|(idx, &kw)| {
+                if kw.to_string().to_uppercase() == self.value.to_uppercase() {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+            .map(|idx| ALL_KEYWORDS_INDEX[idx])
     }
 }
 

@@ -460,7 +460,6 @@ impl<'a> Parser<'a> {
         }
 
         let next_token = self.next_token();
-        println!("next_token: {:?}", next_token);
         match &next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::KILL => Ok(self.parse_kill()?),

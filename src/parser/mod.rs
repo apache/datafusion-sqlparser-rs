@@ -2772,7 +2772,7 @@ impl<'a> Parser<'a> {
     }
 
     /// If the current token is the `expected` keyword followed by
-    /// specified tokens,  consume them and returns true.
+    /// specified tokens, consume them and returns true.
     /// Otherwise, no tokens are consumed and returns false.
     pub fn parse_keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token]) -> bool {
         let index = self.index;

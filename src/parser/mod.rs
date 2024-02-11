@@ -2775,16 +2775,16 @@ impl<'a> Parser<'a> {
     /// specified tokens, consume them and returns true.
     /// Otherwise, no tokens are consumed and returns false.
     pub fn parse_keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token]) -> bool {
-        let index = self.index;
         match self.peek_token().token {
             Token::Word(w) if expected == w.keyword => {
-                self.next_token();
-                for token in tokens {
-                    if !self.consume_token(token) {
-                        // reset index and return immediately
-                        self.index = index;
+                for (idx, token) in tokens.iter().enumerate() {
+                    if self.peek_nth_token(idx + 1).token != *token {
                         return false;
                     }
+                }
+                // consume all tokens
+                for _ in 0..(tokens.len() + 1) {
+                    self.next_token();
                 }
                 true
             }

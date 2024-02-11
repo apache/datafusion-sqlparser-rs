@@ -866,13 +866,13 @@ fn parse_table_identifiers() {
         vec![Ident::with_quote('`', "GROUP"), Ident::new("dataField")],
     );
 
-    // TODO: this should be error
-    // test_table_ident_err("GROUP.dataField");
+    test_table_ident_err("GROUP.dataField");
+    test_table_ident_err("abc5.GROUP");
 
     test_table_ident(
-        "abc5.GROUP",
+        "abc5.`GROUP`",
         None,
-        vec![Ident::new("abc5"), Ident::new("GROUP")],
+        vec![Ident::new("abc5"), Ident::with_quote('`', "GROUP")],
     );
 
     test_table_ident(
@@ -1205,7 +1205,7 @@ fn parse_array_agg_func() {
 
 #[test]
 fn test_select_wildcard_with_except() {
-    let select = bigquery_and_generic().verified_only_select("SELECT * EXCEPT (col_a) FROM data");
+    let select = bigquery_and_generic().verified_only_select("SELECT * EXCEPT (col_a) FROM `data`");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_except: Some(ExceptSelectItem {
             first_element: Ident::new("col_a"),

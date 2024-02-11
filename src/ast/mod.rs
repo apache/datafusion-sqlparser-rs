@@ -144,7 +144,10 @@ impl Ident {
         }
     }
 
-    /// Returns the defined `Keyword` enum for this identifier if it is a keyword.
+    /// If this identifier is also a keyword, return the corresponding [`Keyword`].
+    /// 
+    /// For example even though `AVRO` is a keyword, it can also be used as an
+    /// identifier for a column, such as `SELECT avro FROM my_table`.
     pub fn find_keyword(&self) -> Option<Keyword> {
         ALL_KEYWORDS
             .iter()

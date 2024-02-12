@@ -727,10 +727,7 @@ impl<'a> Tokenizer<'a> {
                     // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
                         chars.next();
-                        let s2 = peeking_take_while(
-                            chars,
-                            |ch| matches!(ch, '0'..='9' | 'A'..='F' | 'a'..='f'),
-                        );
+                        let s2 = peeking_take_while(chars, |c| c.is_ascii_hexdigit());
                         return Ok(Some(Token::HexStringLiteral(s2)));
                     }
 
@@ -1077,7 +1074,7 @@ impl<'a> Tokenizer<'a> {
                 match chars.peek() {
                     Some('$') => {
                         chars.next();
-                        for (_, c) in value.chars().enumerate() {
+                        for c in value.chars() {
                             let next_char = chars.next();
                             if Some(c) != next_char {
                                 return self.tokenizer_error(

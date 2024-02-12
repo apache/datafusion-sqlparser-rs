@@ -213,6 +213,25 @@ fn parse_insert_default_values() {
 }
 
 #[test]
+fn parse_insert_select_returning() {
+    verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
+    let stmt = verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
+    match stmt {
+        Statement::Insert {
+            returning: Some(ret),
+            source: Some(_),
+            ..
+        } => assert_eq!(ret.len(), 1),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_returning_as_column_alias() {
+    verified_stmt("SELECT 1 AS RETURNING");
+}
+
+#[test]
 fn parse_insert_sqlite() {
     let dialect = SQLiteDialect {};
 

@@ -196,8 +196,10 @@ pub enum DataType {
     Timestamp(Option<u64>, TimezoneInfo),
     /// Interval
     Interval,
-    /// JSON type used in BigQuery
+    /// JSON type
     JSON,
+    /// Binary JSON type
+    JSONB,
     /// Regclass used in postgresql serial
     Regclass,
     /// Text
@@ -219,6 +221,10 @@ pub enum DataType {
     /// [hive]: https://docs.cloudera.com/cdw-runtime/cloud/impala-sql-reference/topics/impala-struct.html
     /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct(Vec<StructField>),
+    /// No type specified - only used with
+    /// [`SQLiteDialect`](crate::dialect::SQLiteDialect), from statements such
+    /// as `CREATE TABLE t1 (a)`.
+    Unspecified,
 }
 
 impl fmt::Display for DataType {
@@ -336,6 +342,7 @@ impl fmt::Display for DataType {
             }
             DataType::Interval => write!(f, "INTERVAL"),
             DataType::JSON => write!(f, "JSON"),
+            DataType::JSONB => write!(f, "JSONB"),
             DataType::Regclass => write!(f, "REGCLASS"),
             DataType::Text => write!(f, "TEXT"),
             DataType::String(size) => format_type_with_optional_length(f, "STRING", size, false),
@@ -379,6 +386,7 @@ impl fmt::Display for DataType {
                     write!(f, "STRUCT")
                 }
             }
+            DataType::Unspecified => Ok(()),
         }
     }
 }

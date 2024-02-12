@@ -3,11 +3,69 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project aims to adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Given that the parser produces a typed AST, any changes to the AST will technically be breaking and thus will result in a `0.(N+1)` version. We document changes that break via addition as "Added".
+Given that the parser produces a typed AST, any changes to the AST will
+technically be breaking and thus will result in a `0.(N+1)` version. We document
+changes that break via addition as "Added".
 
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.43.1] 2024-01-22
+### Changes
+* Fixed CHANGELOG
+
+
+## [0.43.0] 2024-01-22
+* NO CHANGES
+
+## [0.42.0] 2024-01-22
+
+### Added
+* Support for constraint `CHARACTERISTICS` clause (#1099) - Thanks @dimfeld
+* Support for unquoted hyphenated identifiers on bigquery (#1109) - Thanks @jmhain
+* Support `BigQuery` table and view options (#1061) - Thanks @iffyio
+* Support Postgres operators for the LIKE expression variants (#1096) - Thanks @gruuya
+* Support "timezone_region" and "timezone_abbr" for `EXTRACT` (and `DATE_PART`) (#1090) - Thanks @alexander-beedie
+* Support `JSONB` datatype (#1089) - Thanks @alexander-beedie
+* Support PostgreSQL `^@` starts-with operator (#1091) - Thanks @alexander-beedie
+* Support PostgreSQL Insert table aliases (#1069) (#1084) - Thanks @boydjohnson
+* Support PostgreSQL `CREATE EXTENSION` (#1078) - Thanks @tobyhede
+* Support PostgreSQL `ADD GENERATED` in `ALTER COLUMN` statements (#1079) - Thanks @tobyhede
+* Support SQLite column definitions with no type (#1075) - Thanks @takluyver
+* Support PostgreSQL `ENABLE` and `DISABLE` on `ALTER TABLE` (#1077) - Thanks @tobyhede
+* Support MySQL `FLUSH` statement (#1076) - Thanks @emin100
+* Support Mysql `REPLACE` statement and `PRIORITY` clause of `INSERT` (#1072) - Thanks @emin100
+
+### Fixed
+* Fix `:start` and `:end` json accesses on SnowFlake (#1110) - Thanks @jmhain
+* Fix array_agg wildcard behavior (#1093) - Thanks @ReppCodes
+* Error on dangling `NO` in `CREATE SEQUENCE` options (#1104) - Thanks @PartiallyTyped
+* Allow string values in `PRAGMA` commands (#1101) - Thanks @invm
+
+### Changed
+* Use `Option<Expr>` for Min and Max vals in Seq Opts, fix alter col seq display (#1106) - Thanks @PartiallyTyped
+* Replace `AtomicUsize` with Cell<usize> in the recursion counter (#1098) - Thanks @wzzzzd
+* Add Qrlew as a user in README.md (#1107) - Thanks @ngrislain
+* Add APIs to reuse token buffers in `Tokenizer` (#1094) - Thanks @0rphon
+* Bump version of `sqlparser-derive` to 0.2.2 (#1083) - Thanks @alamb
+
+## [0.41.0] 2023-12-22
+
+### Added
+* Support `DEFERRED`, `IMMEDIATE`, and `EXCLUSIVE` in SQLite's `BEGIN TRANSACTION` command (#1067) - Thanks @takaebato
+* Support generated columns skipping `GENERATED ALWAYS` keywords (#1058) - Thanks @takluyver
+* Support `LOCK/UNLOCK TABLES` for MySQL (#1059) - Thanks @zzzdong
+* Support `JSON_TABLE` (#1062) - Thanks @lovasoa
+* Support `CALL` statements (#1063) - Thanks @lovasoa
+
+### Fixed
+* fix rendering of SELECT TOP (#1070) for Snowflake - Thanks jmhain
+
+### Changed
+* Improve documentation formatting (#1068) - Thanks @alamb
+* Replace type_id() by trait method to allow wrapping dialects (#1065) - Thanks @jjbayer
+* Document that comments aren't preserved for round trip (#1060) - Thanks @takluyver
+* Update sqlparser-derive to use `syn 2.0` (#1040) - Thanks @serprex
 
 ## [0.40.0] 2023-11-27
 

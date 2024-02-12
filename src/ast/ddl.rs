@@ -26,6 +26,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName, SequenceOptions,
+    SqlOption,
 };
 use crate::tokenizer::Token;
 
@@ -45,6 +46,18 @@ pub enum AlterTableOperation {
         /// <column_def>.
         column_def: ColumnDef,
     },
+    /// `DISABLE ROW LEVEL SECURITY`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    DisableRowLevelSecurity,
+    /// `DISABLE RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    DisableRule { name: Ident },
+    /// `DISABLE TRIGGER [ trigger_name | ALL | USER ]`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    DisableTrigger { name: Ident },
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
         if_exists: bool,
@@ -61,6 +74,34 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is a MySQL-specific operation.
     DropPrimaryKey,
+    /// `ENABLE ALWAYS RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableAlwaysRule { name: Ident },
+    /// `ENABLE ALWAYS TRIGGER trigger_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableAlwaysTrigger { name: Ident },
+    /// `ENABLE REPLICA RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableReplicaRule { name: Ident },
+    /// `ENABLE REPLICA TRIGGER trigger_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableReplicaTrigger { name: Ident },
+    /// `ENABLE ROW LEVEL SECURITY`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableRowLevelSecurity,
+    /// `ENABLE RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableRule { name: Ident },
+    /// `ENABLE TRIGGER [ trigger_name | ALL | USER ]`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableTrigger { name: Ident },
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
         old_partitions: Vec<Expr>,
@@ -143,6 +184,15 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {column_name} {op}")
             }
+            AlterTableOperation::DisableRowLevelSecurity => {
+                write!(f, "DISABLE ROW LEVEL SECURITY")
+            }
+            AlterTableOperation::DisableRule { name } => {
+                write!(f, "DISABLE RULE {name}")
+            }
+            AlterTableOperation::DisableTrigger { name } => {
+                write!(f, "DISABLE TRIGGER {name}")
+            }
             AlterTableOperation::DropPartitions {
                 partitions,
                 if_exists,
@@ -177,6 +227,27 @@ impl fmt::Display for AlterTableOperation {
                 column_name,
                 if *cascade { " CASCADE" } else { "" }
             ),
+            AlterTableOperation::EnableAlwaysRule { name } => {
+                write!(f, "ENABLE ALWAYS RULE {name}")
+            }
+            AlterTableOperation::EnableAlwaysTrigger { name } => {
+                write!(f, "ENABLE ALWAYS TRIGGER {name}")
+            }
+            AlterTableOperation::EnableReplicaRule { name } => {
+                write!(f, "ENABLE REPLICA RULE {name}")
+            }
+            AlterTableOperation::EnableReplicaTrigger { name } => {
+                write!(f, "ENABLE REPLICA TRIGGER {name}")
+            }
+            AlterTableOperation::EnableRowLevelSecurity => {
+                write!(f, "ENABLE ROW LEVEL SECURITY")
+            }
+            AlterTableOperation::EnableRule { name } => {
+                write!(f, "ENABLE RULE {name}")
+            }
+            AlterTableOperation::EnableTrigger { name } => {
+                write!(f, "ENABLE TRIGGER {name}")
+            }
             AlterTableOperation::RenamePartitions {
                 old_partitions,
                 new_partitions,
@@ -245,6 +316,13 @@ pub enum AlterColumnOperation {
         /// PostgreSQL specific
         using: Option<Expr>,
     },
+    /// `ADD GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( sequence_options ) ]`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    AddGenerated {
+        generated_as: Option<GeneratedAs>,
+        sequence_options: Option<Vec<SequenceOptions>>,
+    },
 }
 
 impl fmt::Display for AlterColumnOperation {
@@ -265,6 +343,28 @@ impl fmt::Display for AlterColumnOperation {
                     write!(f, "SET DATA TYPE {data_type}")
                 }
             }
+            AlterColumnOperation::AddGenerated {
+                generated_as,
+                sequence_options,
+            } => {
+                let generated_as = match generated_as {
+                    Some(GeneratedAs::Always) => " ALWAYS",
+                    Some(GeneratedAs::ByDefault) => " BY DEFAULT",
+                    _ => "",
+                };
+
+                write!(f, "ADD GENERATED{generated_as} AS IDENTITY",)?;
+                if let Some(options) = sequence_options {
+                    write!(f, " (")?;
+
+                    for sequence_option in options {
+                        write!(f, "{sequence_option}")?;
+                    }
+
+                    write!(f, " )")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -281,6 +381,7 @@ pub enum TableConstraint {
         columns: Vec<Ident>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
         is_primary: bool,
+        characteristics: Option<ConstraintCharacteristics>,
     },
     /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
     /// REFERENCES <foreign_table> (<referred_columns>)
@@ -294,6 +395,7 @@ pub enum TableConstraint {
         referred_columns: Vec<Ident>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
+        characteristics: Option<ConstraintCharacteristics>,
     },
     /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
     Check {
@@ -350,13 +452,22 @@ impl fmt::Display for TableConstraint {
                 name,
                 columns,
                 is_primary,
-            } => write!(
-                f,
-                "{}{} ({})",
-                display_constraint_name(name),
-                if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
-                display_comma_separated(columns)
-            ),
+                characteristics,
+            } => {
+                write!(
+                    f,
+                    "{}{} ({})",
+                    display_constraint_name(name),
+                    if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
+                    display_comma_separated(columns)
+                )?;
+
+                if let Some(characteristics) = characteristics {
+                    write!(f, " {}", characteristics)?;
+                }
+
+                Ok(())
+            }
             TableConstraint::ForeignKey {
                 name,
                 columns,
@@ -364,6 +475,7 @@ impl fmt::Display for TableConstraint {
                 referred_columns,
                 on_delete,
                 on_update,
+                characteristics,
             } => {
                 write!(
                     f,
@@ -378,6 +490,9 @@ impl fmt::Display for TableConstraint {
                 }
                 if let Some(action) = on_update {
                     write!(f, " ON UPDATE {action}")?;
+                }
+                if let Some(characteristics) = characteristics {
+                    write!(f, " {}", characteristics)?;
                 }
                 Ok(())
             }
@@ -516,12 +631,52 @@ pub struct ColumnDef {
 
 impl fmt::Display for ColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.name, self.data_type)?;
+        if self.data_type == DataType::Unspecified {
+            write!(f, "{}", self.name)?;
+        } else {
+            write!(f, "{} {}", self.name, self.data_type)?;
+        }
         if let Some(collation) = &self.collation {
             write!(f, " COLLATE {collation}")?;
         }
         for option in &self.options {
             write!(f, " {option}")?;
+        }
+        Ok(())
+    }
+}
+
+/// Column definition specified in a `CREATE VIEW` statement.
+///
+/// Syntax
+/// ```markdown
+/// <name> [OPTIONS(option, ...)]
+///
+/// option: <name> = <value>
+/// ```
+///
+/// Examples:
+/// ```sql
+/// name
+/// age OPTIONS(description = "age column", tag = "prod")
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ViewColumnDef {
+    pub name: Ident,
+    pub options: Option<Vec<SqlOption>>,
+}
+
+impl fmt::Display for ViewColumnDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(options) = self.options.as_ref() {
+            write!(
+                f,
+                " OPTIONS({})",
+                display_comma_separated(options.as_slice())
+            )?;
         }
         Ok(())
     }
@@ -569,20 +724,24 @@ pub enum ColumnOption {
     NotNull,
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
-    /// `{ PRIMARY KEY | UNIQUE }`
+    /// `{ PRIMARY KEY | UNIQUE } [<constraint_characteristics>]`
     Unique {
         is_primary: bool,
+        characteristics: Option<ConstraintCharacteristics>,
     },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)
     /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
-    /// }`).
+    /// }
+    /// [<constraint_characteristics>]
+    /// `).
     ForeignKey {
         foreign_table: ObjectName,
         referred_columns: Vec<Ident>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
+        characteristics: Option<ConstraintCharacteristics>,
     },
     /// `CHECK (<expr>)`
     Check(Expr),
@@ -600,7 +759,17 @@ pub enum ColumnOption {
         sequence_options: Option<Vec<SequenceOptions>>,
         generation_expr: Option<Expr>,
         generation_expr_mode: Option<GeneratedExpressionMode>,
+        /// false if 'GENERATED ALWAYS' is skipped (option starts with AS)
+        generated_keyword: bool,
     },
+    /// BigQuery specific: Explicit column options in a view [1] or table [2]
+    /// Syntax
+    /// ```sql
+    /// OPTIONS(description="field desc")
+    /// ```
+    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
+    /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
+    Options(Vec<SqlOption>),
 }
 
 impl fmt::Display for ColumnOption {
@@ -610,14 +779,22 @@ impl fmt::Display for ColumnOption {
             Null => write!(f, "NULL"),
             NotNull => write!(f, "NOT NULL"),
             Default(expr) => write!(f, "DEFAULT {expr}"),
-            Unique { is_primary } => {
-                write!(f, "{}", if *is_primary { "PRIMARY KEY" } else { "UNIQUE" })
+            Unique {
+                is_primary,
+                characteristics,
+            } => {
+                write!(f, "{}", if *is_primary { "PRIMARY KEY" } else { "UNIQUE" })?;
+                if let Some(characteristics) = characteristics {
+                    write!(f, " {}", characteristics)?;
+                }
+                Ok(())
             }
             ForeignKey {
                 foreign_table,
                 referred_columns,
                 on_delete,
                 on_update,
+                characteristics,
             } => {
                 write!(f, "REFERENCES {foreign_table}")?;
                 if !referred_columns.is_empty() {
@@ -628,6 +805,9 @@ impl fmt::Display for ColumnOption {
                 }
                 if let Some(action) = on_update {
                     write!(f, " ON UPDATE {action}")?;
+                }
+                if let Some(characteristics) = characteristics {
+                    write!(f, " {}", characteristics)?;
                 }
                 Ok(())
             }
@@ -641,6 +821,7 @@ impl fmt::Display for ColumnOption {
                 sequence_options,
                 generation_expr,
                 generation_expr_mode,
+                generated_keyword,
             } => {
                 if let Some(expr) = generation_expr {
                     let modifier = match generation_expr_mode {
@@ -648,7 +829,11 @@ impl fmt::Display for ColumnOption {
                         Some(GeneratedExpressionMode::Virtual) => " VIRTUAL",
                         Some(GeneratedExpressionMode::Stored) => " STORED",
                     };
-                    write!(f, "GENERATED ALWAYS AS ({expr}){modifier}")?;
+                    if *generated_keyword {
+                        write!(f, "GENERATED ALWAYS AS ({expr}){modifier}")?;
+                    } else {
+                        write!(f, "AS ({expr}){modifier}")?;
+                    }
                     Ok(())
                 } else {
                     // Like Postgres - generated from sequence
@@ -673,6 +858,9 @@ impl fmt::Display for ColumnOption {
                     }
                     Ok(())
                 }
+            }
+            Options(options) => {
+                write!(f, "OPTIONS({})", display_comma_separated(options))
             }
         }
     }
@@ -710,6 +898,84 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
         }
     }
     ConstraintName(name)
+}
+
+/// `<constraint_characteristics> = [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ] [ ENFORCED | NOT ENFORCED ]`
+///
+/// Used in UNIQUE and foreign key constraints. The individual settings may occur in any order.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ConstraintCharacteristics {
+    /// `[ DEFERRABLE | NOT DEFERRABLE ]`
+    pub deferrable: Option<bool>,
+    /// `[ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
+    pub initially: Option<DeferrableInitial>,
+    /// `[ ENFORCED | NOT ENFORCED ]`
+    pub enforced: Option<bool>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DeferrableInitial {
+    /// `INITIALLY IMMEDIATE`
+    Immediate,
+    /// `INITIALLY DEFERRED`
+    Deferred,
+}
+
+impl ConstraintCharacteristics {
+    fn deferrable_text(&self) -> Option<&'static str> {
+        self.deferrable.map(|deferrable| {
+            if deferrable {
+                "DEFERRABLE"
+            } else {
+                "NOT DEFERRABLE"
+            }
+        })
+    }
+
+    fn initially_immediate_text(&self) -> Option<&'static str> {
+        self.initially
+            .map(|initially_immediate| match initially_immediate {
+                DeferrableInitial::Immediate => "INITIALLY IMMEDIATE",
+                DeferrableInitial::Deferred => "INITIALLY DEFERRED",
+            })
+    }
+
+    fn enforced_text(&self) -> Option<&'static str> {
+        self.enforced.map(
+            |enforced| {
+                if enforced {
+                    "ENFORCED"
+                } else {
+                    "NOT ENFORCED"
+                }
+            },
+        )
+    }
+}
+
+impl fmt::Display for ConstraintCharacteristics {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let deferrable = self.deferrable_text();
+        let initially_immediate = self.initially_immediate_text();
+        let enforced = self.enforced_text();
+
+        match (deferrable, initially_immediate, enforced) {
+            (None, None, None) => Ok(()),
+            (None, None, Some(enforced)) => write!(f, "{enforced}"),
+            (None, Some(initial), None) => write!(f, "{initial}"),
+            (None, Some(initial), Some(enforced)) => write!(f, "{initial} {enforced}"),
+            (Some(deferrable), None, None) => write!(f, "{deferrable}"),
+            (Some(deferrable), None, Some(enforced)) => write!(f, "{deferrable} {enforced}"),
+            (Some(deferrable), Some(initial), None) => write!(f, "{deferrable} {initial}"),
+            (Some(deferrable), Some(initial), Some(enforced)) => {
+                write!(f, "{deferrable} {initial} {enforced}")
+            }
+        }
+    }
 }
 
 /// `<referential_action> =

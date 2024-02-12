@@ -87,6 +87,222 @@ fn parse_raw_literal() {
 }
 
 #[test]
+fn parse_delete_statement() {
+    let sql = "DELETE \"table\" WHERE 1";
+    match bigquery_and_generic().verified_stmt(sql) {
+        Statement::Delete {
+            from: FromTable::WithoutKeyword(from),
+            ..
+        } => {
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                    version: None,
+                    partitions: vec![],
+                },
+                from[0].relation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_view_with_options() {
+    let sql = concat!(
+        "CREATE VIEW myproject.mydataset.newview ",
+        r#"(name, age OPTIONS(description = "field age")) "#,
+        r#"OPTIONS(expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR), "#,
+        r#"friendly_name = "newview", description = "a view that expires in 2 days", labels = [("org_unit", "development")]) "#,
+        "AS SELECT column_1, column_2, column_3 FROM myproject.mydataset.mytable",
+    );
+    match bigquery().verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            query,
+            options,
+            columns,
+            ..
+        } => {
+            assert_eq!(
+                name,
+                ObjectName(vec![
+                    "myproject".into(),
+                    "mydataset".into(),
+                    "newview".into()
+                ])
+            );
+            assert_eq!(
+                vec![
+                    ViewColumnDef {
+                        name: Ident::new("name"),
+                        options: None,
+                    },
+                    ViewColumnDef {
+                        name: Ident::new("age"),
+                        options: Some(vec![SqlOption {
+                            name: Ident::new("description"),
+                            value: Expr::Value(Value::DoubleQuotedString("field age".to_string())),
+                        }])
+                    },
+                ],
+                columns
+            );
+            assert_eq!(
+                "SELECT column_1, column_2, column_3 FROM myproject.mydataset.mytable",
+                query.to_string()
+            );
+            assert_eq!(
+                r#"OPTIONS(expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR), friendly_name = "newview", description = "a view that expires in 2 days", labels = [("org_unit", "development")])"#,
+                options.to_string()
+            );
+            let CreateTableOptions::Options(options) = options else {
+                unreachable!()
+            };
+            assert_eq!(
+                &SqlOption {
+                    name: Ident::new("description"),
+                    value: Expr::Value(Value::DoubleQuotedString(
+                        "a view that expires in 2 days".to_string()
+                    )),
+                },
+                &options[2],
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+#[test]
+fn parse_create_view_if_not_exists() {
+    let sql = "CREATE VIEW IF NOT EXISTS mydataset.newview AS SELECT foo FROM bar";
+    match bigquery().verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            query,
+            or_replace,
+            materialized,
+            options,
+            cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
+        } => {
+            assert_eq!("mydataset.newview", name.to_string());
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
+            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert!(!materialized);
+            assert!(!or_replace);
+            assert_eq!(options, CreateTableOptions::None);
+            assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(if_not_exists);
+            assert!(!temporary);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_options() {
+    let sql = concat!(
+        "CREATE TABLE mydataset.newtable ",
+        r#"(x INT64 NOT NULL OPTIONS(description = "field x"), "#,
+        r#"y BOOL OPTIONS(description = "field y")) "#,
+        "PARTITION BY _PARTITIONDATE ",
+        "CLUSTER BY userid, age ",
+        r#"OPTIONS(partition_expiration_days = 1, description = "table option description")"#
+    );
+    match bigquery().verified_stmt(sql) {
+        Statement::CreateTable {
+            name,
+            columns,
+            partition_by,
+            cluster_by,
+            options,
+            ..
+        } => {
+            assert_eq!(
+                name,
+                ObjectName(vec!["mydataset".into(), "newtable".into()])
+            );
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("x"),
+                        data_type: DataType::Int64,
+                        collation: None,
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull,
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Options(vec![SqlOption {
+                                    name: Ident::new("description"),
+                                    value: Expr::Value(Value::DoubleQuotedString(
+                                        "field x".to_string()
+                                    )),
+                                },])
+                            },
+                        ]
+                    },
+                    ColumnDef {
+                        name: Ident::new("y"),
+                        data_type: DataType::Bool,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Options(vec![SqlOption {
+                                name: Ident::new("description"),
+                                value: Expr::Value(Value::DoubleQuotedString(
+                                    "field y".to_string()
+                                )),
+                            },])
+                        }]
+                    },
+                ],
+                columns
+            );
+            assert_eq!(
+                (
+                    Some(Box::new(Expr::Identifier(Ident::new("_PARTITIONDATE")))),
+                    Some(vec![Ident::new("userid"), Ident::new("age"),]),
+                    Some(vec![
+                        SqlOption {
+                            name: Ident::new("partition_expiration_days"),
+                            value: Expr::Value(number("1")),
+                        },
+                        SqlOption {
+                            name: Ident::new("description"),
+                            value: Expr::Value(Value::DoubleQuotedString(
+                                "table option description".to_string()
+                            )),
+                        },
+                    ])
+                ),
+                (partition_by, cluster_by, options)
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = concat!(
+        "CREATE TABLE mydataset.newtable ",
+        r#"(x INT64 NOT NULL OPTIONS(description = "field x"), "#,
+        r#"y BOOL OPTIONS(description = "field y")) "#,
+        "CLUSTER BY userid ",
+        r#"OPTIONS(partition_expiration_days = 1, "#,
+        r#"description = "table option description")"#
+    );
+    bigquery().verified_stmt(sql);
+}
+
+#[test]
 fn parse_nested_data_types() {
     let sql = "CREATE TABLE table (x STRUCT<a ARRAY<INT64>, b BYTES(42)>, y ARRAY<STRUCT<INT64>>)";
     match bigquery().one_statement_parses_to(sql, sql) {
@@ -716,6 +932,47 @@ fn parse_table_identifiers() {
             Ident::with_quote('`', "da-sh-es"),
         ],
     );
+
+    test_table_ident(
+        "foo-bar.baz-123",
+        Some("foo-bar.baz-123"),
+        vec![Ident::new("foo-bar"), Ident::new("baz-123")],
+    );
+
+    test_table_ident_err("foo-`bar`");
+    test_table_ident_err("`foo`-bar");
+    test_table_ident_err("foo-123a");
+    test_table_ident_err("foo - bar");
+    test_table_ident_err("123-bar");
+    test_table_ident_err("bar-");
+}
+
+#[test]
+fn parse_hyphenated_table_identifiers() {
+    bigquery().one_statement_parses_to(
+        "select * from foo-bar f join baz-qux b on f.id = b.id",
+        "SELECT * FROM foo-bar AS f JOIN baz-qux AS b ON f.id = b.id",
+    );
+
+    assert_eq!(
+        bigquery()
+            .verified_only_select_with_canonical(
+                "SELECT foo-bar.x FROM t",
+                "SELECT foo - bar.x FROM t"
+            )
+            .projection[0],
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("foo"))),
+            op: BinaryOperator::Minus,
+            right: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("bar"),
+                Ident::new("x")
+            ]))
+        })
+    );
+
+    let error_sql = "select foo-bar.* from foo-bar";
+    assert!(bigquery().parse_sql_statements(error_sql).is_err());
 }
 
 #[test]

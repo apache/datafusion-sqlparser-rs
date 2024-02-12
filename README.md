@@ -61,12 +61,12 @@ analysis, feel free to use this project as a base.
 
 ## Preserves Syntax Round Trip 
 
-This crate allows users to recover the original SQL text (with normalized
-whitespace and keyword capitalization), which is useful for tools that
-analyze and manipulate SQL.
+This crate allows users to recover the original SQL text (with comments removed,
+normalized whitespace and keyword capitalization), which is useful for tools
+that analyze and manipulate SQL.
 
-This means that other than whitespace and the capitalization of keywords, the
-following should hold true for all SQL:
+This means that other than comments, whitespace and the capitalization of
+keywords, the following should hold true for all SQL:
 
 ```rust
 // Parse SQL
@@ -115,7 +115,7 @@ $ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
 ## Users
 
 This parser is currently being used by the [DataFusion] query engine,
-[LocustDB], [Ballista], [GlueSQL], [Opteryx], [PRQL], and [JumpWire].
+[LocustDB], [Ballista], [GlueSQL], [Opteryx], [PRQL], [Qrlew], and [JumpWire].
 
 If your project is using sqlparser-rs feel free to make a PR to add it
 to this list.
@@ -211,6 +211,7 @@ licensed as above, without any additional terms or conditions.
 [GlueSQL]: https://github.com/gluesql/gluesql
 [Opteryx]: https://github.com/mabel-dev/opteryx
 [PRQL]: https://github.com/PRQL/prql
+[Qrlew]: https://github.com/Qrlew/qrlew
 [JumpWire]: https://github.com/extragoodlabs/jumpwire
 [Pratt Parser]: https://tdop.github.io/
 [sql-2016-grammar]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html

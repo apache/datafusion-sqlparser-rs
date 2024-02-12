@@ -60,7 +60,8 @@ pub enum Token {
     DoubleQuotedString(String),
     /// Dollar quoted string: i.e: $$string$$ or $tag_name$string$tag_name$
     DollarQuotedString(DollarQuotedString),
-    /// Byte string literal: i.e: b'string' or B'string'
+    /// Byte string literal: i.e: b'string' or B'string' (note that some backends, such as
+    /// PostgreSQL, may treat this syntax as a bit string literal instead, i.e: b'10010101')
     SingleQuotedByteStringLiteral(String),
     /// Byte string literal: i.e: b"string" or B"string"
     DoubleQuotedByteStringLiteral(String),
@@ -114,7 +115,7 @@ pub enum Token {
     Period,
     /// Colon `:`
     Colon,
-    /// DoubleColon `::` (used for casting in postgresql)
+    /// DoubleColon `::` (used for casting in PostgreSQL)
     DoubleColon,
     /// Assignment `:=` (used for keyword argument in DuckDB macros)
     DuckAssignment,
@@ -148,11 +149,19 @@ pub enum Token {
     ExclamationMarkTilde,
     /// `!~*` , a case insensitive not match regular expression operator in PostgreSQL
     ExclamationMarkTildeAsterisk,
+    /// `~~`, a case sensitive match pattern operator in PostgreSQL
+    DoubleTilde,
+    /// `~~*`, a case insensitive match pattern operator in PostgreSQL
+    DoubleTildeAsterisk,
+    /// `!~~`, a case sensitive not match pattern operator in PostgreSQL
+    ExclamationMarkDoubleTilde,
+    /// `!~~*`, a case insensitive not match pattern operator in PostgreSQL
+    ExclamationMarkDoubleTildeAsterisk,
     /// `<<`, a bitwise shift left operator in PostgreSQL
     ShiftLeft,
     /// `>>`, a bitwise shift right operator in PostgreSQL
     ShiftRight,
-    /// '&&', an overlap operator in PostgreSQL
+    /// `&&`, an overlap operator in PostgreSQL
     Overlap,
     /// Exclamation Mark `!` used for PostgreSQL factorial operator
     ExclamationMark,
@@ -160,19 +169,21 @@ pub enum Token {
     DoubleExclamationMark,
     /// AtSign `@` used for PostgreSQL abs operator
     AtSign,
+    /// `^@`, a "starts with" string operator in PostgreSQL
+    CaretAt,
     /// `|/`, a square root math operator in PostgreSQL
     PGSquareRoot,
     /// `||/`, a cube root math operator in PostgreSQL
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
-    /// ->, used as a operator to extract json field in PostgreSQL
+    /// `->`, used as a operator to extract json field in PostgreSQL
     Arrow,
-    /// ->>, used as a operator to extract json field as text in PostgreSQL
+    /// `->>`, used as a operator to extract json field as text in PostgreSQL
     LongArrow,
-    /// #> Extracts JSON sub-object at the specified path
+    /// `#>`, extracts JSON sub-object at the specified path
     HashArrow,
-    /// #>> Extracts JSON sub-object at the specified path as text
+    /// `#>>`, extracts JSON sub-object at the specified path as text
     HashLongArrow,
     /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
     AtArrow,
@@ -246,7 +257,12 @@ impl fmt::Display for Token {
             Token::TildeAsterisk => f.write_str("~*"),
             Token::ExclamationMarkTilde => f.write_str("!~"),
             Token::ExclamationMarkTildeAsterisk => f.write_str("!~*"),
+            Token::DoubleTilde => f.write_str("~~"),
+            Token::DoubleTildeAsterisk => f.write_str("~~*"),
+            Token::ExclamationMarkDoubleTilde => f.write_str("!~~"),
+            Token::ExclamationMarkDoubleTildeAsterisk => f.write_str("!~~*"),
             Token::AtSign => f.write_str("@"),
+            Token::CaretAt => f.write_str("^@"),
             Token::ShiftLeft => f.write_str("<<"),
             Token::ShiftRight => f.write_str(">>"),
             Token::Overlap => f.write_str("&&"),
@@ -539,21 +555,30 @@ impl<'a> Tokenizer<'a> {
 
     /// Tokenize the statement and produce a vector of tokens with location information
     pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
+        let mut tokens: Vec<TokenWithLocation> = vec![];
+        self.tokenize_with_location_into_buf(&mut tokens)
+            .map(|_| tokens)
+    }
+
+    /// Tokenize the statement and append tokens with location information into the provided buffer.
+    /// If an error is thrown, the buffer will contain all tokens that were successfully parsed before the error.
+    pub fn tokenize_with_location_into_buf(
+        &mut self,
+        buf: &mut Vec<TokenWithLocation>,
+    ) -> Result<(), TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),
             line: 1,
             col: 1,
         };
 
-        let mut tokens: Vec<TokenWithLocation> = vec![];
-
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
-            tokens.push(TokenWithLocation { token, location });
+            buf.push(TokenWithLocation { token, location });
 
             location = state.location();
         }
-        Ok(tokens)
+        Ok(())
     }
 
     // Tokenize the identifer or keywords in `ch`
@@ -727,7 +752,7 @@ impl<'a> Tokenizer<'a> {
                     // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
                         chars.next();
-                        let s2 = peeking_take_while(chars, |c| c.is_ascii_hexdigit());
+                        let s2 = peeking_take_while(chars, |ch| ch.is_ascii_hexdigit());
                         return Ok(Some(Token::HexStringLiteral(s2)));
                     }
 
@@ -890,6 +915,16 @@ impl<'a> Tokenizer<'a> {
                             match chars.peek() {
                                 Some('*') => self
                                     .consume_and_return(chars, Token::ExclamationMarkTildeAsterisk),
+                                Some('~') => {
+                                    chars.next();
+                                    match chars.peek() {
+                                        Some('*') => self.consume_and_return(
+                                            chars,
+                                            Token::ExclamationMarkDoubleTildeAsterisk,
+                                        ),
+                                        _ => Ok(Some(Token::ExclamationMarkDoubleTilde)),
+                                    }
+                                }
                                 _ => Ok(Some(Token::ExclamationMarkTilde)),
                             }
                         }
@@ -940,7 +975,13 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::Ampersand)),
                     }
                 }
-                '^' => self.consume_and_return(chars, Token::Caret),
+                '^' => {
+                    chars.next(); // consume the '^'
+                    match chars.peek() {
+                        Some('@') => self.consume_and_return(chars, Token::CaretAt),
+                        _ => Ok(Some(Token::Caret)),
+                    }
+                }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
                 '#' if dialect_of!(self is SnowflakeDialect) => {
@@ -955,6 +996,15 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('*') => self.consume_and_return(chars, Token::TildeAsterisk),
+                        Some('~') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('*') => {
+                                    self.consume_and_return(chars, Token::DoubleTildeAsterisk)
+                                }
+                                _ => Ok(Some(Token::DoubleTilde)),
+                            }
+                        }
                         _ => Ok(Some(Token::Tilde)),
                     }
                 }
@@ -1971,6 +2021,44 @@ mod tests {
             Token::ExclamationMarkTildeAsterisk,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_pg_like_match() {
+        let sql = "SELECT col ~~ '_a%', col ~~* '_a%', col !~~ '_a%', col !~~* '_a%'";
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleTilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleTildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkDoubleTilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkDoubleTildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
         ];
         compare(expected, tokens);
     }

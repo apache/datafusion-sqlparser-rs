@@ -31,6 +31,7 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
+use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
     all_dialects, alter_table_op, assert_eq_vec, expr_from_projection, join, number, only, table,
     table_alias, TestedDialects,
@@ -41,6 +42,7 @@ mod test_utils;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
+use sqlparser::test_utils::all_dialects_except;
 
 #[test]
 fn parse_insert_values() {
@@ -105,6 +107,17 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+}
+
+#[test]
+fn parse_replace_into() {
+    let dialect = PostgreSqlDialect {};
+    let sql = "REPLACE INTO public.customer (id, name, active) VALUES (1, 2, 3)";
+
+    assert_eq!(
+        ParserError::ParserError("Unsupported statement REPLACE at Line: 1, Column 9".to_string()),
+        Parser::parse_sql(&dialect, sql,).unwrap_err(),
+    )
 }
 
 #[test]
@@ -311,6 +324,7 @@ fn parse_update_set_from() {
             Box::new(SnowflakeDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(MsSqlDialect {}),
+            Box::new(SQLiteDialect {}),
         ],
         options: None,
     };
@@ -495,14 +509,15 @@ fn parse_select_with_table_alias() {
 
 #[test]
 fn parse_invalid_table_name() {
-    let ast = all_dialects()
-        .run_parser_method("db.public..customer", |parser| parser.parse_object_name());
+    let ast = all_dialects().run_parser_method("db.public..customer", |parser| {
+        parser.parse_object_name(false)
+    });
     assert!(ast.is_err());
 }
 
 #[test]
 fn parse_no_table_name() {
-    let ast = all_dialects().run_parser_method("", |parser| parser.parse_object_name());
+    let ast = all_dialects().run_parser_method("", |parser| parser.parse_object_name(false));
     assert!(ast.is_err());
 }
 
@@ -510,7 +525,10 @@ fn parse_no_table_name() {
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
-        Statement::Delete { from, .. } => {
+        Statement::Delete {
+            from: FromTable::WithFromKeyword(from),
+            ..
+        } => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
@@ -528,10 +546,27 @@ fn parse_delete_statement() {
 }
 
 #[test]
+fn parse_delete_without_from_error() {
+    let sql = "DELETE \"table\" WHERE 1";
+
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected FROM, found: WHERE".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_delete_statement_for_multi_tables() {
     let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
-    match verified_stmt(sql) {
-        Statement::Delete { tables, from, .. } => {
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    match dialects.verified_stmt(sql) {
+        Statement::Delete {
+            tables,
+            from: FromTable::WithFromKeyword(from),
+            ..
+        } => {
             assert_eq!(
                 ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
                 tables[0]
@@ -572,7 +607,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
     let sql = "DELETE FROM schema1.table1, schema2.table2 USING schema1.table1 JOIN schema2.table2 ON schema2.table2.pk = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
     match verified_stmt(sql) {
         Statement::Delete {
-            from,
+            from: FromTable::WithFromKeyword(from),
             using: Some(using),
             ..
         } => {
@@ -633,7 +668,7 @@ fn parse_where_delete_statement() {
     match verified_stmt(sql) {
         Statement::Delete {
             tables: _,
-            from,
+            from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,
@@ -674,7 +709,7 @@ fn parse_where_delete_with_alias_statement() {
     match verified_stmt(sql) {
         Statement::Delete {
             tables: _,
-            from,
+            from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,
@@ -2161,6 +2196,17 @@ fn parse_cast() {
         },
         expr_from_projection(only(&select.projection))
     );
+
+    let sql = "SELECT CAST(details AS JSONB) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("details"))),
+            data_type: DataType::JSONB,
+            format: None,
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]
@@ -2227,8 +2273,10 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(MILLISECONDS FROM d)");
     verified_stmt("SELECT EXTRACT(QUARTER FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE_ABBR FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_MINUTE FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE_REGION FROM d)");
     verified_stmt("SELECT EXTRACT(TIME FROM d)");
 
     let res = parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
@@ -2377,6 +2425,12 @@ fn parse_array_agg_func() {
     ] {
         supported_dialects.verified_stmt(sql);
     }
+
+    // follows special-case array_agg code path. fails in everything except postgres
+    let wc_sql = "SELECT ARRAY_AGG(sections_tbl.*) AS sections FROM sections_tbl";
+    all_dialects_but_pg()
+        .parse_sql_statements(wc_sql)
+        .expect_err("should have failed");
 }
 
 #[test]
@@ -2523,7 +2577,10 @@ fn parse_create_table() {
                             },
                             ColumnOptionDef {
                                 name: Some("pkey".into()),
-                                option: ColumnOption::Unique { is_primary: true },
+                                option: ColumnOption::Unique {
+                                    is_primary: true,
+                                    characteristics: None
+                                },
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -2531,7 +2588,10 @@ fn parse_create_table() {
                             },
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Unique { is_primary: false },
+                                option: ColumnOption::Unique {
+                                    is_primary: false,
+                                    characteristics: None
+                                },
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -2550,6 +2610,7 @@ fn parse_create_table() {
                                 referred_columns: vec!["a".into(), "b".into()],
                                 on_delete: None,
                                 on_update: None,
+                                characteristics: None,
                             },
                         }],
                     },
@@ -2564,6 +2625,7 @@ fn parse_create_table() {
                                 referred_columns: vec![],
                                 on_delete: Some(ReferentialAction::Cascade),
                                 on_update: Some(ReferentialAction::NoAction),
+                                characteristics: None,
                             },
                         },],
                     },
@@ -2579,6 +2641,7 @@ fn parse_create_table() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
+                        characteristics: None,
                     },
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
@@ -2587,6 +2650,7 @@ fn parse_create_table() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
+                        characteristics: None,
                     },
                     TableConstraint::ForeignKey {
                         name: None,
@@ -2595,6 +2659,7 @@ fn parse_create_table() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
+                        characteristics: None,
                     },
                     TableConstraint::ForeignKey {
                         name: None,
@@ -2603,6 +2668,7 @@ fn parse_create_table() {
                         referred_columns: vec!["longitude".into()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
+                        characteristics: None,
                     },
                 ]
             );
@@ -2622,6 +2688,269 @@ fn parse_create_table() {
         .unwrap_err()
         .to_string()
         .contains("Expected constraint details after CONSTRAINT <name>"));
+}
+
+#[test]
+fn parse_create_table_with_constraint_characteristics() {
+    let sql = "CREATE TABLE uk_cities (\
+               name VARCHAR(100) NOT NULL,\
+               lat DOUBLE NULL,\
+               lng DOUBLE,
+               constraint fkey foreign key (lat) references othertable3 (lat) on delete restrict deferrable initially deferred,\
+               constraint fkey2 foreign key (lat) references othertable4(lat) on delete no action on update restrict deferrable initially immediate, \
+               foreign key (lat) references othertable4(lat) on update set default on delete cascade not deferrable initially deferred not enforced, \
+               FOREIGN KEY (lng) REFERENCES othertable4 (longitude) ON UPDATE SET NULL enforced not deferrable initially immediate
+               )";
+    let ast = one_statement_parses_to(
+        sql,
+        "CREATE TABLE uk_cities (\
+         name VARCHAR(100) NOT NULL, \
+         lat DOUBLE NULL, \
+         lng DOUBLE, \
+         CONSTRAINT fkey FOREIGN KEY (lat) REFERENCES othertable3(lat) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED, \
+         CONSTRAINT fkey2 FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE NO ACTION ON UPDATE RESTRICT DEFERRABLE INITIALLY IMMEDIATE, \
+         FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE CASCADE ON UPDATE SET DEFAULT NOT DEFERRABLE INITIALLY DEFERRED NOT ENFORCED, \
+         FOREIGN KEY (lng) REFERENCES othertable4(longitude) ON UPDATE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE ENFORCED)",
+    );
+    match ast {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            with_options,
+            if_not_exists: false,
+            external: false,
+            file_format: None,
+            location: None,
+            ..
+        } => {
+            assert_eq!("uk_cities", name.to_string());
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "name".into(),
+                        data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                            length: 100,
+                            unit: None,
+                        })),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull,
+                        }],
+                    },
+                    ColumnDef {
+                        name: "lat".into(),
+                        data_type: DataType::Double,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Null,
+                        }],
+                    },
+                    ColumnDef {
+                        name: "lng".into(),
+                        data_type: DataType::Double,
+                        collation: None,
+                        options: vec![],
+                    },
+                ]
+            );
+            assert_eq!(
+                constraints,
+                vec![
+                    TableConstraint::ForeignKey {
+                        name: Some("fkey".into()),
+                        columns: vec!["lat".into()],
+                        foreign_table: ObjectName(vec!["othertable3".into()]),
+                        referred_columns: vec!["lat".into()],
+                        on_delete: Some(ReferentialAction::Restrict),
+                        on_update: None,
+                        characteristics: Some(ConstraintCharacteristics {
+                            deferrable: Some(true),
+                            initially: Some(DeferrableInitial::Deferred),
+                            enforced: None
+                        }),
+                    },
+                    TableConstraint::ForeignKey {
+                        name: Some("fkey2".into()),
+                        columns: vec!["lat".into()],
+                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        referred_columns: vec!["lat".into()],
+                        on_delete: Some(ReferentialAction::NoAction),
+                        on_update: Some(ReferentialAction::Restrict),
+                        characteristics: Some(ConstraintCharacteristics {
+                            deferrable: Some(true),
+                            initially: Some(DeferrableInitial::Immediate),
+                            enforced: None,
+                        }),
+                    },
+                    TableConstraint::ForeignKey {
+                        name: None,
+                        columns: vec!["lat".into()],
+                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        referred_columns: vec!["lat".into()],
+                        on_delete: Some(ReferentialAction::Cascade),
+                        on_update: Some(ReferentialAction::SetDefault),
+                        characteristics: Some(ConstraintCharacteristics {
+                            deferrable: Some(false),
+                            initially: Some(DeferrableInitial::Deferred),
+                            enforced: Some(false),
+                        }),
+                    },
+                    TableConstraint::ForeignKey {
+                        name: None,
+                        columns: vec!["lng".into()],
+                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        referred_columns: vec!["longitude".into()],
+                        on_delete: None,
+                        on_update: Some(ReferentialAction::SetNull),
+                        characteristics: Some(ConstraintCharacteristics {
+                            deferrable: Some(false),
+                            initially: Some(DeferrableInitial::Immediate),
+                            enforced: Some(true),
+                        }),
+                    },
+                ]
+            );
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
+
+    let res = parse_sql_statements("CREATE TABLE t (
+        a int NOT NULL,
+         FOREIGN KEY (a) REFERENCES othertable4(a) ON DELETE CASCADE ON UPDATE SET DEFAULT DEFERRABLE INITIALLY IMMEDIATE NOT DEFERRABLE, \
+        )");
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("Expected \',\' or \')\' after column definition, found: NOT"));
+
+    let res = parse_sql_statements("CREATE TABLE t (
+        a int NOT NULL,
+         FOREIGN KEY (a) REFERENCES othertable4(a) ON DELETE CASCADE ON UPDATE SET DEFAULT NOT ENFORCED INITIALLY DEFERRED ENFORCED, \
+        )");
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("Expected \',\' or \')\' after column definition, found: ENFORCED"));
+
+    let res = parse_sql_statements("CREATE TABLE t (
+        a int NOT NULL,
+         FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE CASCADE ON UPDATE SET DEFAULT INITIALLY DEFERRED INITIALLY IMMEDIATE, \
+        )");
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("Expected \',\' or \')\' after column definition, found: INITIALLY"));
+}
+
+#[test]
+fn parse_create_table_column_constraint_characteristics() {
+    fn test_combo(
+        syntax: &str,
+        deferrable: Option<bool>,
+        initially: Option<DeferrableInitial>,
+        enforced: Option<bool>,
+    ) {
+        let message = if syntax.is_empty() {
+            "No clause"
+        } else {
+            syntax
+        };
+
+        let sql = format!("CREATE TABLE t (a int UNIQUE {})", syntax);
+        let expected_clause = if syntax.is_empty() {
+            String::new()
+        } else {
+            format!(" {syntax}")
+        };
+        let expected = format!("CREATE TABLE t (a INT UNIQUE{})", expected_clause);
+        let ast = one_statement_parses_to(&sql, &expected);
+
+        let expected_value = if deferrable.is_some() || initially.is_some() || enforced.is_some() {
+            Some(ConstraintCharacteristics {
+                deferrable,
+                initially,
+                enforced,
+            })
+        } else {
+            None
+        };
+
+        match ast {
+            Statement::CreateTable { columns, .. } => {
+                assert_eq!(
+                    columns,
+                    vec![ColumnDef {
+                        name: "a".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Unique {
+                                is_primary: false,
+                                characteristics: expected_value
+                            }
+                        }]
+                    }],
+                    "{message}"
+                )
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    for deferrable in [None, Some(true), Some(false)] {
+        for initially in [
+            None,
+            Some(DeferrableInitial::Immediate),
+            Some(DeferrableInitial::Deferred),
+        ] {
+            for enforced in [None, Some(true), Some(false)] {
+                let deferrable_text =
+                    deferrable.map(|d| if d { "DEFERRABLE" } else { "NOT DEFERRABLE" });
+                let initially_text = initially.map(|i| match i {
+                    DeferrableInitial::Immediate => "INITIALLY IMMEDIATE",
+                    DeferrableInitial::Deferred => "INITIALLY DEFERRED",
+                });
+                let enforced_text = enforced.map(|e| if e { "ENFORCED" } else { "NOT ENFORCED" });
+
+                let syntax = [deferrable_text, initially_text, enforced_text]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                test_combo(&syntax, deferrable, initially, enforced);
+            }
+        }
+    }
+
+    let res = parse_sql_statements(
+        "CREATE TABLE t (a int NOT NULL UNIQUE DEFERRABLE INITIALLY BADVALUE)",
+    );
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("Expected one of DEFERRED or IMMEDIATE, found: BADVALUE"));
+
+    let res = parse_sql_statements(
+        "CREATE TABLE t (a int NOT NULL UNIQUE INITIALLY IMMEDIATE DEFERRABLE INITIALLY DEFERRED)",
+    );
+    res.expect_err("INITIALLY {IMMEDIATE|DEFERRED} setting should only be allowed once");
+
+    let res = parse_sql_statements(
+        "CREATE TABLE t (a int NOT NULL UNIQUE DEFERRABLE INITIALLY DEFERRED NOT DEFERRABLE)",
+    );
+    res.expect_err("[NOT] DEFERRABLE setting should only be allowed once");
+
+    let res = parse_sql_statements(
+        "CREATE TABLE t (a int NOT NULL UNIQUE DEFERRABLE INITIALLY DEFERRED ENFORCED NOT ENFORCED)",
+    );
+    res.expect_err("[NOT] ENFORCED setting should only be allowed once");
 }
 
 #[test]
@@ -2972,11 +3301,11 @@ fn parse_create_table_with_options() {
                 vec![
                     SqlOption {
                         name: "foo".into(),
-                        value: Value::SingleQuotedString("bar".into()),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption {
                         name: "a".into(),
-                        value: number("123"),
+                        value: Expr::Value(number("123")),
                     },
                 ],
                 with_options
@@ -3235,11 +3564,11 @@ fn parse_alter_view_with_options() {
                 vec![
                     SqlOption {
                         name: "foo".into(),
-                        value: Value::SingleQuotedString("bar".into()),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption {
                         name: "a".into(),
-                        value: number("123"),
+                        value: Expr::Value(number("123")),
                     },
                 ],
                 with_options
@@ -3446,7 +3775,7 @@ fn parse_alter_table_alter_column_type() {
     let res =
         dialect.parse_sql_statements(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
     assert_eq!(
-        ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
+        ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, or SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
         res.unwrap_err()
     );
 
@@ -3642,12 +3971,48 @@ fn parse_named_argument_function() {
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "1".to_owned()
                     ))),
+                    operator: FunctionArgOperator::RightArrow
                 },
                 FunctionArg::Named {
                     name: Ident::new("b"),
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "2".to_owned()
                     ))),
+                    operator: FunctionArgOperator::RightArrow
+                },
+            ],
+            null_treatment: None,
+            filter: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![],
+        }),
+        expr_from_projection(only(&select.projection))
+    );
+}
+
+#[test]
+fn parse_named_argument_function_with_eq_operator() {
+    let sql = "SELECT FUN(a = '1', b = '2') FROM foo";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("FUN")]),
+            args: vec![
+                FunctionArg::Named {
+                    name: Ident::new("a"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "1".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Equals
+                },
+                FunctionArg::Named {
+                    name: Ident::new("b"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "2".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Equals
                 },
             ],
             null_treatment: None,
@@ -5564,18 +5929,18 @@ fn parse_create_view() {
             query,
             or_replace,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
             assert!(!if_not_exists);
@@ -5589,19 +5954,19 @@ fn parse_create_view() {
 fn parse_create_view_with_options() {
     let sql = "CREATE VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::CreateView { with_options, .. } => {
+        Statement::CreateView { options, .. } => {
             assert_eq!(
-                vec![
+                CreateTableOptions::With(vec![
                     SqlOption {
                         name: "foo".into(),
-                        value: Value::SingleQuotedString("bar".into()),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption {
                         name: "a".into(),
-                        value: number("123"),
+                        value: Expr::Value(number("123")),
                     },
-                ],
-                with_options
+                ]),
+                options
             );
         }
         _ => unreachable!(),
@@ -5616,7 +5981,7 @@ fn parse_create_view_with_columns() {
             name,
             columns,
             or_replace,
-            with_options,
+            options,
             query,
             materialized,
             cluster_by,
@@ -5625,8 +5990,17 @@ fn parse_create_view_with_columns() {
             temporary,
         } => {
             assert_eq!("v", name.to_string());
-            assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(
+                columns,
+                vec![Ident::new("has"), Ident::new("cols"),]
+                    .into_iter()
+                    .map(|name| ViewColumnDef {
+                        name,
+                        options: None
+                    })
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!("SELECT 1, 2", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
@@ -5649,18 +6023,18 @@ fn parse_create_view_temporary() {
             query,
             or_replace,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
             assert!(!if_not_exists);
@@ -5678,7 +6052,7 @@ fn parse_create_or_replace_view() {
             name,
             columns,
             or_replace,
-            with_options,
+            options,
             query,
             materialized,
             cluster_by,
@@ -5688,7 +6062,7 @@ fn parse_create_or_replace_view() {
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!("SELECT 1", query.to_string());
             assert!(!materialized);
             assert!(or_replace);
@@ -5713,7 +6087,7 @@ fn parse_create_or_replace_materialized_view() {
             name,
             columns,
             or_replace,
-            with_options,
+            options,
             query,
             materialized,
             cluster_by,
@@ -5723,7 +6097,7 @@ fn parse_create_or_replace_materialized_view() {
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!("SELECT 1", query.to_string());
             assert!(materialized);
             assert!(or_replace);
@@ -5746,17 +6120,17 @@ fn parse_create_materialized_view() {
             columns,
             query,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
@@ -5777,17 +6151,17 @@ fn parse_create_materialized_view_with_cluster_by() {
             columns,
             query,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![Ident::new("foo")]);
             assert!(!late_binding);
@@ -7414,11 +7788,11 @@ fn parse_cache_table() {
             options: vec![
                 SqlOption {
                     name: Ident::with_quote('\'', "K1"),
-                    value: Value::SingleQuotedString("V1".into()),
+                    value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption {
                     name: Ident::with_quote('\'', "K2"),
-                    value: number("0.88"),
+                    value: Expr::Value(number("0.88")),
                 },
             ],
             query: None,
@@ -7439,11 +7813,11 @@ fn parse_cache_table() {
             options: vec![
                 SqlOption {
                     name: Ident::with_quote('\'', "K1"),
-                    value: Value::SingleQuotedString("V1".into()),
+                    value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption {
                     name: Ident::with_quote('\'', "K2"),
-                    value: number("0.88"),
+                    value: Expr::Value(number("0.88")),
                 },
             ],
             query: Some(query.clone()),
@@ -7464,11 +7838,11 @@ fn parse_cache_table() {
             options: vec![
                 SqlOption {
                     name: Ident::with_quote('\'', "K1"),
-                    value: Value::SingleQuotedString("V1".into()),
+                    value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption {
                     name: Ident::with_quote('\'', "K2"),
-                    value: number("0.88"),
+                    value: Expr::Value(number("0.88")),
                 },
             ],
             query: Some(query.clone()),
@@ -7950,6 +8324,29 @@ fn parse_create_type() {
 }
 
 #[test]
+fn parse_call() {
+    all_dialects().verified_stmt("CALL my_procedure()");
+    all_dialects().verified_stmt("CALL my_procedure(1, 'a')");
+    pg_and_generic().verified_stmt("CALL my_procedure(1, 'a', $1)");
+    all_dialects().verified_stmt("CALL my_procedure");
+    assert_eq!(
+        verified_stmt("CALL my_procedure('a')"),
+        Statement::Call(Function {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                Value::SingleQuotedString("a".to_string())
+            ))),],
+            name: ObjectName(vec![Ident::new("my_procedure")]),
+            filter: None,
+            null_treatment: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![]
+        })
+    );
+}
+
+#[test]
 fn parse_create_table_collate() {
     pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
 }
@@ -8032,4 +8429,17 @@ fn test_release_savepoint() {
     }
 
     one_statement_parses_to("RELEASE test1", "RELEASE SAVEPOINT test1");
+}
+
+#[test]
+fn test_buffer_reuse() {
+    let d = GenericDialect {};
+    let q = "INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)";
+    let mut buf = Vec::new();
+    Tokenizer::new(&d, q)
+        .tokenize_with_location_into_buf(&mut buf)
+        .unwrap();
+    let mut p = Parser::new(&d).with_tokens_with_locations(buf);
+    p.parse_statements().unwrap();
+    let _ = p.into_tokens();
 }

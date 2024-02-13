@@ -356,10 +356,10 @@ fn parse_double_equal() {
 #[test]
 fn parse_limit_by() {
     clickhouse_and_generic().verified_stmt(
-        r#"SELECT * FROM `default`.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset"#,
+        r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset"#,
     );
     clickhouse_and_generic().verified_stmt(
-        r#"SELECT * FROM `default`.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset, toStartOfDay(created_at)"#,
+        r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset, toStartOfDay(created_at)"#,
     );
 }
 

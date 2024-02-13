@@ -7549,13 +7549,11 @@ impl<'a> Parser<'a> {
             let name = self.parse_object_name(true)?;
 
             for ident in &name.0 {
-                if ident.quote_style.is_none() {
-                    if ident.find_keyword().is_some() {
-                        return parser_err!(
-                            "Cannot specify a keyword as identifier for table factor",
-                            loc
-                        );
-                    }
+                if ident.quote_style.is_none() && ident.find_keyword().is_some() {
+                    return parser_err!(
+                        "Cannot specify a keyword as identifier for table factor",
+                        loc
+                    );
                 }
             }
 

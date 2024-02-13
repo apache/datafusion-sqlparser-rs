@@ -8421,10 +8421,17 @@ fn parse_json_table_function_err() {
 
 #[test]
 fn parse_json_table_as_identifier() {
-    let parsed = all_dialects().parse_sql_statements("SELECT * FROM json_table");
+    let ansi_dialect = TestedDialects {
+        dialects: vec![
+            Box::new(AnsiDialect {}),
+        ],
+        options: None,
+    };
+
+    let parsed = ansi_dialect.parse_sql_statements("SELECT * FROM json_table");
     assert_eq!(
         ParserError::ParserError(
-            "Cannot specify a keyword as identifier for table factor".to_string()
+            "Cannot specify a keyword as identifier for table factor: json_table".to_string()
         ),
         parsed.unwrap_err()
     );

@@ -7548,12 +7548,18 @@ impl<'a> Parser<'a> {
             let loc = self.peek_token().location;
             let name = self.parse_object_name(true)?;
 
-            for ident in &name.0 {
-                if ident.quote_style.is_none() && ident.find_keyword().is_some() {
-                    return parser_err!(
-                        "Cannot specify a keyword as identifier for table factor",
-                        loc
-                    );
+            // Prevents using keywords as identifiers for table factor in ANSI mode
+            if dialect_of!(self is AnsiDialect) {
+                for ident in &name.0 {
+                    if ident.quote_style.is_none() && ident.find_keyword().is_some() {
+                        return parser_err!(
+                            format!(
+                                "Cannot specify a keyword as identifier for table factor: {}",
+                                ident.value
+                            ),
+                            loc
+                        );
+                    }
                 }
             }
 

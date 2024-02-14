@@ -2338,9 +2338,7 @@ fn parse_json_table_is_not_reserved() {
         TableFactor::Table {
             name: ObjectName(name),
             ..
-        } => {
-            assert_eq!("JSON_TABLE", name[0].value);
-        }
+        } => assert_eq!("JSON_TABLE", name[0].value),
         _ => unreachable!(),
     }
 }

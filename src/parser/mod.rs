@@ -6302,6 +6302,19 @@ impl<'a> Parser<'a> {
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<Select, ParserError> {
+        let value_table_mode =
+            if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::AS) {
+                if self.parse_keyword(Keyword::VALUE) {
+                    Some(ValueTableMode::AsValue)
+                } else if self.parse_keyword(Keyword::STRUCT) {
+                    Some(ValueTableMode::AsStruct)
+                } else {
+                    self.expected("VALUE or STRUCT", self.peek_token())?
+                }
+            } else {
+                None
+            };
+
         let distinct = self.parse_all_or_distinct()?;
 
         let top = if self.parse_keyword(Keyword::TOP) {
@@ -6441,6 +6454,7 @@ impl<'a> Parser<'a> {
             having,
             named_window: named_windows,
             qualify,
+            value_table_mode,
         })
     }
 

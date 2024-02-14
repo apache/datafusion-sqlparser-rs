@@ -1360,6 +1360,7 @@ fn parse_tablesample() {
         having: None,
         named_window: vec![],
         qualify: None,
+        value_table_mode: None,
     };
     assert_eq!(actual_select_only, expected);
 }

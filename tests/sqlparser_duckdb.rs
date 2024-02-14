@@ -173,6 +173,7 @@ fn test_select_union_by_name() {
             having: None,
             named_window: vec![],
             qualify: None,
+            value_table_mode: None,
         }))),
         right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
             distinct: None,
@@ -208,6 +209,7 @@ fn test_select_union_by_name() {
             having: None,
             named_window: vec![],
             qualify: None,
+            value_table_mode: None,
         }))),
     });
 
@@ -252,6 +254,7 @@ fn test_select_union_by_name() {
             having: None,
             named_window: vec![],
             qualify: None,
+            value_table_mode: None,
         }))),
         right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
             distinct: None,
@@ -287,6 +290,7 @@ fn test_select_union_by_name() {
             having: None,
             named_window: vec![],
             qualify: None,
+            value_table_mode: None,
         }))),
     });
     assert_eq!(ast.body, expected);

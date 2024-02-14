@@ -234,7 +234,7 @@ fn parse_update_set_from() {
                 id: vec![Ident::new("name")],
                 value: Expr::CompoundIdentifier(
                     vec![Ident::new("t2"), Ident::new("name")].empty_span()
-                )
+                ),
             }],
             from: Some(TableWithJoins {
                 relation: TableFactor::Derived {
@@ -276,7 +276,8 @@ fn parse_update_set_from() {
                             sort_by: vec![],
                             having: None,
                             named_window: vec![],
-                            qualify: None
+                            qualify: None,
+                            value_table_mode: None,
                         }))),
                         order_by: vec![],
                         limit: None,
@@ -288,7 +289,7 @@ fn parse_update_set_from() {
                     alias: Some(TableAlias {
                         name: Ident::new("t2").empty_span(),
                         columns: vec![],
-                    })
+                    }),
                 },
                 joins: vec![],
             }),
@@ -344,7 +345,7 @@ fn parse_update_with_table_alias() {
             assert_eq!(
                 Some(Expr::BinaryOp {
                     left: Box::new(Expr::CompoundIdentifier(
-                        vec![Ident::new("u"), Ident::new("username"),].empty_span()
+                        vec![Ident::new("u"), Ident::new("username")].empty_span()
                     )),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString(
@@ -374,11 +375,11 @@ fn parse_select_with_table_alias() {
     assert_eq!(
         select.projection,
         vec![
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("a").empty_span()).empty_span(),)
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("a").empty_span()).empty_span())
                 .empty_span(),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("b").empty_span()).empty_span(),)
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("b").empty_span()).empty_span())
                 .empty_span(),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("c").empty_span()).empty_span(),)
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("c").empty_span()).empty_span())
                 .empty_span(),
         ]
     );
@@ -816,7 +817,7 @@ fn parse_select_wildcard() {
     assert_eq!(
         &SelectItem::QualifiedWildcard(
             ObjectName(vec![Ident::new("foo")]),
-            WildcardAdditionalOptions::default()
+            WildcardAdditionalOptions::default(),
         )
         .empty_span(),
         only(&select.projection)
@@ -826,7 +827,7 @@ fn parse_select_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &SelectItem::QualifiedWildcard(
-            ObjectName(vec![Ident::new("myschema"), Ident::new("mytable"),]),
+            ObjectName(vec![Ident::new("myschema"), Ident::new("mytable")]),
             WildcardAdditionalOptions::default(),
         )
         .empty_span(),
@@ -1064,12 +1065,12 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
             SelectItem::UnnamedExpr(Expr::Value(number("1e+3")).empty_span()).empty_span(),
             SelectItem::ExprWithAlias {
                 expr: Expr::Value(number("1e3")).empty_span(),
-                alias: Ident::new("a").empty_span()
+                alias: Ident::new("a").empty_span(),
             }
             .empty_span(),
             SelectItem::ExprWithAlias {
                 expr: Expr::Value(number("1")).empty_span(),
-                alias: Ident::new("e").empty_span()
+                alias: Ident::new("e").empty_span(),
             }
             .empty_span(),
             SelectItem::UnnamedExpr(Expr::Value(number("0.5e2")).empty_span()).empty_span(),
@@ -1825,7 +1826,7 @@ fn parse_tuples() {
     assert_eq!(
         vec![
             SelectItem::UnnamedExpr(
-                Expr::Tuple(vec![Expr::Value(number("1")), Expr::Value(number("2")),]).empty_span()
+                Expr::Tuple(vec![Expr::Value(number("1")), Expr::Value(number("2"))]).empty_span()
             )
             .empty_span(),
             SelectItem::UnnamedExpr(Expr::Nested(Box::new(Expr::Value(number("1")))).empty_span())
@@ -2361,7 +2362,7 @@ fn parse_listagg() {
                 ))),
                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                     Value::SingleQuotedString(", ".to_string())
-                )))
+                ))),
             ],
             within_group: Some(within_group),
             over: None,
@@ -2537,7 +2538,7 @@ fn parse_create_table() {
                                 foreign_table: ObjectName(vec!["othertable".into()]),
                                 referred_columns: vec![
                                     Ident::new("a").empty_span(),
-                                    Ident::new("b").empty_span()
+                                    Ident::new("b").empty_span(),
                                 ],
                                 on_delete: None,
                                 on_update: None,
@@ -3262,7 +3263,7 @@ fn parse_alter_view_with_columns() {
                 columns,
                 vec![
                     Ident::new("has").empty_span(),
-                    Ident::new("cols").empty_span()
+                    Ident::new("cols").empty_span(),
                 ]
             );
             assert_eq!("SELECT 1, 2", query.to_string());
@@ -3876,6 +3877,7 @@ fn test_parse_named_window() {
             ),
         ],
         qualify: None,
+        value_table_mode: None,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -4258,6 +4260,7 @@ fn parse_interval_and_or_xor() {
             having: None,
             named_window: vec![],
             qualify: None,
+            value_table_mode: None,
         }))),
         order_by: vec![],
         limit: None,
@@ -5266,7 +5269,7 @@ fn parse_cte_renamed_columns() {
     assert_eq!(
         vec![
             Ident::new("col1").empty_span(),
-            Ident::new("col2").empty_span()
+            Ident::new("col2").empty_span(),
         ],
         query
             .with
@@ -5758,7 +5761,7 @@ fn parse_create_view_with_columns() {
                 columns,
                 vec![
                     Ident::new("has").empty_span(),
-                    Ident::new("cols").empty_span()
+                    Ident::new("cols").empty_span(),
                 ]
             );
             assert_eq!(with_options, vec![]);
@@ -6870,6 +6873,7 @@ fn parse_merge() {
                             having: None,
                             named_window: vec![],
                             qualify: None,
+                            value_table_mode: None,
                         }))),
                         order_by: vec![],
                         limit: None,
@@ -6895,21 +6899,21 @@ fn parse_merge() {
                 Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(
-                            vec![Ident::new("dest"), Ident::new("D"),].empty_span()
+                            vec![Ident::new("dest"), Ident::new("D")].empty_span()
                         )),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::CompoundIdentifier(
-                            vec![Ident::new("stg"), Ident::new("D"),].empty_span()
+                            vec![Ident::new("stg"), Ident::new("D")].empty_span()
                         )),
                     }),
                     op: BinaryOperator::And,
                     right: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(
-                            vec![Ident::new("dest"), Ident::new("E"),].empty_span()
+                            vec![Ident::new("dest"), Ident::new("E")].empty_span()
                         )),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::CompoundIdentifier(
-                            vec![Ident::new("stg"), Ident::new("E"),].empty_span()
+                            vec![Ident::new("stg"), Ident::new("E")].empty_span()
                         )),
                     }),
                 })
@@ -6924,7 +6928,7 @@ fn parse_merge() {
                         columns: vec![
                             Ident::new("A").empty_span(),
                             Ident::new("B").empty_span(),
-                            Ident::new("C").empty_span()
+                            Ident::new("C").empty_span(),
                         ],
                         values: Values {
                             explicit_row: false,
@@ -6938,13 +6942,13 @@ fn parse_merge() {
                                 Expr::CompoundIdentifier(
                                     vec![Ident::new("stg"), Ident::new("C")].empty_span()
                                 ),
-                            ]]
+                            ]],
                         },
                     },
                     MergeClause::MatchedUpdate {
                         predicate: Some(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(
-                                vec![Ident::new("dest"), Ident::new("A"),].empty_span()
+                                vec![Ident::new("dest"), Ident::new("A")].empty_span()
                             )),
                             op: BinaryOperator::Eq,
                             right: Box::new(Expr::Value(Value::SingleQuotedString(
@@ -6955,13 +6959,13 @@ fn parse_merge() {
                             Assignment {
                                 id: vec![Ident::new("dest"), Ident::new("F")],
                                 value: Expr::CompoundIdentifier(
-                                    vec![Ident::new("stg"), Ident::new("F"),].empty_span()
+                                    vec![Ident::new("stg"), Ident::new("F")].empty_span()
                                 ),
                             },
                             Assignment {
                                 id: vec![Ident::new("dest"), Ident::new("G")],
                                 value: Expr::CompoundIdentifier(
-                                    vec![Ident::new("stg"), Ident::new("G"),].empty_span()
+                                    vec![Ident::new("stg"), Ident::new("G")].empty_span()
                                 ),
                             },
                         ],
@@ -7032,7 +7036,7 @@ fn test_lock_table() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
         }]
     );
     assert!(lock.nonblock.is_none());
@@ -7046,7 +7050,7 @@ fn test_lock_table() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
         }]
     );
     assert!(lock.nonblock.is_none());
@@ -7060,7 +7064,7 @@ fn test_lock_table() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
         }]
     );
     assert!(lock.nonblock.is_none());
@@ -7070,7 +7074,7 @@ fn test_lock_table() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "student".to_string(),
-            quote_style: None
+            quote_style: None,
         }]
     );
     assert!(lock.nonblock.is_none());
@@ -7087,7 +7091,7 @@ fn test_lock_nonblock() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
         }]
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::SkipLocked);
@@ -7101,7 +7105,7 @@ fn test_lock_nonblock() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
         }]
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::Nowait);
@@ -7222,7 +7226,7 @@ fn parse_identifiers() {
                 select.projection,
                 vec![SelectItem::ExprWithAlias {
                     expr: Expr::Identifier(Ident::new("foo").empty_span()).empty_span(),
-                    alias: Ident::new("baz").empty_span()
+                    alias: Ident::new("baz").empty_span(),
                 }
                 .empty_span()]
             )
@@ -7541,7 +7545,7 @@ fn parse_cache_table() {
             format!(
                 "CACHE {table_flag} TABLE '{cache_table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) {sql}",
             )
-            .as_str()
+                .as_str()
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
@@ -7566,7 +7570,7 @@ fn parse_cache_table() {
             format!(
                 "CACHE {table_flag} TABLE '{cache_table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) AS {sql}",
             )
-            .as_str()
+                .as_str()
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
@@ -7794,7 +7798,7 @@ fn parse_pivot_table() {
                 name: ObjectName(vec![Ident::new("monthly_sales")]),
                 alias: Some(TableAlias {
                     name: Ident::new("a").empty_span(),
-                    columns: vec![]
+                    columns: vec![],
                 }),
                 args: None,
                 with_hints: vec![],
@@ -7805,7 +7809,7 @@ fn parse_pivot_table() {
                 name: ObjectName(vec![Ident::new("SUM")]),
                 args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                     Expr::CompoundIdentifier(
-                        vec![Ident::new("a"), Ident::new("amount"),].empty_span()
+                        vec![Ident::new("a"), Ident::new("amount")].empty_span()
                     )
                 ))]),
                 over: None,
@@ -7827,7 +7831,7 @@ fn parse_pivot_table() {
             alias: Some(TableAlias {
                 name: Ident {
                     value: "p".to_string(),
-                    quote_style: None
+                    quote_style: None,
                 }
                 .empty_span(),
                 columns: vec![Ident::new("c").empty_span(), Ident::new("d").empty_span()],
@@ -7855,10 +7859,10 @@ fn parse_pivot_table() {
 #[test]
 fn parse_pivot_table_aliases() {
     let sql = concat!(
-        "SELECT * FROM monthly_sales AS a ",
-        "PIVOT(COUNT(a.EMPID) AS number_of_sales, SUM(a.amount) AS total FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ",
-        "ORDER BY EMPID"
-        );
+    "SELECT * FROM monthly_sales AS a ",
+    "PIVOT(COUNT(a.EMPID) AS number_of_sales, SUM(a.amount) AS total FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ",
+    "ORDER BY EMPID"
+    );
 
     assert_eq!(
         verified_only_select(sql).from[0].relation,
@@ -7867,7 +7871,7 @@ fn parse_pivot_table_aliases() {
                 name: ObjectName(vec![Ident::new("monthly_sales")]),
                 alias: Some(TableAlias {
                     name: Ident::new("a").empty_span(),
-                    columns: vec![]
+                    columns: vec![],
                 }),
                 args: None,
                 with_hints: vec![],
@@ -7880,7 +7884,7 @@ fn parse_pivot_table_aliases() {
                         name: ObjectName(vec![Ident::new("COUNT")]),
                         args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                             Expr::CompoundIdentifier(
-                                vec![Ident::new("a"), Ident::new("EMPID"),].empty_span()
+                                vec![Ident::new("a"), Ident::new("EMPID")].empty_span()
                             )
                         ))]),
                         over: None,
@@ -7892,14 +7896,14 @@ fn parse_pivot_table_aliases() {
                         null_treatment: None,
                         within_group: None,
                     }),
-                    alias: Ident::new("number_of_sales")
+                    alias: Ident::new("number_of_sales"),
                 },
                 AggregateItem::ExprWithAlias {
                     expr: Expr::Function(Function {
                         name: ObjectName(vec![Ident::new("SUM")]),
                         args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                             Expr::CompoundIdentifier(
-                                vec![Ident::new("a"), Ident::new("amount"),].empty_span()
+                                vec![Ident::new("a"), Ident::new("amount")].empty_span()
                             )
                         ))]),
                         over: None,
@@ -7911,8 +7915,8 @@ fn parse_pivot_table_aliases() {
                         null_treatment: None,
                         within_group: None,
                     }),
-                    alias: Ident::new("total")
-                }
+                    alias: Ident::new("total"),
+                },
             ],
             value_column: vec![Ident::new("a"), Ident::new("MONTH")],
             pivot_values: vec![
@@ -7924,7 +7928,7 @@ fn parse_pivot_table_aliases() {
             alias: Some(TableAlias {
                 name: Ident {
                     value: "p".to_string(),
-                    quote_style: None
+                    quote_style: None,
                 }
                 .empty_span(),
                 columns: vec![Ident::new("c").empty_span(), Ident::new("d").empty_span()],
@@ -7976,7 +7980,7 @@ fn parse_unpivot_table() {
                 name: ObjectName(vec![Ident::new("sales")]),
                 alias: Some(TableAlias {
                     name: Ident::new("s").empty_span(),
-                    columns: vec![]
+                    columns: vec![],
                 }),
                 args: None,
                 with_hints: vec![],
@@ -7995,7 +7999,7 @@ fn parse_unpivot_table() {
                 columns: ["product", "quarter", "quantity"]
                     .into_iter()
                     .map(|f| Ident::new(f).empty_span())
-                    .collect()
+                    .collect(),
             }),
         }
     );
@@ -8036,7 +8040,7 @@ fn parse_pivot_unpivot_table() {
                     name: ObjectName(vec![Ident::new("census")]),
                     alias: Some(TableAlias {
                         name: Ident::new("c").empty_span(),
-                        columns: vec![]
+                        columns: vec![],
                     }),
                     args: None,
                     with_hints: vec![],
@@ -8051,7 +8055,7 @@ fn parse_pivot_unpivot_table() {
                     .collect(),
                 alias: Some(TableAlias {
                     name: Ident::new("u").empty_span(),
-                    columns: vec![]
+                    columns: vec![],
                 }),
             }),
             aggregates: vec![AggregateItem::UnnamedExpr(Expr::Function(Function {
@@ -8071,11 +8075,11 @@ fn parse_pivot_unpivot_table() {
             value_column: vec![Ident::new("year")],
             pivot_values: vec![
                 Value::SingleQuotedString("population_2000".to_string()),
-                Value::SingleQuotedString("population_2010".to_string())
+                Value::SingleQuotedString("population_2010".to_string()),
             ],
             alias: Some(TableAlias {
                 name: Ident::new("p").empty_span(),
-                columns: vec![]
+                columns: vec![],
             }),
         }
     );
@@ -8168,9 +8172,9 @@ fn parse_create_type() {
                         name: Ident::new("bar").empty_span(),
                         data_type: DataType::Text,
                         collation: Some(ObjectName(vec![Ident::with_quote('\"', "de_DE")])),
-                    }
+                    },
                 ]
-            }
+            },
         },
         create_type
     );

@@ -44,7 +44,8 @@ pub use self::query::{
     NamedWindowDefinition, NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem,
     ReplaceSelectElement, ReplaceSelectItem, SamplingMethod, Select, SelectInto, SelectItem,
     SelectionCount, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
-    TableSampleSeed, TableVersion, TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
+    TableSampleSeed, TableVersion, TableWithJoins, Top, ValueTableMode, Values,
+    WildcardAdditionalOptions, With,
 };
 pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, ObjectConstantKeyValue,

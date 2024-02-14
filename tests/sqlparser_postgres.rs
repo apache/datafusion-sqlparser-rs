@@ -2339,7 +2339,7 @@ fn parse_json_table_is_not_reserved() {
             name: ObjectName(name),
             ..
         } => assert_eq!("JSON_TABLE", name[0].value),
-        _ => panic!("Expected JSON_TABLE to be parsed as a table name"),
+        other => panic!("Expected JSON_TABLE to be parsed as a table name, but got {other:?}"),
     }
 }
 

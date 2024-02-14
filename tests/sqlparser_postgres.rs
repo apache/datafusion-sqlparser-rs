@@ -2332,7 +2332,7 @@ fn test_json() {
 fn parse_json_table_is_not_reserved() {
     // JSON_TABLE is not a reserved keyword in PostgreSQL, even though it is in SQL:2023
     // see: https://en.wikipedia.org/wiki/List_of_SQL_reserved_words
-    let Select { from, .. } = pg().verified_only_select("SELECT * FROM JSON_TABLE");
+    let Select { from, .. } = pg_and_generic().verified_only_select("SELECT * FROM JSON_TABLE");
     assert_eq!(1, from.len());
     match &from[0].relation {
         TableFactor::Table {

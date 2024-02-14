@@ -1352,3 +1352,19 @@ fn test_bigquery_trim() {
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 }
+
+#[test]
+fn test_select_as_struct() {
+    bigquery().verified_only_select("SELECT * FROM (SELECT AS VALUE STRUCT(123 AS a, false AS b))");
+    let select = bigquery().verified_only_select("SELECT AS STRUCT 1 AS a, 2 AS b");
+    assert_eq!(Some(ValueTableMode::AsStruct), select.value_table_mode);
+}
+
+#[test]
+fn test_select_as_value() {
+    bigquery().verified_only_select(
+        "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+    );
+    let select = bigquery().verified_only_select("SELECT AS VALUE STRUCT(1 AS a, 2 AS b) AS xyz");
+    assert_eq!(Some(ValueTableMode::AsValue), select.value_table_mode);
+}

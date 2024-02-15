@@ -2329,6 +2329,21 @@ fn test_json() {
 }
 
 #[test]
+fn parse_json_table_is_not_reserved() {
+    // JSON_TABLE is not a reserved keyword in PostgreSQL, even though it is in SQL:2023
+    // see: https://en.wikipedia.org/wiki/List_of_SQL_reserved_words
+    let Select { from, .. } = pg_and_generic().verified_only_select("SELECT * FROM JSON_TABLE");
+    assert_eq!(1, from.len());
+    match &from[0].relation {
+        TableFactor::Table {
+            name: ObjectName(name),
+            ..
+        } => assert_eq!("JSON_TABLE", name[0].value),
+        other => panic!("Expected JSON_TABLE to be parsed as a table name, but got {other:?}"),
+    }
+}
+
+#[test]
 fn test_composite_value() {
     let sql = "SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9";
     let select = pg().verified_only_select(sql);

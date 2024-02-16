@@ -3683,7 +3683,9 @@ fn test_simple_postgres_insert_with_alias() {
             on: None,
             returning: None,
             replace_into: false,
-            priority: None
+            priority: None,
+            as_table: None,
+            as_table_after_columns: None
         }
     )
 }
@@ -3749,7 +3751,9 @@ fn test_simple_postgres_insert_with_alias() {
             on: None,
             returning: None,
             replace_into: false,
-            priority: None
+            priority: None,
+            as_table: None,
+            as_table_after_columns: None
         }
     )
 }
@@ -3811,7 +3815,9 @@ fn test_simple_insert_with_quoted_alias() {
             on: None,
             returning: None,
             replace_into: false,
-            priority: None
+            priority: None,
+            as_table: None,
+            as_table_after_columns: None,
         }
     )
 }

@@ -1536,6 +1536,10 @@ pub enum Statement {
         replace_into: bool,
         /// Only for mysql
         priority: Option<MysqlInsertPriority>,
+        /// Only for mysql
+        as_table: Option<ObjectName>,
+        /// Only for mysql
+        as_table_after_columns: Option<Vec<Ident>>,
     },
     /// ```sql
     /// INSTALL
@@ -2592,6 +2596,8 @@ impl fmt::Display for Statement {
                 returning,
                 replace_into,
                 priority,
+                as_table,
+                as_table_after_columns,
             } => {
                 let table_name = if let Some(alias) = table_alias {
                     format!("{table_name} AS {alias}")
@@ -2639,6 +2645,14 @@ impl fmt::Display for Statement {
 
                 if source.is_none() && columns.is_empty() {
                     write!(f, "DEFAULT VALUES")?;
+                }
+
+                if let Some(as_table) = as_table {
+                    write!(f, " AS {as_table}")?;
+
+                    if let Some(as_table_after_columns) = as_table_after_columns {
+                        write!(f, " ({})", display_comma_separated(as_table_after_columns))?;
+                    }
                 }
 
                 if let Some(on) = on {

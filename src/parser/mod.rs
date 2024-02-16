@@ -7990,6 +7990,17 @@ impl<'a> Parser<'a> {
                     (columns, partitioned, after_columns, source)
                 };
 
+            let (as_table, as_table_after_columns) = if dialect_of!(self is MySqlDialect | GenericDialect)
+                && self.parse_keyword(Keyword::AS)
+            {
+                let as_table = Some(self.parse_object_name(false)?);
+                let as_table_after_columns =
+                    self.parse_parenthesized_column_list(Optional, false)?;
+                (as_table, Some(as_table_after_columns))
+            } else {
+                (None, None)
+            };
+
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
                     let conflict_target =
@@ -8055,6 +8066,8 @@ impl<'a> Parser<'a> {
                 after_columns,
                 source,
                 table,
+                as_table,
+                as_table_after_columns,
                 on,
                 returning,
                 replace_into,

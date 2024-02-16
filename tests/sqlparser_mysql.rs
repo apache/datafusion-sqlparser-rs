@@ -1339,18 +1339,27 @@ fn parse_insert_as() {
             as_table_after_columns,
             ..
         } => {
-            assert_eq!(ObjectName(vec![Ident::with_quote('`', "table")]), table_name);
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "table")]),
+                table_name
+            );
             assert_eq!(vec![Ident::with_quote('`', "date")], columns);
-            assert_eq!(ObjectName(vec![Ident::with_quote('`', "alias")]), as_table.unwrap());
-            assert_eq!(Some(vec![Ident::with_quote('`', "mek")]), as_table_after_columns);
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "alias")]),
+                as_table.unwrap()
+            );
+            assert_eq!(
+                Some(vec![Ident::with_quote('`', "mek")]),
+                as_table_after_columns
+            );
             assert_eq!(
                 Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
-                        rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString("2024-01-01".to_string()))
-                        ]]
+                        rows: vec![vec![Expr::Value(Value::SingleQuotedString(
+                            "2024-01-01".to_string()
+                        ))]]
                     })),
                     order_by: vec![],
                     limit: None,

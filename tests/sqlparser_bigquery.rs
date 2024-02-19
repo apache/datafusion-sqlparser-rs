@@ -988,7 +988,7 @@ fn test_select_wildcard_with_except() {
 fn test_select_agg_ignore_nulls() {
     bigquery().one_statement_parses_to(
         "SELECT last_value(user_id IGNORE NULLS) OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1",
-        "SELECT last_value(user_id) IGNORE NULLS OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1"
+        "SELECT last_value(user_id) IGNORE NULLS OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1",
     );
 }
 
@@ -1003,7 +1003,7 @@ fn test_select_agg_order_by() {
 fn test_select_agg_ignore_nulls_order_by() {
     bigquery().one_statement_parses_to(
         "SELECT last_value(user_id IGNORE NULLS ORDER BY user_id) OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1",
-        "SELECT last_value(user_id ORDER BY user_id) IGNORE NULLS OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1"
+        "SELECT last_value(user_id ORDER BY user_id) IGNORE NULLS OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1",
     );
 }
 
@@ -1151,5 +1151,63 @@ fn test_select_as_value() {
 fn test_select_array_item_field() {
     bigquery().verified_only_select(
         "SELECT arr[SAFE_OFFSET(0)].id AS arr_id FROM `proj`.`dataset`.`table`",
+    );
+}
+
+#[test]
+fn test_select_array_item_field_in_function() {
+    bigquery().verified_only_select(
+        "SELECT LOWER(arr[SAFE_OFFSET(0)].id) AS arr_id FROM `proj`.`dataset`.`table`",
+    );
+}
+
+#[test]
+fn test_select_json_field() {
+    let _select = bigquery().verified_only_select(
+        "SELECT JSON_VALUE(PARSE_JSON(response_json).user.username) AS arr_id FROM `proj`.`dataset`.`table`",
+    );
+
+    assert_eq!(
+        SelectItem::ExprWithAlias {
+            expr: Expr::Function(Function {
+                name: ObjectName(vec!["JSON_VALUE".into()]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                    Expr::JsonAccess {
+                        left: Box::new(Expr::Function(Function {
+                            name: ObjectName(vec!["PARSE_JSON".into()]),
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(
+                                    Ident::new("response_json".to_string()).empty_span()
+                                )
+                            ))],
+                            over: None,
+                            distinct: false,
+                            special: false,
+                            order_by: vec![],
+                            limit: None,
+                            on_overflow: None,
+                            null_treatment: None,
+                            within_group: None,
+                        })),
+                        operator: JsonOperator::Period,
+                        right: Box::new(Expr::Value(Value::UnQuotedString(
+                            "user.username".to_string()
+                        ))),
+                    }
+                ))],
+                over: None,
+                distinct: false,
+                special: false,
+                order_by: vec![],
+                limit: None,
+                on_overflow: None,
+                null_treatment: None,
+                within_group: None,
+            })
+            .empty_span(),
+            alias: Ident::new("arr_id").empty_span(),
+        }
+        .empty_span(),
+        _select.projection[0]
     );
 }

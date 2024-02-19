@@ -864,7 +864,18 @@ impl<'a> Parser<'a> {
 
                         if self.consume_token(&Token::LParen) {
                             self.prev_token();
-                            self.parse_function(ObjectName(id_parts))
+                            let function = self.parse_function(ObjectName(id_parts))?;
+                            if dialect_of!(self is BigQueryDialect)
+                                && self.consume_token(&Token::Period)
+                            {
+                                Ok(Expr::JsonAccess {
+                                    left: Box::new(function),
+                                    operator: JsonOperator::Period,
+                                    right: Box::new(Expr::Value(self.parse_snowflake_json_path()?)),
+                                })
+                            } else {
+                                Ok(function)
+                            }
                         } else {
                             Ok(Expr::CompoundIdentifier(
                                 id_parts.spanning(self.span_from_index(start_idx)),
@@ -2106,7 +2117,7 @@ impl<'a> Parser<'a> {
                 return self.parse_array_index(expr);
             }
             let expr = self.parse_map_access(expr)?;
-            // Snowflake allows col[1].key syntax
+            // Snowflake and BigQuery allows col[1].key syntax
             if dialect_of!(self is SnowflakeDialect | BigQueryDialect)
                 && self.consume_token(&Token::Period)
             {

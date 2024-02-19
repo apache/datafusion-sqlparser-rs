@@ -311,7 +311,7 @@ pub enum JsonOperator {
     HashLongArrow,
     /// : Colon is used by Snowflake (Which is similar to LongArrow)
     Colon,
-    /// . Period is used by Snowflake (Which is similar to Colon)
+    /// . Period is used by Snowflake and BigQuery (Which is similar to Colon)
     Period,
     /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
     AtArrow,

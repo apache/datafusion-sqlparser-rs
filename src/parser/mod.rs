@@ -117,6 +117,7 @@ mod recursion {
             Self { remaining_depth }
         }
     }
+
     impl Drop for DepthGuard {
         fn drop(&mut self) {
             self.remaining_depth.fetch_add(1, Ordering::SeqCst);
@@ -959,7 +960,7 @@ impl<'a> Parser<'a> {
                             return parser_err!(
                                 format!("Expected identifier, found: {tok}"),
                                 tok.span.start
-                            )
+                            );
                         }
                     };
                     Ok(Expr::CompositeAccess {
@@ -2466,7 +2467,7 @@ impl<'a> Parser<'a> {
                             .get(max(2, self.index) - 2)
                             .map(|t| t.span.end.span_to(t.span.end));
                         TokenWithLocation::new(Token::EOF, eof_span.unwrap_or_default())
-                    })
+                    });
                 }
             }
         }
@@ -5724,12 +5725,12 @@ impl<'a> Parser<'a> {
             Token::EOF => {
                 return Err(ParserError::ParserError(
                     "Empty input when parsing identifier".to_string(),
-                ))?
+                ))?;
             }
             token => {
                 return Err(ParserError::ParserError(format!(
                     "Unexpected token in identifier: {token}"
-                )))?
+                )))?;
             }
         };
 
@@ -5742,19 +5743,19 @@ impl<'a> Parser<'a> {
                     Token::EOF => {
                         return Err(ParserError::ParserError(
                             "Trailing period in identifier".to_string(),
-                        ))?
+                        ))?;
                     }
                     token => {
                         return Err(ParserError::ParserError(format!(
                             "Unexpected token following period in identifier: {token}"
-                        )))?
+                        )))?;
                     }
                 },
                 Token::EOF => break,
                 token => {
                     return Err(ParserError::ParserError(format!(
                         "Unexpected token in identifier: {token}"
-                    )))?
+                    )))?;
                 }
             }
         }
@@ -5941,7 +5942,7 @@ impl<'a> Parser<'a> {
                         return parser_err!(
                             format!("unbalanced parens: {}", modifier),
                             next_token.span.start
-                        )
+                        );
                     }
                     Token::LParen => {
                         modifier.push_str(&next_token.to_string());
@@ -6831,7 +6832,7 @@ impl<'a> Parser<'a> {
                             _ => {
                                 return Err(ParserError::ParserError(format!(
                                     "expected OUTER, SEMI, ANTI or JOIN after {kw:?}"
-                                )))
+                                )));
                             }
                         }
                     }
@@ -7699,6 +7700,14 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let null_treatment = if self.parse_keywords(&[Keyword::IGNORE, Keyword::NULLS]) {
+                Some(NullTreatment::IGNORE)
+            } else if self.parse_keywords(&[Keyword::RESPECT, Keyword::NULLS]) {
+                Some(NullTreatment::RESPECT)
+            } else {
+                None
+            };
+
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 self.parse_comma_separated(Parser::parse_order_by_expr)?
             } else {
@@ -7710,13 +7719,6 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            let null_treatment = if self.parse_keywords(&[Keyword::IGNORE, Keyword::NULLS]) {
-                Some(NullTreatment::IGNORE)
-            } else if self.parse_keywords(&[Keyword::RESPECT, Keyword::NULLS]) {
-                Some(NullTreatment::RESPECT)
-            } else {
-                None
-            };
             self.expect_token(&Token::RParen)?;
             Ok((args, on_overflow, order_by, limit, null_treatment))
         }

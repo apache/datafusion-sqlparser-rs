@@ -101,12 +101,12 @@ fn parse_nested_data_types() {
                             StructField {
                                 field_name: Some(Ident::new("a").empty_span()),
                                 field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(
-                                    Box::new(DataType::Int64,)
-                                ))
+                                    Box::new(DataType::Int64)
+                                )),
                             },
                             StructField {
                                 field_name: Some(Ident::new("b").empty_span()),
-                                field_type: DataType::Bytes(Some(42))
+                                field_type: DataType::Bytes(Some(42)),
                             },
                         ]),
                         collation: None,
@@ -177,7 +177,7 @@ fn parse_tuple_struct_literal() {
             Expr::Value(number("1")),
             Expr::Value(number("1.0")),
             Expr::Value(Value::SingleQuotedString("123".to_string())),
-            Expr::Value(Value::Boolean(true))
+            Expr::Value(Value::Boolean(true)),
         ]),
         expr_from_projection(&select.projection[1])
     );
@@ -197,15 +197,15 @@ fn parse_typeless_struct_syntax() {
                 Expr::Value(number("2")),
                 Expr::Value(number("3")),
             ],
-            fields: Default::default()
+            fields: Default::default(),
         },
         expr_from_projection(&select.projection[0])
     );
 
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::SingleQuotedString("abc".to_string())),],
-            fields: Default::default()
+            values: vec![Expr::Value(Value::SingleQuotedString("abc".to_string()))],
+            fields: Default::default(),
         },
         expr_from_projection(&select.projection[1])
     );
@@ -217,7 +217,7 @@ fn parse_typeless_struct_syntax() {
                     vec![Ident::from("t"), Ident::from("str_col")].empty_span()
                 ),
             ],
-            fields: Default::default()
+            fields: Default::default(),
         },
         expr_from_projection(&select.projection[2])
     );
@@ -226,14 +226,14 @@ fn parse_typeless_struct_syntax() {
             values: vec![
                 Expr::Named {
                     expr: Expr::Value(number("1")).into(),
-                    name: Ident::from("a").empty_span()
+                    name: Ident::from("a").empty_span(),
                 },
                 Expr::Named {
                     expr: Expr::Value(Value::SingleQuotedString("abc".to_string())).into(),
-                    name: Ident::from("b").empty_span()
+                    name: Ident::from("b").empty_span(),
                 },
             ],
-            fields: Default::default()
+            fields: Default::default(),
         },
         expr_from_projection(&select.projection[3])
     );
@@ -241,9 +241,9 @@ fn parse_typeless_struct_syntax() {
         &Expr::Struct {
             values: vec![Expr::Named {
                 expr: Expr::Identifier(Ident::from("str_col").empty_span()).into(),
-                name: Ident::from("abc").empty_span()
+                name: Ident::from("abc").empty_span(),
             }],
-            fields: Default::default()
+            fields: Default::default(),
         },
         expr_from_projection(&select.projection[4])
     );
@@ -259,11 +259,11 @@ fn parse_typed_struct_syntax() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5")),],
+            values: vec![Expr::Value(number("5"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
-            }]
+            }],
         },
         expr_from_projection(&select.projection[0])
     );
@@ -288,34 +288,34 @@ fn parse_typed_struct_syntax() {
             fields: vec![
                 StructField {
                     field_name: Some(Ident::new("x").empty_span()),
-                    field_type: DataType::Int64
+                    field_type: DataType::Int64,
                 },
                 StructField {
                     field_name: Some(Ident::new("y").empty_span()),
-                    field_type: DataType::String(None)
+                    field_type: DataType::String(None),
                 },
-            ]
+            ],
         },
         expr_from_projection(&select.projection[1])
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Identifier(Ident::new("nested_col").empty_span()),],
+            values: vec![Expr::Identifier(Ident::new("nested_col").empty_span())],
             fields: vec![
                 StructField {
                     field_name: Some(Ident::new("arr").empty_span()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                         DataType::Float64
-                    )))
+                    ))),
                 },
                 StructField {
                     field_name: Some(Ident::new("str").empty_span()),
                     field_type: DataType::Struct(vec![StructField {
                         field_name: None,
-                        field_type: DataType::Bool
-                    }])
+                        field_type: DataType::Bool,
+                    }]),
                 },
-            ]
+            ],
         },
         expr_from_projection(&select.projection[2])
     );
@@ -325,19 +325,19 @@ fn parse_typed_struct_syntax() {
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Identifier(Ident::new("nested_col").empty_span()),],
+            values: vec![Expr::Identifier(Ident::new("nested_col").empty_span())],
             fields: vec![
                 StructField {
                     field_name: Some(Ident::new("x").empty_span()),
-                    field_type: DataType::Struct(Default::default())
+                    field_type: DataType::Struct(Default::default()),
                 },
                 StructField {
                     field_name: Some(Ident::new("y").empty_span()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                         DataType::Struct(Default::default())
-                    )))
+                    ))),
                 },
-            ]
+            ],
         },
         expr_from_projection(&select.projection[0])
     );
@@ -347,11 +347,11 @@ fn parse_typed_struct_syntax() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::Boolean(true)),],
+            values: vec![Expr::Value(Value::Boolean(true))],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Bool
-            }]
+                field_type: DataType::Bool,
+            }],
         },
         expr_from_projection(&select.projection[0])
     );
@@ -362,8 +362,8 @@ fn parse_typed_struct_syntax() {
             )),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Bytes(Some(42))
-            }]
+                field_type: DataType::Bytes(Some(42)),
+            }],
         },
         expr_from_projection(&select.projection[1])
     );
@@ -378,8 +378,8 @@ fn parse_typed_struct_syntax() {
             )),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Date
-            }]
+                field_type: DataType::Date,
+            }],
         },
         expr_from_projection(&select.projection[0])
     );
@@ -387,32 +387,32 @@ fn parse_typed_struct_syntax() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Datetime(None),
-                value: "1999-01-01 01:23:34.45".to_string()
+                value: "1999-01-01 01:23:34.45".to_string(),
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Datetime(None)
-            }]
+                field_type: DataType::Datetime(None),
+            }],
         },
         expr_from_projection(&select.projection[1])
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5.0")),],
+            values: vec![Expr::Value(number("5.0"))],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Float64
-            }]
+                field_type: DataType::Float64,
+            }],
         },
         expr_from_projection(&select.projection[2])
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("1")),],
+            values: vec![Expr::Value(number("1"))],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Int64
-            }]
+                field_type: DataType::Int64,
+            }],
         },
         expr_from_projection(&select.projection[3])
     );
@@ -429,12 +429,12 @@ fn parse_typed_struct_syntax() {
                 leading_field: None,
                 leading_precision: None,
                 last_field: None,
-                fractional_seconds_precision: None
+                fractional_seconds_precision: None,
             }),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Interval
-            }]
+                field_type: DataType::Interval,
+            }],
         },
         expr_from_projection(&select.projection[0])
     );
@@ -442,12 +442,12 @@ fn parse_typed_struct_syntax() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::JSON,
-                value: r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.to_string()
+                value: r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.to_string(),
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::JSON
-            }]
+                field_type: DataType::JSON,
+            }],
         },
         expr_from_projection(&select.projection[1])
     );
@@ -457,11 +457,11 @@ fn parse_typed_struct_syntax() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::DoubleQuotedString("foo".to_string())),],
+            values: vec![Expr::Value(Value::DoubleQuotedString("foo".to_string()))],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::String(Some(42))
-            }]
+                field_type: DataType::String(Some(42)),
+            }],
         },
         expr_from_projection(&select.projection[0])
     );
@@ -469,12 +469,12 @@ fn parse_typed_struct_syntax() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                value: "2008-12-25 15:30:00 America/Los_Angeles".to_string()
+                value: "2008-12-25 15:30:00 America/Los_Angeles".to_string(),
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Timestamp(None, TimezoneInfo::None)
-            }]
+                field_type: DataType::Timestamp(None, TimezoneInfo::None),
+            }],
         },
         expr_from_projection(&select.projection[1])
     );
@@ -483,12 +483,12 @@ fn parse_typed_struct_syntax() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Time(None, TimezoneInfo::None),
-                value: "15:30:00".to_string()
+                value: "15:30:00".to_string(),
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Time(None, TimezoneInfo::None)
-            }]
+                field_type: DataType::Time(None, TimezoneInfo::None),
+            }],
         },
         expr_from_projection(&select.projection[2])
     );
@@ -500,12 +500,12 @@ fn parse_typed_struct_syntax() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::Numeric(ExactNumberInfo::None),
-                value: "1".to_string()
+                value: "1".to_string(),
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Numeric(ExactNumberInfo::None)
-            }]
+                field_type: DataType::Numeric(ExactNumberInfo::None),
+            }],
         },
         expr_from_projection(&select.projection[0])
     );
@@ -513,12 +513,12 @@ fn parse_typed_struct_syntax() {
         &Expr::Struct {
             values: vec![Expr::TypedString {
                 data_type: DataType::BigNumeric(ExactNumberInfo::None),
-                value: "1".to_string()
+                value: "1".to_string(),
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::BigNumeric(ExactNumberInfo::None)
-            }]
+                field_type: DataType::BigNumeric(ExactNumberInfo::None),
+            }],
         },
         expr_from_projection(&select.projection[1])
     );
@@ -531,21 +531,21 @@ fn parse_typed_struct_with_field_name() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5")),],
+            values: vec![Expr::Value(number("5"))],
             fields: vec![StructField {
                 field_name: Some(Ident::from("x").empty_span()),
-                field_type: DataType::Int64
-            }]
+                field_type: DataType::Int64,
+            }],
         },
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::DoubleQuotedString("foo".to_string())),],
+            values: vec![Expr::Value(Value::DoubleQuotedString("foo".to_string()))],
             fields: vec![StructField {
                 field_name: Some(Ident::from("y").empty_span()),
-                field_type: DataType::String(None)
-            }]
+                field_type: DataType::String(None),
+            }],
         },
         expr_from_projection(&select.projection[1])
     );
@@ -555,17 +555,17 @@ fn parse_typed_struct_with_field_name() {
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5")), Expr::Value(number("5")),],
+            values: vec![Expr::Value(number("5")), Expr::Value(number("5"))],
             fields: vec![
                 StructField {
                     field_name: Some(Ident::from("x").empty_span()),
-                    field_type: DataType::Int64
+                    field_type: DataType::Int64,
                 },
                 StructField {
                     field_name: Some(Ident::from("y").empty_span()),
-                    field_type: DataType::Int64
-                }
-            ]
+                    field_type: DataType::Int64,
+                },
+            ],
         },
         expr_from_projection(&select.projection[0])
     );
@@ -602,7 +602,7 @@ fn parse_table_identifiers() {
                     version: None,
                     partitions: vec![],
                 },
-                joins: vec![]
+                joins: vec![],
             },]
         );
     }
@@ -733,7 +733,7 @@ fn parse_table_time_travel() {
                 ))),
                 partitions: vec![],
             },
-            joins: vec![]
+            joins: vec![],
         },]
     );
 
@@ -757,7 +757,7 @@ fn parse_join_constraint_unnest_alias() {
                     vec![Ident::new("t1"), Ident::new("a")].empty_span()
                 )],
                 with_offset: false,
-                with_offset_alias: None
+                with_offset_alias: None,
             },
             join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("c1").empty_span())),
@@ -985,10 +985,25 @@ fn test_select_wildcard_with_except() {
 }
 
 #[test]
-fn test_select_ignore_nulls() {
+fn test_select_agg_ignore_nulls() {
     bigquery().one_statement_parses_to(
         "SELECT last_value(user_id IGNORE NULLS) OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1",
         "SELECT last_value(user_id) IGNORE NULLS OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1"
+    );
+}
+
+#[test]
+fn test_select_agg_order_by() {
+    bigquery().verified_only_select(
+        "SELECT last_value(user_id ORDER BY user_id) OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1",
+    );
+}
+
+#[test]
+fn test_select_agg_ignore_nulls_order_by() {
+    bigquery().one_statement_parses_to(
+        "SELECT last_value(user_id IGNORE NULLS ORDER BY user_id) OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1",
+        "SELECT last_value(user_id ORDER BY user_id) IGNORE NULLS OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1"
     );
 }
 

@@ -2055,7 +2055,6 @@ pub enum Statement {
         /// Table flag
         table_flag: Option<ObjectName>,
         /// Table name
-
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         has_as: bool,
@@ -3602,6 +3601,7 @@ pub struct OnConflict {
     pub conflict_target: Option<ConflictTarget>,
     pub action: OnConflictAction,
 }
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3609,6 +3609,7 @@ pub enum ConflictTarget {
     Columns(Vec<WithSpan<Ident>>),
     OnConstraint(ObjectName),
 }
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -3639,6 +3640,7 @@ impl fmt::Display for OnInsert {
         }
     }
 }
+
 impl fmt::Display for OnConflict {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, " ON CONFLICT")?;
@@ -3648,6 +3650,7 @@ impl fmt::Display for OnConflict {
         write!(f, " {}", self.action)
     }
 }
+
 impl fmt::Display for ConflictTarget {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -3656,6 +3659,7 @@ impl fmt::Display for ConflictTarget {
         }
     }
 }
+
 impl fmt::Display for OnConflictAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -4009,10 +4013,10 @@ impl fmt::Display for Function {
         if self.special {
             write!(f, "{}", self.name)?;
         } else {
-            let order_by = if !self.order_by.is_empty() {
-                " ORDER BY "
+            let order_by: String = if !self.order_by.is_empty() {
+                format!(" ORDER BY {}", display_comma_separated(&self.order_by))
             } else {
-                ""
+                "".to_string()
             };
 
             let null_treatment = if let Some(null_treatment) = self.null_treatment {
@@ -4038,11 +4042,10 @@ impl fmt::Display for Function {
 
             write!(
                 f,
-                "{}({}{}{order_by}{}{limit}{on_overflow}){null_treatment}",
+                "{}({}{}{order_by}{limit}{on_overflow}){null_treatment}",
                 self.name,
                 if self.distinct { "DISTINCT " } else { "" },
                 display_comma_separated(&self.args),
-                display_comma_separated(&self.order_by),
             )?;
 
             if let Some(within_group) = &self.within_group {

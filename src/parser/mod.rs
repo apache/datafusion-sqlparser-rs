@@ -2107,7 +2107,9 @@ impl<'a> Parser<'a> {
             }
             let expr = self.parse_map_access(expr)?;
             // Snowflake allows col[1].key syntax
-            if dialect_of!(self is SnowflakeDialect) && self.consume_token(&Token::Period) {
+            if dialect_of!(self is SnowflakeDialect | BigQueryDialect)
+                && self.consume_token(&Token::Period)
+            {
                 return Ok(Expr::JsonAccess {
                     left: Box::new(expr),
                     operator: JsonOperator::Period,

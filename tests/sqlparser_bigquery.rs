@@ -1146,3 +1146,10 @@ fn test_select_as_value() {
     let select = bigquery().verified_only_select("SELECT AS VALUE STRUCT(1 AS a, 2 AS b) AS xyz");
     assert_eq!(Some(ValueTableMode::AsValue), select.value_table_mode);
 }
+
+#[test]
+fn test_select_array_item_field() {
+    bigquery().verified_only_select(
+        "SELECT arr[SAFE_OFFSET(0)].id AS arr_id FROM `proj`.`dataset`.`table`",
+    );
+}

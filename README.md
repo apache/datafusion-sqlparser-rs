@@ -115,7 +115,7 @@ $ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
 ## Users
 
 This parser is currently being used by the [DataFusion] query engine,
-[LocustDB], [Ballista], [GlueSQL], [Opteryx], [PRQL], [Qrlew], [JumpWire], and [Paradedb].
+[LocustDB], [Ballista], [GlueSQL], [Opteryx], [PRQL], [Qrlew], [JumpWire], and [ParadeDB].
 
 If your project is using sqlparser-rs feel free to make a PR to add it
 to this list.

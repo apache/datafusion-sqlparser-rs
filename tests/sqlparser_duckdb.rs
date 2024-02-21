@@ -177,6 +177,7 @@ fn test_select_union_by_name() {
                 having: None,
                 named_window: vec![],
                 qualify: None,
+                from_before_select: false,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
@@ -211,6 +212,7 @@ fn test_select_union_by_name() {
                 having: None,
                 named_window: vec![],
                 qualify: None,
+                from_before_select: false,
             }))),
         });
         assert_eq!(ast.body, expected);
@@ -243,4 +245,131 @@ fn test_duckdb_load_extension() {
         },
         stmt
     );
+}
+
+#[test]
+fn test_duckdb_from_statement() {
+    let stmt = duckdb().verified_only_select("FROM my_table");
+    let expected = Select {
+        distinct: None,
+        top: None,
+        projection: vec![],
+        into: None,
+        from: vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "my_table".to_string(),
+                    quote_style: None,
+                }]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+            },
+            joins: vec![],
+        }],
+        lateral_views: vec![],
+        selection: None,
+        group_by: GroupByExpr::Expressions(vec![]),
+        cluster_by: vec![],
+        distribute_by: vec![],
+        sort_by: vec![],
+        having: None,
+        named_window: vec![],
+        qualify: None,
+        from_before_select: true,
+    };
+    assert_eq!(stmt, expected);
+}
+
+#[test]
+fn test_duckdb_from_statement_with_filter() {
+    let stmt = duckdb().verified_only_select("FROM t1 WHERE a = 1");
+    println!("{:?}", stmt);
+    let expected = Select {
+        distinct: None,
+        top: None,
+        projection: vec![],
+        into: None,
+        from: vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t1".to_string(),
+                    quote_style: None,
+                }]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+            },
+            joins: vec![],
+        }],
+        lateral_views: vec![],
+        selection: Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident {
+                value: "a".to_string(),
+                quote_style: None,
+            })),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(number("1"))),
+        }),
+        group_by: GroupByExpr::Expressions(vec![]),
+        cluster_by: vec![],
+        distribute_by: vec![],
+        sort_by: vec![],
+        having: None,
+        named_window: vec![],
+        qualify: None,
+        from_before_select: true,
+    };
+    assert_eq!(stmt, expected);
+}
+
+#[test]
+fn test_duckdb_from_statement_with_filter_and_select() {
+    let stmt = duckdb().verified_only_select("FROM t1 SELECT b WHERE a = 1");
+    println!("{:?}", stmt);
+    let expected = Select {
+        distinct: None,
+        top: None,
+        projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
+            value: "b".to_string(),
+            quote_style: None,
+        }))],
+        into: None,
+        from: vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t1".to_string(),
+                    quote_style: None,
+                }]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+            },
+            joins: vec![],
+        }],
+        lateral_views: vec![],
+        selection: Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident {
+                value: "a".to_string(),
+                quote_style: None,
+            })),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(number("1"))),
+        }),
+        group_by: GroupByExpr::Expressions(vec![]),
+        cluster_by: vec![],
+        distribute_by: vec![],
+        sort_by: vec![],
+        having: None,
+        named_window: vec![],
+        qualify: None,
+        from_before_select: true,
+    };
+    assert_eq!(stmt, expected);
 }

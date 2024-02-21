@@ -245,10 +245,80 @@ pub struct Select {
     pub named_window: Vec<NamedWindowDefinition>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
+    /// Returns true if `FROM` is before `SELECT` in the original SQL.
+    /// such as is the case for duckdb style `FROM t1 SELECT *`
+    pub from_before_select: bool,
+}
+
+impl Select {
+    fn display_for_from(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "FROM {}", display_comma_separated(&self.from))?;
+        if !self.projection.is_empty() {
+            write!(f, " SELECT")?;
+            if let Some(ref distinct) = self.distinct {
+                write!(f, " {distinct}")?;
+            }
+            if let Some(ref top) = self.top {
+                write!(f, " {top}")?;
+            }
+            write!(f, " {}", display_comma_separated(&self.projection))?;
+        }
+
+        if let Some(ref into) = self.into {
+            write!(f, " {into}")?;
+        }
+
+        if !self.lateral_views.is_empty() {
+            for lv in &self.lateral_views {
+                write!(f, "{lv}")?;
+            }
+        }
+        if let Some(ref selection) = self.selection {
+            write!(f, " WHERE {selection}")?;
+        }
+        match &self.group_by {
+            GroupByExpr::All => write!(f, " GROUP BY ALL")?,
+            GroupByExpr::Expressions(exprs) => {
+                if !exprs.is_empty() {
+                    write!(f, " GROUP BY {}", display_comma_separated(exprs))?;
+                }
+            }
+        }
+        if !self.cluster_by.is_empty() {
+            write!(
+                f,
+                " CLUSTER BY {}",
+                display_comma_separated(&self.cluster_by)
+            )?;
+        }
+        if !self.distribute_by.is_empty() {
+            write!(
+                f,
+                " DISTRIBUTE BY {}",
+                display_comma_separated(&self.distribute_by)
+            )?;
+        }
+        if !self.sort_by.is_empty() {
+            write!(f, " SORT BY {}", display_comma_separated(&self.sort_by))?;
+        }
+        if let Some(ref having) = self.having {
+            write!(f, " HAVING {having}")?;
+        }
+        if !self.named_window.is_empty() {
+            write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+        }
+        if let Some(ref qualify) = self.qualify {
+            write!(f, " QUALIFY {qualify}")?;
+        }
+        Ok(())
+    }
 }
 
 impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.from_before_select {
+            return self.display_for_from(f);
+        }
         write!(f, "SELECT")?;
         if let Some(ref distinct) = self.distinct {
             write!(f, " {distinct}")?;

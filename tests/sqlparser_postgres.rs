@@ -1082,6 +1082,7 @@ fn parse_copy_to() {
                     distribute_by: vec![],
                     sort_by: vec![],
                     qualify: None,
+                    from_before_select: false
                 }))),
                 order_by: vec![],
                 limit: None,
@@ -2139,6 +2140,7 @@ fn parse_array_subquery_expr() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    from_before_select: false
                 }))),
                 right: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
@@ -2155,6 +2157,7 @@ fn parse_array_subquery_expr() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    from_before_select: false
                 }))),
             }),
             order_by: vec![],

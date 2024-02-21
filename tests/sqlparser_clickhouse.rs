@@ -110,6 +110,7 @@ fn parse_map_access_expr() {
             having: None,
             named_window: vec![],
             qualify: None,
+            from_before_select: false
         },
         select
     );

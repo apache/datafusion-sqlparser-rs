@@ -516,6 +516,12 @@ impl<'a> Parser<'a> {
                 Keyword::MERGE => Ok(self.parse_merge()?),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => Ok(self.parse_pragma()?),
+
+                // Duckdb style `FROM <table>` or `FROM tbl SELECT ...`
+                Keyword::FROM if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                    self.prev_token();
+                    Ok(Statement::Query(Box::new(self.parse_query()?)))
+                }
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     Ok(self.parse_install()?)
@@ -6458,10 +6464,8 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
         if self.parse_keyword(Keyword::INSERT) {
             let insert = self.parse_insert()?;
-
             Ok(Query {
                 with,
                 body: Box::new(SetExpr::Insert(insert)),
@@ -6722,6 +6726,8 @@ impl<'a> Parser<'a> {
             SetExpr::Values(self.parse_values(is_mysql)?)
         } else if self.parse_keyword(Keyword::TABLE) {
             SetExpr::Table(Box::new(self.parse_as_table()?))
+        } else if self.parse_keyword(Keyword::FROM) {
+            SetExpr::Select(Box::new(self.parse_from_select()?))
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -6936,6 +6942,163 @@ impl<'a> Parser<'a> {
             having,
             named_window: named_windows,
             qualify,
+            from_before_select: false,
+        })
+    }
+
+    /// Parse a duckdb style `FROM` statement without a select.
+    /// assuming the initial `FROM` was already consumed
+    pub fn parse_from_select(&mut self) -> Result<Select, ParserError> {
+        let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
+
+        let distinct = self.parse_all_or_distinct()?;
+        let top = if self.parse_keyword(Keyword::TOP) {
+            Some(self.parse_top()?)
+        } else {
+            None
+        };
+
+        // FROM <tbl> SELECT ...
+        let (selection, projection) = if self.parse_keyword(Keyword::SELECT) {
+            let projection = self.parse_comma_separated(Parser::parse_select_item)?;
+            let selection = if self.parse_keyword(Keyword::WHERE) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
+            (selection, projection)
+        // FROM <tbl> WHERE <EXPR>
+        } else if self.parse_keyword(Keyword::WHERE) {
+            let selection = Some(self.parse_expr()?);
+
+            let projection = self
+                .maybe_parse(|parser| parser.parse_projection())
+                .unwrap_or_default();
+            (selection, projection)
+        } else {
+            let selection = None;
+            let projection = self
+                .maybe_parse(|parser| parser.parse_projection())
+                .unwrap_or_default();
+            (selection, projection)
+        };
+        println!("projection: {:?}", projection);
+
+        let into = if self.parse_keyword(Keyword::INTO) {
+            let temporary = self
+                .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
+                .is_some();
+            let unlogged = self.parse_keyword(Keyword::UNLOGGED);
+            let table = self.parse_keyword(Keyword::TABLE);
+            let name = self.parse_object_name(false)?;
+            Some(SelectInto {
+                temporary,
+                unlogged,
+                table,
+                name,
+            })
+        } else {
+            None
+        };
+
+        // Note that for keywords to be properly handled here, they need to be
+        // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,
+        // otherwise they may be parsed as an alias as part of the `projection`
+        // or `from`.
+
+        let mut lateral_views = vec![];
+        loop {
+            if self.parse_keywords(&[Keyword::LATERAL, Keyword::VIEW]) {
+                let outer = self.parse_keyword(Keyword::OUTER);
+                let lateral_view = self.parse_expr()?;
+                let lateral_view_name = self.parse_object_name(false)?;
+                let lateral_col_alias = self
+                    .parse_comma_separated(|parser| {
+                        parser.parse_optional_alias(&[
+                            Keyword::WHERE,
+                            Keyword::GROUP,
+                            Keyword::CLUSTER,
+                            Keyword::HAVING,
+                            Keyword::LATERAL,
+                        ]) // This couldn't possibly be a bad idea
+                    })?
+                    .into_iter()
+                    .flatten()
+                    .collect();
+
+                lateral_views.push(LateralView {
+                    lateral_view,
+                    lateral_view_name,
+                    lateral_col_alias,
+                    outer,
+                });
+            } else {
+                break;
+            }
+        }
+
+        let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
+            if self.parse_keyword(Keyword::ALL) {
+                GroupByExpr::All
+            } else {
+                GroupByExpr::Expressions(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+            }
+        } else {
+            GroupByExpr::Expressions(vec![])
+        };
+
+        let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+
+        let distribute_by = if self.parse_keywords(&[Keyword::DISTRIBUTE, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+
+        let sort_by = if self.parse_keywords(&[Keyword::SORT, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+
+        let having = if self.parse_keyword(Keyword::HAVING) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let named_windows = if self.parse_keyword(Keyword::WINDOW) {
+            self.parse_comma_separated(Parser::parse_named_window)?
+        } else {
+            vec![]
+        };
+
+        let qualify = if self.parse_keyword(Keyword::QUALIFY) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        Ok(Select {
+            distinct,
+            top,
+            projection,
+            into,
+            from,
+            lateral_views,
+            selection,
+            group_by,
+            cluster_by,
+            distribute_by,
+            sort_by,
+            having,
+            named_window: named_windows,
+            qualify,
+            from_before_select: true,
         })
     }
 

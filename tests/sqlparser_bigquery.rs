@@ -19,6 +19,7 @@ use std::ops::Deref;
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::*;
 use test_utils::*;
 
 #[test]
@@ -1209,5 +1210,33 @@ fn test_select_json_field() {
         }
         .empty_span(),
         _select.projection[0]
+    );
+}
+
+#[test]
+fn test_bigquery_single_line_comment_tokenize() {
+    let sql = "CREATE TABLE# this is a comment \ntable_1";
+    let dialect = BigQueryDialect {};
+    let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+
+    let expected = vec![
+        Token::make_keyword("CREATE"),
+        Token::Whitespace(Whitespace::Space),
+        Token::make_keyword("TABLE"),
+        Token::Whitespace(Whitespace::SingleLineComment {
+            prefix: "#".to_string(),
+            comment: " this is a comment \n".to_string(),
+        }),
+        Token::make_word("table_1", None),
+    ];
+
+    assert_eq!(expected, tokens);
+}
+
+#[test]
+fn test_bigquery_single_line_comment_parsing() {
+    bigquery().verified_only_select_with_canonical(
+        "SELECT book# this is a comment \n FROM library",
+        "SELECT book FROM library",
     );
 }

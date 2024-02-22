@@ -429,14 +429,5 @@ fn test_from_with_copy() {
         legacy_options: vec![],
         values: vec![],
     };
-    // let expected = Statement::Copy {
-    //     source: CopySource::Query(Box::new(Query {
-    //         with: None,
-    //         body:   to: true,
-    //     target: ,
-    //     options: (),
-    //     legacy_options: (),
-    //     values: (),
-    // };
     assert_eq!(stmt, expected);
 }

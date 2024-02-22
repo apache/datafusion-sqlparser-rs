@@ -6982,7 +6982,6 @@ impl<'a> Parser<'a> {
                 .unwrap_or_default();
             (selection, projection)
         };
-        println!("projection: {:?}", projection);
 
         let into = if self.parse_keyword(Keyword::INTO) {
             let temporary = self

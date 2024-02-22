@@ -373,3 +373,70 @@ fn test_duckdb_from_statement_with_filter_and_select() {
     };
     assert_eq!(stmt, expected);
 }
+
+#[test]
+fn test_from_with_copy() {
+    let stmt = duckdb().verified_stmt("COPY (FROM trek_facts) TO 'phaser_filled_facts.parquet'");
+    let body = Box::new(SetExpr::Select(Box::new(Select {
+        distinct: None,
+        top: None,
+        projection: vec![],
+        into: None,
+        from: vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "trek_facts".to_string(),
+                    quote_style: None,
+                }]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+            },
+            joins: vec![],
+        }],
+        lateral_views: vec![],
+        selection: None,
+        group_by: GroupByExpr::Expressions(vec![]),
+        cluster_by: vec![],
+        distribute_by: vec![],
+        sort_by: vec![],
+        having: None,
+        named_window: vec![],
+        qualify: None,
+        from_before_select: true,
+    })));
+    let source = CopySource::Query(Box::new(Query {
+        with: None,
+        body,
+        order_by: vec![],
+        limit: None,
+        limit_by: vec![],
+        offset: None,
+        fetch: None,
+        locks: vec![],
+        for_clause: None,
+    }));
+
+    let expected = Statement::Copy {
+        source,
+        to: true,
+        target: CopyTarget::File {
+            filename: "phaser_filled_facts.parquet".to_string(),
+        },
+        options: vec![],
+        legacy_options: vec![],
+        values: vec![],
+    };
+    // let expected = Statement::Copy {
+    //     source: CopySource::Query(Box::new(Query {
+    //         with: None,
+    //         body:   to: true,
+    //     target: ,
+    //     options: (),
+    //     legacy_options: (),
+    //     values: (),
+    // };
+    assert_eq!(stmt, expected);
+}

@@ -1335,7 +1335,7 @@ impl<'a> Tokenizer<'a> {
         self.tokenizer_error(starting_loc, "Unterminated encoded string literal")
     }
 
-    /// Read a single quoted string, starting with the opening quote.
+    /// Read a quoted string, starting with the opening quote.
     fn tokenize_quoted_string(
         &self,
         chars: &mut State,
@@ -1364,8 +1364,8 @@ impl<'a> Tokenizer<'a> {
                 '\\' => {
                     // consume
                     chars.next();
-                    // slash escaping is specific to MySQL dialect.
-                    if dialect_of!(self is MySqlDialect) {
+                    // slash escaping is specific to MySQL / BigQuery dialect.
+                    if dialect_of!(self is MySqlDialect | BigQueryDialect) {
                         if let Some(next) = chars.peek() {
                             if !self.unescape {
                                 // In no-escape mode, the given query has to be saved completely including backslashes.
@@ -1376,12 +1376,12 @@ impl<'a> Tokenizer<'a> {
                                 // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
                                 let n = match next {
                                     '\'' | '\"' | '\\' | '%' | '_' => *next,
-                                    '0' => '\0',
+                                    '0' if dialect_of!(self is MySqlDialect) => '\0',
                                     'b' => '\u{8}',
                                     'n' => '\n',
                                     'r' => '\r',
                                     't' => '\t',
-                                    'Z' => '\u{1a}',
+                                    'Z' if dialect_of!(self is MySqlDialect) => '\u{1a}',
                                     _ => *next,
                                 };
                                 s.push(n);

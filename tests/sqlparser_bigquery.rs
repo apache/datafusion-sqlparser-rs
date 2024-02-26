@@ -18,7 +18,7 @@ use std::ops::Deref;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::*;
 use test_utils::*;
 
@@ -58,7 +58,7 @@ fn parse_byte_literal() {
 #[test]
 fn parse_raw_literal() {
     let sql = r#"SELECT R'abc', R"abc", R'f\(abc,(.*),def\)', R"f\(abc,(.*),def\)""#;
-    let stmt = bigquery().one_statement_parses_to(
+    let stmt = bigquery_unescaped().one_statement_parses_to(
         sql,
         r"SELECT R'abc', R'abc', R'f\(abc,(.*),def\)', R'f\(abc,(.*),def\)'",
     );
@@ -821,7 +821,7 @@ fn parse_cast_string_to_bytes_format() {
 #[test]
 fn parse_cast_bytes_to_string_format() {
     let sql = r#"SELECT CAST(B'\x48\x65\x6c\x6c\x6f' AS STRING FORMAT 'ASCII') AS bytes_to_string"#;
-    bigquery().verified_only_select(sql);
+    bigquery_unescaped().verified_only_select(sql);
 }
 
 #[test]
@@ -845,10 +845,10 @@ fn parse_like() {
 
         // Test with escape char
         let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
+            r#"SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'"#,
             if negated { "NOT " } else { "" }
         );
-        let select = bigquery().verified_only_select(sql);
+        let select = bigquery().verified_only_select_with_canonical(sql, "");
         assert_eq!(
             Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
@@ -903,10 +903,10 @@ fn parse_similar_to() {
 
         // Test with escape char
         let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
+            r#"SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'"#,
             if negated { "NOT " } else { "" }
         );
-        let select = bigquery().verified_only_select(sql);
+        let select = bigquery().verified_only_select_with_canonical(sql, "");
         assert_eq!(
             Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
@@ -920,10 +920,10 @@ fn parse_similar_to() {
 
         // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
         let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
+            r#"SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL"#,
             if negated { "NOT " } else { "" }
         );
-        let select = bigquery().verified_only_select(sql);
+        let select = bigquery().verified_only_select_with_canonical(sql, "");
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
@@ -1060,6 +1060,13 @@ fn bigquery() -> TestedDialects {
     }
 }
 
+fn bigquery_unescaped() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {})],
+        options: Some(ParserOptions::new().with_unescape(false)),
+    }
+}
+
 fn bigquery_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
@@ -1120,9 +1127,9 @@ fn test_array_agg_over() {
 
 #[test]
 fn test_trim() {
-    bigquery().verified_only_select(r#"SELECT CAST(TRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
-    bigquery().verified_only_select(r#"SELECT CAST(LTRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
-    bigquery().verified_only_select(r#"SELECT CAST(RTRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
+    bigquery_unescaped().verified_only_select(r#"SELECT CAST(TRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
+    bigquery_unescaped().verified_only_select(r#"SELECT CAST(LTRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
+    bigquery_unescaped().verified_only_select(r#"SELECT CAST(RTRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
 }
 
 #[test]
@@ -1239,4 +1246,14 @@ fn test_bigquery_single_line_comment_parsing() {
         "SELECT book# this is a comment \n FROM library",
         "SELECT book FROM library",
     );
+}
+
+#[test]
+fn test_regexp_string_double_quote() {
+    bigquery_unescaped().verified_stmt(r"SELECT 'I\'m fine'");
+    bigquery_unescaped().verified_stmt(r"SELECT 'I\\\'m fine'");
+    bigquery_unescaped().verified_stmt(r#"SELECT 'I''m fine'"#);
+    bigquery_unescaped().verified_stmt(r#"SELECT "I'm ''fine''""#);
+    bigquery_unescaped().verified_stmt(r#"SELECT "I\\\"m fine""#);
+    bigquery_unescaped().verified_stmt(r#"SELECT "[\"\\[\\]]""#);
 }

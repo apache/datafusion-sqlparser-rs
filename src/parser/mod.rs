@@ -2783,6 +2783,10 @@ impl<'a> Parser<'a> {
     /// If the current token is the `expected` keyword followed by
     /// specified tokens, consume them and returns true.
     /// Otherwise, no tokens are consumed and returns false.
+    ///
+    /// Note that if the length of `tokens` is too long, this function will
+    /// not be efficient as it does a loop on the tokens with `peek_nth_token`
+    /// each time.
     pub fn parse_keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token]) -> bool {
         match self.peek_token().token {
             Token::Word(w) if expected == w.keyword => {

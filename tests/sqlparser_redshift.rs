@@ -17,6 +17,7 @@ use test_utils::*;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::RedshiftSqlDialect;
+use sqlparser::parser::ParserOptions;
 
 #[test]
 fn test_square_brackets_over_db_schema_table_name() {
@@ -202,10 +203,10 @@ fn parse_like() {
 
         // Test with escape char
         let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
+            r#"SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'"#,
             if negated { "NOT " } else { "" }
         );
-        let select = redshift().verified_only_select(sql);
+        let select = redshift().verified_only_select_with_canonical(sql, "");
         assert_eq!(
             Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
@@ -220,10 +221,10 @@ fn parse_like() {
         // This statement tests that LIKE and NOT LIKE have the same precedence.
         // This was previously mishandled (#81).
         let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
+            r#"SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL"#,
             if negated { "NOT " } else { "" }
         );
-        let select = redshift().verified_only_select(sql);
+        let select = redshift().verified_only_select_with_canonical(sql, "");
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
@@ -260,10 +261,10 @@ fn parse_similar_to() {
 
         // Test with escape char
         let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
+            r#"SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'"#,
             if negated { "NOT " } else { "" }
         );
-        let select = redshift().verified_only_select(sql);
+        let select = redshift().verified_only_select_with_canonical(sql, "");
         assert_eq!(
             Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
@@ -277,10 +278,10 @@ fn parse_similar_to() {
 
         // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
         let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
+            r#"SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL"#,
             if negated { "NOT " } else { "" }
         );
-        let select = redshift().verified_only_select(sql);
+        let select = redshift().verified_only_select_with_canonical(sql, "");
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
@@ -300,6 +301,13 @@ fn redshift() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(RedshiftSqlDialect {})],
         options: None,
+    }
+}
+
+fn redshift_unescaped() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(RedshiftSqlDialect {})],
+        options: Some(ParserOptions::new().with_unescape(false)),
     }
 }
 
@@ -345,4 +353,13 @@ fn parse_listagg() {
 #[test]
 fn parse_quoted_identifier() {
     redshift().verified_only_select(r#"SELECT 'foo' AS "123_col""#);
+}
+
+#[test]
+fn test_escape_string() {
+    redshift_unescaped().verified_stmt(r"SELECT 'I\'m fine'");
+    redshift_unescaped().verified_stmt(r"SELECT 'I\\\'m fine'");
+    redshift_unescaped().verified_stmt(r#"SELECT 'I''m fine'"#);
+    redshift_unescaped().verified_stmt(r#"SELECT 'I\\\'m fine'"#);
+    redshift_unescaped().verified_stmt(r#"SELECT '[\'\\[\\]]'"#);
 }

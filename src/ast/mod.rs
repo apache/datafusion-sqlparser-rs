@@ -34,8 +34,9 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ProcedureParam, ReferentialAction,
-    TableConstraint, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ColumnOptionDef, ConstraintProperty, GeneratedAs, IndexType, KeyOrIndexDisplay, ProcedureParam,
+    ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{

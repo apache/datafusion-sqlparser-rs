@@ -314,7 +314,8 @@ fn parse_create_table_unique_key() {
                 vec![TableConstraint::Unique {
                     name: Some(Ident::new("bar_key")),
                     columns: vec![Ident::new("bar").empty_span()],
-                    is_primary: false
+                    is_primary: false,
+                    constraint_properties: vec![],
                 }],
                 constraints
             );

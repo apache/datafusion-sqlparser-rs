@@ -282,6 +282,7 @@ pub enum TableConstraint {
         columns: Vec<WithSpan<Ident>>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
         is_primary: bool,
+        constraint_properties: Vec<ConstraintProperty>,
     },
     /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
     /// REFERENCES <foreign_table> (<referred_columns>)
@@ -295,6 +296,7 @@ pub enum TableConstraint {
         referred_columns: Vec<WithSpan<Ident>>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
+        constraint_properties: Vec<ConstraintProperty>,
     },
     /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
     Check {
@@ -357,13 +359,20 @@ impl fmt::Display for TableConstraint {
                 name,
                 columns,
                 is_primary,
-            } => write!(
-                f,
-                "{}{} ({})",
-                display_constraint_name(name),
-                if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
-                display_comma_separated(columns)
-            ),
+                constraint_properties,
+            } => {
+                write!(
+                    f,
+                    "{}{} ({})",
+                    display_constraint_name(name),
+                    if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
+                    display_comma_separated(columns),
+                )?;
+                if !constraint_properties.is_empty() {
+                    write!(f, " {}", display_separated(constraint_properties, " "))?;
+                }
+                Ok(())
+            }
             TableConstraint::ForeignKey {
                 name,
                 columns,
@@ -371,6 +380,7 @@ impl fmt::Display for TableConstraint {
                 referred_columns,
                 on_delete,
                 on_update,
+                constraint_properties,
             } => {
                 write!(
                     f,
@@ -385,6 +395,9 @@ impl fmt::Display for TableConstraint {
                 }
                 if let Some(action) = on_update {
                     write!(f, " ON UPDATE {action}")?;
+                }
+                if !constraint_properties.is_empty() {
+                    write!(f, " {}", display_separated(constraint_properties, " "))?;
                 }
                 Ok(())
             }
@@ -757,6 +770,27 @@ impl fmt::Display for ReferentialAction {
             ReferentialAction::SetNull => "SET NULL",
             ReferentialAction::NoAction => "NO ACTION",
             ReferentialAction::SetDefault => "SET DEFAULT",
+        })
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ConstraintProperty {
+    Validate,
+    NoValidate,
+    Rely,
+    NoRely,
+}
+
+impl fmt::Display for ConstraintProperty {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            ConstraintProperty::Validate => "VALIDATE",
+            ConstraintProperty::NoValidate => "NOVALIDATE",
+            ConstraintProperty::Rely => "RELY",
+            ConstraintProperty::NoRely => "NORELY",
         })
     }
 }

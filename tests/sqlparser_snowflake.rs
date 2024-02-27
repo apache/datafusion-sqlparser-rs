@@ -1364,3 +1364,13 @@ fn parse_tablesample() {
     };
     assert_eq!(actual_select_only, expected);
 }
+
+#[test]
+fn parse_constraints() {
+    snowflake().verified_stmt(
+        r#"CREATE TABLE foo (id VARCHAR(32), CONSTRAINT "id_uk" UNIQUE (id) NOVALIDATE RELY)"#,
+    );
+    snowflake().verified_stmt(
+        r#"ALTER TABLE foo ADD CONSTRAINT "bar" FOREIGN KEY (baz) REFERENCES othertable(baz) ON DELETE NO ACTION NORELY"#,
+    );
+}

@@ -4438,6 +4438,26 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_constraint_properties(&mut self) -> Result<Vec<ConstraintProperty>, ParserError> {
+        let mut constraint_properties = Vec::new();
+        if dialect_of!(self is SnowflakeDialect) {
+            loop {
+                if self.parse_keyword(Keyword::RELY) {
+                    constraint_properties.push(ConstraintProperty::Rely);
+                } else if self.parse_keyword(Keyword::NORELY) {
+                    constraint_properties.push(ConstraintProperty::NoRely);
+                } else if self.parse_keyword(Keyword::VALIDATE) {
+                    constraint_properties.push(ConstraintProperty::Validate);
+                } else if self.parse_keyword(Keyword::NOVALIDATE) {
+                    constraint_properties.push(ConstraintProperty::NoValidate);
+                } else {
+                    break;
+                }
+            }
+        }
+        Ok(constraint_properties)
+    }
+
     pub fn parse_optional_table_constraint(
         &mut self,
     ) -> Result<Option<TableConstraint>, ParserError> {
@@ -4462,10 +4482,12 @@ impl<'a> Parser<'a> {
                     .or(name);
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                let constraint_properties = self.parse_constraint_properties()?;
                 Ok(Some(TableConstraint::Unique {
                     name,
                     columns,
                     is_primary,
+                    constraint_properties,
                 }))
             }
             Token::Word(w) if w.keyword == Keyword::FOREIGN => {
@@ -4487,6 +4509,7 @@ impl<'a> Parser<'a> {
                         break;
                     }
                 }
+                let constraint_properties = self.parse_constraint_properties()?;
                 Ok(Some(TableConstraint::ForeignKey {
                     name,
                     columns,
@@ -4494,6 +4517,7 @@ impl<'a> Parser<'a> {
                     referred_columns,
                     on_delete,
                     on_update,
+                    constraint_properties,
                 }))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {

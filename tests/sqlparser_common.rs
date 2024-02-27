@@ -2572,6 +2572,7 @@ fn parse_create_table() {
                         referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
+                        constraint_properties: vec![],
                     },
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
@@ -2580,6 +2581,7 @@ fn parse_create_table() {
                         referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
+                        constraint_properties: vec![],
                     },
                     TableConstraint::ForeignKey {
                         name: None,
@@ -2588,6 +2590,7 @@ fn parse_create_table() {
                         referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
+                        constraint_properties: vec![],
                     },
                     TableConstraint::ForeignKey {
                         name: None,
@@ -2596,6 +2599,7 @@ fn parse_create_table() {
                         referred_columns: vec![Ident::new("longitude").empty_span()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
+                        constraint_properties: vec![],
                     },
                 ]
             );

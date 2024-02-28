@@ -998,8 +998,19 @@ impl<'a> Parser<'a> {
                         if ends_with_wildcard {
                             Ok(Expr::QualifiedWildcard(ObjectName(id_parts)))
                         } else if self.consume_token(&Token::LParen) {
-                            self.prev_token();
-                            self.parse_function(ObjectName(id_parts))
+                            if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
+                                && self.consume_tokens(&[Token::Plus, Token::RParen])
+                            {
+                                Ok(Expr::OuterJoin(Box::new(
+                                    match <[Ident; 1]>::try_from(id_parts) {
+                                        Ok([ident]) => Expr::Identifier(ident),
+                                        Err(parts) => Expr::CompoundIdentifier(parts),
+                                    },
+                                )))
+                            } else {
+                                self.prev_token();
+                                self.parse_function(ObjectName(id_parts))
+                            }
                         } else {
                             Ok(Expr::CompoundIdentifier(id_parts))
                         }
@@ -2858,6 +2869,21 @@ impl<'a> Parser<'a> {
         } else {
             false
         }
+    }
+
+    /// If the current and subsequent tokens exactly match the `tokens`
+    /// sequence, consume them and returns true. Otherwise, no tokens are
+    /// consumed and returns false
+    #[must_use]
+    pub fn consume_tokens(&mut self, tokens: &[Token]) -> bool {
+        let index = self.index;
+        for token in tokens {
+            if !self.consume_token(token) {
+                self.index = index;
+                return false;
+            }
+        }
+        true
     }
 
     /// Bail out if the current token is not an expected keyword, or consume it if it is

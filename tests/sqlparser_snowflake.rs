@@ -1173,3 +1173,68 @@ fn parse_top() {
         "SELECT TOP 4 c1 FROM testtable",
     );
 }
+
+#[test]
+fn parse_comma_outer_join() {
+    // compound identifiers
+    let case1 =
+        snowflake().verified_only_select("SELECT t1.c1, t2.c2 FROM t1, t2 WHERE t1.c1 = t2.c2 (+)");
+    assert_eq!(
+        case1.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("t1"),
+                Ident::new("c1")
+            ])),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::OuterJoin(Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("t2"),
+                Ident::new("c2")
+            ]))))
+        })
+    );
+
+    // regular identifiers
+    let case2 =
+        snowflake().verified_only_select("SELECT t1.c1, t2.c2 FROM t1, t2 WHERE c1 = c2 (+)");
+    assert_eq!(
+        case2.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("c1"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::OuterJoin(Box::new(Expr::Identifier(Ident::new(
+                "c2"
+            )))))
+        })
+    );
+
+    // ensure we can still parse function calls with a unary plus arg
+    let case3 =
+        snowflake().verified_only_select("SELECT t1.c1, t2.c2 FROM t1, t2 WHERE c1 = myudf(+42)");
+    assert_eq!(
+        case3.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("c1"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("myudf")]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
+                    op: UnaryOperator::Plus,
+                    expr: Box::new(Expr::Value(number("42")))
+                }))],
+                filter: None,
+                null_treatment: None,
+                over: None,
+                distinct: false,
+                special: false,
+                order_by: vec![]
+            }))
+        })
+    );
+
+    // permissive with whitespace
+    snowflake().verified_only_select_with_canonical(
+        "SELECT t1.c1, t2.c2 FROM t1, t2 WHERE t1.c1 = t2.c2(   +     )",
+        "SELECT t1.c1, t2.c2 FROM t1, t2 WHERE t1.c1 = t2.c2 (+)",
+    );
+}

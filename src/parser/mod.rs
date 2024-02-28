@@ -7894,7 +7894,7 @@ impl<'a> Parser<'a> {
             return parser_err!("Unsupported statement REPLACE", self.peek_token().location);
         }
 
-        let insert = &mut self.parse_insert().unwrap();
+        let insert = &mut self.parse_insert()?;
         if let Statement::Insert { replace_into, .. } = insert {
             *replace_into = true;
         }
@@ -9661,5 +9661,43 @@ mod tests {
         } else {
             panic!("fail to parse mysql partition selection");
         }
+    }
+
+    #[test]
+    fn test_replace_into_placeholders() {
+        let sql = "REPLACE INTO t (a) VALUES (&a)";
+
+        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+    }
+
+    #[test]
+    fn test_replace_into_set() {
+        // NOTE: This is actually valid MySQL syntax, REPLACE and INSERT,
+        // but the parser does not yet support it.
+        // https://dev.mysql.com/doc/refman/8.3/en/insert.html
+        let sql = "REPLACE INTO t SET a='1'";
+
+        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+    }
+
+    #[test]
+    fn test_replace_into_set_placeholder() {
+        let sql = "REPLACE INTO t SET ?";
+
+        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+    }
+
+    #[test]
+    fn test_replace_into_select() {
+        let sql = r#"REPLACE INTO t1 (a, b, c) (SELECT * FROM t2)"#;
+
+        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+    }
+
+    #[test]
+    fn test_replace_incomplete() {
+        let sql = r#"REPLACE"#;
+
+        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
     }
 }

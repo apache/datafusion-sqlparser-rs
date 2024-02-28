@@ -3834,3 +3834,12 @@ fn parse_array_agg() {
     let sql4 = "SELECT ARRAY_AGG(my_schema.sections_tbl.*) AS sections FROM sections_tbl";
     pg().verified_stmt(sql4);
 }
+
+#[test]
+fn parse_mat_cte() {
+    let sql = r#"WITH cte AS MATERIALIZED (SELECT id FROM accounts) SELECT id FROM cte"#;
+    pg().verified_stmt(sql);
+
+    let sql2 = r#"WITH cte AS NOT MATERIALIZED (SELECT id FROM accounts) SELECT id FROM cte"#;
+    pg().verified_stmt(sql2);
+}

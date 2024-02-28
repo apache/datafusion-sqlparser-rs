@@ -6668,6 +6668,14 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier(false)?;
 
         let mut cte = if self.parse_keyword(Keyword::AS) {
+            let mut is_materialized = CteAsMaterialized::Default;
+            if dialect_of!(self is PostgreSqlDialect) {
+                if self.parse_keyword(Keyword::MATERIALIZED) {
+                    is_materialized = CteAsMaterialized::Materialized;
+                } else if self.parse_keywords(&[Keyword::NOT, Keyword::MATERIALIZED]) {
+                    is_materialized = CteAsMaterialized::NotMaterialized;
+                }
+            }
             self.expect_token(&Token::LParen)?;
             let query = Box::new(self.parse_query()?);
             self.expect_token(&Token::RParen)?;
@@ -6679,10 +6687,19 @@ impl<'a> Parser<'a> {
                 alias,
                 query,
                 from: None,
+                materialized: is_materialized,
             }
         } else {
             let columns = self.parse_parenthesized_column_list(Optional, false)?;
             self.expect_keyword(Keyword::AS)?;
+            let mut is_materialized = CteAsMaterialized::Default;
+            if dialect_of!(self is PostgreSqlDialect) {
+                if self.parse_keyword(Keyword::MATERIALIZED) {
+                    is_materialized = CteAsMaterialized::Materialized;
+                } else if self.parse_keywords(&[Keyword::NOT, Keyword::MATERIALIZED]) {
+                    is_materialized = CteAsMaterialized::NotMaterialized;
+                }
+            }
             self.expect_token(&Token::LParen)?;
             let query = Box::new(self.parse_query()?);
             self.expect_token(&Token::RParen)?;
@@ -6691,6 +6708,7 @@ impl<'a> Parser<'a> {
                 alias,
                 query,
                 from: None,
+                materialized: is_materialized,
             }
         };
         if self.parse_keyword(Keyword::FROM) {

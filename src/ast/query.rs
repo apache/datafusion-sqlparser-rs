@@ -376,7 +376,36 @@ impl fmt::Display for With {
     }
 }
 
-/// A single CTE (used after `WITH`): `alias [(col1, col2, ...)] AS ( query )`
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CteAsMaterialized {
+    /// The WITH statement does not specify MATERIALIZED behavior
+    Default,
+    /// The WITH statement  specifies AS MATERIALIZED behavior
+    Materialized,
+    /// The WITH statement  specifies AS NOT MATERIALIZED behavior
+    NotMaterialized,
+}
+
+impl fmt::Display for CteAsMaterialized {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            CteAsMaterialized::Default => {
+                write!(f, "")?;
+            }
+            CteAsMaterialized::Materialized => {
+                write!(f, "MATERIALIZED")?;
+            }
+            CteAsMaterialized::NotMaterialized => {
+                write!(f, "NOT MATERIALIZED")?;
+            }
+        };
+        Ok(())
+    }
+}
+
+/// A single CTE (used after `WITH`): `<alias> [(col1, col2, ...)] AS <materialized> ( <query> )`
 /// The names in the column list before `AS`, when specified, replace the names
 /// of the columns returned by the query. The parser does not validate that the
 /// number of columns in the query matches the number of columns in the query.
@@ -387,11 +416,20 @@ pub struct Cte {
     pub alias: TableAlias,
     pub query: Box<Query>,
     pub from: Option<Ident>,
+    pub materialized: CteAsMaterialized,
 }
 
 impl fmt::Display for Cte {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} AS ({})", self.alias, self.query)?;
+        if matches!(self.materialized, CteAsMaterialized::Default) {
+            write!(f, "{} AS ({})", self.alias, self.query)?;
+        } else {
+            write!(
+                f,
+                "{} AS {} ({})",
+                self.alias, self.materialized, self.query
+            )?;
+        }
         if let Some(ref fr) = self.from {
             write!(f, " FROM {fr}")?;
         }

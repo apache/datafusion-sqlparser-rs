@@ -3497,6 +3497,23 @@ fn parse_alter_table() {
         }
         _ => unreachable!(),
     }
+
+    let set_table_properties = "ALTER TABLE tab SET TBLPROPERTIES('classification' = 'parquet')";
+    match alter_table_op(verified_stmt(set_table_properties)) {
+        AlterTableOperation::SetTblProperties {
+            table_properties,
+        } => {
+            assert_eq!(table_properties, [
+                SqlOption {
+                    name: Ident { value: "classification".to_string(), quote_style: Some('\'') },
+                    value: Expr::Value(Value::SingleQuotedString(
+                        "parquet".to_string()
+                    )),
+                }
+            ]);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

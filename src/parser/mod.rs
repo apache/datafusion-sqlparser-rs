@@ -4132,18 +4132,24 @@ impl<'a> Parser<'a> {
                 let mut row_delimiters = vec![];
 
                 loop {
-                    match self.parse_one_of_keywords(&[Keyword::FIELDS, Keyword::COLLECTION, Keyword::MAP, Keyword::LINES, Keyword::NULL]) {
+                    match self.parse_one_of_keywords(&[
+                        Keyword::FIELDS,
+                        Keyword::COLLECTION,
+                        Keyword::MAP,
+                        Keyword::LINES,
+                        Keyword::NULL
+                    ]) {
                         Some(Keyword::FIELDS) => {
                             if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::FieldsTerminatedBy,
-                                    char: self.parse_identifier(false)?
+                                    char: self.parse_identifier(false)?,
                                 });
 
                                 if self.parse_keywords(&[Keyword::ESCAPED, Keyword::BY]) {
                                     row_delimiters.push(HiveRowDelimiter {
                                         delimiter: HiveDelimiter::FieldsEscapedBy,
-                                        char: self.parse_identifier(false)?
+                                        char: self.parse_identifier(false)?,
                                     });
                                 }
                             } else {
@@ -4154,7 +4160,7 @@ impl<'a> Parser<'a> {
                             if self.parse_keywords(&[Keyword::ITEMS, Keyword::TERMINATED, Keyword::BY]) {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
-                                    char: self.parse_identifier(false)?
+                                    char: self.parse_identifier(false)?,
                                 });
                             } else {
                                 break;
@@ -4164,7 +4170,7 @@ impl<'a> Parser<'a> {
                             if self.parse_keywords(&[Keyword::KEYS, Keyword::TERMINATED, Keyword::BY]) {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::MapKeysTerminatedBy,
-                                    char: self.parse_identifier(false)?
+                                    char: self.parse_identifier(false)?,
                                 });
                             } else {
                                 break;
@@ -4174,7 +4180,7 @@ impl<'a> Parser<'a> {
                             if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::LinesTerminatedBy,
-                                    char: self.parse_identifier(false)?
+                                    char: self.parse_identifier(false)?,
                                 });
                             } else {
                                 break;
@@ -4184,20 +4190,22 @@ impl<'a> Parser<'a> {
                             if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::NullDefinedAs,
-                                    char: self.parse_identifier(false)?
+                                    char: self.parse_identifier(false)?,
                                 });
                             } else {
                                 break;
                             }
                         }
-                        _ => { break; }
+                        _ => {
+                            break;
+                        }
                     }
                 }
 
                 Ok(HiveRowFormat::DELIMITED {
-                    delimiters: row_delimiters
+                    delimiters: row_delimiters,
                 })
-            },
+            }
         }
     }
 

@@ -3915,14 +3915,26 @@ impl<'a> Parser<'a> {
         Ok(DropFunctionDesc { name, args })
     }
 
+    /// Parse a `DECLARE` statement.
+    ///
     /// ```sql
     /// DECLARE name [ BINARY ] [ ASENSITIVE | INSENSITIVE ] [ [ NO ] SCROLL ]
     ///     CURSOR [ { WITH | WITHOUT } HOLD ] FOR query
     /// ```
+    ///
+    /// The syntax can vary significantly between warehouses. See the grammar
+    /// on the warehouse specific function in such cases.
     pub fn parse_declare(&mut self) -> Result<Statement, ParserError> {
+        if dialect_of!(self is BigQueryDialect) {
+            return self.parse_big_query_declare();
+        }
+        if dialect_of!(self is SnowflakeDialect) {
+            return self.parse_snowflake_declare();
+        }
+
         let name = self.parse_identifier(false)?;
 
-        let binary = self.parse_keyword(Keyword::BINARY);
+        let binary = Some(self.parse_keyword(Keyword::BINARY));
         let sensitive = if self.parse_keyword(Keyword::INSENSITIVE) {
             Some(true)
         } else if self.parse_keyword(Keyword::ASENSITIVE) {
@@ -3939,6 +3951,7 @@ impl<'a> Parser<'a> {
         };
 
         self.expect_keyword(Keyword::CURSOR)?;
+        let declare_type = Some(DeclareType::Cursor);
 
         let hold = match self.parse_one_of_keywords(&[Keyword::WITH, Keyword::WITHOUT]) {
             Some(keyword) => {
@@ -3955,15 +3968,204 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword(Keyword::FOR)?;
 
-        let query = self.parse_query()?;
+        let query = Some(Box::new(self.parse_query()?));
 
         Ok(Statement::Declare {
-            name,
-            binary,
-            sensitive,
-            scroll,
-            hold,
-            query: Box::new(query),
+            stmts: vec![Declare {
+                names: vec![name],
+                data_type: None,
+                assignment: None,
+                declare_type,
+                binary,
+                sensitive,
+                scroll,
+                hold,
+                for_query: query,
+            }],
+        })
+    }
+
+    /// Parse a [BigQuery] `DECLARE` statement.
+    ///
+    /// Syntax:
+    /// ```text
+    /// DECLARE variable_name[, ...] [{ <variable_type> | <DEFAULT expression> }];
+    /// ```
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#declare
+    pub fn parse_big_query_declare(&mut self) -> Result<Statement, ParserError> {
+        let names = self.parse_comma_separated(|parser| Parser::parse_identifier(parser, false))?;
+
+        let data_type = match self.peek_token().token {
+            Token::Word(w) if w.keyword == Keyword::DEFAULT => None,
+            _ => Some(self.parse_data_type()?),
+        };
+
+        let expr = if data_type.is_some() {
+            if self.parse_keyword(Keyword::DEFAULT) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            }
+        } else {
+            // If no variable type - default expression must be specified, per BQ docs.
+            // i.e `DECLARE foo;` is invalid.
+            self.expect_keyword(Keyword::DEFAULT)?;
+            Some(self.parse_expr()?)
+        };
+
+        Ok(Statement::Declare {
+            stmts: vec![Declare {
+                names,
+                data_type,
+                assignment: expr.map(|expr| DeclareAssignment::Default(Box::new(expr))),
+                declare_type: None,
+                binary: None,
+                sensitive: None,
+                scroll: None,
+                hold: None,
+                for_query: None,
+            }],
+        })
+    }
+
+    /// Parse a [Snowflake] `DECLARE` statement.
+    ///
+    /// Syntax:
+    /// ```text
+    /// DECLARE
+    ///   [{ <variable_declaration>
+    ///      | <cursor_declaration>
+    ///      | <resultset_declaration>
+    ///      | <exception_declaration> }; ... ]
+    ///
+    /// <variable_declaration>
+    /// <variable_name> [<type>] [ { DEFAULT | := } <expression>]
+    ///
+    /// <cursor_declaration>
+    /// <cursor_name> CURSOR FOR <query>
+    ///
+    /// <resultset_declaration>
+    /// <resultset_name> RESULTSET [ { DEFAULT | := } ( <query> ) ] ;
+    ///
+    /// <exception_declaration>
+    /// <exception_name> EXCEPTION [ ( <exception_number> , '<exception_message>' ) ] ;
+    /// ```
+    ///
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/snowflake-scripting/declare
+    pub fn parse_snowflake_declare(&mut self) -> Result<Statement, ParserError> {
+        let mut stmts = vec![];
+        loop {
+            let name = self.parse_identifier(false)?;
+            let (declare_type, for_query, assigned_expr, data_type) =
+                if self.parse_keyword(Keyword::CURSOR) {
+                    self.expect_keyword(Keyword::FOR)?;
+                    match self.peek_token().token {
+                        Token::Word(w) if w.keyword == Keyword::SELECT => (
+                            Some(DeclareType::Cursor),
+                            Some(Box::new(self.parse_query()?)),
+                            None,
+                            None,
+                        ),
+                        _ => (
+                            Some(DeclareType::Cursor),
+                            None,
+                            Some(DeclareAssignment::For(Box::new(self.parse_expr()?))),
+                            None,
+                        ),
+                    }
+                } else if self.parse_keyword(Keyword::RESULTSET) {
+                    let assigned_expr = if self.peek_token().token != Token::SemiColon {
+                        self.parse_snowflake_variable_declaration_expression()?
+                    } else {
+                        // Nothing more to do. The statement has no further parameters.
+                        None
+                    };
+
+                    (Some(DeclareType::ResultSet), None, assigned_expr, None)
+                } else if self.parse_keyword(Keyword::EXCEPTION) {
+                    let assigned_expr = if self.peek_token().token == Token::LParen {
+                        Some(DeclareAssignment::Expr(Box::new(self.parse_expr()?)))
+                    } else {
+                        // Nothing more to do. The statement has no further parameters.
+                        None
+                    };
+
+                    (Some(DeclareType::Exception), None, assigned_expr, None)
+                } else {
+                    // Without an explicit keyword, the only valid option is variable declaration.
+                    let (assigned_expr, data_type) = if let Some(assigned_expr) =
+                        self.parse_snowflake_variable_declaration_expression()?
+                    {
+                        (Some(assigned_expr), None)
+                    } else if let Token::Word(_) = self.peek_token().token {
+                        let data_type = self.parse_data_type()?;
+                        (
+                            self.parse_snowflake_variable_declaration_expression()?,
+                            Some(data_type),
+                        )
+                    } else {
+                        (None, None)
+                    };
+                    (None, None, assigned_expr, data_type)
+                };
+            let stmt = Declare {
+                names: vec![name],
+                data_type,
+                assignment: assigned_expr,
+                declare_type,
+                binary: None,
+                sensitive: None,
+                scroll: None,
+                hold: None,
+                for_query,
+            };
+
+            stmts.push(stmt);
+            if self.consume_token(&Token::SemiColon) {
+                match self.peek_token().token {
+                    Token::Word(w)
+                        if ALL_KEYWORDS
+                            .binary_search(&w.value.to_uppercase().as_str())
+                            .is_err() =>
+                    {
+                        // Not a keyword - start of a new declaration.
+                        continue;
+                    }
+                    _ => {
+                        // Put back the semi-colon, this is the end of the DECLARE statement.
+                        self.prev_token();
+                    }
+                }
+            }
+
+            break;
+        }
+
+        Ok(Statement::Declare { stmts })
+    }
+
+    /// Parses the assigned expression in a variable declaration.
+    ///
+    /// Syntax:
+    /// ```text
+    /// [ { DEFAULT | := } <expression>]
+    /// ```
+    /// <https://docs.snowflake.com/en/sql-reference/snowflake-scripting/declare#variable-declaration-syntax>
+    pub fn parse_snowflake_variable_declaration_expression(
+        &mut self,
+    ) -> Result<Option<DeclareAssignment>, ParserError> {
+        Ok(match self.peek_token().token {
+            Token::Word(w) if w.keyword == Keyword::DEFAULT => {
+                self.next_token(); // Skip `DEFAULT`
+                Some(DeclareAssignment::Default(Box::new(self.parse_expr()?)))
+            }
+            Token::DuckAssignment => {
+                self.next_token(); // Skip `:=`
+                Some(DeclareAssignment::DuckAssignment(Box::new(
+                    self.parse_expr()?,
+                )))
+            }
+            _ => None,
         })
     }
 

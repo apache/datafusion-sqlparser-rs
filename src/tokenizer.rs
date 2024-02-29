@@ -2299,5 +2299,11 @@ mod tests {
         // others
         check_unescape(r"\9", Some("9"));
         check_unescape(r"''", Some("'"));
+        check_unescape(
+            r"Hello\r\nRust/\u4c91 SQL Parser\U0010ABCD\1232",
+            Some("Hello\r\nRust/\u{4c91} SQL Parser\u{10abcd}\u{0053}2"),
+        );
+        check_unescape(r"Hello\0", None);
+        check_unescape(r"Hello\xCADRust", None);
     }
 }

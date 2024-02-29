@@ -4137,7 +4137,7 @@ impl<'a> Parser<'a> {
                         Keyword::COLLECTION,
                         Keyword::MAP,
                         Keyword::LINES,
-                        Keyword::NULL
+                        Keyword::NULL,
                     ]) {
                         Some(Keyword::FIELDS) => {
                             if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
@@ -4157,7 +4157,11 @@ impl<'a> Parser<'a> {
                             }
                         }
                         Some(Keyword::COLLECTION) => {
-                            if self.parse_keywords(&[Keyword::ITEMS, Keyword::TERMINATED, Keyword::BY]) {
+                            if self.parse_keywords(&[
+                                Keyword::ITEMS,
+                                Keyword::TERMINATED,
+                                Keyword::BY,
+                            ]) {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
                                     char: self.parse_identifier(false)?,
@@ -4167,7 +4171,11 @@ impl<'a> Parser<'a> {
                             }
                         }
                         Some(Keyword::MAP) => {
-                            if self.parse_keywords(&[Keyword::KEYS, Keyword::TERMINATED, Keyword::BY]) {
+                            if self.parse_keywords(&[
+                                Keyword::KEYS,
+                                Keyword::TERMINATED,
+                                Keyword::BY
+                            ]) {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::MapKeysTerminatedBy,
                                     char: self.parse_identifier(false)?,

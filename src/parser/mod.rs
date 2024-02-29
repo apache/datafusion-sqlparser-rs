@@ -516,6 +516,7 @@ impl<'a> Parser<'a> {
                 Keyword::MERGE => Ok(self.parse_merge()?),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => Ok(self.parse_pragma()?),
+                Keyword::UNLOAD => Ok(self.parse_unload()?),
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     Ok(self.parse_install()?)
@@ -524,7 +525,6 @@ impl<'a> Parser<'a> {
                 Keyword::LOAD if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     Ok(self.parse_load()?)
                 }
-
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -8944,6 +8944,23 @@ impl<'a> Parser<'a> {
             name,
             data_types,
             statement,
+        })
+    }
+
+    pub fn parse_unload(&mut self) -> Result<Statement, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let query = self.parse_query()?;
+        self.expect_token(&Token::RParen)?;
+
+        self.expect_keyword(Keyword::TO)?;
+        let to = self.parse_identifier(false)?;
+
+        let with_options = self.parse_options(Keyword::WITH)?;
+
+        Ok(Statement::Unload {
+            query: Box::new(query),
+            to,
+            with: with_options,
         })
     }
 

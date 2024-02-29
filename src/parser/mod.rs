@@ -8411,8 +8411,15 @@ impl<'a> Parser<'a> {
 
                     let partitioned = self.parse_insert_partition()?;
 
-                    // Hive allows you to specify columns after partitions as well if you want.
-                    let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+                    // make sure we are not about to consume a query
+                    let mut after_columns = vec![];
+                    match self.peek_nth_token(1).token {
+                        Token::Word(w) if w.keyword != Keyword::SELECT => {
+                            // Hive allows you to specify columns after partitions as well if you want.
+                            after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+                        },
+                        _ => {}
+                    };
 
                     let source = Some(Box::new(self.parse_query()?));
 

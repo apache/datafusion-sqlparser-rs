@@ -2791,6 +2791,31 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// If the current token is the `expected` keyword followed by
+    /// specified tokens, consume them and returns true.
+    /// Otherwise, no tokens are consumed and returns false.
+    ///
+    /// Note that if the length of `tokens` is too long, this function will
+    /// not be efficient as it does a loop on the tokens with `peek_nth_token`
+    /// each time.
+    pub fn parse_keyword_with_tokens(&mut self, expected: Keyword, tokens: &[Token]) -> bool {
+        match self.peek_token().token {
+            Token::Word(w) if expected == w.keyword => {
+                for (idx, token) in tokens.iter().enumerate() {
+                    if self.peek_nth_token(idx + 1).token != *token {
+                        return false;
+                    }
+                }
+                // consume all tokens
+                for _ in 0..(tokens.len() + 1) {
+                    self.next_token();
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// If the current and subsequent tokens exactly match the `keywords`
     /// sequence, consume them and returns true. Otherwise, no tokens are
     /// consumed and returns false
@@ -7555,12 +7580,7 @@ impl<'a> Parser<'a> {
                 with_offset,
                 with_offset_alias,
             })
-        } else if matches!(
-            self.peek_token().token, Token::Word(w)
-            if w.keyword == Keyword::JSON_TABLE && self.peek_nth_token(1).token == Token::LParen
-        ) {
-            self.expect_keyword(Keyword::JSON_TABLE)?;
-            self.expect_token(&Token::LParen)?;
+        } else if self.parse_keyword_with_tokens(Keyword::JSON_TABLE, &[Token::LParen]) {
             let json_expr = self.parse_expr()?;
             self.expect_token(&Token::Comma)?;
             let json_path = self.parse_value()?;

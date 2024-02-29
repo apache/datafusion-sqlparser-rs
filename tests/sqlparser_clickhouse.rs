@@ -19,7 +19,6 @@ mod test_utils;
 use test_utils::*;
 
 use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
-use sqlparser::ast::Ident;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Table;
 use sqlparser::ast::*;

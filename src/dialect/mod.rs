@@ -207,8 +207,6 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
 
 #[cfg(test)]
 mod tests {
-    use super::ansi::AnsiDialect;
-    use super::generic::GenericDialect;
     use super::*;
 
     struct DialectHolder<'a> {

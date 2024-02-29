@@ -5200,7 +5200,13 @@ impl fmt::Display for CopyLegacyCsvOption {
     }
 }
 
+/// `MERGE` Statement
 ///
+/// ```sql
+/// MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]
+/// ```
+///
+/// See [Snowflake documentation](https://docs.snowflake.com/en/sql-reference/sql/merge)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

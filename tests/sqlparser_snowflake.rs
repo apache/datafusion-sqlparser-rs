@@ -1305,7 +1305,7 @@ fn test_snowflake_stage_object_names() {
         "@namespace.stage_name/path",
         "@~/path",
     ];
-    let mut allowed_object_names = vec![
+    let mut allowed_object_names = [
         ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
         ObjectName(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
         ObjectName(vec![

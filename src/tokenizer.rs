@@ -1409,7 +1409,7 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dialect::{ClickHouseDialect, GenericDialect, MsSqlDialect};
+    use crate::dialect::{ClickHouseDialect, MsSqlDialect};
 
     #[test]
     fn tokenizer_error_impl() {

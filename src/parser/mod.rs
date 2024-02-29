@@ -4862,7 +4862,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_options_with_keywords(&mut self, keywords: &[Keyword]) -> Result<Vec<SqlOption>, ParserError> {
+    pub fn parse_options_with_keywords(
+        &mut self,
+        keywords: &[Keyword],
+    ) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keywords(keywords) {
             self.expect_token(&Token::LParen)?;
             let options = self.parse_comma_separated(Parser::parse_sql_option)?;
@@ -5134,9 +5137,12 @@ impl<'a> Parser<'a> {
             let table_name = self.parse_object_name(false)?;
             AlterTableOperation::SwapWith { table_name }
         } else {
-            let options: Vec<SqlOption> = self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
+            let options: Vec<SqlOption> =
+                self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
             if options.len() > 0 {
-                AlterTableOperation::SetTblProperties { table_properties: options }
+                AlterTableOperation::SetTblProperties {
+                    table_properties: options
+                }
             } else {
                 return self.expected(
                     "ADD, RENAME, PARTITION, SWAP, DROP, or SET TBLPROPERTIES after ALTER TABLE",

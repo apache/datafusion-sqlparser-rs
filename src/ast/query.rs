@@ -245,11 +245,18 @@ pub struct Select {
     pub named_window: Vec<NamedWindowDefinition>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
+    /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
+    pub value_table_mode: Option<ValueTableMode>,
 }
 
 impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SELECT")?;
+
+        if let Some(value_table_mode) = self.value_table_mode {
+            write!(f, " {value_table_mode}")?;
+        }
+
         if let Some(ref distinct) = self.distinct {
             write!(f, " {distinct}")?;
         }
@@ -1571,6 +1578,27 @@ impl fmt::Display for JsonTableColumnErrorHandling {
                 write!(f, "DEFAULT {}", json_string)
             }
             JsonTableColumnErrorHandling::Error => write!(f, "ERROR"),
+        }
+    }
+}
+
+/// BigQuery supports ValueTables which have 2 modes:
+/// `SELECT AS STRUCT`
+/// `SELECT AS VALUE`
+/// <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#value_tables>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ValueTableMode {
+    AsStruct,
+    AsValue,
+}
+
+impl fmt::Display for ValueTableMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ValueTableMode::AsStruct => write!(f, "AS STRUCT"),
+            ValueTableMode::AsValue => write!(f, "AS VALUE"),
         }
     }
 }

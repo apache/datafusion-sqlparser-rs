@@ -8609,7 +8609,11 @@ impl<'a> Parser<'a> {
             }
         };
 
-        Ok(Statement::Execute { name, parameters, using })
+        Ok(Statement::Execute {
+            name,
+            parameters,
+            using
+        })
     }
 
     pub fn parse_prepare(&mut self) -> Result<Statement, ParserError> {

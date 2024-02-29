@@ -1437,7 +1437,8 @@ fn parse_execute() {
         }
     );
 
-    let stmt = pg_and_generic().verified_stmt("EXECUTE a USING CAST(1337 AS SMALLINT), CAST(7331 AS SMALLINT)");
+    let stmt = pg_and_generic()
+        .verified_stmt("EXECUTE a USING CAST(1337 AS SMALLINT), CAST(7331 AS SMALLINT)");
     assert_eq!(
         stmt,
         Statement::Execute {

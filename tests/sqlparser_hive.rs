@@ -47,6 +47,16 @@ fn parse_describe() {
 }
 
 #[test]
+fn explain_describe_formatted() {
+    hive().verified_stmt("DESCRIBE FORMATTED test.table");
+}
+
+#[test]
+fn explain_describe_extended() {
+    hive().verified_stmt("DESCRIBE EXTENDED test.table");
+}
+
+#[test]
 fn parse_insert_overwrite() {
     let insert_partitions = r#"INSERT OVERWRITE TABLE db.new_table PARTITION (a = '1', b) SELECT a, b, c FROM db.table"#;
     hive().verified_stmt(insert_partitions);

@@ -3873,19 +3873,31 @@ fn run_explain_analyze(
 
 #[test]
 fn parse_explain_table() {
-    let validate_explain = |query: &str, expected_describe_alias: bool| match verified_stmt(query) {
+    let validate_explain = |query: &str, expected_describe_alias: DescribeAlias| match verified_stmt(query) {
         Statement::ExplainTable {
             describe_alias,
+            hive_format,
             table_name,
         } => {
             assert_eq!(describe_alias, expected_describe_alias);
+            assert_eq!(hive_format, None);
             assert_eq!("test_identifier", table_name.to_string());
         }
         _ => panic!("Unexpected Statement, must be ExplainTable"),
     };
 
-    validate_explain("EXPLAIN test_identifier", false);
-    validate_explain("DESCRIBE test_identifier", true);
+    validate_explain("EXPLAIN test_identifier", DescribeAlias::Explain);
+    validate_explain("DESCRIBE test_identifier", DescribeAlias::Describe);
+}
+
+#[test]
+fn explain_describe() {
+    verified_stmt("DESCRIBE test.table");
+}
+
+#[test]
+fn explain_desc() {
+    verified_stmt("DESC test.table");
 }
 
 #[test]

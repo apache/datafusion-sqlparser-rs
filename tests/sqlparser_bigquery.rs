@@ -255,7 +255,7 @@ fn parse_typed_struct_syntax() {
     // typed struct syntax https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typed_struct_syntax
     // syntax: STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
 
-    let sql = r#"SELECT STRUCT<INT64>(5), STRUCT<x INT64, y STRING>(1, t.str_col), STRUCT<arr ARRAY<FLOAT64>, str STRUCT<BOOL>>(nested_col)"#;
+    let sql = r#"SELECT STRUCT<INT64>(5), STRUCT<x INT64, y STRING, timezone STRING>(1, t.str_col, timezone), STRUCT<arr ARRAY<FLOAT64>, str STRUCT<BOOL>>(nested_col)"#;
     let select = bigquery().verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
@@ -285,6 +285,7 @@ fn parse_typed_struct_syntax() {
                     ]
                     .empty_span()
                 ),
+                Expr::Identifier(Ident::new("timezone").empty_span()),
             ],
             fields: vec![
                 StructField {
@@ -293,6 +294,10 @@ fn parse_typed_struct_syntax() {
                 },
                 StructField {
                     field_name: Some(Ident::new("y").empty_span()),
+                    field_type: DataType::String(None),
+                },
+                StructField {
+                    field_name: Some(Ident::new("timezone").empty_span()),
                     field_type: DataType::String(None),
                 },
             ],

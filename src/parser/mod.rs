@@ -1824,18 +1824,14 @@ impl<'a> Parser<'a> {
     fn parse_big_query_struct_field_def(
         &mut self,
     ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
-        let is_anonymous_field = if let Token::Word(w) = self.peek_token().token {
-            ALL_KEYWORDS
-                .binary_search(&w.value.to_uppercase().as_str())
-                .is_ok()
+        let field_name: Option<WithSpan<Ident>> = if let Token::Word(_) = self.peek_token().token {
+            match self.peek_nth_token(1).token {
+                // if there is another word it is named field
+                Token::Word(_) => Some(self.parse_identifier()?),
+                _ => None,
+            }
         } else {
-            false
-        };
-
-        let field_name = if is_anonymous_field {
             None
-        } else {
-            Some(self.parse_identifier()?)
         };
 
         let (field_type, trailing_bracket) = self.parse_data_type_helper()?;

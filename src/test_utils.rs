@@ -242,6 +242,7 @@ pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTa
             if_exists,
             only: is_only,
             operations,
+            location: _,
         } => {
             assert_eq!(name.to_string(), expected_name);
             assert!(!if_exists);
@@ -251,6 +252,7 @@ pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTa
         _ => panic!("Expected ALTER TABLE statement"),
     }
 }
+
 pub fn alter_table_op(stmt: Statement) -> AlterTableOperation {
     alter_table_op_with_name(stmt, "tab")
 }

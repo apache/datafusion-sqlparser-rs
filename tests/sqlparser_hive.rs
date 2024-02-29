@@ -123,6 +123,18 @@ fn test_alter_partition() {
 }
 
 #[test]
+fn test_alter_with_location() {
+    let alter = "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1) LOCATION 's3://...'";
+    hive().verified_stmt(alter);
+}
+
+#[test]
+fn test_alter_with_set_location() {
+    let alter = "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1) SET LOCATION 's3://...'";
+    hive().verified_stmt(alter);
+}
+
+#[test]
 fn test_add_partition() {
     let add = "ALTER TABLE db.table ADD IF NOT EXISTS PARTITION (a = 'asdf', b = 2)";
     hive().verified_stmt(add);

@@ -8403,28 +8403,28 @@ impl<'a> Parser<'a> {
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
-            let (columns, partitioned, after_columns, source) =
-                if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
-                    (vec![], None, vec![], None)
-                } else {
-                    let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+            let (columns, partitioned, after_columns, source) = if self
+            .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
+                (vec![], None, vec![], None)
+            } else {
+                let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
-                    let partitioned = self.parse_insert_partition()?;
+                let partitioned = self.parse_insert_partition()?;
 
-                    // make sure we are not about to consume a query
-                    let mut after_columns = vec![];
-                    match self.peek_nth_token(1).token {
-                        Token::Word(w) if w.keyword != Keyword::SELECT => {
-                            // Hive allows you to specify columns after partitions as well if you want.
-                            after_columns = self.parse_parenthesized_column_list(Optional, false)?;
-                        },
-                        _ => {}
-                    };
-
-                    let source = Some(Box::new(self.parse_query()?));
-
-                    (columns, partitioned, after_columns, source)
+                // make sure we are not about to consume a query
+                let mut after_columns = vec![];
+                match self.peek_nth_token(1).token {
+                    Token::Word(w) if w.keyword != Keyword::SELECT => {
+                        // Hive allows you to specify columns after partitions as well if you want.
+                        after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+                    },
+                    _ => {}
                 };
+
+                let source = Some(Box::new(self.parse_query()?));
+
+                (columns, partitioned, after_columns, source)
+            };
 
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {

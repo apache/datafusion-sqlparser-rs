@@ -4174,7 +4174,7 @@ impl<'a> Parser<'a> {
                             if self.parse_keywords(&[
                                 Keyword::KEYS,
                                 Keyword::TERMINATED,
-                                Keyword::BY
+                                Keyword::BY,
                             ]) {
                                 row_delimiters.push(HiveRowDelimiter {
                                     delimiter: HiveDelimiter::MapKeysTerminatedBy,

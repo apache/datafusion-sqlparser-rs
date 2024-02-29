@@ -3317,7 +3317,7 @@ impl<'a> Parser<'a> {
                 return_type: None,
                 params,
             })
-        } else if dialect_of!(self is PostgreSqlDialect) {
+        } else if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
             let name = self.parse_object_name(false)?;
             self.expect_token(&Token::LParen)?;
             let args = if self.consume_token(&Token::RParen) {

@@ -1278,6 +1278,70 @@ fn test_select_wildcard_with_replace() {
     assert_eq!(expected, select.projection[0]);
 }
 
+#[test]
+fn parse_big_query_declare() {
+    for (sql, expected_names, expected_data_type, expected_assigned_expr) in [
+        (
+            "DECLARE x INT64",
+            vec![Ident::new("x")],
+            Some(DataType::Int64),
+            None,
+        ),
+        (
+            "DECLARE x INT64 DEFAULT 42",
+            vec![Ident::new("x")],
+            Some(DataType::Int64),
+            Some(DeclareAssignment::Default(Box::new(Expr::Value(number(
+                "42",
+            ))))),
+        ),
+        (
+            "DECLARE x, y, z INT64 DEFAULT 42",
+            vec![Ident::new("x"), Ident::new("y"), Ident::new("z")],
+            Some(DataType::Int64),
+            Some(DeclareAssignment::Default(Box::new(Expr::Value(number(
+                "42",
+            ))))),
+        ),
+        (
+            "DECLARE x DEFAULT 42",
+            vec![Ident::new("x")],
+            None,
+            Some(DeclareAssignment::Default(Box::new(Expr::Value(number(
+                "42",
+            ))))),
+        ),
+    ] {
+        match bigquery().verified_stmt(sql) {
+            Statement::Declare { mut stmts } => {
+                assert_eq!(1, stmts.len());
+                let Declare {
+                    names,
+                    data_type,
+                    assignment: assigned_expr,
+                    ..
+                } = stmts.swap_remove(0);
+                assert_eq!(expected_names, names);
+                assert_eq!(expected_data_type, data_type);
+                assert_eq!(expected_assigned_expr, assigned_expr);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    let error_sql = "DECLARE x";
+    assert_eq!(
+        ParserError::ParserError("Expected a data type name, found: EOF".to_owned()),
+        bigquery().parse_sql_statements(error_sql).unwrap_err()
+    );
+
+    let error_sql = "DECLARE x 42";
+    assert_eq!(
+        ParserError::ParserError("Expected a data type name, found: 42".to_owned()),
+        bigquery().parse_sql_statements(error_sql).unwrap_err()
+    );
+}
+
 fn bigquery() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {})],
@@ -1351,4 +1415,20 @@ fn test_bigquery_trim() {
         ParserError::ParserError("Expected ), found: 'a'".to_owned()),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
+}
+
+#[test]
+fn test_select_as_struct() {
+    bigquery().verified_only_select("SELECT * FROM (SELECT AS VALUE STRUCT(123 AS a, false AS b))");
+    let select = bigquery().verified_only_select("SELECT AS STRUCT 1 AS a, 2 AS b");
+    assert_eq!(Some(ValueTableMode::AsStruct), select.value_table_mode);
+}
+
+#[test]
+fn test_select_as_value() {
+    bigquery().verified_only_select(
+        "SELECT * FROM (SELECT AS VALUE STRUCT(5 AS star_rating, false AS up_down_rating))",
+    );
+    let select = bigquery().verified_only_select("SELECT AS VALUE STRUCT(1 AS a, 2 AS b) AS xyz");
+    assert_eq!(Some(ValueTableMode::AsValue), select.value_table_mode);
 }

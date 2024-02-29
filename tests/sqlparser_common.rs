@@ -8352,6 +8352,67 @@ fn parse_binary_operators_without_whitespace() {
 }
 
 #[test]
+fn parse_unload() {
+    let unload = verified_stmt("UNLOAD(SELECT cola FROM tab) TO 's3://...' WITH (format = 'AVRO')");
+    assert_eq!(
+        unload,
+        Statement::Unload {
+            query: Box::new(Query {
+                body: Box::new(
+                    SetExpr::Select(Box::new(Select {
+                        distinct: None,
+                        top: None,
+                        projection: vec![
+                            UnnamedExpr(Expr::Identifier(Ident::new("cola"))),
+                        ],
+                        into: None,
+                        from: vec![TableWithJoins {
+                            relation: TableFactor::Table {
+                                name: ObjectName(vec![Ident::new("tab")]),
+                                alias: None,
+                                args: None,
+                                with_hints: vec![],
+                                version: None,
+                                partitions: vec![],
+                            },
+                            joins: vec![],
+                        }],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: GroupByExpr::Expressions(vec![]),
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        qualify: None
+                    }))
+                ),
+                with: None,
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                order_by: vec![],
+            }),
+            to: Ident {
+                value: "s3://...".to_string(),
+                quote_style: Some('\'')
+            },
+            with: vec![SqlOption {
+                name: Ident {
+                    value: "format".to_string(),
+                    quote_style: None
+                },
+                value: Expr::Value(Value::SingleQuotedString("AVRO".to_string()))
+            }]
+        }
+    );
+}
+
+#[test]
 fn test_savepoint() {
     match verified_stmt("SAVEPOINT test1") {
         Statement::Savepoint { name } => {

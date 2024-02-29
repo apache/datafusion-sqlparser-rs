@@ -684,6 +684,7 @@ define_keywords!(
     UNCOMMITTED,
     UNION,
     UNIQUE,
+    UNLOAD,
     UNKNOWN,
     UNLOCK,
     UNLOGGED,

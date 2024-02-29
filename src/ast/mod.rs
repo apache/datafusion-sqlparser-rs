@@ -2301,6 +2301,14 @@ pub enum Statement {
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
     UnlockTables,
+    /// ```sql
+    /// UNLOAD(statement) TO <destination> [ WITH options ]
+    /// ```
+    Unload {
+        query: Box<Query>,
+        to: Ident,
+        with: Vec<SqlOption>
+    }
 }
 
 impl fmt::Display for Statement {
@@ -3819,6 +3827,15 @@ impl fmt::Display for Statement {
             }
             Statement::UnlockTables => {
                 write!(f, "UNLOCK TABLES")
+            }
+            Statement::Unload { query, to, with } => {
+                write!(f, "UNLOAD({query}) TO {to}")?;
+
+                if with.len() > 0 {
+                    write!(f, " WITH ({})", display_comma_separated(with))?;
+                }
+
+                Ok(())
             }
         }
     }

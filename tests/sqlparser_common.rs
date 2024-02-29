@@ -5589,6 +5589,7 @@ fn parse_recursive_cte() {
         },
         query: Box::new(cte_query),
         from: None,
+        materialized: None,
     };
     assert_eq!(with.cte_tables.first().unwrap(), &expected);
 }

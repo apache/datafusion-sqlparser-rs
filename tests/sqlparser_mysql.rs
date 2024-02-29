@@ -15,9 +15,8 @@
 //! is also tested (on the inputs it can handle).
 
 use matches::assert_matches;
-use sqlparser::ast::Expr;
+
 use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
-use sqlparser::ast::Value;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::parser::ParserOptions;

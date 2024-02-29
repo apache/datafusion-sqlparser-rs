@@ -30,7 +30,7 @@ use IsOptional::*;
 use crate::ast::helpers::stmt_create_table::{BigQueryTableConfiguration, CreateTableBuilder};
 use crate::ast::*;
 use crate::dialect::*;
-use crate::keywords::{self, Keyword, ALL_KEYWORDS};
+use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
 
 mod alter;

@@ -1506,7 +1506,7 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dialect::{ClickHouseDialect, GenericDialect, MsSqlDialect};
+    use crate::dialect::{ClickHouseDialect, MsSqlDialect};
 
     #[test]
     fn tokenizer_error_impl() {

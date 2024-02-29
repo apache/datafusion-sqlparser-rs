@@ -5139,7 +5139,7 @@ impl<'a> Parser<'a> {
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
-            if options.len() > 0 {
+            if !options.is_empty() {
                 AlterTableOperation::SetTblProperties {
                     table_properties: options
                 }

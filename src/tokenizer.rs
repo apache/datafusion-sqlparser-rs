@@ -1199,8 +1199,7 @@ impl<'a> Tokenizer<'a> {
         starting_loc: Location,
         chars: &mut State,
     ) -> Result<String, TokenizerError> {
-        let mut unescape = Unescape { chars };
-        if let Some(s) = unescape.unescape_single_quoted_string() {
+        if let Some(s) = unescape_single_quoted_string(chars) {
             return Ok(s);
         }
 
@@ -1356,12 +1355,19 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
     s
 }
 
+fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {
+    Unescape::new(chars).unescape()
+}
+
 struct Unescape<'a: 'b, 'b> {
     chars: &'b mut State<'a>,
 }
 
 impl<'a: 'b, 'b> Unescape<'a, 'b> {
-    pub(crate) fn unescape_single_quoted_string(&mut self) -> Option<String> {
+    fn new(chars: &'b mut State<'a>) -> Self {
+        Self { chars }
+    }
+    fn unescape(mut self) -> Option<String> {
         let mut unescaped = String::new();
 
         self.chars.next();
@@ -2233,15 +2239,14 @@ mod tests {
 
     fn check_unescape(s: &str, expected: Option<&str>) {
         let s = format!("'{}'", s);
-        let mut unescape = Unescape {
-            chars: &mut State {
-                peekable: s.chars().peekable(),
-                line: 0,
-                col: 0,
-            },
+        let mut state = State {
+            peekable: s.chars().peekable(),
+            line: 0,
+            col: 0,
         };
+
         assert_eq!(
-            unescape.unescape_single_quoted_string(),
+            unescape_single_quoted_string(&mut state),
             expected.map(|s| s.to_string())
         );
     }

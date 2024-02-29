@@ -2158,11 +2158,11 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement.
     Deallocate { name: Ident, prepare: bool },
     /// ```sql
-    /// EXECUTE name [ ( parameter [, ...] ) ]
+    /// EXECUTE name [ ( parameter [, ...] ) ] [USING <expr>]
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute { name: Ident, parameters: Vec<Expr> },
+    Execute { name: Ident, parameters: Vec<Expr>, using: Vec<Expr> },
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
     /// ```
@@ -3574,11 +3574,14 @@ impl fmt::Display for Statement {
                 prepare = if *prepare { "PREPARE " } else { "" },
                 name = name,
             ),
-            Statement::Execute { name, parameters } => {
+            Statement::Execute { name, parameters, using } => {
                 write!(f, "EXECUTE {name}")?;
                 if !parameters.is_empty() {
                     write!(f, "({})", display_comma_separated(parameters))?;
                 }
+                if using.len() > 0 {
+                    write!(f, " USING {}", display_comma_separated(using))?;
+                };
                 Ok(())
             }
             Statement::Prepare {

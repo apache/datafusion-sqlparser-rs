@@ -5141,7 +5141,7 @@ impl<'a> Parser<'a> {
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
             if !options.is_empty() {
                 AlterTableOperation::SetTblProperties {
-                    table_properties: options
+                    table_properties: options,
                 }
             } else {
                 return self.expected(

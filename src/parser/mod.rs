@@ -4091,7 +4091,12 @@ impl<'a> Parser<'a> {
     pub fn parse_hive_formats(&mut self) -> Result<HiveFormat, ParserError> {
         let mut hive_format = HiveFormat::default();
         loop {
-            match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STORED, Keyword::LOCATION, Keyword::WITH]) {
+            match self.parse_one_of_keywords(&[
+                Keyword::ROW,
+                Keyword::STORED,
+                Keyword::LOCATION,
+                Keyword::WITH,
+            ]) {
                 Some(Keyword::ROW) => {
                     hive_format.row_format = Some(self.parse_row_format()?);
                 }
@@ -4115,8 +4120,9 @@ impl<'a> Parser<'a> {
                 }
                 Some(Keyword::WITH) => {
                     self.prev_token();
-                    let properties = self.parse_options_with_keywords(&[Keyword::WITH, Keyword::SERDEPROPERTIES])?;
-                    if properties.len() > 0 {
+                    let properties = self
+                        .parse_options_with_keywords(&[Keyword::WITH, Keyword::SERDEPROPERTIES])?;
+                    if !properties.is_empty() {
                         hive_format.serde_properties = Some(properties);
                     } else {
                         break;
@@ -4871,7 +4877,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_options_with_keywords(&mut self, keywords: &[Keyword]) -> Result<Vec<SqlOption>, ParserError> {
+    pub fn parse_options_with_keywords(
+        &mut self,
+        keywords: &[Keyword]
+    ) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keywords(keywords) {
             self.expect_token(&Token::LParen)?;
             let options = self.parse_comma_separated(Parser::parse_sql_option)?;

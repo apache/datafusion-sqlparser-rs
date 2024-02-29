@@ -8404,7 +8404,8 @@ impl<'a> Parser<'a> {
             let is_mysql = dialect_of!(self is MySqlDialect);
 
             let (columns, partitioned, after_columns, source) = if self
-            .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
+                .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
+            {
                 (vec![], None, vec![], None)
             } else {
                 let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
@@ -8417,7 +8418,7 @@ impl<'a> Parser<'a> {
                     Token::Word(w) if w.keyword != Keyword::SELECT => {
                         // Hive allows you to specify columns after partitions as well if you want.
                         after_columns = self.parse_parenthesized_column_list(Optional, false)?;
-                    },
+                    }
                     _ => {}
                 };
 

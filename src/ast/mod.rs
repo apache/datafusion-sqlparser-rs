@@ -2969,6 +2969,7 @@ impl fmt::Display for Statement {
 
                 if let Some(HiveFormat {
                     row_format,
+                    serde_properties,
                     storage,
                     location,
                 }) = hive_formats
@@ -2977,7 +2978,12 @@ impl fmt::Display for Statement {
                         Some(HiveRowFormat::SERDE { class }) => {
                             write!(f, " ROW FORMAT SERDE '{class}'")?
                         }
-                        Some(HiveRowFormat::DELIMITED) => write!(f, " ROW FORMAT DELIMITED")?,
+                        Some(HiveRowFormat::DELIMITED { delimiters }) => {
+                            write!(f, " ROW FORMAT DELIMITED")?;
+                            if delimiters.len() > 0 {
+                                write!(f, " {}", display_separated(delimiters, " "))?;
+                            }
+                        },
                         None => (),
                     }
                     match storage {
@@ -2992,6 +2998,13 @@ impl fmt::Display for Statement {
                             write!(f, " STORED AS {format}")?
                         }
                         _ => (),
+                    }
+                    if let Some(serde_properties) = serde_properties.as_ref() {
+                        write!(
+                            f,
+                            " WITH SERDEPROPERTIES ({})",
+                            display_comma_separated(serde_properties)
+                        )?;
                     }
                     if !*external {
                         if let Some(loc) = location {
@@ -4566,7 +4579,50 @@ pub enum HiveDistributionStyle {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum HiveRowFormat {
     SERDE { class: String },
-    DELIMITED,
+    DELIMITED {
+        delimiters: Vec<HiveRowDelimiter>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct HiveRowDelimiter {
+    pub delimiter: HiveDelimiter,
+    pub char: Ident
+}
+
+impl fmt::Display for HiveRowDelimiter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ", self.delimiter)?;
+        write!(f, "{}", self.char)
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum HiveDelimiter {
+    FieldsTerminatedBy,
+    FieldsEscapedBy,
+    CollectionItemsTerminatedBy,
+    MapKeysTerminatedBy,
+    LinesTerminatedBy,
+    NullDefinedAs
+}
+
+impl fmt::Display for HiveDelimiter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use HiveDelimiter::*;
+        f.write_str(match self {
+            FieldsTerminatedBy => { "FIELDS TERMINATED BY" }
+            FieldsEscapedBy => { "ESCAPED BY" }
+            CollectionItemsTerminatedBy => { "COLLECTION ITEMS TERMINATED BY" }
+            MapKeysTerminatedBy => { "MAP KEYS TERMINATED BY" }
+            LinesTerminatedBy => { "LINES TERMINATED BY" }
+            NullDefinedAs => { "NULL DEFINED AS" }
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -4588,6 +4644,7 @@ pub enum HiveIOFormat {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct HiveFormat {
     pub row_format: Option<HiveRowFormat>,
+    pub serde_properties: Option<Vec<SqlOption>>,
     pub storage: Option<HiveIOFormat>,
     pub location: Option<String>,
 }

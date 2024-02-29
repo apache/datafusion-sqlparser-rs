@@ -4091,7 +4091,7 @@ impl<'a> Parser<'a> {
     pub fn parse_hive_formats(&mut self) -> Result<HiveFormat, ParserError> {
         let mut hive_format = HiveFormat::default();
         loop {
-            match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STORED, Keyword::LOCATION]) {
+            match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STORED, Keyword::LOCATION, Keyword::WITH]) {
                 Some(Keyword::ROW) => {
                     hive_format.row_format = Some(self.parse_row_format()?);
                 }
@@ -4113,6 +4113,15 @@ impl<'a> Parser<'a> {
                 Some(Keyword::LOCATION) => {
                     hive_format.location = Some(self.parse_literal_string()?);
                 }
+                Some(Keyword::WITH) => {
+                    self.prev_token();
+                    let properties = self.parse_options_with_keywords(&[Keyword::WITH, Keyword::SERDEPROPERTIES])?;
+                    if properties.len() > 0 {
+                        hive_format.serde_properties = Some(properties);
+                    } else {
+                        break;
+                    }
+                }
                 None => break,
                 _ => break,
             }
@@ -4128,7 +4137,76 @@ impl<'a> Parser<'a> {
                 let class = self.parse_literal_string()?;
                 Ok(HiveRowFormat::SERDE { class })
             }
-            _ => Ok(HiveRowFormat::DELIMITED),
+            _ => {
+                let mut row_delimiters = vec![];
+
+                loop {
+                    match self.parse_one_of_keywords(&[Keyword::FIELDS, Keyword::COLLECTION, Keyword::MAP, Keyword::LINES, Keyword::NULL]) {
+                        Some(Keyword::FIELDS) => {
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::FieldsTerminatedBy,
+                                    char: self.parse_identifier(false)?
+                                });
+
+                                if self.parse_keywords(&[Keyword::ESCAPED, Keyword::BY]) {
+                                    row_delimiters.push(HiveRowDelimiter {
+                                        delimiter: HiveDelimiter::FieldsEscapedBy,
+                                        char: self.parse_identifier(false)?
+                                    });
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        Some(Keyword::COLLECTION) => {
+                            if self.parse_keywords(&[Keyword::ITEMS, Keyword::TERMINATED, Keyword::BY]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::CollectionItemsTerminatedBy,
+                                    char: self.parse_identifier(false)?
+                                });
+                            } else {
+                                break;
+                            }
+                        }
+                        Some(Keyword::MAP) => {
+                            if self.parse_keywords(&[Keyword::KEYS, Keyword::TERMINATED, Keyword::BY]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::MapKeysTerminatedBy,
+                                    char: self.parse_identifier(false)?
+                                });
+                            } else {
+                                break;
+                            }
+                        }
+                        Some(Keyword::LINES) => {
+                            if self.parse_keywords(&[Keyword::TERMINATED, Keyword::BY]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::LinesTerminatedBy,
+                                    char: self.parse_identifier(false)?
+                                });
+                            } else {
+                                break;
+                            }
+                        }
+                        Some(Keyword::NULL) => {
+                            if self.parse_keywords(&[Keyword::DEFINED, Keyword::AS]) {
+                                row_delimiters.push(HiveRowDelimiter {
+                                    delimiter: HiveDelimiter::NullDefinedAs,
+                                    char: self.parse_identifier(false)?
+                                });
+                            } else {
+                                break;
+                            }
+                        }
+                        _ => { break; }
+                    }
+                }
+
+                Ok(HiveRowFormat::DELIMITED {
+                    delimiters: row_delimiters
+                })
+            },
         }
     }
 
@@ -4853,6 +4931,17 @@ impl<'a> Parser<'a> {
 
     pub fn parse_options(&mut self, keyword: Keyword) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keyword(keyword) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(options)
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    pub fn parse_options_with_keywords(&mut self, keywords: &[Keyword]) -> Result<Vec<SqlOption>, ParserError> {
+        if self.parse_keywords(keywords) {
             self.expect_token(&Token::LParen)?;
             let options = self.parse_comma_separated(Parser::parse_sql_option)?;
             self.expect_token(&Token::RParen)?;

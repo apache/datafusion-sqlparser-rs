@@ -400,7 +400,8 @@ fn parse_update_set_from() {
                             sort_by: vec![],
                             having: None,
                             named_window: vec![],
-                            qualify: None
+                            qualify: None,
+                            value_table_mode: None,
                         }))),
                         order_by: vec![],
                         limit: None,
@@ -4212,6 +4213,7 @@ fn test_parse_named_window() {
             ),
         ],
         qualify: None,
+        value_table_mode: None,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -4567,6 +4569,7 @@ fn parse_interval_and_or_xor() {
             having: None,
             named_window: vec![],
             qualify: None,
+            value_table_mode: None,
         }))),
         order_by: vec![],
         limit: None,
@@ -6551,6 +6554,7 @@ fn lateral_function() {
         having: None,
         named_window: vec![],
         qualify: None,
+        value_table_mode: None,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -7194,6 +7198,7 @@ fn parse_merge() {
                             having: None,
                             named_window: vec![],
                             qualify: None,
+                            value_table_mode: None,
                         }))),
                         order_by: vec![],
                         limit: None,

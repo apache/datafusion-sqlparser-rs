@@ -387,20 +387,15 @@ impl fmt::Display for With {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CteAsMaterialized {
-    /// The WITH statement does not specify MATERIALIZED behavior
-    Default,
-    /// The WITH statement  specifies AS MATERIALIZED behavior
+    /// The `WITH` statement specifies `AS MATERIALIZED` behavior
     Materialized,
-    /// The WITH statement  specifies AS NOT MATERIALIZED behavior
+    /// The `WITH` statement specifies `AS NOT MATERIALIZED` behavior
     NotMaterialized,
 }
 
 impl fmt::Display for CteAsMaterialized {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            CteAsMaterialized::Default => {
-                write!(f, "")?;
-            }
             CteAsMaterialized::Materialized => {
                 write!(f, "MATERIALIZED")?;
             }
@@ -423,20 +418,15 @@ pub struct Cte {
     pub alias: TableAlias,
     pub query: Box<Query>,
     pub from: Option<Ident>,
-    pub materialized: CteAsMaterialized,
+    pub materialized: Option<CteAsMaterialized>,
 }
 
 impl fmt::Display for Cte {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if matches!(self.materialized, CteAsMaterialized::Default) {
-            write!(f, "{} AS ({})", self.alias, self.query)?;
-        } else {
-            write!(
-                f,
-                "{} AS {} ({})",
-                self.alias, self.materialized, self.query
-            )?;
-        }
+        match self.materialized.as_ref() {
+            None => write!(f, "{} AS ({})", self.alias, self.query)?,
+            Some(materialized) => write!(f, "{} AS {materialized} ({})", self.alias, self.query)?,
+        };
         if let Some(ref fr) = self.from {
             write!(f, " FROM {fr}")?;
         }

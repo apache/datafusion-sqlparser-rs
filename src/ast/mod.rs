@@ -39,13 +39,13 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, CteAsMaterialized, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, ForClause, ForJson, ForXml,
-    GroupByExpr, IdentWithAlias, Join, JoinConstraint, JoinOperator, JsonTableColumn,
-    JsonTableColumnErrorHandling, LateralView, LockClause, LockType, NamedWindowDefinition,
-    NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table,
-    TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode,
-    Values, WildcardAdditionalOptions, With,
+    Cte, CteAsMaterialized, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, ForClause,
+    ForJson, ForXml, GroupByExpr, IdentWithAlias, Join, JoinConstraint, JoinOperator,
+    JsonTableColumn, JsonTableColumnErrorHandling, LateralView, LockClause, LockType,
+    NamedWindowDefinition, NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem,
+    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator,
+    SetQuantifier, Table, TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity,
+    ValueTableMode, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,

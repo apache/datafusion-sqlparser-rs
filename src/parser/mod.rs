@@ -6719,12 +6719,12 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier(false)?;
 
         let mut cte = if self.parse_keyword(Keyword::AS) {
-            let mut is_materialized = CteAsMaterialized::Default;
+            let mut is_materialized = None;
             if dialect_of!(self is PostgreSqlDialect) {
                 if self.parse_keyword(Keyword::MATERIALIZED) {
-                    is_materialized = CteAsMaterialized::Materialized;
+                    is_materialized = Some(CteAsMaterialized::Materialized);
                 } else if self.parse_keywords(&[Keyword::NOT, Keyword::MATERIALIZED]) {
-                    is_materialized = CteAsMaterialized::NotMaterialized;
+                    is_materialized = Some(CteAsMaterialized::NotMaterialized);
                 }
             }
             self.expect_token(&Token::LParen)?;
@@ -6743,12 +6743,12 @@ impl<'a> Parser<'a> {
         } else {
             let columns = self.parse_parenthesized_column_list(Optional, false)?;
             self.expect_keyword(Keyword::AS)?;
-            let mut is_materialized = CteAsMaterialized::Default;
+            let mut is_materialized = None;
             if dialect_of!(self is PostgreSqlDialect) {
                 if self.parse_keyword(Keyword::MATERIALIZED) {
-                    is_materialized = CteAsMaterialized::Materialized;
+                    is_materialized = Some(CteAsMaterialized::Materialized);
                 } else if self.parse_keywords(&[Keyword::NOT, Keyword::MATERIALIZED]) {
-                    is_materialized = CteAsMaterialized::NotMaterialized;
+                    is_materialized = Some(CteAsMaterialized::NotMaterialized);
                 }
             }
             self.expect_token(&Token::LParen)?;

@@ -4879,7 +4879,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_options_with_keywords(
         &mut self,
-        keywords: &[Keyword]
+        keywords: &[Keyword],
     ) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keywords(keywords) {
             self.expect_token(&Token::LParen)?;

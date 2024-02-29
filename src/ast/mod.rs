@@ -2550,6 +2550,8 @@ pub enum Statement {
     /// ```sql
     /// UNLOAD(statement) TO <destination> [ WITH options ]
     /// ```
+    /// See Redshift <https://docs.aws.amazon.com/redshift/latest/dg/r_UNLOAD.html> and
+    // Athena <https://docs.aws.amazon.com/athena/latest/ug/unload.html>
     Unload {
         query: Box<Query>,
         to: Ident,
@@ -4071,7 +4073,7 @@ impl fmt::Display for Statement {
             Statement::Unload { query, to, with } => {
                 write!(f, "UNLOAD({query}) TO {to}")?;
 
-                if with.is_empty() {
+                if !with.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with))?;
                 }
 

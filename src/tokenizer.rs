@@ -1199,61 +1199,10 @@ impl<'a> Tokenizer<'a> {
         starting_loc: Location,
         chars: &mut State,
     ) -> Result<String, TokenizerError> {
-        let mut s = String::new();
-
-        // This case is a bit tricky
-
-        chars.next(); // consume the opening quote
-
-        // slash escaping
-        let mut is_escaped = false;
-        while let Some(&ch) = chars.peek() {
-            macro_rules! escape_control_character {
-                ($ESCAPED:expr) => {{
-                    if is_escaped {
-                        s.push($ESCAPED);
-                        is_escaped = false;
-                    } else {
-                        s.push(ch);
-                    }
-
-                    chars.next();
-                }};
-            }
-
-            match ch {
-                '\'' => {
-                    chars.next(); // consume
-                    if is_escaped {
-                        s.push(ch);
-                        is_escaped = false;
-                    } else if chars.peek().map(|c| *c == '\'').unwrap_or(false) {
-                        s.push(ch);
-                        chars.next();
-                    } else {
-                        return Ok(s);
-                    }
-                }
-                '\\' => {
-                    if is_escaped {
-                        s.push('\\');
-                        is_escaped = false;
-                    } else {
-                        is_escaped = true;
-                    }
-
-                    chars.next();
-                }
-                'r' => escape_control_character!('\r'),
-                'n' => escape_control_character!('\n'),
-                't' => escape_control_character!('\t'),
-                _ => {
-                    is_escaped = false;
-                    chars.next(); // consume
-                    s.push(ch);
-                }
-            }
+        if let Some(s) = unescape_single_quoted_string(chars) {
+            return Ok(s);
         }
+
         self.tokenizer_error(starting_loc, "Unterminated encoded string literal")
     }
 
@@ -1404,6 +1353,154 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
         }
     }
     s
+}
+
+fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {
+    Unescape::new(chars).unescape()
+}
+
+struct Unescape<'a: 'b, 'b> {
+    chars: &'b mut State<'a>,
+}
+
+impl<'a: 'b, 'b> Unescape<'a, 'b> {
+    fn new(chars: &'b mut State<'a>) -> Self {
+        Self { chars }
+    }
+    fn unescape(mut self) -> Option<String> {
+        let mut unescaped = String::new();
+
+        self.chars.next();
+
+        while let Some(c) = self.chars.next() {
+            if c == '\'' {
+                // case: ''''
+                if self.chars.peek().map(|c| *c == '\'').unwrap_or(false) {
+                    self.chars.next();
+                    unescaped.push('\'');
+                    continue;
+                }
+                return Some(unescaped);
+            }
+
+            if c != '\\' {
+                unescaped.push(c);
+                continue;
+            }
+
+            let c = match self.chars.next()? {
+                'b' => '\u{0008}',
+                'f' => '\u{000C}',
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                'u' => self.unescape_unicode_16()?,
+                'U' => self.unescape_unicode_32()?,
+                'x' => self.unescape_hex()?,
+                c if c.is_digit(8) => self.unescape_octal(c)?,
+                c => c,
+            };
+
+            unescaped.push(Self::check_null(c)?);
+        }
+
+        None
+    }
+
+    #[inline]
+    fn check_null(c: char) -> Option<char> {
+        if c == '\0' {
+            None
+        } else {
+            Some(c)
+        }
+    }
+
+    #[inline]
+    fn byte_to_char<const RADIX: u32>(s: &str) -> Option<char> {
+        // u32 is used here because Pg has an overflow operation rather than throwing an exception directly.
+        match u32::from_str_radix(s, RADIX) {
+            Err(_) => None,
+            Ok(n) => {
+                let n = n & 0xFF;
+                if n <= 127 {
+                    char::from_u32(n)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    // Hexadecimal byte value. \xh, \xhh (h = 0–9, A–F)
+    fn unescape_hex(&mut self) -> Option<char> {
+        let mut s = String::new();
+
+        for _ in 0..2 {
+            match self.next_hex_digit() {
+                Some(c) => s.push(c),
+                None => break,
+            }
+        }
+
+        if s.is_empty() {
+            return Some('x');
+        }
+
+        Self::byte_to_char::<16>(&s)
+    }
+
+    #[inline]
+    fn next_hex_digit(&mut self) -> Option<char> {
+        match self.chars.peek() {
+            Some(c) if c.is_ascii_hexdigit() => self.chars.next(),
+            _ => None,
+        }
+    }
+
+    // Octal byte value. \o, \oo, \ooo (o = 0–7)
+    fn unescape_octal(&mut self, c: char) -> Option<char> {
+        let mut s = String::new();
+
+        s.push(c);
+        for _ in 0..2 {
+            match self.next_octal_digest() {
+                Some(c) => s.push(c),
+                None => break,
+            }
+        }
+
+        Self::byte_to_char::<8>(&s)
+    }
+
+    #[inline]
+    fn next_octal_digest(&mut self) -> Option<char> {
+        match self.chars.peek() {
+            Some(c) if c.is_digit(8) => self.chars.next(),
+            _ => None,
+        }
+    }
+
+    // 16-bit hexadecimal Unicode character value. \uxxxx (x = 0–9, A–F)
+    fn unescape_unicode_16(&mut self) -> Option<char> {
+        self.unescape_unicode::<4>()
+    }
+
+    // 32-bit hexadecimal Unicode character value. \Uxxxxxxxx (x = 0–9, A–F)
+    fn unescape_unicode_32(&mut self) -> Option<char> {
+        self.unescape_unicode::<8>()
+    }
+
+    fn unescape_unicode<const NUM: usize>(&mut self) -> Option<char> {
+        let mut s = String::new();
+        for _ in 0..NUM {
+            s.push(self.chars.next()?);
+        }
+        match u32::from_str_radix(&s, 16) {
+            Err(_) => None,
+            Ok(n) => char::from_u32(n),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2138,5 +2235,75 @@ mod tests {
         //println!("expected = {:?}", expected);
         //println!("------------------------------");
         assert_eq!(expected, actual);
+    }
+
+    fn check_unescape(s: &str, expected: Option<&str>) {
+        let s = format!("'{}'", s);
+        let mut state = State {
+            peekable: s.chars().peekable(),
+            line: 0,
+            col: 0,
+        };
+
+        assert_eq!(
+            unescape_single_quoted_string(&mut state),
+            expected.map(|s| s.to_string())
+        );
+    }
+
+    #[test]
+    fn test_unescape() {
+        check_unescape(r"\b", Some("\u{0008}"));
+        check_unescape(r"\f", Some("\u{000C}"));
+        check_unescape(r"\t", Some("\t"));
+        check_unescape(r"\r\n", Some("\r\n"));
+        check_unescape(r"\/", Some("/"));
+        check_unescape(r"/", Some("/"));
+        check_unescape(r"\\", Some("\\"));
+
+        // 16 and 32-bit hexadecimal Unicode character value
+        check_unescape(r"\u0001", Some("\u{0001}"));
+        check_unescape(r"\u4c91", Some("\u{4c91}"));
+        check_unescape(r"\u4c916", Some("\u{4c91}6"));
+        check_unescape(r"\u4c", None);
+        check_unescape(r"\u0000", None);
+        check_unescape(r"\U0010FFFF", Some("\u{10FFFF}"));
+        check_unescape(r"\U00110000", None);
+        check_unescape(r"\U00000000", None);
+        check_unescape(r"\u", None);
+        check_unescape(r"\U", None);
+        check_unescape(r"\U1010FFFF", None);
+
+        // hexadecimal byte value
+        check_unescape(r"\x4B", Some("\u{004b}"));
+        check_unescape(r"\x4", Some("\u{0004}"));
+        check_unescape(r"\x4L", Some("\u{0004}L"));
+        check_unescape(r"\x", Some("x"));
+        check_unescape(r"\xP", Some("xP"));
+        check_unescape(r"\x0", None);
+        check_unescape(r"\xCAD", None);
+        check_unescape(r"\xA9", None);
+
+        // octal byte value
+        check_unescape(r"\1", Some("\u{0001}"));
+        check_unescape(r"\12", Some("\u{000a}"));
+        check_unescape(r"\123", Some("\u{0053}"));
+        check_unescape(r"\1232", Some("\u{0053}2"));
+        check_unescape(r"\4", Some("\u{0004}"));
+        check_unescape(r"\45", Some("\u{0025}"));
+        check_unescape(r"\450", Some("\u{0028}"));
+        check_unescape(r"\603", None);
+        check_unescape(r"\0", None);
+        check_unescape(r"\080", None);
+
+        // others
+        check_unescape(r"\9", Some("9"));
+        check_unescape(r"''", Some("'"));
+        check_unescape(
+            r"Hello\r\nRust/\u4c91 SQL Parser\U0010ABCD\1232",
+            Some("Hello\r\nRust/\u{4c91} SQL Parser\u{10abcd}\u{0053}2"),
+        );
+        check_unescape(r"Hello\0", None);
+        check_unescape(r"Hello\xCADRust", None);
     }
 }

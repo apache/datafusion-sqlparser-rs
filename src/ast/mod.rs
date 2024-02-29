@@ -2553,8 +2553,8 @@ pub enum Statement {
     Unload {
         query: Box<Query>,
         to: Ident,
-        with: Vec<SqlOption>
-    }
+        with: Vec<SqlOption>,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -4071,7 +4071,7 @@ impl fmt::Display for Statement {
             Statement::Unload { query, to, with } => {
                 write!(f, "UNLOAD({query}) TO {to}")?;
 
-                if with.len() > 0 {
+                if with.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with))?;
                 }
 

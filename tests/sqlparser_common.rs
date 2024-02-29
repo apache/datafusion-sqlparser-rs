@@ -8441,36 +8441,33 @@ fn parse_unload() {
         unload,
         Statement::Unload {
             query: Box::new(Query {
-                body: Box::new(
-                    SetExpr::Select(Box::new(Select {
-                        distinct: None,
-                        top: None,
-                        projection: vec![
-                            UnnamedExpr(Expr::Identifier(Ident::new("cola"))),
-                        ],
-                        into: None,
-                        from: vec![TableWithJoins {
-                            relation: TableFactor::Table {
-                                name: ObjectName(vec![Ident::new("tab")]),
-                                alias: None,
-                                args: None,
-                                with_hints: vec![],
-                                version: None,
-                                partitions: vec![],
-                            },
-                            joins: vec![],
-                        }],
-                        lateral_views: vec![],
-                        selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
-                        cluster_by: vec![],
-                        distribute_by: vec![],
-                        sort_by: vec![],
-                        having: None,
-                        named_window: vec![],
-                        qualify: None
-                    }))
-                ),
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: None,
+                    top: None,
+                    projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
+                    into: None,
+                    from: vec![TableWithJoins {
+                        relation: TableFactor::Table {
+                            name: ObjectName(vec![Ident::new("tab")]),
+                            alias: None,
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                        },
+                        joins: vec![],
+                    }],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    qualify: None,
+                    value_table_mode: None,
+                }))),
                 with: None,
                 limit: None,
                 limit_by: vec![],

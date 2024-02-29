@@ -5148,14 +5148,14 @@ impl<'a> Parser<'a> {
 
                 let mut location = None;
                 if self.parse_keyword(Keyword::LOCATION) {
-                    location = Some(HiveSetLocation{
+                    location = Some(HiveSetLocation {
                         has_set: false,
-                        location: self.parse_identifier(false)?
+                        location: self.parse_identifier(false)?,
                     });
                 } else if self.parse_keywords(&[Keyword::SET, Keyword::LOCATION]) {
-                    location = Some(HiveSetLocation{
+                    location = Some(HiveSetLocation {
                         has_set: true,
-                        location: self.parse_identifier(false)?
+                        location: self.parse_identifier(false)?,
                     });
                 }
 

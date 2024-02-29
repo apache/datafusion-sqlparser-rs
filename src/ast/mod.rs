@@ -3002,7 +3002,7 @@ impl fmt::Display for Statement {
                 }
                 if *external {
                     if file_format.is_some() {
-                        write!( f, " STORED AS {}", file_format.as_ref().unwrap())?;
+                        write!(f, " STORED AS {}", file_format.as_ref().unwrap())?;
                     }
                     write!(f, " LOCATION '{}'", location.as_ref().unwrap())?;
                 }

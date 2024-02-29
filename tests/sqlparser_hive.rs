@@ -124,7 +124,8 @@ fn test_alter_partition() {
 
 #[test]
 fn test_alter_with_location() {
-    let alter = "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1) LOCATION 's3://...'";
+    let alter =
+        "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1) LOCATION 's3://...'";
     hive().verified_stmt(alter);
 }
 

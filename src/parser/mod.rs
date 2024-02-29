@@ -8612,7 +8612,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Execute {
             name,
             parameters,
-            using
+            using,
         })
     }
 

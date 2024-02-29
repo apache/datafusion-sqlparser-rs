@@ -192,6 +192,12 @@ fn create_temp_table() {
 }
 
 #[test]
+fn create_delimited_table() {
+    let query = "CREATE TABLE tab (cola STRING, colb BIGINT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' ESCAPED BY '\"' MAP KEYS TERMINATED BY '\"'";
+    hive().verified_stmt(query);
+}
+
+#[test]
 fn create_local_directory() {
     let query =
         "INSERT OVERWRITE LOCAL DIRECTORY '/home/blah' STORED AS TEXTFILE SELECT * FROM db.table";

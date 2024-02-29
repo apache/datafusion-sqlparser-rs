@@ -6397,7 +6397,10 @@ impl<'a> Parser<'a> {
         Ok(Statement::Kill { modifier, id })
     }
 
-    pub fn parse_explain(&mut self, describe_alias: DescribeAlias) -> Result<Statement, ParserError> {
+    pub fn parse_explain(
+        &mut self,
+        describe_alias: DescribeAlias,
+    ) -> Result<Statement, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
         let mut format = None;
@@ -6419,8 +6422,8 @@ impl<'a> Parser<'a> {
             _ => {
                 let mut hive_format = None;
                 match self.parse_one_of_keywords(&[Keyword::EXTENDED, Keyword::FORMATTED]) {
-                    Some(Keyword::EXTENDED) => { hive_format = Some(HiveDescribeFormat::Extended) }
-                    Some(Keyword::FORMATTED) => { hive_format = Some(HiveDescribeFormat::Formatted) }
+                    Some(Keyword::EXTENDED) => hive_format = Some(HiveDescribeFormat::Extended),
+                    Some(Keyword::FORMATTED) => hive_format = Some(HiveDescribeFormat::Formatted),
                     _ => {}
                 }
 

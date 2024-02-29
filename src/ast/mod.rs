@@ -4579,8 +4579,8 @@ impl fmt::Display for HiveDescribeFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use HiveDescribeFormat::*;
         f.write_str(match self {
-            Extended => { "EXTENDED" }
-            Formatted => { "FORMATTED" }
+            Extended => "EXTENDED",
+            Formatted => "FORMATTED",
         })
     }
 }
@@ -4598,9 +4598,9 @@ impl fmt::Display for DescribeAlias {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use DescribeAlias::*;
         f.write_str(match self {
-            Describe => { "DESCRIBE" }
-            Explain => { "EXPLAIN" }
-            Desc => { "DESC" }
+            Describe => "DESCRIBE",
+            Explain => "EXPLAIN",
+            Desc => "DESC",
         })
     }
 }

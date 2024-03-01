@@ -5124,6 +5124,20 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_options_with_keywords(
+        &mut self,
+        keywords: &[Keyword],
+    ) -> Result<Vec<SqlOption>, ParserError> {
+        if self.parse_keywords(keywords) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(options)
+        } else {
+            Ok(vec![])
+        }
+    }
+
     pub fn parse_index_type(&mut self) -> Result<IndexType, ParserError> {
         if self.parse_keyword(Keyword::BTREE) {
             Ok(IndexType::BTree)
@@ -5385,10 +5399,18 @@ impl<'a> Parser<'a> {
             let table_name = self.parse_object_name(false)?;
             AlterTableOperation::SwapWith { table_name }
         } else {
-            return self.expected(
-                "ADD, RENAME, PARTITION, SWAP or DROP after ALTER TABLE",
-                self.peek_token(),
-            );
+            let options: Vec<SqlOption> =
+                self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
+            if !options.is_empty() {
+                AlterTableOperation::SetTblProperties {
+                    table_properties: options,
+                }
+            } else {
+                return self.expected(
+                    "ADD, RENAME, PARTITION, SWAP, DROP, or SET TBLPROPERTIES after ALTER TABLE",
+                    self.peek_token(),
+                );
+            }
         };
         Ok(operation)
     }

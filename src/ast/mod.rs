@@ -1760,9 +1760,10 @@ pub enum Statement {
         /// Only for mysql
         priority: Option<MysqlInsertPriority>,
         /// Only for mysql
-        as_table: Option<ObjectName>,
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        row_alias: ObjectName,
         /// Only for mysql
-        as_table_after_columns: Option<Vec<Ident>>,
+        col_aliases: Option<Vec<Ident>>,
     },
     /// ```sql
     /// INSTALL
@@ -2773,8 +2774,8 @@ impl fmt::Display for Statement {
                 returning,
                 replace_into,
                 priority,
-                as_table,
-                as_table_after_columns,
+                row_alias,
+                col_aliases,
             } => {
                 let table_name = if let Some(alias) = table_alias {
                     format!("{table_name} AS {alias}")
@@ -2824,11 +2825,13 @@ impl fmt::Display for Statement {
                     write!(f, "DEFAULT VALUES")?;
                 }
 
-                if let Some(as_table) = as_table {
-                    write!(f, " AS {as_table}")?;
+                if !row_alias.to_string().is_empty() {
+                    write!(f, " AS {row_alias}")?;
 
-                    if let Some(as_table_after_columns) = as_table_after_columns {
-                        write!(f, " ({})", display_comma_separated(as_table_after_columns))?;
+                    if let Some(col_aliases) = col_aliases {
+                        if !col_aliases.is_empty() {
+                            write!(f, " ({})", display_comma_separated(col_aliases))?;
+                        }
                     }
                 }
 

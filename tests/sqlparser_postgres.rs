@@ -3740,8 +3740,8 @@ fn test_simple_postgres_insert_with_alias() {
             returning: None,
             replace_into: false,
             priority: None,
-            as_table: None,
-            as_table_after_columns: None
+            row_alias: ObjectName(vec![]),
+            col_aliases: None
         }
     )
 }
@@ -3808,8 +3808,8 @@ fn test_simple_postgres_insert_with_alias() {
             returning: None,
             replace_into: false,
             priority: None,
-            as_table: None,
-            as_table_after_columns: None
+            row_alias: ObjectName(vec![]),
+            col_aliases: None
         }
     )
 }
@@ -3872,8 +3872,8 @@ fn test_simple_insert_with_quoted_alias() {
             returning: None,
             replace_into: false,
             priority: None,
-            as_table: None,
-            as_table_after_columns: None,
+            row_alias: ObjectName(vec![]),
+            col_aliases: None,
         }
     )
 }

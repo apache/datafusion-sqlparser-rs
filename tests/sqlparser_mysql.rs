@@ -1332,14 +1332,14 @@ fn parse_priority_insert() {
 
 #[test]
 fn parse_insert_as() {
-    let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias` (`mek`)";
+    let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias`";
     match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert {
             table_name,
             columns,
             source,
-            as_table,
-            as_table_after_columns,
+            row_alias,
+            col_aliases,
             ..
         } => {
             assert_eq!(
@@ -1347,14 +1347,8 @@ fn parse_insert_as() {
                 table_name
             );
             assert_eq!(vec![Ident::with_quote('`', "date")], columns);
-            assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "alias")]),
-                as_table.unwrap()
-            );
-            assert_eq!(
-                Some(vec![Ident::with_quote('`', "mek")]),
-                as_table_after_columns
-            );
+            assert_eq!(ObjectName(vec![Ident::with_quote('`', "alias")]), row_alias);
+            assert_eq!(Some(vec![]), col_aliases);
             assert_eq!(
                 Some(Box::new(Query {
                     with: None,
@@ -1363,6 +1357,56 @@ fn parse_insert_as() {
                         rows: vec![vec![Expr::Value(Value::SingleQuotedString(
                             "2024-01-01".to_string()
                         ))]]
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    limit_by: vec![],
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                })),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = r"INSERT INTO `table` (`id`, `date`) VALUES (1, '2024-01-01') AS `alias` (`mek_id`, `mek_date`)";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            row_alias,
+            col_aliases,
+            ..
+        } => {
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "table")]),
+                table_name
+            );
+            assert_eq!(
+                vec![Ident::with_quote('`', "id"), Ident::with_quote('`', "date")],
+                columns
+            );
+            assert_eq!(ObjectName(vec![Ident::with_quote('`', "alias")]), row_alias);
+            assert_eq!(
+                Some(vec![
+                    Ident::with_quote('`', "mek_id"),
+                    Ident::with_quote('`', "mek_date")
+                ]),
+                col_aliases
+            );
+            assert_eq!(
+                Some(Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![
+                            Expr::Value(number("1")),
+                            Expr::Value(Value::SingleQuotedString("2024-01-01".to_string()))
+                        ]]
                     })),
                     order_by: vec![],
                     limit: None,

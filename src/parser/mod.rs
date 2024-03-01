@@ -8948,7 +8948,20 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
         }
 
-        Ok(Statement::Execute { name, parameters })
+        let mut using = vec![];
+        if self.parse_keyword(Keyword::USING) {
+            using.push(self.parse_expr()?);
+
+            while self.consume_token(&Token::Comma) {
+                using.push(self.parse_expr()?);
+            }
+        };
+
+        Ok(Statement::Execute {
+            name,
+            parameters,
+            using,
+        })
     }
 
     pub fn parse_prepare(&mut self) -> Result<Statement, ParserError> {

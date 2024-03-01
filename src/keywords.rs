@@ -596,6 +596,7 @@ define_keywords!(
     SEQUENCEFILE,
     SEQUENCES,
     SERDE,
+    SERDEPROPERTIES,
     SERIALIZABLE,
     SESSION,
     SESSION_USER,

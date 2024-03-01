@@ -464,8 +464,9 @@ impl<'a> Parser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::KILL => Ok(self.parse_kill()?),
                 Keyword::FLUSH => Ok(self.parse_flush()?),
-                Keyword::DESCRIBE => Ok(self.parse_explain(true)?),
-                Keyword::EXPLAIN => Ok(self.parse_explain(false)?),
+                Keyword::DESC => Ok(self.parse_explain(DescribeAlias::Desc)?),
+                Keyword::DESCRIBE => Ok(self.parse_explain(DescribeAlias::Describe)?),
+                Keyword::EXPLAIN => Ok(self.parse_explain(DescribeAlias::Explain)?),
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
@@ -6805,7 +6806,10 @@ impl<'a> Parser<'a> {
         Ok(Statement::Kill { modifier, id })
     }
 
-    pub fn parse_explain(&mut self, describe_alias: bool) -> Result<Statement, ParserError> {
+    pub fn parse_explain(
+        &mut self,
+        describe_alias: DescribeAlias,
+    ) -> Result<Statement, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
         let mut format = None;
@@ -6825,9 +6829,17 @@ impl<'a> Parser<'a> {
                 format,
             }),
             _ => {
+                let mut hive_format = None;
+                match self.parse_one_of_keywords(&[Keyword::EXTENDED, Keyword::FORMATTED]) {
+                    Some(Keyword::EXTENDED) => hive_format = Some(HiveDescribeFormat::Extended),
+                    Some(Keyword::FORMATTED) => hive_format = Some(HiveDescribeFormat::Formatted),
+                    _ => {}
+                }
+
                 let table_name = self.parse_object_name(false)?;
                 Ok(Statement::ExplainTable {
                     describe_alias,
+                    hive_format,
                     table_name,
                 })
             }

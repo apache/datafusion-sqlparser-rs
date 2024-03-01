@@ -303,6 +303,7 @@ define_keywords!(
     FORCE_QUOTE,
     FOREIGN,
     FORMAT,
+    FORMATTED,
     FORWARD,
     FRAME_ROW,
     FREE,

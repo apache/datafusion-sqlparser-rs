@@ -3257,7 +3257,7 @@ fn parse_similar_to() {
 fn parse_create_function() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE AS 'select $1 + $2;'";
     assert_eq!(
-        pg().verified_stmt(sql),
+        pg_and_generic().verified_stmt(sql),
         Statement::CreateFunction {
             or_replace: false,
             temporary: false,

@@ -2191,6 +2191,7 @@ pub enum Statement {
     ExplainTable {
         /// If true, query used the MySQL `DESCRIBE` alias for explain
         describe_alias: DescribeAlias,
+        /// Hive style `FORMATTED | EXTENDED` 
         hive_format: Option<HiveDescribeFormat>,
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]

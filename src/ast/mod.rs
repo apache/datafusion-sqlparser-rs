@@ -2435,20 +2435,20 @@ pub enum Statement {
         id: u64,
     },
     /// ```sql
-    /// EXPLAIN TABLE
+    /// [EXPLAIN | DESC | DESCRIBE] TABLE
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
     ExplainTable {
-        /// `EXPLAIN | DESC | DESCRIBE````
+        /// `EXPLAIN | DESC | DESCRIBE`
         describe_alias: DescribeAlias,
-        /// Hive style `FORMATTED | EXTENDED` 
+        /// Hive style `FORMATTED | EXTENDED`
         hive_format: Option<HiveDescribeFormat>,
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
     },
     /// ```sql
-    /// [EXPLAIN | DESCRIBE <select statement>
+    /// [EXPLAIN | DESC | DESCRIBE]  <statement>
     /// ```
     Explain {
         /// `EXPLAIN | DESC | DESCRIBE`

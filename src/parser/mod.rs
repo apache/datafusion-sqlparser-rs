@@ -8410,10 +8410,7 @@ impl<'a> Parser<'a> {
             } else {
                 let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
-                let (partitioned, after_columns) = match self.parse_insert_partition()? {
-                    Some((partitioned, after_columns)) => (Some(partitioned), after_columns),
-                    None => (None, vec![])
-                };
+                let (partitioned, after_columns) = self.parse_insert_partition()?;
 
                 let source = Some(Box::new(self.parse_query()?));
 
@@ -8493,7 +8490,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_insert_partition(&mut self) -> Result<Option<(Vec<Expr>, Vec<Ident>)>, ParserError> {
+    pub fn parse_insert_partition(&mut self) -> Result<(Option<Vec<Expr>>, Vec<Ident>), ParserError> {
         if self.parse_keyword(Keyword::PARTITION) {
             self.expect_token(&Token::LParen)?;
             let partition_cols = self.parse_comma_separated(Parser::parse_expr)?;
@@ -8502,9 +8499,9 @@ impl<'a> Parser<'a> {
             // Hive allows you to specify columns after partitions as well if you want.
             let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
 
-            Ok(Some((partition_cols, after_columns)))
+            Ok((Some(partition_cols), after_columns))
         } else {
-            Ok(None)
+            Ok((None, vec![]))
         }
     }
 

@@ -3001,8 +3001,8 @@ impl fmt::Display for Statement {
                     }
                 }
                 if *external {
-                    if file_format.is_some() {
-                        write!(f, " STORED AS {}", file_format.as_ref().unwrap())?;
+                    if let Some(file_format) = &file_format {
+                        write!(f, " STORED AS {file_format}")?;
                     }
                     write!(f, " LOCATION '{}'", location.as_ref().unwrap())?;
                 }

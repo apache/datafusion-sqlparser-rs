@@ -2001,6 +2001,7 @@ pub enum Statement {
         if_exists: bool,
         only: bool,
         operations: Vec<AlterTableOperation>,
+        location: Option<HiveSetLocation>,
     },
     /// ```sql
     /// ALTER INDEX
@@ -3249,12 +3250,10 @@ impl fmt::Display for Statement {
                     }
                 }
                 if *external {
-                    write!(
-                        f,
-                        " STORED AS {} LOCATION '{}'",
-                        file_format.as_ref().unwrap(),
-                        location.as_ref().unwrap()
-                    )?;
+                    if let Some(file_format) = &file_format {
+                        write!(f, " STORED AS {file_format}")?;
+                    }
+                    write!(f, " LOCATION '{}'", location.as_ref().unwrap())?;
                 }
                 if !table_properties.is_empty() {
                     write!(
@@ -3504,6 +3503,7 @@ impl fmt::Display for Statement {
                 if_exists,
                 only,
                 operations,
+                location,
             } => {
                 write!(f, "ALTER TABLE ")?;
                 if *if_exists {
@@ -3516,7 +3516,11 @@ impl fmt::Display for Statement {
                     f,
                     "{name} {operations}",
                     operations = display_comma_separated(operations)
-                )
+                )?;
+                if let Some(loc) = location {
+                    write!(f, " {loc}")?
+                }
+                Ok(())
             }
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
@@ -5837,6 +5841,23 @@ impl fmt::Display for LockTableType {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct HiveSetLocation {
+    pub has_set: bool,
+    pub location: Ident,
+}
+
+impl fmt::Display for HiveSetLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.has_set {
+            write!(f, "SET ")?;
+        }
+        write!(f, "LOCATION {}", self.location)
     }
 }
 

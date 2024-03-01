@@ -5529,11 +5529,26 @@ impl<'a> Parser<'a> {
                 let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
                 let table_name = self.parse_object_name(false)?;
                 let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
+
+                let mut location = None;
+                if self.parse_keyword(Keyword::LOCATION) {
+                    location = Some(HiveSetLocation {
+                        has_set: false,
+                        location: self.parse_identifier(false)?,
+                    });
+                } else if self.parse_keywords(&[Keyword::SET, Keyword::LOCATION]) {
+                    location = Some(HiveSetLocation {
+                        has_set: true,
+                        location: self.parse_identifier(false)?,
+                    });
+                }
+
                 Ok(Statement::AlterTable {
                     name: table_name,
                     if_exists,
                     only,
                     operations,
+                    location,
                 })
             }
             Keyword::INDEX => {

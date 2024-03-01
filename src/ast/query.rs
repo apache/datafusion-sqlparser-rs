@@ -245,11 +245,18 @@ pub struct Select {
     pub named_window: Vec<NamedWindowDefinition>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
+    /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
+    pub value_table_mode: Option<ValueTableMode>,
 }
 
 impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SELECT")?;
+
+        if let Some(value_table_mode) = self.value_table_mode {
+            write!(f, " {value_table_mode}")?;
+        }
+
         if let Some(ref distinct) = self.distinct {
             write!(f, " {distinct}")?;
         }
@@ -376,7 +383,31 @@ impl fmt::Display for With {
     }
 }
 
-/// A single CTE (used after `WITH`): `alias [(col1, col2, ...)] AS ( query )`
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CteAsMaterialized {
+    /// The `WITH` statement specifies `AS MATERIALIZED` behavior
+    Materialized,
+    /// The `WITH` statement specifies `AS NOT MATERIALIZED` behavior
+    NotMaterialized,
+}
+
+impl fmt::Display for CteAsMaterialized {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            CteAsMaterialized::Materialized => {
+                write!(f, "MATERIALIZED")?;
+            }
+            CteAsMaterialized::NotMaterialized => {
+                write!(f, "NOT MATERIALIZED")?;
+            }
+        };
+        Ok(())
+    }
+}
+
+/// A single CTE (used after `WITH`): `<alias> [(col1, col2, ...)] AS <materialized> ( <query> )`
 /// The names in the column list before `AS`, when specified, replace the names
 /// of the columns returned by the query. The parser does not validate that the
 /// number of columns in the query matches the number of columns in the query.
@@ -387,11 +418,15 @@ pub struct Cte {
     pub alias: TableAlias,
     pub query: Box<Query>,
     pub from: Option<Ident>,
+    pub materialized: Option<CteAsMaterialized>,
 }
 
 impl fmt::Display for Cte {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} AS ({})", self.alias, self.query)?;
+        match self.materialized.as_ref() {
+            None => write!(f, "{} AS ({})", self.alias, self.query)?,
+            Some(materialized) => write!(f, "{} AS {materialized} ({})", self.alias, self.query)?,
+        };
         if let Some(ref fr) = self.from {
             write!(f, " FROM {fr}")?;
         }
@@ -1571,6 +1606,27 @@ impl fmt::Display for JsonTableColumnErrorHandling {
                 write!(f, "DEFAULT {}", json_string)
             }
             JsonTableColumnErrorHandling::Error => write!(f, "ERROR"),
+        }
+    }
+}
+
+/// BigQuery supports ValueTables which have 2 modes:
+/// `SELECT AS STRUCT`
+/// `SELECT AS VALUE`
+/// <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#value_tables>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ValueTableMode {
+    AsStruct,
+    AsValue,
+}
+
+impl fmt::Display for ValueTableMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ValueTableMode::AsStruct => write!(f, "AS STRUCT"),
+            ValueTableMode::AsValue => write!(f, "AS VALUE"),
         }
     }
 }

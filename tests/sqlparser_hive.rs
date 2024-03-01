@@ -19,7 +19,7 @@ use sqlparser::ast::{
     CreateFunctionBody, CreateFunctionUsing, Expr, Function, FunctionDefinition, Ident, ObjectName,
     SelectItem, Statement, TableFactor, UnaryOperator, Value,
 };
-use sqlparser::dialect::{GenericDialect, HiveDialect};
+use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::test_utils::*;
 
@@ -287,8 +287,14 @@ fn parse_create_function() {
         _ => unreachable!(),
     }
 
+    // Test error in dialect that doesn't support parsing CREATE FUNCTION
+    let unsupported_dialects = TestedDialects {
+        dialects: vec![Box::new(MsSqlDialect {})],
+        options: None,
+    };
+
     assert_eq!(
-        generic(None).parse_sql_statements(sql).unwrap_err(),
+        unsupported_dialects.parse_sql_statements(sql).unwrap_err(),
         ParserError::ParserError(
             "Expected an object type after CREATE, found: FUNCTION".to_string()
         )

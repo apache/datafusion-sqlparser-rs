@@ -42,6 +42,7 @@ mod test_utils;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
+use sqlparser::test_utils::all_dialects_except;
 
 #[test]
 fn parse_insert_values() {
@@ -225,6 +226,25 @@ fn parse_insert_default_values() {
 }
 
 #[test]
+fn parse_insert_select_returning() {
+    verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
+    let stmt = verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
+    match stmt {
+        Statement::Insert {
+            returning: Some(ret),
+            source: Some(_),
+            ..
+        } => assert_eq!(ret.len(), 1),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_returning_as_column_alias() {
+    verified_stmt("SELECT 1 AS RETURNING");
+}
+
+#[test]
 fn parse_insert_sqlite() {
     let dialect = SQLiteDialect {};
 
@@ -323,6 +343,7 @@ fn parse_update_set_from() {
             Box::new(SnowflakeDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(MsSqlDialect {}),
+            Box::new(SQLiteDialect {}),
         ],
         options: None,
     };
@@ -379,7 +400,8 @@ fn parse_update_set_from() {
                             sort_by: vec![],
                             having: None,
                             named_window: vec![],
-                            qualify: None
+                            qualify: None,
+                            value_table_mode: None,
                         }))),
                         order_by: vec![],
                         limit: None,
@@ -523,7 +545,10 @@ fn parse_no_table_name() {
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
-        Statement::Delete { from, .. } => {
+        Statement::Delete {
+            from: FromTable::WithFromKeyword(from),
+            ..
+        } => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
@@ -541,10 +566,27 @@ fn parse_delete_statement() {
 }
 
 #[test]
+fn parse_delete_without_from_error() {
+    let sql = "DELETE \"table\" WHERE 1";
+
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected FROM, found: WHERE".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_delete_statement_for_multi_tables() {
     let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
-    match verified_stmt(sql) {
-        Statement::Delete { tables, from, .. } => {
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    match dialects.verified_stmt(sql) {
+        Statement::Delete {
+            tables,
+            from: FromTable::WithFromKeyword(from),
+            ..
+        } => {
             assert_eq!(
                 ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
                 tables[0]
@@ -585,7 +627,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
     let sql = "DELETE FROM schema1.table1, schema2.table2 USING schema1.table1 JOIN schema2.table2 ON schema2.table2.pk = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
     match verified_stmt(sql) {
         Statement::Delete {
-            from,
+            from: FromTable::WithFromKeyword(from),
             using: Some(using),
             ..
         } => {
@@ -646,7 +688,7 @@ fn parse_where_delete_statement() {
     match verified_stmt(sql) {
         Statement::Delete {
             tables: _,
-            from,
+            from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,
@@ -687,7 +729,7 @@ fn parse_where_delete_with_alias_statement() {
     match verified_stmt(sql) {
         Statement::Delete {
             tables: _,
-            from,
+            from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,
@@ -3497,6 +3539,23 @@ fn parse_alter_table() {
         }
         _ => unreachable!(),
     }
+
+    let set_table_properties = "ALTER TABLE tab SET TBLPROPERTIES('classification' = 'parquet')";
+    match alter_table_op(verified_stmt(set_table_properties)) {
+        AlterTableOperation::SetTblProperties { table_properties } => {
+            assert_eq!(
+                table_properties,
+                [SqlOption {
+                    name: Ident {
+                        value: "classification".to_string(),
+                        quote_style: Some('\'')
+                    },
+                    value: Expr::Value(Value::SingleQuotedString("parquet".to_string())),
+                }],
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -3962,12 +4021,48 @@ fn parse_named_argument_function() {
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "1".to_owned()
                     ))),
+                    operator: FunctionArgOperator::RightArrow
                 },
                 FunctionArg::Named {
                     name: Ident::new("b"),
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "2".to_owned()
                     ))),
+                    operator: FunctionArgOperator::RightArrow
+                },
+            ],
+            null_treatment: None,
+            filter: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![],
+        }),
+        expr_from_projection(only(&select.projection))
+    );
+}
+
+#[test]
+fn parse_named_argument_function_with_eq_operator() {
+    let sql = "SELECT FUN(a = '1', b = '2') FROM foo";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("FUN")]),
+            args: vec![
+                FunctionArg::Named {
+                    name: Ident::new("a"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "1".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Equals
+                },
+                FunctionArg::Named {
+                    name: Ident::new("b"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "2".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Equals
                 },
             ],
             null_treatment: None,
@@ -4148,6 +4243,7 @@ fn test_parse_named_window() {
             ),
         ],
         qualify: None,
+        value_table_mode: None,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -4503,6 +4599,7 @@ fn parse_interval_and_or_xor() {
             having: None,
             named_window: vec![],
             qualify: None,
+            value_table_mode: None,
         }))),
         order_by: vec![],
         limit: None,
@@ -5522,6 +5619,7 @@ fn parse_recursive_cte() {
         },
         query: Box::new(cte_query),
         from: None,
+        materialized: None,
     };
     assert_eq!(with.cte_tables.first().unwrap(), &expected);
 }
@@ -6486,6 +6584,7 @@ fn lateral_function() {
         having: None,
         named_window: vec![],
         qualify: None,
+        value_table_mode: None,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -7129,6 +7228,7 @@ fn parse_merge() {
                             having: None,
                             named_window: vec![],
                             qualify: None,
+                            value_table_mode: None,
                         }))),
                         order_by: vec![],
                         limit: None,
@@ -8361,6 +8461,64 @@ fn parse_binary_operators_without_whitespace() {
     all_dialects().one_statement_parses_to(
         "SELECT tbl1.field%tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
         "SELECT tbl1.field % tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+    );
+}
+
+#[test]
+fn parse_unload() {
+    let unload = verified_stmt("UNLOAD(SELECT cola FROM tab) TO 's3://...' WITH (format = 'AVRO')");
+    assert_eq!(
+        unload,
+        Statement::Unload {
+            query: Box::new(Query {
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: None,
+                    top: None,
+                    projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
+                    into: None,
+                    from: vec![TableWithJoins {
+                        relation: TableFactor::Table {
+                            name: ObjectName(vec![Ident::new("tab")]),
+                            alias: None,
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                        },
+                        joins: vec![],
+                    }],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    qualify: None,
+                    value_table_mode: None,
+                }))),
+                with: None,
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                order_by: vec![],
+            }),
+            to: Ident {
+                value: "s3://...".to_string(),
+                quote_style: Some('\'')
+            },
+            with: vec![SqlOption {
+                name: Ident {
+                    value: "format".to_string(),
+                    quote_style: None
+                },
+                value: Expr::Value(Value::SingleQuotedString("AVRO".to_string()))
+            }]
+        }
     );
 }
 

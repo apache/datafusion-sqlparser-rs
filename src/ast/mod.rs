@@ -2439,8 +2439,9 @@ pub enum Statement {
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
     ExplainTable {
-        /// If true, query used the MySQL `DESCRIBE` alias for explain
+        /// `EXPLAIN | DESC | DESCRIBE````
         describe_alias: DescribeAlias,
+        /// Hive style `FORMATTED | EXTENDED` 
         hive_format: Option<HiveDescribeFormat>,
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -2450,7 +2451,7 @@ pub enum Statement {
     /// [EXPLAIN | DESCRIBE <select statement>
     /// ```
     Explain {
-        // If true, query used the MySQL `DESCRIBE` alias for explain
+        /// `EXPLAIN | DESC | DESCRIBE`
         describe_alias: DescribeAlias,
         /// Carry out the command and show actual run times and other statistics.
         analyze: bool,

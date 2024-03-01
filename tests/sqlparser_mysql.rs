@@ -15,9 +15,8 @@
 //! is also tested (on the inputs it can handle).
 
 use matches::assert_matches;
-use sqlparser::ast::Expr;
+
 use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
-use sqlparser::ast::Value;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::parser::ParserOptions;
@@ -785,7 +784,8 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 sort_by: vec![],
                 having: None,
                 named_window: vec![],
-                qualify: None
+                qualify: None,
+                value_table_mode: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -829,7 +829,8 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 sort_by: vec![],
                 having: None,
                 named_window: vec![],
-                qualify: None
+                qualify: None,
+                value_table_mode: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -870,7 +871,8 @@ fn parse_escaped_backticks_with_escape() {
                 sort_by: vec![],
                 having: None,
                 named_window: vec![],
-                qualify: None
+                qualify: None,
+                value_table_mode: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -911,7 +913,8 @@ fn parse_escaped_backticks_with_no_escape() {
                 sort_by: vec![],
                 having: None,
                 named_window: vec![],
-                qualify: None
+                qualify: None,
+                value_table_mode: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -1630,6 +1633,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    value_table_mode: None,
                 })))
             );
         }
@@ -1680,6 +1684,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    value_table_mode: None,
                 })))
             );
         }
@@ -1890,7 +1895,8 @@ fn parse_substring_in_select() {
                         sort_by: vec![],
                         having: None,
                         named_window: vec![],
-                        qualify: None
+                        qualify: None,
+                        value_table_mode: None,
                     }))),
                     order_by: vec![],
                     limit: None,
@@ -2192,6 +2198,7 @@ fn parse_hex_string_introducer() {
                 having: None,
                 named_window: vec![],
                 qualify: None,
+                value_table_mode: None,
                 into: None
             }))),
             order_by: vec![],

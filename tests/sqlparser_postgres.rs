@@ -1082,6 +1082,7 @@ fn parse_copy_to() {
                     distribute_by: vec![],
                     sort_by: vec![],
                     qualify: None,
+                    value_table_mode: None,
                 }))),
                 order_by: vec![],
                 limit: None,
@@ -2139,6 +2140,7 @@ fn parse_array_subquery_expr() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    value_table_mode: None,
                 }))),
                 right: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
@@ -2155,6 +2157,7 @@ fn parse_array_subquery_expr() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    value_table_mode: None,
                 }))),
             }),
             order_by: vec![],
@@ -2528,6 +2531,59 @@ fn parse_escaped_literal_string() {
             .to_string(),
         "sql parser error: Unterminated encoded string literal at Line: 1, Column 8"
     );
+
+    let sql = r"SELECT E'\u0001', E'\U0010FFFF', E'\xC', E'\x25', E'\2', E'\45', E'\445'";
+    let canonical = "";
+    let select = pg_and_generic().verified_only_select_with_canonical(sql, canonical);
+    assert_eq!(7, select.projection.len());
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("\u{0001}".to_string())),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("\u{10ffff}".to_string())),
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("\u{000c}".to_string())),
+        expr_from_projection(&select.projection[2])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("%".to_string())),
+        expr_from_projection(&select.projection[3])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("\u{0002}".to_string())),
+        expr_from_projection(&select.projection[4])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("%".to_string())),
+        expr_from_projection(&select.projection[5])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("%".to_string())),
+        expr_from_projection(&select.projection[6])
+    );
+
+    fn negative_cast(sqls: &[&str]) {
+        for sql in sqls {
+            assert_eq!(
+                pg_and_generic()
+                    .parse_sql_statements(sql)
+                    .unwrap_err()
+                    .to_string(),
+                "sql parser error: Unterminated encoded string literal at Line: 1, Column 8"
+            );
+        }
+    }
+
+    negative_cast(&[
+        r"SELECT E'\u0000'",
+        r"SELECT E'\U00110000'",
+        r"SELECT E'\u{0001}'",
+        r"SELECT E'\xCAD'",
+        r"SELECT E'\080'",
+    ]);
 }
 
 #[test]
@@ -3839,4 +3895,13 @@ fn parse_array_agg() {
     // handles multi-part identifier with array_agg code path
     let sql4 = "SELECT ARRAY_AGG(my_schema.sections_tbl.*) AS sections FROM sections_tbl";
     pg().verified_stmt(sql4);
+}
+
+#[test]
+fn parse_mat_cte() {
+    let sql = r#"WITH cte AS MATERIALIZED (SELECT id FROM accounts) SELECT id FROM cte"#;
+    pg().verified_stmt(sql);
+
+    let sql2 = r#"WITH cte AS NOT MATERIALIZED (SELECT id FROM accounts) SELECT id FROM cte"#;
+    pg().verified_stmt(sql2);
 }

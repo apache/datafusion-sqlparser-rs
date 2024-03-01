@@ -19,7 +19,7 @@ $ cargo install cargo-release
     ```
     $ git fetch && git status
     On branch main
-    Your branch is up to date with 'upstream/main'.
+    Your branch is up to date with 'origin/main'.
 
     nothing to commit, working tree clean
     ```
@@ -28,7 +28,7 @@ $ cargo install cargo-release
 2. Using `cargo-release` we can publish a new release like so:
 
     ```
-    $ cargo release minor --push-remote upstream
+    $ cargo release minor --push-remote origin
     ```
 
     After verifying, you can rerun with `--execute` if all looks good.
@@ -39,7 +39,7 @@ $ cargo install cargo-release
     * Bump the minor part of the version in `Cargo.toml` (e.g. `0.7.1-alpha.0`
        -> `0.8.0`. You can use `patch` instead of `minor`, as appropriate).
     * Create a new tag (e.g. `v0.8.0`) locally
-    * Push the new tag to the specified remote (`upstream` in the above
+    * Push the new tag to the specified remote (`origin` in the above
       example), which will trigger a publishing process to crates.io as part of
       the [corresponding GitHub Action](https://github.com/sqlparser-rs/sqlparser-rs/blob/main/.github/workflows/rust.yml).
 

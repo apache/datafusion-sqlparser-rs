@@ -10,6 +10,42 @@ changes that break via addition as "Added".
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.44.0] 2024-03-02
+
+### Added
+* Support EXPLAIN / DESCR / DESCRIBE [FORMATTED | EXTENDED] (#1156) - Thanks @jonathanlehtoalamb
+* Support ALTER TABLE ... SET LOCATION (#1154) - Thanks @jonathanlehto
+* Support `ROW FORMAT DELIMITED` in Hive (#1155) - Thanks @jonathanlehto
+* Support `SERDEPROPERTIES` for `CREATE TABLE` with Hive (#1152) - Thanks @jonathanlehto
+* Support `EXECUTE ... USING` for Postgres (#1153) - Thanks @jonathanlehto
+* Support Postgres style `CREATE FUNCTION` in GenericDialect (#1159) - Thanks @alamb
+* Support `SET TBLPROPERTIES`  (#1151) - Thanks @jonathanlehto
+* Support `UNLOAD` statement (#1150) - Thanks @jonathanlehto
+* Support `MATERIALIZED CTEs` (#1148) - Thanks @ReppCodes
+* Support `DECLARE` syntax for snowflake and bigquery (#1122) - Thanks @iffyio
+* Support `SELECT AS VALUE` and `SELECT AS STRUCT` for BigQuery (#1135) - Thanks @lustefaniak
+* Support `(+)` outer join syntax (#1145) - Thanks @jmhain
+* Support `INSERT INTO ... SELECT ... RETURNING`(#1132) - Thanks @lovasoa
+* Support DuckDB `INSTALL` and `LOAD` (#1127) - Thanks @universalmind303
+* Support `=` operator in function args (#1128) - Thanks @universalmind303
+* Support `CREATE VIEW IF NOT EXISTS` (#1118) - Thanks @7phs
+* Support `UPDATE FROM` for SQLite (further to #694) (#1117) - Thanks @ggaughan
+* Support optional `DELETE FROM` statement (#1120) - Thanks @iffyio
+* Support MySQL `SHOW STATUS` statement (#1119) - Thanks invm
+
+### Fixed
+* Clean up nightly clippy lints (#1158) - Thanks @alamb
+* Handle escape, unicode, and hex in tokenize_escaped_single_quoted_string (#1146) - Thanks @JasonLi-cn
+* Fix panic while parsing `REPLACE` (#1140) - THanks @jjbayer
+* Fix clippy warning from rust 1.76 (#1130) - Thanks @alamb
+* Fix release instructions (#1115) - Thanks @alamb
+
+### Changed
+* Add `parse_keyword_with_tokens` for paring keyword and tokens combination (#1141) - Thanks @viirya
+* Add ParadeDB to list of known users (#1142) - Thanks @philippemnoel
+* Accept JSON_TABLE both as an unquoted table name and a table-valued function (#1134) - Thanks @lovasoa
+
+
 ## [0.43.1] 2024-01-22
 ### Changes
 * Fixed CHANGELOG

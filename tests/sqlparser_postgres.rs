@@ -677,6 +677,7 @@ fn parse_alter_table_add_columns() {
             if_exists,
             only,
             operations,
+            location: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(if_exists);
@@ -1421,6 +1422,7 @@ fn parse_execute() {
         Statement::Execute {
             name: "a".into(),
             parameters: vec![],
+            using: vec![]
         }
     );
 
@@ -1433,6 +1435,29 @@ fn parse_execute() {
                 Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
             ],
+            using: vec![]
+        }
+    );
+
+    let stmt = pg_and_generic()
+        .verified_stmt("EXECUTE a USING CAST(1337 AS SMALLINT), CAST(7331 AS SMALLINT)");
+    assert_eq!(
+        stmt,
+        Statement::Execute {
+            name: "a".into(),
+            parameters: vec![],
+            using: vec![
+                Expr::Cast {
+                    expr: Box::new(Expr::Value(Value::Number("1337".parse().unwrap(), false))),
+                    data_type: DataType::SmallInt(None),
+                    format: None
+                },
+                Expr::Cast {
+                    expr: Box::new(Expr::Value(Value::Number("7331".parse().unwrap(), false))),
+                    data_type: DataType::SmallInt(None),
+                    format: None
+                },
+            ]
         }
     );
 }
@@ -3257,7 +3282,7 @@ fn parse_similar_to() {
 fn parse_create_function() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE AS 'select $1 + $2;'";
     assert_eq!(
-        pg().verified_stmt(sql),
+        pg_and_generic().verified_stmt(sql),
         Statement::CreateFunction {
             or_replace: false,
             temporary: false,

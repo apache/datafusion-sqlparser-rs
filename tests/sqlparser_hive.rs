@@ -19,7 +19,7 @@ use sqlparser::ast::{
     CreateFunctionBody, CreateFunctionUsing, Expr, Function, FunctionDefinition, Ident, ObjectName,
     SelectItem, Statement, TableFactor, UnaryOperator, Value,
 };
-use sqlparser::dialect::{GenericDialect, HiveDialect};
+use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::test_utils::*;
 
@@ -27,9 +27,11 @@ use sqlparser::test_utils::*;
 fn parse_table_create() {
     let sql = r#"CREATE TABLE IF NOT EXISTS db.table (a BIGINT, b STRING, c TIMESTAMP) PARTITIONED BY (d STRING, e TIMESTAMP) STORED AS ORC LOCATION 's3://...' TBLPROPERTIES ("prop" = "2", "asdf" = '1234', 'asdf' = "1234", "asdf" = 2)"#;
     let iof = r#"CREATE TABLE IF NOT EXISTS db.table (a BIGINT, b STRING, c TIMESTAMP) PARTITIONED BY (d STRING, e TIMESTAMP) STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat' OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat' LOCATION 's3://...'"#;
+    let serdeproperties = r#"CREATE EXTERNAL TABLE IF NOT EXISTS db.table (a STRING, b STRING, c STRING) PARTITIONED BY (d STRING, e STRING) ROW FORMAT SERDE 'org.apache.hadoop.hive.serde.config' WITH SERDEPROPERTIES ('prop_a' = 'a', 'prop_b' = 'b') STORED AS TEXTFILE LOCATION 's3://...' TBLPROPERTIES ('prop_c' = 'c')"#;
 
     hive().verified_stmt(sql);
     hive().verified_stmt(iof);
+    hive().verified_stmt(serdeproperties);
 }
 
 fn generic(options: Option<ParserOptions>) -> TestedDialects {
@@ -44,6 +46,16 @@ fn parse_describe() {
     let describe = r#"DESCRIBE namespace.`table`"#;
     hive().verified_stmt(describe);
     generic(None).verified_stmt(describe);
+}
+
+#[test]
+fn explain_describe_formatted() {
+    hive().verified_stmt("DESCRIBE FORMATTED test.table");
+}
+
+#[test]
+fn explain_describe_extended() {
+    hive().verified_stmt("DESCRIBE EXTENDED test.table");
 }
 
 #[test]
@@ -123,6 +135,19 @@ fn test_alter_partition() {
 }
 
 #[test]
+fn test_alter_with_location() {
+    let alter =
+        "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1) LOCATION 's3://...'";
+    hive().verified_stmt(alter);
+}
+
+#[test]
+fn test_alter_with_set_location() {
+    let alter = "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1) SET LOCATION 's3://...'";
+    hive().verified_stmt(alter);
+}
+
+#[test]
 fn test_add_partition() {
     let add = "ALTER TABLE db.table ADD IF NOT EXISTS PARTITION (a = 'asdf', b = 2)";
     hive().verified_stmt(add);
@@ -189,6 +214,12 @@ fn create_temp_table() {
 
     hive().verified_stmt(query);
     hive().one_statement_parses_to(query2, query);
+}
+
+#[test]
+fn create_delimited_table() {
+    let query = "CREATE TABLE tab (cola STRING, colb BIGINT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' ESCAPED BY '\"' MAP KEYS TERMINATED BY '\"'";
+    hive().verified_stmt(query);
 }
 
 #[test]
@@ -285,8 +316,14 @@ fn parse_create_function() {
         _ => unreachable!(),
     }
 
+    // Test error in dialect that doesn't support parsing CREATE FUNCTION
+    let unsupported_dialects = TestedDialects {
+        dialects: vec![Box::new(MsSqlDialect {})],
+        options: None,
+    };
+
     assert_eq!(
-        generic(None).parse_sql_statements(sql).unwrap_err(),
+        unsupported_dialects.parse_sql_statements(sql).unwrap_err(),
         ParserError::ParserError(
             "Expected an object type after CREATE, found: FUNCTION".to_string()
         )

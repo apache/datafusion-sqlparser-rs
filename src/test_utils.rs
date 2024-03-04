@@ -193,21 +193,35 @@ impl TestedDialects {
     }
 }
 
+/// Returns all available dialects.
 pub fn all_dialects() -> TestedDialects {
+    all_dialects_except(|_| false)
+}
+
+/// Returns available dialects. The `except` predicate is used
+/// to filter out specific dialects.
+pub fn all_dialects_except<F>(except: F) -> TestedDialects
+where
+    F: Fn(&dyn Dialect) -> bool,
+{
+    let all_dialects = vec![
+        Box::new(GenericDialect {}) as Box<dyn Dialect>,
+        Box::new(PostgreSqlDialect {}) as Box<dyn Dialect>,
+        Box::new(MsSqlDialect {}) as Box<dyn Dialect>,
+        Box::new(AnsiDialect {}) as Box<dyn Dialect>,
+        Box::new(SnowflakeDialect {}) as Box<dyn Dialect>,
+        Box::new(HiveDialect {}) as Box<dyn Dialect>,
+        Box::new(RedshiftSqlDialect {}) as Box<dyn Dialect>,
+        Box::new(MySqlDialect {}) as Box<dyn Dialect>,
+        Box::new(BigQueryDialect {}) as Box<dyn Dialect>,
+        Box::new(SQLiteDialect {}) as Box<dyn Dialect>,
+        Box::new(DuckDbDialect {}) as Box<dyn Dialect>,
+    ];
     TestedDialects {
-        dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(HiveDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(MySqlDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(SQLiteDialect {}),
-            Box::new(DuckDbDialect {}),
-        ],
+        dialects: all_dialects
+            .into_iter()
+            .filter(|d| !except(d.as_ref()))
+            .collect(),
         options: None,
     }
 }
@@ -242,6 +256,7 @@ pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTa
             if_exists,
             only: is_only,
             operations,
+            location: _,
         } => {
             assert_eq!(name.to_string(), expected_name);
             assert!(!if_exists);
@@ -251,6 +266,7 @@ pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTa
         _ => panic!("Expected ALTER TABLE statement"),
     }
 }
+
 pub fn alter_table_op(stmt: Statement) -> AlterTableOperation {
     alter_table_op_with_name(stmt, "tab")
 }

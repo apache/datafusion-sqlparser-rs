@@ -143,6 +143,8 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is Snowflake specific <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
     SwapWith { table_name: ObjectName },
+    /// 'SET TBLPROPERTIES ( { property_key [ = ] property_val } [, ...] )'
+    SetTblProperties { table_properties: Vec<SqlOption> },
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -282,6 +284,13 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::SwapWith { table_name } => {
                 write!(f, "SWAP WITH {table_name}")
+            }
+            AlterTableOperation::SetTblProperties { table_properties } => {
+                write!(
+                    f,
+                    "SET TBLPROPERTIES({})",
+                    display_comma_separated(table_properties)
+                )
             }
         }
     }

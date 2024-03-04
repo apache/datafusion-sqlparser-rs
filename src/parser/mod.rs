@@ -8419,14 +8419,17 @@ impl<'a> Parser<'a> {
                     (columns, partitioned, after_columns, source)
                 };
 
-            let (row_alias, col_aliases) = if dialect_of!(self is MySqlDialect | GenericDialect)
+            let insert_alias = if dialect_of!(self is MySqlDialect | GenericDialect)
                 && self.parse_keyword(Keyword::AS)
             {
                 let row_alias = self.parse_object_name(false)?;
-                let col_aliases = self.parse_parenthesized_column_list(Optional, false)?;
-                (row_alias, Some(col_aliases))
+                let col_aliases = Some(self.parse_parenthesized_column_list(Optional, false)?);
+                Some(InsertAliases {
+                    row_alias,
+                    col_aliases,
+                })
             } else {
-                (ObjectName(vec![]), None)
+                None
             };
 
             let on = if self.parse_keyword(Keyword::ON) {
@@ -8498,8 +8501,7 @@ impl<'a> Parser<'a> {
                 returning,
                 replace_into,
                 priority,
-                row_alias,
-                col_aliases,
+                insert_alias,
             })
         }
     }

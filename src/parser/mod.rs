@@ -256,10 +256,22 @@ impl ParserOptions {
     }
 }
 
+#[derive(Copy, Clone)]
+enum ParserState {
+    /// The default state of the parser.
+    Normal,
+    /// The state when parsing a CONNECT BY expression. This allows parsing
+    /// PRIOR expressions while still allowing prior as an identifier name
+    /// in other contexts.
+    ConnectBy,
+}
+
 pub struct Parser<'a> {
     tokens: Vec<TokenWithLocation>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
+    /// The current state of the parser.
+    state: ParserState,
     /// The current dialect to use
     dialect: &'a dyn Dialect,
     /// Additional options that allow you to mix & match behavior
@@ -290,6 +302,7 @@ impl<'a> Parser<'a> {
         Self {
             tokens: vec![],
             index: 0,
+            state: ParserState::Normal,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
             options: ParserOptions::default(),
@@ -965,6 +978,10 @@ impl<'a> Parser<'a> {
                 Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     self.prev_token();
                     self.parse_bigquery_struct_literal()
+                }
+                Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
+                    let expr = self.parse_subexpr(Self::PLUS_MINUS_PREC)?;
+                    Ok(Expr::Prior(Box::new(expr)))
                 }
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
@@ -5894,12 +5911,15 @@ impl<'a> Parser<'a> {
                     )?,
                 },
                 // Case when Snowflake Semi-structured data like key:value
+                // FIXME: Find a better way to deal with this than exhaustively
+                //        listing every keyword allowed here.
                 Keyword::NoKeyword
                 | Keyword::LOCATION
                 | Keyword::TYPE
                 | Keyword::DATE
                 | Keyword::START
                 | Keyword::END
+                | Keyword::DATA
                     if dialect_of!(self is SnowflakeDialect | GenericDialect) =>
                 {
                     Ok(Value::UnQuotedString(w.value))
@@ -7154,7 +7174,7 @@ impl<'a> Parser<'a> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
         let mut expr = if self.parse_keyword(Keyword::SELECT) {
-            SetExpr::Select(Box::new(self.parse_select()?))
+            self.parse_select()?
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
             let subquery = self.parse_query()?;
@@ -7242,7 +7262,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
-    pub fn parse_select(&mut self) -> Result<Select, ParserError> {
+    pub fn parse_select(&mut self) -> Result<SetExpr, ParserError> {
         let value_table_mode =
             if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::AS) {
                 if self.parse_keyword(Keyword::VALUE) {
@@ -7293,6 +7313,18 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
+
+        if distinct.is_none()
+            && top.is_none()
+            && into.is_none()
+            && !from.is_empty()
+            && self
+                .parse_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
+                .is_some()
+        {
+            self.prev_token();
+            return Ok(SetExpr::ConnectBy(self.parse_connect_by(projection, from)?));
+        }
 
         let mut lateral_views = vec![];
         loop {
@@ -7377,7 +7409,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Select {
+        Ok(SetExpr::Select(Box::new(Select {
             distinct,
             top,
             projection,
@@ -7393,6 +7425,48 @@ impl<'a> Parser<'a> {
             named_window: named_windows,
             qualify,
             value_table_mode,
+        })))
+    }
+
+    fn with_state<T, F>(&mut self, state: ParserState, mut f: F) -> Result<T, ParserError>
+    where
+        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+    {
+        let current_state = self.state;
+        self.state = state;
+        let res = f(self);
+        self.state = current_state;
+        res
+    }
+
+    pub fn parse_connect_by(
+        &mut self,
+        projection: Vec<SelectItem>,
+        from: Vec<TableWithJoins>,
+    ) -> Result<ConnectBy, ParserError> {
+        debug_assert!(!from.is_empty());
+
+        let (condition, relationships) = if self.parse_keywords(&[Keyword::CONNECT, Keyword::BY]) {
+            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
+                parser.parse_comma_separated(Parser::parse_expr)
+            })?;
+            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
+            let condition = self.parse_expr()?;
+            (condition, relationships)
+        } else {
+            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
+            let condition = self.parse_expr()?;
+            self.expect_keywords(&[Keyword::CONNECT, Keyword::BY])?;
+            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
+                parser.parse_comma_separated(Parser::parse_expr)
+            })?;
+            (condition, relationships)
+        };
+        Ok(ConnectBy {
+            projection,
+            from,
+            condition,
+            relationships,
         })
     }
 

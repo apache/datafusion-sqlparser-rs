@@ -39,8 +39,8 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, CteAsMaterialized, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, ForClause,
-    ForJson, ForXml, GroupByExpr, IdentWithAlias, Join, JoinConstraint, JoinOperator,
+    ConnectBy, Cte, CteAsMaterialized, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch,
+    ForClause, ForJson, ForXml, GroupByExpr, IdentWithAlias, Join, JoinConstraint, JoinOperator,
     JsonTableColumn, JsonTableColumnErrorHandling, LateralView, LockClause, LockType,
     NamedWindowDefinition, NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem,
     ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator,
@@ -735,6 +735,8 @@ pub enum Expr {
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/where#joins-in-the-where-clause>.
     OuterJoin(Box<Expr>),
+    /// A reference to the prior level in a CONNECT BY clause.
+    Prior(Box<Expr>),
 }
 
 impl fmt::Display for CastFormat {
@@ -1210,6 +1212,7 @@ impl fmt::Display for Expr {
             Expr::OuterJoin(expr) => {
                 write!(f, "{expr} (+)")
             }
+            Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
         }
     }
 }

@@ -230,7 +230,7 @@ fn parse_json_using_colon() {
 
     snowflake().one_statement_parses_to("SELECT a:b::int FROM t", "SELECT CAST(a:b AS INT) FROM t");
 
-    let sql = "SELECT a:start, a:end FROM t";
+    let sql = "SELECT a:start, a:end, a:data FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         vec![
@@ -243,6 +243,11 @@ fn parse_json_using_colon() {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),
                 operator: JsonOperator::Colon,
                 right: Box::new(Expr::Value(Value::UnQuotedString("end".to_string()))),
+            }),
+            SelectItem::UnnamedExpr(Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(Value::UnQuotedString("data".to_string()))),
             })
         ],
         select.projection
@@ -1501,5 +1506,90 @@ fn parse_comma_outer_join() {
     snowflake().verified_only_select_with_canonical(
         "SELECT t1.c1, t2.c2 FROM t1, t2 WHERE t1.c1 = t2.c2(   +     )",
         "SELECT t1.c1, t2.c2 FROM t1, t2 WHERE t1.c1 = t2.c2 (+)",
+    );
+}
+
+#[test]
+fn parse_connect_by() {
+    let expect_query = Query {
+        with: None,
+        body: Box::new(SetExpr::ConnectBy(ConnectBy {
+            projection: vec![
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
+            ],
+            from: vec![TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("employees")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                    version: None,
+                    partitions: vec![],
+                },
+                joins: vec![],
+            }],
+            condition: Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("title"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "president".to_owned(),
+                ))),
+            },
+            relationships: vec![Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
+                    "employee_id",
+                ))))),
+            }],
+        })),
+        order_by: vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("employee_id")),
+            asc: None,
+            nulls_first: None,
+        }],
+        limit: None,
+        limit_by: vec![],
+        offset: None,
+        fetch: None,
+        locks: vec![],
+        for_clause: None,
+    };
+
+    let connect_by_1 = concat!(
+        "SELECT employee_id, manager_id, title FROM employees ",
+        "START WITH title = 'president' ",
+        "CONNECT BY manager_id = PRIOR employee_id ",
+        "ORDER BY employee_id"
+    );
+
+    assert_eq!(
+        snowflake_and_generic().verified_query(connect_by_1),
+        expect_query
+    );
+
+    // CONNECT BY can come before START WITH
+    let connect_by_2 = concat!(
+        "SELECT employee_id, manager_id, title FROM employees ",
+        "CONNECT BY manager_id = PRIOR employee_id ",
+        "START WITH title = 'president' ",
+        "ORDER BY employee_id"
+    );
+    assert_eq!(
+        snowflake_and_generic().verified_query_with_canonical(connect_by_2, connect_by_1),
+        expect_query
+    );
+
+    // PRIOR expressions are only valid within a CONNECT BY, and the the token
+    // `prior` is valid as an identifier anywhere else.
+    assert_eq!(
+        snowflake_and_generic()
+            .verified_only_select("SELECT prior FROM some_table")
+            .projection,
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
+            "prior"
+        )))]
     );
 }

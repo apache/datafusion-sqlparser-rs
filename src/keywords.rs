@@ -797,6 +797,9 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::FOR,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for Snowflake START WITH .. CONNECT BY
+    Keyword::START,
+    Keyword::CONNECT,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

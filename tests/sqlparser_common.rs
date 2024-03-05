@@ -110,9 +110,6 @@ fn parse_insert_values() {
 
     // allow parenthesis query after insert into
     verified_stmt("INSERT INTO tbla (cola) (SELECT cola FROM tblb)");
-
-    // allow parenthesis query after insert into
-    verified_stmt("INSERT INTO tbla (cola) (VALUES (1))");
 }
 
 #[test]

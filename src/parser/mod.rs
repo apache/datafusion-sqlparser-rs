@@ -7135,6 +7135,16 @@ impl<'a> Parser<'a> {
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
             let subquery = self.parse_query()?;
+
+            let is_generic = dialect_of!(self is GenericDialect);
+            if !is_generic {
+                if let SetExpr::Values(_) = *subquery.body {
+                    return Err(ParserError::ParserError(format!(
+                        "VALUES is not a recognized subquery"
+                    )))
+                }
+            }
+
             self.expect_token(&Token::RParen)?;
             SetExpr::Query(Box::new(subquery))
         } else if self.parse_keyword(Keyword::VALUES) {
@@ -10152,7 +10162,35 @@ mod tests {
     fn test_replace_into_select() {
         let sql = r#"REPLACE INTO t1 (a, b, c) (SELECT * FROM t2)"#;
 
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_ok());
+    }
+
+    #[test]
+    fn test_insert_into_select() {
+        let sql = r#"INSERT INTO t1 (a, b, c) (SELECT * FROM t2)"#;
+
+        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_ok());
+    }
+
+    #[test]
+    fn test_insert_into_values() {
+        let sql = r#"INSERT INTO t1 (a) VALUES(1)"#;
+
+        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_ok());
+    }
+
+    #[test]
+    fn test_insert_into_values_wrapped() {
+        let sql = r#"INSERT INTO t1 (a) (VALUES(1))"#;
+
+        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_ok());
+    }
+
+    #[test]
+    fn test_insert_into_values_wrapped_not_generic() {
+        let sql = r#"INSERT INTO t1 (a) (VALUES(1))"#;
+
+        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
     }
 
     #[test]

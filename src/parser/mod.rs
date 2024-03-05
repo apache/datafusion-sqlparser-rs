@@ -5911,12 +5911,15 @@ impl<'a> Parser<'a> {
                     )?,
                 },
                 // Case when Snowflake Semi-structured data like key:value
+                // FIXME: Find a better way to deal with this than exhaustively
+                //        listing every keyword allowed here.
                 Keyword::NoKeyword
                 | Keyword::LOCATION
                 | Keyword::TYPE
                 | Keyword::DATE
                 | Keyword::START
                 | Keyword::END
+                | Keyword::DATA
                     if dialect_of!(self is SnowflakeDialect | GenericDialect) =>
                 {
                     Ok(Value::UnQuotedString(w.value))

@@ -72,6 +72,7 @@ pub struct CreateTableBuilder {
     pub default_charset: Option<String>,
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
+    pub partitioned_by: Option<Expr>,
     pub on_cluster: Option<String>,
     pub primary_key: Option<Vec<WithSpan<Ident>>>,
     pub order_by: Option<Vec<WithSpan<Ident>>>,
@@ -112,6 +113,7 @@ impl CreateTableBuilder {
             on_cluster: None,
             primary_key: None,
             order_by: None,
+            partitioned_by: None,
             cluster_by: None,
             strict: false,
             table_ttl: None,
@@ -236,6 +238,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn partitioned_by(mut self, partitioned_by: Option<Expr>) -> Self {
+        self.partitioned_by = partitioned_by;
+        self
+    }
+
     pub fn on_cluster(mut self, on_cluster: Option<String>) -> Self {
         self.on_cluster = on_cluster;
         self
@@ -301,6 +308,7 @@ impl CreateTableBuilder {
             on_cluster: self.on_cluster,
             primary_key: self.primary_key,
             order_by: self.order_by,
+            partitioned_by: self.partitioned_by,
             cluster_by: self.cluster_by,
             strict: self.strict,
             table_ttl: self.table_ttl,
@@ -342,6 +350,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 default_charset,
                 collation,
                 on_commit,
+                partitioned_by,
                 on_cluster,
                 primary_key,
                 order_by,
@@ -375,6 +384,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 default_charset,
                 collation,
                 on_commit,
+                partitioned_by,
                 on_cluster,
                 primary_key,
                 order_by,

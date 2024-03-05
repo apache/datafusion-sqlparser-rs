@@ -1604,6 +1604,7 @@ pub enum Statement {
         default_charset: Option<String>,
         collation: Option<String>,
         on_commit: Option<OnCommit>,
+        partitioned_by: Option<Expr>,
         /// ClickHouse "ON CLUSTER" clause:
         /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
         on_cluster: Option<String>,
@@ -2620,6 +2621,7 @@ impl fmt::Display for Statement {
                 auto_increment_offset,
                 collation,
                 on_commit,
+                partitioned_by,
                 on_cluster,
                 primary_key,
                 order_by,
@@ -2784,6 +2786,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(order_by) = order_by {
                     write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
+                }
+                if let Some(expr) = partitioned_by {
+                    write!(f, " PARTITION BY {expr}")?;
                 }
                 if let Some(cluster_by) = cluster_by {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;

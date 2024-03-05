@@ -33,7 +33,7 @@ use IsOptional::*;
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::*;
 use crate::dialect::*;
-use crate::keywords::{self, Keyword, ALL_KEYWORDS};
+use crate::keywords::{self, Keyword};
 use crate::tokenizer::*;
 
 mod alter;
@@ -197,7 +197,7 @@ impl fmt::Display for ParserError {
 impl std::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
-const DEFAULT_REMAINING_DEPTH: usize = 41;
+const DEFAULT_REMAINING_DEPTH: usize = 38;
 
 /// Composite types declarations using angle brackets syntax can be arbitrary
 /// nested such that the following declaration is possible:
@@ -4083,6 +4083,13 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // In BigQuery PARITION BY can be also defined after columns
+        let partitioned_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         // In Snowflake CLUSTER BY can be also defined after columns
         if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
             self.expect_token(&Token::LParen)?;
@@ -4181,6 +4188,7 @@ impl<'a> Parser<'a> {
             .default_charset(default_charset)
             .collation(collation)
             .on_commit(on_commit)
+            .partitioned_by(partitioned_by)
             .on_cluster(on_cluster)
             .strict(strict)
             .table_ttl(table_ttl)

@@ -1262,3 +1262,10 @@ fn test_regexp_string_double_quote() {
     bigquery_unescaped().verified_stmt(r#"SELECT "I\\\"m fine""#);
     bigquery_unescaped().verified_stmt(r#"SELECT "[\"\\[\\]]""#);
 }
+
+#[test]
+fn test_create_table_with_partition_by() {
+    bigquery().verified_stmt(
+        "CREATE TABLE mytable (id INT64, timestamp TIMESTAMP) PARTITION BY DATE(timestamp)",
+    );
+}

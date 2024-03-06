@@ -565,7 +565,7 @@ fn parse_create_table_unique_key() {
 #[test]
 fn parse_create_table_unique_key_with_index_options() {
     let sql = "CREATE TABLE foo (bar INT, var INT, CONSTRAINT constr UNIQUE INDEX index_name (bar, var) USING HASH COMMENT 'yes, ' USING BTREE COMMENT 'MySQL allows')";
-    match mysql().one_statement_parses_to(sql, "") {
+    match mysql_and_generic().one_statement_parses_to(sql, "") {
         Statement::CreateTable {
             name, constraints, ..
         } => {
@@ -591,7 +591,7 @@ fn parse_create_table_unique_key_with_index_options() {
         _ => unreachable!(),
     }
 
-    mysql().verified_stmt(sql);
+    mysql_and_generic().verified_stmt(sql);
 }
 
 #[test]
@@ -2070,6 +2070,15 @@ fn parse_create_table_with_index_definition() {
         "CREATE TABLE tb (id INT, INDEX (c1, c2, c3, c4,c5))",
         "CREATE TABLE tb (id INT, INDEX (c1, c2, c3, c4, c5))",
     );
+}
+
+#[test]
+fn parse_create_table_unallow_constraint_then_index() {
+    let sql = "CREATE TABLE foo (bar INT, CONSTRAINT constr INDEX index (bar))";
+    assert!(mysql_and_generic().parse_sql_statements(sql).is_err());
+
+    let sql = "CREATE TABLE foo (bar INT, INDEX index (bar))";
+    assert!(mysql_and_generic().parse_sql_statements(sql).is_ok());
 }
 
 #[test]

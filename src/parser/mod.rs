@@ -5156,7 +5156,8 @@ impl<'a> Parser<'a> {
             }
             Token::Word(w)
                 if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)
-                    && dialect_of!(self is GenericDialect | MySqlDialect) =>
+                    && dialect_of!(self is GenericDialect | MySqlDialect)
+                    && name.is_none() =>
             {
                 let display_as_key = w.keyword == Keyword::KEY;
 

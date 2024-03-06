@@ -58,6 +58,7 @@ pub struct CreateTableBuilder {
     pub constraints: Vec<TableConstraint>,
     pub hive_distribution: HiveDistributionStyle,
     pub hive_formats: Option<HiveFormat>,
+    pub table_options: Vec<SqlOption>,
     pub table_properties: Vec<SqlOption>,
     pub with_options: Vec<SqlOption>,
     pub file_format: Option<FileFormat>,
@@ -96,6 +97,7 @@ impl CreateTableBuilder {
             constraints: vec![],
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
+            table_options: vec![],
             table_properties: vec![],
             with_options: vec![],
             file_format: None,
@@ -167,6 +169,11 @@ impl CreateTableBuilder {
 
     pub fn hive_formats(mut self, hive_formats: Option<HiveFormat>) -> Self {
         self.hive_formats = hive_formats;
+        self
+    }
+
+    pub fn table_options(mut self, table_options: Vec<SqlOption>) -> Self {
+        self.table_options = table_options;
         self
     }
 
@@ -291,6 +298,7 @@ impl CreateTableBuilder {
             constraints: self.constraints,
             hive_distribution: self.hive_distribution,
             hive_formats: self.hive_formats,
+            table_options: self.table_options,
             table_properties: self.table_properties,
             with_options: self.with_options,
             file_format: self.file_format,
@@ -336,6 +344,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 constraints,
                 hive_distribution,
                 hive_formats,
+                table_options,
                 table_properties,
                 with_options,
                 file_format,
@@ -370,6 +379,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 constraints,
                 hive_distribution,
                 hive_formats,
+                table_options,
                 table_properties,
                 with_options,
                 file_format,

@@ -1269,3 +1269,10 @@ fn test_create_table_with_partition_by() {
         "CREATE TABLE mytable (id INT64, timestamp TIMESTAMP) PARTITION BY DATE(timestamp)",
     );
 }
+
+#[test]
+fn test_create_external_table_with_options() {
+    bigquery().verified_stmt(
+        r#"CREATE EXTERNAL TABLE mytable (id INT64, timestamp TIMESTAMP) OPTIONS (sheet_range = "synq", skip_leading_rows = 1, format = "GOOGLE_SHEETS", uris = ["https://docs.google.com/spreadsheets/d/1g3xwWi1r-Ln2VVwv4mswwmqyfMeoJglv-MS80ywASGI/edit#gid=0"])"#,
+    );
+}

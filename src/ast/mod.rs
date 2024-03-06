@@ -1591,6 +1591,7 @@ pub enum Statement {
         hive_distribution: HiveDistributionStyle,
         hive_formats: Option<HiveFormat>,
         table_properties: Vec<SqlOption>,
+        table_options: Vec<SqlOption>,
         with_options: Vec<SqlOption>,
         file_format: Option<FileFormat>,
         location: Option<String>,
@@ -2599,6 +2600,7 @@ impl fmt::Display for Statement {
                 name,
                 columns,
                 constraints,
+                table_options,
                 table_properties,
                 with_options,
                 or_replace,
@@ -2754,7 +2756,8 @@ impl fmt::Display for Statement {
                         }
                     }
                 }
-                if *external {
+                // BigQuey doesn't have this external format
+                if *external && file_format.is_some() && location.is_some() {
                     write!(
                         f,
                         " STORED AS {} LOCATION '{}'",
@@ -2792,6 +2795,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(cluster_by) = cluster_by {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
+                }
+                if !table_options.is_empty() {
+                    write!(f, " OPTIONS ({})", display_comma_separated(table_options))?;
                 }
                 if let Some(table_ttl) = table_ttl {
                     write!(f, " TTL {table_ttl}")?;

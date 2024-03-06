@@ -78,6 +78,7 @@ pub enum Value {
     /// OBJECT constant as used by Snowflake
     /// https://docs.snowflake.com/en/sql-reference/data-types-semistructured#object-constants
     ObjectConstant(Vec<ObjectConstantKeyValue>),
+    Array(Vec<Value>),
 }
 
 impl fmt::Display for Value {
@@ -113,6 +114,10 @@ impl fmt::Display for Value {
                     }
                     write!(f, "{}", " }")
                 }
+            }
+            Value::Array(values) => {
+                let collected: Vec<String> = values.iter().map(|v| format!("{}", v)).collect();
+                write!(f, "[{}]", collected.join(", "))
             }
         }
     }

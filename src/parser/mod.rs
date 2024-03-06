@@ -197,7 +197,7 @@ impl fmt::Display for ParserError {
 impl std::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
-const DEFAULT_REMAINING_DEPTH: usize = 38;
+const DEFAULT_REMAINING_DEPTH: usize = 37;
 
 /// Composite types declarations using angle brackets syntax can be arbitrary
 /// nested such that the following declaration is possible:
@@ -3178,11 +3178,13 @@ impl<'a> Parser<'a> {
         };
         let location = hive_formats.location.clone();
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
+        let table_options = self.parse_options(Keyword::OPTIONS)?;
         Ok(CreateTableBuilder::new(table_name)
             .columns(columns)
             .constraints(constraints)
             .hive_distribution(hive_distribution)
             .hive_formats(Some(hive_formats))
+            .table_options(table_options)
             .table_properties(table_properties)
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
@@ -5198,6 +5200,21 @@ impl<'a> Parser<'a> {
                 }
                 self.expect_token(&Token::RBrace)?;
                 Ok(Value::ObjectConstant(fields))
+            }
+            Token::LBracket => {
+                if self.consume_token(&Token::RBracket) {
+                    return Ok(Value::ObjectConstant(vec![]));
+                }
+                let mut fields = vec![];
+                loop {
+                    let value = self.parse_value()?;
+                    fields.push(value);
+                    if !self.consume_token(&Token::Comma) {
+                        break;
+                    }
+                }
+                self.expect_token(&Token::RBracket)?;
+                Ok(Value::Array(fields))
             }
             unexpected => self.expected(
                 "a value",

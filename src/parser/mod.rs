@@ -5087,21 +5087,32 @@ impl<'a> Parser<'a> {
         match next_token.token {
             Token::Word(w) if w.keyword == Keyword::PRIMARY || w.keyword == Keyword::UNIQUE => {
                 let is_primary = w.keyword == Keyword::PRIMARY;
+                // after `PRIMARY` always stay `KEY`
+                if is_primary && !self.parse_keyword(Keyword::KEY) {
+                    return self.expected("KEY", self.peek_token());
+                }
 
-                // parse optional [KEY]
-                let _ = self.parse_keyword(Keyword::KEY);
+                let index_type_display = self.parse_index_type_display();
+                if !dialect_of!(self is GenericDialect | MySqlDialect)
+                    && !index_type_display.is_none()
+                {
+                    return self
+                        .expected("`index_name` or `(column_name [, ...])`", self.peek_token());
+                }
 
-                // optional constraint name
-                let name = self
-                    .maybe_parse(|parser| parser.parse_identifier(false))
-                    .or(name);
+                // optional index name
+                let index_name = self.maybe_parse(|parser| parser.parse_identifier(false));
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
                 Ok(Some(TableConstraint::Unique {
                     name,
+                    index_name,
+                    index_type_display,
                     columns,
                     is_primary,
+                    index_options,
                     characteristics,
                 }))
             }
@@ -5184,13 +5195,7 @@ impl<'a> Parser<'a> {
 
                 let fulltext = w.keyword == Keyword::FULLTEXT;
 
-                let index_type_display = if self.parse_keyword(Keyword::KEY) {
-                    KeyOrIndexDisplay::Key
-                } else if self.parse_keyword(Keyword::INDEX) {
-                    KeyOrIndexDisplay::Index
-                } else {
-                    KeyOrIndexDisplay::None
-                };
+                let index_type_display = self.parse_index_type_display();
 
                 let opt_index_name = self.maybe_parse(|parser| parser.parse_identifier(false));
 
@@ -5246,6 +5251,40 @@ impl<'a> Parser<'a> {
             Ok(IndexType::Hash)
         } else {
             self.expected("index type {BTREE | HASH}", self.peek_token())
+        }
+    }
+
+    #[must_use]
+    pub fn parse_index_type_display(&mut self) -> KeyOrIndexDisplay {
+        if self.parse_keyword(Keyword::KEY) {
+            KeyOrIndexDisplay::Key
+        } else if self.parse_keyword(Keyword::INDEX) {
+            KeyOrIndexDisplay::Index
+        } else {
+            KeyOrIndexDisplay::None
+        }
+    }
+
+    pub fn parse_optional_index_option(&mut self) -> Result<Option<IndexOption>, ParserError> {
+        if self.parse_keyword(Keyword::USING) {
+            let index_type = self.parse_index_type()?;
+            Ok(Some(IndexOption::Using(index_type)))
+        } else if self.parse_keyword(Keyword::COMMENT) {
+            let s = self.parse_literal_string()?;
+            Ok(Some(IndexOption::Comment(s)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn parse_index_options(&mut self) -> Result<Vec<IndexOption>, ParserError> {
+        let mut options = Vec::new();
+
+        loop {
+            match self.parse_optional_index_option()? {
+                Some(index_option) => options.push(index_option),
+                None => return Ok(options),
+            }
         }
     }
 

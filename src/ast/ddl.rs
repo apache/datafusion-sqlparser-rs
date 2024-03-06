@@ -15,7 +15,7 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, string::String, vec::Vec};
-use core::fmt;
+use core::fmt::{self, Write};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -384,12 +384,30 @@ impl fmt::Display for AlterColumnOperation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TableConstraint {
-    /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
+    /// MySQLs [definition][1] for `UNIQUE` & `PRIMARY KEY` constraints statements:\
+    /// * `[CONSTRAINT [<name>]] UNIQUE <index_type_display> [<index_name>] [index_type] (<columns>) <index_options>`
+    /// * `[CONSTRAINT [<name>]] PRIMARY KEY [index_type] (<columns>) <index_options>`
+    ///
+    /// where:
+    /// * [index_type][2] is `USING {BTREE | HASH}`
+    /// * [index_optios][3] is `{index_type | COMMENT 'string' | ... %currently unsupported stmts% } ...`
+    /// * [index_type_display][4] is `[INDEX | KEY]`
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
+    /// [2]: IndexType
+    /// [3]: IndexOption
+    /// [4]: KeyOrIndexDisplay
     Unique {
+        /// Constraint name.
+        ///
+        /// Can be not the same as `index_name`
         name: Option<Ident>,
+        index_name: Option<Ident>,
+        index_type_display: KeyOrIndexDisplay,
         columns: Vec<Ident>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
         is_primary: bool,
+        index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
     },
     /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
@@ -459,17 +477,29 @@ impl fmt::Display for TableConstraint {
         match self {
             TableConstraint::Unique {
                 name,
+                index_name,
+                index_type_display,
                 columns,
                 is_primary,
+                index_options,
                 characteristics,
             } => {
                 write!(
                     f,
-                    "{}{} ({})",
+                    "{}{}{index_type_display:>}",
                     display_constraint_name(name),
                     if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
-                    display_comma_separated(columns)
                 )?;
+
+                if let Some(index_name) = index_name {
+                    write!(f, " {index_name}")?;
+                }
+
+                write!(f, " ({})", display_comma_separated(columns))?;
+
+                if !index_options.is_empty() {
+                    write!(f, " {}", display_separated(index_options, " "))?;
+                }
 
                 if let Some(characteristics) = characteristics {
                     write!(f, " {}", characteristics)?;
@@ -537,9 +567,7 @@ impl fmt::Display for TableConstraint {
                     write!(f, "SPATIAL")?;
                 }
 
-                if !matches!(index_type_display, KeyOrIndexDisplay::None) {
-                    write!(f, " {index_type_display}")?;
-                }
+                write!(f, "{index_type_display:>}")?;
 
                 if let Some(name) = opt_index_name {
                     write!(f, " {name}")?;
@@ -572,8 +600,20 @@ pub enum KeyOrIndexDisplay {
     Index,
 }
 
+impl KeyOrIndexDisplay {
+    pub fn is_none(self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
 impl fmt::Display for KeyOrIndexDisplay {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let left_space = matches!(f.align(), Some(fmt::Alignment::Right));
+
+        if left_space && !self.is_none() {
+            f.write_char(' ')?
+        }
+
         match self {
             KeyOrIndexDisplay::None => {
                 write!(f, "")
@@ -613,6 +653,30 @@ impl fmt::Display for IndexType {
         }
     }
 }
+
+/// MySQLs index option.
+///
+/// This structure used here [`MySQL` CREATE TABLE][1], [`MySQL` CREATE INDEX][2].
+///
+/// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
+/// [2]: https://dev.mysql.com/doc/refman/8.3/en/create-index.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IndexOption {
+    Using(IndexType),
+    Comment(String),
+}
+
+impl fmt::Display for IndexOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Using(index_type) => write!(f, "USING {index_type}"),
+            Self::Comment(s) => write!(f, "COMMENT '{s}'"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

@@ -5102,6 +5102,7 @@ impl<'a> Parser<'a> {
 
                 // optional index name
                 let index_name = self.maybe_parse(|parser| parser.parse_identifier(false));
+                let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
                 let index_options = self.parse_index_options()?;
@@ -5110,6 +5111,7 @@ impl<'a> Parser<'a> {
                     name,
                     index_name,
                     index_type_display,
+                    index_type,
                     columns,
                     is_primary,
                     index_options,
@@ -5166,11 +5168,7 @@ impl<'a> Parser<'a> {
                     _ => self.maybe_parse(|parser| parser.parse_identifier(false)),
                 };
 
-                let index_type = if self.parse_keyword(Keyword::USING) {
-                    Some(self.parse_index_type()?)
-                } else {
-                    None
-                };
+                let index_type = self.parse_optional_using_then_index_type()?;
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
 
                 Ok(Some(TableConstraint::Index {
@@ -5255,6 +5253,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse [USING {BTREE | HASH}]
+    pub fn parse_optional_using_then_index_type(
+        &mut self,
+    ) -> Result<Option<IndexType>, ParserError> {
+        if self.parse_keyword(Keyword::USING) {
+            Ok(Some(self.parse_index_type()?))
+        } else {
+            Ok(None)
+        }
+    }
+
     #[must_use]
     pub fn parse_index_type_display(&mut self) -> KeyOrIndexDisplay {
         if self.parse_keyword(Keyword::KEY) {
@@ -5267,8 +5276,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_optional_index_option(&mut self) -> Result<Option<IndexOption>, ParserError> {
-        if self.parse_keyword(Keyword::USING) {
-            let index_type = self.parse_index_type()?;
+        if let Some(index_type) = self.parse_optional_using_then_index_type()? {
             Ok(Some(IndexOption::Using(index_type)))
         } else if self.parse_keyword(Keyword::COMMENT) {
             let s = self.parse_literal_string()?;

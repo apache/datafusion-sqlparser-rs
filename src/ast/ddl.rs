@@ -404,6 +404,10 @@ pub enum TableConstraint {
         name: Option<Ident>,
         index_name: Option<Ident>,
         index_type_display: KeyOrIndexDisplay,
+        /// Optional `USING` of [index type][1] statement before columns.
+        ///
+        /// [1]: IndexType
+        index_type: Option<IndexType>,
         columns: Vec<Ident>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
         is_primary: bool,
@@ -479,6 +483,7 @@ impl fmt::Display for TableConstraint {
                 name,
                 index_name,
                 index_type_display,
+                index_type,
                 columns,
                 is_primary,
                 index_options,
@@ -493,6 +498,10 @@ impl fmt::Display for TableConstraint {
 
                 if let Some(index_name) = index_name {
                     write!(f, " {index_name}")?;
+                }
+
+                if let Some(index_type) = index_type {
+                    write!(f, " USING {index_type}")?;
                 }
 
                 write!(f, " ({})", display_comma_separated(columns))?;

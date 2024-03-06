@@ -515,6 +515,7 @@ fn parse_create_table_unique_key() {
                 vec![TableConstraint::Unique {
                     name: Some(Ident::new("bar_key")),
                     index_name: None,
+                    index_type: None,
                     columns: vec![Ident::new("bar")],
                     is_primary: false,
                     index_type_display: KeyOrIndexDisplay::Key,
@@ -574,6 +575,7 @@ fn parse_create_table_unique_key_with_index_options() {
                 vec![TableConstraint::Unique {
                     name: Some(Ident::new("constr")),
                     index_name: Some(Ident::new("index_name")),
+                    index_type: None,
                     columns: vec![Ident::new("bar"), Ident::new("var")],
                     is_primary: false,
                     index_type_display: KeyOrIndexDisplay::Index,
@@ -591,6 +593,36 @@ fn parse_create_table_unique_key_with_index_options() {
         _ => unreachable!(),
     }
 
+    mysql_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_table_unique_key_with_index_type() {
+    let sql = "CREATE TABLE foo (bar INT, UNIQUE index_name USING BTREE (bar) USING HASH)";
+    match mysql_and_generic().one_statement_parses_to(sql, "") {
+        Statement::CreateTable {
+            name, constraints, ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![TableConstraint::Unique {
+                    name: None,
+                    index_name: Some(Ident::new("index_name")),
+                    index_type: Some(IndexType::BTree),
+                    columns: vec![Ident::new("bar")],
+                    is_primary: false,
+                    index_type_display: KeyOrIndexDisplay::None,
+                    index_options: vec![IndexOption::Using(IndexType::Hash),],
+                    characteristics: None,
+                }],
+                constraints
+            );
+        }
+        _ => unreachable!(),
+    }
+    mysql_and_generic().verified_stmt(sql);
+
+    let sql = "CREATE TABLE foo (bar INT, PRIMARY KEY index_name USING BTREE (bar) USING HASH)";
     mysql_and_generic().verified_stmt(sql);
 }
 

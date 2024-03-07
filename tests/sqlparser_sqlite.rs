@@ -434,6 +434,7 @@ fn parse_window_function_with_filter() {
                 ))],
                 null_treatment: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
                     partition_by: vec![],
                     order_by: vec![],
                     window_frame: None,

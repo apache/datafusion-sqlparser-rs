@@ -1213,11 +1213,19 @@ impl Display for WindowType {
     }
 }
 
-/// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
+/// A window specification (i.e. `OVER ([window_name] PARTITION BY .. ORDER BY .. etc.)`)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WindowSpec {
+    /// Optional window name.
+    ///
+    /// You can find it at least in [MySQL][1], [BigQuery][2], [PostgreSQL][3]
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/window-functions-named-windows.html
+    /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
+    /// [3]: https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS
+    pub window_name: Option<Ident>,
     /// `OVER (PARTITION BY ...)`
     pub partition_by: Vec<Expr>,
     /// `OVER (ORDER BY ...)`
@@ -1229,7 +1237,12 @@ pub struct WindowSpec {
 impl fmt::Display for WindowSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
+        if let Some(window_name) = &self.window_name {
+            delim = " ";
+            write!(f, "{window_name}")?;
+        }
         if !self.partition_by.is_empty() {
+            f.write_str(delim)?;
             delim = " ";
             write!(
                 f,

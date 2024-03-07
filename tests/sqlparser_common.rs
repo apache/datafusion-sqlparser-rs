@@ -2062,6 +2062,7 @@ fn parse_select_qualify() {
                 null_treatment: None,
                 filter: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
@@ -4101,6 +4102,7 @@ fn parse_window_functions() {
             null_treatment: None,
             filter: None,
             over: Some(WindowType::WindowSpec(WindowSpec {
+                window_name: None,
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
@@ -4115,6 +4117,54 @@ fn parse_window_functions() {
         }),
         expr_from_projection(&select.projection[0])
     );
+
+    for i in 0..7 {
+        assert!(matches!(
+            expr_from_projection(&select.projection[i]),
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
+                    ..
+                })),
+                ..
+            })
+        ));
+    }
+}
+
+#[test]
+fn parse_named_window_functions() {
+    let sql = "SELECT row_number() OVER (w ORDER BY dt DESC), \
+               sum(foo) OVER (win PARTITION BY a, b ORDER BY c, d \
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) \
+               FROM foo \
+               WINDOW w AS (PARTITION BY x), win AS (ORDER BY y)";
+
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MySqlDialect {}),
+            Box::new(BigQueryDialect {}),
+        ],
+        options: None,
+    };
+    supported_dialects.verified_stmt(sql);
+
+    let select = verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    for (i, win_name) in ["w", "win"].iter().enumerate() {
+        assert!(matches!(
+            expr_from_projection(&select.projection[i]),
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: Some(Ident { value, .. }),
+                    ..
+                })),
+                ..
+            }) if value == win_name
+        ));
+    }
 }
 
 #[test]
@@ -4215,6 +4265,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    window_name: None,
                     partition_by: vec![],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident {
@@ -4233,6 +4284,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    window_name: None,
                     partition_by: vec![Expr::Identifier(Ident {
                         value: "C11".to_string(),
                         quote_style: None,

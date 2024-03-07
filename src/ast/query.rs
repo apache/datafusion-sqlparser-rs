@@ -1114,9 +1114,12 @@ pub enum JoinConstraint {
 pub struct OrderByExpr {
     pub expr: Expr,
     /// Optional `ASC` or `DESC`
+    /// TODO: Convert this into an Enum (ASC, DESC, Operator)
     pub asc: Option<bool>,
     /// Optional `NULLS FIRST` or `NULLS LAST`
     pub nulls_first: Option<bool>,
+    /// Optional `USING` operator for ordering (PostgreSQL only)
+    pub using: Option<BinaryOperator>,
 }
 
 impl fmt::Display for OrderByExpr {
@@ -1126,6 +1129,9 @@ impl fmt::Display for OrderByExpr {
             Some(true) => write!(f, " ASC")?,
             Some(false) => write!(f, " DESC")?,
             None => (),
+        }
+        if let Some(ref operator) = self.using {
+            write!(f, " USING {}", operator)?;
         }
         match self.nulls_first {
             Some(true) => write!(f, " NULLS FIRST")?,

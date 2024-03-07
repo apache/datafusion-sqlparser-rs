@@ -3601,3 +3601,131 @@ fn parse_join_constraint_unnest_alias() {
         }]
     );
 }
+
+#[test]
+fn parse_insert_with_table_alias() {
+    match pg().verified_stmt("INSERT INTO table_1 AS t1 (c1) VALUES (1)") {
+        Statement::Insert {
+            table_name,
+            table_alias,
+            ..
+        } => {
+            assert_eq!(table_name, "table_1".into());
+            assert_eq!(table_alias, Some(Ident::new("t1")));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_select_order_by_using() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name USING >",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: None,
+            nulls_first: None,
+            using: Some(BinaryOperator::Gt),
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_order_by_asc() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name ASC",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: Some(true),
+            nulls_first: None,
+            using: None,
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_order_by_desc() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name DESC",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: Some(false),
+            nulls_first: None,
+            using: None,
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_order_by_desc_nulls_first() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name DESC NULLS FIRST",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: Some(false),
+            nulls_first: Some(true),
+            using: None,
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_order_by_using_nulls_last() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name USING < NULLS LAST",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: None,
+            nulls_first: Some(false),
+            using: Some(BinaryOperator::Lt),
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_with_biderectional_arrow() {
+    pg_and_generic().verified_only_select_with_canonical(
+        "SELECT location <-> '(101,456)'::point",
+        "SELECT location <-> CAST('(101,456)' AS point)",
+    );
+}
+
+#[test]
+fn parse_query_with_biderectional_arrow() {
+    let select = pg_and_generic().verified_query_with_canonical(
+        "SELECT name, email FROM users ORDER BY location <-> '(101,456)'::point",
+        "SELECT name, email FROM users ORDER BY location <-> CAST('(101,456)' AS point)",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("location"))),
+                op: BinaryOperator::PGGeoDistance,
+                right: Box::new(Expr::Cast {
+                    expr: Box::new(Expr::Value(Value::SingleQuotedString("(101,456)".into()))),
+                    data_type: DataType::new_custom("point", vec![]),
+                    format: None
+                }),
+            },
+            asc: None,
+            nulls_first: None,
+            using: None,
+        }],
+        select.order_by
+    );
+}

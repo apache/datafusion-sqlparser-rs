@@ -1705,6 +1705,7 @@ fn parse_delete_with_order_by() {
                     }),
                     asc: Some(false),
                     nulls_first: None,
+                    using: None,
                 }],
                 order_by
             );

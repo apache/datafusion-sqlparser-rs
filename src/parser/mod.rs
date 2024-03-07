@@ -9405,12 +9405,10 @@ impl<'a> Parser<'a> {
 
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
         let window_name = match self.peek_token().token {
-            Token::Word(word)
-                if word.keyword == Keyword::PARTITION || word.keyword == Keyword::ORDER =>
-            {
-                None
+            Token::Word(word) if word.keyword == Keyword::NoKeyword => {
+                self.maybe_parse(|parser| parser.parse_identifier(false))
             }
-            _ => self.maybe_parse(|parser| parser.parse_identifier(false)),
+            _ => None,
         };
 
         let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {

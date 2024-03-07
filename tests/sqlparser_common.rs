@@ -4134,12 +4134,6 @@ fn parse_window_functions() {
 
 #[test]
 fn parse_named_window_functions() {
-    let sql = "SELECT row_number() OVER (w ORDER BY dt DESC), \
-               sum(foo) OVER (win PARTITION BY a, b ORDER BY c, d \
-               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) \
-               FROM foo \
-               WINDOW w AS (PARTITION BY x), win AS (ORDER BY y)";
-
     let supported_dialects = TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
@@ -4149,6 +4143,12 @@ fn parse_named_window_functions() {
         ],
         options: None,
     };
+
+    let sql = "SELECT row_number() OVER (w ORDER BY dt DESC), \
+               sum(foo) OVER (win PARTITION BY a, b ORDER BY c, d \
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) \
+               FROM foo \
+               WINDOW w AS (PARTITION BY x), win AS (ORDER BY y)";
     supported_dialects.verified_stmt(sql);
 
     let select = verified_only_select(sql);
@@ -4165,6 +4165,14 @@ fn parse_named_window_functions() {
             }) if value == win_name
         ));
     }
+
+    let sql = "SELECT \
+        FIRST_VALUE(x) OVER (w ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS first, \
+        FIRST_VALUE(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS last, \
+        SUM(y) OVER (win PARTITION BY x) AS last \
+        FROM EMPLOYEE \
+        WINDOW w AS (PARTITION BY x), win AS (w ORDER BY y)";
+    supported_dialects.verified_stmt(sql);
 }
 
 #[test]

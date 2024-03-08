@@ -655,10 +655,9 @@ impl<'a> Parser<'a> {
         let only = self.parse_keyword(Keyword::ONLY);
 
         let table_name = self.parse_object_name(false)?;
-        let table_names = self.parse_comma_separated(Parser::parse_object_name)?;
 
         let table_names = if dialect_of!(self is PostgreSqlDialect) {
-            let table_names = self.parse_comma_separated(Parser::parse_object_name)?;
+            let table_names = self.parse_comma_separated(|f| Parser::parse_object_name(f, false))?;
             let mut v = vec![table_name.to_owned()];
             v.extend(table_names.iter().cloned());
             Some(table_names)
@@ -8629,7 +8628,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_insert_table_alias(&mut self) -> Result<Option<Ident>, ParserError> {
         let table_alias = if self.parse_keyword(Keyword::AS) {
-            Some(self.parse_identifier()?)
+            Some(self.parse_identifier(false)?)
         } else {
             None
         };

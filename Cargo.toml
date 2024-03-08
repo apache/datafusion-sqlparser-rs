@@ -8,11 +8,7 @@ documentation = "https://docs.rs/sqlparser/"
 keywords = ["ansi", "sql", "lexer", "parser"]
 repository = "https://github.com/sqlparser-rs/sqlparser-rs"
 license = "Apache-2.0"
-include = [
-    "src/**/*.rs",
-    "Cargo.toml",
-    "LICENSE.TXT",
-]
+include = ["src/**/*.rs", "Cargo.toml", "LICENSE.TXT"]
 edition = "2021"
 
 [lib]

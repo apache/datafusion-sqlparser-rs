@@ -1759,6 +1759,8 @@ pub enum Statement {
         replace_into: bool,
         /// Only for mysql
         priority: Option<MysqlInsertPriority>,
+        /// Only for mysql
+        insert_alias: Option<InsertAliases>,
     },
     /// ```sql
     /// INSTALL
@@ -2773,6 +2775,7 @@ impl fmt::Display for Statement {
                 returning,
                 replace_into,
                 priority,
+                insert_alias,
             } => {
                 let table_name = if let Some(alias) = table_alias {
                     format!("{table_name} AS {alias}")
@@ -2820,6 +2823,16 @@ impl fmt::Display for Statement {
 
                 if source.is_none() && columns.is_empty() {
                     write!(f, "DEFAULT VALUES")?;
+                }
+
+                if let Some(insert_alias) = insert_alias {
+                    write!(f, " AS {0}", insert_alias.row_alias)?;
+
+                    if let Some(col_aliases) = &insert_alias.col_aliases {
+                        if !col_aliases.is_empty() {
+                            write!(f, " ({})", display_comma_separated(col_aliases))?;
+                        }
+                    }
                 }
 
                 if let Some(on) = on {
@@ -4192,6 +4205,14 @@ pub enum OnInsert {
     DuplicateKeyUpdate(Vec<Assignment>),
     /// ON CONFLICT is a PostgreSQL and Sqlite extension
     OnConflict(OnConflict),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct InsertAliases {
+    pub row_alias: ObjectName,
+    pub col_aliases: Option<Vec<Ident>>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

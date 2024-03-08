@@ -8419,6 +8419,19 @@ impl<'a> Parser<'a> {
                     (columns, partitioned, after_columns, source)
                 };
 
+            let insert_alias = if dialect_of!(self is MySqlDialect | GenericDialect)
+                && self.parse_keyword(Keyword::AS)
+            {
+                let row_alias = self.parse_object_name(false)?;
+                let col_aliases = Some(self.parse_parenthesized_column_list(Optional, false)?);
+                Some(InsertAliases {
+                    row_alias,
+                    col_aliases,
+                })
+            } else {
+                None
+            };
+
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
                     let conflict_target =
@@ -8488,6 +8501,7 @@ impl<'a> Parser<'a> {
                 returning,
                 replace_into,
                 priority,
+                insert_alias,
             })
         }
     }

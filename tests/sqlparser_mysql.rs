@@ -19,7 +19,7 @@ use matches::assert_matches;
 use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
-use sqlparser::parser::ParserOptions;
+use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Token;
 use test_utils::*;
 
@@ -1313,6 +1313,112 @@ fn parse_priority_insert() {
                         rows: vec![vec![
                             Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
                             Expr::Value(number("1"))
+                        ]]
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    limit_by: vec![],
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                })),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_insert_as() {
+    let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias`";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            insert_alias,
+            ..
+        } => {
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "table")]),
+                table_name
+            );
+            assert_eq!(vec![Ident::with_quote('`', "date")], columns);
+            let insert_alias = insert_alias.unwrap();
+
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "alias")]),
+                insert_alias.row_alias
+            );
+            assert_eq!(Some(vec![]), insert_alias.col_aliases);
+            assert_eq!(
+                Some(Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![Expr::Value(Value::SingleQuotedString(
+                            "2024-01-01".to_string()
+                        ))]]
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    limit_by: vec![],
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                })),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias` ()";
+    assert!(matches!(
+        mysql_and_generic().parse_sql_statements(sql),
+        Err(ParserError::ParserError(_))
+    ));
+
+    let sql = r"INSERT INTO `table` (`id`, `date`) VALUES (1, '2024-01-01') AS `alias` (`mek_id`, `mek_date`)";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            insert_alias,
+            ..
+        } => {
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "table")]),
+                table_name
+            );
+            assert_eq!(
+                vec![Ident::with_quote('`', "id"), Ident::with_quote('`', "date")],
+                columns
+            );
+            let insert_alias = insert_alias.unwrap();
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "alias")]),
+                insert_alias.row_alias
+            );
+            assert_eq!(
+                Some(vec![
+                    Ident::with_quote('`', "mek_id"),
+                    Ident::with_quote('`', "mek_date")
+                ]),
+                insert_alias.col_aliases
+            );
+            assert_eq!(
+                Some(Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![
+                            Expr::Value(number("1")),
+                            Expr::Value(Value::SingleQuotedString("2024-01-01".to_string()))
                         ]]
                     })),
                     order_by: vec![],

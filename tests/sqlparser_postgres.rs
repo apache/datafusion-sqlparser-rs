@@ -3597,9 +3597,13 @@ fn parse_select_group_by_cube() {
 #[test]
 fn parse_truncate() {
     let truncate = pg_and_generic().verified_stmt("TRUNCATE db.table_name");
+
+    let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+
     assert_eq!(
         Statement::Truncate {
-            table_names: vec![ObjectName(vec![Ident::new("db"), Ident::new("table_name")])],
+            table_name,
+            table_names: None,
             partitions: None,
             table: false,
             only: false,
@@ -3614,9 +3618,38 @@ fn parse_truncate() {
 fn parse_truncate_with_options() {
     let truncate = pg_and_generic()
         .verified_stmt("TRUNCATE TABLE ONLY db.table_name RESTART IDENTITY CASCADE");
+    let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+
     assert_eq!(
         Statement::Truncate {
-            table_names: vec![ObjectName(vec![Ident::new("db"), Ident::new("table_name")])],
+            table_name,
+            table_names: None,
+            partitions: None,
+            table: true,
+            only: true,
+            identity: Some(TruncateIdentityOption::Restart),
+            cascade: Some(TruncateCascadeOption::Cascade)
+        },
+        truncate
+    );
+}
+
+#[test]
+fn parse_truncate_with_table_list() {
+    let truncate = pg_and_generic().verified_stmt(
+        "TRUNCATE TABLE db.table_name, db.other_table_name RESTART IDENTITY CASCADE",
+    );
+    let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+
+    let table_names = vec![
+        table_name.clone(),
+        ObjectName(vec![Ident::new("db"), Ident::new("other_table_name")]),
+    ];
+
+    assert_eq!(
+        Statement::Truncate {
+            table_name,
+            table_names: Some(table_names),
             partitions: None,
             table: true,
             only: true,
@@ -3978,9 +4011,7 @@ fn parse_insert_with_table_alias() {
 
 #[test]
 fn parse_select_order_by_using() {
-    let select = pg().verified_query(
-        "SELECT name, email FROM users ORDER BY name USING >",
-    );
+    let select = pg().verified_query("SELECT name, email FROM users ORDER BY name USING >");
     assert_eq!(
         vec![OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
@@ -3994,9 +4025,7 @@ fn parse_select_order_by_using() {
 
 #[test]
 fn parse_select_order_by_asc() {
-    let select = pg().verified_query(
-        "SELECT name, email FROM users ORDER BY name ASC",
-    );
+    let select = pg().verified_query("SELECT name, email FROM users ORDER BY name ASC");
     assert_eq!(
         vec![OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
@@ -4010,9 +4039,7 @@ fn parse_select_order_by_asc() {
 
 #[test]
 fn parse_select_order_by_desc() {
-    let select = pg().verified_query(
-        "SELECT name, email FROM users ORDER BY name DESC",
-    );
+    let select = pg().verified_query("SELECT name, email FROM users ORDER BY name DESC");
     assert_eq!(
         vec![OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
@@ -4026,9 +4053,8 @@ fn parse_select_order_by_desc() {
 
 #[test]
 fn parse_select_order_by_desc_nulls_first() {
-    let select = pg().verified_query(
-        "SELECT name, email FROM users ORDER BY name DESC NULLS FIRST",
-    );
+    let select =
+        pg().verified_query("SELECT name, email FROM users ORDER BY name DESC NULLS FIRST");
     assert_eq!(
         vec![OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
@@ -4042,9 +4068,8 @@ fn parse_select_order_by_desc_nulls_first() {
 
 #[test]
 fn parse_select_order_by_using_nulls_last() {
-    let select = pg().verified_query(
-        "SELECT name, email FROM users ORDER BY name USING < NULLS LAST",
-    );
+    let select =
+        pg().verified_query("SELECT name, email FROM users ORDER BY name USING < NULLS LAST");
     assert_eq!(
         vec![OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),

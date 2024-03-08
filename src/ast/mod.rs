@@ -174,9 +174,9 @@ pub struct ObjectName(pub Vec<Ident>);
 
 /// Quality of life assistance for devs writing tests.
 /// Useful when needing an object name and you want to just pass a string.
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```
 /// use sqlparser::ast::ObjectName;
 /// let on: ObjectName = "foo.bar".into();
@@ -1726,7 +1726,8 @@ pub enum Statement {
     /// Truncate (Hive)
     Truncate {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_names: Vec<ObjectName>,
+        table_name: ObjectName,
+        table_names: Option<Vec<ObjectName>>,
         partitions: Option<Vec<Expr>>,
         /// TABLE - optional keyword;
         table: bool,
@@ -2734,6 +2735,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Truncate {
+                table_name,
                 table_names,
                 partitions,
                 table,
@@ -2744,13 +2746,18 @@ impl fmt::Display for Statement {
                 let table = if *table { "TABLE " } else { "" };
                 let only = if *only { "ONLY " } else { "" };
 
-                let table_names = table_names
-                    .iter()
-                    .map(|table_name| table_name.to_string()) // replace `to_string()` with the appropriate method if necessary
-                    .collect::<Vec<String>>()
-                    .join(", ");
+                match table_names {
+                    Some(table_names) => {
+                        let table_names = table_names
+                            .iter()
+                            .map(|table_name| table_name.to_string()) // replace `to_string()` with the appropriate method if necessary
+                            .collect::<Vec<String>>()
+                            .join(", ");
 
-                write!(f, "TRUNCATE {table}{only}{table_names}")?;
+                        write!(f, "TRUNCATE {table}{only}{table_names}")?
+                    }
+                    None => write!(f, "TRUNCATE {table}{only}{table_name}")?,
+                };
 
                 if let Some(identity) = identity {
                     match identity {

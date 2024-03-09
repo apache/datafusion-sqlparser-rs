@@ -7985,6 +7985,7 @@ impl<'a> Parser<'a> {
                     match &mut table_and_joins.relation {
                         TableFactor::Derived { alias, .. }
                         | TableFactor::Table { alias, .. }
+                        | TableFactor::SigmaElement { alias, .. }
                         | TableFactor::Function { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::JsonTable { alias, .. }
@@ -8062,6 +8063,18 @@ impl<'a> Parser<'a> {
                 columns,
                 alias,
             })
+        } else if self
+            .maybe_parse(|p| {
+                p.expect_token(&Token::AtSign)?;
+                p.expect_keyword(Keyword::SIGMA)?;
+                Ok(())
+            })
+            .is_some()
+        {
+            self.expect_token(&Token::Period)?;
+            let element = self.parse_identifier(true)?;
+            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            Ok(TableFactor::SigmaElement { element, alias })
         } else {
             let name = self.parse_object_name(true)?;
 

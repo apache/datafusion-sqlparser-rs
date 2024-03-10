@@ -108,6 +108,10 @@ pub trait Dialect: Debug + Any {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '`'
     }
+    /// Return the character used to quote identifiers.
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        None
+    }
     /// Determine if quoted characters are proper for identifier
     fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
         true

@@ -108,6 +108,10 @@ pub trait Dialect: Debug + Any {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '`'
     }
+    /// Return the character used to quote identifiers.
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        None
+    }
     /// Determine if quoted characters are proper for identifier
     fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
         true
@@ -263,6 +267,21 @@ mod tests {
     }
 
     #[test]
+    fn identifier_quote_style() {
+        let tests: Vec<(&dyn Dialect, &str, Option<char>)> = vec![
+            (&GenericDialect {}, "id", None),
+            (&SQLiteDialect {}, "id", Some('`')),
+            (&PostgreSqlDialect {}, "id", Some('"')),
+        ];
+
+        for (dialect, ident, expected) in tests {
+            let actual = dialect.identifier_quote_style(ident);
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
     fn parse_with_wrapped_dialect() {
         /// Wrapper for a dialect. In a real-world example, this wrapper
         /// would tweak the behavior of the dialect. For the test case,
@@ -281,6 +300,10 @@ mod tests {
 
             fn is_delimited_identifier_start(&self, ch: char) -> bool {
                 self.0.is_delimited_identifier_start(ch)
+            }
+
+            fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
+                self.0.identifier_quote_style(identifier)
             }
 
             fn is_proper_identifier_inside_quotes(

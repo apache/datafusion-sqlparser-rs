@@ -96,6 +96,10 @@ pub trait Dialect: Debug + Any {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"'
     }
+    /// Return the character used to quote identifiers.
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        None
+    }
     /// Determine if quoted characters are proper for identifier
     fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
         true
@@ -238,5 +242,107 @@ mod tests {
 
     fn parse_dialect(v: &str) -> Box<dyn Dialect> {
         dialect_from_str(v).unwrap()
+    }
+
+    #[test]
+    fn identifier_quote_style() {
+        let tests: Vec<(&dyn Dialect, &str, Option<char>)> = vec![
+            (&GenericDialect {}, "id", None),
+            (&SQLiteDialect {}, "id", Some('`')),
+            (&PostgreSqlDialect {}, "id", Some('"')),
+        ];
+
+        for (dialect, ident, expected) in tests {
+            let actual = dialect.identifier_quote_style(ident);
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn parse_with_wrapped_dialect() {
+        /// Wrapper for a dialect. In a real-world example, this wrapper
+        /// would tweak the behavior of the dialect. For the test case,
+        /// it wraps all methods unaltered.
+        #[derive(Debug)]
+        struct WrappedDialect(MySqlDialect);
+
+        impl Dialect for WrappedDialect {
+            fn is_identifier_start(&self, ch: char) -> bool {
+                self.0.is_identifier_start(ch)
+            }
+
+            fn is_delimited_identifier_start(&self, ch: char) -> bool {
+                self.0.is_delimited_identifier_start(ch)
+            }
+
+            fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
+                self.0.identifier_quote_style(identifier)
+            }
+
+            fn is_proper_identifier_inside_quotes(
+                &self,
+                chars: std::iter::Peekable<std::str::Chars<'_>>,
+            ) -> bool {
+                self.0.is_proper_identifier_inside_quotes(chars)
+            }
+
+            fn supports_filter_during_aggregation(&self) -> bool {
+                self.0.supports_filter_during_aggregation()
+            }
+
+            fn supports_within_after_array_aggregation(&self) -> bool {
+                self.0.supports_within_after_array_aggregation()
+            }
+
+            fn supports_group_by_expr(&self) -> bool {
+                self.0.supports_group_by_expr()
+            }
+
+            fn supports_substring_from_for_expr(&self) -> bool {
+                self.0.supports_substring_from_for_expr()
+            }
+
+            fn parse_prefix(
+                &self,
+                parser: &mut sqlparser::parser::Parser,
+            ) -> Option<Result<Expr, sqlparser::parser::ParserError>> {
+                self.0.parse_prefix(parser)
+            }
+
+            fn parse_infix(
+                &self,
+                parser: &mut sqlparser::parser::Parser,
+                expr: &Expr,
+                precedence: u8,
+            ) -> Option<Result<Expr, sqlparser::parser::ParserError>> {
+                self.0.parse_infix(parser, expr, precedence)
+            }
+
+            fn get_next_precedence(
+                &self,
+                parser: &sqlparser::parser::Parser,
+            ) -> Option<Result<u8, sqlparser::parser::ParserError>> {
+                self.0.get_next_precedence(parser)
+            }
+
+            fn parse_statement(
+                &self,
+                parser: &mut sqlparser::parser::Parser,
+            ) -> Option<Result<Statement, sqlparser::parser::ParserError>> {
+                self.0.parse_statement(parser)
+            }
+
+            fn is_identifier_part(&self, ch: char) -> bool {
+                self.0.is_identifier_part(ch)
+            }
+        }
+
+        #[allow(clippy::needless_raw_string_hashes)]
+        let statement = r#"SELECT 'Waynes World'"#;
+        let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
+        let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);
+        assert!(res1.is_ok());
+        assert_eq!(res1, res2);
     }
 }

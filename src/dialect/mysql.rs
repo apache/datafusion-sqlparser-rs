@@ -43,6 +43,10 @@ impl Dialect for MySqlDialect {
         ch == '`'
     }
 
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('`')
+    }
+
     fn parse_infix(
         &self,
         parser: &mut crate::parser::Parser,

@@ -470,7 +470,7 @@ impl<'a> Parser<'a> {
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
-                    Ok(Statement::Query(Box::new(self.parse_query()?)))
+                    Ok(Statement::Query(self.parse_boxed_query()?))
                 }
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::ATTACH => Ok(self.parse_attach_database()?),
@@ -530,7 +530,7 @@ impl<'a> Parser<'a> {
             },
             Token::LParen => {
                 self.prev_token();
-                Ok(Statement::Query(Box::new(self.parse_query()?)))
+                Ok(Statement::Query(self.parse_boxed_query()?))
             }
             _ => self.expected("an SQL statement", next_token),
         }
@@ -1084,7 +1084,7 @@ impl<'a> Parser<'a> {
                 let expr =
                     if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
                         self.prev_token();
-                        Expr::Subquery(Box::new(self.parse_query()?))
+                        Expr::Subquery(self.parse_boxed_query()?)
                     } else {
                         let exprs = self.parse_comma_separated(Parser::parse_expr)?;
                         match exprs.len() {
@@ -1461,7 +1461,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let exists_node = Expr::Exists {
             negated,
-            subquery: Box::new(self.parse_query()?),
+            subquery: self.parse_boxed_query()?,
         };
         self.expect_token(&Token::RParen)?;
         Ok(exists_node)
@@ -1670,9 +1670,9 @@ impl<'a> Parser<'a> {
 
     // Parses an array constructed from a subquery
     pub fn parse_array_subquery(&mut self) -> Result<Expr, ParserError> {
-        let query = self.parse_query()?;
+        let query = self.parse_boxed_query()?;
         self.expect_token(&Token::RParen)?;
-        Ok(Expr::ArraySubquery(Box::new(query)))
+        Ok(Expr::ArraySubquery(query))
     }
 
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
@@ -2531,7 +2531,7 @@ impl<'a> Parser<'a> {
             self.prev_token();
             Expr::InSubquery {
                 expr: Box::new(expr),
-                subquery: Box::new(self.parse_query()?),
+                subquery: self.parse_boxed_query()?,
                 negated,
             }
         } else {
@@ -3574,7 +3574,7 @@ impl<'a> Parser<'a> {
         }
 
         self.expect_keyword(Keyword::AS)?;
-        let query = Box::new(self.parse_query()?);
+        let query = self.parse_boxed_query()?;
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
 
         let with_no_schema_binding = dialect_of!(self is RedshiftSqlDialect | GenericDialect)
@@ -3969,7 +3969,7 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword(Keyword::FOR)?;
 
-        let query = Some(Box::new(self.parse_query()?));
+        let query = Some(self.parse_boxed_query()?);
 
         Ok(Statement::Declare {
             stmts: vec![Declare {
@@ -4063,7 +4063,7 @@ impl<'a> Parser<'a> {
                     match self.peek_token().token {
                         Token::Word(w) if w.keyword == Keyword::SELECT => (
                             Some(DeclareType::Cursor),
-                            Some(Box::new(self.parse_query()?)),
+                            Some(self.parse_boxed_query()?),
                             None,
                             None,
                         ),
@@ -4587,7 +4587,7 @@ impl<'a> Parser<'a> {
 
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
-            Some(Box::new(self.parse_query()?))
+            Some(self.parse_boxed_query()?)
         } else {
             None
         };
@@ -5583,7 +5583,7 @@ impl<'a> Parser<'a> {
         let with_options = self.parse_options(Keyword::WITH)?;
 
         self.expect_keyword(Keyword::AS)?;
-        let query = Box::new(self.parse_query()?);
+        let query = self.parse_boxed_query()?;
 
         Ok(Statement::AlterView {
             name,
@@ -5623,7 +5623,7 @@ impl<'a> Parser<'a> {
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let source;
         if self.consume_token(&Token::LParen) {
-            source = CopySource::Query(Box::new(self.parse_query()?));
+            source = CopySource::Query(self.parse_boxed_query()?);
             self.expect_token(&Token::RParen)?;
         } else {
             let table_name = self.parse_object_name(false)?;
@@ -6846,10 +6846,20 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Do the same as `parse_query` but return `Box`'ed `Ok(..)` result
+    /// and therefore caller fn reserves only `poiter size` memory on stack
+    /// instead of `sizeof(Query)` (if the call isn't optimized by compiler)
+    pub fn parse_boxed_query(&mut self) -> Result<Box<Query>, ParserError> {
+        self.parse_query().map(Box::new)
+    }
+
     /// Parse a query expression, i.e. a `SELECT` statement optionally
     /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
+    ///
+    /// If you need `Box<Query>` then maybe there is sense to use `parse_boxed_query`
+    /// due to prevent stack overflow in debug building(to reserve less memory on stack).
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if self.parse_keyword(Keyword::WITH) {
@@ -6889,7 +6899,7 @@ impl<'a> Parser<'a> {
                 for_clause: None,
             })
         } else {
-            let body = Box::new(self.parse_query_body(0)?);
+            let body = self.parse_boxed_query_body(0)?;
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 self.parse_comma_separated(Parser::parse_order_by_expr)?
@@ -7079,7 +7089,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.expect_token(&Token::LParen)?;
-            let query = Box::new(self.parse_query()?);
+            let query = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
             let alias = TableAlias {
                 name,
@@ -7103,7 +7113,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.expect_token(&Token::LParen)?;
-            let query = Box::new(self.parse_query()?);
+            let query = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
             let alias = TableAlias { name, columns };
             Cte {
@@ -7119,6 +7129,13 @@ impl<'a> Parser<'a> {
         Ok(cte)
     }
 
+    /// Do the same as `parse_query_body` but return `Box`'ed `Ok(..)` result
+    /// and therefore caller fn reserves only `poiter size` memory on stack
+    /// instead of `sizeof(SetExpr)` (if the call isn't optimized by compiler)
+    pub fn parse_boxed_query_body(&mut self, precedence: u8) -> Result<Box<SetExpr>, ParserError> {
+        self.parse_query_body(precedence).map(Box::new)
+    }
+
     /// Parse a "query body", which is an expression with roughly the
     /// following grammar:
     /// ```sql
@@ -7127,6 +7144,9 @@ impl<'a> Parser<'a> {
     ///   subquery ::= query_body [ order_by_limit ]
     ///   set_operation ::= query_body { 'UNION' | 'EXCEPT' | 'INTERSECT' } [ 'ALL' ] query_body
     /// ```
+    ///
+    /// If you need `Box<SetExpr>` then maybe there is sense to use `parse_boxed_query_body`
+    /// due to prevent stack overflow in debug building(to reserve less memory on stack).
     pub fn parse_query_body(&mut self, precedence: u8) -> Result<SetExpr, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
@@ -7134,9 +7154,9 @@ impl<'a> Parser<'a> {
             SetExpr::Select(Box::new(self.parse_select()?))
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
-            let subquery = self.parse_query()?;
+            let subquery = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
-            SetExpr::Query(Box::new(subquery))
+            SetExpr::Query(subquery)
         } else if self.parse_keyword(Keyword::VALUES) {
             let is_mysql = dialect_of!(self is MySqlDialect);
             SetExpr::Values(self.parse_values(is_mysql)?)
@@ -7169,7 +7189,7 @@ impl<'a> Parser<'a> {
                 left: Box::new(expr),
                 op: op.unwrap(),
                 set_quantifier,
-                right: Box::new(self.parse_query_body(next_precedence)?),
+                right: self.parse_boxed_query_body(next_precedence)?,
             };
         }
 
@@ -8083,7 +8103,7 @@ impl<'a> Parser<'a> {
         &mut self,
         lateral: IsLateral,
     ) -> Result<TableFactor, ParserError> {
-        let subquery = Box::new(self.parse_query()?);
+        let subquery = self.parse_boxed_query()?;
         self.expect_token(&Token::RParen)?;
         let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(TableFactor::Derived {
@@ -8381,7 +8401,7 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            let source = Box::new(self.parse_query()?);
+            let source = self.parse_boxed_query()?;
             Ok(Statement::Directory {
                 local,
                 path,
@@ -8414,7 +8434,7 @@ impl<'a> Parser<'a> {
                     // Hive allows you to specify columns after partitions as well if you want.
                     let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
 
-                    let source = Some(Box::new(self.parse_query()?));
+                    let source = Some(self.parse_boxed_query()?);
 
                     (columns, partitioned, after_columns, source)
                 };
@@ -8607,11 +8627,11 @@ impl<'a> Parser<'a> {
                     .is_some()
             {
                 self.prev_token();
-                let subquery = self.parse_query()?;
+                let subquery = self.parse_boxed_query()?;
                 self.expect_token(&Token::RParen)?;
                 return Ok((
                     vec![FunctionArg::Unnamed(FunctionArgExpr::from(Expr::Subquery(
-                        Box::new(subquery),
+                        subquery,
                     )))],
                     vec![],
                 ));
@@ -9125,7 +9145,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_unload(&mut self) -> Result<Statement, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let query = self.parse_query()?;
+        let query = self.parse_boxed_query()?;
         self.expect_token(&Token::RParen)?;
 
         self.expect_keyword(Keyword::TO)?;
@@ -9134,7 +9154,7 @@ impl<'a> Parser<'a> {
         let with_options = self.parse_options(Keyword::WITH)?;
 
         Ok(Statement::Unload {
-            query: Box::new(query),
+            query,
             to,
             with: with_options,
         })

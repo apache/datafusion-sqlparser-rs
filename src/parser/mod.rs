@@ -7140,7 +7140,7 @@ impl<'a> Parser<'a> {
             if !is_generic {
                 if let SetExpr::Values(_) = *subquery.body {
                     return Err(ParserError::ParserError(
-                        "VALUES is not a recognized subquery".to_string()
+                        "VALUES is not a recognized subquery".to_string(),
                     ));
                 }
             }
@@ -8500,7 +8500,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_insert_partition(
-        &mut self
+        &mut self,
     ) -> Result<(Option<Vec<Expr>>, Vec<Ident>), ParserError> {
         if self.parse_keyword(Keyword::PARTITION) {
             self.expect_token(&Token::LParen)?;

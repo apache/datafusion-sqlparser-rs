@@ -7139,9 +7139,9 @@ impl<'a> Parser<'a> {
             let is_generic = dialect_of!(self is GenericDialect);
             if !is_generic {
                 if let SetExpr::Values(_) = *subquery.body {
-                    return Err(ParserError::ParserError(format!(
-                        "VALUES is not a recognized subquery"
-                    )))
+                    return Err(ParserError::ParserError(
+                        "VALUES is not a recognized subquery".to_string()
+                    ));
                 }
             }
 
@@ -8413,19 +8413,18 @@ impl<'a> Parser<'a> {
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
-            let (columns, partitioned, after_columns, source) = if self
-                .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
-            {
-                (vec![], None, vec![], None)
-            } else {
-                let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+            let (columns, partitioned, after_columns, source) =
+                if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
+                    (vec![], None, vec![], None)
+                } else {
+                    let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
-                let (partitioned, after_columns) = self.parse_insert_partition()?;
+                    let (partitioned, after_columns) = self.parse_insert_partition()?;
 
-                let source = Some(Box::new(self.parse_query()?));
+                    let source = Some(Box::new(self.parse_query()?));
 
-                (columns, partitioned, after_columns, source)
-            };
+                    (columns, partitioned, after_columns, source)
+                };
 
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
@@ -8500,7 +8499,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_insert_partition(&mut self) -> Result<(Option<Vec<Expr>>, Vec<Ident>), ParserError> {
+    pub fn parse_insert_partition(
+        &mut self
+    ) -> Result<(Option<Vec<Expr>>, Vec<Ident>), ParserError> {
         if self.parse_keyword(Keyword::PARTITION) {
             self.expect_token(&Token::LParen)?;
             let partition_cols = self.parse_comma_separated(Parser::parse_expr)?;

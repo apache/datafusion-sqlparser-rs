@@ -6872,11 +6872,13 @@ impl<'a> Parser<'a> {
         };
 
         if self.parse_keyword(Keyword::INSERT) {
-            let insert = self.parse_insert()?;
+            let body = self
+                .parse_insert()
+                .map(|insert| Box::new(SetExpr::Insert(insert)))?;
 
             Ok(Query {
                 with,
-                body: Box::new(SetExpr::Insert(insert)),
+                body,
                 limit: None,
                 limit_by: vec![],
                 order_by: vec![],
@@ -6886,10 +6888,13 @@ impl<'a> Parser<'a> {
                 for_clause: None,
             })
         } else if self.parse_keyword(Keyword::UPDATE) {
-            let update = self.parse_update()?;
+            let body = self
+                .parse_update()
+                .map(|update| Box::new(SetExpr::Update(update)))?;
+
             Ok(Query {
                 with,
-                body: Box::new(SetExpr::Update(update)),
+                body,
                 limit: None,
                 limit_by: vec![],
                 order_by: vec![],
@@ -7151,7 +7156,7 @@ impl<'a> Parser<'a> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
         let mut expr = if self.parse_keyword(Keyword::SELECT) {
-            SetExpr::Select(Box::new(self.parse_select()?))
+            SetExpr::Select(self.parse_select().map(Box::new)?)
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
             let subquery = self.parse_boxed_query()?;

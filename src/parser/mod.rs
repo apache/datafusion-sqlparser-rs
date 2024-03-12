@@ -6861,6 +6861,45 @@ impl<'a> Parser<'a> {
     /// If you need `Box<Query>` then maybe there is sense to use `parse_boxed_query`
     /// due to prevent stack overflow in debug building(to reserve less memory on stack).
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {
+        mod parse_query {
+            use super::*;
+            type ReturnTy = Result<Query, ParserError>;
+            pub fn insert_case(parser: &mut Parser<'_>, with: Option<With>) -> ReturnTy {
+                let body = parser
+                    .parse_insert()
+                    .map(|insert| Box::new(SetExpr::Insert(insert)))?;
+
+                Ok(Query {
+                    with,
+                    body,
+                    limit: None,
+                    limit_by: vec![],
+                    order_by: vec![],
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                })
+            }
+            pub fn update_case(parser: &mut Parser<'_>, with: Option<With>) -> ReturnTy {
+                let body = parser
+                    .parse_update()
+                    .map(|update| Box::new(SetExpr::Update(update)))?;
+
+                Ok(Query {
+                    with,
+                    body,
+                    limit: None,
+                    limit_by: vec![],
+                    order_by: vec![],
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                })
+            }
+        }
+
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if self.parse_keyword(Keyword::WITH) {
             Some(With {
@@ -6870,39 +6909,10 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
         if self.parse_keyword(Keyword::INSERT) {
-            let body = self
-                .parse_insert()
-                .map(|insert| Box::new(SetExpr::Insert(insert)))?;
-
-            Ok(Query {
-                with,
-                body,
-                limit: None,
-                limit_by: vec![],
-                order_by: vec![],
-                offset: None,
-                fetch: None,
-                locks: vec![],
-                for_clause: None,
-            })
+            parse_query::insert_case(self, with)
         } else if self.parse_keyword(Keyword::UPDATE) {
-            let body = self
-                .parse_update()
-                .map(|update| Box::new(SetExpr::Update(update)))?;
-
-            Ok(Query {
-                with,
-                body,
-                limit: None,
-                limit_by: vec![],
-                order_by: vec![],
-                offset: None,
-                fetch: None,
-                locks: vec![],
-                for_clause: None,
-            })
+            parse_query::update_case(self, with)
         } else {
             let body = self.parse_boxed_query_body(0)?;
 

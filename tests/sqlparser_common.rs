@@ -4094,7 +4094,10 @@ fn parse_window_functions() {
                GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(7, select.projection.len());
+
+    const EXPECTED_PROJ_QTY: usize = 7;
+    assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
+
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
@@ -4118,7 +4121,7 @@ fn parse_window_functions() {
         expr_from_projection(&select.projection[0])
     );
 
-    for i in 0..7 {
+    for i in 0..EXPECTED_PROJ_QTY {
         assert!(matches!(
             expr_from_projection(&select.projection[i]),
             Expr::Function(Function {
@@ -4152,8 +4155,12 @@ fn parse_named_window_functions() {
     supported_dialects.verified_stmt(sql);
 
     let select = verified_only_select(sql);
-    assert_eq!(2, select.projection.len());
-    for (i, win_name) in ["w", "win"].iter().enumerate() {
+
+    const EXPECTED_PROJ_QTY: usize = 2;
+    assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
+    
+    const EXPECTED_WIN_NAMES: [&str; 2] = ["w", "win"];
+    for (i, win_name) in EXPECTED_WIN_NAMES.iter().enumerate() {
         assert!(matches!(
             expr_from_projection(&select.projection[i]),
             Expr::Function(Function {

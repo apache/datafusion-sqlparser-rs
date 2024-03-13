@@ -492,21 +492,21 @@ pub enum Expr {
         negated: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
-        escape_char: Option<char>,
+        escape_char: Option<String>,
     },
     /// `ILIKE` (case-insensitive `LIKE`)
     ILike {
         negated: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
-        escape_char: Option<char>,
+        escape_char: Option<String>,
     },
     /// SIMILAR TO regex
     SimilarTo {
         negated: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
-        escape_char: Option<char>,
+        escape_char: Option<String>,
     },
     /// MySQL: RLIKE regex or REGEXP regex
     RLike {

@@ -2584,9 +2584,9 @@ impl<'a> Parser<'a> {
     }
 
     /// parse the ESCAPE CHAR portion of LIKE, ILIKE, and SIMILAR TO
-    pub fn parse_escape_char(&mut self) -> Result<Option<char>, ParserError> {
+    pub fn parse_escape_char(&mut self) -> Result<Option<String>, ParserError> {
         if self.parse_keyword(Keyword::ESCAPE) {
-            Ok(Some(self.parse_literal_char()?))
+            Ok(Some(self.parse_literal_string()?))
         } else {
             Ok(None)
         }

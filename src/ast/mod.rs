@@ -559,13 +559,18 @@ pub enum Expr {
     /// ```sql
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     /// ```
+    /// or
+    /// ```sql
+    /// SUBSTRING(<expr>, <expr>, <expr>)
+    /// ```
     Substring {
         expr: Box<Expr>,
         substring_from: Option<Box<Expr>>,
         substring_for: Option<Box<Expr>>,
 
-        // Some dialects use `SUBSTRING(expr [FROM start] [FOR len])` syntax while others omit FROM,
-        // FOR keywords (e.g. Microsoft SQL Server). This flags is used for formatting.
+        /// false if the expression is represented using the `SUBSTRING(expr [FROM start] [FOR len])` syntax
+        /// true if the expression is represented using the `SUBSTRING(expr, start, len)` syntax
+        /// This flag is used for formatting.
         special: bool,
     },
     /// ```sql

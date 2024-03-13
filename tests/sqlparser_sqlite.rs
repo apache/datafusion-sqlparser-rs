@@ -413,6 +413,18 @@ fn parse_single_quoted_identified() {
     sqlite().verified_only_select("SELECT 't'.*, t.'x' FROM 't'");
     // TODO: add support for select 't'.x
 }
+
+#[test]
+fn parse_substring() {
+    // SQLite supports the SUBSTRING function since v3.34, but does not support the SQL standard
+    // SUBSTRING(expr FROM start FOR length) syntax.
+    // https://www.sqlite.org/lang_corefunc.html#substr
+    sqlite().verified_only_select("SELECT SUBSTRING('SQLITE', 3, 4)");
+    sqlite().verified_only_select("SELECT SUBSTR('SQLITE', 3, 4)");
+    sqlite().verified_only_select("SELECT SUBSTRING('SQLITE', 3)");
+    sqlite().verified_only_select("SELECT SUBSTR('SQLITE', 3)");
+}
+
 #[test]
 fn parse_window_function_with_filter() {
     for func_name in [

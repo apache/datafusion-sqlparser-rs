@@ -135,10 +135,6 @@ pub trait Dialect: Debug + Any {
     fn supports_group_by_expr(&self) -> bool {
         false
     }
-    /// Returns true if the dialect supports `SUBSTRING(expr [FROM start] [FOR len])` expressions
-    fn supports_substring_from_for_expr(&self) -> bool {
-        true
-    }
     /// Returns true if the dialect supports `(NOT) IN ()` expressions
     fn supports_in_empty_list(&self) -> bool {
         false
@@ -323,10 +319,6 @@ mod tests {
 
             fn supports_group_by_expr(&self) -> bool {
                 self.0.supports_group_by_expr()
-            }
-
-            fn supports_substring_from_for_expr(&self) -> bool {
-                self.0.supports_substring_from_for_expr()
             }
 
             fn supports_in_empty_list(&self) -> bool {

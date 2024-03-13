@@ -1911,7 +1911,7 @@ fn parse_substring_in_select() {
     let sql = "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test";
     match mysql().one_statement_parses_to(
         sql,
-        "SELECT DISTINCT SUBSTRING(description FROM 0 FOR 1) FROM test",
+        "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test",
     ) {
         Statement::Query(query) => {
             assert_eq!(
@@ -1927,7 +1927,7 @@ fn parse_substring_in_select() {
                             })),
                             substring_from: Some(Box::new(Expr::Value(number("0")))),
                             substring_for: Some(Box::new(Expr::Value(number("1")))),
-                            special: false,
+                            special: true,
                         })],
                         into: None,
                         from: vec![TableWithJoins {

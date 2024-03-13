@@ -5761,45 +5761,12 @@ fn parse_scalar_subqueries() {
 
 #[test]
 fn parse_substring() {
-    let from_for_supported_dialects = TestedDialects {
-        dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(HiveDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(MySqlDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(SQLiteDialect {}),
-            Box::new(DuckDbDialect {}),
-        ],
-        options: None,
-    };
-
-    let from_for_unsupported_dialects = TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {})],
-        options: None,
-    };
-
-    from_for_supported_dialects
-        .one_statement_parses_to("SELECT SUBSTRING('1')", "SELECT SUBSTRING('1')");
-
-    from_for_supported_dialects.one_statement_parses_to(
-        "SELECT SUBSTRING('1' FROM 1)",
-        "SELECT SUBSTRING('1' FROM 1)",
-    );
-
-    from_for_supported_dialects.one_statement_parses_to(
-        "SELECT SUBSTRING('1' FROM 1 FOR 3)",
-        "SELECT SUBSTRING('1' FROM 1 FOR 3)",
-    );
-
-    from_for_unsupported_dialects
-        .one_statement_parses_to("SELECT SUBSTRING('1', 1, 3)", "SELECT SUBSTRING('1', 1, 3)");
-
-    from_for_supported_dialects
-        .one_statement_parses_to("SELECT SUBSTRING('1' FOR 3)", "SELECT SUBSTRING('1' FOR 3)");
+    verified_stmt("SELECT SUBSTRING('1')");
+    verified_stmt("SELECT SUBSTRING('1' FROM 1)");
+    verified_stmt("SELECT SUBSTRING('1' FROM 1 FOR 3)");
+    verified_stmt("SELECT SUBSTRING('1', 1, 3)");
+    verified_stmt("SELECT SUBSTRING('1', 1)");
+    verified_stmt("SELECT SUBSTRING('1' FOR 3)");
 }
 
 #[test]

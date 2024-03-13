@@ -1529,19 +1529,13 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         let mut from_expr = None;
-        let mut special = false;
-        if self.parse_keyword(Keyword::FROM) {
-            from_expr = Some(self.parse_expr()?);
-        } else if self.consume_token(&Token::Comma) {
-            special = true;
+        let special = self.consume_token(&Token::Comma);
+        if special || self.parse_keyword(Keyword::FROM) {
             from_expr = Some(self.parse_expr()?);
         }
 
         let mut to_expr = None;
-        if self.parse_keyword(Keyword::FOR) {
-            to_expr = Some(self.parse_expr()?);
-        } else if self.consume_token(&Token::Comma) {
-            special = true;
+        if self.parse_keyword(Keyword::FOR) || self.consume_token(&Token::Comma) {
             to_expr = Some(self.parse_expr()?);
         }
         self.expect_token(&Token::RParen)?;

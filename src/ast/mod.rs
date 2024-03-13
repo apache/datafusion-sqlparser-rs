@@ -570,7 +570,7 @@ pub enum Expr {
 
         /// false if the expression is represented using the `SUBSTRING(expr [FROM start] [FOR len])` syntax
         /// true if the expression is represented using the `SUBSTRING(expr, start, len)` syntax
-        /// This flags is used for formatting.
+        /// This flag is used for formatting.
         special: bool,
     },
     /// ```sql

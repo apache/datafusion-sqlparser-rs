@@ -8523,3 +8523,45 @@ fn test_buffer_reuse() {
     p.parse_statements().unwrap();
     let _ = p.into_tokens();
 }
+
+#[test]
+fn parse_map_access_expr() {
+    let sql = "users[-1][safe_offset(2)]";
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(ClickHouseDialect {})],
+        options: None,
+    };
+    let expr = dialects.verified_expr(sql);
+    let expected = Expr::MapAccess {
+        column: Expr::Identifier(Ident::new("users")).into(),
+        keys: vec![
+            MapAccessKey {
+                key: Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: Expr::Value(number("1")).into(),
+                },
+                syntax: MapAccessSyntax::Bracket,
+            },
+            MapAccessKey {
+                key: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("safe_offset")]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        number("2"),
+                    )))],
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                }),
+                syntax: MapAccessSyntax::Bracket,
+            },
+        ],
+    };
+    assert_eq!(expr, expected);
+
+    for sql in ["users[1]", "a[array_length(b) - 1 + 2][c + 3][d * 4]"] {
+        let _ = dialects.verified_expr(sql);
+    }
+}

@@ -1357,39 +1357,48 @@ fn bigquery_and_generic() -> TestedDialects {
 }
 
 #[test]
-fn parse_map_access_offset() {
-    let sql = "SELECT d[offset(0)]";
-    let _select = bigquery().verified_only_select(sql);
-    assert_eq!(
-        _select.projection[0],
-        SelectItem::UnnamedExpr(Expr::MapAccess {
-            column: Box::new(Expr::Identifier(Ident {
-                value: "d".to_string(),
-                quote_style: None,
-            })),
-            keys: vec![Expr::Function(Function {
-                name: ObjectName(vec!["offset".into()]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    number("0")
-                ))),],
-                null_treatment: None,
-                filter: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-            })],
-        })
-    );
+fn parse_map_access_expr() {
+    let sql = "users[-1][safe_offset(2)].a.b";
+    let expr = bigquery().verified_expr(sql);
 
-    // test other operators
-    for sql in [
-        "SELECT d[SAFE_OFFSET(0)]",
-        "SELECT d[ORDINAL(0)]",
-        "SELECT d[SAFE_ORDINAL(0)]",
-    ] {
-        bigquery().verified_only_select(sql);
+    fn map_access_key(key: Expr, syntax: MapAccessSyntax) -> MapAccessKey {
+        MapAccessKey { key, syntax }
     }
+    let expected = Expr::MapAccess {
+        column: Expr::Identifier(Ident::new("users")).into(),
+        keys: vec![
+            map_access_key(
+                Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: Expr::Value(number("1")).into(),
+                },
+                MapAccessSyntax::Bracket,
+            ),
+            map_access_key(
+                Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("safe_offset")]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        number("2"),
+                    )))],
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                }),
+                MapAccessSyntax::Bracket,
+            ),
+            map_access_key(
+                Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("b")]),
+                MapAccessSyntax::Period,
+            ),
+        ],
+    };
+    assert_eq!(expr, expected);
+
+    let sql = "SELECT myfunc()[-1].a[SAFE_OFFSET(2)].b";
+    bigquery().verified_only_select(sql);
 }
 
 #[test]

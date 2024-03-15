@@ -5275,10 +5275,14 @@ impl<'a> Parser<'a> {
                     };
 
                     let column_def = self.parse_column_def()?;
+
+                    let column_position = self.parse_column_position()?;
+
                     AlterTableOperation::AddColumn {
                         column_keyword,
                         if_not_exists,
                         column_def,
+                        column_position,
                     }
                 }
             }
@@ -5407,11 +5411,14 @@ impl<'a> Parser<'a> {
                 options.push(option);
             }
 
+            let column_position = self.parse_column_position()?;
+
             AlterTableOperation::ChangeColumn {
                 old_name,
                 new_name,
                 data_type,
                 options,
+                column_position,
             }
         } else if self.parse_keyword(Keyword::ALTER) {
             let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
@@ -9467,6 +9474,21 @@ impl<'a> Parser<'a> {
         let partitions = self.parse_comma_separated(|p| p.parse_identifier(false))?;
         self.expect_token(&Token::RParen)?;
         Ok(partitions)
+    }
+
+    fn parse_column_position(&mut self) -> Result<Option<MySQLColumnPosition>, ParserError> {
+        if dialect_of!(self is MySqlDialect | GenericDialect) {
+            if self.parse_keyword(Keyword::FIRST) {
+                Ok(Some(MySQLColumnPosition::First))
+            } else if self.parse_keyword(Keyword::AFTER) {
+                let ident = self.parse_identifier(false)?;
+                Ok(Some(MySQLColumnPosition::After(ident)))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     /// Consume the parser and return its underlying token buffer

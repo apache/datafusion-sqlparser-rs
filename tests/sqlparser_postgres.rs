@@ -1079,6 +1079,7 @@ fn parse_copy_to() {
                     group_by: GroupByExpr::Expressions(vec![]),
                     having: None,
                     named_window: vec![],
+                    window_before_qualify: false,
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -2165,6 +2166,7 @@ fn parse_array_subquery_expr() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    window_before_qualify: false,
                     value_table_mode: None,
                 }))),
                 right: Box::new(SetExpr::Select(Box::new(Select {
@@ -2182,6 +2184,7 @@ fn parse_array_subquery_expr() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    window_before_qualify: false,
                     value_table_mode: None,
                 }))),
             }),

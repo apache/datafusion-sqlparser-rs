@@ -2645,6 +2645,58 @@ fn parse_window_rank_function() {
 }
 
 #[test]
+fn parse_window_function_null_treatment_arg() {
+    let dialects = all_dialects_where(|d| d.supports_window_function_null_treatment_arg());
+    let sql = "SELECT \
+        FIRST_VALUE(a IGNORE NULLS) OVER (), \
+        FIRST_VALUE(b RESPECT NULLS) OVER () \
+    FROM mytable";
+    let Select { projection, .. } = dialects.verified_only_select(sql);
+    for (i, (expected_expr, expected_null_treatment)) in [
+        ("a", NullTreatment::IgnoreNulls),
+        ("b", NullTreatment::RespectNulls),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let SelectItem::UnnamedExpr(Expr::Function(actual)) = &projection[i] else {
+            unreachable!()
+        };
+        assert_eq!(ObjectName(vec![Ident::new("FIRST_VALUE")]), actual.name);
+        assert!(actual.order_by.is_empty());
+        assert_eq!(1, actual.args.len());
+        let FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(actual_expr))) =
+            &actual.args[0]
+        else {
+            unreachable!()
+        };
+        assert_eq!(&Ident::new(expected_expr), actual_expr);
+        let Some(NullTreatmentType::FunctionArg(actual_null_treatment)) = actual.null_treatment
+        else {
+            unreachable!()
+        };
+        assert_eq!(expected_null_treatment, actual_null_treatment);
+    }
+
+    let sql = "SELECT FIRST_VALUE(a ORDER BY b IGNORE NULLS) OVER () FROM t1";
+    dialects.verified_stmt(sql);
+
+    let sql = "SELECT LAG(1 IGNORE NULLS) IGNORE NULLS OVER () FROM t1";
+    assert_eq!(
+        dialects.parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected end of statement, found: NULLS".to_string())
+    );
+
+    let sql = "SELECT LAG(1 IGNORE NULLS) IGNORE NULLS OVER () FROM t1";
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_window_function_null_treatment_arg())
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("Expected ), found: IGNORE".to_string())
+    );
+}
+
+#[test]
 fn parse_create_table() {
     let sql = "CREATE TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

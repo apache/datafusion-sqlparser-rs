@@ -51,6 +51,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_window_function_null_treatment_arg(&self) -> bool {
+        true
+    }
+
     fn supports_dictionary_syntax(&self) -> bool {
         true
     }

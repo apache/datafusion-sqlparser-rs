@@ -13,11 +13,16 @@
 //! SQL Abstract Syntax Tree (AST) types
 #[cfg(not(feature = "std"))]
 use alloc::{
+    borrow::Cow,
     boxed::Box,
     format,
     string::{String, ToString},
     vec::Vec,
 };
+
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
 use core::fmt::{self, Display};
 
 #[cfg(feature = "serde")]
@@ -1403,6 +1408,35 @@ impl fmt::Display for NullTreatment {
             NullTreatment::IgnoreNulls => "IGNORE NULLS",
             NullTreatment::RespectNulls => "RESPECT NULLS",
         })
+    }
+}
+
+/// Specifies Ignore / Respect NULL within window functions.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum NullTreatmentType {
+    /// The declaration is part of the function's arguments.
+    ///
+    /// ```sql
+    /// FIRST_VALUE(x IGNORE NULLS) OVER ()
+    /// ```
+    FunctionArg(NullTreatment),
+    /// The declaration occurs after the function call.
+    ///
+    /// ```sql
+    /// FIRST_VALUE(x) IGNORE NULLS OVER ()
+    /// ```
+    AfterFunction(NullTreatment),
+}
+
+impl Display for NullTreatmentType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let null_treatment = match self {
+            NullTreatmentType::FunctionArg(n) => n,
+            NullTreatmentType::AfterFunction(n) => n,
+        };
+        write!(f, "{null_treatment}")
     }
 }
 
@@ -4787,15 +4821,18 @@ pub struct Function {
     pub args: Vec<FunctionArg>,
     /// e.g. `x > 5` in `COUNT(x) FILTER (WHERE x > 5)`
     pub filter: Option<Box<Expr>>,
-    // Snowflake/MSSQL supports different options for null treatment in rank functions
-    pub null_treatment: Option<NullTreatment>,
+    /// Specifies Ignore / Respect NULL within window functions.
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions/first_value)
+    pub null_treatment: Option<NullTreatmentType>,
     pub over: Option<WindowType>,
-    // aggregate functions may specify eg `COUNT(DISTINCT x)`
+    /// aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
-    // Some functions must be called without trailing parentheses, for example Postgres
-    // do it for current_catalog, current_schema, etc. This flags is used for formatting.
+    /// Some functions must be called without trailing parentheses, for example Postgres
+    /// do it for current_catalog, current_schema, etc. This flags is used for formatting.
     pub special: bool,
-    // Required ordering for the function (if empty, there is no requirement).
+    /// Required ordering for the function (if empty, there is no requirement).
     pub order_by: Vec<OrderByExpr>,
 }
 
@@ -4830,19 +4867,25 @@ impl fmt::Display for Function {
             };
             write!(
                 f,
-                "{}({}{}{order_by}{})",
+                "{}({}{}{order_by}{}{})",
                 self.name,
                 if self.distinct { "DISTINCT " } else { "" },
                 display_comma_separated(&self.args),
                 display_comma_separated(&self.order_by),
+                match self.null_treatment {
+                    Some(NullTreatmentType::FunctionArg(null_treatment)) => {
+                        Cow::from(format!(" {null_treatment}"))
+                    }
+                    _ => Cow::from(""),
+                }
             )?;
 
             if let Some(filter_cond) = &self.filter {
                 write!(f, " FILTER (WHERE {filter_cond})")?;
             }
 
-            if let Some(o) = &self.null_treatment {
-                write!(f, " {o}")?;
+            if let Some(NullTreatmentType::AfterFunction(null_treatment)) = &self.null_treatment {
+                write!(f, " {null_treatment}")?;
             }
 
             if let Some(o) = &self.over {

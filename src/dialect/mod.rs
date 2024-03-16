@@ -93,7 +93,7 @@ macro_rules! dialect_of {
 pub trait Dialect: Debug + Any {
     /// Determine the [`TypeId`] of this dialect.
     ///
-    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overriden
+    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overridden
     /// by dialects that behave like other dialects
     /// (for example when wrapping a dialect).
     fn dialect(&self) -> TypeId {

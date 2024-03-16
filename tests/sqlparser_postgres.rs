@@ -3305,7 +3305,7 @@ fn parse_create_function() {
 
     let sql = "CREATE OR REPLACE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL IMMUTABLE RETURN a + b";
     assert_eq!(
-        pg().verified_stmt(sql),
+        pg_and_generic().verified_stmt(sql),
         Statement::CreateFunction {
             or_replace: true,
             temporary: false,

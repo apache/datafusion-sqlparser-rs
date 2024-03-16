@@ -5954,7 +5954,7 @@ impl<'a> Parser<'a> {
     pub fn parse_function_definition(&mut self) -> Result<FunctionDefinition, ParserError> {
         let peek_token = self.peek_token();
         match peek_token.token {
-            Token::DollarQuotedString(value) if dialect_of!(self is PostgreSqlDialect) => {
+            Token::DollarQuotedString(value) if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
                 self.next_token();
                 Ok(FunctionDefinition::DoubleDollarDef(value.value))
             }

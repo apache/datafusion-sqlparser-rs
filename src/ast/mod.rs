@@ -543,6 +543,10 @@ pub enum Expr {
         charset: Option<ObjectName>,
         /// whether the target comes before the expr (MSSQL syntax)
         target_before_value: bool,
+        /// How to translate the expression.
+        ///
+        /// [MSSQL]: https://learn.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql?view=sql-server-ver16#style
+        styles: Vec<Expr>,
     },
     /// `CAST` an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
@@ -971,6 +975,7 @@ impl fmt::Display for Expr {
                 target_before_value,
                 data_type,
                 charset,
+                styles,
             } => {
                 write!(f, "CONVERT(")?;
                 if let Some(data_type) = data_type {
@@ -986,6 +991,9 @@ impl fmt::Display for Expr {
                 } else {
                     write!(f, "{expr}") // This should never happen
                 }?;
+                if !styles.is_empty() {
+                    write!(f, ", {}", display_comma_separated(styles))?;
+                }
                 write!(f, ")")
             }
             Expr::Cast {

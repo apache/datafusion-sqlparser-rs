@@ -1886,23 +1886,21 @@ fn parse_alter_table_add_column() {
             location: _,
         } => {
             assert_eq!(name.to_string(), "tab");
-            assert_eq!(if_exists, false);
-            assert_eq!(only, false);
+            assert!(!if_exists);
+            assert!(!only);
             assert_eq!(
                 operations,
-                vec![
-                    AlterTableOperation::AddColumn {
-                        column_keyword: true,
-                        if_not_exists: false,
-                        column_def: ColumnDef {
-                            name: "b".into(),
-                            data_type: DataType::Int(None),
-                            collation: None,
-                            options: vec![],
-                        },
-                        column_position: Some(MySQLColumnPosition::First),
+                vec![AlterTableOperation::AddColumn {
+                    column_keyword: true,
+                    if_not_exists: false,
+                    column_def: ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
                     },
-                ]
+                    column_position: Some(MySQLColumnPosition::First),
+                },]
             );
         }
         _ => unreachable!(),
@@ -1917,25 +1915,24 @@ fn parse_alter_table_add_column() {
             location: _,
         } => {
             assert_eq!(name.to_string(), "tab");
-            assert_eq!(if_exists, false);
-            assert_eq!(only, false);
+            assert!(!if_exists);
+            assert!(!only);
             assert_eq!(
                 operations,
-                vec![
-                    AlterTableOperation::AddColumn {
-                        column_keyword: true,
-                        if_not_exists: false,
-                        column_def: ColumnDef {
-                            name: "b".into(),
-                            data_type: DataType::Int(None),
-                            collation: None,
-                            options: vec![],
-                        },
-                        column_position: Some(MySQLColumnPosition::After(
-                            Ident {value: String::from("foo"), quote_style :None}
-                        )),
+                vec![AlterTableOperation::AddColumn {
+                    column_keyword: true,
+                    if_not_exists: false,
+                    column_def: ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
                     },
-                ]
+                    column_position: Some(MySQLColumnPosition::After(Ident {
+                        value: String::from("foo"),
+                        quote_style: None
+                    })),
+                },]
             );
         }
         _ => unreachable!(),
@@ -1944,7 +1941,9 @@ fn parse_alter_table_add_column() {
 
 #[test]
 fn parse_alter_table_add_columns() {
-    match mysql().verified_stmt("ALTER TABLE tab ADD COLUMN a TEXT FIRST, ADD COLUMN b INT AFTER foo") {
+    match mysql()
+        .verified_stmt("ALTER TABLE tab ADD COLUMN a TEXT FIRST, ADD COLUMN b INT AFTER foo")
+    {
         Statement::AlterTable {
             name,
             if_exists,
@@ -1953,8 +1952,8 @@ fn parse_alter_table_add_columns() {
             location: _,
         } => {
             assert_eq!(name.to_string(), "tab");
-            assert_eq!(if_exists, false);
-            assert_eq!(only, false);
+            assert!(!if_exists);
+            assert!(!only);
             assert_eq!(
                 operations,
                 vec![
@@ -1978,9 +1977,10 @@ fn parse_alter_table_add_columns() {
                             collation: None,
                             options: vec![],
                         },
-                        column_position: Some(MySQLColumnPosition::After(
-                            Ident {value: String::from("foo"), quote_style :None}
-                        )),
+                        column_position: Some(MySQLColumnPosition::After(Ident {
+                            value: String::from("foo"),
+                            quote_style: None,
+                        })),
                     },
                 ]
             );
@@ -2037,16 +2037,15 @@ fn parse_alter_table_change_column() {
         new_name: Ident::new("desc"),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
-        column_position: Some(MySQLColumnPosition::After(
-            Ident{ value: String::from("foo"), quote_style: None}
-        )),
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("foo"),
+            quote_style: None,
+        })),
     };
     let sql4 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL AFTER foo";
     let operation =
         alter_table_op_with_name(mysql().verified_stmt(sql4), &expected_name.to_string());
     assert_eq!(expected_operation, operation);
-
-
 }
 
 #[test]
@@ -2077,9 +2076,10 @@ fn parse_alter_table_change_column_with_column_position() {
         new_name: Ident::new("desc"),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
-        column_position: Some(MySQLColumnPosition::After(
-            Ident{value: String::from("total_count"), quote_style: None}
-        )),
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("total_count"),
+            quote_style: None,
+        })),
     };
 
     let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL AFTER total_count";
@@ -2093,8 +2093,6 @@ fn parse_alter_table_change_column_with_column_position() {
         &expected_name.to_string(),
     );
     assert_eq!(expected_operation_after, operation);
-
-
 }
 
 #[test]

@@ -5928,14 +5928,10 @@ impl fmt::Display for HiveSetLocation {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(
-feature = "visitor",
-derive(Visit, VisitMut),
-visit(with = "visit_statement")
-)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum MySQLColumnPosition {
     First,
-    After(Ident)
+    After(Ident),
 }
 
 impl Display for MySQLColumnPosition {

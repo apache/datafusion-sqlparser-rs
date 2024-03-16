@@ -25,8 +25,8 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName, SequenceOptions,
-    SqlOption, MySQLColumnPosition
+    display_comma_separated, display_separated, DataType, Expr, Ident, MySQLColumnPosition,
+    ObjectName, SequenceOptions, SqlOption,
 };
 use crate::tokenizer::Token;
 

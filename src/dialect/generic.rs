@@ -50,4 +50,8 @@ impl Dialect for GenericDialect {
     fn supports_dictionary_syntax(&self) -> bool {
         true
     }
+
+    fn supports_window_clause_named_window_reference(&self) -> bool {
+        true
+    }
 }

@@ -143,6 +143,17 @@ pub trait Dialect: Debug + Any {
     fn supports_filter_during_aggregation(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports referencing another named window
+    /// within a window clause declaration.
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT * FROM mytable
+    /// WINDOW mynamed_window AS another_named_window
+    /// ```
+    fn supports_window_clause_named_window_reference(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect supports `ARRAY_AGG() [WITHIN GROUP (ORDER BY)]` expressions.
     /// Otherwise, the dialect should expect an `ORDER BY` without the `WITHIN GROUP` clause, e.g. [`ANSI`]
     ///

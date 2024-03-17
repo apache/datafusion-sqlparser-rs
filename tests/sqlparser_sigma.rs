@@ -15,7 +15,7 @@ fn snowflake() -> TestedDialects {
 }
 #[test]
 fn parse_sigma() {
-    let sql = "SELECT my_column FROM @sigma.my_element";
+    let sql = "SELECT my_column FROM @sigma.my_element WHERE my_column <> @sigma.param_filter";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         select.from,
@@ -26,5 +26,13 @@ fn parse_sigma() {
             },
             joins: vec![]
         }]
+    );
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("my_column"))),
+            op: BinaryOperator::NotEq,
+            right: Box::new(Expr::SigmaParameter(Ident::new("param_filter"))),
+        })
     )
 }

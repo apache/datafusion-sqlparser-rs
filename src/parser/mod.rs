@@ -8067,14 +8067,7 @@ impl<'a> Parser<'a> {
                 columns,
                 alias,
             })
-        } else if self
-            .maybe_parse(|p| {
-                p.expect_token(&Token::AtSign)?;
-                p.expect_keyword(Keyword::SIGMA)?;
-                Ok(())
-            })
-            .is_some()
-        {
+        } else if self.parse_sigma_directive() {
             self.expect_token(&Token::Period)?;
             let element = self.parse_identifier(true)?;
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
@@ -8133,6 +8126,15 @@ impl<'a> Parser<'a> {
 
             Ok(table)
         }
+    }
+
+    pub fn parse_sigma_directive(&mut self) -> bool {
+        self.maybe_parse(|p| {
+            p.expect_token(&Token::AtSign)?;
+            p.expect_keyword(Keyword::SIGMA)?;
+            Ok(())
+        })
+        .is_some()
     }
 
     /// Parse a given table version specifier.

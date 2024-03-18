@@ -612,6 +612,7 @@ define_keywords!(
     SETS,
     SHARE,
     SHOW,
+    SIGMA,
     SIMILAR,
     SKIP,
     SLOW,

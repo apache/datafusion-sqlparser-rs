@@ -761,6 +761,11 @@ pub enum TableFactor {
         /// [Partition selection](https://dev.mysql.com/doc/refman/8.0/en/partitioning-selection.html), supported by MySQL.
         partitions: Vec<Ident>,
     },
+    /// A reference to an element in a Sigma workbook.
+    SigmaElement {
+        element: Ident,
+        alias: Option<TableAlias>,
+    },
     Derived {
         lateral: bool,
         subquery: Box<Query>,
@@ -884,6 +889,13 @@ impl fmt::Display for TableFactor {
                 }
                 if let Some(version) = version {
                     write!(f, "{version}")?;
+                }
+                Ok(())
+            }
+            TableFactor::SigmaElement { element, alias } => {
+                write!(f, "@sigma.{element}")?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {alias}")?;
                 }
                 Ok(())
             }

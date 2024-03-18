@@ -1050,6 +1050,10 @@ impl<'a> Parser<'a> {
             }, // End of Token::Word
             // array `[1, 2, 3]`
             Token::LBracket => self.parse_array_expr(false),
+            Token::AtSign if self.parse_keyword(Keyword::SIGMA) => {
+                self.expect_token(&Token::Period)?;
+                Ok(Expr::SigmaParameter(self.parse_identifier(false)?))
+            }
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
                     UnaryOperator::Plus
@@ -7985,6 +7989,7 @@ impl<'a> Parser<'a> {
                     match &mut table_and_joins.relation {
                         TableFactor::Derived { alias, .. }
                         | TableFactor::Table { alias, .. }
+                        | TableFactor::SigmaElement { alias, .. }
                         | TableFactor::Function { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::JsonTable { alias, .. }
@@ -8062,6 +8067,11 @@ impl<'a> Parser<'a> {
                 columns,
                 alias,
             })
+        } else if self.parse_sigma_directive() {
+            self.expect_token(&Token::Period)?;
+            let element = self.parse_identifier(true)?;
+            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            Ok(TableFactor::SigmaElement { element, alias })
         } else {
             let name = self.parse_object_name(true)?;
 
@@ -8116,6 +8126,15 @@ impl<'a> Parser<'a> {
 
             Ok(table)
         }
+    }
+
+    pub fn parse_sigma_directive(&mut self) -> bool {
+        self.maybe_parse(|p| {
+            p.expect_token(&Token::AtSign)?;
+            p.expect_keyword(Keyword::SIGMA)?;
+            Ok(())
+        })
+        .is_some()
     }
 
     /// Parse a given table version specifier.

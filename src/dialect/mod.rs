@@ -13,6 +13,7 @@
 mod ansi;
 mod bigquery;
 mod clickhouse;
+mod databricks;
 mod duckdb;
 mod generic;
 mod hive;
@@ -32,6 +33,7 @@ use core::str::Chars;
 pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
+pub use self::databricks::DatabricksDialect;
 pub use self::duckdb::DuckDbDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
@@ -174,6 +176,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "bigquery" => Some(Box::new(BigQueryDialect)),
         "ansi" => Some(Box::new(AnsiDialect {})),
         "duckdb" => Some(Box::new(DuckDbDialect {})),
+        "databricks" => Some(Box::new(DatabricksDialect {})),
         _ => None,
     }
 }

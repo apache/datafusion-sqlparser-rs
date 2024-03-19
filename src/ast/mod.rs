@@ -1631,6 +1631,8 @@ pub enum Statement {
         table_ttl: Option<Expr>,
         /// SETTINGS k = v, k2 = v2...
         clickhouse_settings: Option<Vec<SqlOption>>,
+        /// Databricks USING DELTA
+        using: Option<ObjectName>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -2631,6 +2633,7 @@ impl fmt::Display for Statement {
                 strict,
                 table_ttl,
                 clickhouse_settings,
+                using,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -2675,6 +2678,11 @@ impl fmt::Display for Statement {
                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
                     write!(f, " ()")?;
                 }
+
+                if let Some(using) = using {
+                    write!(f, " USING {using}")?;
+                }
+
                 // Only for SQLite
                 if *without_rowid {
                     write!(f, " WITHOUT ROWID")?;

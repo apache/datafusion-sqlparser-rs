@@ -81,6 +81,7 @@ pub struct CreateTableBuilder {
     pub strict: bool,
     pub table_ttl: Option<Expr>,
     pub clickhouse_settings: Option<Vec<SqlOption>>,
+    pub using: Option<ObjectName>,
 }
 
 impl CreateTableBuilder {
@@ -120,6 +121,7 @@ impl CreateTableBuilder {
             strict: false,
             table_ttl: None,
             clickhouse_settings: None,
+            using: None,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -285,6 +287,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn using(mut self, using: Option<ObjectName>) -> Self {
+        self.using = using;
+        self
+    }
+
     pub fn build(self) -> Statement {
         Statement::CreateTable {
             or_replace: self.or_replace,
@@ -321,6 +328,7 @@ impl CreateTableBuilder {
             strict: self.strict,
             table_ttl: self.table_ttl,
             clickhouse_settings: self.clickhouse_settings,
+            using: self.using,
         }
     }
 }
@@ -367,6 +375,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 strict,
                 table_ttl,
                 clickhouse_settings,
+                using,
             } => Ok(Self {
                 or_replace,
                 temporary,
@@ -402,6 +411,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 strict,
                 table_ttl,
                 clickhouse_settings,
+                using,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"

@@ -4002,6 +4002,12 @@ impl<'a> Parser<'a> {
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
 
+        let using = if self.parse_keyword(Keyword::USING) {
+            Some(self.parse_object_name()?)
+        } else {
+            None
+        };
+
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
@@ -4009,6 +4015,7 @@ impl<'a> Parser<'a> {
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let with_options = self.parse_options(Keyword::WITH)?;
+
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {
@@ -4195,6 +4202,7 @@ impl<'a> Parser<'a> {
             .strict(strict)
             .table_ttl(table_ttl)
             .clickhouse_settings(clickhouse_settings)
+            .using(using)
             .build())
     }
 

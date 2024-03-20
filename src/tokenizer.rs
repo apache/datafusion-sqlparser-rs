@@ -800,7 +800,9 @@ impl<'a> Tokenizer<'a> {
 
                     // mysql dialect supports identifiers that start with a numeric prefix,
                     // as long as they aren't an exponent number.
-                    if dialect_of!(self is MySqlDialect | HiveDialect) && exponent_part.is_empty() {
+                    if (dialect_of!(self is MySqlDialect | HiveDialect) || self.dialect.supports_numeric_prefix())
+                        && exponent_part.is_empty()
+                    {
                         let word =
                             peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
 
@@ -1518,6 +1520,7 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
 mod tests {
     use super::*;
     use crate::dialect::{ClickHouseDialect, MsSqlDialect};
+    use core::fmt::Debug;
 
     #[test]
     fn tokenizer_error_impl() {
@@ -2385,5 +2388,48 @@ mod tests {
         );
         check_unescape(r"Hello\0", None);
         check_unescape(r"Hello\xCADRust", None);
+    }
+
+    #[test]
+    fn tokenize_numeric_prefix() {
+        #[derive(Debug)]
+        struct NumericPrefixDialect;
+
+        impl Dialect for NumericPrefixDialect {
+            fn is_identifier_start(&self, ch: char) -> bool {
+                ch.is_ascii_lowercase()
+                    || ch.is_ascii_uppercase()
+                    || ch.is_ascii_digit()
+                    || ch == '$'
+            }
+
+            fn is_identifier_part(&self, ch: char) -> bool {
+                ch.is_ascii_lowercase()
+                    || ch.is_ascii_uppercase()
+                    || ch.is_ascii_digit()
+                    || ch == '_'
+                    || ch == '$'
+                    || ch == '{'
+                    || ch == '}'
+            }
+
+            fn supports_numeric_prefix(&self) -> bool {
+                true
+            }
+        }
+
+        let sql = r#"SELECT * FROM 1"#;
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Mul,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("FROM"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1"), false),
+        ];
+        compare(expected, tokens);
     }
 }

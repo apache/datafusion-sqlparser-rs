@@ -6958,18 +6958,65 @@ fn parse_set_variable() {
         Statement::SetVariable {
             local,
             hivevar,
-            variable,
+            variables,
             value,
         } => {
             assert!(!local);
             assert!(!hivevar);
-            assert_eq!(variable, ObjectName(vec!["SOMETHING".into()]));
+            assert_eq!(
+                variables,
+                OneOrManyWithParens::One(ObjectName(vec!["SOMETHING".into()]))
+            );
             assert_eq!(
                 value,
                 vec![Expr::Value(Value::SingleQuotedString("1".into()))]
             );
         }
         _ => unreachable!(),
+    }
+
+    let multi_variable_dialects = all_dialects_where(|d| d.supports_parenthesized_set_variables());
+    let sql = r#"SET (a, b, c) = (1, 2, 3)"#;
+    match multi_variable_dialects.verified_stmt(sql) {
+        Statement::SetVariable {
+            local,
+            hivevar,
+            variables,
+            value,
+        } => {
+            assert!(!local);
+            assert!(!hivevar);
+            assert_eq!(
+                variables,
+                OneOrManyWithParens::Many(vec![
+                    ObjectName(vec!["a".into()]),
+                    ObjectName(vec!["b".into()]),
+                    ObjectName(vec!["c".into()]),
+                ])
+            );
+            assert_eq!(
+                value,
+                vec![
+                    Expr::Value(number("1")),
+                    Expr::Value(number("2")),
+                    Expr::Value(number("3")),
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let error_sqls = [
+        ("SET (a, b, c) = (1, 2, 3", "Expected ), found: EOF"),
+        ("SET (a, b, c) = 1, 2, 3", "Expected (, found: 1"),
+    ];
+    for (sql, error) in error_sqls {
+        assert_eq!(
+            ParserError::ParserError(error.to_string()),
+            multi_variable_dialects
+                .parse_sql_statements(sql)
+                .unwrap_err()
+        );
     }
 
     one_statement_parses_to("SET SOMETHING TO '1'", "SET SOMETHING = '1'");
@@ -6981,12 +7028,15 @@ fn parse_set_time_zone() {
         Statement::SetVariable {
             local,
             hivevar,
-            variable,
+            variables: variable,
             value,
         } => {
             assert!(!local);
             assert!(!hivevar);
-            assert_eq!(variable, ObjectName(vec!["TIMEZONE".into()]));
+            assert_eq!(
+                variable,
+                OneOrManyWithParens::One(ObjectName(vec!["TIMEZONE".into()]))
+            );
             assert_eq!(
                 value,
                 vec![Expr::Value(Value::SingleQuotedString("UTC".into()))]

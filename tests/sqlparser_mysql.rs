@@ -460,7 +460,7 @@ fn parse_set_variables() {
         Statement::SetVariable {
             local: true,
             hivevar: false,
-            variable: ObjectName(vec!["autocommit".into()]),
+            variables: OneOrManyWithParens::One(ObjectName(vec!["autocommit".into()])),
             value: vec![Expr::Value(number("1"))],
         }
     );

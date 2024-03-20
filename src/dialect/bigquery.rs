@@ -44,4 +44,9 @@ impl Dialect for BigQueryDialect {
     fn supports_window_clause_named_window_reference(&self) -> bool {
         true
     }
+
+    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#set)
+    fn supports_parenthesized_set_variables(&self) -> bool {
+        true
+    }
 }

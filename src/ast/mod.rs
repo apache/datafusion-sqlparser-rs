@@ -2275,7 +2275,8 @@ pub enum Statement {
         role_name: Option<Ident>,
     },
     /// ```sql
-    /// SET <variable>
+    /// SET <variable> = expression;
+    /// SET (variable[, ...]) = (expression[, ...]);
     /// ```
     ///
     /// Note: this is not a standard SQL statement, but it is supported by at
@@ -2284,7 +2285,7 @@ pub enum Statement {
     SetVariable {
         local: bool,
         hivevar: bool,
-        variable: ObjectName,
+        variables: OneOrManyWithParens<ObjectName>,
         value: Vec<Expr>,
     },
     /// ```sql
@@ -3823,7 +3824,7 @@ impl fmt::Display for Statement {
             }
             Statement::SetVariable {
                 local,
-                variable,
+                variables,
                 hivevar,
                 value,
             } => {
@@ -3831,12 +3832,15 @@ impl fmt::Display for Statement {
                 if *local {
                     f.write_str("LOCAL ")?;
                 }
+                let parenthesized = matches!(variables, OneOrManyWithParens::Many(_));
                 write!(
                     f,
-                    "{hivevar}{name} = {value}",
+                    "{hivevar}{name} = {l_paren}{value}{r_paren}",
                     hivevar = if *hivevar { "HIVEVAR:" } else { "" },
-                    name = variable,
-                    value = display_comma_separated(value)
+                    name = variables,
+                    l_paren = parenthesized.then_some("(").unwrap_or_default(),
+                    value = display_comma_separated(value),
+                    r_paren = parenthesized.then_some(")").unwrap_or_default(),
                 )
             }
             Statement::SetTimeZone { local, value } => {

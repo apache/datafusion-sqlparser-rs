@@ -16,6 +16,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::parser::{Parser, ParserError};
 use test_utils::*;
 
 use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
@@ -379,6 +380,52 @@ fn parse_select_star_except_no_parens() {
 #[test]
 fn parse_select_star_replace() {
     clickhouse().verified_stmt("SELECT * REPLACE (i + 1 AS i) FROM columns_transformers");
+}
+
+#[test]
+fn parse_select_output_format() {
+    clickhouse().all_verified_stmts([
+        "SELECT * FROM default.last_asset_runs_mv FORMAT JSON",
+        "SELECT * FROM default.last_asset_runs_mv WHERE x = 1 FORMAT JSON",
+        "SELECT x, sum(y) FROM example_table GROUP BY x FORMAT JSON",
+        "SELECT * FROM mytable AS t FORMAT JSON",
+        "SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset FORMAT JSONCompact",
+        "SELECT * FROM (SELECT user_id FROM my_first_table) AS t FORMAT JSON",
+    ]);
+}
+
+#[test]
+fn parse_select_output_format_missing() {
+    let dialect = ClickHouseDialect {};
+    let sql = "SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset FORMAT";
+
+    assert_eq!(
+        ParserError::ParserError("Expected FORMAT identifier".to_string()),
+        Parser::parse_sql(&dialect, sql).unwrap_err(),
+    )
+}
+
+#[test]
+fn parse_select_invalid_format() {
+    let dialect = ClickHouseDialect {};
+    let sql = "SELECT * FROM default.last_asset_runs_mv FORMAT not_a_format";
+
+    assert_eq!(
+        ParserError::ParserError("Unknown FORMAT not_a_format".to_string()),
+        Parser::parse_sql(&dialect, sql).unwrap_err(),
+    )
+}
+
+#[test]
+fn parse_select_invalid_output_format() {
+    let dialect = ClickHouseDialect {};
+    // Regexp is only valid as an input format
+    let sql = "SELECT * FROM default.last_asset_runs_mv FORMAT Regexp";
+
+    assert_eq!(
+        ParserError::ParserError("Regexp is not a valid output format".to_string()),
+        Parser::parse_sql(&dialect, sql).unwrap_err(),
+    )
 }
 
 fn clickhouse() -> TestedDialects {

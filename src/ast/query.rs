@@ -50,6 +50,10 @@ pub struct Query {
     /// `FOR JSON { AUTO | PATH } [ , INCLUDE_NULL_VALUES ]`
     /// (MSSQL-specific)
     pub for_clause: Option<ForClause>,
+
+    /// Clickhouse FORMAT
+    /// `FORMAT { format }`
+    pub format: Option<Format>,
 }
 
 impl fmt::Display for Query {
@@ -78,6 +82,9 @@ impl fmt::Display for Query {
         }
         if let Some(ref for_clause) = self.for_clause {
             write!(f, " {}", for_clause)?;
+        }
+        if let Some(ref format) = self.format {
+            write!(f, " FORMAT {format}")?;
         }
         Ok(())
     }
@@ -1577,6 +1584,311 @@ impl fmt::Display for JsonTableColumnErrorHandling {
                 write!(f, "DEFAULT {}", json_string)
             }
             JsonTableColumnErrorHandling::Error => write!(f, "ERROR"),
+        }
+    }
+}
+
+/// Clickhouse input and output formats
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+pub enum Format {
+    TabSeparated,
+    TabSeparatedRaw,
+    TabSeparatedWithNames,
+    TabSeparatedWithNamesAndTypes,
+    TabSeparatedRawWithNames,
+    TabSeparatedRawWithNamesAndTypes,
+    Template,
+    TemplateIgnoreSpaces,
+    CSV,
+    CSVWithNames,
+    CSVWithNamesAndTypes,
+    CustomSeparated,
+    CustomSeparatedWithNames,
+    CustomSeparatedWithNamesAndTypes,
+    SQLInsert,
+    Values,
+    Vertical,
+    JSON,
+    JSONAsString,
+    JSONStrings,
+    JSONColumns,
+    JSONColumnsWithMetadata,
+    JSONCompact,
+    JSONCompactStrings,
+    JSONCompactColumns,
+    JSONEachRow,
+    PrettyJSONEachRow,
+    JSONEachRowWithProgress,
+    JSONStringsEachRow,
+    JSONStringsEachRowWithProgress,
+    JSONCompactEachRow,
+    JSONCompactEachRowWithNames,
+    JSONCompactEachRowWithNamesAndTypes,
+    JSONCompactStringsEachRow,
+    JSONCompactStringsEachRowWithNames,
+    JSONCompactStringsEachRowWithNamesAndTypes,
+    JSONObjectEachRow,
+    BSONEachRow,
+    TSKV,
+    Pretty,
+    PrettyNoEscapes,
+    PrettyMonoBlock,
+    PrettyNoEscapesMonoBlock,
+    PrettyCompact,
+    PrettyCompactNoEscapes,
+    PrettyCompactMonoBlock,
+    PrettyCompactNoEscapesMonoBlock,
+    PrettySpace,
+    PrettySpaceNoEscapes,
+    PrettySpaceMonoBlock,
+    PrettySpaceNoEscapesMonoBlock,
+    Prometheus,
+    Protobuf,
+    ProtobufSingle,
+    Avro,
+    AvroConfluent,
+    Parquet,
+    ParquetMetadata,
+    Arrow,
+    ArrowStream,
+    ORC,
+    One,
+    Npy,
+    RowBinary,
+    RowBinaryWithNames,
+    RowBinaryWithNamesAndTypes,
+    RowBinaryWithDefaults,
+    Native,
+    Null,
+    XML,
+    CapnProto,
+    LineAsString,
+    Regexp,
+    RawBLOB,
+    MsgPack,
+    MySQLDump,
+    DWARF,
+    Markdown,
+}
+
+impl Format {
+    pub fn valid_for_output(&self) -> bool {
+        matches!(self,
+            Format::TabSeparated
+            | Format::TabSeparatedRaw
+            | Format::TabSeparatedWithNames
+            | Format::TabSeparatedWithNamesAndTypes
+            | Format::TabSeparatedRawWithNames
+            | Format::TabSeparatedRawWithNamesAndTypes
+            | Format::Template
+            | Format::CSV
+            | Format::CSVWithNames
+            | Format::CSVWithNamesAndTypes
+            | Format::CustomSeparated
+            | Format::CustomSeparatedWithNames
+            | Format::CustomSeparatedWithNamesAndTypes
+            | Format::SQLInsert
+            | Format::Values
+            | Format::Vertical
+            | Format::JSON
+            | Format::JSONStrings
+            | Format::JSONColumns
+            | Format::JSONColumnsWithMetadata
+            | Format::JSONCompact
+            | Format::JSONCompactStrings
+            | Format::JSONCompactColumns
+            | Format::JSONEachRow
+            | Format::PrettyJSONEachRow
+            | Format::JSONEachRowWithProgress
+            | Format::JSONStringsEachRow
+            | Format::JSONStringsEachRowWithProgress
+            | Format::JSONCompactEachRow
+            | Format::JSONCompactEachRowWithNames
+            | Format::JSONCompactEachRowWithNamesAndTypes
+            | Format::JSONCompactStringsEachRow
+            | Format::JSONCompactStringsEachRowWithNames
+            | Format::JSONCompactStringsEachRowWithNamesAndTypes
+            | Format::JSONObjectEachRow
+            | Format::BSONEachRow
+            | Format::TSKV
+            | Format::Pretty
+            | Format::PrettyNoEscapes
+            | Format::PrettyMonoBlock
+            | Format::PrettyNoEscapesMonoBlock
+            | Format::PrettyCompact
+            | Format::PrettyCompactNoEscapes
+            | Format::PrettyCompactMonoBlock
+            | Format::PrettyCompactNoEscapesMonoBlock
+            | Format::PrettySpace
+            | Format::PrettySpaceNoEscapes
+            | Format::PrettySpaceMonoBlock
+            | Format::PrettySpaceNoEscapesMonoBlock
+            | Format::Prometheus
+            | Format::Protobuf
+            | Format::ProtobufSingle
+            | Format::Avro
+            | Format::Parquet
+            | Format::Arrow
+            | Format::ArrowStream
+            | Format::ORC
+            | Format::RowBinary
+            | Format::RowBinaryWithNames
+            | Format::RowBinaryWithNamesAndTypes
+            | Format::RowBinaryWithDefaults
+            | Format::Native
+            | Format::Null
+            | Format::XML
+            | Format::CapnProto
+            | Format::LineAsString
+            | Format::RawBLOB
+            | Format::MsgPack
+            | Format::Markdown
+        )
+    }
+
+    pub fn valid_for_input(&self) -> bool {
+        matches!(self,
+            Format::TabSeparated
+            | Format::TabSeparatedRaw
+            | Format::TabSeparatedWithNames
+            | Format::TabSeparatedWithNamesAndTypes
+            | Format::TabSeparatedRawWithNames
+            | Format::TabSeparatedRawWithNamesAndTypes
+            | Format::Template
+            | Format::TemplateIgnoreSpaces
+            | Format::CSV
+            | Format::CSVWithNames
+            | Format::CSVWithNamesAndTypes
+            | Format::CustomSeparated
+            | Format::CustomSeparatedWithNames
+            | Format::CustomSeparatedWithNamesAndTypes
+            | Format::Values
+            | Format::JSON
+            | Format::JSONAsString
+            | Format::JSONStrings
+            | Format::JSONColumns
+            | Format::JSONColumnsWithMetadata
+            | Format::JSONCompact
+            | Format::JSONCompactColumns
+            | Format::JSONEachRow
+            | Format::JSONStringsEachRow
+            | Format::JSONCompactEachRow
+            | Format::JSONCompactEachRowWithNames
+            | Format::JSONCompactEachRowWithNamesAndTypes
+            | Format::JSONCompactStringsEachRow
+            | Format::JSONCompactStringsEachRowWithNames
+            | Format::JSONCompactStringsEachRowWithNamesAndTypes
+            | Format::JSONObjectEachRow
+            | Format::BSONEachRow
+            | Format::TSKV
+            | Format::Protobuf
+            | Format::ProtobufSingle
+            | Format::Avro
+            | Format::AvroConfluent
+            | Format::Parquet
+            | Format::ParquetMetadata
+            | Format::Arrow
+            | Format::ArrowStream
+            | Format::ORC
+            | Format::One
+            | Format::Npy
+            | Format::RowBinary
+            | Format::RowBinaryWithNames
+            | Format::RowBinaryWithNamesAndTypes
+            | Format::RowBinaryWithDefaults
+            | Format::Native
+            | Format::CapnProto
+            | Format::LineAsString
+            | Format::Regexp
+            | Format::RawBLOB
+            | Format::MsgPack
+            | Format::MySQLDump
+            | Format::DWARF
+        )
+    }
+}
+
+impl fmt::Display for Format {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Format::TabSeparated => write!(f, "TabSeparated"),
+            Format::TabSeparatedRaw => write!(f, "TabSeparatedRaw"),
+            Format::TabSeparatedWithNames => write!(f, "TabSeparatedWithNames"),
+            Format::TabSeparatedWithNamesAndTypes => write!(f, "TabSeparatedWithNamesAndTypes"),
+            Format::TabSeparatedRawWithNames => write!(f, "TabSeparatedRawWithNames"),
+            Format::TabSeparatedRawWithNamesAndTypes => write!(f, "TabSeparatedRawWithNamesAndTypes"),
+            Format::Template => write!(f, "Template"),
+            Format::TemplateIgnoreSpaces => write!(f, "TemplateIgnoreSpaces"),
+            Format::CSV => write!(f, "CSV"),
+            Format::CSVWithNames => write!(f, "CSVWithNames"),
+            Format::CSVWithNamesAndTypes => write!(f, "CSVWithNamesAndTypes"),
+            Format::CustomSeparated => write!(f, "CustomSeparated"),
+            Format::CustomSeparatedWithNames => write!(f, "CustomSeparatedWithNames"),
+            Format::CustomSeparatedWithNamesAndTypes => write!(f, "CustomSeparatedWithNamesAndTypes"),
+            Format::SQLInsert => write!(f, "SQLInsert"),
+            Format::Values => write!(f, "Values"),
+            Format::Vertical => write!(f, "Vertical"),
+            Format::JSON => write!(f, "JSON"),
+            Format::JSONAsString => write!(f, "JSONAsString"),
+            Format::JSONStrings => write!(f, "JSONStrings"),
+            Format::JSONColumns => write!(f, "JSONColumns"),
+            Format::JSONColumnsWithMetadata => write!(f, "JSONColumnsWithMetadata"),
+            Format::JSONCompact => write!(f, "JSONCompact"),
+            Format::JSONCompactStrings => write!(f, "JSONCompactStrings"),
+            Format::JSONCompactColumns => write!(f, "JSONCompactColumns"),
+            Format::JSONEachRow => write!(f, "JSONEachRow"),
+            Format::PrettyJSONEachRow => write!(f, "PrettyJSONEachRow"),
+            Format::JSONEachRowWithProgress => write!(f, "JSONEachRowWithProgress"),
+            Format::JSONStringsEachRow => write!(f, "JSONStringsEachRow"),
+            Format::JSONStringsEachRowWithProgress => write!(f, "JSONStringsEachRowWithProgress"),
+            Format::JSONCompactEachRow => write!(f, "JSONCompactEachRow"),
+            Format::JSONCompactEachRowWithNames => write!(f, "JSONCompactEachRowWithNames"),
+            Format::JSONCompactEachRowWithNamesAndTypes => write!(f, "JSONCompactEachRowWithNamesAndTypes"),
+            Format::JSONCompactStringsEachRow => write!(f, "JSONCompactStringsEachRow"),
+            Format::JSONCompactStringsEachRowWithNames => write!(f, "JSONCompactStringsEachRowWithNames"),
+            Format::JSONCompactStringsEachRowWithNamesAndTypes  => write!(f, "JSONCompactStringsEachRowWithNamesAndTypes"),
+            Format::JSONObjectEachRow => write!(f, "JSONObjectEachRow"),
+            Format::BSONEachRow => write!(f, "BSONEachRow"),
+            Format::TSKV => write!(f, "TSKV"),
+            Format::Pretty => write!(f, "Pretty"),
+            Format::PrettyNoEscapes => write!(f, "PrettyNoEscapes"),
+            Format::PrettyMonoBlock => write!(f, "PrettyMonoBlock"),
+            Format::PrettyNoEscapesMonoBlock => write!(f, "PrettyNoEscapesMonoBlock"),
+            Format::PrettyCompact => write!(f, "PrettyCompact"),
+            Format::PrettyCompactNoEscapes => write!(f, "PrettyCompactNoEscapes"),
+            Format::PrettyCompactMonoBlock => write!(f, "PrettyCompactMonoBlock"),
+            Format::PrettyCompactNoEscapesMonoBlock => write!(f, "PrettyCompactNoEscapesMonoBlock"),
+            Format::PrettySpace => write!(f, "PrettySpace"),
+            Format::PrettySpaceNoEscapes => write!(f, "PrettySpaceNoEscapes"),
+            Format::PrettySpaceMonoBlock => write!(f, "PrettySpaceMonoBlock"),
+            Format::PrettySpaceNoEscapesMonoBlock => write!(f, "PrettySpaceNoEscapesMonoBlock"),
+            Format::Prometheus => write!(f, "Prometheus"),
+            Format::Protobuf => write!(f, "Protobuf"),
+            Format::ProtobufSingle => write!(f, "ProtobufSingle"),
+            Format::Avro => write!(f, "Avro"),
+            Format::AvroConfluent => write!(f, "AvroConfluent"),
+            Format::Parquet => write!(f, "Parquet"),
+            Format::ParquetMetadata => write!(f, "ParquetMetadata"),
+            Format::Arrow => write!(f, "Arrow"),
+            Format::ArrowStream => write!(f, "ArrowStream"),
+            Format::ORC => write!(f, "ORC"),
+            Format::One => write!(f, "One"),
+            Format::Npy => write!(f, "Npy"),
+            Format::RowBinary => write!(f, "RowBinary"),
+            Format::RowBinaryWithNames => write!(f, "RowBinaryWithNames"),
+            Format::RowBinaryWithNamesAndTypes => write!(f, "RowBinaryWithNamesAndTypes"),
+            Format::RowBinaryWithDefaults => write!(f, "RowBinaryWithDefaults"),
+            Format::Native => write!(f, "Native"),
+            Format::Null => write!(f, "Null"),
+            Format::XML => write!(f, "XML"),
+            Format::CapnProto => write!(f, "CapnProto"),
+            Format::LineAsString => write!(f, "LineAsString"),
+            Format::Regexp => write!(f, "Regexp"),
+            Format::RawBLOB => write!(f, "RawBLOB"),
+            Format::MsgPack => write!(f, "MsgPack"),
+            Format::MySQLDump => write!(f, "MySQLDump"),
+            Format::DWARF => write!(f, "DWARF"),
+            Format::Markdown => write!(f, "Markdown"),
         }
     }
 }

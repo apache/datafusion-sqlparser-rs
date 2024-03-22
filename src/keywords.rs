@@ -777,6 +777,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::FOR,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for Clickhouse FORMAT <format>
+    Keyword::FORMAT,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

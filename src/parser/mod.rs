@@ -429,6 +429,7 @@ impl<'a> Parser<'a> {
             }
 
             if expecting_statement_delimiter {
+                println!("---> expected end of statement");
                 return self.expected("end of statement", self.peek_token());
             }
 
@@ -6262,6 +6263,7 @@ impl<'a> Parser<'a> {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                format: None,
             })
         } else if self.parse_keyword(Keyword::UPDATE) {
             let update = self.parse_update()?;
@@ -6275,6 +6277,7 @@ impl<'a> Parser<'a> {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                format: None,
             })
         } else {
             let body = Box::new(self.parse_query_body(0)?);
@@ -6337,6 +6340,14 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            // Clickhouse FORMAT clause
+            // See https://clickhouse.com/docs/en/sql-reference/formats
+            let format = if dialect_of!(self is ClickHouseDialect) && self.parse_keyword(Keyword::FORMAT) {
+                Some(self.parse_format_for_output()?)
+            } else {
+                None
+            };
+
             Ok(Query {
                 with,
                 body,
@@ -6347,6 +6358,7 @@ impl<'a> Parser<'a> {
                 fetch,
                 locks,
                 for_clause,
+                format,
             })
         }
     }
@@ -6451,6 +6463,110 @@ impl<'a> Parser<'a> {
             include_null_values,
             without_array_wrapper,
         })
+    }
+
+    fn parse_format_for_output(&mut self) -> Result<Format, ParserError> {
+        let format = self.parse_format()?;
+        if format.valid_for_output() {
+            Ok(format)
+        } else {
+            Err(ParserError::ParserError(format!("{} is not a valid output format", format)))
+        }
+    }
+
+    // Parse Clickhouse format clause
+    fn parse_format(&mut self) -> Result<Format, ParserError> {
+        if let Token::Word(word) = self.next_token().token {
+            match word.value.as_str() {
+                "TabSeparated" => Ok(Format::TabSeparated),
+                "TabSeparatedRaw" => Ok(Format::TabSeparatedRaw),
+                "TabSeparatedWithNames" => Ok(Format::TabSeparatedWithNames),
+                "TabSeparatedWithNamesAndTypes" => Ok(Format::TabSeparatedWithNamesAndTypes),
+                "TabSeparatedRawWithNames" => Ok(Format::TabSeparatedRawWithNames),
+                "TabSeparatedRawWithNamesAndTypes" => Ok(Format::TabSeparatedRawWithNamesAndTypes),
+                "Template" => Ok(Format::Template),
+                "TemplateIgnoreSpaces" => Ok(Format::TemplateIgnoreSpaces),
+                "CSV" => Ok(Format::CSV),
+                "CSVWithNames" => Ok(Format::CSVWithNames),
+                "CSVWithNamesAndTypes" => Ok(Format::CSVWithNamesAndTypes),
+                "CustomSeparated" => Ok(Format::CustomSeparated),
+                "CustomSeparatedWithNames" => Ok(Format::CustomSeparatedWithNames),
+                "CustomSeparatedWithNamesAndTypes" => Ok(Format::CustomSeparatedWithNamesAndTypes),
+                "SQLInsert" => Ok(Format::SQLInsert),
+                "Values" => Ok(Format::Values),
+                "Vertical" => Ok(Format::Vertical),
+                "JSON" => Ok(Format::JSON),
+                "JSONAsString" => Ok(Format::JSONAsString),
+                "JSONStrings" => Ok(Format::JSONStrings),
+                "JSONColumns" => Ok(Format::JSONColumns),
+                "JSONColumnsWithMetadata" => Ok(Format::JSONColumnsWithMetadata),
+                "JSONCompact" => Ok(Format::JSONCompact),
+                "JSONCompactStrings" => Ok(Format::JSONCompactStrings),
+                "JSONCompactColumns" => Ok(Format::JSONCompactColumns),
+                "JSONEachRow" => Ok(Format::JSONEachRow),
+                "PrettyJSONEachRow" => Ok(Format::PrettyJSONEachRow),
+                "JSONEachRowWithProgress" => Ok(Format::JSONEachRowWithProgress),
+                "JSONStringsEachRow" => Ok(Format::JSONStringsEachRow),
+                "JSONStringsEachRowWithProgress" => Ok(Format::JSONStringsEachRowWithProgress),
+                "JSONCompactEachRow" => Ok(Format::JSONCompactEachRow),
+                "JSONCompactEachRowWithNames" => Ok(Format::JSONCompactEachRowWithNames), 
+                "JSONCompactEachRowWithNamesAndTypes" => Ok(Format::JSONCompactEachRowWithNamesAndTypes),
+                "JSONCompactStringsEachRow" => Ok(Format::JSONCompactStringsEachRow),
+                "JSONCompactStringsEachRowWithNames" => Ok(Format::JSONCompactStringsEachRowWithNames),
+                "JSONCompactStringsEachRowWithNamesAndTypes" => Ok(Format::JSONCompactStringsEachRowWithNamesAndTypes),
+                "JSONObjectEachRow" => Ok(Format::JSONObjectEachRow),
+                "BSONEachRow" => Ok(Format::BSONEachRow),
+                "TSKV" => Ok(Format::TSKV),
+                "Pretty" => Ok(Format::Pretty),
+                "PrettyNoEscapes" => Ok(Format::PrettyNoEscapes),
+                "PrettyMonoBlock" => Ok(Format::PrettyMonoBlock),
+                "PrettyNoEscapesMonoBlock" => Ok(Format::PrettyNoEscapesMonoBlock),
+                "PrettyCompact" => Ok(Format::PrettyCompact),
+                "PrettyCompactNoEscapes" => Ok(Format::PrettyCompactNoEscapes),
+                "PrettyCompactMonoBlock" => Ok(Format::PrettyCompactMonoBlock),
+                "PrettyCompactNoEscapesMonoBlock" => Ok(Format::PrettyCompactNoEscapesMonoBlock),
+                "PrettySpace" => Ok(Format::PrettySpace),
+                "PrettySpaceNoEscapes" => Ok(Format::PrettySpaceNoEscapes),
+                "PrettySpaceMonoBlock" => Ok(Format::PrettySpaceMonoBlock),
+                "PrettySpaceNoEscapesMonoBlock" => Ok(Format::PrettySpaceNoEscapesMonoBlock),
+                "Prometheus" => Ok(Format::Prometheus),
+                "Protobuf" => Ok(Format::Protobuf),
+                "ProtobufSingle" => Ok(Format::ProtobufSingle),
+                "Avro" => Ok(Format::Avro),
+                "AvroConfluent" => Ok(Format::AvroConfluent),
+                "Parquet" => Ok(Format::Parquet),
+                "ParquetMetadata" => Ok(Format::ParquetMetadata),
+                "Arrow" => Ok(Format::Arrow),
+                "ArrowStream" => Ok(Format::ArrowStream),
+                "ORC" => Ok(Format::ORC),
+                "One" => Ok(Format::One),
+                "Npy" => Ok(Format::Npy),
+                "RowBinary" => Ok(Format::RowBinary),
+                "RowBinaryWithNames" => Ok(Format::RowBinaryWithNames),
+                "RowBinaryWithNamesAndTypes" => Ok(Format::RowBinaryWithNamesAndTypes),
+                "RowBinaryWithDefaults" => Ok(Format::RowBinaryWithDefaults),
+                "Native" => Ok(Format::Native),
+                "Null" => Ok(Format::Null),
+                "XML" => Ok(Format::XML),
+                "CapnProto" => Ok(Format::CapnProto),
+                "LineAsString" => Ok(Format::LineAsString),
+                "Regexp" => Ok(Format::Regexp),
+                "RawBLOB" => Ok(Format::RawBLOB),
+                "MsgPack" => Ok(Format::MsgPack),
+                "MySQLDump" => Ok(Format::MySQLDump),
+                "DWARF" => Ok(Format::DWARF),
+                "Markdown" => Ok(Format::Markdown),
+                _ => {
+                    return Err(ParserError::ParserError(
+                        format!("Unknown FORMAT {}", word.value),
+                    ));
+                }
+            }
+        } else {
+            return Err(ParserError::ParserError(
+                "Expected FORMAT identifier".to_string(),
+            ));
+        }
     }
 
     /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)

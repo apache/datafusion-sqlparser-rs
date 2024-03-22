@@ -147,6 +147,11 @@ impl TestedDialects {
         self.one_statement_parses_to(sql, sql)
     }
 
+    /// Convenience function to verify many statements at once.
+    pub fn all_verified_stmts<'s>(&'s self, i: impl IntoIterator<Item = &'s str>) -> Vec<Statement> {
+        i.into_iter().map(|sql| self.verified_stmt(sql)).collect()
+    }
+
     /// Ensures that `sql` parses as a single [Query], and that
     /// re-serializing the parse result produces the same `sql`
     /// string (is not modified after a serialization round-trip).

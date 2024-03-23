@@ -260,7 +260,7 @@ impl fmt::Display for Interval {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let value = self.value.as_ref();
         match (
-            self.leading_field,
+            &self.leading_field,
             self.leading_precision,
             self.fractional_seconds_precision,
         ) {
@@ -279,13 +279,13 @@ impl fmt::Display for Interval {
             }
             _ => {
                 write!(f, "INTERVAL {value}")?;
-                if let Some(leading_field) = self.leading_field {
+                if let Some(leading_field) = &self.leading_field {
                     write!(f, " {leading_field}")?;
                 }
                 if let Some(leading_precision) = self.leading_precision {
                     write!(f, " ({leading_precision})")?;
                 }
-                if let Some(last_field) = self.last_field {
+                if let Some(last_field) = &self.last_field {
                     write!(f, " TO {last_field}")?;
                 }
                 if let Some(fractional_seconds_precision) = self.fractional_seconds_precision {

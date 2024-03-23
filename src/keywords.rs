@@ -631,6 +631,7 @@ define_keywords!(
     TIMEZONE,
     TIMEZONE_HOUR,
     TIMEZONE_MINUTE,
+    TIMEZONE_REGION,
     TINYINT,
     TO,
     TOP,

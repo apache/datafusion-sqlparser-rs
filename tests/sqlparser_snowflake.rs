@@ -1283,6 +1283,19 @@ fn parse_create_table_cluster_by() {
 }
 
 #[test]
+fn parse_extract_custom_part() {
+    let sql = "SELECT EXTRACT(eod FROM d)";
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Custom(Ident::new("eod")),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_create_table_comment() {
     snowflake().verified_stmt("CREATE TABLE my_table (my_column STRING COMMENT 'column comment')");
     snowflake().one_statement_parses_to(

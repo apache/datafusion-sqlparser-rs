@@ -1499,11 +1499,23 @@ impl<'a> Parser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::YEAR => Ok(DateTimeField::Year),
                 Keyword::MONTH => Ok(DateTimeField::Month),
-                Keyword::WEEK => Ok(DateTimeField::Week),
+                Keyword::WEEK => {
+                    let week_day = if dialect_of!(self is BigQueryDialect | GenericDialect)
+                        && self.consume_token(&Token::LParen)
+                    {
+                        let week_day = self.parse_identifier_no_span()?;
+                        self.expect_token(&Token::RParen)?;
+                        Some(week_day)
+                    } else {
+                        None
+                    };
+                    Ok(DateTimeField::Week(week_day))
+                }
                 Keyword::DAY => Ok(DateTimeField::Day),
                 Keyword::DAYOFWEEK => Ok(DateTimeField::DayOfWeek),
                 Keyword::DAYOFYEAR => Ok(DateTimeField::DayOfYear),
                 Keyword::DATE => Ok(DateTimeField::Date),
+                Keyword::DATETIME => Ok(DateTimeField::Datetime),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
                 Keyword::SECOND => Ok(DateTimeField::Second),
@@ -1529,6 +1541,12 @@ impl<'a> Parser<'a> {
                 Keyword::TIMEZONE => Ok(DateTimeField::Timezone),
                 Keyword::TIMEZONE_HOUR => Ok(DateTimeField::TimezoneHour),
                 Keyword::TIMEZONE_MINUTE => Ok(DateTimeField::TimezoneMinute),
+                Keyword::TIMEZONE_REGION => Ok(DateTimeField::TimezoneRegion),
+                _ if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
+                    self.prev_token();
+                    let custom = self.parse_identifier_no_span()?;
+                    Ok(DateTimeField::Custom(custom))
+                }
                 _ => self.expected("date/time field", next_token),
             },
             _ => self.expected("date/time field", next_token),

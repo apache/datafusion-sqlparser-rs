@@ -12,6 +12,13 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
+
+#[cfg(not(feature = "std"))]
+use alloc::format;
+
+#[cfg(not(feature = "std"))]
+use alloc::string::ToString;
+
 use core::fmt;
 
 #[cfg(feature = "bigdecimal")]
@@ -20,6 +27,7 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::ast::Ident;
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -109,17 +117,25 @@ impl fmt::Display for DollarQuotedString {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DateTimeField {
     Year,
     Month,
-    Week,
+    /// Week optionally followed by a WEEKDAY.
+    ///
+    /// ```sql
+    /// WEEK(MONDAY)
+    /// ```
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#extract)
+    Week(Option<Ident>),
     Day,
     DayOfWeek,
     DayOfYear,
     Date,
+    Datetime,
     Hour,
     Minute,
     Second,
@@ -148,47 +164,67 @@ pub enum DateTimeField {
     TimezoneMinute,
     TimezoneRegion,
     NoDateTime,
+    /// Arbitrary abbreviation or custom date-time part.
+    ///
+    /// ```sql
+    /// EXTRACT(q FROM CURRENT_TIMESTAMP)
+    /// ```
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions-date-time#supported-date-and-time-parts)
+    Custom(Ident),
 }
 
 impl fmt::Display for DateTimeField {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self {
-            DateTimeField::Year => "YEAR",
-            DateTimeField::Month => "MONTH",
-            DateTimeField::Week => "WEEK",
-            DateTimeField::Day => "DAY",
-            DateTimeField::DayOfWeek => "DAYOFWEEK",
-            DateTimeField::DayOfYear => "DAYOFYEAR",
-            DateTimeField::Date => "DATE",
-            DateTimeField::Hour => "HOUR",
-            DateTimeField::Minute => "MINUTE",
-            DateTimeField::Second => "SECOND",
-            DateTimeField::Century => "CENTURY",
-            DateTimeField::Decade => "DECADE",
-            DateTimeField::Dow => "DOW",
-            DateTimeField::Doy => "DOY",
-            DateTimeField::Epoch => "EPOCH",
-            DateTimeField::Isodow => "ISODOW",
-            DateTimeField::Isoyear => "ISOYEAR",
-            DateTimeField::IsoWeek => "ISOWEEK",
-            DateTimeField::Julian => "JULIAN",
-            DateTimeField::Microsecond => "MICROSECOND",
-            DateTimeField::Microseconds => "MICROSECONDS",
-            DateTimeField::Millenium => "MILLENIUM",
-            DateTimeField::Millennium => "MILLENNIUM",
-            DateTimeField::Millisecond => "MILLISECOND",
-            DateTimeField::Milliseconds => "MILLISECONDS",
-            DateTimeField::Nanosecond => "NANOSECOND",
-            DateTimeField::Nanoseconds => "NANOSECONDS",
-            DateTimeField::Quarter => "QUARTER",
-            DateTimeField::Time => "TIME",
-            DateTimeField::Timezone => "TIMEZONE",
-            DateTimeField::TimezoneAbbr => "TIMEZONE_ABBR",
-            DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
-            DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
-            DateTimeField::TimezoneRegion => "TIMEZONE_REGION",
-            DateTimeField::NoDateTime => "NODATETIME",
-        })
+        f.write_str(
+            match self {
+                DateTimeField::Year => "YEAR".to_string(),
+                DateTimeField::Month => "MONTH".to_string(),
+                DateTimeField::Week(week_day) => {
+                    format!(
+                        "WEEK{}",
+                        week_day
+                            .as_ref()
+                            .map(|w| format!("({w})"))
+                            .unwrap_or_default()
+                    )
+                }
+                DateTimeField::Day => "DAY".to_string(),
+                DateTimeField::DayOfWeek => "DAYOFWEEK".to_string(),
+                DateTimeField::DayOfYear => "DAYOFYEAR".to_string(),
+                DateTimeField::Date => "DATE".to_string(),
+                DateTimeField::Datetime => "DATETIME".to_string(),
+                DateTimeField::Hour => "HOUR".to_string(),
+                DateTimeField::Minute => "MINUTE".to_string(),
+                DateTimeField::Second => "SECOND".to_string(),
+                DateTimeField::Century => "CENTURY".to_string(),
+                DateTimeField::Decade => "DECADE".to_string(),
+                DateTimeField::Dow => "DOW".to_string(),
+                DateTimeField::Doy => "DOY".to_string(),
+                DateTimeField::Epoch => "EPOCH".to_string(),
+                DateTimeField::Isodow => "ISODOW".to_string(),
+                DateTimeField::Isoyear => "ISOYEAR".to_string(),
+                DateTimeField::IsoWeek => "ISOWEEK".to_string(),
+                DateTimeField::Julian => "JULIAN".to_string(),
+                DateTimeField::Microsecond => "MICROSECOND".to_string(),
+                DateTimeField::Microseconds => "MICROSECONDS".to_string(),
+                DateTimeField::Millenium => "MILLENIUM".to_string(),
+                DateTimeField::Millennium => "MILLENNIUM".to_string(),
+                DateTimeField::Millisecond => "MILLISECOND".to_string(),
+                DateTimeField::Milliseconds => "MILLISECONDS".to_string(),
+                DateTimeField::Nanosecond => "NANOSECOND".to_string(),
+                DateTimeField::Nanoseconds => "NANOSECONDS".to_string(),
+                DateTimeField::Quarter => "QUARTER".to_string(),
+                DateTimeField::Time => "TIME".to_string(),
+                DateTimeField::Timezone => "TIMEZONE".to_string(),
+                DateTimeField::TimezoneAbbr => "TIMEZONE_ABBR".to_string(),
+                DateTimeField::TimezoneHour => "TIMEZONE_HOUR".to_string(),
+                DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE".to_string(),
+                DateTimeField::TimezoneRegion => "TIMEZONE_REGION".to_string(),
+                DateTimeField::NoDateTime => "NODATETIME".to_string(),
+                DateTimeField::Custom(custom) => format!("{custom}"),
+            }
+            .as_str(),
+        )
     }
 }
 

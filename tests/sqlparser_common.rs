@@ -2270,6 +2270,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(DAYOFWEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAYOFYEAR FROM d)");
     verified_stmt("SELECT EXTRACT(DATE FROM d)");
+    verified_stmt("SELECT EXTRACT(DATETIME FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
     verified_stmt("SELECT EXTRACT(SECOND FROM d)");
@@ -2299,7 +2300,8 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(TIMEZONE_REGION FROM d)");
     verified_stmt("SELECT EXTRACT(TIME FROM d)");
 
-    let res = parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
+    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
     assert_eq!(
         ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
         res.unwrap_err()
@@ -2337,7 +2339,8 @@ fn parse_ceil_datetime() {
     verified_stmt("SELECT CEIL(d TO SECOND) FROM df");
     verified_stmt("SELECT CEIL(d TO MILLISECOND) FROM df");
 
-    let res = parse_sql_statements("SELECT CEIL(d TO JIFFY) FROM df");
+    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements("SELECT CEIL(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
         res.unwrap_err()
@@ -2363,7 +2366,8 @@ fn parse_floor_datetime() {
     verified_stmt("SELECT FLOOR(d TO SECOND) FROM df");
     verified_stmt("SELECT FLOOR(d TO MILLISECOND) FROM df");
 
-    let res = parse_sql_statements("SELECT FLOOR(d TO JIFFY) FROM df");
+    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements("SELECT FLOOR(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
         res.unwrap_err()

@@ -1418,6 +1418,19 @@ fn test_bigquery_trim() {
 }
 
 #[test]
+fn parse_extract_weekday() {
+    let sql = "SELECT EXTRACT(WEEK(MONDAY) FROM d)";
+    let select = bigquery_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Week(Some(Ident::new("MONDAY"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn test_select_as_struct() {
     bigquery().verified_only_select("SELECT * FROM (SELECT AS VALUE STRUCT(123 AS a, false AS b))");
     let select = bigquery().verified_only_select("SELECT AS STRUCT 1 AS a, 2 AS b");

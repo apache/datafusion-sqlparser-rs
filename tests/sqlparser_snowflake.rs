@@ -1431,6 +1431,19 @@ fn parse_top() {
 }
 
 #[test]
+fn parse_extract_custom_part() {
+    let sql = "SELECT EXTRACT(eod FROM d)";
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Custom(Ident::new("eod")),
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_comma_outer_join() {
     // compound identifiers
     let case1 =

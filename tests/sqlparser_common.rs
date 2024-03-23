@@ -8453,10 +8453,31 @@ fn parse_escaped_string_without_unescape() {
 #[test]
 fn parse_pivot_table() {
     let sql = concat!(
-        "SELECT * FROM monthly_sales AS a ",
-        "PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ",
+        "SELECT * FROM monthly_sales AS a PIVOT(",
+        "SUM(a.amount), ",
+        "SUM(b.amount) AS t, ",
+        "SUM(c.amount) AS u ",
+        "FOR a.MONTH IN (1 AS x, 'two', three AS y)) AS p (c, d) ",
         "ORDER BY EMPID"
     );
+
+    fn expected_function(table: &'static str, alias: Option<&'static str>) -> ExprWithAlias {
+        ExprWithAlias {
+            expr: Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("SUM")]),
+                args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                    Expr::CompoundIdentifier(vec![Ident::new(table), Ident::new("amount")]),
+                ))]),
+                null_treatment: None,
+                filter: None,
+                over: None,
+                distinct: false,
+                special: false,
+                order_by: vec![],
+            }),
+            alias: alias.map(Ident::new),
+        }
+    }
 
     assert_eq!(
         verified_only_select(sql).from[0].relation,
@@ -8472,24 +8493,25 @@ fn parse_pivot_table() {
                 version: None,
                 partitions: vec![],
             }),
-            aggregate_function: Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("SUM")]),
-                args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                    Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("amount"),])
-                ))]),
-                null_treatment: None,
-                filter: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-            }),
+            aggregate_functions: vec![
+                expected_function("a", None),
+                expected_function("b", Some("t")),
+                expected_function("c", Some("u")),
+            ],
             value_column: vec![Ident::new("a"), Ident::new("MONTH")],
             pivot_values: vec![
-                Value::SingleQuotedString("JAN".to_string()),
-                Value::SingleQuotedString("FEB".to_string()),
-                Value::SingleQuotedString("MAR".to_string()),
-                Value::SingleQuotedString("APR".to_string()),
+                ExprWithAlias {
+                    expr: Expr::Value(number("1")),
+                    alias: Some(Ident::new("x"))
+                },
+                ExprWithAlias {
+                    expr: Expr::Value(Value::SingleQuotedString("two".to_string())),
+                    alias: None
+                },
+                ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("three")),
+                    alias: Some(Ident::new("y"))
+                },
             ],
             alias: Some(TableAlias {
                 name: Ident {
@@ -8623,22 +8645,31 @@ fn parse_pivot_unpivot_table() {
                     columns: vec![]
                 }),
             }),
-            aggregate_function: Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("sum")]),
-                args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                    Expr::Identifier(Ident::new("population"))
-                ))]),
-                null_treatment: None,
-                filter: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-            }),
+            aggregate_functions: vec![ExprWithAlias {
+                expr: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("sum")]),
+                    args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                        Expr::Identifier(Ident::new("population"))
+                    ))]),
+                    null_treatment: None,
+                    filter: None,
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                }),
+                alias: None
+            }],
             value_column: vec![Ident::new("year")],
             pivot_values: vec![
-                Value::SingleQuotedString("population_2000".to_string()),
-                Value::SingleQuotedString("population_2010".to_string())
+                ExprWithAlias {
+                    expr: Expr::Value(Value::SingleQuotedString("population_2000".to_string())),
+                    alias: None
+                },
+                ExprWithAlias {
+                    expr: Expr::Value(Value::SingleQuotedString("population_2010".to_string())),
+                    alias: None
+                },
             ],
             alias: Some(TableAlias {
                 name: Ident::new("p"),

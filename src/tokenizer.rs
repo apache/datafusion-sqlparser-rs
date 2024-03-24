@@ -1119,37 +1119,46 @@ impl<'a> Tokenizer<'a> {
 
             if let Some('$') = chars.peek() {
                 chars.next();
-                s.push_str(&peeking_take_while(chars, |ch| ch != '$'));
 
-                match chars.peek() {
-                    Some('$') => {
-                        chars.next();
-                        for c in value.chars() {
-                            let next_char = chars.next();
-                            if Some(c) != next_char {
-                                return self.tokenizer_error(
-                                    chars.location(),
-                                    format!(
-                                        "Unterminated dollar-quoted string at or near \"{value}\""
-                                    ),
-                                );
-                            }
-                        }
-
-                        if let Some('$') = chars.peek() {
+                'searching_for_end: loop {
+                    s.push_str(&peeking_take_while(chars, |ch| ch != '$'));
+                    match chars.peek() {
+                        Some('$') => {
                             chars.next();
-                        } else {
-                            return self.tokenizer_error(
-                                chars.location(),
-                                "Unterminated dollar-quoted string, expected $",
-                            );
-                        }
-                    }
-                    _ => {
-                        return self.tokenizer_error(
+                            let mut maybe_s = String::from("$");
+                            for c in value.chars() {
+                                if let Some(next_char) = chars.next() {
+                                    maybe_s.push(next_char);
+                                    if next_char != c {
+                                        // This doesn't match the dollar quote delimiter so this
+                                        // is not the end of the string.
+                                        s.push_str(&maybe_s);
+                                        continue 'searching_for_end;
+                                    }
+                                } else {
+                                    return self.tokenizer_error(
+                                        chars.location(),
+                                        "Unterminated dollar-quoted, expected $",
+                                    )
+                                }
+                            }
+                            if chars.peek() == Some(&'$') {
+                                chars.next();
+                                maybe_s.push('$');
+                                // maybe_s matches the end delimiter
+                                break 'searching_for_end;
+                            } else {
+                                // This also doesn't match the dollar quote delimiter as there are
+                                // more characters before the second dollar so this is not the end
+                                // of the string.
+                                s.push_str(&maybe_s);
+                                continue 'searching_for_end;
+                            }
+                        },
+                        _ => return self.tokenizer_error(
                             chars.location(),
                             "Unterminated dollar-quoted, expected $",
-                        );
+                        )
                     }
                 }
             } else {

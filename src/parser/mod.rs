@@ -3347,6 +3347,8 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let view_options = self.parse_options(Keyword::OPTIONS)?;
+
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
@@ -3377,6 +3379,7 @@ impl<'a> Parser<'a> {
             late_binding,
             auto_refresh,
             comment,
+            view_options,
         })
     }
 

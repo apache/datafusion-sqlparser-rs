@@ -5703,6 +5703,7 @@ fn parse_create_view() {
             late_binding,
             auto_refresh,
             comment,
+            view_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<WithSpan<Ident>>::new(), columns);
@@ -5721,6 +5722,7 @@ fn parse_create_view() {
             assert_eq!(late_binding, false);
             assert_eq!(auto_refresh, None);
             assert_eq!(comment, None);
+            assert_eq!(view_options, vec![]);
         }
         _ => unreachable!(),
     }
@@ -5771,6 +5773,7 @@ fn parse_create_view_with_columns() {
             late_binding,
             auto_refresh,
             comment,
+            view_options,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(
@@ -5795,6 +5798,7 @@ fn parse_create_view_with_columns() {
             assert_eq!(late_binding, false);
             assert_eq!(auto_refresh, None);
             assert_eq!(comment, None);
+            assert_eq!(view_options, vec![]);
         }
         _ => unreachable!(),
     }
@@ -5822,6 +5826,7 @@ fn parse_create_or_replace_view() {
             late_binding,
             auto_refresh,
             comment,
+            view_options,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -5840,6 +5845,7 @@ fn parse_create_or_replace_view() {
             assert_eq!(late_binding, false);
             assert_eq!(auto_refresh, None);
             assert_eq!(comment, None);
+            assert_eq!(view_options, vec![]);
         }
         _ => unreachable!(),
     }
@@ -5871,6 +5877,7 @@ fn parse_create_or_replace_materialized_view() {
             late_binding,
             auto_refresh,
             comment,
+            view_options,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -5889,6 +5896,7 @@ fn parse_create_or_replace_materialized_view() {
             assert_eq!(late_binding, false);
             assert_eq!(auto_refresh, None);
             assert_eq!(comment, None);
+            assert_eq!(view_options, vec![]);
         }
         _ => unreachable!(),
     }
@@ -5916,6 +5924,7 @@ fn parse_create_materialized_view() {
             late_binding,
             auto_refresh,
             comment,
+            view_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<WithSpan<Ident>>::new(), columns);
@@ -5934,6 +5943,7 @@ fn parse_create_materialized_view() {
             assert_eq!(late_binding, false);
             assert_eq!(auto_refresh, None);
             assert_eq!(comment, None);
+            assert_eq!(view_options, vec![]);
         }
         _ => unreachable!(),
     }
@@ -5961,6 +5971,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             late_binding,
             auto_refresh,
             comment,
+            view_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<WithSpan<Ident>>::new(), columns);
@@ -5979,6 +5990,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert_eq!(late_binding, false);
             assert_eq!(auto_refresh, None);
             assert_eq!(comment, None);
+            assert_eq!(view_options, vec![]);
         }
         _ => unreachable!(),
     }

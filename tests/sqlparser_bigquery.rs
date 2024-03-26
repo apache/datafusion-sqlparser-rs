@@ -1285,3 +1285,10 @@ fn test_create_table_field_options() {
         "CREATE TABLE `pr`.`ts`.`salesforce_accounts` (account_name STRING OPTIONS(description = \"Account name\", label = \"dev\"))",
     );
 }
+
+#[test]
+fn test_create_view_options() {
+    bigquery().verified_stmt(
+        "CREATE VIEW `myproject`.`mydataset`.`newview` OPTIONS(friendly_name = \"newview\", description = \"a view that expires in 2 days\") AS SELECT col_1 FROM `myproject`.`mydataset`.`mytable`",
+    );
+}

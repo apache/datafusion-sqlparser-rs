@@ -1573,6 +1573,7 @@ pub enum Statement {
         late_binding: bool,
         auto_refresh: Option<bool>,
         comment: Option<String>,
+        view_options: Vec<SqlOption>,
     },
     /// CREATE TABLE
     CreateTable {
@@ -2535,6 +2536,7 @@ impl fmt::Display for Statement {
                 late_binding,
                 auto_refresh,
                 comment,
+                view_options,
             } => {
                 write!(
                     f,
@@ -2588,6 +2590,14 @@ impl fmt::Display for Statement {
                 }
                 if let Some(comment) = comment {
                     write!(f, " COMMENT='{comment}'")?;
+                }
+
+                if !view_options.is_empty() {
+                    write!(
+                        f,
+                        " OPTIONS({view_options})",
+                        view_options = display_comma_separated(view_options)
+                    )?;
                 }
 
                 write!(f, " AS {query}")?;

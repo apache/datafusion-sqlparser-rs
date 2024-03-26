@@ -4303,12 +4303,16 @@ impl<'a> Parser<'a> {
                 break;
             };
         }
+
+        let column_options = self.parse_options(Keyword::OPTIONS)?;
+
         Ok(ColumnDef {
             name,
             data_type,
             collation,
             codec,
             options,
+            column_options,
         })
     }
 

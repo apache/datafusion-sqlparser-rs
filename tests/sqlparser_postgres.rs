@@ -338,6 +338,7 @@ fn parse_create_table_with_defaults() {
                                 pg().verified_expr("nextval(public.customer_customer_id_seq)")
                             )
                         }],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("store_id").empty_span(),
@@ -348,6 +349,7 @@ fn parse_create_table_with_defaults() {
                             name: None,
                             option: ColumnOption::NotNull,
                         }],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("first_name").empty_span(),
@@ -363,6 +365,7 @@ fn parse_create_table_with_defaults() {
                             name: None,
                             option: ColumnOption::NotNull,
                         }],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("last_name").empty_span(),
@@ -378,6 +381,7 @@ fn parse_create_table_with_defaults() {
                             name: None,
                             option: ColumnOption::NotNull,
                         }],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("email").empty_span(),
@@ -390,6 +394,7 @@ fn parse_create_table_with_defaults() {
                         collation: None,
                         codec: None,
                         options: vec![],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("address_id").empty_span(),
@@ -400,6 +405,7 @@ fn parse_create_table_with_defaults() {
                             name: None,
                             option: ColumnOption::NotNull
                         }],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("activebool").empty_span(),
@@ -416,6 +422,7 @@ fn parse_create_table_with_defaults() {
                                 option: ColumnOption::NotNull,
                             }
                         ],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("create_date").empty_span(),
@@ -434,6 +441,7 @@ fn parse_create_table_with_defaults() {
                                 option: ColumnOption::NotNull,
                             }
                         ],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("last_update").empty_span(),
@@ -450,6 +458,7 @@ fn parse_create_table_with_defaults() {
                                 option: ColumnOption::NotNull,
                             }
                         ],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("active").empty_span(),
@@ -460,6 +469,7 @@ fn parse_create_table_with_defaults() {
                             name: None,
                             option: ColumnOption::NotNull
                         }],
+                        column_options: vec![],
                     },
                 ]
             );
@@ -624,6 +634,7 @@ fn parse_alter_table_add_columns() {
                             collation: None,
                             codec: None,
                             options: vec![],
+                            column_options: vec![],
                         },
                     },
                     AlterTableOperation::AddColumn {
@@ -635,6 +646,7 @@ fn parse_alter_table_add_columns() {
                             collation: None,
                             codec: None,
                             options: vec![],
+                            column_options: vec![],
                         },
                     },
                 ]
@@ -3599,42 +3611,48 @@ fn parse_create_table_with_alias() {
                         data_type: DataType::Int8(None),
                         collation: None,
                         codec: None,
-                        options: vec![]
+                        options: vec![],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("int4_col").empty_span(),
                         data_type: DataType::Int4(None),
                         collation: None,
                         codec: None,
-                        options: vec![]
+                        options: vec![],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("int2_col").empty_span(),
                         data_type: DataType::Int2(None),
                         collation: None,
                         codec: None,
-                        options: vec![]
+                        options: vec![],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("float8_col").empty_span(),
                         data_type: DataType::Float8,
                         collation: None,
                         codec: None,
-                        options: vec![]
+                        options: vec![],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("float4_col").empty_span(),
                         data_type: DataType::Float4,
                         collation: None,
                         codec: None,
-                        options: vec![]
+                        options: vec![],
+                        column_options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bool_col").empty_span(),
                         data_type: DataType::Bool,
                         collation: None,
                         codec: None,
-                        options: vec![]
+                        options: vec![],
+                        column_options: vec![],
                     },
                 ]
             );

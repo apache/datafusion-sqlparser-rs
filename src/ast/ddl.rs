@@ -20,7 +20,7 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use sqlparser::ast::{Value, WithSpan};
+use sqlparser::ast::{SqlOption, Value, WithSpan};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -551,6 +551,7 @@ pub struct ColumnDef {
     pub collation: Option<ObjectName>,
     pub codec: Option<Vec<Expr>>,
     pub options: Vec<ColumnOptionDef>,
+    pub column_options: Vec<SqlOption>,
 }
 
 impl fmt::Display for ColumnDef {
@@ -564,6 +565,13 @@ impl fmt::Display for ColumnDef {
         }
         for option in &self.options {
             write!(f, " {option}")?;
+        }
+        if !self.column_options.is_empty() {
+            write!(
+                f,
+                " OPTIONS({})",
+                display_comma_separated(&self.column_options)
+            )?;
         }
         Ok(())
     }

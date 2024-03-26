@@ -113,6 +113,7 @@ fn parse_nested_data_types() {
                         collation: None,
                         codec: None,
                         options: vec![],
+                        column_options: vec![]
                     },
                     ColumnDef {
                         name: Ident::new("y").empty_span(),
@@ -125,6 +126,7 @@ fn parse_nested_data_types() {
                         collation: None,
                         codec: None,
                         options: vec![],
+                        column_options: vec![]
                     },
                 ]
             );
@@ -1274,5 +1276,12 @@ fn test_create_table_with_partition_by() {
 fn test_create_external_table_with_options() {
     bigquery().verified_stmt(
         r#"CREATE EXTERNAL TABLE mytable (id INT64, timestamp TIMESTAMP) OPTIONS (sheet_range = "synq", skip_leading_rows = 1, format = "GOOGLE_SHEETS", uris = ["https://docs.google.com/spreadsheets/d/1g3xwWi1r-Ln2VVwv4mswwmqyfMeoJglv-MS80ywASGI/edit#gid=0"])"#,
+    );
+}
+
+#[test]
+fn test_create_table_field_options() {
+    bigquery().verified_stmt(
+        "CREATE TABLE `pr`.`ts`.`salesforce_accounts` (account_name STRING OPTIONS(description = \"Account name\", label = \"dev\"))",
     );
 }

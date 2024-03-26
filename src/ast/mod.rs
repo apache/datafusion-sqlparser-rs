@@ -371,15 +371,20 @@ impl fmt::Display for JsonOperator {
 pub struct StructField {
     pub field_name: Option<WithSpan<Ident>>,
     pub field_type: DataType,
+    pub options: Vec<SqlOption>,
 }
 
 impl fmt::Display for StructField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(name) = &self.field_name {
-            write!(f, "{name} {}", self.field_type)
+            write!(f, "{name} {}", self.field_type)?;
         } else {
-            write!(f, "{}", self.field_type)
+            write!(f, "{}", self.field_type)?;
+        };
+        if !self.options.is_empty() {
+            write!(f, " OPTIONS({})", display_comma_separated(&self.options))?;
         }
+        Ok(())
     }
 }
 

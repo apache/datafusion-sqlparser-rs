@@ -1835,11 +1835,13 @@ impl<'a> Parser<'a> {
         };
 
         let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
+        let options = self.parse_options(Keyword::OPTIONS)?;
 
         Ok((
             StructField {
                 field_name,
                 field_type,
+                options,
             },
             trailing_bracket,
         ))

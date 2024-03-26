@@ -4836,6 +4836,11 @@ impl<'a> Parser<'a> {
             self.expect_keyword(Keyword::WITH)?;
             let table_name = self.parse_object_name()?;
             AlterTableOperation::SwapWith { table_name }
+        } else if self.parse_keyword(Keyword::SET) {
+            self.expect_keyword(Keyword::OPTIONS)?;
+            self.prev_token();
+            let options = self.parse_options(Keyword::OPTIONS)?;
+            AlterTableOperation::SetOptions { options }
         } else {
             return self.expected(
                 "ADD, RENAME, PARTITION, SWAP or DROP after ALTER TABLE",
@@ -5230,6 +5235,14 @@ impl<'a> Parser<'a> {
                 }
                 self.expect_token(&Token::RBracket)?;
                 Ok(Value::Array(fields))
+            }
+            Token::LParen => {
+                let values = self.parse_comma_separated(Parser::parse_value)?;
+                if values.len() == 1 {
+                    Ok(values.into_iter().next().unwrap())
+                } else {
+                    Ok(Value::Tuple(values))
+                }
             }
             unexpected => self.expected(
                 "a value",

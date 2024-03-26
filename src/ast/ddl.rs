@@ -99,10 +99,15 @@ pub enum AlterTableOperation {
         column_name: Ident,
         op: AlterColumnOperation,
     },
-    /// 'SWAP WITH <table_name>'
+    /// `SWAP WITH <table_name>`
     ///
     /// Note: this is Snowflake specific <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
     SwapWith { table_name: ObjectName },
+
+    /// `SET OPTIONS(table_set_options_list)`
+    ///
+    /// Note: this is BigQuery specific <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_set_options_statement>
+    SetOptions { options: Vec<SqlOption> },
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -212,6 +217,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::SwapWith { table_name } => {
                 write!(f, "SWAP WITH {table_name}")
+            }
+            AlterTableOperation::SetOptions { options } => {
+                write!(f, "SET OPTIONS({})", display_comma_separated(options))
             }
         }
     }

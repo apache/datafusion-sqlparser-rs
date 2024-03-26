@@ -20,7 +20,7 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ast::Expr;
+use crate::ast::{display_comma_separated, Expr};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -79,6 +79,9 @@ pub enum Value {
     /// https://docs.snowflake.com/en/sql-reference/data-types-semistructured#object-constants
     ObjectConstant(Vec<ObjectConstantKeyValue>),
     Array(Vec<Value>),
+    /// TUPLE as used by BigQuery
+    /// ("org_unit", "development")
+    Tuple(Vec<Value>),
 }
 
 impl fmt::Display for Value {
@@ -116,8 +119,10 @@ impl fmt::Display for Value {
                 }
             }
             Value::Array(values) => {
-                let collected: Vec<String> = values.iter().map(|v| format!("{}", v)).collect();
-                write!(f, "[{}]", collected.join(", "))
+                write!(f, "[{}]", display_comma_separated(values))
+            }
+            Value::Tuple(values) => {
+                write!(f, "({})", display_comma_separated(values))
             }
         }
     }

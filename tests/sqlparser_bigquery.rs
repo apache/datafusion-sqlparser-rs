@@ -1292,3 +1292,8 @@ fn test_create_view_options() {
         "CREATE VIEW `myproject`.`mydataset`.`newview` OPTIONS(friendly_name = \"newview\", description = \"a view that expires in 2 days\") AS SELECT col_1 FROM `myproject`.`mydataset`.`mytable`",
     );
 }
+
+#[test]
+fn test_alter_table_set_options() {
+    bigquery().verified_stmt("ALTER TABLE tbl SET OPTIONS(description = \"Desc.\")");
+}

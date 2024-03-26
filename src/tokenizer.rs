@@ -117,7 +117,7 @@ pub enum Token {
     Colon,
     /// DoubleColon `::` (used for casting in PostgreSQL)
     DoubleColon,
-    /// Assignment `:=` (used for keyword argument in DuckDB macros)
+    /// Assignment `:=` (used for keyword argument in DuckDB macros and some functions)
     DuckAssignment,
     /// SemiColon `;` used as separator for COPY and payload
     SemiColon,

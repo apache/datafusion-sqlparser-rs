@@ -245,7 +245,9 @@ pub enum AlterColumnOperation {
     /// `DROP NOT NULL`
     DropNotNull,
     /// `SET DEFAULT <expr>`
-    SetDefault { value: Expr },
+    SetDefault {
+        value: Expr,
+    },
     /// `DROP DEFAULT`
     DropDefault,
     /// `[SET DATA] TYPE <data_type> [USING <expr>]`
@@ -253,6 +255,9 @@ pub enum AlterColumnOperation {
         data_type: DataType,
         /// PostgreSQL specific
         using: Option<Expr>,
+    },
+    SetOptions {
+        options: Vec<SqlOption>,
     },
 }
 
@@ -273,6 +278,9 @@ impl fmt::Display for AlterColumnOperation {
                 } else {
                     write!(f, "SET DATA TYPE {data_type}")
                 }
+            }
+            AlterColumnOperation::SetOptions { options } => {
+                write!(f, "SET OPTIONS({})", display_comma_separated(options))
             }
         }
     }

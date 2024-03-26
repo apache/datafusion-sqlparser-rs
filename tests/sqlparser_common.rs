@@ -3471,7 +3471,7 @@ fn parse_alter_table_alter_column_type() {
     let res =
         dialect.parse_sql_statements(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
     assert_eq!(
-        ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE\nNear ` TABLE tab ALTER COLUMN is_active`".to_string()),
+        ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, SET OPTIONS after ALTER COLUMN, found: TYPE\nNear ` TABLE tab ALTER COLUMN is_active`".to_string()),
         res.unwrap_err()
     );
 

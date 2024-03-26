@@ -4825,9 +4825,13 @@ impl<'a> Parser<'a> {
                     None
                 };
                 AlterColumnOperation::SetDataType { data_type, using }
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::OPTIONS]) {
+                self.prev_token();
+                let options = self.parse_options(Keyword::OPTIONS)?;
+                AlterColumnOperation::SetOptions { options }
             } else {
                 return self.expected(
-                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN",
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, SET OPTIONS after ALTER COLUMN",
                     self.peek_token(),
                 );
             };

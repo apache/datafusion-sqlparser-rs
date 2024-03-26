@@ -1308,3 +1308,9 @@ fn test_alter_schema_set_options() {
     bigquery()
         .verified_stmt("ALTER SCHEMA mydataset SET OPTIONS (default_table_expiration_days = 3.75)");
 }
+
+#[test]
+fn test_alter_table_alter_column_set_options() {
+    bigquery()
+        .verified_stmt("ALTER TABLE mydataset.mytable ALTER COLUMN price SET OPTIONS(description = 'Price per unit')");
+}

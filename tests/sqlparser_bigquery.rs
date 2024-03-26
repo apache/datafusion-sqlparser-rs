@@ -1314,3 +1314,9 @@ fn test_alter_table_alter_column_set_options() {
     bigquery()
         .verified_stmt("ALTER TABLE mydataset.mytable ALTER COLUMN price SET OPTIONS(description = 'Price per unit')");
 }
+
+#[test]
+fn test_alter_set_options_labels_tuple() {
+    bigquery()
+        .verified_stmt("ALTER SCHEMA mydataset SET OPTIONS (labels = [('sensitivity', 'high')])");
+}

@@ -5266,6 +5266,7 @@ impl<'a> Parser<'a> {
             }
             Token::LParen => {
                 let values = self.parse_comma_separated(Parser::parse_value)?;
+                self.expect_token(&Token::RParen)?;
                 if values.len() == 1 {
                     Ok(values.into_iter().next().unwrap())
                 } else {

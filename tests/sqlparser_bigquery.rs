@@ -409,7 +409,8 @@ fn parse_typeless_struct_syntax() {
                 Expr::Value(number("2")),
                 Expr::Value(number("3")),
             ],
-            fields: Default::default()
+            fields: Default::default(),
+            array_notation: false,
         },
         expr_from_projection(&select.projection[0])
     );
@@ -417,7 +418,8 @@ fn parse_typeless_struct_syntax() {
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::Value(Value::SingleQuotedString("abc".to_string())),],
-            fields: Default::default()
+            fields: Default::default(),
+            array_notation: false,
         },
         expr_from_projection(&select.projection[1])
     );
@@ -427,7 +429,8 @@ fn parse_typeless_struct_syntax() {
                 Expr::Value(number("1")),
                 Expr::CompoundIdentifier(vec![Ident::from("t"), Ident::from("str_col")]),
             ],
-            fields: Default::default()
+            fields: Default::default(),
+            array_notation: false,
         },
         expr_from_projection(&select.projection[2])
     );
@@ -443,7 +446,8 @@ fn parse_typeless_struct_syntax() {
                     name: Ident::from("b")
                 },
             ],
-            fields: Default::default()
+            fields: Default::default(),
+            array_notation: false
         },
         expr_from_projection(&select.projection[3])
     );
@@ -453,7 +457,8 @@ fn parse_typeless_struct_syntax() {
                 expr: Expr::Identifier(Ident::from("str_col")).into(),
                 name: Ident::from("abc")
             }],
-            fields: Default::default()
+            fields: Default::default(),
+            array_notation: false
         },
         expr_from_projection(&select.projection[4])
     );
@@ -473,7 +478,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[0])
     );
@@ -507,7 +513,8 @@ fn parse_typed_struct_syntax() {
                     }),
                     field_type: DataType::String(None)
                 },
-            ]
+            ],
+            array_notation: false
         },
         expr_from_projection(&select.projection[1])
     );
@@ -531,7 +538,8 @@ fn parse_typed_struct_syntax() {
                         field_type: DataType::Bool
                     }])
                 },
-            ]
+            ],
+            array_notation: false
         },
         expr_from_projection(&select.projection[2])
     );
@@ -556,7 +564,8 @@ fn parse_typed_struct_syntax() {
                         DataType::Struct(Default::default())
                     )))
                 },
-            ]
+            ],
+            array_notation: false
         },
         expr_from_projection(&select.projection[0])
     );
@@ -570,7 +579,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Bool
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[0])
     );
@@ -582,7 +592,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Bytes(Some(42))
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[1])
     );
@@ -598,7 +609,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Date
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[0])
     );
@@ -611,7 +623,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Datetime(None)
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[1])
     );
@@ -621,7 +634,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Float64
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[2])
     );
@@ -631,7 +645,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[3])
     );
@@ -653,7 +668,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Interval
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[0])
     );
@@ -666,7 +682,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::JSON
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[1])
     );
@@ -680,7 +697,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::String(Some(42))
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[0])
     );
@@ -693,7 +711,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Timestamp(None, TimezoneInfo::None)
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[1])
     );
@@ -707,7 +726,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Time(None, TimezoneInfo::None)
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[2])
     );
@@ -724,7 +744,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Numeric(ExactNumberInfo::None)
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[0])
     );
@@ -737,7 +758,8 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::BigNumeric(ExactNumberInfo::None)
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[1])
     );
@@ -754,7 +776,8 @@ fn parse_typed_struct_with_field_name() {
             fields: vec![StructField {
                 field_name: Some(Ident::from("x")),
                 field_type: DataType::Int64
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[0])
     );
@@ -764,7 +787,8 @@ fn parse_typed_struct_with_field_name() {
             fields: vec![StructField {
                 field_name: Some(Ident::from("y")),
                 field_type: DataType::String(None)
-            }]
+            }],
+            array_notation: false
         },
         expr_from_projection(&select.projection[1])
     );
@@ -784,7 +808,8 @@ fn parse_typed_struct_with_field_name() {
                     field_name: Some(Ident::from("y")),
                     field_type: DataType::Int64
                 }
-            ]
+            ],
+            array_notation: false
         },
         expr_from_projection(&select.projection[0])
     );

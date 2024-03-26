@@ -246,3 +246,114 @@ fn test_duckdb_load_extension() {
         stmt
     );
 }
+
+#[test]
+fn test_duckdb_struct_literal() {
+    //array notation struct syntax https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    //syntax: {'field_name': expr1[, ... ]}
+    let sql = "SELECT {'a': 1, 'b': 2, 'c': 3}, {'a': 'abc'}, {'a': 1, 'b': t.str_col}, {'a': 1, 'b': 'abc'}, {'abc': str_col}, {'a': {'aa': 1}}";
+    let select = duckdb_and_generic().verified_only_select(sql);
+    assert_eq!(6, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![
+                Expr::Named {
+                    expr: Box::new(Expr::Value(number("1"))),
+                    name: Ident::with_quote('\'', "a")
+                },
+                Expr::Named {
+                    expr: Box::new(Expr::Value(number("2"))),
+                    name: Ident::with_quote('\'', "b")
+                },
+                Expr::Named {
+                    expr: Box::new(Expr::Value(number("3"))),
+                    name: Ident::with_quote('\'', "c")
+                },
+            ],
+            fields: Default::default(),
+            array_notation: true
+        },
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Named {
+                expr: Box::new(Expr::Value(Value::SingleQuotedString("abc".to_string()))),
+                name: Ident::with_quote('\'', "a")
+            },],
+            fields: Default::default(),
+            array_notation: true
+        },
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![
+                Expr::Named {
+                    expr: Box::new(Expr::Value(number("1"))),
+                    name: Ident::with_quote('\'', "a")
+                },
+                Expr::Named {
+                    expr: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::from("t"),
+                        Ident::from("str_col")
+                    ])),
+                    name: Ident::with_quote('\'', "b")
+                },
+            ],
+            fields: Default::default(),
+            array_notation: true
+        },
+        expr_from_projection(&select.projection[2])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![
+                Expr::Named {
+                    expr: Expr::Value(number("1")).into(),
+                    name: Ident::with_quote('\'', "a")
+                },
+                Expr::Named {
+                    expr: Expr::Value(Value::SingleQuotedString("abc".to_string())).into(),
+                    name: Ident::with_quote('\'', "b")
+                },
+            ],
+            fields: Default::default(),
+            array_notation: true
+        },
+        expr_from_projection(&select.projection[3])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Named {
+                expr: Expr::Identifier(Ident::from("str_col")).into(),
+                name: Ident::with_quote('\'', "abc")
+            }],
+            fields: Default::default(),
+            array_notation: true
+        },
+        expr_from_projection(&select.projection[4])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Named {
+                expr: Expr::Struct {
+                    values: vec![
+                        Expr::Named {
+                            expr: Expr::Value(number("1")).into(),
+                            name: Ident::with_quote('\'', "aa")
+                        }
+                    ],
+                    fields: vec![],
+                    array_notation: true
+                }
+                .into(),
+                name: Ident::with_quote('\'', "a")
+            }],
+            fields: Default::default(),
+            array_notation: true
+        },
+        expr_from_projection(&select.projection[5])
+    );
+}

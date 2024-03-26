@@ -1117,6 +1117,10 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
+            Token::LBrace if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                self.prev_token();
+                self.parse_duckdb_struct_literal()
+            }
             _ => self.expected("an expression:", next_token),
         }?;
 
@@ -2008,7 +2012,11 @@ impl<'a> Parser<'a> {
             .parse_comma_separated(|parser| parser.parse_struct_field_expr(!fields.is_empty()))?;
         self.expect_token(&Token::RParen)?;
 
-        Ok(Expr::Struct { values, fields })
+        Ok(Expr::Struct {
+            values,
+            fields,
+            array_notation: false,
+        })
     }
 
     /// Parse an expression value for a bigquery struct [1]
@@ -2125,6 +2133,52 @@ impl<'a> Parser<'a> {
             },
             trailing_bracket,
         ))
+    }
+
+    /// DuckDB specific: Parse a struct literal [1]
+    /// Syntax
+    /// ```sql
+    /// {'field_name': expr1[, ... ]}
+    /// ```
+    ///
+    /// [1] https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    fn parse_duckdb_struct_literal(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LBrace)?;
+
+        let values = self.parse_comma_separated(Self::parse_duckdb_struct_field)?;
+
+        self.expect_token(&Token::RBrace)?;
+
+        Ok(Expr::Struct {
+            values,
+            fields: vec![],
+            array_notation: true,
+        })
+    }
+
+    /// Parse an expression value for a duckdb struct [1]
+    /// Syntax
+    /// ```sql
+    /// 'name': expr
+    /// ```
+    ///
+    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    fn parse_duckdb_struct_field(&mut self) -> Result<Expr, ParserError> {
+        let next_token = self.next_token();
+
+        let name = match next_token.token {
+            Token::SingleQuotedString(name) => name,
+            _ => return self.expected("single quoted string", next_token),
+        };
+
+        self.expect_token(&Token::Colon)?;
+
+        let expr = self.parse_expr()?;
+
+        Ok(Expr::Named {
+            expr: Box::new(expr),
+            name: Ident::with_quote('\'', name),
+        })
     }
 
     /// For nested types that use the angle bracket syntax, this matches either

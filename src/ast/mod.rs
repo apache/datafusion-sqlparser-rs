@@ -669,12 +669,21 @@ pub enum Expr {
     /// ```sql
     /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
     /// ```
+    /// `DuckDB` specific `Struct` literal expression [2]
+    /// Syntax:
+    /// ```sql
+    /// syntax: {'field_name': expr1[, ... ]}
+    /// ```
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+    /// [2]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     Struct {
         /// Struct values.
         values: Vec<Expr>,
         /// Struct field definitions.
         fields: Vec<StructField>,
+        /// true if uses duckdb array notation syntax(no change in semantics)
+        /// this field is used for formatting
+        array_notation: bool,
     },
     /// `BigQuery` specific: An named expression in a typeless struct [1]
     ///
@@ -1131,8 +1140,23 @@ impl fmt::Display for Expr {
             Expr::Tuple(exprs) => {
                 write!(f, "({})", display_comma_separated(exprs))
             }
-            Expr::Struct { values, fields } => {
-                if !fields.is_empty() {
+            Expr::Struct {
+                values,
+                fields,
+                array_notation,
+            } => {
+                if *array_notation {
+                    let args = values
+                        .iter()
+                        .map(|value| match value {
+                            Expr::Named { expr, name } => {
+                                format!("'{}': {}", name.value, expr)
+                            }
+                            _ => unreachable!(),
+                        })
+                        .collect::<Vec<_>>();
+                    write!(f, "{{{}}}", display_comma_separated(&args))
+                } else if !fields.is_empty() {
                     write!(
                         f,
                         "STRUCT<{}>({})",

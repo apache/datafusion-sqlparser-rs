@@ -3231,11 +3231,13 @@ fn parse_alter_view() {
             columns,
             query,
             with_options,
+            set_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<WithSpan<Ident>>::new(), columns);
-            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert_eq!("SELECT foo FROM bar", query.unwrap().to_string());
             assert_eq!(with_options, vec![]);
+            assert_eq!(set_options, vec![]);
         }
         _ => unreachable!(),
     }
@@ -3273,6 +3275,7 @@ fn parse_alter_view_with_columns() {
             columns,
             query,
             with_options,
+            set_options,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(
@@ -3282,8 +3285,9 @@ fn parse_alter_view_with_columns() {
                     Ident::new("cols").empty_span(),
                 ]
             );
-            assert_eq!("SELECT 1, 2", query.to_string());
+            assert_eq!("SELECT 1, 2", query.unwrap().to_string());
             assert_eq!(with_options, vec![]);
+            assert_eq!(set_options, vec![]);
         }
         _ => unreachable!(),
     }

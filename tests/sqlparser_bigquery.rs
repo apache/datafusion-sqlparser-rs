@@ -1297,3 +1297,8 @@ fn test_create_view_options() {
 fn test_alter_table_set_options() {
     bigquery().verified_stmt("ALTER TABLE tbl SET OPTIONS(description = \"Desc.\")");
 }
+
+#[test]
+fn test_alter_view_set_options() {
+    bigquery().verified_stmt("ALTER VIEW tbl SET OPTIONS (description = \"Desc.\")");
+}

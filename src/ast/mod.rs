@@ -1695,14 +1695,15 @@ pub enum Statement {
         name: ObjectName,
         operation: AlterIndexOperation,
     },
-    /// ALTER VIEW
+    /// ALTER VIEW AS
     AlterView {
         /// View name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
         columns: Vec<WithSpan<Ident>>,
-        query: Box<Query>,
+        query: Option<Query>,
         with_options: Vec<SqlOption>,
+        set_options: Vec<SqlOption>,
     },
     /// ALTER ROLE
     AlterRole {
@@ -3030,6 +3031,7 @@ impl fmt::Display for Statement {
                 columns,
                 query,
                 with_options,
+                set_options,
             } => {
                 write!(f, "ALTER VIEW {name}")?;
                 if !with_options.is_empty() {
@@ -3038,7 +3040,13 @@ impl fmt::Display for Statement {
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
-                write!(f, " AS {query}")
+                if let Some(query) = query {
+                    write!(f, " AS {query}")?;
+                }
+                if !set_options.is_empty() {
+                    write!(f, " SET OPTIONS ({})", display_comma_separated(set_options))?;
+                }
+                Ok(())
             }
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")

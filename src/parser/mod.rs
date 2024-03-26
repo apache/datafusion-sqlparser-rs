@@ -4901,14 +4901,25 @@ impl<'a> Parser<'a> {
 
         let with_options = self.parse_options(Keyword::WITH)?;
 
-        self.expect_keyword(Keyword::AS)?;
-        let query = Box::new(self.parse_query()?);
+        let query = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_query()?)
+        } else {
+            None
+        };
+
+        let set_options = if self.parse_keywords(&[Keyword::SET, Keyword::OPTIONS]) {
+            self.prev_token();
+            self.parse_options(Keyword::OPTIONS)?
+        } else {
+            vec![]
+        };
 
         Ok(Statement::AlterView {
             name,
             columns,
             query,
             with_options,
+            set_options,
         })
     }
 

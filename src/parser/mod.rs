@@ -4021,6 +4021,8 @@ impl<'a> Parser<'a> {
 
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
+        let table_options = self.parse_options(Keyword::OPTIONS)?;
+
         let engine = if self.parse_keyword(Keyword::ENGINE) {
             self.expect_token(&Token::Eq)?;
             let next_token = self.next_token();
@@ -4206,6 +4208,7 @@ impl<'a> Parser<'a> {
             .table_ttl(table_ttl)
             .clickhouse_settings(clickhouse_settings)
             .using(using)
+            .table_options(table_options)
             .build())
     }
 

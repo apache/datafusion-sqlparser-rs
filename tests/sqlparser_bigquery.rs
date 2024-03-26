@@ -1280,6 +1280,13 @@ fn test_create_external_table_with_options() {
 }
 
 #[test]
+fn test_create_table_with_options() {
+    bigquery().verified_stmt(
+        "CREATE TABLE `pr`.`ts`.`salesforce_accounts` (account_name STRING) OPTIONS (description = \"Account name\")",
+    );
+}
+
+#[test]
 fn test_create_table_field_options() {
     bigquery().verified_stmt(
         "CREATE TABLE `pr`.`ts`.`salesforce_accounts` (account_name STRING OPTIONS(description = \"Account name\", label = \"dev\"))",

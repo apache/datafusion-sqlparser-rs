@@ -4856,6 +4856,7 @@ impl<'a> Parser<'a> {
             Keyword::TABLE,
             Keyword::INDEX,
             Keyword::ROLE,
+            Keyword::SCHEMA,
         ])?;
         match object_type {
             Keyword::VIEW => self.parse_alter_view(),
@@ -4890,6 +4891,7 @@ impl<'a> Parser<'a> {
                 })
             }
             Keyword::ROLE => self.parse_alter_role(),
+            Keyword::SCHEMA => self.parse_alter_schema(),
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }
@@ -4921,6 +4923,17 @@ impl<'a> Parser<'a> {
             with_options,
             set_options,
         })
+    }
+
+    pub fn parse_alter_schema(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+
+        self.expect_keywords(&[Keyword::SET, Keyword::OPTIONS])?;
+        self.prev_token();
+
+        let set_options = self.parse_options(Keyword::OPTIONS)?;
+
+        Ok(Statement::AlterSchema { name, set_options })
     }
 
     /// Parse a copy statement

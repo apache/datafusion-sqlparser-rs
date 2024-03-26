@@ -1705,6 +1705,13 @@ pub enum Statement {
         with_options: Vec<SqlOption>,
         set_options: Vec<SqlOption>,
     },
+    /// ALTER SCHEMA
+    AlterSchema {
+        /// View name
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        name: ObjectName,
+        set_options: Vec<SqlOption>,
+    },
     /// ALTER ROLE
     AlterRole {
         name: Ident,
@@ -3043,6 +3050,13 @@ impl fmt::Display for Statement {
                 if let Some(query) = query {
                     write!(f, " AS {query}")?;
                 }
+                if !set_options.is_empty() {
+                    write!(f, " SET OPTIONS ({})", display_comma_separated(set_options))?;
+                }
+                Ok(())
+            }
+            Statement::AlterSchema { name, set_options } => {
+                write!(f, "ALTER SCHEMA {name}")?;
                 if !set_options.is_empty() {
                     write!(f, " SET OPTIONS ({})", display_comma_separated(set_options))?;
                 }

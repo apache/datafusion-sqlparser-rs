@@ -1302,3 +1302,9 @@ fn test_alter_table_set_options() {
 fn test_alter_view_set_options() {
     bigquery().verified_stmt("ALTER VIEW tbl SET OPTIONS (description = \"Desc.\")");
 }
+
+#[test]
+fn test_alter_schema_set_options() {
+    bigquery()
+        .verified_stmt("ALTER SCHEMA mydataset SET OPTIONS (default_table_expiration_days = 3.75)");
+}

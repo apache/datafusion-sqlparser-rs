@@ -4077,7 +4077,7 @@ fn parse_named_argument_function_with_eq_operator() {
 }
 
 #[test]
-fn parse_named_argument_function_with_assignment_operator() {
+fn parse_named_argument_function_with_duckdb_assignment_operator() {
     let sql = "SELECT FUN(a := '1', b := '2') FROM foo";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -4089,14 +4089,14 @@ fn parse_named_argument_function_with_assignment_operator() {
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "1".to_owned()
                     ))),
-                    operator: FunctionArgOperator::Assignment
+                    operator: FunctionArgOperator::DuckAssignment
                 },
                 FunctionArg::Named {
                     name: Ident::new("b"),
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "2".to_owned()
                     ))),
-                    operator: FunctionArgOperator::Assignment
+                    operator: FunctionArgOperator::DuckAssignment
                 },
             ],
             null_treatment: None,

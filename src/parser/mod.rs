@@ -8568,7 +8568,7 @@ impl<'a> Parser<'a> {
             Ok(FunctionArg::Named {
                 name,
                 arg,
-                operator: FunctionArgOperator::Assignment,
+                operator: FunctionArgOperator::DuckAssignment,
             })
         } else {
             Ok(FunctionArg::Unnamed(self.parse_wildcard_expr()?.into()))

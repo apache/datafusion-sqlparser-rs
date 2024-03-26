@@ -4557,7 +4557,7 @@ pub enum FunctionArgOperator {
     /// function(arg1 => value1)
     RightArrow,
     /// function(arg1 := value1)
-    Assignment,
+    DuckAssignment,
 }
 
 impl fmt::Display for FunctionArgOperator {
@@ -4565,7 +4565,7 @@ impl fmt::Display for FunctionArgOperator {
         match self {
             FunctionArgOperator::Equals => f.write_str("="),
             FunctionArgOperator::RightArrow => f.write_str("=>"),
-            FunctionArgOperator::Assignment => f.write_str(":="),
+            FunctionArgOperator::DuckAssignment => f.write_str(":="),
         }
     }
 }

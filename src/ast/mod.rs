@@ -4290,7 +4290,7 @@ pub struct HiveFormat {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SqlOption {
     pub name: WithSpan<Ident>,
-    pub value: Value,
+    pub value: Expr,
 }
 
 impl fmt::Display for SqlOption {

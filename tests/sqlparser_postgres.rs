@@ -479,15 +479,15 @@ fn parse_create_table_with_defaults() {
                 vec![
                     SqlOption {
                         name: Ident::new("fillfactor").empty_span(),
-                        value: number("20")
+                        value: Expr::Value(number("20")),
                     },
                     SqlOption {
                         name: Ident::new("user_catalog_table").empty_span(),
-                        value: Value::Boolean(true)
+                        value: Expr::Value(Value::Boolean(true)),
                     },
                     SqlOption {
                         name: Ident::new("autovacuum_vacuum_threshold").empty_span(),
-                        value: number("100")
+                        value: Expr::Value(number("100")),
                     },
                 ]
             );

@@ -4693,7 +4693,7 @@ impl<'a> Parser<'a> {
     pub fn parse_sql_option(&mut self) -> Result<SqlOption, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_token(&Token::Eq)?;
-        let value = self.parse_value()?;
+        let value = self.parse_expr()?;
         Ok(SqlOption { name, value })
     }
 

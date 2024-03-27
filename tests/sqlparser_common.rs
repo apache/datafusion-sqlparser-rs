@@ -2979,11 +2979,11 @@ fn parse_create_table_with_options() {
                 vec![
                     SqlOption {
                         name: Ident::new("foo").empty_span(),
-                        value: Value::SingleQuotedString("bar".into()),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption {
                         name: Ident::new("a").empty_span(),
-                        value: number("123"),
+                        value: Expr::Value(number("123")),
                     },
                 ],
                 with_options
@@ -3252,11 +3252,11 @@ fn parse_alter_view_with_options() {
                 vec![
                     SqlOption {
                         name: Ident::new("foo").empty_span(),
-                        value: Value::SingleQuotedString("bar".into()),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption {
                         name: Ident::new("a").empty_span(),
-                        value: number("123"),
+                        value: Expr::Value(number("123")),
                     },
                 ],
                 with_options
@@ -5741,11 +5741,11 @@ fn parse_create_view_with_options() {
                 vec![
                     SqlOption {
                         name: Ident::new("foo").empty_span(),
-                        value: Value::SingleQuotedString("bar".into()),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption {
                         name: Ident::new("a").empty_span(),
-                        value: number("123"),
+                        value: Expr::Value(number("123")),
                     },
                 ],
                 with_options
@@ -7561,11 +7561,11 @@ fn parse_cache_table() {
             options: vec![
                 SqlOption {
                     name: Ident::with_quote('\'', "K1").empty_span(),
-                    value: Value::SingleQuotedString("V1".into()),
+                    value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption {
                     name: Ident::with_quote('\'', "K2").empty_span(),
-                    value: number("0.88"),
+                    value: Expr::Value(number("0.88")),
                 },
             ],
             query: None,
@@ -7586,11 +7586,11 @@ fn parse_cache_table() {
             options: vec![
                 SqlOption {
                     name: Ident::with_quote('\'', "K1").empty_span(),
-                    value: Value::SingleQuotedString("V1".into()),
+                    value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption {
                     name: Ident::with_quote('\'', "K2").empty_span(),
-                    value: number("0.88"),
+                    value: Expr::Value(number("0.88")),
                 },
             ],
             query: Some(query.clone()),
@@ -7611,11 +7611,11 @@ fn parse_cache_table() {
             options: vec![
                 SqlOption {
                     name: Ident::with_quote('\'', "K1").empty_span(),
-                    value: Value::SingleQuotedString("V1".into()),
+                    value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption {
                     name: Ident::with_quote('\'', "K2").empty_span(),
-                    value: number("0.88"),
+                    value: Expr::Value(number("0.88")),
                 },
             ],
             query: Some(query.clone()),

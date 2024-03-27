@@ -1378,3 +1378,10 @@ fn test_create_table_primary_key_not_enforced() {
         "CREATE TABLE `myproject`.`mydataset`.`mytable` (id INT64, PRIMARY KEY (id) NOT ENFORCED)",
     );
 }
+
+#[test]
+fn test_options_expression() {
+    bigquery().verified_stmt(
+        "CREATE TABLE `myproject`.`mydataset`.`mytable` (id INT64) OPTIONS (max_staleness = INTERVAL '0-0 0 0:15:0' YEAR TO SECOND)",
+    );
+}

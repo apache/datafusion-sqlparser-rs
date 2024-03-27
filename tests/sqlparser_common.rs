@@ -33,8 +33,8 @@ use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
-    all_dialects, alter_table_op, assert_eq_vec, expr_from_projection, join, number, only, table,
-    table_alias, TestedDialects,
+    all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, expr_from_projection, join,
+    number, only, table, table_alias, TestedDialects,
 };
 
 #[macro_use]
@@ -4045,7 +4045,9 @@ fn parse_named_argument_function() {
 #[test]
 fn parse_named_argument_function_with_eq_operator() {
     let sql = "SELECT FUN(a = '1', b = '2') FROM foo";
-    let select = verified_only_select(sql);
+
+    let select = all_dialects_where(|d| d.supports_named_fn_args_with_eq_operator())
+        .verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
@@ -4074,6 +4076,33 @@ fn parse_named_argument_function_with_eq_operator() {
         }),
         expr_from_projection(only(&select.projection))
     );
+
+    // Ensure that bar = 42 in a function argument parses as an equality binop
+    // rather than a named function argument.
+    assert_eq!(
+        all_dialects_except(|d| d.supports_named_fn_args_with_eq_operator())
+            .verified_expr("foo(bar = 42)"),
+        Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("foo")]),
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("bar"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(number("42"))),
+                },
+            ))],
+            filter: None,
+            null_treatment: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![],
+        })
+    );
+
+    // TODO: should this parse for all dialects?
+    all_dialects_except(|d| d.supports_named_fn_args_with_eq_operator())
+        .verified_expr("iff(1 = 1, 1, 0)");
 }
 
 #[test]

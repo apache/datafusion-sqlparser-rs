@@ -4023,8 +4023,6 @@ impl<'a> Parser<'a> {
 
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
-        let table_options = self.parse_options(Keyword::OPTIONS)?;
-
         let engine = if self.parse_keyword(Keyword::ENGINE) {
             self.expect_token(&Token::Eq)?;
             let next_token = self.next_token();
@@ -4108,13 +4106,18 @@ impl<'a> Parser<'a> {
 
         // In Snowflake CLUSTER BY can be also defined after columns
         if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
-            self.expect_token(&Token::LParen)?;
-            let exprs = if self.peek_token() != Token::RParen {
-                self.parse_comma_separated(|p| p.parse_expr())?
+            let exprs = if self.peek_token() == Token::LParen {
+                self.expect_token(&Token::LParen)?;
+                let exprs = if self.peek_token() != Token::RParen {
+                    self.parse_comma_separated(|p| p.parse_expr())?
+                } else {
+                    vec![]
+                };
+                self.expect_token(&Token::RParen)?;
+                exprs
             } else {
-                vec![]
+                self.parse_comma_separated(|p| p.parse_expr())?
             };
-            self.expect_token(&Token::RParen)?;
             cluster_by = Some(exprs)
         };
 
@@ -4179,6 +4182,9 @@ impl<'a> Parser<'a> {
             };
 
         let strict = self.parse_keyword(Keyword::STRICT);
+
+        let table_options = self.parse_options(Keyword::OPTIONS)?;
+
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
             .columns(columns)

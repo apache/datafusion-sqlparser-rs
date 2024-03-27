@@ -1363,3 +1363,11 @@ fn test_alter_set_options_labels_tuple() {
     bigquery()
         .verified_stmt("ALTER SCHEMA mydataset SET OPTIONS (labels = [('sensitivity', 'high')])");
 }
+
+#[test]
+fn test_create_table_cluster_by() {
+    bigquery().one_statement_parses_to(
+        "CREATE TABLE `myproject`.`mydataset`.`mytable` (service_id STRING, account_id STRING, state STRING, valid_from TIMESTAMP, valid_to TIMESTAMP) PARTITION BY TIMESTAMP_TRUNC(valid_from, MONTH) CLUSTER BY account_id, state OPTIONS (description = \"State of an service at a point in time\")",
+        "CREATE TABLE `myproject`.`mydataset`.`mytable` (service_id STRING, account_id STRING, state STRING, valid_from TIMESTAMP, valid_to TIMESTAMP) PARTITION BY TIMESTAMP_TRUNC(valid_from, MONTH) CLUSTER BY (account_id, state) OPTIONS (description = \"State of an service at a point in time\")"
+    );
+}

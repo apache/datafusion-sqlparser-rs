@@ -243,6 +243,7 @@ define_keywords!(
     ENDPOINT,
     END_FRAME,
     END_PARTITION,
+    ENFORCED,
     ENGINE,
     ENUM,
     EPOCH,

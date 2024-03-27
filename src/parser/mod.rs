@@ -4487,6 +4487,15 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+        if dialect_of!(self is BigQueryDialect) {
+            loop {
+                if self.parse_keywords(&[Keyword::NOT, Keyword::ENFORCED]) {
+                    constraint_properties.push(ConstraintProperty::NotEnforced)
+                } else {
+                    break;
+                }
+            }
+        }
         Ok(constraint_properties)
     }
 

@@ -806,6 +806,7 @@ pub enum ConstraintProperty {
     NoValidate,
     Rely,
     NoRely,
+    NotEnforced,
 }
 
 impl fmt::Display for ConstraintProperty {
@@ -815,6 +816,7 @@ impl fmt::Display for ConstraintProperty {
             ConstraintProperty::NoValidate => "NOVALIDATE",
             ConstraintProperty::Rely => "RELY",
             ConstraintProperty::NoRely => "NORELY",
+            ConstraintProperty::NotEnforced => "NOT ENFORCED",
         })
     }
 }

@@ -4089,14 +4089,14 @@ fn parse_named_argument_function_with_duckdb_assignment_operator() {
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "1".to_owned()
                     ))),
-                    operator: FunctionArgOperator::DuckAssignment
+                    operator: FunctionArgOperator::Assignment
                 },
                 FunctionArg::Named {
                     name: Ident::new("b"),
                     arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                         "2".to_owned()
                     ))),
-                    operator: FunctionArgOperator::DuckAssignment
+                    operator: FunctionArgOperator::Assignment
                 },
             ],
             null_treatment: None,

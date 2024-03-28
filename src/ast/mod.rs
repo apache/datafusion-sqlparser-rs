@@ -347,6 +347,23 @@ impl fmt::Display for StructField {
     }
 }
 
+/// A dictionary field within a dictionary.
+///
+/// [duckdb]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DictionaryField {
+    pub key: Ident,
+    pub value: Box<Expr>,
+}
+
+impl fmt::Display for DictionaryField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.key, self.value)
+    }
+}
+
 /// Options for `CAST` / `TRY_CAST`
 /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -669,21 +686,12 @@ pub enum Expr {
     /// ```sql
     /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
     /// ```
-    /// `DuckDB` specific `Struct` literal expression [2]
-    /// Syntax:
-    /// ```sql
-    /// syntax: {'field_name': expr1[, ... ]}
-    /// ```
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
-    /// [2]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     Struct {
         /// Struct values.
         values: Vec<Expr>,
         /// Struct field definitions.
         fields: Vec<StructField>,
-        /// true if uses duckdb array notation syntax(no change in semantics)
-        /// this field is used for formatting
-        array_notation: bool,
     },
     /// `BigQuery` specific: An named expression in a typeless struct [1]
     ///
@@ -696,6 +704,13 @@ pub enum Expr {
         expr: Box<Expr>,
         name: Ident,
     },
+    /// `DuckDB` specific `Struct` literal expression [1]
+    /// Syntax:
+    /// ```sql
+    /// syntax: {'field_name': expr1[, ... ]}
+    /// ```
+    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    Dictionary(Vec<DictionaryField>),
     /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
     ArrayIndex {
         obj: Box<Expr>,
@@ -1140,23 +1155,8 @@ impl fmt::Display for Expr {
             Expr::Tuple(exprs) => {
                 write!(f, "({})", display_comma_separated(exprs))
             }
-            Expr::Struct {
-                values,
-                fields,
-                array_notation,
-            } => {
-                if *array_notation {
-                    let args = values
-                        .iter()
-                        .map(|value| match value {
-                            Expr::Named { expr, name } => {
-                                format!("'{}': {}", name.value, expr)
-                            }
-                            _ => unreachable!(),
-                        })
-                        .collect::<Vec<_>>();
-                    write!(f, "{{{}}}", display_comma_separated(&args))
-                } else if !fields.is_empty() {
+            Expr::Struct { values, fields } => {
+                if !fields.is_empty() {
                     write!(
                         f,
                         "STRUCT<{}>({})",
@@ -1169,6 +1169,9 @@ impl fmt::Display for Expr {
             }
             Expr::Named { expr, name } => {
                 write!(f, "{} AS {}", expr, name)
+            }
+            Expr::Dictionary(fields) => {
+                write!(f, "{{{}}}", display_comma_separated(fields))
             }
             Expr::ArrayIndex { obj, indexes } => {
                 write!(f, "{obj}")?;

@@ -5924,6 +5924,7 @@ impl<'a> Parser<'a> {
                 | Keyword::START
                 | Keyword::END
                 | Keyword::DATA
+                | Keyword::VALUE
                     if dialect_of!(self is SnowflakeDialect | GenericDialect) =>
                 {
                     Ok(Value::UnQuotedString(w.value))

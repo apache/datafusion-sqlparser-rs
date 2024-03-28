@@ -246,3 +246,72 @@ fn test_duckdb_load_extension() {
         stmt
     );
 }
+
+#[test]
+fn test_create_secret() {
+    let sql = r#"CREATE OR REPLACE PERSISTENT SECRET IF NOT EXISTS name IN storage ( TYPE type, key1 value1, key2 value2 )"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::CreateSecret {
+            or_replace: true,
+            temporary: Some(false),
+            if_not_exists: true,
+            name: Some(Ident::new("name")),
+            storage_specifier: Some(Ident::new("storage")),
+            secret_type: Ident::new("type"),
+            options: vec![
+                SecretOption {
+                    key: Ident::new("key1"),
+                    value: Ident::new("value1"),
+                },
+                SecretOption {
+                    key: Ident::new("key2"),
+                    value: Ident::new("value2"),
+                }
+            ]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_create_secret_simple() {
+    let sql = r#"CREATE SECRET ( TYPE type )"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::CreateSecret {
+            or_replace: false,
+            temporary: None,
+            if_not_exists: false,
+            name: None,
+            storage_specifier: None,
+            secret_type: Ident::new("type"),
+            options: vec![]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_drop_secret() {
+    let sql = r#"DROP PERSISTENT SECRET IF EXISTS secret FROM storage"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DropSecret {
+             if_exists: true, temporary: Some(false), name:  Ident::new("secret"), storage_specifier: Some(Ident::new("storage")) }
+            ,
+        stmt
+    );
+}
+
+#[test]
+fn test_drop_secret_simple() {
+    let sql = r#"DROP SECRET secret"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DropSecret {
+             if_exists: false, temporary: None, name:  Ident::new("secret"), storage_specifier: None }
+            ,
+        stmt
+    );
+}

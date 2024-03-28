@@ -1999,6 +1999,19 @@ pub enum Statement {
         authorization_owner: Option<ObjectName>,
     },
     /// ```sql
+    /// CREATE SECRET
+    /// ```
+    /// See [duckdb](https://duckdb.org/docs/sql/statements/create_secret.html)
+    CreateSecret {
+        or_replace: bool,
+        temporary: Option<bool>,
+        if_not_exists: bool,
+        name: Option<Ident>,
+        storage_specifier: Option<Ident>,
+        secret_type: Ident,
+        options: Vec<SecretOption>,
+    },
+    /// ```sql
     /// ALTER TABLE
     /// ```
     AlterTable {
@@ -2078,6 +2091,15 @@ pub enum Statement {
         func_desc: Vec<DropFunctionDesc>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
+    },
+    /// ```sql
+    /// DROP SECRET
+    /// ```
+    DropSecret {
+        if_exists: bool,
+        temporary: Option<bool>,
+        name: Ident,
+        storage_specifier: Option<Ident>,
     },
     /// ```sql
     /// DECLARE
@@ -3515,6 +3537,48 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateSecret {
+                or_replace,
+                temporary,
+                if_not_exists,
+                name,
+                storage_specifier,
+                secret_type,
+                options,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                )?;
+                if let Some(t) = temporary {
+                    write!(f, "{}", if *t { "TEMPORARY " } else { "PERSISTENT " })?;
+                }
+                write!(
+                    f,
+                    "SECRET {if_not_exists}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                )?;
+                if let Some(n) = name {
+                    write!(f, "{n} ")?;
+                };
+                if let Some(s) = storage_specifier {
+                    write!(f, "IN {s} ")?;
+                }
+                write!(
+                    f,
+                    "( TYPE {secret_type}",
+                )?;
+                if !options.is_empty() {
+                    write!(
+                        f,
+                        ", {o}",
+                        o = display_comma_separated(options)
+                    )?;
+                }
+                write!(f, " )")?;
+                Ok(())
+            }
             Statement::AlterTable {
                 name,
                 if_exists,
@@ -3592,6 +3656,21 @@ impl fmt::Display for Statement {
                 )?;
                 if let Some(op) = option {
                     write!(f, " {op}")?;
+                }
+                Ok(())
+            }
+            Statement::DropSecret { if_exists, temporary, name, storage_specifier } => {
+                write!(f, "DROP ")?;
+                if let Some(t) = temporary {
+                    write!(f, "{}", if *t { "TEMPORARY " } else { "PERSISTENT " })?;
+                }
+                write!(
+                    f,
+                    "SECRET {if_exists}{name}",
+                    if_exists = if *if_exists { "IF EXISTS " } else { "" },
+                )?;
+                if let Some(s) = storage_specifier {
+                    write!(f, " FROM {s}")?;
                 }
                 Ok(())
             }
@@ -5023,6 +5102,20 @@ pub struct SqlOption {
 impl fmt::Display for SqlOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} = {}", self.name, self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SecretOption {
+    pub key: Ident,
+    pub value: Ident,
+}
+
+impl fmt::Display for SecretOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.key, self.value)
     }
 }
 

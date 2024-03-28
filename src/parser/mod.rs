@@ -3031,6 +3031,7 @@ impl<'a> Parser<'a> {
         let temporary = self
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
+        let persistent = dialect_of!(self is DuckDbDialect) && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
@@ -3042,6 +3043,8 @@ impl<'a> Parser<'a> {
             self.parse_create_function(or_replace, temporary)
         } else if self.parse_keyword(Keyword::MACRO) {
             self.parse_create_macro(or_replace, temporary)
+        } else if self.parse_keyword(Keyword::SECRET) {
+            self.parse_create_secret(or_replace, temporary, persistent)
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -3070,6 +3073,62 @@ impl<'a> Parser<'a> {
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
+    }
+
+    /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.
+    pub fn parse_create_secret(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+        persistent: bool,
+    ) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+
+        let mut storage_specifier = None;
+        let mut name = None;
+        if self.peek_token() != Token::LParen {
+            if self.parse_keyword(Keyword::IN) {
+                storage_specifier = self.parse_identifier(false).ok()
+            } else {
+                name = self.parse_identifier(false).ok();
+            }
+
+            // Storage specifier may follow the name
+            if storage_specifier.is_none() && self.peek_token() != Token::LParen && self.parse_keyword(Keyword::IN) {
+                storage_specifier = self.parse_identifier(false).ok();
+            }
+        }
+
+        self.expect_token(&Token::LParen)?;
+        self.expect_keyword(Keyword::TYPE)?;
+        let secret_type = self.parse_identifier(false)?;
+
+        let mut options = Vec::new();
+        if self.consume_token(&Token::Comma) {
+            options.append(&mut self.parse_comma_separated(|p| {
+                let key = p.parse_identifier(false)?;
+                let value = p.parse_identifier(false)?;
+                Ok(SecretOption { key, value })
+            })?);
+        }
+        self.expect_token(&Token::RParen)?;
+
+        let temp = match (temporary, persistent) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            (false, false) => None,
+            _ => self.expected("TEMPORARY or PERSISTENT", self.peek_token())?,
+        };
+
+        Ok(Statement::CreateSecret {
+            or_replace,
+            temporary: temp,
+            if_not_exists,
+            name,
+            storage_specifier,
+            secret_type,
+            options,
+        })
     }
 
     /// Parse a CACHE TABLE statement
@@ -3805,8 +3864,9 @@ impl<'a> Parser<'a> {
 
     pub fn parse_drop(&mut self) -> Result<Statement, ParserError> {
         // MySQL dialect supports `TEMPORARY`
-        let temporary = dialect_of!(self is MySqlDialect | GenericDialect)
+        let temporary = dialect_of!(self is MySqlDialect | GenericDialect | DuckDbDialect)
             && self.parse_keyword(Keyword::TEMPORARY);
+        let persistent = dialect_of!(self is DuckDbDialect) && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
 
         let object_type = if self.parse_keyword(Keyword::TABLE) {
             ObjectType::Table
@@ -3824,6 +3884,8 @@ impl<'a> Parser<'a> {
             ObjectType::Stage
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
+        } else if self.parse_keyword(Keyword::SECRET) {
+            return self.parse_drop_secret(temporary, persistent);
         } else {
             return self.expected(
                 "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, STAGE or SEQUENCE after DROP",
@@ -3894,6 +3956,25 @@ impl<'a> Parser<'a> {
         };
 
         Ok(DropFunctionDesc { name, args })
+    }
+
+    /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.
+    fn parse_drop_secret(&mut self, temporary: bool, persistent: bool) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parse_identifier(false)?;
+        let storage_specifier = if self.parse_keyword(Keyword::FROM) {
+            self.parse_identifier(false).ok()
+        } else {
+            None
+        };
+        let temp = match (temporary, persistent) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            (false, false) => None,
+            _ => self.expected("TEMPORARY or PERSISTENT", self.peek_token())?,
+        };
+
+        Ok(Statement::DropSecret { if_exists, temporary: temp, name, storage_specifier})
     }
 
     /// Parse a `DECLARE` statement.

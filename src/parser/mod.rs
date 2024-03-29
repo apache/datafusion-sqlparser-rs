@@ -2131,13 +2131,15 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    /// DuckDB specific: Parse a struct literal [1]
-    /// Syntax
+    /// DuckDB specific: Parse a duckdb dictionary [1]
+    ///
+    /// Syntax:
+    ///
     /// ```sql
     /// {'field_name': expr1[, ... ]}
     /// ```
     ///
-    /// [1] https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     fn parse_duckdb_struct_literal(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LBrace)?;
 

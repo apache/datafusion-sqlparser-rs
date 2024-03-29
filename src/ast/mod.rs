@@ -705,6 +705,7 @@ pub enum Expr {
         name: Ident,
     },
     /// `DuckDB` specific `Struct` literal expression [1]
+    ///
     /// Syntax:
     /// ```sql
     /// syntax: {'field_name': expr1[, ... ]}

@@ -1117,6 +1117,10 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
+            Token::LBrace if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                self.prev_token();
+                self.parse_duckdb_struct_literal()
+            }
             _ => self.expected("an expression:", next_token),
         }?;
 
@@ -2125,6 +2129,45 @@ impl<'a> Parser<'a> {
             },
             trailing_bracket,
         ))
+    }
+
+    /// DuckDB specific: Parse a duckdb dictionary [1]
+    ///
+    /// Syntax:
+    ///
+    /// ```sql
+    /// {'field_name': expr1[, ... ]}
+    /// ```
+    ///
+    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    fn parse_duckdb_struct_literal(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LBrace)?;
+
+        let fields = self.parse_comma_separated(Self::parse_duckdb_dictionary_field)?;
+
+        self.expect_token(&Token::RBrace)?;
+
+        Ok(Expr::Dictionary(fields))
+    }
+
+    /// Parse a field for a duckdb dictionary [1]
+    /// Syntax
+    /// ```sql
+    /// 'name': expr
+    /// ```
+    ///
+    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    fn parse_duckdb_dictionary_field(&mut self) -> Result<DictionaryField, ParserError> {
+        let key = self.parse_identifier(false)?;
+
+        self.expect_token(&Token::Colon)?;
+
+        let expr = self.parse_expr()?;
+
+        Ok(DictionaryField {
+            key,
+            value: Box::new(expr),
+        })
     }
 
     /// For nested types that use the angle bracket syntax, this matches either

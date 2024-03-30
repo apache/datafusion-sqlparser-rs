@@ -8607,7 +8607,7 @@ impl<'a> Parser<'a> {
             let name = self.parse_identifier(false)?;
 
             self.expect_token(&Token::Assignment)?;
-            let arg = self.parse_wildcard_expr()?.into();
+            let arg = self.parse_expr()?.into();
 
             Ok(FunctionArg::Named {
                 name,

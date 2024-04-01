@@ -21,6 +21,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt;
+use itertools::Itertools;
 
 use log::debug;
 
@@ -5826,14 +5827,16 @@ impl<'a> Parser<'a> {
 
     fn parse_literal_char(&mut self) -> Result<char, ParserError> {
         let s = self.parse_literal_string()?;
-        if s.len() != 1 {
+
+        if let Ok(ch) = s.chars().exactly_one() {
+            Ok(ch)
+        } else {
             let loc = self
                 .tokens
                 .get(self.index - 1)
                 .map_or(Location { line: 0, column: 0 }, |t| t.location);
-            return parser_err!(format!("Expect a char, found {s:?}"), loc);
+            parser_err!(format!("Expect a char, found {s:?}"), loc)
         }
-        Ok(s.chars().next().unwrap())
     }
 
     /// Parse a tab separated values in

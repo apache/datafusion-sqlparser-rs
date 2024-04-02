@@ -480,6 +480,9 @@ impl<'a> Parser<'a> {
                         Ok(self.parse_attach_database()?)
                     }
                 }
+                Keyword::DETACH if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                    Ok(self.parse_detach_duckdb_database()?)
+                },
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::CACHE => Ok(self.parse_cache_table()?),
@@ -724,6 +727,17 @@ impl<'a> Parser<'a> {
             database_path,
             database_alias,
             attach_options,
+        })
+    }
+
+    pub fn parse_detach_duckdb_database(&mut self) -> Result<Statement, ParserError> {
+        let database = self.parse_keyword(Keyword::DATABASE);
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let database_alias = self.parse_identifier(false)?;
+        Ok(Statement::DetachDuckDBDatabase {
+            if_exists,
+            database,
+            database_alias,
         })
     }
 

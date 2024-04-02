@@ -223,6 +223,7 @@ define_keywords!(
     DEREF,
     DESC,
     DESCRIBE,
+    DETACH,
     DETAIL,
     DETERMINISTIC,
     DIRECTORY,

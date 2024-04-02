@@ -446,3 +446,33 @@ fn test_attach_database_simple() {
         stmt
     );
 }
+
+#[test]
+fn test_detach_database() {
+    let sql = r#"DETACH DATABASE IF EXISTS db_name"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DetachDuckDBDatabase { 
+            if_exists: true,
+            database: true,
+            database_alias: Ident::new("db_name"),
+        },
+        stmt
+    );
+}
+
+
+#[test]
+fn test_detach_database_simple() {
+    let sql = r#"DETACH db_name"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DetachDuckDBDatabase { 
+            if_exists: false,
+            database: false,
+            database_alias: Ident::new("db_name"),
+        },
+        stmt
+    );
+}
+

@@ -2103,6 +2103,17 @@ pub enum Statement {
         attach_options: Vec<AttachDuckDBDatabaseOption>,
     },
     /// ```sql
+    /// DETACH db_alias;
+    /// ```
+    /// See https://duckdb.org/docs/sql/statements/attach.html
+    /// (DuckDB-specific)
+    DetachDuckDBDatabase {
+        if_exists: bool,
+        /// true if the syntax is 'DETACH DATABASE', false if it's just 'DETACH'
+        database: bool,
+        database_alias: Ident,
+    },
+    /// ```sql
     /// DROP [TABLE, VIEW, ...]
     /// ```
     Drop {
@@ -2814,6 +2825,19 @@ impl fmt::Display for Statement {
                 if !attach_options.is_empty() {
                     write!(f, " ({})", display_comma_separated(attach_options))?;
                 }
+                Ok(())
+            }
+            Statement::DetachDuckDBDatabase {
+                if_exists,
+                database,
+                database_alias, 
+            } => {
+                write!(
+                    f,
+                    "DETACH{database}{if_exists} {database_alias}",
+                    database = if *database { " DATABASE" } else { "" },
+                    if_exists = if *if_exists { " IF EXISTS" } else { "" },
+                )?;
                 Ok(())
             }
             Statement::Analyze {

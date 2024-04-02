@@ -473,7 +473,13 @@ impl<'a> Parser<'a> {
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
                 }
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
-                Keyword::ATTACH => Ok(self.parse_attach_database()?),
+                Keyword::ATTACH => {
+                    if dialect_of!(self is DuckDbDialect) {
+                        return self.parse_attach_duckdb_database();
+                    } else {
+                        Ok(self.parse_attach_database()?)
+                    }
+                }
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::CACHE => Ok(self.parse_cache_table()?),
@@ -663,6 +669,61 @@ impl<'a> Parser<'a> {
             table_name,
             partitions,
             table,
+        })
+    }
+
+    pub fn parse_attach_duckdb_database_options(
+        &mut self,
+    ) -> Result<Vec<AttachDuckDBDatabaseOption>, ParserError> {
+        if !self.consume_token(&Token::LParen) {
+            return Ok(vec![]);
+        }
+
+        let mut options = vec![];
+        loop {
+            if self.parse_keyword(Keyword::READ_ONLY) {
+                let boolean = if self.parse_keyword(Keyword::TRUE) {
+                    Some(true)
+                } else if self.parse_keyword(Keyword::FALSE) {
+                    Some(false)
+                } else {
+                    None
+                };
+                options.push(AttachDuckDBDatabaseOption::ReadOnly(boolean));
+            } else if self.parse_keyword(Keyword::TYPE) {
+                let ident = self.parse_identifier(false)?;
+                options.push(AttachDuckDBDatabaseOption::Type(ident));
+            } else {
+                return self.expected("expected one of: ), READ_ONLY, TYPE", self.peek_token());
+            };
+
+            if self.consume_token(&Token::RParen) {
+                return Ok(options);
+            } else if self.consume_token(&Token::Comma) {
+                continue;
+            } else {
+                return self.expected("expected one of: ')', ','", self.peek_token());
+            }
+        }
+    }
+
+    pub fn parse_attach_duckdb_database(&mut self) -> Result<Statement, ParserError> {
+        let database = self.parse_keyword(Keyword::DATABASE);
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let database_path = self.parse_identifier(false)?;
+        let database_alias = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_identifier(false)?)
+        } else {
+            None
+        };
+
+        let attach_options = self.parse_attach_duckdb_database_options()?;
+        Ok(Statement::AttachDuckDBDatabase {
+            if_not_exists,
+            database,
+            database_path,
+            database_alias,
+            attach_options,
         })
     }
 
@@ -3074,7 +3135,8 @@ impl<'a> Parser<'a> {
         let temporary = self
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
-        let persistent = dialect_of!(self is DuckDbDialect) && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
+        let persistent = dialect_of!(self is DuckDbDialect)
+            && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
@@ -3137,7 +3199,10 @@ impl<'a> Parser<'a> {
             }
 
             // Storage specifier may follow the name
-            if storage_specifier.is_none() && self.peek_token() != Token::LParen && self.parse_keyword(Keyword::IN) {
+            if storage_specifier.is_none()
+                && self.peek_token() != Token::LParen
+                && self.parse_keyword(Keyword::IN)
+            {
                 storage_specifier = self.parse_identifier(false).ok();
             }
         }
@@ -3909,7 +3974,8 @@ impl<'a> Parser<'a> {
         // MySQL dialect supports `TEMPORARY`
         let temporary = dialect_of!(self is MySqlDialect | GenericDialect | DuckDbDialect)
             && self.parse_keyword(Keyword::TEMPORARY);
-        let persistent = dialect_of!(self is DuckDbDialect) && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
+        let persistent = dialect_of!(self is DuckDbDialect)
+            && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
 
         let object_type = if self.parse_keyword(Keyword::TABLE) {
             ObjectType::Table
@@ -4002,7 +4068,11 @@ impl<'a> Parser<'a> {
     }
 
     /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.
-    fn parse_drop_secret(&mut self, temporary: bool, persistent: bool) -> Result<Statement, ParserError> {
+    fn parse_drop_secret(
+        &mut self,
+        temporary: bool,
+        persistent: bool,
+    ) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_identifier(false)?;
         let storage_specifier = if self.parse_keyword(Keyword::FROM) {
@@ -4017,7 +4087,12 @@ impl<'a> Parser<'a> {
             _ => self.expected("TEMPORARY or PERSISTENT", self.peek_token())?,
         };
 
-        Ok(Statement::DropSecret { if_exists, temporary: temp, name, storage_specifier})
+        Ok(Statement::DropSecret {
+            if_exists,
+            temporary: temp,
+            name,
+            storage_specifier,
+        })
     }
 
     /// Parse a `DECLARE` statement.

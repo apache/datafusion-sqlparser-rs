@@ -2089,6 +2089,20 @@ pub enum Statement {
         database: bool,
     },
     /// ```sql
+    /// ATTACH 'sqlite_file.db' AS sqlite_db (READ_ONLY, TYPE SQLITE);
+    /// ```
+    /// See https://duckdb.org/docs/sql/statements/attach.html
+    /// (DuckDB-specific)
+    AttachDuckDBDatabase {
+        if_not_exists: bool,
+        /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
+        database: bool,
+        /// An expression that indicates the path to the database file
+        database_path: Ident,
+        database_alias: Option<Ident>,
+        attach_options: Vec<AttachDuckDBDatabaseOption>,
+    },
+    /// ```sql
     /// DROP [TABLE, VIEW, ...]
     /// ```
     Drop {
@@ -2780,6 +2794,27 @@ impl fmt::Display for Statement {
             } => {
                 let keyword = if *database { "DATABASE " } else { "" };
                 write!(f, "ATTACH {keyword}{database_file_name} AS {schema_name}")
+            }
+            Statement::AttachDuckDBDatabase {
+                if_not_exists,
+                database,
+                database_path,
+                database_alias,
+                attach_options,
+            } => {
+                write!(
+                    f,
+                    "ATTACH{database}{if_not_exists} {database_path}",
+                    database = if *database { " DATABASE" } else { "" },
+                    if_not_exists = if *if_not_exists { " IF NOT EXISTS" } else { "" },
+                )?;
+                if let Some(alias) = database_alias {
+                    write!(f, " AS {alias}")?;
+                }
+                if !attach_options.is_empty() {
+                    write!(f, " ({})", display_comma_separated(attach_options))?;
+                }
+                Ok(())
             }
             Statement::Analyze {
                 table_name,
@@ -3593,16 +3628,9 @@ impl fmt::Display for Statement {
                 if let Some(s) = storage_specifier {
                     write!(f, "IN {s} ")?;
                 }
-                write!(
-                    f,
-                    "( TYPE {secret_type}",
-                )?;
+                write!(f, "( TYPE {secret_type}",)?;
                 if !options.is_empty() {
-                    write!(
-                        f,
-                        ", {o}",
-                        o = display_comma_separated(options)
-                    )?;
+                    write!(f, ", {o}", o = display_comma_separated(options))?;
                 }
                 write!(f, " )")?;
                 Ok(())
@@ -3687,7 +3715,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DropSecret { if_exists, temporary, name, storage_specifier } => {
+            Statement::DropSecret {
+                if_exists,
+                temporary,
+                name,
+                storage_specifier,
+            } => {
                 write!(f, "DROP ")?;
                 if let Some(t) = temporary {
                     write!(f, "{}", if *t { "TEMPORARY " } else { "PERSISTENT " })?;
@@ -5144,6 +5177,25 @@ pub struct SecretOption {
 impl fmt::Display for SecretOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.key, self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AttachDuckDBDatabaseOption {
+    ReadOnly(Option<bool>),
+    Type(Ident),
+}
+
+impl fmt::Display for AttachDuckDBDatabaseOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AttachDuckDBDatabaseOption::ReadOnly(Some(true)) => write!(f, "READ_ONLY true"),
+            AttachDuckDBDatabaseOption::ReadOnly(Some(false)) => write!(f, "READ_ONLY false"),
+            AttachDuckDBDatabaseOption::ReadOnly(None) => write!(f, "READ_ONLY"),
+            AttachDuckDBDatabaseOption::Type(t) => write!(f, "TYPE {}", t),
+        }
     }
 }
 

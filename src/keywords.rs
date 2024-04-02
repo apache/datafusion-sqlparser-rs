@@ -541,6 +541,7 @@ define_keywords!(
     RCFILE,
     READ,
     READS,
+    READ_ONLY,
     REAL,
     RECURSIVE,
     REF,

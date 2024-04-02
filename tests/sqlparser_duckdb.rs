@@ -385,8 +385,11 @@ fn test_drop_secret() {
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
         Statement::DropSecret {
-             if_exists: true, temporary: Some(false), name:  Ident::new("secret"), storage_specifier: Some(Ident::new("storage")) }
-            ,
+            if_exists: true,
+            temporary: Some(false),
+            name: Ident::new("secret"),
+            storage_specifier: Some(Ident::new("storage"))
+        },
         stmt
     );
 }
@@ -397,8 +400,49 @@ fn test_drop_secret_simple() {
     let stmt = duckdb().verified_stmt(sql);
     assert_eq!(
         Statement::DropSecret {
-             if_exists: false, temporary: None, name:  Ident::new("secret"), storage_specifier: None }
-            ,
+            if_exists: false,
+            temporary: None,
+            name: Ident::new("secret"),
+            storage_specifier: None
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_attach_database() {
+    let sql = r#"ATTACH DATABASE IF NOT EXISTS 'sqlite_file.db' AS sqlite_db (READ_ONLY false, TYPE SQLITE)"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::AttachDuckDBDatabase {
+            if_not_exists: true,
+            database: true,
+            database_path: Ident::with_quote('\'', "sqlite_file.db"),
+            database_alias: Some(Ident::new("sqlite_db")),
+            attach_options: vec![
+                AttachDuckDBDatabaseOption::ReadOnly(Some(false)),
+                AttachDuckDBDatabaseOption::Type(Ident::new("SQLITE")),
+            ]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_attach_database_simple() {
+    let sql = r#"ATTACH 'postgres://user.name:pass-word@some.url.com:5432/postgres'"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::AttachDuckDBDatabase {
+            if_not_exists: false,
+            database: false,
+            database_path: Ident::with_quote(
+                '\'',
+                "postgres://user.name:pass-word@some.url.com:5432/postgres"
+            ),
+            database_alias: None,
+            attach_options: vec![]
+        },
         stmt
     );
 }

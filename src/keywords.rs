@@ -540,6 +540,7 @@ define_keywords!(
     RETURNS,
     REVOKE,
     RIGHT,
+    RLIKE,
     ROLE,
     ROLLBACK,
     ROLLUP,

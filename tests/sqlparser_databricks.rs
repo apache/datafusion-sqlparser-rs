@@ -18,6 +18,7 @@
 use pretty_assertions::assert_eq;
 use sqlparser::ast::*;
 use sqlparser::dialect::{DatabricksDialect, GenericDialect};
+use sqlparser::parser::ParserOptions;
 use test_utils::*;
 
 #[macro_use]
@@ -37,6 +38,13 @@ fn databricks_and_generic() -> TestedDialects {
     }
 }
 
+fn databricks_unescaped() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(DatabricksDialect {})],
+        options: Some(ParserOptions::new().with_unescape(false)),
+    }
+}
+
 #[test]
 fn test_databricks_create_table() {
     let sql = "CREATE TABLE main.dbt_lukasz.customers (customer_id BIGINT, customer_lifetime_value DOUBLE) USING delta TBLPROPERTIES ('delta.minReaderVersion' = '3', 'delta.minWriterVersion' = '7')";
@@ -52,4 +60,21 @@ fn test_databricks_create_table() {
 fn test_identifiers() {
     let sql = "SELECT * FROM `main`.`dbt_lukasz`.`raw_orders`";
     databricks().verified_stmt(sql);
+}
+
+#[test]
+fn test_string_escape() {
+    databricks().one_statement_parses_to(r#"SELECT 'O\'Connell'"#, r#"SELECT 'O''Connell'"#);
+}
+
+#[test]
+fn test_string_raw_literal() {
+    let sql = r#"SELECT R'Some\nText'"#;
+    databricks_unescaped().verified_stmt(sql);
+}
+
+#[test]
+fn test_rlike() {
+    let sql = r#"SELECT R'%SystemDrive%\Users\John' RLIKE R'%SystemDrive%\\Users.*'"#;
+    databricks_unescaped().verified_stmt(sql);
 }

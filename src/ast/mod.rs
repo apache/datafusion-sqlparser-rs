@@ -555,6 +555,13 @@ pub enum Expr {
         pattern: Box<Expr>,
         escape_char: Option<char>,
     },
+    /// RLIKE
+    RLike {
+        negated: bool,
+        expr: Box<Expr>,
+        pattern: Box<Expr>,
+        escape_char: Option<char>,
+    },
     /// REGEXP
     /// Snowflake: <subject> REGEXP <pattern>
     /// https://docs.snowflake.com/en/sql-reference/functions/regexp
@@ -873,6 +880,28 @@ impl fmt::Display for Expr {
                 _ => write!(
                     f,
                     "{} {}LIKE {}",
+                    expr,
+                    if *negated { "NOT " } else { "" },
+                    pattern
+                ),
+            },
+            Expr::RLike {
+                negated,
+                expr,
+                pattern,
+                escape_char,
+            } => match escape_char {
+                Some(ch) => write!(
+                    f,
+                    "{} {}RLIKE {} ESCAPE '{}'",
+                    expr,
+                    if *negated { "NOT " } else { "" },
+                    pattern,
+                    ch
+                ),
+                _ => write!(
+                    f,
+                    "{} {}RLIKE {}",
                     expr,
                     if *negated { "NOT " } else { "" },
                     pattern

@@ -2056,6 +2056,7 @@ impl<'a> Parser<'a> {
                 | Keyword::BETWEEN
                 | Keyword::LIKE
                 | Keyword::ILIKE
+                | Keyword::RLIKE
                 | Keyword::SIMILAR
                 | Keyword::REGEXP => {
                     self.prev_token();
@@ -2079,6 +2080,13 @@ impl<'a> Parser<'a> {
                         })
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Ok(Expr::ILike {
+                            negated,
+                            expr: Box::new(expr),
+                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
+                            escape_char: self.parse_escape_char()?,
+                        })
+                    } else if self.parse_keyword(Keyword::RLIKE) {
+                        Ok(Expr::RLike {
                             negated,
                             expr: Box::new(expr),
                             pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
@@ -2377,6 +2385,7 @@ impl<'a> Parser<'a> {
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
                 Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::LIKE_PREC),
                 Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
                 Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::LIKE_PREC),
                 _ => Ok(0),
@@ -2386,6 +2395,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),

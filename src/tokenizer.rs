@@ -38,8 +38,8 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
 use crate::dialect::{
-    BigQueryDialect, DuckDbDialect, GenericDialect, HiveDialect, RedshiftSqlDialect,
-    SnowflakeDialect,
+    BigQueryDialect, DatabricksDialect, DuckDbDialect, GenericDialect, HiveDialect,
+    RedshiftSqlDialect, SnowflakeDialect,
 };
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
@@ -731,7 +731,8 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // BigQuery uses r or R for raw string literal
-                b @ 'R' | b @ 'r' if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                b @ 'R' | b @ 'r' if dialect_of!(self is BigQueryDialect | GenericDialect | DatabricksDialect) =>
+                {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('\'') => {
@@ -1366,7 +1367,8 @@ impl<'a> Tokenizer<'a> {
                     // consume
                     chars.next();
                     // slash escaping is specific to MySQL / BigQuery dialect.
-                    if dialect_of!(self is MySqlDialect | BigQueryDialect | RedshiftSqlDialect) {
+                    if dialect_of!(self is MySqlDialect | BigQueryDialect | RedshiftSqlDialect | DatabricksDialect)
+                    {
                         if let Some(next) = chars.peek() {
                             if !self.unescape {
                                 // In no-escape mode, the given query has to be saved completely including backslashes.

@@ -4031,7 +4031,7 @@ impl<'a> Parser<'a> {
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let with_options = self.parse_options(Keyword::WITH)?;
 
-        let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
+        let mut table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {
             self.expect_token(&Token::Eq)?;
@@ -4194,6 +4194,9 @@ impl<'a> Parser<'a> {
         let strict = self.parse_keyword(Keyword::STRICT);
 
         let table_options = self.parse_options(Keyword::OPTIONS)?;
+        //Databricks has TBLPROPERTIES after COMMENT
+        let _table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
+        table_properties.extend(_table_properties);
 
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)

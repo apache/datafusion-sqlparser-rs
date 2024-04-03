@@ -78,3 +78,10 @@ fn test_rlike() {
     let sql = r#"SELECT R'%SystemDrive%\Users\John' RLIKE R'%SystemDrive%\\Users.*'"#;
     databricks_unescaped().verified_stmt(sql);
 }
+
+#[test]
+fn test_create_table_comment_tblproperties() {
+    let sql = "CREATE TABLE main.dbt_cloud_lukasz.customers (customer_id BIGINT COMMENT 'Customer Unique identifier', first_name STRING, last_name STRING) USING delta TBLPROPERTIES ('delta.checkpoint.writeStatsAsJson' = 'false') COMMENT 'The ''customers'' table.'";
+
+    databricks_unescaped().verified_stmt(sql);
+}

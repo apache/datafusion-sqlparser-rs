@@ -3485,7 +3485,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier(false)?;
 
         let default_expr =
-            if self.consume_token(&Token::DuckAssignment) || self.consume_token(&Token::RArrow) {
+            if self.consume_token(&Token::Assignment) || self.consume_token(&Token::RArrow) {
                 Some(self.parse_expr()?)
             } else {
                 None
@@ -4183,7 +4183,7 @@ impl<'a> Parser<'a> {
                 self.next_token(); // Skip `DEFAULT`
                 Some(DeclareAssignment::Default(Box::new(self.parse_expr()?)))
             }
-            Token::DuckAssignment => {
+            Token::Assignment => {
                 self.next_token(); // Skip `:=`
                 Some(DeclareAssignment::DuckAssignment(Box::new(
                     self.parse_expr()?,
@@ -8601,6 +8601,19 @@ impl<'a> Parser<'a> {
                 name,
                 arg,
                 operator: FunctionArgOperator::Equals,
+            })
+        } else if dialect_of!(self is DuckDbDialect | GenericDialect)
+            && self.peek_nth_token(1) == Token::Assignment
+        {
+            let name = self.parse_identifier(false)?;
+
+            self.expect_token(&Token::Assignment)?;
+            let arg = self.parse_expr()?.into();
+
+            Ok(FunctionArg::Named {
+                name,
+                arg,
+                operator: FunctionArgOperator::Assignment,
             })
         } else {
             Ok(FunctionArg::Unnamed(self.parse_wildcard_expr()?.into()))

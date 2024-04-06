@@ -337,7 +337,7 @@ fn test_duckdb_struct_literal() {
 #[test]
 fn test_duckdb_named_argument_function_with_assignment_operator() {
     let sql = "SELECT FUN(a := '1', b := '2') FROM foo";
-    let select = duckdb().verified_only_select(sql);
+    let select = duckdb_and_generic().verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),

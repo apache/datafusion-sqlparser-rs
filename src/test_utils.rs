@@ -68,7 +68,7 @@ impl TestedDialects {
                 }
                 Some((dialect, parsed))
             })
-            .unwrap()
+            .expect("tested dialects cannot be empty")
             .1
     }
 
@@ -195,15 +195,6 @@ impl TestedDialects {
 
 /// Returns all available dialects.
 pub fn all_dialects() -> TestedDialects {
-    all_dialects_except(|_| false)
-}
-
-/// Returns available dialects. The `except` predicate is used
-/// to filter out specific dialects.
-pub fn all_dialects_except<F>(except: F) -> TestedDialects
-where
-    F: Fn(&dyn Dialect) -> bool,
-{
     let all_dialects = vec![
         Box::new(GenericDialect {}) as Box<dyn Dialect>,
         Box::new(PostgreSqlDialect {}) as Box<dyn Dialect>,
@@ -218,12 +209,28 @@ where
         Box::new(DuckDbDialect {}) as Box<dyn Dialect>,
     ];
     TestedDialects {
-        dialects: all_dialects
-            .into_iter()
-            .filter(|d| !except(d.as_ref()))
-            .collect(),
+        dialects: all_dialects,
         options: None,
     }
+}
+
+/// Returns all dialects matching the given predicate.
+pub fn all_dialects_where<F>(predicate: F) -> TestedDialects
+where
+    F: Fn(&dyn Dialect) -> bool,
+{
+    let mut dialects = all_dialects();
+    dialects.dialects.retain(|d| predicate(&**d));
+    dialects
+}
+
+/// Returns available dialects. The `except` predicate is used
+/// to filter out specific dialects.
+pub fn all_dialects_except<F>(except: F) -> TestedDialects
+where
+    F: Fn(&dyn Dialect) -> bool,
+{
+    all_dialects_where(|d| !except(d))
 }
 
 pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {

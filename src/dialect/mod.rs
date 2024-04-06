@@ -143,6 +143,10 @@ pub trait Dialect: Debug + Any {
     fn supports_start_transaction_modifier(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
+    fn supports_named_fn_args_with_eq_operator(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect has a CONVERT function which accepts a type first
     /// and an expression second, e.g. `CONVERT(varchar, 1)`
     fn convert_type_before_value(&self) -> bool {

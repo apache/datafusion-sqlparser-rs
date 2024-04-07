@@ -1338,6 +1338,48 @@ fn test_snowflake_stage_object_names() {
 }
 
 #[test]
+fn test_snowflake_copy_into() {
+    let sql = "COPY INTO a.b FROM @namespace.stage_name";
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            into, from_stage, ..
+        } => {
+            assert_eq!(into, ObjectName(vec![Ident::new("a"), Ident::new("b")]));
+            assert_eq!(
+                from_stage,
+                ObjectName(vec![Ident::new("@namespace"), Ident::new("stage_name")])
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_copy_into_stage_name_ends_with_parens() {
+    let sql = "COPY INTO SCHEMA.SOME_MONITORING_SYSTEM FROM (SELECT t.$1:st AS st FROM @schema.general_finished)";
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            into, from_stage, ..
+        } => {
+            assert_eq!(
+                into,
+                ObjectName(vec![
+                    Ident::new("SCHEMA"),
+                    Ident::new("SOME_MONITORING_SYSTEM")
+                ])
+            );
+            assert_eq!(
+                from_stage,
+                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_snowflake_trim() {
     let real_sql = r#"SELECT customer_id, TRIM(sub_items.value:item_price_id, '"', "a") AS item_price_id FROM models_staging.subscriptions"#;
     assert_eq!(snowflake().verified_stmt(real_sql).to_string(), real_sql);

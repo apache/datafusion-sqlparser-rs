@@ -8608,6 +8608,24 @@ fn test_release_savepoint() {
 }
 
 #[test]
+fn test_comment_hash_syntax() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(SnowflakeDialect {})],
+        options: None,
+    };
+    let sql = r#"
+    # comment
+    SELECT a, b, c # , d, e
+    FROM T
+    ####### comment #################
+    WHERE true
+    # comment
+    "#;
+    let canonical = "SELECT a, b, c FROM T WHERE true";
+    dialects.verified_only_select_with_canonical(sql, canonical);
+}
+
+#[test]
 fn test_buffer_reuse() {
     let d = GenericDialect {};
     let q = "INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)";

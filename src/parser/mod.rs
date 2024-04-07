@@ -6910,7 +6910,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Call's [`parse_query`] returning a `Box`'ed  result.
+    /// Call's [`Self::parse_query`] returning a `Box`'ed  result.
     ///
     /// This function can be used to reduce the stack size required in debug
     /// builds. Instead of `sizeof(Query)` only a pointer (`Box<Query>`)
@@ -7188,7 +7188,7 @@ impl<'a> Parser<'a> {
         Ok(cte)
     }
 
-    /// Call's [`parse_query_body`] returning a `Box`'ed  result.
+    /// Call's [`Self::parse_query_body`] returning a `Box`'ed  result.
     ///
     /// This function can be used to reduce the stack size required in debug
     /// builds. Instead of `sizeof(QueryBody)` only a pointer (`Box<QueryBody>`)

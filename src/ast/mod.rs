@@ -1514,6 +1514,13 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         source: Box<Query>,
     },
+    /// ```sql
+    /// CALL <function>
+    /// ```
+    Call(Function),
+    /// ```sql
+    /// COPY [TO | FROM] ...
+    /// ```
     Copy {
         /// The source of 'COPY TO', or the target of 'COPY FROM'
         source: CopySource,
@@ -1548,12 +1555,17 @@ pub enum Statement {
         copy_options: DataLoadingOptions,
         validation_mode: Option<String>,
     },
-    /// Close - closes the portal underlying an open cursor.
+    /// ```sql
+    /// CLOSE
+    /// ```
+    /// Closes the portal underlying an open cursor.
     Close {
         /// Cursor name
         cursor: CloseCursor,
     },
+    /// ```sql
     /// UPDATE
+    /// ```
     Update {
         /// TABLE
         table: TableWithJoins,
@@ -1566,7 +1578,9 @@ pub enum Statement {
         /// RETURNING
         returning: Option<Vec<WithSpan<SelectItem>>>,
     },
+    /// ```sql
     /// DELETE
+    /// ```
     Delete {
         /// Multi tables delete are supported in mysql
         tables: Vec<ObjectName>,
@@ -1579,7 +1593,9 @@ pub enum Statement {
         /// RETURNING
         returning: Option<Vec<WithSpan<SelectItem>>>,
     },
+    /// ```sql
     /// CREATE VIEW
+    /// ```
     CreateView {
         or_replace: bool,
         materialized: bool,
@@ -1609,7 +1625,9 @@ pub enum Statement {
         comment: Option<String>,
         view_options: Vec<SqlOption>,
     },
+    /// ```sql
     /// CREATE TABLE
+    /// ```
     CreateTable {
         or_replace: bool,
         temporary: bool,
@@ -1669,7 +1687,10 @@ pub enum Statement {
         /// Databricks USING DELTA
         using: Option<ObjectName>,
     },
-    /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
+    /// ```sql
+    /// CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
+    /// ```
+    /// Sqlite specific statement
     CreateVirtualTable {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
@@ -1692,7 +1713,9 @@ pub enum Statement {
         nulls_distinct: Option<bool>,
         predicate: Option<Expr>,
     },
+    /// ```sql
     /// CREATE ROLE
+    /// ```
     /// See [postgres](https://www.postgresql.org/docs/current/sql-createrole.html)
     CreateRole {
         names: Vec<ObjectName>,
@@ -1716,7 +1739,9 @@ pub enum Statement {
         // MSSQL
         authorization_owner: Option<ObjectName>,
     },
+    /// ```sql
     /// ALTER TABLE
+    /// ```
     AlterTable {
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -1725,11 +1750,16 @@ pub enum Statement {
         only: bool,
         operations: Vec<AlterTableOperation>,
     },
+    /// ```sql
+    /// ALTER INDEX
+    /// ```
     AlterIndex {
         name: ObjectName,
         operation: AlterIndexOperation,
     },
-    /// ALTER VIEW AS
+    /// ```sql
+    /// ALTER VIEW
+    /// ```
     AlterView {
         /// View name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -1746,7 +1776,9 @@ pub enum Statement {
         name: ObjectName,
         set_options: Vec<SqlOption>,
     },
+    /// ```sql
     /// ALTER ROLE
+    /// ```
     AlterRole {
         name: Ident,
         operation: AlterRoleOperation,
@@ -1771,7 +1803,9 @@ pub enum Statement {
         /// MySQL-specific "TEMPORARY" keyword
         temporary: bool,
     },
-    /// DROP Function
+    /// ```sql
+    /// DROP FUNCTION
+    /// ```
     DropFunction {
         if_exists: bool,
         /// One or more function to drop
@@ -1779,7 +1813,10 @@ pub enum Statement {
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
-    /// DECLARE - Declaring Cursor Variables
+    /// ```sql
+    /// DECLARE
+    /// ```
+    /// Declare Cursor Variables
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
@@ -1813,12 +1850,18 @@ pub enum Statement {
         /// Optional, It's possible to fetch rows form cursor to the table
         into: Option<ObjectName>,
     },
+    /// ```sql
     /// DISCARD [ ALL | PLANS | SEQUENCES | TEMPORARY | TEMP ]
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
     Discard { object_type: DiscardObject },
-    /// SET `[ SESSION | LOCAL ]` ROLE role_name. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4].
+    /// ```sql
+    /// SET [ SESSION | LOCAL ] ROLE role_name
+    /// ```
+    ///
+    /// Sets sesssion state. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4]
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#set-role-statement
     /// [2]: https://www.postgresql.org/docs/14/sql-set-role.html
@@ -1850,18 +1893,22 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statements
     /// `SET TIME ZONE <value>` is an alias for `SET timezone TO <value>` in PostgreSQL
     SetTimeZone { local: bool, value: Expr },
+    /// ```sql
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     SetNames {
         charset_name: String,
         collation_name: Option<String>,
     },
+    /// ```sql
     /// SET NAMES DEFAULT
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     SetNamesDefault {},
-    /// SHOW FUNCTIONS
+    /// `SHOW FUNCTIONS`
     ///
     /// Note: this is a Presto-specific statement.
     ShowFunctions { filter: Option<ShowStatementFilter> },
@@ -1871,7 +1918,9 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Vec<Ident> },
+    /// ```sql
     /// SHOW VARIABLES
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     ShowVariables { filter: Option<ShowStatementFilter> },
@@ -1882,7 +1931,9 @@ pub enum Statement {
         obj_type: ShowCreateObject,
         obj_name: ObjectName,
     },
+    /// ```sql
     /// SHOW COLUMNS
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     ShowColumns {
@@ -1892,8 +1943,9 @@ pub enum Statement {
         table_name: ObjectName,
         filter: Option<ShowStatementFilter>,
     },
+    /// ```sql
     /// SHOW TABLES
-    ///
+    /// ```
     /// Note: this is a MySQL-specific statement.
     ShowTables {
         extended: bool,
@@ -1901,30 +1953,42 @@ pub enum Statement {
         db_name: Option<Ident>,
         filter: Option<ShowStatementFilter>,
     },
+    /// ```sql
     /// SHOW COLLATION
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     ShowCollation { filter: Option<ShowStatementFilter> },
+    /// ```sql
     /// USE
+    /// ```
     ///
     /// Note: This is a MySQL-specific statement.
     Use { db_name: Ident },
-    /// `START  [ TRANSACTION | WORK ] | START TRANSACTION } ...`
+    /// ```sql
+    /// START  [ TRANSACTION | WORK ] | START TRANSACTION } ...
+    /// ```
     /// If `begin` is false.
     ///
+    /// ```sql
     /// `BEGIN  [ TRANSACTION | WORK ] | START TRANSACTION } ...`
+    /// ```
     /// If `begin` is true
     StartTransaction {
         modes: Vec<TransactionMode>,
         begin: bool,
     },
-    /// `SET TRANSACTION ...`
+    /// ```sql
+    /// SET TRANSACTION ...
+    /// ```
     SetTransaction {
         modes: Vec<TransactionMode>,
         snapshot: Option<Value>,
         session: bool,
     },
-    /// `COMMENT ON ...`
+    /// ```sql
+    /// COMMENT ON ...
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Comment {
@@ -1935,17 +1999,25 @@ pub enum Statement {
         /// See <https://docs.snowflake.com/en/sql-reference/sql/comment>
         if_exists: bool,
     },
-    /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
+    /// ```sql
+    /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    /// ```
     Commit { chain: bool },
-    /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
+    /// ```sql
+    /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]
+    /// ```
     Rollback { chain: bool },
+    /// ```sql
     /// CREATE SCHEMA
+    /// ```
     CreateSchema {
         /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
         schema_name: SchemaName,
         if_not_exists: bool,
     },
+    /// ```sql
     /// CREATE DATABASE
+    /// ```
     CreateDatabase {
         db_name: ObjectName,
         if_not_exists: bool,
@@ -2005,12 +2077,16 @@ pub enum Statement {
         copy_options: DataLoadingOptions,
         comment: Option<String>,
     },
-    /// `ASSERT <condition> [AS <message>]`
+    /// ```sql
+    /// ASSERT <condition> [AS <message>]
+    /// ```
     Assert {
         condition: Expr,
         message: Option<Expr>,
     },
+    /// ```sql
     /// GRANT privileges ON objects TO grantees
+    /// ```
     Grant {
         privileges: Privileges,
         objects: GrantObjects,
@@ -2018,7 +2094,9 @@ pub enum Statement {
         with_grant_option: bool,
         granted_by: Option<Ident>,
     },
+    /// ```sql
     /// REVOKE privileges ON objects FROM grantees
+    /// ```
     Revoke {
         privileges: Privileges,
         objects: GrantObjects,
@@ -2026,21 +2104,27 @@ pub enum Statement {
         granted_by: Option<Ident>,
         cascade: bool,
     },
-    /// `DEALLOCATE [ PREPARE ] { name | ALL }`
+    /// ```sql
+    /// DEALLOCATE [ PREPARE ] { name | ALL }
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Deallocate {
         name: WithSpan<Ident>,
         prepare: bool,
     },
-    /// `EXECUTE name [ ( parameter [, ...] ) ]`
+    /// ```sql
+    /// EXECUTE name [ ( parameter [, ...] ) ] [USING <expr>]
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Execute {
         name: WithSpan<Ident>,
         parameters: Vec<Expr>,
     },
-    /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
+    /// ```sql
+    /// PREPARE name [ ( data_type [, ...] ) ] AS statement
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Prepare {
@@ -2048,7 +2132,9 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
+    /// ```sql
     /// KILL [CONNECTION | QUERY | MUTATION]
+    /// ```
     ///
     /// See <https://clickhouse.com/docs/ru/sql-reference/statements/kill/>
     /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
@@ -2057,7 +2143,9 @@ pub enum Statement {
         // processlist_id
         id: u64,
     },
-    /// EXPLAIN TABLE
+    /// ```sql
+    /// [EXPLAIN | DESC | DESCRIBE] TABLE
+    /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
     ExplainTable {
         /// If true, query used the MySQL `DESCRIBE` alias for explain
@@ -2377,6 +2465,8 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
+
+            Statement::Call(function) => write!(f, "CALL {function}"),
 
             Statement::Copy {
                 source,

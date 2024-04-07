@@ -3280,7 +3280,7 @@ fn parse_similar_to() {
 
 #[test]
 fn parse_create_function() {
-    let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE AS 'select $1 + $2;'";
+    let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS 'select $1 + $2;'";
     assert_eq!(
         pg_and_generic().verified_stmt(sql),
         Statement::CreateFunction {
@@ -3295,6 +3295,8 @@ fn parse_create_function() {
             params: CreateFunctionBody {
                 language: Some("SQL".into()),
                 behavior: Some(FunctionBehavior::Immutable),
+                called_on_null: Some(FunctionCalledOnNull::Strict),
+                parallel: Some(FunctionParallel::Safe),
                 as_: Some(FunctionDefinition::SingleQuotedDef(
                     "select $1 + $2;".into()
                 )),
@@ -3303,9 +3305,9 @@ fn parse_create_function() {
         }
     );
 
-    let sql = "CREATE OR REPLACE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL IMMUTABLE RETURN a + b";
+    let sql = "CREATE OR REPLACE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL IMMUTABLE RETURNS NULL ON NULL INPUT PARALLEL RESTRICTED RETURN a + b";
     assert_eq!(
-        pg().verified_stmt(sql),
+        pg_and_generic().verified_stmt(sql),
         Statement::CreateFunction {
             or_replace: true,
             temporary: false,
@@ -3323,6 +3325,40 @@ fn parse_create_function() {
             params: CreateFunctionBody {
                 language: Some("SQL".into()),
                 behavior: Some(FunctionBehavior::Immutable),
+                called_on_null: Some(FunctionCalledOnNull::ReturnsNullOnNullInput),
+                parallel: Some(FunctionParallel::Restricted),
+                return_: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier("a".into())),
+                    op: BinaryOperator::Plus,
+                    right: Box::new(Expr::Identifier("b".into())),
+                }),
+                ..Default::default()
+            },
+        }
+    );
+
+    let sql = "CREATE OR REPLACE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL STABLE CALLED ON NULL INPUT PARALLEL UNSAFE RETURN a + b";
+    assert_eq!(
+        pg_and_generic().verified_stmt(sql),
+        Statement::CreateFunction {
+            or_replace: true,
+            temporary: false,
+            name: ObjectName(vec![Ident::new("add")]),
+            args: Some(vec![
+                OperateFunctionArg::with_name("a", DataType::Integer(None)),
+                OperateFunctionArg {
+                    mode: Some(ArgMode::In),
+                    name: Some("b".into()),
+                    data_type: DataType::Integer(None),
+                    default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                }
+            ]),
+            return_type: Some(DataType::Integer(None)),
+            params: CreateFunctionBody {
+                language: Some("SQL".into()),
+                behavior: Some(FunctionBehavior::Stable),
+                called_on_null: Some(FunctionCalledOnNull::CalledOnNullInput),
+                parallel: Some(FunctionParallel::Unsafe),
                 return_: Some(Expr::BinaryOp {
                     left: Box::new(Expr::Identifier("a".into())),
                     op: BinaryOperator::Plus,
@@ -3348,6 +3384,8 @@ fn parse_create_function() {
             params: CreateFunctionBody {
                 language: Some("plpgsql".into()),
                 behavior: None,
+                called_on_null: None,
+                parallel: None,
                 return_: None,
                 as_: Some(FunctionDefinition::DoubleDollarDef(
                     " BEGIN RETURN i + 1; END; ".into()
@@ -3356,6 +3394,12 @@ fn parse_create_function() {
             },
         }
     );
+}
+
+#[test]
+fn parse_incorrect_create_function_parallel() {
+    let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL PARALLEL BLAH AS 'select $1 + $2;'";
+    assert!(pg().parse_sql_statements(sql).is_err());
 }
 
 #[test]

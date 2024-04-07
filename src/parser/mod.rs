@@ -6846,10 +6846,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Do the same as `parse_query` but return `Box`'ed `Ok(..)` result
-    /// and therefore caller fn reserves only `poiter size` memory on stack
-    /// instead of `sizeof(Query)` (if the call isn't optimized by compiler)
-    pub fn parse_boxed_query(&mut self) -> Result<Box<Query>, ParserError> {
+    /// Call's [`parse_query`] returning a `Box`'ed  result.
+    ///
+    /// This function can be used to reduce the stack size required in debug
+    /// builds. Instead of `sizeof(Query)` only a pointer (`Box<Query>`)
+    /// is used.
+    fn parse_boxed_query(&mut self) -> Result<Box<Query>, ParserError> {
         self.parse_query().map(Box::new)
     }
 
@@ -6857,9 +6859,6 @@ impl<'a> Parser<'a> {
     /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
-    ///
-    /// If you need `Box<Query>` then maybe there is sense to use `parse_boxed_query`
-    /// due to prevent stack overflow in debug building(to reserve less memory on stack).
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {
         mod parse_query {
             use super::*;
@@ -7144,10 +7143,12 @@ impl<'a> Parser<'a> {
         Ok(cte)
     }
 
-    /// Do the same as `parse_query_body` but return `Box`'ed `Ok(..)` result
-    /// and therefore caller fn reserves only `poiter size` memory on stack
-    /// instead of `sizeof(SetExpr)` (if the call isn't optimized by compiler)
-    pub fn parse_boxed_query_body(&mut self, precedence: u8) -> Result<Box<SetExpr>, ParserError> {
+    /// Call's [`parse_query_body`] returning a `Box`'ed  result.
+    ///
+    /// This function can be used to reduce the stack size required in debug
+    /// builds. Instead of `sizeof(QueryBody)` only a pointer (`Box<QueryBody>`)
+    /// is used.
+    fn parse_boxed_query_body(&mut self, precedence: u8) -> Result<Box<SetExpr>, ParserError> {
         self.parse_query_body(precedence).map(Box::new)
     }
 

@@ -55,7 +55,7 @@ fn pragma_eq_style() {
     }
 }
 #[test]
-fn pragma_funciton_style() {
+fn pragma_function_style() {
     let sql = "PRAGMA cache_size(10)";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::Pragma {
@@ -103,7 +103,7 @@ fn pragma_function_string_style() {
 }
 
 #[test]
-fn pragma_eq_placehoder_style() {
+fn pragma_eq_placeholder_style() {
     let sql = "PRAGMA table_info = ?";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::Pragma {
@@ -413,6 +413,18 @@ fn parse_single_quoted_identified() {
     sqlite().verified_only_select("SELECT 't'.*, t.'x' FROM 't'");
     // TODO: add support for select 't'.x
 }
+
+#[test]
+fn parse_substring() {
+    // SQLite supports the SUBSTRING function since v3.34, but does not support the SQL standard
+    // SUBSTRING(expr FROM start FOR length) syntax.
+    // https://www.sqlite.org/lang_corefunc.html#substr
+    sqlite().verified_only_select("SELECT SUBSTRING('SQLITE', 3, 4)");
+    sqlite().verified_only_select("SELECT SUBSTR('SQLITE', 3, 4)");
+    sqlite().verified_only_select("SELECT SUBSTRING('SQLITE', 3)");
+    sqlite().verified_only_select("SELECT SUBSTR('SQLITE', 3)");
+}
+
 #[test]
 fn parse_window_function_with_filter() {
     for func_name in [

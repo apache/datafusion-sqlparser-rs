@@ -40,8 +40,4 @@ impl Dialect for MsSqlDialect {
     fn convert_type_before_value(&self) -> bool {
         true
     }
-
-    fn supports_substring_from_for_expr(&self) -> bool {
-        false
-    }
 }

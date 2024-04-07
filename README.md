@@ -151,7 +151,7 @@ maintain this crate is limited. Please read the following sections carefully.
 ### New Syntax
 
 The most commonly accepted PRs add support for or fix a bug in a feature in the
-SQL standard, or a a popular RDBMS, such as Microsoft SQL
+SQL standard, or a popular RDBMS, such as Microsoft SQL
 Server or PostgreSQL, will likely be accepted after a brief
 review.  Any SQL feature that is dialect specific should be parsed by *both* the relevant [`Dialect`] 
 as well as [`GenericDialect`].

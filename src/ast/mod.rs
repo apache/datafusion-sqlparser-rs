@@ -347,6 +347,23 @@ impl fmt::Display for StructField {
     }
 }
 
+/// A dictionary field within a dictionary.
+///
+/// [duckdb]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DictionaryField {
+    pub key: Ident,
+    pub value: Box<Expr>,
+}
+
+impl fmt::Display for DictionaryField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.key, self.value)
+    }
+}
+
 /// Options for `CAST` / `TRY_CAST`
 /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -559,13 +576,18 @@ pub enum Expr {
     /// ```sql
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     /// ```
+    /// or
+    /// ```sql
+    /// SUBSTRING(<expr>, <expr>, <expr>)
+    /// ```
     Substring {
         expr: Box<Expr>,
         substring_from: Option<Box<Expr>>,
         substring_for: Option<Box<Expr>>,
 
-        // Some dialects use `SUBSTRING(expr [FROM start] [FOR len])` syntax while others omit FROM,
-        // FOR keywords (e.g. Microsoft SQL Server). This flags is used for formatting.
+        /// false if the expression is represented using the `SUBSTRING(expr [FROM start] [FOR len])` syntax
+        /// true if the expression is represented using the `SUBSTRING(expr, start, len)` syntax
+        /// This flag is used for formatting.
         special: bool,
     },
     /// ```sql
@@ -682,6 +704,14 @@ pub enum Expr {
         expr: Box<Expr>,
         name: Ident,
     },
+    /// `DuckDB` specific `Struct` literal expression [1]
+    ///
+    /// Syntax:
+    /// ```sql
+    /// syntax: {'field_name': expr1[, ... ]}
+    /// ```
+    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    Dictionary(Vec<DictionaryField>),
     /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
     ArrayIndex {
         obj: Box<Expr>,
@@ -1140,6 +1170,9 @@ impl fmt::Display for Expr {
             }
             Expr::Named { expr, name } => {
                 write!(f, "{} AS {}", expr, name)
+            }
+            Expr::Dictionary(fields) => {
+                write!(f, "{{{}}}", display_comma_separated(fields))
             }
             Expr::ArrayIndex { obj, indexes } => {
                 write!(f, "{obj}")?;
@@ -1772,6 +1805,8 @@ pub enum Statement {
         replace_into: bool,
         /// Only for mysql
         priority: Option<MysqlInsertPriority>,
+        /// Only for mysql
+        insert_alias: Option<InsertAliases>,
     },
     /// ```sql
     /// INSTALL
@@ -2786,6 +2821,7 @@ impl fmt::Display for Statement {
                 returning,
                 replace_into,
                 priority,
+                insert_alias,
             } => {
                 let table_name = if let Some(alias) = table_alias {
                     format!("{table_name} AS {alias}")
@@ -2833,6 +2869,16 @@ impl fmt::Display for Statement {
 
                 if source.is_none() && columns.is_empty() {
                     write!(f, "DEFAULT VALUES")?;
+                }
+
+                if let Some(insert_alias) = insert_alias {
+                    write!(f, " AS {0}", insert_alias.row_alias)?;
+
+                    if let Some(col_aliases) = &insert_alias.col_aliases {
+                        if !col_aliases.is_empty() {
+                            write!(f, " ({})", display_comma_separated(col_aliases))?;
+                        }
+                    }
                 }
 
                 if let Some(on) = on {
@@ -4210,6 +4256,14 @@ pub enum OnInsert {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct InsertAliases {
+    pub row_alias: ObjectName,
+    pub col_aliases: Option<Vec<Ident>>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OnConflict {
     pub conflict_target: Option<ConflictTarget>,
     pub action: OnConflictAction,
@@ -4543,6 +4597,8 @@ pub enum FunctionArgOperator {
     Equals,
     /// function(arg1 => value1)
     RightArrow,
+    /// function(arg1 := value1)
+    Assignment,
 }
 
 impl fmt::Display for FunctionArgOperator {
@@ -4550,6 +4606,7 @@ impl fmt::Display for FunctionArgOperator {
         match self {
             FunctionArgOperator::Equals => f.write_str("="),
             FunctionArgOperator::RightArrow => f.write_str("=>"),
+            FunctionArgOperator::Assignment => f.write_str(":="),
         }
     }
 }
@@ -4605,7 +4662,7 @@ pub struct Function {
     pub args: Vec<FunctionArg>,
     /// e.g. `x > 5` in `COUNT(x) FILTER (WHERE x > 5)`
     pub filter: Option<Box<Expr>>,
-    // Snowflake/MSSQL supports diffrent options for null treatment in rank functions
+    // Snowflake/MSSQL supports different options for null treatment in rank functions
     pub null_treatment: Option<NullTreatment>,
     pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
@@ -5639,6 +5696,46 @@ impl fmt::Display for FunctionBehavior {
     }
 }
 
+/// These attributes describe the behavior of the function when called with a null argument.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionCalledOnNull {
+    CalledOnNullInput,
+    ReturnsNullOnNullInput,
+    Strict,
+}
+
+impl fmt::Display for FunctionCalledOnNull {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionCalledOnNull::CalledOnNullInput => write!(f, "CALLED ON NULL INPUT"),
+            FunctionCalledOnNull::ReturnsNullOnNullInput => write!(f, "RETURNS NULL ON NULL INPUT"),
+            FunctionCalledOnNull::Strict => write!(f, "STRICT"),
+        }
+    }
+}
+
+/// If it is safe for PostgreSQL to call the function from multiple threads at once
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionParallel {
+    Unsafe,
+    Restricted,
+    Safe,
+}
+
+impl fmt::Display for FunctionParallel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionParallel::Unsafe => write!(f, "PARALLEL UNSAFE"),
+            FunctionParallel::Restricted => write!(f, "PARALLEL RESTRICTED"),
+            FunctionParallel::Safe => write!(f, "PARALLEL SAFE"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -5659,7 +5756,7 @@ impl fmt::Display for FunctionDefinition {
 
 /// Postgres specific feature.
 ///
-/// See [Postgresdocs](https://www.postgresql.org/docs/15/sql-createfunction.html)
+/// See [Postgres docs](https://www.postgresql.org/docs/15/sql-createfunction.html)
 /// for more details
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -5669,6 +5766,10 @@ pub struct CreateFunctionBody {
     pub language: Option<Ident>,
     /// IMMUTABLE | STABLE | VOLATILE
     pub behavior: Option<FunctionBehavior>,
+    /// CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
+    pub called_on_null: Option<FunctionCalledOnNull>,
+    /// PARALLEL { UNSAFE | RESTRICTED | SAFE }
+    pub parallel: Option<FunctionParallel>,
     /// AS 'definition'
     ///
     /// Note that Hive's `AS class_name` is also parsed here.
@@ -5686,6 +5787,12 @@ impl fmt::Display for CreateFunctionBody {
         }
         if let Some(behavior) = &self.behavior {
             write!(f, " {behavior}")?;
+        }
+        if let Some(called_on_null) = &self.called_on_null {
+            write!(f, " {called_on_null}")?;
+        }
+        if let Some(parallel) = &self.parallel {
+            write!(f, " {parallel}")?;
         }
         if let Some(definition) = &self.as_ {
             write!(f, " AS {definition}")?;

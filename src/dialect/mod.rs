@@ -93,7 +93,7 @@ macro_rules! dialect_of {
 pub trait Dialect: Debug + Any {
     /// Determine the [`TypeId`] of this dialect.
     ///
-    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overriden
+    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overridden
     /// by dialects that behave like other dialects
     /// (for example when wrapping a dialect).
     fn dialect(&self) -> TypeId {
@@ -107,6 +107,10 @@ pub trait Dialect: Debug + Any {
     /// in `Word::matching_end_quote` here
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '`'
+    }
+    /// Return the character used to quote identifiers.
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        None
     }
     /// Determine if quoted characters are proper for identifier
     fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
@@ -131,16 +135,16 @@ pub trait Dialect: Debug + Any {
     fn supports_group_by_expr(&self) -> bool {
         false
     }
-    /// Returns true if the dialect supports `SUBSTRING(expr [FROM start] [FOR len])` expressions
-    fn supports_substring_from_for_expr(&self) -> bool {
-        true
-    }
     /// Returns true if the dialect supports `(NOT) IN ()` expressions
     fn supports_in_empty_list(&self) -> bool {
         false
     }
     /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
+    fn supports_named_fn_args_with_eq_operator(&self) -> bool {
         false
     }
     /// Returns true if the dialect has a CONVERT function which accepts a type first
@@ -263,6 +267,21 @@ mod tests {
     }
 
     #[test]
+    fn identifier_quote_style() {
+        let tests: Vec<(&dyn Dialect, &str, Option<char>)> = vec![
+            (&GenericDialect {}, "id", None),
+            (&SQLiteDialect {}, "id", Some('`')),
+            (&PostgreSqlDialect {}, "id", Some('"')),
+        ];
+
+        for (dialect, ident, expected) in tests {
+            let actual = dialect.identifier_quote_style(ident);
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
     fn parse_with_wrapped_dialect() {
         /// Wrapper for a dialect. In a real-world example, this wrapper
         /// would tweak the behavior of the dialect. For the test case,
@@ -283,6 +302,10 @@ mod tests {
                 self.0.is_delimited_identifier_start(ch)
             }
 
+            fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
+                self.0.identifier_quote_style(identifier)
+            }
+
             fn is_proper_identifier_inside_quotes(
                 &self,
                 chars: std::iter::Peekable<std::str::Chars<'_>>,
@@ -300,10 +323,6 @@ mod tests {
 
             fn supports_group_by_expr(&self) -> bool {
                 self.0.supports_group_by_expr()
-            }
-
-            fn supports_substring_from_for_expr(&self) -> bool {
-                self.0.supports_substring_from_for_expr()
             }
 
             fn supports_in_empty_list(&self) -> bool {

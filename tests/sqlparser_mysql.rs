@@ -1876,6 +1876,120 @@ fn parse_delete_with_limit() {
 }
 
 #[test]
+fn parse_alter_table_add_column() {
+    match mysql().verified_stmt("ALTER TABLE tab ADD COLUMN b INT FIRST") {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only,
+            operations,
+            location: _,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert!(!if_exists);
+            assert!(!only);
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddColumn {
+                    column_keyword: true,
+                    if_not_exists: false,
+                    column_def: ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                    column_position: Some(MySQLColumnPosition::First),
+                },]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match mysql().verified_stmt("ALTER TABLE tab ADD COLUMN b INT AFTER foo") {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only,
+            operations,
+            location: _,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert!(!if_exists);
+            assert!(!only);
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddColumn {
+                    column_keyword: true,
+                    if_not_exists: false,
+                    column_def: ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                    column_position: Some(MySQLColumnPosition::After(Ident {
+                        value: String::from("foo"),
+                        quote_style: None
+                    })),
+                },]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_add_columns() {
+    match mysql()
+        .verified_stmt("ALTER TABLE tab ADD COLUMN a TEXT FIRST, ADD COLUMN b INT AFTER foo")
+    {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only,
+            operations,
+            location: _,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert!(!if_exists);
+            assert!(!only);
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::AddColumn {
+                        column_keyword: true,
+                        if_not_exists: false,
+                        column_def: ColumnDef {
+                            name: "a".into(),
+                            data_type: DataType::Text,
+                            collation: None,
+                            options: vec![],
+                        },
+                        column_position: Some(MySQLColumnPosition::First),
+                    },
+                    AlterTableOperation::AddColumn {
+                        column_keyword: true,
+                        if_not_exists: false,
+                        column_def: ColumnDef {
+                            name: "b".into(),
+                            data_type: DataType::Int(None),
+                            collation: None,
+                            options: vec![],
+                        },
+                        column_position: Some(MySQLColumnPosition::After(Ident {
+                            value: String::from("foo"),
+                            quote_style: None,
+                        })),
+                    },
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_drop_primary_key() {
     assert_matches!(
         alter_table_op(mysql_and_generic().verified_stmt("ALTER TABLE tab DROP PRIMARY KEY")),
@@ -1891,6 +2005,7 @@ fn parse_alter_table_change_column() {
         new_name: Ident::new("desc"),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
+        column_position: None,
     };
 
     let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL";
@@ -1904,6 +2019,80 @@ fn parse_alter_table_change_column() {
         &expected_name.to_string(),
     );
     assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ChangeColumn {
+        old_name: Ident::new("description"),
+        new_name: Ident::new("desc"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+    let sql3 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql3), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ChangeColumn {
+        old_name: Ident::new("description"),
+        new_name: Ident::new("desc"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("foo"),
+            quote_style: None,
+        })),
+    };
+    let sql4 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL AFTER foo";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql4), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+}
+
+#[test]
+fn parse_alter_table_change_column_with_column_position() {
+    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_operation_first = AlterTableOperation::ChangeColumn {
+        old_name: Ident::new("description"),
+        new_name: Ident::new("desc"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+
+    let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_first, operation);
+
+    let sql2 = "ALTER TABLE orders CHANGE description desc TEXT NOT NULL FIRST";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_first, operation);
+
+    let expected_operation_after = AlterTableOperation::ChangeColumn {
+        old_name: Ident::new("description"),
+        new_name: Ident::new("desc"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("total_count"),
+            quote_style: None,
+        })),
+    };
+
+    let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL AFTER total_count";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_after, operation);
+
+    let sql2 = "ALTER TABLE orders CHANGE description desc TEXT NOT NULL AFTER total_count";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_after, operation);
 }
 
 #[test]

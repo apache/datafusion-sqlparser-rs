@@ -73,6 +73,7 @@ define_keywords!(
     ACTION,
     ADD,
     ADMIN,
+    AFTER,
     AGAINST,
     ALL,
     ALLOCATE,

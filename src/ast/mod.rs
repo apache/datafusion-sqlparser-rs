@@ -6018,6 +6018,28 @@ impl fmt::Display for HiveSetLocation {
     }
 }
 
+/// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MySQLColumnPosition {
+    First,
+    After(Ident),
+}
+
+impl Display for MySQLColumnPosition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MySQLColumnPosition::First => Ok(write!(f, "FIRST")?),
+            MySQLColumnPosition::After(ident) => {
+                let column_name = &ident.value;
+                Ok(write!(f, "AFTER {column_name}")?)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -25,8 +25,8 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName, SequenceOptions,
-    SqlOption,
+    display_comma_separated, display_separated, DataType, Expr, Ident, MySQLColumnPosition,
+    ObjectName, SequenceOptions, SqlOption,
 };
 use crate::tokenizer::Token;
 
@@ -45,6 +45,8 @@ pub enum AlterTableOperation {
         if_not_exists: bool,
         /// <column_def>.
         column_def: ColumnDef,
+        /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
+        column_position: Option<MySQLColumnPosition>,
     },
     /// `DISABLE ROW LEVEL SECURITY`
     ///
@@ -129,6 +131,8 @@ pub enum AlterTableOperation {
         new_name: Ident,
         data_type: DataType,
         options: Vec<ColumnOption>,
+        /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
+        column_position: Option<MySQLColumnPosition>,
     },
     /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
     ///
@@ -171,6 +175,7 @@ impl fmt::Display for AlterTableOperation {
                 column_keyword,
                 if_not_exists,
                 column_def,
+                column_position,
             } => {
                 write!(f, "ADD")?;
                 if *column_keyword {
@@ -180,6 +185,10 @@ impl fmt::Display for AlterTableOperation {
                     write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {column_def}")?;
+
+                if let Some(position) = column_position {
+                    write!(f, " {position}")?;
+                }
 
                 Ok(())
             }
@@ -271,13 +280,17 @@ impl fmt::Display for AlterTableOperation {
                 new_name,
                 data_type,
                 options,
+                column_position,
             } => {
                 write!(f, "CHANGE COLUMN {old_name} {new_name} {data_type}")?;
-                if options.is_empty() {
-                    Ok(())
-                } else {
-                    write!(f, " {}", display_separated(options, " "))
+                if !options.is_empty() {
+                    write!(f, " {}", display_separated(options, " "))?;
                 }
+                if let Some(position) = column_position {
+                    write!(f, " {position}")?;
+                }
+
+                Ok(())
             }
             AlterTableOperation::RenameConstraint { old_name, new_name } => {
                 write!(f, "RENAME CONSTRAINT {old_name} TO {new_name}")

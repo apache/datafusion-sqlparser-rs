@@ -694,6 +694,7 @@ fn parse_alter_table_add_columns() {
                             collation: None,
                             options: vec![],
                         },
+                        column_position: None,
                     },
                     AlterTableOperation::AddColumn {
                         column_keyword: true,
@@ -704,6 +705,7 @@ fn parse_alter_table_add_columns() {
                             collation: None,
                             options: vec![],
                         },
+                        column_position: None,
                     },
                 ]
             );

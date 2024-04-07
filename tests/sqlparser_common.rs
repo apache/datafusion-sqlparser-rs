@@ -3512,11 +3512,13 @@ fn parse_alter_table() {
             column_keyword,
             if_not_exists,
             column_def,
+            column_position,
         } => {
             assert!(column_keyword);
             assert!(!if_not_exists);
             assert_eq!("foo", column_def.name.to_string());
             assert_eq!("TEXT", column_def.data_type.to_string());
+            assert_eq!(None, column_position);
         }
         _ => unreachable!(),
     };

@@ -2946,9 +2946,10 @@ impl<'a> Parser<'a> {
 
     /// Parse a comma-separated list of 1+ SelectItem
     pub fn parse_projection(&mut self) -> Result<Vec<SelectItem>, ParserError> {
-        // BigQuery allows trailing commas, but only in project lists
+        // BigQuery and Snowflake allow trailing commas, but only in project lists
         // e.g. `SELECT 1, 2, FROM t`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#trailing_commas
+        // https://docs.snowflake.com/en/release-notes/2024/8_11#select-supports-trailing-commas
         //
         // This pattern could be captured better with RAII type semantics, but it's quite a bit of
         // code to add for just one case, so we'll just do it manually here.

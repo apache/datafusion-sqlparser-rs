@@ -6924,45 +6924,6 @@ impl<'a> Parser<'a> {
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {
-        mod parse_query {
-            use super::*;
-            type ReturnTy = Result<Query, ParserError>;
-            pub fn insert_case(parser: &mut Parser<'_>, with: Option<With>) -> ReturnTy {
-                let body = parser
-                    .parse_insert()
-                    .map(|insert| Box::new(SetExpr::Insert(insert)))?;
-
-                Ok(Query {
-                    with,
-                    body,
-                    limit: None,
-                    limit_by: vec![],
-                    order_by: vec![],
-                    offset: None,
-                    fetch: None,
-                    locks: vec![],
-                    for_clause: None,
-                })
-            }
-            pub fn update_case(parser: &mut Parser<'_>, with: Option<With>) -> ReturnTy {
-                let body = parser
-                    .parse_update()
-                    .map(|update| Box::new(SetExpr::Update(update)))?;
-
-                Ok(Query {
-                    with,
-                    body,
-                    limit: None,
-                    limit_by: vec![],
-                    order_by: vec![],
-                    offset: None,
-                    fetch: None,
-                    locks: vec![],
-                    for_clause: None,
-                })
-            }
-        }
-
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if self.parse_keyword(Keyword::WITH) {
             Some(With {
@@ -6973,9 +6934,29 @@ impl<'a> Parser<'a> {
             None
         };
         if self.parse_keyword(Keyword::INSERT) {
-            parse_query::insert_case(self, with)
+            Ok(Query {
+                with,
+                body: self.parse_insert_setexpr_boxed()?,
+                limit: None,
+                limit_by: vec![],
+                order_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+            })
         } else if self.parse_keyword(Keyword::UPDATE) {
-            parse_query::update_case(self, with)
+            Ok(Query {
+                with,
+                body: self.parse_update_setexpr_boxed()?,
+                limit: None,
+                limit_by: vec![],
+                order_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+            })
         } else {
             let body = self.parse_boxed_query_body(0)?;
 
@@ -8431,6 +8412,13 @@ impl<'a> Parser<'a> {
         Ok(insert.clone())
     }
 
+    /// Parse an INSERT statement, returning a `Box`ed SetExpr
+    ///
+    /// This is used to reduce the size of the stack frames in debug builds
+    fn parse_insert_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Insert(self.parse_insert()?)))
+    }
+
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
         let or = if !dialect_of!(self is SQLiteDialect) {
@@ -8615,6 +8603,13 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    /// Parse an UPDATE statement, returning a `Box`ed SetExpr
+    ///
+    /// This is used to reduce the size of the stack frames in debug builds
+    fn parse_update_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Update(self.parse_update()?)))
     }
 
     pub fn parse_update(&mut self) -> Result<Statement, ParserError> {

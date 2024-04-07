@@ -2062,6 +2062,7 @@ fn parse_select_qualify() {
                 null_treatment: None,
                 filter: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
@@ -4122,7 +4123,10 @@ fn parse_window_functions() {
                GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(7, select.projection.len());
+
+    const EXPECTED_PROJ_QTY: usize = 7;
+    assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
+
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
@@ -4130,6 +4134,7 @@ fn parse_window_functions() {
             null_treatment: None,
             filter: None,
             over: Some(WindowType::WindowSpec(WindowSpec {
+                window_name: None,
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
@@ -4144,6 +4149,66 @@ fn parse_window_functions() {
         }),
         expr_from_projection(&select.projection[0])
     );
+
+    for i in 0..EXPECTED_PROJ_QTY {
+        assert!(matches!(
+            expr_from_projection(&select.projection[i]),
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
+                    ..
+                })),
+                ..
+            })
+        ));
+    }
+}
+
+#[test]
+fn parse_named_window_functions() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MySqlDialect {}),
+            Box::new(BigQueryDialect {}),
+        ],
+        options: None,
+    };
+
+    let sql = "SELECT row_number() OVER (w ORDER BY dt DESC), \
+               sum(foo) OVER (win PARTITION BY a, b ORDER BY c, d \
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) \
+               FROM foo \
+               WINDOW w AS (PARTITION BY x), win AS (ORDER BY y)";
+    supported_dialects.verified_stmt(sql);
+
+    let select = verified_only_select(sql);
+
+    const EXPECTED_PROJ_QTY: usize = 2;
+    assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
+
+    const EXPECTED_WIN_NAMES: [&str; 2] = ["w", "win"];
+    for (i, win_name) in EXPECTED_WIN_NAMES.iter().enumerate() {
+        assert!(matches!(
+            expr_from_projection(&select.projection[i]),
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: Some(Ident { value, .. }),
+                    ..
+                })),
+                ..
+            }) if value == win_name
+        ));
+    }
+
+    let sql = "SELECT \
+        FIRST_VALUE(x) OVER (w ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS first, \
+        FIRST_VALUE(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS last, \
+        SUM(y) OVER (win PARTITION BY x) AS last \
+        FROM EMPLOYEE \
+        WINDOW w AS (PARTITION BY x), win AS (w ORDER BY y)";
+    supported_dialects.verified_stmt(sql);
 }
 
 #[test]
@@ -4244,6 +4309,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    window_name: None,
                     partition_by: vec![],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident {
@@ -4262,6 +4328,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    window_name: None,
                     partition_by: vec![Expr::Identifier(Ident {
                         value: "C11".to_string(),
                         quote_style: None,

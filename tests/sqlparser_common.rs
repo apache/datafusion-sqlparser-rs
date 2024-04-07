@@ -4187,7 +4187,7 @@ fn parse_named_window_functions() {
 
     const EXPECTED_PROJ_QTY: usize = 2;
     assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
-    
+
     const EXPECTED_WIN_NAMES: [&str; 2] = ["w", "win"];
     for (i, win_name) in EXPECTED_WIN_NAMES.iter().enumerate() {
         assert!(matches!(

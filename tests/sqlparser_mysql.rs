@@ -500,128 +500,176 @@ fn parse_create_table_auto_increment() {
     }
 }
 
-#[test]
-fn parse_create_table_unique_key() {
-    let sql = "CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, CONSTRAINT bar_key UNIQUE KEY (bar))";
-    match mysql().one_statement_parses_to(sql, "") {
-        Statement::CreateTable {
+/// if `unique_index_type_display` is `Some` create `TableConstraint::Unique`
+///  otherwise create `TableConstraint::Primary`
+fn table_constraint_unique_primary_ctor(
+    name: Option<Ident>,
+    index_name: Option<Ident>,
+    index_type: Option<IndexType>,
+    columns: Vec<Ident>,
+    index_options: Vec<IndexOption>,
+    characteristics: Option<ConstraintCharacteristics>,
+    unique_index_type_display: Option<KeyOrIndexDisplay>,
+) -> TableConstraint {
+    match unique_index_type_display {
+        Some(index_type_display) => TableConstraint::Unique {
             name,
+            index_name,
+            index_type_display,
+            index_type,
             columns,
-            constraints,
-            ..
-        } => {
-            assert_eq!(name.to_string(), "foo");
-            assert_eq!(
-                vec![TableConstraint::Unique {
-                    name: Some(Ident::new("bar_key")),
-                    index_name: None,
-                    index_type: None,
-                    columns: vec![Ident::new("bar")],
-                    is_primary: false,
-                    index_type_display: KeyOrIndexDisplay::Key,
-                    index_options: vec![],
-                    characteristics: None,
-                }],
-                constraints
-            );
-            assert_eq!(
-                vec![
-                    ColumnDef {
-                        name: Ident::new("id"),
-                        data_type: DataType::Int(None),
-                        collation: None,
-                        options: vec![
-                            ColumnOptionDef {
-                                name: None,
-                                option: ColumnOption::Unique {
-                                    is_primary: true,
-                                    characteristics: None
-                                },
-                            },
-                            ColumnOptionDef {
-                                name: None,
-                                option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                                    "AUTO_INCREMENT"
-                                )]),
-                            },
-                        ],
-                    },
-                    ColumnDef {
-                        name: Ident::new("bar"),
-                        data_type: DataType::Int(None),
-                        collation: None,
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::NotNull,
-                        },],
-                    },
-                ],
-                columns
-            );
-        }
-        _ => unreachable!(),
+            index_options,
+            characteristics,
+        },
+        None => TableConstraint::PrimaryKey {
+            name,
+            index_name,
+            index_type,
+            columns,
+            index_options,
+            characteristics,
+        },
     }
 }
 
 #[test]
-fn parse_create_table_unique_key_with_index_options() {
-    let sql = "CREATE TABLE foo (bar INT, var INT, CONSTRAINT constr UNIQUE INDEX index_name (bar, var) USING HASH COMMENT 'yes, ' USING BTREE COMMENT 'MySQL allows')";
-    match mysql_and_generic().one_statement_parses_to(sql, "") {
-        Statement::CreateTable {
-            name, constraints, ..
-        } => {
-            assert_eq!(name.to_string(), "foo");
-            assert_eq!(
-                vec![TableConstraint::Unique {
-                    name: Some(Ident::new("constr")),
-                    index_name: Some(Ident::new("index_name")),
-                    index_type: None,
-                    columns: vec![Ident::new("bar"), Ident::new("var")],
-                    is_primary: false,
-                    index_type_display: KeyOrIndexDisplay::Index,
-                    index_options: vec![
+fn parse_create_table_primary_and_unique_key() {
+    let sqls = ["UNIQUE KEY", "PRIMARY KEY"]
+        .map(|key_ty|format!("CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, CONSTRAINT bar_key {key_ty} (bar))"));
+
+    let index_type_display = [Some(KeyOrIndexDisplay::Key), None];
+
+    for (sql, index_type_display) in sqls.iter().zip(index_type_display) {
+        match mysql().one_statement_parses_to(sql, "") {
+            Statement::CreateTable {
+                name,
+                columns,
+                constraints,
+                ..
+            } => {
+                assert_eq!(name.to_string(), "foo");
+
+                let expected_constraint = table_constraint_unique_primary_ctor(
+                    Some(Ident::new("bar_key")),
+                    None,
+                    None,
+                    vec![Ident::new("bar")],
+                    vec![],
+                    None,
+                    index_type_display,
+                );
+                assert_eq!(vec![expected_constraint], constraints);
+
+                assert_eq!(
+                    vec![
+                        ColumnDef {
+                            name: Ident::new("id"),
+                            data_type: DataType::Int(None),
+                            collation: None,
+                            options: vec![
+                                ColumnOptionDef {
+                                    name: None,
+                                    option: ColumnOption::Unique {
+                                        is_primary: true,
+                                        characteristics: None
+                                    },
+                                },
+                                ColumnOptionDef {
+                                    name: None,
+                                    option: ColumnOption::DialectSpecific(vec![
+                                        Token::make_keyword("AUTO_INCREMENT")
+                                    ]),
+                                },
+                            ],
+                        },
+                        ColumnDef {
+                            name: Ident::new("bar"),
+                            data_type: DataType::Int(None),
+                            collation: None,
+                            options: vec![ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull,
+                            },],
+                        },
+                    ],
+                    columns
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn parse_create_table_primary_and_unique_key_with_index_options() {
+    let sqls = ["UNIQUE INDEX", "PRIMARY KEY"]
+        .map(|key_ty|format!("CREATE TABLE foo (bar INT, var INT, CONSTRAINT constr {key_ty} index_name (bar, var) USING HASH COMMENT 'yes, ' USING BTREE COMMENT 'MySQL allows')"));
+
+    let index_type_display = [Some(KeyOrIndexDisplay::Index), None];
+
+    for (sql, index_type_display) in sqls.iter().zip(index_type_display) {
+        match mysql_and_generic().one_statement_parses_to(sql, "") {
+            Statement::CreateTable {
+                name, constraints, ..
+            } => {
+                assert_eq!(name.to_string(), "foo");
+
+                let expected_constraint = table_constraint_unique_primary_ctor(
+                    Some(Ident::new("constr")),
+                    Some(Ident::new("index_name")),
+                    None,
+                    vec![Ident::new("bar"), Ident::new("var")],
+                    vec![
                         IndexOption::Using(IndexType::Hash),
                         IndexOption::Comment("yes, ".into()),
                         IndexOption::Using(IndexType::BTree),
-                        IndexOption::Comment("MySQL allows".into())
+                        IndexOption::Comment("MySQL allows".into()),
                     ],
-                    characteristics: None,
-                }],
-                constraints
-            );
+                    None,
+                    index_type_display,
+                );
+                assert_eq!(vec![expected_constraint], constraints);
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
-    }
 
-    mysql_and_generic().verified_stmt(sql);
+        mysql_and_generic().verified_stmt(sql);
+    }
 }
 
 #[test]
-fn parse_create_table_unique_key_with_index_type() {
-    let sql = "CREATE TABLE foo (bar INT, UNIQUE index_name USING BTREE (bar) USING HASH)";
-    match mysql_and_generic().one_statement_parses_to(sql, "") {
-        Statement::CreateTable {
-            name, constraints, ..
-        } => {
-            assert_eq!(name.to_string(), "foo");
-            assert_eq!(
-                vec![TableConstraint::Unique {
-                    name: None,
-                    index_name: Some(Ident::new("index_name")),
-                    index_type: Some(IndexType::BTree),
-                    columns: vec![Ident::new("bar")],
-                    is_primary: false,
-                    index_type_display: KeyOrIndexDisplay::None,
-                    index_options: vec![IndexOption::Using(IndexType::Hash),],
-                    characteristics: None,
-                }],
-                constraints
-            );
-        }
-        _ => unreachable!(),
-    }
-    mysql_and_generic().verified_stmt(sql);
+fn parse_create_table_primary_and_unique_key_with_index_type() {
+    let sqls = ["UNIQUE", "PRIMARY KEY"].map(|key_ty| {
+        format!("CREATE TABLE foo (bar INT, {key_ty} index_name USING BTREE (bar) USING HASH)")
+    });
 
+    let index_type_display = [Some(KeyOrIndexDisplay::None), None];
+
+    for (sql, index_type_display) in sqls.iter().zip(index_type_display) {
+        match mysql_and_generic().one_statement_parses_to(sql, "") {
+            Statement::CreateTable {
+                name, constraints, ..
+            } => {
+                assert_eq!(name.to_string(), "foo");
+
+                let expected_constraint = table_constraint_unique_primary_ctor(
+                    None,
+                    Some(Ident::new("index_name")),
+                    Some(IndexType::BTree),
+                    vec![Ident::new("bar")],
+                    vec![IndexOption::Using(IndexType::Hash)],
+                    None,
+                    index_type_display,
+                );
+                assert_eq!(vec![expected_constraint], constraints);
+            }
+            _ => unreachable!(),
+        }
+        mysql_and_generic().verified_stmt(sql);
+    }
+
+    let sql = "CREATE TABLE foo (bar INT, UNIQUE INDEX index_name USING BTREE (bar) USING HASH)";
+    mysql_and_generic().verified_stmt(sql);
     let sql = "CREATE TABLE foo (bar INT, PRIMARY KEY index_name USING BTREE (bar) USING HASH)";
     mysql_and_generic().verified_stmt(sql);
 }

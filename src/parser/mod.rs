@@ -5148,13 +5148,7 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(w) if w.keyword == Keyword::PRIMARY || w.keyword == Keyword::UNIQUE => {
-                let is_primary = w.keyword == Keyword::PRIMARY;
-                // after `PRIMARY` always stay `KEY`
-                if is_primary && !self.parse_keyword(Keyword::KEY) {
-                    return self.expected("KEY", self.peek_token());
-                }
-
+            Token::Word(w) if w.keyword == Keyword::UNIQUE => {
                 let index_type_display = self.parse_index_type_display();
                 if !dialect_of!(self is GenericDialect | MySqlDialect)
                     && !index_type_display.is_none()
@@ -5164,7 +5158,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // optional index name
-                let index_name = self.maybe_parse(|parser| parser.parse_identifier(false));
+                let index_name = self.parse_optional_indent();
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
@@ -5176,7 +5170,26 @@ impl<'a> Parser<'a> {
                     index_type_display,
                     index_type,
                     columns,
-                    is_primary,
+                    index_options,
+                    characteristics,
+                }))
+            }
+            Token::Word(w) if w.keyword == Keyword::PRIMARY => {
+                // after `PRIMARY` always stay `KEY`
+                self.expect_keyword(Keyword::KEY)?;
+
+                // optional index name
+                let index_name = self.parse_optional_indent();
+                let index_type = self.parse_optional_using_then_index_type()?;
+
+                let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                let index_options = self.parse_index_options()?;
+                let characteristics = self.parse_constraint_characteristics()?;
+                Ok(Some(TableConstraint::PrimaryKey {
+                    name,
+                    index_name,
+                    index_type,
+                    columns,
                     index_options,
                     characteristics,
                 }))
@@ -5228,7 +5241,7 @@ impl<'a> Parser<'a> {
 
                 let name = match self.peek_token().token {
                     Token::Word(word) if word.keyword == Keyword::USING => None,
-                    _ => self.maybe_parse(|parser| parser.parse_identifier(false)),
+                    _ => self.parse_optional_indent(),
                 };
 
                 let index_type = self.parse_optional_using_then_index_type()?;
@@ -5259,7 +5272,7 @@ impl<'a> Parser<'a> {
 
                 let index_type_display = self.parse_index_type_display();
 
-                let opt_index_name = self.maybe_parse(|parser| parser.parse_identifier(false));
+                let opt_index_name = self.parse_optional_indent();
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
 
@@ -5325,6 +5338,12 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    /// Parse `[ident]`, mostly `ident` is name, like:
+    /// `window_name`, `index_name`, ...
+    pub fn parse_optional_indent(&mut self) -> Option<Ident> {
+        self.maybe_parse(|parser| parser.parse_identifier(false))
     }
 
     #[must_use]
@@ -9584,9 +9603,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
         let window_name = match self.peek_token().token {
-            Token::Word(word) if word.keyword == Keyword::NoKeyword => {
-                self.maybe_parse(|parser| parser.parse_identifier(false))
-            }
+            Token::Word(word) if word.keyword == Keyword::NoKeyword => self.parse_optional_indent(),
             _ => None,
         };
 

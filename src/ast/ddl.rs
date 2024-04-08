@@ -399,11 +399,10 @@ impl fmt::Display for AlterColumnOperation {
 pub enum TableConstraint {
     /// MySQLs [definition][1] for `UNIQUE` & `PRIMARY KEY` constraints statements:\
     /// * `[CONSTRAINT [<name>]] UNIQUE <index_type_display> [<index_name>] [index_type] (<columns>) <index_options>`
-    /// * `[CONSTRAINT [<name>]] PRIMARY KEY [index_type] (<columns>) <index_options>`
     ///
     /// where:
     /// * [index_type][2] is `USING {BTREE | HASH}`
-    /// * [index_optios][3] is `{index_type | COMMENT 'string' | ... %currently unsupported stmts% } ...`
+    /// * [index_options][3] is `{index_type | COMMENT 'string' | ... %currently unsupported stmts% } ...`
     /// * [index_type_display][4] is `[INDEX | KEY]`
     ///
     /// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
@@ -422,8 +421,38 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         columns: Vec<Ident>,
-        /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
-        is_primary: bool,
+        index_options: Vec<IndexOption>,
+        characteristics: Option<ConstraintCharacteristics>,
+    },
+    /// MySQLs [definition][1] for `PRIMARY KEY` constraints statements:\
+    /// * `[CONSTRAINT [<name>]] PRIMARY KEY [index_name] [index_type] (<columns>) <index_options>`
+    ///
+    /// Actually the specification have no `[index_name]` but the next query will complete successfully:
+    /// ```sql
+    /// CREATE TABLE unspec_table (
+    ///   xid INT NOT NULL,
+    ///   CONSTRAINT p_name PRIMARY KEY index_name USING BTREE (xid)
+    /// );
+    /// ```
+    ///
+    /// where:
+    /// * [index_type][2] is `USING {BTREE | HASH}`
+    /// * [index_options][3] is `{index_type | COMMENT 'string' | ... %currently unsupported stmts% } ...`
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
+    /// [2]: IndexType
+    /// [3]: IndexOption
+    PrimaryKey {
+        /// Constraint name.
+        ///
+        /// Can be not the same as `index_name`
+        name: Option<Ident>,
+        index_name: Option<Ident>,
+        /// Optional `USING` of [index type][1] statement before columns.
+        ///
+        /// [1]: IndexType
+        index_type: Option<IndexType>,
+        columns: Vec<Ident>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
     },
@@ -498,35 +527,46 @@ impl fmt::Display for TableConstraint {
                 index_type_display,
                 index_type,
                 columns,
-                is_primary,
                 index_options,
                 characteristics,
             } => {
                 write!(
                     f,
-                    "{}{}{index_type_display:>}",
+                    "{}UNIQUE{index_type_display:>}{}{} ({})",
                     display_constraint_name(name),
-                    if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
+                    display_option_spaced(index_name),
+                    display_option(" USING ", "", index_type),
+                    display_comma_separated(columns),
                 )?;
 
-                if let Some(index_name) = index_name {
-                    write!(f, " {index_name}")?;
+                if !index_options.is_empty() {
+                    write!(f, " {}", display_separated(index_options, " "))?;
                 }
-
-                if let Some(index_type) = index_type {
-                    write!(f, " USING {index_type}")?;
-                }
-
-                write!(f, " ({})", display_comma_separated(columns))?;
+                display_option_spaced(characteristics);
+                Ok(())
+            }
+            TableConstraint::PrimaryKey {
+                name,
+                index_name,
+                index_type,
+                columns,
+                index_options,
+                characteristics,
+            } => {
+                write!(
+                    f,
+                    "{}PRIMARY KEY{}{} ({})",
+                    display_constraint_name(name),
+                    display_option_spaced(index_name),
+                    display_option(" USING ", "", index_type),
+                    display_comma_separated(columns),
+                )?;
 
                 if !index_options.is_empty() {
                     write!(f, " {}", display_separated(index_options, " "))?;
                 }
 
-                if let Some(characteristics) = characteristics {
-                    write!(f, " {}", characteristics)?;
-                }
-
+                display_option_spaced(characteristics);
                 Ok(())
             }
             TableConstraint::ForeignKey {
@@ -993,6 +1033,34 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
         }
     }
     ConstraintName(name)
+}
+
+/// If `option` is
+/// * `Some(inner)` => create display struct for `"{prefix}{inner}{postfix}"`
+/// * `_` => do nothing
+fn display_option<'a, T: fmt::Display>(
+    prefix: &'a str,
+    postfix: &'a str,
+    option: &'a Option<T>,
+) -> impl fmt::Display + 'a {
+    struct OptionDisplay<'a, T>(&'a str, &'a str, &'a Option<T>);
+    impl<'a, T: fmt::Display> fmt::Display for OptionDisplay<'a, T> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            if let Some(inner) = self.2 {
+                let (prefix, postfix) = (self.0, self.1);
+                write!(f, "{prefix}{inner}{postfix}")?;
+            }
+            Ok(())
+        }
+    }
+    OptionDisplay(prefix, postfix, option)
+}
+
+/// If `option` is
+/// * `Some(inner)` => create display struct for `" {inner}"`
+/// * `_` => do nothing
+fn display_option_spaced<'a, T: fmt::Display>(option: &'a Option<T>) -> impl fmt::Display + 'a {
+    display_option(" ", "", option)
 }
 
 /// `<constraint_characteristics> = [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ] [ ENFORCED | NOT ENFORCED ]`

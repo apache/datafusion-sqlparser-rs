@@ -85,3 +85,10 @@ fn test_create_table_comment_tblproperties() {
 
     databricks_unescaped().verified_stmt(sql);
 }
+
+#[test]
+fn test_select_star_except() {
+    let sql = "SELECT * EXCEPT (c2) FROM tbl";
+
+    databricks().verified_stmt(sql);
+}

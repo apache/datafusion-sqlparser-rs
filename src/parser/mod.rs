@@ -7966,7 +7966,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
+        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect | DatabricksDialect)
         {
             self.parse_optional_select_item_except()?
         } else {

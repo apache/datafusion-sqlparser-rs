@@ -155,6 +155,10 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
                 parser.prev_token();
                 break;
             }
+            Token::RParen => {
+                parser.prev_token();
+                break;
+            }
             Token::AtSign => ident.push('@'),
             Token::Tilde => ident.push('~'),
             Token::Mod => ident.push('%'),
@@ -219,7 +223,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         }
         _ => {
             parser.prev_token();
-            from_stage = parser.parse_object_name(false)?;
+            from_stage = parse_snowflake_stage_name(parser)?;
             stage_params = parse_stage_params(parser)?;
 
             // as

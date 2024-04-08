@@ -470,7 +470,7 @@ impl<'a> Parser<'a> {
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
-                    Ok(Statement::Query(Box::new(self.parse_query()?)))
+                    Ok(Statement::Query(self.parse_boxed_query()?))
                 }
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::ATTACH => Ok(self.parse_attach_database()?),
@@ -530,7 +530,7 @@ impl<'a> Parser<'a> {
             },
             Token::LParen => {
                 self.prev_token();
-                Ok(Statement::Query(Box::new(self.parse_query()?)))
+                Ok(Statement::Query(self.parse_boxed_query()?))
             }
             _ => self.expected("an SQL statement", next_token),
         }
@@ -1084,7 +1084,7 @@ impl<'a> Parser<'a> {
                 let expr =
                     if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
                         self.prev_token();
-                        Expr::Subquery(Box::new(self.parse_query()?))
+                        Expr::Subquery(self.parse_boxed_query()?)
                     } else {
                         let exprs = self.parse_comma_separated(Parser::parse_expr)?;
                         match exprs.len() {
@@ -1116,6 +1116,10 @@ impl<'a> Parser<'a> {
             Token::Placeholder(_) | Token::Colon | Token::AtSign => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
+            }
+            Token::LBrace if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                self.prev_token();
+                self.parse_duckdb_struct_literal()
             }
             _ => self.expected("an expression:", next_token),
         }?;
@@ -1461,7 +1465,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let exists_node = Expr::Exists {
             negated,
-            subquery: Box::new(self.parse_query()?),
+            subquery: self.parse_boxed_query()?,
         };
         self.expect_token(&Token::RParen)?;
         Ok(exists_node)
@@ -1525,47 +1529,27 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_substring_expr(&mut self) -> Result<Expr, ParserError> {
-        if self.dialect.supports_substring_from_for_expr() {
-            // PARSE SUBSTRING (EXPR [FROM 1] [FOR 3])
-            self.expect_token(&Token::LParen)?;
-            let expr = self.parse_expr()?;
-            let mut from_expr = None;
-            if self.parse_keyword(Keyword::FROM) || self.consume_token(&Token::Comma) {
-                from_expr = Some(self.parse_expr()?);
-            }
-
-            let mut to_expr = None;
-            if self.parse_keyword(Keyword::FOR) || self.consume_token(&Token::Comma) {
-                to_expr = Some(self.parse_expr()?);
-            }
-            self.expect_token(&Token::RParen)?;
-
-            Ok(Expr::Substring {
-                expr: Box::new(expr),
-                substring_from: from_expr.map(Box::new),
-                substring_for: to_expr.map(Box::new),
-                special: false,
-            })
-        } else {
-            // PARSE SUBSTRING(EXPR, start, length)
-            self.expect_token(&Token::LParen)?;
-            let expr = self.parse_expr()?;
-
-            self.expect_token(&Token::Comma)?;
-            let from_expr = Some(self.parse_expr()?);
-
-            self.expect_token(&Token::Comma)?;
-            let to_expr = Some(self.parse_expr()?);
-
-            self.expect_token(&Token::RParen)?;
-
-            Ok(Expr::Substring {
-                expr: Box::new(expr),
-                substring_from: from_expr.map(Box::new),
-                substring_for: to_expr.map(Box::new),
-                special: true,
-            })
+        // PARSE SUBSTRING (EXPR [FROM 1] [FOR 3])
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        let mut from_expr = None;
+        let special = self.consume_token(&Token::Comma);
+        if special || self.parse_keyword(Keyword::FROM) {
+            from_expr = Some(self.parse_expr()?);
         }
+
+        let mut to_expr = None;
+        if self.parse_keyword(Keyword::FOR) || self.consume_token(&Token::Comma) {
+            to_expr = Some(self.parse_expr()?);
+        }
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::Substring {
+            expr: Box::new(expr),
+            substring_from: from_expr.map(Box::new),
+            substring_for: to_expr.map(Box::new),
+            special,
+        })
     }
 
     pub fn parse_overlay_expr(&mut self) -> Result<Expr, ParserError> {
@@ -1670,9 +1654,9 @@ impl<'a> Parser<'a> {
 
     // Parses an array constructed from a subquery
     pub fn parse_array_subquery(&mut self) -> Result<Expr, ParserError> {
-        let query = self.parse_query()?;
+        let query = self.parse_boxed_query()?;
         self.expect_token(&Token::RParen)?;
-        Ok(Expr::ArraySubquery(Box::new(query)))
+        Ok(Expr::ArraySubquery(query))
     }
 
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
@@ -2147,6 +2131,45 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    /// DuckDB specific: Parse a duckdb dictionary [1]
+    ///
+    /// Syntax:
+    ///
+    /// ```sql
+    /// {'field_name': expr1[, ... ]}
+    /// ```
+    ///
+    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    fn parse_duckdb_struct_literal(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LBrace)?;
+
+        let fields = self.parse_comma_separated(Self::parse_duckdb_dictionary_field)?;
+
+        self.expect_token(&Token::RBrace)?;
+
+        Ok(Expr::Dictionary(fields))
+    }
+
+    /// Parse a field for a duckdb dictionary [1]
+    /// Syntax
+    /// ```sql
+    /// 'name': expr
+    /// ```
+    ///
+    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    fn parse_duckdb_dictionary_field(&mut self) -> Result<DictionaryField, ParserError> {
+        let key = self.parse_identifier(false)?;
+
+        self.expect_token(&Token::Colon)?;
+
+        let expr = self.parse_expr()?;
+
+        Ok(DictionaryField {
+            key,
+            value: Box::new(expr),
+        })
+    }
+
     /// For nested types that use the angle bracket syntax, this matches either
     /// `>`, `>>` or nothing depending on which variant is expected (specified by the previously
     /// matched `trailing_bracket` argument). It returns whether there is a trailing
@@ -2531,7 +2554,7 @@ impl<'a> Parser<'a> {
             self.prev_token();
             Expr::InSubquery {
                 expr: Box::new(expr),
-                subquery: Box::new(self.parse_query()?),
+                subquery: self.parse_boxed_query()?,
                 negated,
             }
         } else {
@@ -3414,6 +3437,46 @@ impl<'a> Parser<'a> {
             } else if self.parse_keyword(Keyword::VOLATILE) {
                 ensure_not_set(&body.behavior, "IMMUTABLE | STABLE | VOLATILE")?;
                 body.behavior = Some(FunctionBehavior::Volatile);
+            } else if self.parse_keywords(&[
+                Keyword::CALLED,
+                Keyword::ON,
+                Keyword::NULL,
+                Keyword::INPUT,
+            ]) {
+                ensure_not_set(
+                    &body.called_on_null,
+                    "CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT",
+                )?;
+                body.called_on_null = Some(FunctionCalledOnNull::CalledOnNullInput);
+            } else if self.parse_keywords(&[
+                Keyword::RETURNS,
+                Keyword::NULL,
+                Keyword::ON,
+                Keyword::NULL,
+                Keyword::INPUT,
+            ]) {
+                ensure_not_set(
+                    &body.called_on_null,
+                    "CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT",
+                )?;
+                body.called_on_null = Some(FunctionCalledOnNull::ReturnsNullOnNullInput);
+            } else if self.parse_keyword(Keyword::STRICT) {
+                ensure_not_set(
+                    &body.called_on_null,
+                    "CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT",
+                )?;
+                body.called_on_null = Some(FunctionCalledOnNull::Strict);
+            } else if self.parse_keyword(Keyword::PARALLEL) {
+                ensure_not_set(&body.parallel, "PARALLEL { UNSAFE | RESTRICTED | SAFE }")?;
+                if self.parse_keyword(Keyword::UNSAFE) {
+                    body.parallel = Some(FunctionParallel::Unsafe);
+                } else if self.parse_keyword(Keyword::RESTRICTED) {
+                    body.parallel = Some(FunctionParallel::Restricted);
+                } else if self.parse_keyword(Keyword::SAFE) {
+                    body.parallel = Some(FunctionParallel::Safe);
+                } else {
+                    return self.expected("one of UNSAFE | RESTRICTED | SAFE", self.peek_token());
+                }
             } else if self.parse_keyword(Keyword::RETURN) {
                 ensure_not_set(&body.return_, "RETURN")?;
                 body.return_ = Some(self.parse_expr()?);
@@ -3462,7 +3525,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier(false)?;
 
         let default_expr =
-            if self.consume_token(&Token::DuckAssignment) || self.consume_token(&Token::RArrow) {
+            if self.consume_token(&Token::Assignment) || self.consume_token(&Token::RArrow) {
                 Some(self.parse_expr()?)
             } else {
                 None
@@ -3574,7 +3637,7 @@ impl<'a> Parser<'a> {
         }
 
         self.expect_keyword(Keyword::AS)?;
-        let query = Box::new(self.parse_query()?);
+        let query = self.parse_boxed_query()?;
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
 
         let with_no_schema_binding = dialect_of!(self is RedshiftSqlDialect | GenericDialect)
@@ -3969,7 +4032,7 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword(Keyword::FOR)?;
 
-        let query = Some(Box::new(self.parse_query()?));
+        let query = Some(self.parse_boxed_query()?);
 
         Ok(Statement::Declare {
             stmts: vec![Declare {
@@ -4063,7 +4126,7 @@ impl<'a> Parser<'a> {
                     match self.peek_token().token {
                         Token::Word(w) if w.keyword == Keyword::SELECT => (
                             Some(DeclareType::Cursor),
-                            Some(Box::new(self.parse_query()?)),
+                            Some(self.parse_boxed_query()?),
                             None,
                             None,
                         ),
@@ -4160,7 +4223,7 @@ impl<'a> Parser<'a> {
                 self.next_token(); // Skip `DEFAULT`
                 Some(DeclareAssignment::Default(Box::new(self.parse_expr()?)))
             }
-            Token::DuckAssignment => {
+            Token::Assignment => {
                 self.next_token(); // Skip `:=`
                 Some(DeclareAssignment::DuckAssignment(Box::new(
                     self.parse_expr()?,
@@ -4587,7 +4650,7 @@ impl<'a> Parser<'a> {
 
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
-            Some(Box::new(self.parse_query()?))
+            Some(self.parse_boxed_query()?)
         } else {
             None
         };
@@ -5343,10 +5406,14 @@ impl<'a> Parser<'a> {
                     };
 
                     let column_def = self.parse_column_def()?;
+
+                    let column_position = self.parse_column_position()?;
+
                     AlterTableOperation::AddColumn {
                         column_keyword,
                         if_not_exists,
                         column_def,
+                        column_position,
                     }
                 }
             }
@@ -5475,11 +5542,14 @@ impl<'a> Parser<'a> {
                 options.push(option);
             }
 
+            let column_position = self.parse_column_position()?;
+
             AlterTableOperation::ChangeColumn {
                 old_name,
                 new_name,
                 data_type,
                 options,
+                column_position,
             }
         } else if self.parse_keyword(Keyword::ALTER) {
             let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
@@ -5631,7 +5701,7 @@ impl<'a> Parser<'a> {
         let with_options = self.parse_options(Keyword::WITH)?;
 
         self.expect_keyword(Keyword::AS)?;
-        let query = Box::new(self.parse_query()?);
+        let query = self.parse_boxed_query()?;
 
         Ok(Statement::AlterView {
             name,
@@ -5671,7 +5741,7 @@ impl<'a> Parser<'a> {
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let source;
         if self.consume_token(&Token::LParen) {
-            source = CopySource::Query(Box::new(self.parse_query()?));
+            source = CopySource::Query(self.parse_boxed_query()?);
             self.expect_token(&Token::RParen)?;
         } else {
             let table_name = self.parse_object_name(false)?;
@@ -6022,7 +6092,8 @@ impl<'a> Parser<'a> {
     pub fn parse_function_definition(&mut self) -> Result<FunctionDefinition, ParserError> {
         let peek_token = self.peek_token();
         match peek_token.token {
-            Token::DollarQuotedString(value) if dialect_of!(self is PostgreSqlDialect) => {
+            Token::DollarQuotedString(value) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+            {
                 self.next_token();
                 Ok(FunctionDefinition::DoubleDollarDef(value.value))
             }
@@ -6894,6 +6965,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Call's [`Self::parse_query`] returning a `Box`'ed  result.
+    ///
+    /// This function can be used to reduce the stack size required in debug
+    /// builds. Instead of `sizeof(Query)` only a pointer (`Box<Query>`)
+    /// is used.
+    fn parse_boxed_query(&mut self) -> Result<Box<Query>, ParserError> {
+        self.parse_query().map(Box::new)
+    }
+
     /// Parse a query expression, i.e. a `SELECT` statement optionally
     /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
@@ -6908,13 +6988,10 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
         if self.parse_keyword(Keyword::INSERT) {
-            let insert = self.parse_insert()?;
-
             Ok(Query {
                 with,
-                body: Box::new(SetExpr::Insert(insert)),
+                body: self.parse_insert_setexpr_boxed()?,
                 limit: None,
                 limit_by: vec![],
                 order_by: vec![],
@@ -6924,10 +7001,9 @@ impl<'a> Parser<'a> {
                 for_clause: None,
             })
         } else if self.parse_keyword(Keyword::UPDATE) {
-            let update = self.parse_update()?;
             Ok(Query {
                 with,
-                body: Box::new(SetExpr::Update(update)),
+                body: self.parse_update_setexpr_boxed()?,
                 limit: None,
                 limit_by: vec![],
                 order_by: vec![],
@@ -6937,7 +7013,7 @@ impl<'a> Parser<'a> {
                 for_clause: None,
             })
         } else {
-            let body = Box::new(self.parse_query_body(0)?);
+            let body = self.parse_boxed_query_body(0)?;
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 self.parse_comma_separated(Parser::parse_order_by_expr)?
@@ -7127,7 +7203,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.expect_token(&Token::LParen)?;
-            let query = Box::new(self.parse_query()?);
+            let query = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
             let alias = TableAlias {
                 name,
@@ -7151,7 +7227,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.expect_token(&Token::LParen)?;
-            let query = Box::new(self.parse_query()?);
+            let query = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
             let alias = TableAlias { name, columns };
             Cte {
@@ -7167,6 +7243,15 @@ impl<'a> Parser<'a> {
         Ok(cte)
     }
 
+    /// Call's [`Self::parse_query_body`] returning a `Box`'ed  result.
+    ///
+    /// This function can be used to reduce the stack size required in debug
+    /// builds. Instead of `sizeof(QueryBody)` only a pointer (`Box<QueryBody>`)
+    /// is used.
+    fn parse_boxed_query_body(&mut self, precedence: u8) -> Result<Box<SetExpr>, ParserError> {
+        self.parse_query_body(precedence).map(Box::new)
+    }
+
     /// Parse a "query body", which is an expression with roughly the
     /// following grammar:
     /// ```sql
@@ -7175,16 +7260,19 @@ impl<'a> Parser<'a> {
     ///   subquery ::= query_body [ order_by_limit ]
     ///   set_operation ::= query_body { 'UNION' | 'EXCEPT' | 'INTERSECT' } [ 'ALL' ] query_body
     /// ```
+    ///
+    /// If you need `Box<SetExpr>` then maybe there is sense to use `parse_boxed_query_body`
+    /// due to prevent stack overflow in debug building(to reserve less memory on stack).
     pub fn parse_query_body(&mut self, precedence: u8) -> Result<SetExpr, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
         let mut expr = if self.parse_keyword(Keyword::SELECT) {
-            SetExpr::Select(Box::new(self.parse_select()?))
+            SetExpr::Select(self.parse_select().map(Box::new)?)
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
-            let subquery = self.parse_query()?;
+            let subquery = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
-            SetExpr::Query(Box::new(subquery))
+            SetExpr::Query(subquery)
         } else if self.parse_keyword(Keyword::VALUES) {
             let is_mysql = dialect_of!(self is MySqlDialect);
             SetExpr::Values(self.parse_values(is_mysql)?)
@@ -7217,7 +7305,7 @@ impl<'a> Parser<'a> {
                 left: Box::new(expr),
                 op: op.unwrap(),
                 set_quantifier,
-                right: Box::new(self.parse_query_body(next_precedence)?),
+                right: self.parse_boxed_query_body(next_precedence)?,
             };
         }
 
@@ -8131,7 +8219,7 @@ impl<'a> Parser<'a> {
         &mut self,
         lateral: IsLateral,
     ) -> Result<TableFactor, ParserError> {
-        let subquery = Box::new(self.parse_query()?);
+        let subquery = self.parse_boxed_query()?;
         self.expect_token(&Token::RParen)?;
         let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(TableFactor::Derived {
@@ -8379,6 +8467,13 @@ impl<'a> Parser<'a> {
         Ok(insert.clone())
     }
 
+    /// Parse an INSERT statement, returning a `Box`ed SetExpr
+    ///
+    /// This is used to reduce the size of the stack frames in debug builds
+    fn parse_insert_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Insert(self.parse_insert()?)))
+    }
+
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
         let or = if !dialect_of!(self is SQLiteDialect) {
@@ -8429,7 +8524,7 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            let source = Box::new(self.parse_query()?);
+            let source = self.parse_boxed_query()?;
             Ok(Statement::Directory {
                 local,
                 path,
@@ -8462,10 +8557,23 @@ impl<'a> Parser<'a> {
                     // Hive allows you to specify columns after partitions as well if you want.
                     let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
 
-                    let source = Some(Box::new(self.parse_query()?));
+                    let source = Some(self.parse_boxed_query()?);
 
                     (columns, partitioned, after_columns, source)
                 };
+
+            let insert_alias = if dialect_of!(self is MySqlDialect | GenericDialect)
+                && self.parse_keyword(Keyword::AS)
+            {
+                let row_alias = self.parse_object_name(false)?;
+                let col_aliases = Some(self.parse_parenthesized_column_list(Optional, false)?);
+                Some(InsertAliases {
+                    row_alias,
+                    col_aliases,
+                })
+            } else {
+                None
+            };
 
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
@@ -8536,6 +8644,7 @@ impl<'a> Parser<'a> {
                 returning,
                 replace_into,
                 priority,
+                insert_alias,
             })
         }
     }
@@ -8549,6 +8658,13 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    /// Parse an UPDATE statement, returning a `Box`ed SetExpr
+    ///
+    /// This is used to reduce the size of the stack frames in debug builds
+    fn parse_update_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Update(self.parse_update()?)))
     }
 
     pub fn parse_update(&mut self) -> Result<Statement, ParserError> {
@@ -8601,7 +8717,9 @@ impl<'a> Parser<'a> {
                 arg,
                 operator: FunctionArgOperator::RightArrow,
             })
-        } else if self.peek_nth_token(1) == Token::Eq {
+        } else if self.dialect.supports_named_fn_args_with_eq_operator()
+            && self.peek_nth_token(1) == Token::Eq
+        {
             let name = self.parse_identifier(false)?;
 
             self.expect_token(&Token::Eq)?;
@@ -8611,6 +8729,19 @@ impl<'a> Parser<'a> {
                 name,
                 arg,
                 operator: FunctionArgOperator::Equals,
+            })
+        } else if dialect_of!(self is DuckDbDialect | GenericDialect)
+            && self.peek_nth_token(1) == Token::Assignment
+        {
+            let name = self.parse_identifier(false)?;
+
+            self.expect_token(&Token::Assignment)?;
+            let arg = self.parse_expr()?.into();
+
+            Ok(FunctionArg::Named {
+                name,
+                arg,
+                operator: FunctionArgOperator::Assignment,
             })
         } else {
             Ok(FunctionArg::Unnamed(self.parse_wildcard_expr()?.into()))
@@ -8641,11 +8772,11 @@ impl<'a> Parser<'a> {
                     .is_some()
             {
                 self.prev_token();
-                let subquery = self.parse_query()?;
+                let subquery = self.parse_boxed_query()?;
                 self.expect_token(&Token::RParen)?;
                 return Ok((
                     vec![FunctionArg::Unnamed(FunctionArgExpr::from(Expr::Subquery(
-                        Box::new(subquery),
+                        subquery,
                     )))],
                     vec![],
                 ));
@@ -9159,7 +9290,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_unload(&mut self) -> Result<Statement, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let query = self.parse_query()?;
+        let query = self.parse_boxed_query()?;
         self.expect_token(&Token::RParen)?;
 
         self.expect_keyword(Keyword::TO)?;
@@ -9168,7 +9299,7 @@ impl<'a> Parser<'a> {
         let with_options = self.parse_options(Keyword::WITH)?;
 
         Ok(Statement::Unload {
-            query: Box::new(query),
+            query,
             to,
             with: with_options,
         })
@@ -9452,6 +9583,13 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
+        let window_name = match self.peek_token().token {
+            Token::Word(word) if word.keyword == Keyword::NoKeyword => {
+                self.maybe_parse(|parser| parser.parse_identifier(false))
+            }
+            _ => None,
+        };
+
         let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?
         } else {
@@ -9462,6 +9600,7 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
+
         let window_frame = if !self.consume_token(&Token::RParen) {
             let window_frame = self.parse_window_frame()?;
             self.expect_token(&Token::RParen)?;
@@ -9470,6 +9609,7 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(WindowSpec {
+            window_name,
             partition_by,
             order_by,
             window_frame,
@@ -9521,6 +9661,21 @@ impl<'a> Parser<'a> {
         let partitions = self.parse_comma_separated(|p| p.parse_identifier(false))?;
         self.expect_token(&Token::RParen)?;
         Ok(partitions)
+    }
+
+    fn parse_column_position(&mut self) -> Result<Option<MySQLColumnPosition>, ParserError> {
+        if dialect_of!(self is MySqlDialect | GenericDialect) {
+            if self.parse_keyword(Keyword::FIRST) {
+                Ok(Some(MySQLColumnPosition::First))
+            } else if self.parse_keyword(Keyword::AFTER) {
+                let ident = self.parse_identifier(false)?;
+                Ok(Some(MySQLColumnPosition::After(ident)))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     /// Consume the parser and return its underlying token buffer

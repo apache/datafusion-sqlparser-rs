@@ -117,8 +117,8 @@ pub enum Token {
     Colon,
     /// DoubleColon `::` (used for casting in PostgreSQL)
     DoubleColon,
-    /// Assignment `:=` (used for keyword argument in DuckDB macros)
-    DuckAssignment,
+    /// Assignment `:=` (used for keyword argument in DuckDB macros and some functions, and for variable declarations in DuckDB and Snowflake)
+    Assignment,
     /// SemiColon `;` used as separator for COPY and payload
     SemiColon,
     /// Backslash `\` used in terminating the COPY payload with `\.`
@@ -239,7 +239,7 @@ impl fmt::Display for Token {
             Token::Period => f.write_str("."),
             Token::Colon => f.write_str(":"),
             Token::DoubleColon => f.write_str("::"),
-            Token::DuckAssignment => f.write_str(":="),
+            Token::Assignment => f.write_str(":="),
             Token::SemiColon => f.write_str(";"),
             Token::Backslash => f.write_str("\\"),
             Token::LBracket => f.write_str("["),
@@ -959,7 +959,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     match chars.peek() {
                         Some(':') => self.consume_and_return(chars, Token::DoubleColon),
-                        Some('=') => self.consume_and_return(chars, Token::DuckAssignment),
+                        Some('=') => self.consume_and_return(chars, Token::Assignment),
                         _ => Ok(Some(Token::Colon)),
                     }
                 }
@@ -984,7 +984,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect) => {
+                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect) => {
                     chars.next(); // consume the '#', starting a snowflake single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {

@@ -32,6 +32,10 @@ impl Dialect for SQLiteDialect {
         ch == '`' || ch == '"' || ch == '['
     }
 
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('`')
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://www.sqlite.org/draft/tokenreq.html
         ch.is_ascii_lowercase()

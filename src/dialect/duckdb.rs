@@ -33,4 +33,8 @@ impl Dialect for DuckDbDialect {
     fn supports_group_by_expr(&self) -> bool {
         true
     }
+
+    fn supports_named_fn_args_with_eq_operator(&self) -> bool {
+        true
+    }
 }

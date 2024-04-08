@@ -33,8 +33,8 @@ use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
-    all_dialects, alter_table_op, assert_eq_vec, expr_from_projection, join, number, only, table,
-    table_alias, TestedDialects,
+    all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, expr_from_projection, join,
+    number, only, table, table_alias, TestedDialects,
 };
 
 #[macro_use]
@@ -2062,6 +2062,7 @@ fn parse_select_qualify() {
                 null_treatment: None,
                 filter: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
@@ -3511,11 +3512,13 @@ fn parse_alter_table() {
             column_keyword,
             if_not_exists,
             column_def,
+            column_position,
         } => {
             assert!(column_keyword);
             assert!(!if_not_exists);
             assert_eq!("foo", column_def.name.to_string());
             assert_eq!("TEXT", column_def.data_type.to_string());
+            assert_eq!(None, column_position);
         }
         _ => unreachable!(),
     };
@@ -4045,7 +4048,9 @@ fn parse_named_argument_function() {
 #[test]
 fn parse_named_argument_function_with_eq_operator() {
     let sql = "SELECT FUN(a = '1', b = '2') FROM foo";
-    let select = verified_only_select(sql);
+
+    let select = all_dialects_where(|d| d.supports_named_fn_args_with_eq_operator())
+        .verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
@@ -4074,6 +4079,33 @@ fn parse_named_argument_function_with_eq_operator() {
         }),
         expr_from_projection(only(&select.projection))
     );
+
+    // Ensure that bar = 42 in a function argument parses as an equality binop
+    // rather than a named function argument.
+    assert_eq!(
+        all_dialects_except(|d| d.supports_named_fn_args_with_eq_operator())
+            .verified_expr("foo(bar = 42)"),
+        Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("foo")]),
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("bar"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(number("42"))),
+                },
+            ))],
+            filter: None,
+            null_treatment: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![],
+        })
+    );
+
+    // TODO: should this parse for all dialects?
+    all_dialects_except(|d| d.supports_named_fn_args_with_eq_operator())
+        .verified_expr("iff(1 = 1, 1, 0)");
 }
 
 #[test]
@@ -4093,7 +4125,10 @@ fn parse_window_functions() {
                GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(7, select.projection.len());
+
+    const EXPECTED_PROJ_QTY: usize = 7;
+    assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
+
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
@@ -4101,6 +4136,7 @@ fn parse_window_functions() {
             null_treatment: None,
             filter: None,
             over: Some(WindowType::WindowSpec(WindowSpec {
+                window_name: None,
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
@@ -4115,6 +4151,66 @@ fn parse_window_functions() {
         }),
         expr_from_projection(&select.projection[0])
     );
+
+    for i in 0..EXPECTED_PROJ_QTY {
+        assert!(matches!(
+            expr_from_projection(&select.projection[i]),
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
+                    ..
+                })),
+                ..
+            })
+        ));
+    }
+}
+
+#[test]
+fn parse_named_window_functions() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MySqlDialect {}),
+            Box::new(BigQueryDialect {}),
+        ],
+        options: None,
+    };
+
+    let sql = "SELECT row_number() OVER (w ORDER BY dt DESC), \
+               sum(foo) OVER (win PARTITION BY a, b ORDER BY c, d \
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) \
+               FROM foo \
+               WINDOW w AS (PARTITION BY x), win AS (ORDER BY y)";
+    supported_dialects.verified_stmt(sql);
+
+    let select = verified_only_select(sql);
+
+    const EXPECTED_PROJ_QTY: usize = 2;
+    assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
+
+    const EXPECTED_WIN_NAMES: [&str; 2] = ["w", "win"];
+    for (i, win_name) in EXPECTED_WIN_NAMES.iter().enumerate() {
+        assert!(matches!(
+            expr_from_projection(&select.projection[i]),
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: Some(Ident { value, .. }),
+                    ..
+                })),
+                ..
+            }) if value == win_name
+        ));
+    }
+
+    let sql = "SELECT \
+        FIRST_VALUE(x) OVER (w ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS first, \
+        FIRST_VALUE(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS last, \
+        SUM(y) OVER (win PARTITION BY x) AS last \
+        FROM EMPLOYEE \
+        WINDOW w AS (PARTITION BY x), win AS (w ORDER BY y)";
+    supported_dialects.verified_stmt(sql);
 }
 
 #[test]
@@ -4215,6 +4311,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    window_name: None,
                     partition_by: vec![],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident {
@@ -4233,6 +4330,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    window_name: None,
                     partition_by: vec![Expr::Identifier(Ident {
                         value: "C11".to_string(),
                         quote_style: None,
@@ -5761,45 +5859,12 @@ fn parse_scalar_subqueries() {
 
 #[test]
 fn parse_substring() {
-    let from_for_supported_dialects = TestedDialects {
-        dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(HiveDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(MySqlDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(SQLiteDialect {}),
-            Box::new(DuckDbDialect {}),
-        ],
-        options: None,
-    };
-
-    let from_for_unsupported_dialects = TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {})],
-        options: None,
-    };
-
-    from_for_supported_dialects
-        .one_statement_parses_to("SELECT SUBSTRING('1')", "SELECT SUBSTRING('1')");
-
-    from_for_supported_dialects.one_statement_parses_to(
-        "SELECT SUBSTRING('1' FROM 1)",
-        "SELECT SUBSTRING('1' FROM 1)",
-    );
-
-    from_for_supported_dialects.one_statement_parses_to(
-        "SELECT SUBSTRING('1' FROM 1 FOR 3)",
-        "SELECT SUBSTRING('1' FROM 1 FOR 3)",
-    );
-
-    from_for_unsupported_dialects
-        .one_statement_parses_to("SELECT SUBSTRING('1', 1, 3)", "SELECT SUBSTRING('1', 1, 3)");
-
-    from_for_supported_dialects
-        .one_statement_parses_to("SELECT SUBSTRING('1' FOR 3)", "SELECT SUBSTRING('1' FOR 3)");
+    verified_stmt("SELECT SUBSTRING('1')");
+    verified_stmt("SELECT SUBSTRING('1' FROM 1)");
+    verified_stmt("SELECT SUBSTRING('1' FROM 1 FOR 3)");
+    verified_stmt("SELECT SUBSTRING('1', 1, 3)");
+    verified_stmt("SELECT SUBSTRING('1', 1)");
+    verified_stmt("SELECT SUBSTRING('1' FOR 3)");
 }
 
 #[test]
@@ -8542,6 +8607,24 @@ fn test_release_savepoint() {
     }
 
     one_statement_parses_to("RELEASE test1", "RELEASE SAVEPOINT test1");
+}
+
+#[test]
+fn test_comment_hash_syntax() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(SnowflakeDialect {})],
+        options: None,
+    };
+    let sql = r#"
+    # comment
+    SELECT a, b, c # , d, e
+    FROM T
+    ####### comment #################
+    WHERE true
+    # comment
+    "#;
+    let canonical = "SELECT a, b, c FROM T WHERE true";
+    dialects.verified_only_select_with_canonical(sql, canonical);
 }
 
 #[test]

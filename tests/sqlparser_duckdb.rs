@@ -246,3 +246,124 @@ fn test_duckdb_load_extension() {
         stmt
     );
 }
+
+#[test]
+fn test_duckdb_struct_literal() {
+    //struct literal syntax https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    //syntax: {'field_name': expr1[, ... ]}
+    let sql = "SELECT {'a': 1, 'b': 2, 'c': 3}, [{'a': 'abc'}], {'a': 1, 'b': [t.str_col]}, {'a': 1, 'b': 'abc'}, {'abc': str_col}, {'a': {'aa': 1}}";
+    let select = duckdb_and_generic().verified_only_select(sql);
+    assert_eq!(6, select.projection.len());
+    assert_eq!(
+        &Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "a"),
+                value: Box::new(Expr::Value(number("1"))),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "b"),
+                value: Box::new(Expr::Value(number("2"))),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "c"),
+                value: Box::new(Expr::Value(number("3"))),
+            },
+        ],),
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Array(Array {
+            elem: vec![Expr::Dictionary(vec![DictionaryField {
+                key: Ident::with_quote('\'', "a"),
+                value: Box::new(Expr::Value(Value::SingleQuotedString("abc".to_string()))),
+            },],)],
+            named: false
+        }),
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "a"),
+                value: Box::new(Expr::Value(number("1"))),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "b"),
+                value: Box::new(Expr::Array(Array {
+                    elem: vec![Expr::CompoundIdentifier(vec![
+                        Ident::from("t"),
+                        Ident::from("str_col")
+                    ])],
+                    named: false
+                })),
+            },
+        ],),
+        expr_from_projection(&select.projection[2])
+    );
+    assert_eq!(
+        &Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "a"),
+                value: Expr::Value(number("1")).into(),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "b"),
+                value: Expr::Value(Value::SingleQuotedString("abc".to_string())).into(),
+            },
+        ],),
+        expr_from_projection(&select.projection[3])
+    );
+    assert_eq!(
+        &Expr::Dictionary(vec![DictionaryField {
+            key: Ident::with_quote('\'', "abc"),
+            value: Expr::Identifier(Ident::from("str_col")).into(),
+        }],),
+        expr_from_projection(&select.projection[4])
+    );
+    assert_eq!(
+        &Expr::Dictionary(vec![DictionaryField {
+            key: Ident::with_quote('\'', "a"),
+            value: Expr::Dictionary(vec![DictionaryField {
+                key: Ident::with_quote('\'', "aa"),
+                value: Expr::Value(number("1")).into(),
+            }],)
+            .into(),
+        }],),
+        expr_from_projection(&select.projection[5])
+    );
+}
+
+#[test]
+fn test_duckdb_named_argument_function_with_assignment_operator() {
+    let sql = "SELECT FUN(a := '1', b := '2') FROM foo";
+    let select = duckdb_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("FUN")]),
+            args: vec![
+                FunctionArg::Named {
+                    name: Ident::new("a"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "1".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Assignment
+                },
+                FunctionArg::Named {
+                    name: Ident::new("b"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "2".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Assignment
+                },
+            ],
+            null_treatment: None,
+            filter: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![],
+        }),
+        expr_from_projection(only(&select.projection))
+    );
+}

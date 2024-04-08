@@ -1059,7 +1059,7 @@ fn display_option<'a, T: fmt::Display>(
 /// If `option` is
 /// * `Some(inner)` => create display struct for `" {inner}"`
 /// * `_` => do nothing
-fn display_option_spaced<'a, T: fmt::Display>(option: &'a Option<T>) -> impl fmt::Display + 'a {
+fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl fmt::Display + '_ {
     display_option(" ", "", option)
 }
 

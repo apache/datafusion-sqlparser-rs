@@ -542,7 +542,8 @@ impl fmt::Display for TableConstraint {
                 if !index_options.is_empty() {
                     write!(f, " {}", display_separated(index_options, " "))?;
                 }
-                display_option_spaced(characteristics);
+
+                write!(f, "{}", display_option_spaced(characteristics))?;
                 Ok(())
             }
             TableConstraint::PrimaryKey {
@@ -566,7 +567,7 @@ impl fmt::Display for TableConstraint {
                     write!(f, " {}", display_separated(index_options, " "))?;
                 }
 
-                display_option_spaced(characteristics);
+                write!(f, "{}", display_option_spaced(characteristics))?;
                 Ok(())
             }
             TableConstraint::ForeignKey {
@@ -1022,6 +1023,7 @@ pub enum GeneratedExpressionMode {
     Stored,
 }
 
+#[must_use]
 fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
     struct ConstraintName<'a>(&'a Option<Ident>);
     impl<'a> fmt::Display for ConstraintName<'a> {
@@ -1038,6 +1040,7 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
 /// If `option` is
 /// * `Some(inner)` => create display struct for `"{prefix}{inner}{postfix}"`
 /// * `_` => do nothing
+#[must_use]
 fn display_option<'a, T: fmt::Display>(
     prefix: &'a str,
     postfix: &'a str,
@@ -1059,6 +1062,7 @@ fn display_option<'a, T: fmt::Display>(
 /// If `option` is
 /// * `Some(inner)` => create display struct for `" {inner}"`
 /// * `_` => do nothing
+#[must_use]
 fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl fmt::Display + '_ {
     display_option(" ", "", option)
 }

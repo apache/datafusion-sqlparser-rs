@@ -674,6 +674,16 @@ fn parse_create_table_primary_and_unique_key_with_index_type() {
     mysql_and_generic().verified_stmt(sql);
 }
 
+
+#[test]
+fn parse_create_table_primary_and_unique_key_characteristic_test() {
+    let sqls = ["UNIQUE INDEX", "PRIMARY KEY"]
+        .map(|key_ty|format!("CREATE TABLE x (y INT, CONSTRAINT constr {key_ty} (y) NOT DEFERRABLE INITIALLY IMMEDIATE)"));
+    for sql in &sqls {
+        mysql_and_generic().verified_stmt(sql);
+    }
+}
+
 #[test]
 fn parse_create_table_comment() {
     let canonical = "CREATE TABLE foo (bar INT) COMMENT 'baz'";

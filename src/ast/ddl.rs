@@ -397,7 +397,7 @@ impl fmt::Display for AlterColumnOperation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TableConstraint {
-    /// MySQLs [definition][1] for `UNIQUE` & `PRIMARY KEY` constraints statements:\
+    /// MySQL [definition][1] for `UNIQUE` constraints statements:\
     /// * `[CONSTRAINT [<name>]] UNIQUE <index_type_display> [<index_name>] [index_type] (<columns>) <index_options>`
     ///
     /// where:
@@ -414,17 +414,20 @@ pub enum TableConstraint {
         ///
         /// Can be not the same as `index_name`
         name: Option<Ident>,
+        /// Index name
         index_name: Option<Ident>,
+        /// Whether the type is followed by the keyword `KEY`, `INDEX`, or no keyword at all.
         index_type_display: KeyOrIndexDisplay,
         /// Optional `USING` of [index type][1] statement before columns.
         ///
         /// [1]: IndexType
         index_type: Option<IndexType>,
+        /// Identifiers of the columns that are unique.
         columns: Vec<Ident>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
     },
-    /// MySQLs [definition][1] for `PRIMARY KEY` constraints statements:\
+    /// MySQL [definition][1] for `PRIMARY KEY` constraints statements:\
     /// * `[CONSTRAINT [<name>]] PRIMARY KEY [index_name] [index_type] (<columns>) <index_options>`
     ///
     /// Actually the specification have no `[index_name]` but the next query will complete successfully:
@@ -447,11 +450,13 @@ pub enum TableConstraint {
         ///
         /// Can be not the same as `index_name`
         name: Option<Ident>,
+        /// Index name
         index_name: Option<Ident>,
         /// Optional `USING` of [index type][1] statement before columns.
         ///
         /// [1]: IndexType
         index_type: Option<IndexType>,
+        /// Identifiers of the columns that form the primary key.
         columns: Vec<Ident>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,

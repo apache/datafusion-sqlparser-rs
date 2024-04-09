@@ -374,6 +374,40 @@ pub enum CastFormat {
     ValueAtTimeZone(Value, Value),
 }
 
+/// Represents the syntax/style used in a map access.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MapAccessSyntax {
+    /// Access using bracket notation. `mymap[mykey]`
+    Bracket,
+    /// Access using period notation. `mymap.mykey`
+    Period,
+}
+
+/// Expression used to access a value in a nested structure.
+///
+/// Example: `SAFE_OFFSET(0)` in
+/// ```sql
+/// SELECT mymap[SAFE_OFFSET(0)];
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MapAccessKey {
+    pub key: Expr,
+    pub syntax: MapAccessSyntax,
+}
+
+impl fmt::Display for MapAccessKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.syntax {
+            MapAccessSyntax::Bracket => write!(f, "[{}]", self.key),
+            MapAccessSyntax::Period => write!(f, ".{}", self.key),
+        }
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -638,7 +672,7 @@ pub enum Expr {
     /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
     MapAccess {
         column: Box<Expr>,
-        keys: Vec<Expr>,
+        keys: Vec<MapAccessKey>,
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
@@ -774,15 +808,7 @@ impl fmt::Display for Expr {
         match self {
             Expr::Identifier(s) => write!(f, "{s}"),
             Expr::MapAccess { column, keys } => {
-                write!(f, "{column}")?;
-                for k in keys {
-                    match k {
-                        k @ Expr::Value(Value::Number(_, _)) => write!(f, "[{k}]")?,
-                        Expr::Value(Value::SingleQuotedString(s)) => write!(f, "[\"{s}\"]")?,
-                        _ => write!(f, "[{k}]")?,
-                    }
-                }
-                Ok(())
+                write!(f, "{column}{}", display_separated(keys, ""))
             }
             Expr::Wildcard => f.write_str("*"),
             Expr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),

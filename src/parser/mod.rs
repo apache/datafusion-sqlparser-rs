@@ -2608,23 +2608,43 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_map_key()?;
-        let tok = self.consume_token(&Token::RBracket);
-        debug!("Tok: {}", tok);
-        let mut key_parts: Vec<Expr> = vec![key];
-        while self.consume_token(&Token::LBracket) {
-            let key = self.parse_map_key()?;
-            let tok = self.consume_token(&Token::RBracket);
-            debug!("Tok: {}", tok);
-            key_parts.push(key);
+        let key = self.parse_expr()?;
+        self.expect_token(&Token::RBracket)?;
+
+        let mut keys = vec![MapAccessKey {
+            key,
+            syntax: MapAccessSyntax::Bracket,
+        }];
+        loop {
+            let key = match self.peek_token().token {
+                Token::LBracket => {
+                    self.next_token(); // consume `[`
+                    let key = self.parse_expr()?;
+                    self.expect_token(&Token::RBracket)?;
+                    MapAccessKey {
+                        key,
+                        syntax: MapAccessSyntax::Bracket,
+                    }
+                }
+                // Access on BigQuery nested and repeated expressions can
+                // mix notations in the same expression.
+                // https://cloud.google.com/bigquery/docs/nested-repeated#query_nested_and_repeated_columns
+                Token::Period if dialect_of!(self is BigQueryDialect) => {
+                    self.next_token(); // consume `.`
+                    MapAccessKey {
+                        key: self.parse_expr()?,
+                        syntax: MapAccessSyntax::Period,
+                    }
+                }
+                _ => break,
+            };
+            keys.push(key);
         }
-        match expr {
-            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
-                column: Box::new(e),
-                keys: key_parts,
-            }),
-            _ => Ok(expr),
-        }
+
+        Ok(Expr::MapAccess {
+            column: Box::new(expr),
+            keys,
+        })
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator
@@ -6326,31 +6346,6 @@ impl<'a> Parser<'a> {
                 Ok(s)
             }
             _ => self.expected("literal string", next_token),
-        }
-    }
-
-    /// Parse a map key string
-    pub fn parse_map_key(&mut self) -> Result<Expr, ParserError> {
-        let next_token = self.next_token();
-        match next_token.token {
-            // handle bigquery offset subscript operator which overlaps with OFFSET operator
-            Token::Word(Word { value, keyword, .. })
-                if (dialect_of!(self is BigQueryDialect) && keyword == Keyword::OFFSET) =>
-            {
-                self.parse_function(ObjectName(vec![Ident::new(value)]))
-            }
-            Token::Word(Word { value, keyword, .. }) if (keyword == Keyword::NoKeyword) => {
-                if self.peek_token() == Token::LParen {
-                    return self.parse_function(ObjectName(vec![Ident::new(value)]));
-                }
-                Ok(Expr::Value(Value::SingleQuotedString(value)))
-            }
-            Token::SingleQuotedString(s) => Ok(Expr::Value(Value::SingleQuotedString(s))),
-            #[cfg(not(feature = "bigdecimal"))]
-            Token::Number(s, _) => Ok(Expr::Value(Value::Number(s, false))),
-            #[cfg(feature = "bigdecimal")]
-            Token::Number(s, _) => Ok(Expr::Value(Value::Number(s.parse().unwrap(), false))),
-            _ => self.expected("literal string, number or function", next_token),
         }
     }
 

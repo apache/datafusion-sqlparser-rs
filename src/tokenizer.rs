@@ -1139,7 +1139,7 @@ impl<'a> Tokenizer<'a> {
                                     return self.tokenizer_error(
                                         chars.location(),
                                         "Unterminated dollar-quoted, expected $",
-                                    )
+                                    );
                                 }
                             }
                             if chars.peek() == Some(&'$') {
@@ -1154,11 +1154,13 @@ impl<'a> Tokenizer<'a> {
                                 s.push_str(&maybe_s);
                                 continue 'searching_for_end;
                             }
-                        },
-                        _ => return self.tokenizer_error(
-                            chars.location(),
-                            "Unterminated dollar-quoted, expected $",
-                        )
+                        }
+                        _ => {
+                            return self.tokenizer_error(
+                                chars.location(),
+                                "Unterminated dollar-quoted, expected $",
+                            )
+                        }
                     }
                 }
             } else {
@@ -1917,13 +1919,18 @@ mod tests {
 
     #[test]
     fn tokenize_dollar_quoted_string_tagged() {
-        let sql = String::from("SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$tag$");
+        let sql = String::from(
+            "SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$tag$",
+        );
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::DollarQuotedString(DollarQuotedString { value: "dollar '$' quoted strings have $tags like this$ or like this $$".into(), tag: Some("tag".into()) })
+            Token::DollarQuotedString(DollarQuotedString {
+                value: "dollar '$' quoted strings have $tags like this$ or like this $$".into(),
+                tag: Some("tag".into()),
+            }),
         ];
         compare(expected, tokens);
     }
@@ -1934,30 +1941,48 @@ mod tests {
         let dialect = GenericDialect {};
         assert_eq!(
             Tokenizer::new(&dialect, &sql).tokenize(),
-            Err(TokenizerError {message: "Unterminated dollar-quoted, expected $".into(), location: Location { line: 1, column: 91 }})
+            Err(TokenizerError {
+                message: "Unterminated dollar-quoted, expected $".into(),
+                location: Location {
+                    line: 1,
+                    column: 91
+                }
+            })
         );
     }
 
     #[test]
     fn tokenize_dollar_quoted_string_untagged() {
-        let sql = String::from("SELECT $$within dollar '$' quoted strings have $tags like this$ $$");
+        let sql =
+            String::from("SELECT $$within dollar '$' quoted strings have $tags like this$ $$");
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::DollarQuotedString(DollarQuotedString { value: "within dollar '$' quoted strings have $tags like this$ ".into(), tag: None })
+            Token::DollarQuotedString(DollarQuotedString {
+                value: "within dollar '$' quoted strings have $tags like this$ ".into(),
+                tag: None,
+            }),
         ];
         compare(expected, tokens);
     }
 
     #[test]
     fn tokenize_dollar_quoted_string_untagged_unterminated() {
-        let sql = String::from("SELECT $$dollar '$' quoted strings have $tags like this$ or like this $different tag$");
+        let sql = String::from(
+            "SELECT $$dollar '$' quoted strings have $tags like this$ or like this $different tag$",
+        );
         let dialect = GenericDialect {};
         assert_eq!(
             Tokenizer::new(&dialect, &sql).tokenize(),
-            Err(TokenizerError {message: "Unterminated dollar-quoted string".into(), location: Location { line: 1, column: 86 }})
+            Err(TokenizerError {
+                message: "Unterminated dollar-quoted string".into(),
+                location: Location {
+                    line: 1,
+                    column: 86
+                }
+            })
         );
     }
 

@@ -1374,3 +1374,8 @@ fn parse_constraints() {
         r#"ALTER TABLE foo ADD CONSTRAINT "bar" FOREIGN KEY (baz) REFERENCES othertable(baz) ON DELETE NO ACTION NORELY"#,
     );
 }
+
+#[test]
+fn test_sf_trailing_commas() {
+    snowflake().verified_only_select_with_canonical("SELECT 1, 2, FROM t", "SELECT 1, 2 FROM t");
+}

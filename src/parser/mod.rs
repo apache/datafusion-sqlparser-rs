@@ -2639,13 +2639,15 @@ impl<'a> Parser<'a> {
     /// Parse a comma-separated list of 1+ SelectItem
     pub fn parse_projection(&mut self) -> Result<Vec<WithSpan<SelectItem>>, ParserError> {
         // BigQuery allows trailing commas, but only in project lists
+        // BigQuery and Snowflake allow trailing commas, but only in project lists
         // e.g. `SELECT 1, 2, FROM t`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#trailing_commas
+        // https://docs.snowflake.com/en/release-notes/2024/8_11#select-supports-trailing-commas
         //
         // This pattern could be captured better with RAII type semantics, but it's quite a bit of
         // code to add for just one case, so we'll just do it manually here.
         let old_value = self.options.trailing_commas;
-        self.options.trailing_commas |= dialect_of!(self is BigQueryDialect);
+        self.options.trailing_commas |= dialect_of!(self is BigQueryDialect | SnowflakeDialect);
 
         let ret = self.parse_comma_separated(|p| p.parse_select_item());
         self.options.trailing_commas = old_value;
@@ -4194,7 +4196,7 @@ impl<'a> Parser<'a> {
             };
 
         let strict = self.parse_keyword(Keyword::STRICT);
-        
+
         //Databricks has TBLPROPERTIES after COMMENT
         let _table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
         table_properties.extend(_table_properties);

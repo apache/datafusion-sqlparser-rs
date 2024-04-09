@@ -1536,3 +1536,8 @@ fn parse_comma_outer_join() {
         "SELECT t1.c1, t2.c2 FROM t1, t2 WHERE t1.c1 = t2.c2 (+)",
     );
 }
+
+#[test]
+fn test_sf_trailing_commas() {
+    snowflake().verified_only_select_with_canonical("SELECT 1, 2, FROM t", "SELECT 1, 2 FROM t");
+}

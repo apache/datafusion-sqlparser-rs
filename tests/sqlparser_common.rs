@@ -8685,3 +8685,28 @@ fn parse_map_access_expr() {
         let _ = dialects.verified_expr(sql);
     }
 }
+fn general_dialect() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: None,
+    }
+}
+#[test]
+fn parse_create_parametrised_views() {
+    // 1. verify this
+    general_dialect().verified_stmt("CREATE VIEW view AS SELECT * FROM A WHERE Column1 = {column1:datatype1} AND Column2 = {column2:datatype2}");
+
+    // 2. verify single column def
+    general_dialect()
+        .verified_stmt("CREATE VIEW view AS SELECT * FROM A WHERE Column1 = {column1:datatype1}");
+
+    // 3. Error case I : column =
+    let mut res = general_dialect()
+        .parse_sql_statements("CREATE VIEW view AS SELECT * FROM A WHERE Column1 = {column1}");
+    assert!(res.is_err());
+    // 4. No column def
+    res = general_dialect().parse_sql_statements(
+        "CREATE VIEW view AS SELECT * FROM A WHERE Column1 = {column1:} AND Column2 = {column2:}",
+    );
+    assert!(res.is_err());
+}

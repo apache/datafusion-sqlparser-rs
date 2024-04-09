@@ -400,3 +400,8 @@ fn clickhouse_and_generic() -> TestedDialects {
         options: None,
     }
 }
+
+#[test]
+fn parse_create_parametrised_views() {
+    clickhouse().verified_stmt("CREATE VIEW view AS SELECT * FROM A WHERE Column1 = {column1:datatype1} AND Column2 = {column2:datatype2}");
+}

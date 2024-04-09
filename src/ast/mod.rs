@@ -792,6 +792,17 @@ pub enum Expr {
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/where#joins-in-the-where-clause>.
     OuterJoin(Box<Expr>),
+
+    /// ClickHouse supported parameterized view
+    /// for example
+    /// ```sql
+    /// CREATE VIEW view AS SELECT * FROM TABLE WHERE Column1={column1:datatype1} and Column2={column2:datatype2}
+    /// ```
+    /// see doc <https://clickhouse.com/docs/en/sql-reference/statements/create/view#parameterized-view>
+    ParameterizedViewArg {
+        column: Ident,
+        data_type: DataType,
+    },
 }
 
 impl fmt::Display for CastFormat {
@@ -1250,6 +1261,9 @@ impl fmt::Display for Expr {
             }
             Expr::OuterJoin(expr) => {
                 write!(f, "{expr} (+)")
+            }
+            Expr::ParameterizedViewArg { column, data_type } => {
+                write!(f, "{{{}:{}}}", column, data_type)
             }
         }
     }

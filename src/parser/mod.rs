@@ -928,14 +928,38 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::ReleaseSavepoint { name })
     }
-
+    /// Parse clickhouse view parameter style `column1:data_type`
+    pub fn parse_column_with_data_type(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LBrace)?;
+        let name = self.parse_identifier(false)?;
+        self.expect_token(&Token::Colon)?;
+        let data_type = self.parse_data_type()?;
+        self.expect_token(&Token::RBrace)?;
+        Ok(Expr::ParameterizedViewArg {
+            column: (name),
+            data_type: (data_type),
+        })
+    }
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
         if let Some(prefix) = self.dialect.parse_prefix(self) {
             return prefix;
         }
-
+        // ClickHouse support using {column:Datatype} format in its creation of parametrised views
+        match self.peek_token().token {
+            // check if last token is WHERE and if it is do it, else do the following logic
+            Token::LBrace if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
+                self.prev_token();
+                // prev token is EQ
+                if self.consume_token(&Token::Eq) {
+                    return self.parse_column_with_data_type();
+                } else {
+                    self.next_token();
+                }
+            }
+            _ => {}
+        }
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
         // string literal represents a literal of that type. Some examples:
         //
@@ -2542,6 +2566,12 @@ impl<'a> Parser<'a> {
             }
             self.parse_map_access(expr)
         } else if Token::Colon == tok {
+            if dialect_of!(self is ClickHouseDialect) && self.index() > 0 {
+                return Ok(Expr::ParameterizedViewArg {
+                    column: Ident::new(expr.to_string()),
+                    data_type: self.parse_data_type()?,
+                });
+            }
             Ok(Expr::JsonAccess {
                 left: Box::new(expr),
                 operator: JsonOperator::Colon,

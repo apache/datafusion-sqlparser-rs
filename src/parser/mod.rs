@@ -475,7 +475,7 @@ impl<'a> Parser<'a> {
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::ATTACH => {
                     if dialect_of!(self is DuckDbDialect) {
-                        return self.parse_attach_duckdb_database();
+                        Ok(self.parse_attach_duckdb_database()?)
                     } else {
                         Ok(self.parse_attach_database()?)
                     }

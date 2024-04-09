@@ -2040,6 +2040,19 @@ pub enum Statement {
         authorization_owner: Option<ObjectName>,
     },
     /// ```sql
+    /// CREATE SECRET
+    /// ```
+    /// See [duckdb](https://duckdb.org/docs/sql/statements/create_secret.html)
+    CreateSecret {
+        or_replace: bool,
+        temporary: Option<bool>,
+        if_not_exists: bool,
+        name: Option<Ident>,
+        storage_specifier: Option<Ident>,
+        secret_type: Ident,
+        options: Vec<SecretOption>,
+    },
+    /// ```sql
     /// ALTER TABLE
     /// ```
     AlterTable {
@@ -2088,6 +2101,31 @@ pub enum Statement {
         /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
         database: bool,
     },
+    /// (DuckDB-specific)
+    /// ```sql
+    /// ATTACH 'sqlite_file.db' AS sqlite_db (READ_ONLY, TYPE SQLITE);
+    /// ```
+    /// See <https://duckdb.org/docs/sql/statements/attach.html>
+    AttachDuckDBDatabase {
+        if_not_exists: bool,
+        /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
+        database: bool,
+        /// An expression that indicates the path to the database file
+        database_path: Ident,
+        database_alias: Option<Ident>,
+        attach_options: Vec<AttachDuckDBDatabaseOption>,
+    },
+    /// (DuckDB-specific)
+    /// ```sql
+    /// DETACH db_alias;
+    /// ```
+    /// See <https://duckdb.org/docs/sql/statements/attach.html>
+    DetachDuckDBDatabase {
+        if_exists: bool,
+        /// true if the syntax is 'DETACH DATABASE', false if it's just 'DETACH'
+        database: bool,
+        database_alias: Ident,
+    },
     /// ```sql
     /// DROP [TABLE, VIEW, ...]
     /// ```
@@ -2119,6 +2157,15 @@ pub enum Statement {
         func_desc: Vec<DropFunctionDesc>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
+    },
+    /// ```sql
+    /// DROP SECRET
+    /// ```
+    DropSecret {
+        if_exists: bool,
+        temporary: Option<bool>,
+        name: Ident,
+        storage_specifier: Option<Ident>,
     },
     /// ```sql
     /// DECLARE
@@ -2771,6 +2818,40 @@ impl fmt::Display for Statement {
             } => {
                 let keyword = if *database { "DATABASE " } else { "" };
                 write!(f, "ATTACH {keyword}{database_file_name} AS {schema_name}")
+            }
+            Statement::AttachDuckDBDatabase {
+                if_not_exists,
+                database,
+                database_path,
+                database_alias,
+                attach_options,
+            } => {
+                write!(
+                    f,
+                    "ATTACH{database}{if_not_exists} {database_path}",
+                    database = if *database { " DATABASE" } else { "" },
+                    if_not_exists = if *if_not_exists { " IF NOT EXISTS" } else { "" },
+                )?;
+                if let Some(alias) = database_alias {
+                    write!(f, " AS {alias}")?;
+                }
+                if !attach_options.is_empty() {
+                    write!(f, " ({})", display_comma_separated(attach_options))?;
+                }
+                Ok(())
+            }
+            Statement::DetachDuckDBDatabase {
+                if_exists,
+                database,
+                database_alias,
+            } => {
+                write!(
+                    f,
+                    "DETACH{database}{if_exists} {database_alias}",
+                    database = if *database { " DATABASE" } else { "" },
+                    if_exists = if *if_exists { " IF EXISTS" } else { "" },
+                )?;
+                Ok(())
             }
             Statement::Analyze {
                 table_name,
@@ -3556,6 +3637,41 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateSecret {
+                or_replace,
+                temporary,
+                if_not_exists,
+                name,
+                storage_specifier,
+                secret_type,
+                options,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                )?;
+                if let Some(t) = temporary {
+                    write!(f, "{}", if *t { "TEMPORARY " } else { "PERSISTENT " })?;
+                }
+                write!(
+                    f,
+                    "SECRET {if_not_exists}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                )?;
+                if let Some(n) = name {
+                    write!(f, "{n} ")?;
+                };
+                if let Some(s) = storage_specifier {
+                    write!(f, "IN {s} ")?;
+                }
+                write!(f, "( TYPE {secret_type}",)?;
+                if !options.is_empty() {
+                    write!(f, ", {o}", o = display_comma_separated(options))?;
+                }
+                write!(f, " )")?;
+                Ok(())
+            }
             Statement::AlterTable {
                 name,
                 if_exists,
@@ -3633,6 +3749,26 @@ impl fmt::Display for Statement {
                 )?;
                 if let Some(op) = option {
                     write!(f, " {op}")?;
+                }
+                Ok(())
+            }
+            Statement::DropSecret {
+                if_exists,
+                temporary,
+                name,
+                storage_specifier,
+            } => {
+                write!(f, "DROP ")?;
+                if let Some(t) = temporary {
+                    write!(f, "{}", if *t { "TEMPORARY " } else { "PERSISTENT " })?;
+                }
+                write!(
+                    f,
+                    "SECRET {if_exists}{name}",
+                    if_exists = if *if_exists { "IF EXISTS " } else { "" },
+                )?;
+                if let Some(s) = storage_specifier {
+                    write!(f, " FROM {s}")?;
                 }
                 Ok(())
             }
@@ -5067,6 +5203,39 @@ pub struct SqlOption {
 impl fmt::Display for SqlOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} = {}", self.name, self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SecretOption {
+    pub key: Ident,
+    pub value: Ident,
+}
+
+impl fmt::Display for SecretOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.key, self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AttachDuckDBDatabaseOption {
+    ReadOnly(Option<bool>),
+    Type(Ident),
+}
+
+impl fmt::Display for AttachDuckDBDatabaseOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AttachDuckDBDatabaseOption::ReadOnly(Some(true)) => write!(f, "READ_ONLY true"),
+            AttachDuckDBDatabaseOption::ReadOnly(Some(false)) => write!(f, "READ_ONLY false"),
+            AttachDuckDBDatabaseOption::ReadOnly(None) => write!(f, "READ_ONLY"),
+            AttachDuckDBDatabaseOption::Type(t) => write!(f, "TYPE {}", t),
+        }
     }
 }
 

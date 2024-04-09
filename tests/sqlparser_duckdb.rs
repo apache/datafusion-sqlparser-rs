@@ -335,6 +335,147 @@ fn test_duckdb_struct_literal() {
 }
 
 #[test]
+fn test_create_secret() {
+    let sql = r#"CREATE OR REPLACE PERSISTENT SECRET IF NOT EXISTS name IN storage ( TYPE type, key1 value1, key2 value2 )"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::CreateSecret {
+            or_replace: true,
+            temporary: Some(false),
+            if_not_exists: true,
+            name: Some(Ident::new("name")),
+            storage_specifier: Some(Ident::new("storage")),
+            secret_type: Ident::new("type"),
+            options: vec![
+                SecretOption {
+                    key: Ident::new("key1"),
+                    value: Ident::new("value1"),
+                },
+                SecretOption {
+                    key: Ident::new("key2"),
+                    value: Ident::new("value2"),
+                }
+            ]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_create_secret_simple() {
+    let sql = r#"CREATE SECRET ( TYPE type )"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::CreateSecret {
+            or_replace: false,
+            temporary: None,
+            if_not_exists: false,
+            name: None,
+            storage_specifier: None,
+            secret_type: Ident::new("type"),
+            options: vec![]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_drop_secret() {
+    let sql = r#"DROP PERSISTENT SECRET IF EXISTS secret FROM storage"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DropSecret {
+            if_exists: true,
+            temporary: Some(false),
+            name: Ident::new("secret"),
+            storage_specifier: Some(Ident::new("storage"))
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_drop_secret_simple() {
+    let sql = r#"DROP SECRET secret"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DropSecret {
+            if_exists: false,
+            temporary: None,
+            name: Ident::new("secret"),
+            storage_specifier: None
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_attach_database() {
+    let sql = r#"ATTACH DATABASE IF NOT EXISTS 'sqlite_file.db' AS sqlite_db (READ_ONLY false, TYPE SQLITE)"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::AttachDuckDBDatabase {
+            if_not_exists: true,
+            database: true,
+            database_path: Ident::with_quote('\'', "sqlite_file.db"),
+            database_alias: Some(Ident::new("sqlite_db")),
+            attach_options: vec![
+                AttachDuckDBDatabaseOption::ReadOnly(Some(false)),
+                AttachDuckDBDatabaseOption::Type(Ident::new("SQLITE")),
+            ]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_attach_database_simple() {
+    let sql = r#"ATTACH 'postgres://user.name:pass-word@some.url.com:5432/postgres'"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::AttachDuckDBDatabase {
+            if_not_exists: false,
+            database: false,
+            database_path: Ident::with_quote(
+                '\'',
+                "postgres://user.name:pass-word@some.url.com:5432/postgres"
+            ),
+            database_alias: None,
+            attach_options: vec![]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_detach_database() {
+    let sql = r#"DETACH DATABASE IF EXISTS db_name"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DetachDuckDBDatabase {
+            if_exists: true,
+            database: true,
+            database_alias: Ident::new("db_name"),
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_detach_database_simple() {
+    let sql = r#"DETACH db_name"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DetachDuckDBDatabase {
+            if_exists: false,
+            database: false,
+            database_alias: Ident::new("db_name"),
+        },
+        stmt
+    );
+}
+
+#[test]
 fn test_duckdb_named_argument_function_with_assignment_operator() {
     let sql = "SELECT FUN(a := '1', b := '2') FROM foo";
     let select = duckdb_and_generic().verified_only_select(sql);

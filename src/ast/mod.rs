@@ -33,7 +33,7 @@ pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue}
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, ConstraintCharacteristics, DeferrableInitial, GeneratedAs,
-    GeneratedExpressionMode, IndexType, KeyOrIndexDisplay, Partition, ProcedureParam,
+    GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Partition, ProcedureParam,
     ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
 };

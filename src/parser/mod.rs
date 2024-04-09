@@ -482,7 +482,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::DETACH if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     Ok(self.parse_detach_duckdb_database()?)
-                },
+                }
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::CACHE => Ok(self.parse_cache_table()?),

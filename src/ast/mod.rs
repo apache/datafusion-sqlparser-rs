@@ -2830,7 +2830,7 @@ impl fmt::Display for Statement {
             Statement::DetachDuckDBDatabase {
                 if_exists,
                 database,
-                database_alias, 
+                database_alias,
             } => {
                 write!(
                     f,

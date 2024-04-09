@@ -13,12 +13,6 @@
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 
-#[cfg(not(feature = "std"))]
-use alloc::format;
-
-#[cfg(not(feature = "std"))]
-use alloc::string::ToString;
-
 use core::fmt;
 
 #[cfg(feature = "bigdecimal")]
@@ -215,56 +209,51 @@ pub enum DateTimeField {
 
 impl fmt::Display for DateTimeField {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(
-            match self {
-                DateTimeField::Year => "YEAR".to_string(),
-                DateTimeField::Month => "MONTH".to_string(),
-                DateTimeField::Week(week_day) => {
-                    format!(
-                        "WEEK{}",
-                        week_day
-                            .as_ref()
-                            .map(|w| format!("({w})"))
-                            .unwrap_or_default()
-                    )
+        match self {
+            DateTimeField::Year => write!(f, "YEAR"),
+            DateTimeField::Month => write!(f, "MONTH"),
+            DateTimeField::Week(week_day) => {
+                write!(f, "WEEK")?;
+                if let Some(week_day) = week_day {
+                    write!(f, "({week_day})")?
                 }
-                DateTimeField::Day => "DAY".to_string(),
-                DateTimeField::DayOfWeek => "DAYOFWEEK".to_string(),
-                DateTimeField::DayOfYear => "DAYOFYEAR".to_string(),
-                DateTimeField::Date => "DATE".to_string(),
-                DateTimeField::Datetime => "DATETIME".to_string(),
-                DateTimeField::Hour => "HOUR".to_string(),
-                DateTimeField::Minute => "MINUTE".to_string(),
-                DateTimeField::Second => "SECOND".to_string(),
-                DateTimeField::Century => "CENTURY".to_string(),
-                DateTimeField::Decade => "DECADE".to_string(),
-                DateTimeField::Dow => "DOW".to_string(),
-                DateTimeField::Doy => "DOY".to_string(),
-                DateTimeField::Epoch => "EPOCH".to_string(),
-                DateTimeField::Isodow => "ISODOW".to_string(),
-                DateTimeField::Isoyear => "ISOYEAR".to_string(),
-                DateTimeField::IsoWeek => "ISOWEEK".to_string(),
-                DateTimeField::Julian => "JULIAN".to_string(),
-                DateTimeField::Microsecond => "MICROSECOND".to_string(),
-                DateTimeField::Microseconds => "MICROSECONDS".to_string(),
-                DateTimeField::Millenium => "MILLENIUM".to_string(),
-                DateTimeField::Millennium => "MILLENNIUM".to_string(),
-                DateTimeField::Millisecond => "MILLISECOND".to_string(),
-                DateTimeField::Milliseconds => "MILLISECONDS".to_string(),
-                DateTimeField::Nanosecond => "NANOSECOND".to_string(),
-                DateTimeField::Nanoseconds => "NANOSECONDS".to_string(),
-                DateTimeField::Quarter => "QUARTER".to_string(),
-                DateTimeField::Time => "TIME".to_string(),
-                DateTimeField::Timezone => "TIMEZONE".to_string(),
-                DateTimeField::TimezoneAbbr => "TIMEZONE_ABBR".to_string(),
-                DateTimeField::TimezoneHour => "TIMEZONE_HOUR".to_string(),
-                DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE".to_string(),
-                DateTimeField::TimezoneRegion => "TIMEZONE_REGION".to_string(),
-                DateTimeField::NoDateTime => "NODATETIME".to_string(),
-                DateTimeField::Custom(custom) => format!("{custom}"),
+                Ok(())
             }
-            .as_str(),
-        )
+            DateTimeField::Day => write!(f, "DAY"),
+            DateTimeField::DayOfWeek => write!(f, "DAYOFWEEK"),
+            DateTimeField::DayOfYear => write!(f, "DAYOFYEAR"),
+            DateTimeField::Date => write!(f, "DATE"),
+            DateTimeField::Datetime => write!(f, "DATETIME"),
+            DateTimeField::Hour => write!(f, "HOUR"),
+            DateTimeField::Minute => write!(f, "MINUTE"),
+            DateTimeField::Second => write!(f, "SECOND"),
+            DateTimeField::Century => write!(f, "CENTURY"),
+            DateTimeField::Decade => write!(f, "DECADE"),
+            DateTimeField::Dow => write!(f, "DOW"),
+            DateTimeField::Doy => write!(f, "DOY"),
+            DateTimeField::Epoch => write!(f, "EPOCH"),
+            DateTimeField::Isodow => write!(f, "ISODOW"),
+            DateTimeField::Isoyear => write!(f, "ISOYEAR"),
+            DateTimeField::IsoWeek => write!(f, "ISOWEEK"),
+            DateTimeField::Julian => write!(f, "JULIAN"),
+            DateTimeField::Microsecond => write!(f, "MICROSECOND"),
+            DateTimeField::Microseconds => write!(f, "MICROSECONDS"),
+            DateTimeField::Millenium => write!(f, "MILLENIUM"),
+            DateTimeField::Millennium => write!(f, "MILLENNIUM"),
+            DateTimeField::Millisecond => write!(f, "MILLISECOND"),
+            DateTimeField::Milliseconds => write!(f, "MILLISECONDS"),
+            DateTimeField::Nanosecond => write!(f, "NANOSECOND"),
+            DateTimeField::Nanoseconds => write!(f, "NANOSECONDS"),
+            DateTimeField::Quarter => write!(f, "QUARTER"),
+            DateTimeField::Time => write!(f, "TIME"),
+            DateTimeField::Timezone => write!(f, "TIMEZONE"),
+            DateTimeField::TimezoneAbbr => write!(f, "TIMEZONE_ABBR"),
+            DateTimeField::TimezoneHour => write!(f, "TIMEZONE_HOUR"),
+            DateTimeField::TimezoneMinute => write!(f, "TIMEZONE_MINUTE"),
+            DateTimeField::TimezoneRegion => write!(f, "TIMEZONE_REGION"),
+            DateTimeField::NoDateTime => write!(f, "NODATETIME"),
+            DateTimeField::Custom(custom) => write!(f, "{custom}"),
+        }
     }
 }
 

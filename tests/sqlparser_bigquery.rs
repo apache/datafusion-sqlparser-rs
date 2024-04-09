@@ -207,6 +207,51 @@ fn parse_create_view_if_not_exists() {
 }
 
 #[test]
+fn parse_create_view_with_unquoted_hyphen() {
+    let sql = "CREATE VIEW IF NOT EXISTS my-pro-ject.mydataset.myview AS SELECT 1";
+    match bigquery().verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            query,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq!("my-pro-ject.mydataset.myview", name.to_string());
+            assert_eq!("SELECT 1", query.to_string());
+            assert!(if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_unquoted_hyphen() {
+    let sql = "CREATE TABLE my-pro-ject.mydataset.mytable (x INT64)";
+    match bigquery().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(
+                name,
+                ObjectName(vec![
+                    "my-pro-ject".into(),
+                    "mydataset".into(),
+                    "mytable".into()
+                ])
+            );
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("x"),
+                    data_type: DataType::Int64,
+                    collation: None,
+                    options: vec![]
+                },],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_with_options() {
     let sql = concat!(
         "CREATE TABLE mydataset.newtable ",

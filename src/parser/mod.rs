@@ -2674,9 +2674,14 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_projection_only(&mut self) -> Result<Vec<WithSpan<SelectItem>>, ParserError> {
-        let projection = self.parse_projection()?;
+        let old_value = self.options.trailing_commas;
+        self.options.trailing_commas = false;
+
+        let ret = self.parse_comma_separated(|p| p.parse_select_item())?;
+        self.options.trailing_commas = old_value;
+
         self.expect_token(&sqlparser::parser::Token::EOF)?;
-        Ok(projection)
+        Ok(ret)
     }
 
     /// Parse a comma-separated list of 1+ items accepted by `F`

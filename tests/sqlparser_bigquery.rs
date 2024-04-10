@@ -1385,3 +1385,10 @@ fn test_options_expression() {
         "CREATE TABLE `myproject`.`mydataset`.`mytable` (id INT64) OPTIONS (max_staleness = INTERVAL '0-0 0 0:15:0' YEAR TO SECOND)",
     );
 }
+
+#[test]
+fn test_create_table_options_expression() {
+    bigquery().verified_stmt(
+        "CREATE OR REPLACE TABLE `myproject`.`mydataset`.`mytable` OPTIONS (description = \"\"\"Project entity stream base\"\"\") AS (SELECT * FROM `myproject`.`mydataset`.`othertable`)",
+    );
+}

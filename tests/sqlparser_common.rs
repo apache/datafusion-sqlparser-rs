@@ -409,14 +409,15 @@ fn parse_select_with_table_alias() {
 
 #[test]
 fn parse_invalid_table_name() {
-    let ast = all_dialects()
-        .run_parser_method("db.public..customer", |parser| parser.parse_object_name());
+    let ast = all_dialects().run_parser_method("db.public..customer", |parser| {
+        parser.parse_object_name(false)
+    });
     assert!(ast.is_err());
 }
 
 #[test]
 fn parse_no_table_name() {
-    let ast = all_dialects().run_parser_method("", |parser| parser.parse_object_name());
+    let ast = all_dialects().run_parser_method("", |parser| parser.parse_object_name(false));
     assert!(ast.is_err());
 }
 

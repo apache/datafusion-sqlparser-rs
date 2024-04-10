@@ -90,7 +90,7 @@ pub fn parse_create_stage(
 ) -> Result<Statement, ParserError> {
     //[ IF NOT EXISTS ]
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-    let name = parser.parse_object_name()?;
+    let name = parser.parse_object_name(false)?;
     let mut directory_table_params = Vec::new();
     let mut file_format = Vec::new();
     let mut copy_options = Vec::new();
@@ -146,7 +146,7 @@ pub fn parse_create_stage(
 }
 
 pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
-    let into: ObjectName = parser.parse_object_name()?;
+    let into: ObjectName = parser.parse_object_name(false)?;
     let mut files: Vec<String> = vec![];
     let mut from_transformations: Option<Vec<StageLoadSelectItem>> = None;
     let from_stage_alias;
@@ -162,7 +162,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             from_transformations = parse_select_items_for_data_load(parser)?;
 
             parser.expect_keyword(Keyword::FROM)?;
-            from_stage = parser.parse_object_name()?;
+            from_stage = parser.parse_object_name(true)?;
             stage_params = parse_stage_params(parser)?;
 
             // as
@@ -178,7 +178,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         }
         _ => {
             parser.prev_token();
-            from_stage = parser.parse_object_name()?;
+            from_stage = parser.parse_object_name(false)?;
             stage_params = parse_stage_params(parser)?;
 
             // as

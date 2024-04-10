@@ -4145,6 +4145,8 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let table_options = self.parse_options(Keyword::OPTIONS)?;
+
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(Box::new(self.parse_query()?))
@@ -4192,8 +4194,7 @@ impl<'a> Parser<'a> {
             };
 
         let strict = self.parse_keyword(Keyword::STRICT);
-
-        let table_options = self.parse_options(Keyword::OPTIONS)?;
+        
         //Databricks has TBLPROPERTIES after COMMENT
         let _table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
         table_properties.extend(_table_properties);

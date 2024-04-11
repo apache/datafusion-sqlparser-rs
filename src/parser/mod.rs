@@ -292,7 +292,7 @@ impl<'a> Parser<'a> {
             index: 0,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
-            options: ParserOptions::default(),
+            options: ParserOptions::new().with_trailing_commas(dialect.supports_trailing_commas()),
         }
     }
 
@@ -343,6 +343,7 @@ impl<'a> Parser<'a> {
     ///   assert!(matches!(result, Ok(_)));
     /// # Ok(())
     /// # }
+    ///
     /// ```
     pub fn with_options(mut self, options: ParserOptions) -> Self {
         self.options = options;
@@ -8530,6 +8531,9 @@ impl<'a> Parser<'a> {
                 with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
             }
         } else {
+            let old_value = self.options.trailing_commas;
+            self.options.trailing_commas = false;
+
             let (actions, err): (Vec<_>, Vec<_>) = self
                 .parse_comma_separated(Parser::parse_grant_permission)?
                 .into_iter()
@@ -8552,6 +8556,8 @@ impl<'a> Parser<'a> {
                     _ => Err(kw),
                 })
                 .partition(Result::is_ok);
+
+            self.options.trailing_commas = old_value;
 
             if !err.is_empty() {
                 let errors: Vec<Keyword> = err.into_iter().filter_map(|x| x.err()).collect();
@@ -9007,6 +9013,12 @@ impl<'a> Parser<'a> {
             Expr::Wildcard => Ok(SelectItem::Wildcard(
                 self.parse_wildcard_additional_options()?,
             )),
+            Expr::Identifier(v) if v.value.to_lowercase() == "from" => {
+                parser_err!(
+                    format!("Trailing comma not allowed in dialect: {:?}", self.dialect),
+                    self.peek_token().location
+                )
+            }
             expr => {
                 let expr: Expr = if self.dialect.supports_filter_during_aggregation()
                     && self.parse_keyword(Keyword::FILTER)

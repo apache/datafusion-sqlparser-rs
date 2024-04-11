@@ -157,6 +157,14 @@ pub trait Dialect: Debug + Any {
         // return None to fall back to the default behavior
         None
     }
+    /// Does the dialect support trailing commas around the query?
+    fn supports_trailing_commas(&self) -> bool {
+        false
+    }
+    /// Does the dialect support trailing commas only in proejction list?
+    fn supports_projection_trailing_commas(&self) -> bool {
+        self.supports_trailing_commas()
+    }
     /// Dialect-specific infix parser override
     fn parse_infix(
         &self,

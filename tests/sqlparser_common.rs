@@ -8394,9 +8394,11 @@ fn parse_non_latin_identifiers() {
 
 #[test]
 fn parse_trailing_comma() {
+    // At the moment, Duck DB is the only dialect that allows
+    // trailing commas anywhere in the query
     let trailing_commas = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
-        options: Some(ParserOptions::new().with_trailing_commas(true)),
+        dialects: vec![Box::new(DuckDbDialect {})],
+        options: None,
     };
 
     trailing_commas.one_statement_parses_to(
@@ -8419,6 +8421,30 @@ fn parse_trailing_comma() {
     trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
 
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
+}
+
+#[test]
+fn parse_porjection_trailing_comma() {
+    // Some dialects allow trailing commas only in the projection
+    let trailing_commas = TestedDialects {
+        dialects: vec![Box::new(SnowflakeDialect {}), Box::new(BigQueryDialect {})],
+        options: None,
+    };
+
+    trailing_commas.one_statement_parses_to(
+        "SELECT album_id, name, FROM track",
+        "SELECT album_id, name FROM track",
+    );
+
+    trailing_commas.verified_stmt("SELECT album_id, name FROM track");
+
+    trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
+
+    trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
+
+    assert!(trailing_commas
+        .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
+        .is_err(),)
 }
 
 #[test]

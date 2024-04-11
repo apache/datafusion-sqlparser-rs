@@ -38,6 +38,10 @@ impl Dialect for SnowflakeDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }
 
+    fn supports_projection_trailing_commas(&self) -> bool {
+        true
+    }
+
     fn is_identifier_part(&self, ch: char) -> bool {
         ch.is_ascii_lowercase()
             || ch.is_ascii_uppercase()

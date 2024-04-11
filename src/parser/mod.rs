@@ -4025,13 +4025,18 @@ impl<'a> Parser<'a> {
 
         // Snowflake allows defining `CLUSTER BY` after the name of the table or after columns
         let mut cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
-            self.expect_token(&Token::LParen)?;
-            let exprs = if self.peek_token() != Token::RParen {
-                self.parse_comma_separated(|p| p.parse_expr())?
+            let exprs = if self.peek_token() == Token::LParen {
+                self.expect_token(&Token::LParen)?;
+                let exprs = if self.peek_token() != Token::RParen {
+                    self.parse_comma_separated(|p| p.parse_expr())?
+                } else {
+                    vec![]
+                };
+                self.expect_token(&Token::RParen)?;
+                exprs
             } else {
-                vec![]
+                self.parse_comma_separated(|p| p.parse_expr())?
             };
-            self.expect_token(&Token::RParen)?;
             Some(exprs)
         } else {
             None

@@ -1432,6 +1432,13 @@ fn test_create_table_cluster_by() {
         "CREATE TABLE `myproject`.`mydataset`.`mytable` (service_id STRING, account_id STRING, state STRING, valid_from TIMESTAMP, valid_to TIMESTAMP) PARTITION BY TIMESTAMP_TRUNC(valid_from, MONTH) CLUSTER BY (account_id, state) OPTIONS (description = \"State of an service at a point in time\")"
     );
 }
+#[test]
+fn test_create_table_cluster_by_no_parens() {
+    bigquery().one_statement_parses_to(
+        "CREATE OR REPLACE TABLE `ebury-business-intelligence`.`core_dimensional`.`dimaccount` CLUSTER BY account_number OPTIONS (description = \"\"\"contains all accounts from SF. Accounts can be from companies or individuals\"\"\") AS (SELECT 1)",
+        "CREATE OR REPLACE TABLE `ebury-business-intelligence`.`core_dimensional`.`dimaccount` CLUSTER BY (account_number) OPTIONS (description = \"\"\"contains all accounts from SF. Accounts can be from companies or individuals\"\"\") AS (SELECT 1)"
+    );
+}
 
 #[test]
 fn test_create_table_primary_key_not_enforced() {

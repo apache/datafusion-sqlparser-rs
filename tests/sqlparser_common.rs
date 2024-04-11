@@ -8421,6 +8421,16 @@ fn parse_trailing_comma() {
     trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
 
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
+
+    // doesn't allow any trailing commas
+    let trailing_commas = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: None,
+    };
+
+    assert!(trailing_commas
+        .parse_sql_statements("SELECT name, age, FROM employees;")
+        .is_err());
 }
 
 #[test]

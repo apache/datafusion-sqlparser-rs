@@ -161,7 +161,7 @@ pub trait Dialect: Debug + Any {
     fn supports_trailing_commas(&self) -> bool {
         false
     }
-    /// Does the dialect support trailing commas only in proejction list?
+    /// Does the dialect support trailing commas in proejction list?
     fn supports_projection_trailing_commas(&self) -> bool {
         self.supports_trailing_commas()
     }

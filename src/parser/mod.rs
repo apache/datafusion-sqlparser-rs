@@ -3067,7 +3067,7 @@ impl<'a> Parser<'a> {
         // This pattern could be captured better with RAII type semantics, but it's quite a bit of
         // code to add for just one case, so we'll just do it manually here.
         let old_value = self.options.trailing_commas;
-        self.options.trailing_commas |= dialect_of!(self is BigQueryDialect | SnowflakeDialect);
+        self.options.trailing_commas |= self.dialect.supports_projection_trailing_commas();
 
         let ret = self.parse_comma_separated(|p| p.parse_select_item());
         self.options.trailing_commas = old_value;

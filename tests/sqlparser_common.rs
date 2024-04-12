@@ -8440,11 +8440,9 @@ fn parse_trailing_comma() {
 
     assert_eq!(
         trailing_commas
-            .parse_sql_statements("SELECT name, age, FROM employees;")
+            .parse_sql_statements("SELECT name, age, from employees;")
             .unwrap_err(),
-        ParserError::ParserError(
-            "Trailing comma not allowed in dialect: GenericDialect".to_string()
-        )
+        ParserError::ParserError("Expected an expression, found: from".to_string())
     );
 
     assert_eq!(

@@ -343,7 +343,6 @@ impl<'a> Parser<'a> {
     ///   assert!(matches!(result, Ok(_)));
     /// # Ok(())
     /// # }
-    ///
     /// ```
     pub fn with_options(mut self, options: ParserOptions) -> Self {
         self.options = options;
@@ -9022,7 +9021,7 @@ impl<'a> Parser<'a> {
             )),
             Expr::Identifier(v) if v.value.to_lowercase() == "from" => {
                 parser_err!(
-                    format!("Trailing comma not allowed in dialect: {:?}", self.dialect),
+                    format!("Expected an expression, found: {}", v),
                     self.peek_token().location
                 )
             }

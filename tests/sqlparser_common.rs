@@ -8434,7 +8434,7 @@ fn parse_trailing_comma() {
 }
 
 #[test]
-fn parse_porjection_trailing_comma() {
+fn parse_projection_trailing_comma() {
     // Some dialects allow trailing commas only in the projection
     let trailing_commas = TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {}), Box::new(BigQueryDialect {})],

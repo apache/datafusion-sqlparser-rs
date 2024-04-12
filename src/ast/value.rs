@@ -21,8 +21,8 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ast::Ident;
 use crate::ast::{display_comma_separated, Expr};
+use crate::ast::{Ident, ObjectName};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -74,6 +74,8 @@ pub enum Value {
     Null,
     /// `?` or `$` Prepared statement arg placeholder
     Placeholder(String),
+    /// {{param}}
+    Parameter(ObjectName),
     /// Add support of snowflake field:key - key should be a value
     UnQuotedString(String),
 
@@ -102,6 +104,13 @@ impl fmt::Display for Value {
             Value::RawStringLiteral(v) => write!(f, "R'{v}'"),
             Value::Null => write!(f, "NULL"),
             Value::Placeholder(v) => write!(f, "{v}"),
+            Value::Parameter(v) => {
+                write!(f, "{{")?;
+                write!(f, "{{")?;
+                write!(f, "{v}")?;
+                write!(f, "}}")?;
+                write!(f, "}}")
+            }
             Value::UnQuotedString(v) => write!(f, "{v}"),
             Value::ObjectConstant(fields) => {
                 if fields.is_empty() {

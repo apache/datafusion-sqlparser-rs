@@ -5357,6 +5357,14 @@ impl<'a> Parser<'a> {
                 Ok(Value::Placeholder(placeholder))
             }
             Token::LBrace => {
+                //Databricks {{param}}
+                if self.consume_token(&Token::LBrace) {
+                    let placeholder = self.parse_object_name(true)?;
+                    self.expect_token(&Token::RBrace)?;
+                    self.expect_token(&Token::RBrace)?;
+                    return Ok(Value::Parameter(placeholder));
+                }
+
                 if self.consume_token(&Token::RBrace) {
                     return Ok(Value::ObjectConstant(vec![]));
                 }

@@ -106,3 +106,10 @@ fn test_create_table_map_type() {
 
     databricks().verified_stmt(sql);
 }
+
+#[test]
+fn test_select_placeholder() {
+    let sql = "SELECT {{param}}";
+
+    databricks().verified_stmt(sql);
+}

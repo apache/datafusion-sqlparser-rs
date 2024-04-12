@@ -1119,37 +1119,48 @@ impl<'a> Tokenizer<'a> {
 
             if let Some('$') = chars.peek() {
                 chars.next();
-                s.push_str(&peeking_take_while(chars, |ch| ch != '$'));
 
-                match chars.peek() {
-                    Some('$') => {
-                        chars.next();
-                        for c in value.chars() {
-                            let next_char = chars.next();
-                            if Some(c) != next_char {
-                                return self.tokenizer_error(
-                                    chars.location(),
-                                    format!(
-                                        "Unterminated dollar-quoted string at or near \"{value}\""
-                                    ),
-                                );
+                'searching_for_end: loop {
+                    s.push_str(&peeking_take_while(chars, |ch| ch != '$'));
+                    match chars.peek() {
+                        Some('$') => {
+                            chars.next();
+                            let mut maybe_s = String::from("$");
+                            for c in value.chars() {
+                                if let Some(next_char) = chars.next() {
+                                    maybe_s.push(next_char);
+                                    if next_char != c {
+                                        // This doesn't match the dollar quote delimiter so this
+                                        // is not the end of the string.
+                                        s.push_str(&maybe_s);
+                                        continue 'searching_for_end;
+                                    }
+                                } else {
+                                    return self.tokenizer_error(
+                                        chars.location(),
+                                        "Unterminated dollar-quoted, expected $",
+                                    );
+                                }
+                            }
+                            if chars.peek() == Some(&'$') {
+                                chars.next();
+                                maybe_s.push('$');
+                                // maybe_s matches the end delimiter
+                                break 'searching_for_end;
+                            } else {
+                                // This also doesn't match the dollar quote delimiter as there are
+                                // more characters before the second dollar so this is not the end
+                                // of the string.
+                                s.push_str(&maybe_s);
+                                continue 'searching_for_end;
                             }
                         }
-
-                        if let Some('$') = chars.peek() {
-                            chars.next();
-                        } else {
+                        _ => {
                             return self.tokenizer_error(
                                 chars.location(),
-                                "Unterminated dollar-quoted string, expected $",
-                            );
+                                "Unterminated dollar-quoted, expected $",
+                            )
                         }
-                    }
-                    _ => {
-                        return self.tokenizer_error(
-                            chars.location(),
-                            "Unterminated dollar-quoted, expected $",
-                        );
                     }
                 }
             } else {
@@ -1904,6 +1915,75 @@ mod tests {
             Token::make_word("مصطفىh", None),
         ];
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_dollar_quoted_string_tagged() {
+        let sql = String::from(
+            "SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$tag$",
+        );
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::DollarQuotedString(DollarQuotedString {
+                value: "dollar '$' quoted strings have $tags like this$ or like this $$".into(),
+                tag: Some("tag".into()),
+            }),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_dollar_quoted_string_tagged_unterminated() {
+        let sql = String::from("SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$different tag$");
+        let dialect = GenericDialect {};
+        assert_eq!(
+            Tokenizer::new(&dialect, &sql).tokenize(),
+            Err(TokenizerError {
+                message: "Unterminated dollar-quoted, expected $".into(),
+                location: Location {
+                    line: 1,
+                    column: 91
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn tokenize_dollar_quoted_string_untagged() {
+        let sql =
+            String::from("SELECT $$within dollar '$' quoted strings have $tags like this$ $$");
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::DollarQuotedString(DollarQuotedString {
+                value: "within dollar '$' quoted strings have $tags like this$ ".into(),
+                tag: None,
+            }),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_dollar_quoted_string_untagged_unterminated() {
+        let sql = String::from(
+            "SELECT $$dollar '$' quoted strings have $tags like this$ or like this $different tag$",
+        );
+        let dialect = GenericDialect {};
+        assert_eq!(
+            Tokenizer::new(&dialect, &sql).tokenize(),
+            Err(TokenizerError {
+                message: "Unterminated dollar-quoted string".into(),
+                location: Location {
+                    line: 1,
+                    column: 86
+                }
+            })
+        );
     }
 
     #[test]

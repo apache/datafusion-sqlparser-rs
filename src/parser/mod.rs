@@ -1736,7 +1736,7 @@ impl<'a> Parser<'a> {
     /// ```
     fn parse_bigquery_struct_literal(&mut self) -> Result<Expr, ParserError> {
         let (fields, trailing_bracket) =
-            self.parse_struct_type_def(Self::parse_big_query_struct_field_def)?;
+            self.parse_struct_type_def(Self::parse_big_query_struct_field_def, Keyword::STRUCT)?;
         if trailing_bracket.0 {
             return parser_err!(
                 "unmatched > in STRUCT literal",
@@ -1799,12 +1799,13 @@ impl<'a> Parser<'a> {
     fn parse_struct_type_def<F>(
         &mut self,
         mut elem_parser: F,
+        kw: Keyword,
     ) -> Result<(Vec<StructField>, MatchedTrailingBracket), ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<(StructField, MatchedTrailingBracket), ParserError>,
     {
         let start_token = self.peek_token();
-        self.expect_keyword(Keyword::STRUCT)?;
+        self.expect_keyword(kw)?;
 
         // Nothing to do if we have no type information.
         if Token::Lt != self.peek_token() {
@@ -5745,10 +5746,21 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
+                Keyword::MAP if dialect_of!(self is DatabricksDialect) => {
+                    self.prev_token();
+                    let (field_defs, _trailing_bracket) = self.parse_struct_type_def(
+                        Self::parse_big_query_struct_field_def,
+                        Keyword::MAP,
+                    )?;
+                    trailing_bracket = _trailing_bracket;
+                    Ok(DataType::DatabricksMap(field_defs))
+                }
                 Keyword::STRUCT if dialect_of!(self is BigQueryDialect) => {
                     self.prev_token();
-                    let (field_defs, _trailing_bracket) =
-                        self.parse_struct_type_def(Self::parse_big_query_struct_field_def)?;
+                    let (field_defs, _trailing_bracket) = self.parse_struct_type_def(
+                        Self::parse_big_query_struct_field_def,
+                        Keyword::STRUCT,
+                    )?;
                     trailing_bracket = _trailing_bracket;
                     Ok(DataType::Struct(field_defs))
                 }

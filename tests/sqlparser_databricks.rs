@@ -99,3 +99,10 @@ fn test_create_table_partitioned_by_as() {
 
     databricks().verified_stmt(sql);
 }
+
+#[test]
+fn test_create_table_map_type() {
+    let sql = "CREATE TABLE logs (info MAP<STRING, ARRAY<STRING>>)";
+
+    databricks().verified_stmt(sql);
+}

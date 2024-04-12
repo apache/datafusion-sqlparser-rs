@@ -380,6 +380,7 @@ define_keywords!(
     LOWER,
     MACRO,
     MANAGEDLOCATION,
+    MAP,
     MATCH,
     MATCHED,
     MATERIALIZED,

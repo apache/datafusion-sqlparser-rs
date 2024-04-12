@@ -936,8 +936,8 @@ impl<'a> Parser<'a> {
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RBrace)?;
         Ok(Expr::ParameterizedViewArg {
-            column: (name),
-            data_type: (data_type),
+            column: name,
+            data_type,
         })
     }
     /// Parse an expression prefix

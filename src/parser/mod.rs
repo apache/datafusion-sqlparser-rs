@@ -5015,12 +5015,19 @@ impl<'a> Parser<'a> {
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
             }
+
             let comma = self.consume_token(&Token::Comma);
-            if self.consume_token(&Token::RParen) {
-                // allow a trailing comma, even though it's not in standard
-                break;
-            } else if !comma {
+            let rparen = self.peek_token().token == Token::RParen;
+
+            if comma && rparen && !self.options.trailing_commas {
+                return self.expected("column definition after ','", self.peek_token());
+            } else if !comma && !rparen {
                 return self.expected("',' or ')' after column definition", self.peek_token());
+            };
+
+            if rparen && (!comma || self.options.trailing_commas) {
+                let _ = self.consume_token(&Token::RParen);
+                break;
             }
         }
 

@@ -3572,7 +3572,7 @@ fn parse_create_table_with_alias() {
       int2_col INT2,
       float8_col FLOAT8,
       float4_col FLOAT4,
-      bool_col BOOL,
+      bool_col BOOL
     );";
     match pg_and_generic().one_statement_parses_to(sql, "") {
         Statement::CreateTable {

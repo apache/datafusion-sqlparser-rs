@@ -3354,8 +3354,13 @@ fn parse_create_table_clone() {
 
 #[test]
 fn parse_create_table_trailing_comma() {
-    let sql = "CREATE TABLE foo (bar int,)";
-    all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar INT)");
+    let dialect = TestedDialects {
+        dialects: vec![Box::new(DuckDbDialect {})],
+        options: None,
+    };
+
+    let sql = "CREATE TABLE foo (bar int,);";
+    dialect.one_statement_parses_to(sql, "CREATE TABLE foo (bar INT)");
 }
 
 #[test]
@@ -8416,6 +8421,11 @@ fn parse_trailing_comma() {
         "SELECT DISTINCT ON (album_id) name FROM track",
     );
 
+    trailing_commas.one_statement_parses_to(
+        "CREATE TABLE employees (name text, age int,)",
+        "CREATE TABLE employees (name TEXT, age INT)",
+    );
+
     trailing_commas.verified_stmt("SELECT album_id, name FROM track");
 
     trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
@@ -8428,9 +8438,21 @@ fn parse_trailing_comma() {
         options: None,
     };
 
-    assert!(trailing_commas
-        .parse_sql_statements("SELECT name, age, FROM employees;")
-        .is_err());
+    assert_eq!(
+        trailing_commas
+            .parse_sql_statements("SELECT name, age, FROM employees;")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Trailing comma not allowed in dialect: GenericDialect".to_string()
+        )
+    );
+
+    assert_eq!(
+        trailing_commas
+            .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected column definition after ',', found: )".to_string())
+    );
 }
 
 #[test]
@@ -8452,9 +8474,19 @@ fn parse_projection_trailing_comma() {
 
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
 
-    assert!(trailing_commas
-        .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
-        .is_err(),)
+    assert_eq!(
+        trailing_commas
+            .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
+            .unwrap_err(),
+        ParserError::ParserError("Expected an expression:, found: EOF".to_string())
+    );
+
+    assert_eq!(
+        trailing_commas
+            .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
+            .unwrap_err(),
+        ParserError::ParserError("Expected column definition after ',', found: )".to_string())
+    );
 }
 
 #[test]

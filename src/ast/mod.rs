@@ -2843,6 +2843,9 @@ impl fmt::Display for Statement {
                     HiveDistributionStyle::PARTITIONED { columns } => {
                         write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
                     }
+                    HiveDistributionStyle::PARTITIONED_NAMES { columns } => {
+                        write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
+                    }
                     HiveDistributionStyle::CLUSTERED {
                         columns,
                         sorted_by,
@@ -2871,7 +2874,7 @@ impl fmt::Display for Statement {
                             write!(f, " STORED AS DIRECTORIES")?;
                         }
                     }
-                    _ => (),
+                    HiveDistributionStyle::NONE => (),
                 }
 
                 if let Some(HiveFormat {
@@ -4359,6 +4362,9 @@ impl fmt::Display for KillType {
 pub enum HiveDistributionStyle {
     PARTITIONED {
         columns: Vec<ColumnDef>,
+    },
+    PARTITIONED_NAMES {
+        columns: Vec<WithSpan<Ident>>,
     },
     CLUSTERED {
         columns: Vec<Ident>,

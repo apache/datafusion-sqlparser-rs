@@ -3961,9 +3961,15 @@ impl<'a> Parser<'a> {
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
             self.expect_token(&Token::LParen)?;
-            let columns = self.parse_comma_separated(Parser::parse_column_def)?;
+            let distribution = if dialect_of!(self is DatabricksDialect) {
+                let columns = self.parse_comma_separated(|p| p.parse_identifier(false))?;
+                HiveDistributionStyle::PARTITIONED_NAMES { columns }
+            } else {
+                let columns = self.parse_comma_separated(Parser::parse_column_def)?;
+                HiveDistributionStyle::PARTITIONED { columns }
+            };
             self.expect_token(&Token::RParen)?;
-            Ok(HiveDistributionStyle::PARTITIONED { columns })
+            Ok(distribution)
         } else {
             Ok(HiveDistributionStyle::NONE)
         }

@@ -92,3 +92,10 @@ fn test_select_star_except() {
 
     databricks().verified_stmt(sql);
 }
+
+#[test]
+fn test_create_table_partitioned_by_as() {
+    let sql = "CREATE TABLE logs PARTITIONED BY (datepart) AS SELECT 1";
+
+    databricks().verified_stmt(sql);
+}

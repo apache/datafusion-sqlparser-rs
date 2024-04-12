@@ -5018,9 +5018,7 @@ impl<'a> Parser<'a> {
             let comma = self.consume_token(&Token::Comma);
             let rparen = self.peek_token().token == Token::RParen;
 
-            if comma && rparen && !self.options.trailing_commas {
-                return self.expected("column definition after ','", self.peek_token());
-            } else if !comma && !rparen {
+            if !comma && !rparen {
                 return self.expected("',' or ')' after column definition", self.peek_token());
             };
 

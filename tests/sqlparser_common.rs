@@ -8449,7 +8449,9 @@ fn parse_trailing_comma() {
         trailing_commas
             .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
             .unwrap_err(),
-        ParserError::ParserError("Expected column definition after ',', found: )".to_string())
+        ParserError::ParserError(
+            "Expected column name or constraint definition, found: )".to_string()
+        )
     );
 }
 
@@ -8483,7 +8485,9 @@ fn parse_projection_trailing_comma() {
         trailing_commas
             .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
             .unwrap_err(),
-        ParserError::ParserError("Expected column definition after ',', found: )".to_string())
+        ParserError::ParserError(
+            "Expected column name or constraint definition, found: )".to_string()
+        ),
     );
 }
 

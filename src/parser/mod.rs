@@ -2625,7 +2625,7 @@ impl<'a> Parser<'a> {
                     let key = self.parse_expr()?;
                     self.expect_token(&Token::RBracket)?;
 
-                    path.push(VariantPathElem::Bracket { key: Box::new(key) });
+                    path.push(VariantPathElem::Bracket { key });
                 }
                 _ => {
                     self.prev_token();

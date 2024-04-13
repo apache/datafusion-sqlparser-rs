@@ -364,7 +364,7 @@ pub enum VariantPathElem {
     /// e.g. `obj['foo']`.
     ///
     /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#bracket-notation>.
-    Bracket { key: Box<Expr> },
+    Bracket { key: Expr },
 }
 
 /// An SQL expression of any type.

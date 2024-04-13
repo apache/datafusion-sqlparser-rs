@@ -220,11 +220,11 @@ fn parse_semi_structured_data_traversal() {
         SelectItem::UnnamedExpr(Expr::VariantAccess {
             value: Box::new(Expr::Identifier(Ident::new("a"))),
             path: vec![VariantPathElem::Bracket {
-                key: Box::new(Expr::BinaryOp {
+                key: Expr::BinaryOp {
                     left: Box::new(Expr::Value(number("2"))),
                     op: BinaryOperator::Plus,
                     right: Box::new(Expr::Value(number("2")))
-                }),
+                },
             }],
         }),
         select.projection[0]
@@ -293,7 +293,7 @@ fn parse_semi_structured_data_traversal() {
                     quoted: false,
                 },
                 VariantPathElem::Bracket {
-                    key: Box::new(Expr::Value(number("0"))),
+                    key: Expr::Value(number("0")),
                 },
                 VariantPathElem::Dot {
                     key: "bar".to_owned(),
@@ -313,7 +313,7 @@ fn parse_semi_structured_data_traversal() {
             value: Box::new(Expr::Identifier(Ident::new("a"))),
             path: vec![
                 VariantPathElem::Bracket {
-                    key: Box::new(Expr::Value(number("0"))),
+                    key: Expr::Value(number("0")),
                 },
                 VariantPathElem::Dot {
                     key: "foo".to_owned(),

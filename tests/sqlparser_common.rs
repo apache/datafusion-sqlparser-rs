@@ -1374,25 +1374,25 @@ fn pg_and_generic() -> TestedDialects {
 
 #[test]
 fn parse_json_ops_without_colon() {
-    use self::JsonOperator;
-    let binary_ops = &[
-        ("->", JsonOperator::Arrow, all_dialects()),
-        ("->>", JsonOperator::LongArrow, all_dialects()),
-        ("#>", JsonOperator::HashArrow, pg_and_generic()),
-        ("#>>", JsonOperator::HashLongArrow, pg_and_generic()),
-        ("@>", JsonOperator::AtArrow, all_dialects()),
-        ("<@", JsonOperator::ArrowAt, all_dialects()),
-        ("#-", JsonOperator::HashMinus, pg_and_generic()),
-        ("@?", JsonOperator::AtQuestion, all_dialects()),
-        ("@@", JsonOperator::AtAt, all_dialects()),
+    use self::BinaryOperator::*;
+    let binary_ops = [
+        ("->", Arrow, all_dialects()),
+        ("->>", LongArrow, all_dialects()),
+        ("#>", HashArrow, pg_and_generic()),
+        ("#>>", HashLongArrow, pg_and_generic()),
+        ("@>", AtArrow, all_dialects()),
+        ("<@", ArrowAt, all_dialects()),
+        ("#-", HashMinus, pg_and_generic()),
+        ("@?", AtQuestion, all_dialects()),
+        ("@@", AtAt, all_dialects()),
     ];
 
     for (str_op, op, dialects) in binary_ops {
         let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::JsonAccess {
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),
-                operator: *op,
+                op,
                 right: Box::new(Expr::Identifier(Ident::new("b"))),
             }),
             select.projection[0]

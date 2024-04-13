@@ -48,7 +48,8 @@ pub use self::query::{
     ValueTableMode, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
-    escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
+    escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
+    TrimWhereField, Value,
 };
 
 use crate::ast::helpers::stmt_data_loading::{
@@ -266,66 +267,6 @@ impl fmt::Display for Interval {
     }
 }
 
-/// JsonOperator
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum JsonOperator {
-    /// -> keeps the value as json
-    Arrow,
-    /// ->> keeps the value as text or int.
-    LongArrow,
-    /// #> Extracts JSON sub-object at the specified path
-    HashArrow,
-    /// #>> Extracts JSON sub-object at the specified path as text
-    HashLongArrow,
-    /// : Colon is used by Snowflake (Which is similar to LongArrow)
-    Colon,
-    /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
-    AtArrow,
-    /// jsonb <@ jsonb -> boolean: Test whether right json contains the left json
-    ArrowAt,
-    /// jsonb #- text[] -> jsonb: Deletes the field or array element at the specified
-    /// path, where path elements can be either field keys or array indexes.
-    HashMinus,
-    /// jsonb @? jsonpath -> boolean: Does JSON path return any item for the specified
-    /// JSON value?
-    AtQuestion,
-    /// jsonb @@ jsonpath → boolean: Returns the result of a JSON path predicate check
-    /// for the specified JSON value. Only the first item of the result is taken into
-    /// account. If the result is not Boolean, then NULL is returned.
-    AtAt,
-}
-
-impl fmt::Display for JsonOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            JsonOperator::Arrow => {
-                write!(f, "->")
-            }
-            JsonOperator::LongArrow => {
-                write!(f, "->>")
-            }
-            JsonOperator::HashArrow => {
-                write!(f, "#>")
-            }
-            JsonOperator::HashLongArrow => {
-                write!(f, "#>>")
-            }
-            JsonOperator::Colon => {
-                write!(f, ":")
-            }
-            JsonOperator::AtArrow => {
-                write!(f, "@>")
-            }
-            JsonOperator::ArrowAt => write!(f, "<@"),
-            JsonOperator::HashMinus => write!(f, "#-"),
-            JsonOperator::AtQuestion => write!(f, "@?"),
-            JsonOperator::AtAt => write!(f, "@@"),
-        }
-    }
-}
-
 /// A field definition within a struct.
 ///
 /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
@@ -408,6 +349,24 @@ impl fmt::Display for MapAccessKey {
     }
 }
 
+/// A element of a path to data nested in a VARIANT on Snowflake.
+///
+/// See <https://docs.snowflake.com/en/user-guide/querying-semistructured>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum VariantPathElem {
+    /// Accesses an object field using dot notation, e.g. `obj:foo.bar.baz`.
+    ///
+    /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation>.
+    Dot { key: String, quoted: bool },
+    /// Accesses an object field or array element using bracket notation,
+    /// e.g. `obj['foo']`.
+    ///
+    /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#bracket-notation>.
+    Bracket { key: Box<Expr> },
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -425,11 +384,14 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
-    /// JSON access (postgres)  eg: data->'tags'
-    JsonAccess {
-        left: Box<Expr>,
-        operator: JsonOperator,
-        right: Box<Expr>,
+    /// Access data nested in a VARIANT on Snowflake, for example `src:customer[0].name`.
+    ///
+    /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured>.
+    VariantAccess {
+        /// The VARIANT being queried.
+        value: Box<Expr>,
+        /// The path to the data inside the VARIANT to extract.
+        path: Vec<VariantPathElem>,
     },
     /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
     CompositeAccess {
@@ -1210,16 +1172,29 @@ impl fmt::Display for Expr {
             Expr::Array(set) => {
                 write!(f, "{set}")
             }
-            Expr::JsonAccess {
-                left,
-                operator,
-                right,
-            } => {
-                if operator == &JsonOperator::Colon {
-                    write!(f, "{left}{operator}{right}")
-                } else {
-                    write!(f, "{left} {operator} {right}")
+            Expr::VariantAccess { value, path } => {
+                write!(f, "{value}")?;
+                for (i, elem) in path.iter().enumerate() {
+                    match elem {
+                        VariantPathElem::Dot { key, quoted } => {
+                            if i == 0 {
+                                write!(f, ":")?;
+                            } else {
+                                write!(f, ".")?;
+                            }
+
+                            if *quoted {
+                                write!(f, "\"{}\"", escape_double_quote_string(key))?;
+                            } else {
+                                write!(f, "{key}")?;
+                            }
+                        }
+                        VariantPathElem::Bracket { key } => {
+                            write!(f, "[{key}]")?;
+                        }
+                    }
                 }
+                Ok(())
             }
             Expr::CompositeAccess { expr, key } => {
                 write!(f, "{expr}.{key}")

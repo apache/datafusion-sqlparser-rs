@@ -162,7 +162,7 @@ pub enum BinaryOperator {
     /// On PostgreSQL, this operator extracts a JSON sub-object at the specified
     /// path, for example:
     ///
-    /// ```
+    /// ```notrust
     ///'{"a": {"b": ["foo","bar"]}}'::json #> '{a,b,1}'
     /// ```
     ///
@@ -173,7 +173,7 @@ pub enum BinaryOperator {
     /// A PostgreSQL-specific operator that extracts JSON sub-object at the
     /// specified path, for example
     ///
-    /// ```
+    /// ```notrust
     ///'{"a": {"b": ["foo","bar"]}}'::json #>> '{a,b,1}'
     /// ```
     ///

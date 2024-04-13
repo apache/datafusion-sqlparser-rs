@@ -2548,15 +2548,16 @@ impl<'a> Parser<'a> {
         } else if Token::LBracket == tok {
             if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
                 // parse index
-                return self.parse_array_index(expr);
+                self.parse_array_index(expr)
+            } else if dialect_of!(self is SnowflakeDialect) {
+                self.prev_token();
+                self.parse_variant_access(expr)
+            } else {
+                self.parse_map_access(expr)
             }
-            self.parse_map_access(expr)
         } else if Token::Colon == tok {
-            Ok(Expr::JsonAccess {
-                left: Box::new(expr),
-                operator: JsonOperator::Colon,
-                right: Box::new(Expr::Value(self.parse_value()?)),
-            })
+            self.prev_token();
+            self.parse_variant_access(expr)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(
@@ -2587,6 +2588,56 @@ impl<'a> Parser<'a> {
         Ok(Expr::ArrayIndex {
             obj: Box::new(expr),
             indexes,
+        })
+    }
+
+    fn parse_variant_object_key(&mut self) -> Result<VariantPathElem, ParserError> {
+        match self.next_token() {
+            TokenWithLocation {
+                token:
+                    Token::Word(Word {
+                        value,
+                        quote_style: quote_style @ (Some('"') | None),
+                        // Some experimentation suggests that snowflake permits
+                        // any keyword here unquoted.
+                        keyword: _,
+                    }),
+                ..
+            } => Ok(VariantPathElem::Dot {
+                key: value,
+                quoted: quote_style.is_some(),
+            }),
+            token => self.expected("variant object key name", token),
+        }
+    }
+
+    fn parse_variant_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let mut path = Vec::new();
+        loop {
+            match self.next_token().token {
+                Token::Colon if path.is_empty() => {
+                    path.push(self.parse_variant_object_key()?);
+                }
+                Token::Period if !path.is_empty() => {
+                    path.push(self.parse_variant_object_key()?);
+                }
+                Token::LBracket => {
+                    let key = self.parse_expr()?;
+                    self.expect_token(&Token::RBracket)?;
+
+                    path.push(VariantPathElem::Bracket { key: Box::new(key) });
+                }
+                _ => {
+                    self.prev_token();
+                    break;
+                }
+            };
+        }
+
+        debug_assert!(!path.is_empty());
+        Ok(Expr::VariantAccess {
+            value: Box::new(expr),
+            path,
         })
     }
 
@@ -6200,17 +6251,6 @@ impl<'a> Parser<'a> {
                         },
                     )?,
                 },
-                // Case when Snowflake Semi-structured data like key:value
-                Keyword::NoKeyword
-                | Keyword::LOCATION
-                | Keyword::TYPE
-                | Keyword::DATE
-                | Keyword::START
-                | Keyword::END
-                    if dialect_of!(self is SnowflakeDialect | GenericDialect) =>
-                {
-                    Ok(Value::UnQuotedString(w.value))
-                }
                 _ => self.expected(
                     "a concrete value",
                     TokenWithLocation {

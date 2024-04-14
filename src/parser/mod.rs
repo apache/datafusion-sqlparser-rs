@@ -2634,7 +2634,6 @@ impl<'a> Parser<'a> {
             };
         }
 
-        debug_assert!(!path.is_empty());
         Ok(Expr::VariantAccess {
             value: Box::new(expr),
             path,

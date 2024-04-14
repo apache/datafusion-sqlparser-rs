@@ -24,4 +24,9 @@ impl Dialect for DatabricksDialect {
     fn supports_filter_during_aggregation(&self) -> bool {
         true
     }
+
+    // https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-groupby.html
+    fn supports_group_by_expr(&self) -> bool {
+        true
+    }
 }

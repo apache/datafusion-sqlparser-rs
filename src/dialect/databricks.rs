@@ -20,4 +20,8 @@ impl Dialect for DatabricksDialect {
     fn is_identifier_part(&self, ch: char) -> bool {
         matches!(ch, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_')
     }
+
+    fn supports_filter_during_aggregation(&self) -> bool {
+        true
+    }
 }

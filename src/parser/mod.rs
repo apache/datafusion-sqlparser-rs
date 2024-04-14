@@ -2592,22 +2592,26 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_variant_object_key(&mut self) -> Result<VariantPathElem, ParserError> {
-        match self.next_token() {
-            TokenWithLocation {
-                token:
-                    Token::Word(Word {
-                        value,
-                        quote_style: quote_style @ (Some('"') | None),
-                        // Some experimentation suggests that snowflake permits
-                        // any keyword here unquoted.
-                        keyword: _,
-                    }),
-                ..
-            } => Ok(VariantPathElem::Dot {
+        let token = self.next_token();
+        match token.token {
+            Token::Word(Word {
+                value,
+                // path segments in SF dot notation can be unquoted or double quoted
+                quote_style: quote_style @ (Some('"') | None),
+                // some experimentation suggests that snowflake permits
+                // any keyword here unquoted.
+                keyword: _,
+            }) => Ok(VariantPathElem::Dot {
                 key: value,
                 quoted: quote_style.is_some(),
             }),
-            token => self.expected("variant object key name", token),
+
+            // This token should never be generated on snowflake or generic
+            // dialects, but we handle it just in case this is used on future
+            // dialects.
+            Token::DoubleQuotedString(key) => Ok(VariantPathElem::Dot { key, quoted: true }),
+
+            _ => self.expected("variant object key name", token),
         }
     }
 

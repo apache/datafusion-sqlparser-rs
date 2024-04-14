@@ -2555,7 +2555,7 @@ impl<'a> Parser<'a> {
             } else {
                 self.parse_map_access(expr)
             }
-        } else if Token::Colon == tok {
+        } else if dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == tok {
             self.prev_token();
             self.parse_json_access(expr)
         } else {

@@ -2551,13 +2551,13 @@ impl<'a> Parser<'a> {
                 self.parse_array_index(expr)
             } else if dialect_of!(self is SnowflakeDialect) {
                 self.prev_token();
-                self.parse_variant_access(expr)
+                self.parse_json_access(expr)
             } else {
                 self.parse_map_access(expr)
             }
         } else if Token::Colon == tok {
             self.prev_token();
-            self.parse_variant_access(expr)
+            self.parse_json_access(expr)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(
@@ -2591,7 +2591,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_variant_object_key(&mut self) -> Result<VariantPathElem, ParserError> {
+    fn parse_json_path_object_key(&mut self) -> Result<JsonPathElem, ParserError> {
         let token = self.next_token();
         match token.token {
             Token::Word(Word {
@@ -2601,7 +2601,7 @@ impl<'a> Parser<'a> {
                 // some experimentation suggests that snowflake permits
                 // any keyword here unquoted.
                 keyword: _,
-            }) => Ok(VariantPathElem::Dot {
+            }) => Ok(JsonPathElem::Dot {
                 key: value,
                 quoted: quote_style.is_some(),
             }),
@@ -2609,27 +2609,27 @@ impl<'a> Parser<'a> {
             // This token should never be generated on snowflake or generic
             // dialects, but we handle it just in case this is used on future
             // dialects.
-            Token::DoubleQuotedString(key) => Ok(VariantPathElem::Dot { key, quoted: true }),
+            Token::DoubleQuotedString(key) => Ok(JsonPathElem::Dot { key, quoted: true }),
 
             _ => self.expected("variant object key name", token),
         }
     }
 
-    fn parse_variant_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+    fn parse_json_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let mut path = Vec::new();
         loop {
             match self.next_token().token {
                 Token::Colon if path.is_empty() => {
-                    path.push(self.parse_variant_object_key()?);
+                    path.push(self.parse_json_path_object_key()?);
                 }
                 Token::Period if !path.is_empty() => {
-                    path.push(self.parse_variant_object_key()?);
+                    path.push(self.parse_json_path_object_key()?);
                 }
                 Token::LBracket => {
                     let key = self.parse_expr()?;
                     self.expect_token(&Token::RBracket)?;
 
-                    path.push(VariantPathElem::Bracket { key });
+                    path.push(JsonPathElem::Bracket { key });
                 }
                 _ => {
                     self.prev_token();
@@ -2638,9 +2638,10 @@ impl<'a> Parser<'a> {
             };
         }
 
-        Ok(Expr::VariantAccess {
+        debug_assert!(!path.is_empty());
+        Ok(Expr::JsonAccess {
             value: Box::new(expr),
-            path,
+            path: JsonPath { path },
         })
     }
 

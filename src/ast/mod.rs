@@ -349,13 +349,11 @@ impl fmt::Display for MapAccessKey {
     }
 }
 
-/// An element of a path to data nested in a VARIANT on Snowflake.
-///
-/// See <https://docs.snowflake.com/en/user-guide/querying-semistructured>.
+/// An element of a JSON path.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum VariantPathElem {
+pub enum JsonPathElem {
     /// Accesses an object field using dot notation, e.g. `obj:foo.bar.baz`.
     ///
     /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation>.
@@ -365,6 +363,43 @@ pub enum VariantPathElem {
     ///
     /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#bracket-notation>.
     Bracket { key: Expr },
+}
+
+/// A JSON path.
+///
+/// See <https://docs.snowflake.com/en/user-guide/querying-semistructured>.
+/// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-json-path-expression.html>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JsonPath {
+    pub path: Vec<JsonPathElem>,
+}
+
+impl fmt::Display for JsonPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, elem) in self.path.iter().enumerate() {
+            match elem {
+                JsonPathElem::Dot { key, quoted } => {
+                    if i == 0 {
+                        write!(f, ":")?;
+                    } else {
+                        write!(f, ".")?;
+                    }
+
+                    if *quoted {
+                        write!(f, "\"{}\"", escape_double_quote_string(key))?;
+                    } else {
+                        write!(f, "{key}")?;
+                    }
+                }
+                JsonPathElem::Bracket { key } => {
+                    write!(f, "[{key}]")?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// An SQL expression of any type.
@@ -384,14 +419,16 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
-    /// Access data nested in a VARIANT on Snowflake, for example `src:customer[0].name`.
+    /// Access data nested in a value containing semi-structured data, such as
+    /// the `VARIANT` type on Snowflake. for example `src:customer[0].name`.
     ///
     /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured>.
-    VariantAccess {
-        /// The VARIANT being queried.
+    /// See <https://docs.databricks.com/en/sql/language-manual/functions/colonsign.html>.
+    JsonAccess {
+        /// The value being queried.
         value: Box<Expr>,
-        /// The path to the data inside the VARIANT to extract.
-        path: Vec<VariantPathElem>,
+        /// The path to the data to extract.
+        path: JsonPath,
     },
     /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
     CompositeAccess {
@@ -1172,29 +1209,8 @@ impl fmt::Display for Expr {
             Expr::Array(set) => {
                 write!(f, "{set}")
             }
-            Expr::VariantAccess { value, path } => {
-                write!(f, "{value}")?;
-                for (i, elem) in path.iter().enumerate() {
-                    match elem {
-                        VariantPathElem::Dot { key, quoted } => {
-                            if i == 0 {
-                                write!(f, ":")?;
-                            } else {
-                                write!(f, ".")?;
-                            }
-
-                            if *quoted {
-                                write!(f, "\"{}\"", escape_double_quote_string(key))?;
-                            } else {
-                                write!(f, "{key}")?;
-                            }
-                        }
-                        VariantPathElem::Bracket { key } => {
-                            write!(f, "[{key}]")?;
-                        }
-                    }
-                }
-                Ok(())
+            Expr::JsonAccess { value, path } => {
+                write!(f, "{value}{path}")
             }
             Expr::CompositeAccess { expr, key } => {
                 write!(f, "{expr}.{key}")

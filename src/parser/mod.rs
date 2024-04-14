@@ -7742,6 +7742,9 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Invoke `f` after first setting the parser's `ParserState` to `state`.
+    ///
+    /// Upon return, restores the parser's state to what it started at.
     fn with_state<T, F>(&mut self, state: ParserState, mut f: F) -> Result<T, ParserError>
     where
         F: FnMut(&mut Parser) -> Result<T, ParserError>,

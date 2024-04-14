@@ -50,6 +50,10 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_connect_by(&self) -> bool {
+        true
+    }
+
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE

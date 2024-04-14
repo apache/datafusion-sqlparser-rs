@@ -256,10 +256,22 @@ impl ParserOptions {
     }
 }
 
+#[derive(Copy, Clone)]
+enum ParserState {
+    /// The default state of the parser.
+    Normal,
+    /// The state when parsing a CONNECT BY expression. This allows parsing
+    /// PRIOR expressions while still allowing prior as an identifier name
+    /// in other contexts.
+    ConnectBy,
+}
+
 pub struct Parser<'a> {
     tokens: Vec<TokenWithLocation>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
+    /// The current state of the parser.
+    state: ParserState,
     /// The current dialect to use
     dialect: &'a dyn Dialect,
     /// Additional options that allow you to mix & match behavior
@@ -290,6 +302,7 @@ impl<'a> Parser<'a> {
         Self {
             tokens: vec![],
             index: 0,
+            state: ParserState::Normal,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
             options: ParserOptions::default(),
@@ -1039,6 +1052,10 @@ impl<'a> Parser<'a> {
                 Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     self.prev_token();
                     self.parse_bigquery_struct_literal()
+                }
+                Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
+                    let expr = self.parse_subexpr(Self::PLUS_MINUS_PREC)?;
+                    Ok(Expr::Prior(Box::new(expr)))
                 }
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
@@ -7694,6 +7711,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let connect_by = if self.dialect.supports_connect_by()
+            && self
+                .parse_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
+                .is_some()
+        {
+            self.prev_token();
+            Some(self.parse_connect_by()?)
+        } else {
+            None
+        };
+
         Ok(Select {
             distinct,
             top,
@@ -7710,6 +7738,41 @@ impl<'a> Parser<'a> {
             named_window: named_windows,
             qualify,
             value_table_mode,
+            connect_by,
+        })
+    }
+
+    fn with_state<T, F>(&mut self, state: ParserState, mut f: F) -> Result<T, ParserError>
+    where
+        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+    {
+        let current_state = self.state;
+        self.state = state;
+        let res = f(self);
+        self.state = current_state;
+        res
+    }
+
+    pub fn parse_connect_by(&mut self) -> Result<ConnectBy, ParserError> {
+        let (condition, relationships) = if self.parse_keywords(&[Keyword::CONNECT, Keyword::BY]) {
+            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
+                parser.parse_comma_separated(Parser::parse_expr)
+            })?;
+            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
+            let condition = self.parse_expr()?;
+            (condition, relationships)
+        } else {
+            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
+            let condition = self.parse_expr()?;
+            self.expect_keywords(&[Keyword::CONNECT, Keyword::BY])?;
+            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
+                parser.parse_comma_separated(Parser::parse_expr)
+            })?;
+            (condition, relationships)
+        };
+        Ok(ConnectBy {
+            condition,
+            relationships,
         })
     }
 

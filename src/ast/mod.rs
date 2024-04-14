@@ -349,7 +349,7 @@ impl fmt::Display for MapAccessKey {
     }
 }
 
-/// A element of a path to data nested in a VARIANT on Snowflake.
+/// An element of a path to data nested in a VARIANT on Snowflake.
 ///
 /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured>.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

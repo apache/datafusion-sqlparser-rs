@@ -2219,6 +2219,99 @@ fn parse_alter_table_change_column_with_column_position() {
 }
 
 #[test]
+fn parse_alter_table_modify_column() {
+    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_operation = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: None,
+    };
+
+    let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+
+    let sql2 = "ALTER TABLE orders MODIFY description TEXT NOT NULL";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+    let sql3 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql3), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("foo"),
+            quote_style: None,
+        })),
+    };
+    let sql4 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL AFTER foo";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql4), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+}
+
+#[test]
+fn parse_alter_table_modify_column_with_column_position() {
+    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_operation_first = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+
+    let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_first, operation);
+
+    let sql2 = "ALTER TABLE orders MODIFY description TEXT NOT NULL FIRST";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_first, operation);
+
+    let expected_operation_after = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("total_count"),
+            quote_style: None,
+        })),
+    };
+
+    let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL AFTER total_count";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_after, operation);
+
+    let sql2 = "ALTER TABLE orders MODIFY description TEXT NOT NULL AFTER total_count";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_after, operation);
+}
+
+#[test]
 fn parse_substring_in_select() {
     let sql = "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test";
     match mysql().one_statement_parses_to(

@@ -9288,3 +9288,59 @@ fn insert_into_with_parentheses() {
     };
     dialects.verified_stmt("INSERT INTO t1 (id, name) (SELECT t2.id, t2.name FROM t2)");
 }
+
+#[test]
+fn test_dictionary_syntax() {
+    fn check(sql: &str, expect: Expr) {
+        assert_eq!(
+            all_dialects_where(|d| d.supports_dictionary_syntax()).verified_expr(sql),
+            expect
+        );
+    }
+
+    check(
+        "{'Alberta': 'Edmonton', 'Manitoba': 'Winnipeg'}",
+        Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "Alberta"),
+                value: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "Edmonton".to_owned(),
+                ))),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "Manitoba"),
+                value: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "Winnipeg".to_owned(),
+                ))),
+            },
+        ]),
+    );
+
+    check(
+        "{'start': CAST('2023-04-01' AS TIMESTAMP), 'end': CAST('2023-04-05' AS TIMESTAMP)}",
+        Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "start"),
+                value: Box::new(Expr::Cast {
+                    kind: CastKind::Cast,
+                    expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "2023-04-01".to_owned(),
+                    ))),
+                    data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                    format: None,
+                }),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "end"),
+                value: Box::new(Expr::Cast {
+                    kind: CastKind::Cast,
+                    expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "2023-04-05".to_owned(),
+                    ))),
+                    data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                    format: None,
+                }),
+            },
+        ]),
+    )
+}

@@ -1283,13 +1283,13 @@ fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";
 
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1335,14 +1335,14 @@ fn parse_ignore_insert() {
     let sql = r"INSERT IGNORE INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ignore,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1377,14 +1377,14 @@ fn parse_priority_insert() {
     let sql = r"INSERT HIGH_PRIORITY INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             priority,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1416,14 +1416,14 @@ fn parse_priority_insert() {
     let sql2 = r"INSERT LOW_PRIORITY INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
     match mysql().verified_stmt(sql2) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             priority,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1457,13 +1457,13 @@ fn parse_priority_insert() {
 fn parse_insert_as() {
     let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias`";
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             insert_alias,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::with_quote('`', "table")]),
                 table_name
@@ -1507,13 +1507,13 @@ fn parse_insert_as() {
 
     let sql = r"INSERT INTO `table` (`id`, `date`) VALUES (1, '2024-01-01') AS `alias` (`mek_id`, `mek_date`)";
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             insert_alias,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::with_quote('`', "table")]),
                 table_name
@@ -1563,7 +1563,7 @@ fn parse_insert_as() {
 fn parse_replace_insert() {
     let sql = r"REPLACE DELAYED INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
@@ -1571,7 +1571,7 @@ fn parse_replace_insert() {
             replace_into,
             priority,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1607,13 +1607,13 @@ fn parse_empty_row_insert() {
     let sql = "INSERT INTO tb () VALUES (), ()";
 
     match mysql().one_statement_parses_to(sql, "INSERT INTO tb VALUES (), ()") {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tb")]), table_name);
             assert!(columns.is_empty());
             assert!(on.is_none());
@@ -1644,13 +1644,13 @@ fn parse_insert_with_on_duplicate_update() {
     let sql = "INSERT INTO permission_groups (name, description, perm_create, perm_read, perm_update, perm_delete) VALUES ('accounting_manager', 'Some description about the group', true, true, true, true) ON DUPLICATE KEY UPDATE description = VALUES(description), perm_create = VALUES(perm_create), perm_read = VALUES(perm_read), perm_update = VALUES(perm_update), perm_delete = VALUES(perm_delete)";
 
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::new("permission_groups")]),
                 table_name
@@ -1876,11 +1876,11 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
 fn parse_insert_with_numeric_prefix_column_name() {
     let sql = "INSERT INTO s1.t1 (123col_$@length123) VALUES (67.654)";
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::new("s1"), Ident::new("t1")]),
                 table_name
@@ -1970,7 +1970,7 @@ fn parse_update_with_joins() {
 fn parse_delete_with_order_by() {
     let sql = "DELETE FROM customers ORDER BY id DESC";
     match mysql().verified_stmt(sql) {
-        Statement::Delete { order_by, .. } => {
+        Statement::Delete(Delete { order_by, .. }) => {
             assert_eq!(
                 vec![OrderByExpr {
                     expr: Expr::Identifier(Ident {
@@ -1991,7 +1991,7 @@ fn parse_delete_with_order_by() {
 fn parse_delete_with_limit() {
     let sql = "DELETE FROM customers LIMIT 100";
     match mysql().verified_stmt(sql) {
-        Statement::Delete { limit, .. } => {
+        Statement::Delete(Delete { limit, .. }) => {
             assert_eq!(Some(Expr::Value(number("100"))), limit);
         }
         _ => unreachable!(),

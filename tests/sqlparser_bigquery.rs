@@ -90,10 +90,10 @@ fn parse_raw_literal() {
 fn parse_delete_statement() {
     let sql = "DELETE \"table\" WHERE 1";
     match bigquery_and_generic().verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             from: FromTable::WithoutKeyword(from),
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),

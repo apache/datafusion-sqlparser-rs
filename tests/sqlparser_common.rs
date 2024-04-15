@@ -84,12 +84,12 @@ fn parse_insert_values() {
         expected_rows: &[Vec<Expr>],
     ) {
         match verified_stmt(sql) {
-            Statement::Insert {
+            Statement::Insert(Insert {
                 table_name,
                 columns,
                 source: Some(source),
                 ..
-            } => {
+            }) => {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
@@ -125,7 +125,7 @@ fn parse_insert_default_values() {
     let insert_with_default_values = verified_stmt("INSERT INTO test_table DEFAULT VALUES");
 
     match insert_with_default_values {
-        Statement::Insert {
+        Statement::Insert(Insert {
             after_columns,
             columns,
             on,
@@ -134,7 +134,7 @@ fn parse_insert_default_values() {
             source,
             table_name,
             ..
-        } => {
+        }) => {
             assert_eq!(columns, vec![]);
             assert_eq!(after_columns, vec![]);
             assert_eq!(on, None);
@@ -150,7 +150,7 @@ fn parse_insert_default_values() {
         verified_stmt("INSERT INTO test_table DEFAULT VALUES RETURNING test_column");
 
     match insert_with_default_values_and_returning {
-        Statement::Insert {
+        Statement::Insert(Insert {
             after_columns,
             columns,
             on,
@@ -159,7 +159,7 @@ fn parse_insert_default_values() {
             source,
             table_name,
             ..
-        } => {
+        }) => {
             assert_eq!(after_columns, vec![]);
             assert_eq!(columns, vec![]);
             assert_eq!(on, None);
@@ -175,7 +175,7 @@ fn parse_insert_default_values() {
         verified_stmt("INSERT INTO test_table DEFAULT VALUES ON CONFLICT DO NOTHING");
 
     match insert_with_default_values_and_on_conflict {
-        Statement::Insert {
+        Statement::Insert(Insert {
             after_columns,
             columns,
             on,
@@ -184,7 +184,7 @@ fn parse_insert_default_values() {
             source,
             table_name,
             ..
-        } => {
+        }) => {
             assert_eq!(after_columns, vec![]);
             assert_eq!(columns, vec![]);
             assert!(on.is_some());
@@ -230,11 +230,11 @@ fn parse_insert_select_returning() {
     verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
     let stmt = verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             returning: Some(ret),
             source: Some(_),
             ..
-        } => assert_eq!(ret.len(), 1),
+        }) => assert_eq!(ret.len(), 1),
         _ => unreachable!(),
     }
 }
@@ -255,7 +255,7 @@ fn parse_insert_sqlite() {
     .pop()
     .unwrap()
     {
-        Statement::Insert { or, .. } => assert_eq!(or, expected_action),
+        Statement::Insert(Insert { or, .. }) => assert_eq!(or, expected_action),
         _ => panic!("{}", sql),
     };
 
@@ -545,10 +545,10 @@ fn parse_no_table_name() {
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             from: FromTable::WithFromKeyword(from),
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
@@ -582,11 +582,11 @@ fn parse_delete_statement_for_multi_tables() {
     let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
     let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
     match dialects.verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             tables,
             from: FromTable::WithFromKeyword(from),
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
                 tables[0]
@@ -626,11 +626,11 @@ fn parse_delete_statement_for_multi_tables() {
 fn parse_delete_statement_for_multi_tables_with_using() {
     let sql = "DELETE FROM schema1.table1, schema2.table2 USING schema1.table1 JOIN schema2.table2 ON schema2.table2.pk = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
     match verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             from: FromTable::WithFromKeyword(from),
             using: Some(using),
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
@@ -686,14 +686,14 @@ fn parse_where_delete_statement() {
 
     let sql = "DELETE FROM foo WHERE name = 5";
     match verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             tables: _,
             from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::new("foo")]),
@@ -727,14 +727,14 @@ fn parse_where_delete_with_alias_statement() {
 
     let sql = "DELETE FROM basket AS a USING basket AS b WHERE a.id < b.id";
     match verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             tables: _,
             from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::new("basket")]),

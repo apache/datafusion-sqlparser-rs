@@ -113,3 +113,10 @@ fn test_select_placeholder() {
 
     databricks().verified_stmt(sql);
 }
+
+#[test]
+fn test_underscore_column_name() {
+    databricks().verified_stmt("SELECT _column FROM `myproject`.`mydataset`.`mytable`");
+
+    databricks().verified_stmt("SELECT other AS _column FROM `myproject`.`mydataset`.`mytable`");
+}

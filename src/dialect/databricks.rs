@@ -21,7 +21,7 @@ impl Dialect for DatabricksDialect {
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
-        ch.is_ascii_lowercase() || ch.is_ascii_uppercase()
+        ch == '_' || ch.is_ascii_lowercase() || ch.is_ascii_uppercase()
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {

@@ -246,3 +246,32 @@ fn test_duckdb_load_extension() {
         stmt
     );
 }
+
+#[test]
+fn test_select_wildcard_with_replace() {
+    let select = duckdb_and_generic()
+        .verified_only_select(r#"SELECT * REPLACE (lower(city) AS city) FROM addresses"#);
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![Box::new(ReplaceSelectElement {
+                expr: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("lower")]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                        Expr::Identifier(Ident::new("city")),
+                    ))],
+                    filter: None,
+                    null_treatment: None,
+                    within_group: None,
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                }),
+                column_name: Ident::new("city"),
+                as_keyword: true,
+            })],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+}

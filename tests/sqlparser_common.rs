@@ -8700,12 +8700,14 @@ fn test_match_recognize() {
         version: None,
         partitions: vec![],
     };
+
     fn check(options: &str, expect: TableFactor) {
         let select = all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(
             &format!("SELECT * FROM my_table MATCH_RECOGNIZE({options})"),
         );
         assert_eq!(&select.from[0].relation, &expect);
     }
+
     check(
         concat!(
             "PARTITION BY company ",
@@ -8716,7 +8718,7 @@ fn test_match_recognize() {
             "LAST(price_date) AS end_date ",
             "ONE ROW PER MATCH ",
             "AFTER MATCH SKIP TO LAST row_with_price_increase ",
-            "PATTERN(row_before_decrease row_with_price_decrease+ row_with_price_increase+) ",
+            "PATTERN (row_before_decrease row_with_price_decrease+ row_with_price_increase+) ",
             "DEFINE ",
             "row_with_price_decrease AS price < LAG(price), ",
             "row_with_price_increase AS price > LAG(price)"
@@ -8779,6 +8781,57 @@ fn test_match_recognize() {
             alias: None,
         },
     );
+
+    #[rustfmt::skip]
+    let examples = [
+        concat!(
+            "SELECT * ",
+            "FROM login_attempts ",
+            "MATCH_RECOGNIZE(",
+                "PARTITION BY user_id ",
+                "ORDER BY timestamp ",
+                "PATTERN (failed_attempt{3,}) ",
+                "DEFINE ",
+                    "failed_attempt AS status = 'failure'",
+            ")",
+        ),
+        concat!(
+            "SELECT * ",
+            "FROM stock_transactions ",
+            "MATCH_RECOGNIZE(",
+                "PARTITION BY symbol ",
+                "ORDER BY timestamp ",
+                "MEASURES ",
+                    "FIRST(price) AS start_price, ",
+                    "LAST(price) AS end_price, ",
+                    "MATCH_NUMBER() AS match_num ",
+                "ALL ROWS PER MATCH ",
+                "PATTERN (STRT UP+) ",
+                "DEFINE ",
+                    "UP AS price > PREV(price)",
+            ")",
+        ),
+        concat!(
+            "SELECT * ",
+            "FROM event_log ",
+            "MATCH_RECOGNIZE(",
+                "MEASURES ",
+                    "FIRST(event_type) AS start_event, ",
+                    "LAST(event_type) AS end_event, ",
+                    "COUNT(*) AS error_count ",
+                "ALL ROWS PER MATCH ",
+                "PATTERN (STRT ERROR+ END) ",
+                "DEFINE ",
+                    "STRT AS event_type = 'START', ",
+                    "ERROR AS event_type = 'ERROR', ",
+                    "END AS event_type = 'END'",
+            ")",
+        )
+    ];
+
+    for sql in examples {
+        all_dialects_where(|d| d.supports_match_recognize()).verified_query(sql);
+    }
 }
 
 #[test]
@@ -8790,7 +8843,7 @@ fn test_match_recognize_patterns() {
     fn check(pattern: &str, expect: MatchRecognizePattern) {
         let select =
             all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(&format!(
-                "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN({pattern}) DEFINE DUMMY AS true)" // "select * from my_table match_recognize ("
+                "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN ({pattern}) DEFINE DUMMY AS true)" // "select * from my_table match_recognize ("
             ));
         let TableFactor::MatchRecognize {
             pattern: actual, ..

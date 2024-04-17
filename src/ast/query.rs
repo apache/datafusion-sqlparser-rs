@@ -1235,7 +1235,7 @@ impl fmt::Display for TableFactor {
                 if let Some(after_match_skip) = after_match_skip {
                     write!(f, "{after_match_skip} ")?;
                 }
-                write!(f, "PATTERN({pattern}) ")?;
+                write!(f, "PATTERN ({pattern}) ")?;
                 write!(f, "DEFINE {})", display_comma_separated(symbols))?;
                 if alias.is_some() {
                     write!(f, " AS {}", alias.as_ref().unwrap())?;

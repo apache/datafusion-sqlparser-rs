@@ -839,7 +839,7 @@ pub enum TableFactor {
         /// `AFTER MATCH SKIP <option>`
         after_match_skip: Option<AfterMatchSkip>,
         /// `PATTERN ( <pattern> )`
-        pattern: Pattern,
+        pattern: MatchRecognizePattern,
         /// `DEFINE <symbol> AS <expr> [, ... ]`
         symbols: Vec<SymbolDefinition>,
         alias: Option<TableAlias>,
@@ -963,21 +963,21 @@ impl fmt::Display for SymbolDefinition {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum Symbol {
+pub enum MatchRecognizeSymbol {
     /// A named symbol, e.g. `S1`.
     Named(Ident),
-    /// Start of partition (`^`).
+    /// A virtual symbol representing the start of the of partition (`^`).
     Start,
-    /// End of partition (`$`).
+    /// A virtual symbol representing the end of the partition (`$`).
     End,
 }
 
-impl fmt::Display for Symbol {
+impl fmt::Display for MatchRecognizeSymbol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Symbol::Named(symbol) => write!(f, "{symbol}"),
-            Symbol::Start => write!(f, "^"),
-            Symbol::End => write!(f, "$"),
+            MatchRecognizeSymbol::Named(symbol) => write!(f, "{symbol}"),
+            MatchRecognizeSymbol::Start => write!(f, "^"),
+            MatchRecognizeSymbol::End => write!(f, "$"),
         }
     }
 }
@@ -988,26 +988,26 @@ impl fmt::Display for Symbol {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum Pattern {
+pub enum MatchRecognizePattern {
     /// A named symbol such as `S1` or a virtual symbol such as `^`.
-    Symbol(Symbol),
+    Symbol(MatchRecognizeSymbol),
     /// {- symbol -}
-    Exclude(Symbol),
+    Exclude(MatchRecognizeSymbol),
     /// PERMUTE(symbol_1, ..., symbol_n)
-    Permute(Vec<Symbol>),
+    Permute(Vec<MatchRecognizeSymbol>),
     /// pattern_1 pattern_2 ... pattern_n
-    Concat(Vec<Pattern>),
+    Concat(Vec<MatchRecognizePattern>),
     /// ( pattern )
-    Group(Box<Pattern>),
+    Group(Box<MatchRecognizePattern>),
     /// pattern_1 | pattern_2 | ... | pattern_n
-    Alternation(Vec<Pattern>),
+    Alternation(Vec<MatchRecognizePattern>),
     /// e.g. pattern*
-    Repetition(Box<Pattern>, Quantifier),
+    Repetition(Box<MatchRecognizePattern>, RepetitionQuantifier),
 }
 
-impl fmt::Display for Pattern {
+impl fmt::Display for MatchRecognizePattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Pattern::*;
+        use MatchRecognizePattern::*;
         match self {
             Symbol(symbol) => write!(f, "{}", symbol),
             Exclude(symbol) => write!(f, "{{- {symbol} -}}"),
@@ -1025,7 +1025,7 @@ impl fmt::Display for Pattern {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum Quantifier {
+pub enum RepetitionQuantifier {
     /// `*`
     ZeroOrMore,
     /// `+`
@@ -1042,9 +1042,9 @@ pub enum Quantifier {
     Range(u32, u32),
 }
 
-impl fmt::Display for Quantifier {
+impl fmt::Display for RepetitionQuantifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Quantifier::*;
+        use RepetitionQuantifier::*;
         match self {
             ZeroOrMore => write!(f, "*"),
             OneOrMore => write!(f, "+"),

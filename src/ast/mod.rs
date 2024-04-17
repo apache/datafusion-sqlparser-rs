@@ -42,11 +42,12 @@ pub use self::query::{
     AfterMatchSkip, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode, ExceptSelectItem,
     ExcludeSelectItem, Fetch, ForClause, ForJson, ForXml, GroupByExpr, IdentWithAlias, Join,
     JoinConstraint, JoinOperator, JsonTableColumn, JsonTableColumnErrorHandling, LateralView,
-    LockClause, LockType, Measure, NamedWindowDefinition, NonBlock, Offset, OffsetRows,
-    OrderByExpr, Pattern, Quantifier, Query, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, RowsPerMatch, Select, SelectInto, SelectItem, SetExpr, SetOperator,
-    SetQuantifier, Symbol, SymbolDefinition, Table, TableAlias, TableFactor, TableVersion,
-    TableWithJoins, Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With,
+    LockClause, LockType, MatchRecognizePattern, MatchRecognizeSymbol, Measure,
+    NamedWindowDefinition, NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem,
+    RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, SymbolDefinition, Table,
+    TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode,
+    Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,

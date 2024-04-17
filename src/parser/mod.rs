@@ -8475,16 +8475,20 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_base_pattern(&mut self) -> Result<Pattern, ParserError> {
+    fn parse_base_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
         match self.next_token().token {
-            Token::Caret => Ok(Pattern::Symbol(Symbol::Start)),
-            Token::Placeholder(s) if s == "$" => Ok(Pattern::Symbol(Symbol::End)),
+            Token::Caret => Ok(MatchRecognizePattern::Symbol(MatchRecognizeSymbol::Start)),
+            Token::Placeholder(s) if s == "$" => {
+                Ok(MatchRecognizePattern::Symbol(MatchRecognizeSymbol::End))
+            }
             Token::LBrace => {
                 self.expect_token(&Token::Minus)?;
-                let symbol = self.parse_identifier(false).map(Symbol::Named)?;
+                let symbol = self
+                    .parse_identifier(false)
+                    .map(MatchRecognizeSymbol::Named)?;
                 self.expect_token(&Token::Minus)?;
                 self.expect_token(&Token::RBrace)?;
-                Ok(Pattern::Exclude(symbol))
+                Ok(MatchRecognizePattern::Exclude(symbol))
             }
             Token::Word(Word {
                 value,
@@ -8492,33 +8496,34 @@ impl<'a> Parser<'a> {
                 ..
             }) if value == "PERMUTE" => {
                 self.expect_token(&Token::LParen)?;
-                let symbols =
-                    self.parse_comma_separated(|p| p.parse_identifier(false).map(Symbol::Named))?;
+                let symbols = self.parse_comma_separated(|p| {
+                    p.parse_identifier(false).map(MatchRecognizeSymbol::Named)
+                })?;
                 self.expect_token(&Token::RParen)?;
-                Ok(Pattern::Permute(symbols))
+                Ok(MatchRecognizePattern::Permute(symbols))
             }
             Token::LParen => {
                 let pattern = self.parse_pattern()?;
                 self.expect_token(&Token::RParen)?;
-                Ok(Pattern::Group(Box::new(pattern)))
+                Ok(MatchRecognizePattern::Group(Box::new(pattern)))
             }
             _ => {
                 self.prev_token();
                 self.parse_identifier(false)
-                    .map(Symbol::Named)
-                    .map(Pattern::Symbol)
+                    .map(MatchRecognizeSymbol::Named)
+                    .map(MatchRecognizePattern::Symbol)
             }
         }
     }
 
-    fn parse_repetition_pattern(&mut self) -> Result<Pattern, ParserError> {
+    fn parse_repetition_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
         let mut pattern = self.parse_base_pattern()?;
         loop {
             let token = self.next_token();
             let quantifier = match token.token {
-                Token::Mul => Quantifier::ZeroOrMore,
-                Token::Plus => Quantifier::OneOrMore,
-                Token::Placeholder(s) if s == "?" => Quantifier::AtMostOne,
+                Token::Mul => RepetitionQuantifier::ZeroOrMore,
+                Token::Plus => RepetitionQuantifier::OneOrMore,
+                Token::Placeholder(s) if s == "?" => RepetitionQuantifier::AtMostOne,
                 Token::LBrace => {
                     // quantifier is a range like {n} or {n,} or {,m} or {n,m}
                     let token = self.next_token();
@@ -8529,20 +8534,20 @@ impl<'a> Parser<'a> {
                                 return self.expected("literal number", next_token);
                             };
                             self.expect_token(&Token::RBrace)?;
-                            Quantifier::AtMost(n.parse().expect("literal int"))
+                            RepetitionQuantifier::AtMost(n.parse().expect("literal int"))
                         }
                         Token::Number(n, _) if self.consume_token(&Token::Comma) => {
                             let next_token = self.next_token();
                             match next_token.token {
                                 Token::Number(m, _) => {
                                     self.expect_token(&Token::RBrace)?;
-                                    Quantifier::Range(
+                                    RepetitionQuantifier::Range(
                                         n.parse().expect("literal int"),
                                         m.parse().expect("literal int"),
                                     )
                                 }
                                 Token::RBrace => {
-                                    Quantifier::AtLeast(n.parse().expect("literal int"))
+                                    RepetitionQuantifier::AtLeast(n.parse().expect("literal int"))
                                 }
                                 _ => {
                                     return self.expected("} or upper bound", next_token);
@@ -8551,7 +8556,7 @@ impl<'a> Parser<'a> {
                         }
                         Token::Number(n, _) => {
                             self.expect_token(&Token::RBrace)?;
-                            Quantifier::Exactly(n.parse().expect("literal int"))
+                            RepetitionQuantifier::Exactly(n.parse().expect("literal int"))
                         }
                         _ => return self.expected("quantifier range", token),
                     }
@@ -8561,32 +8566,32 @@ impl<'a> Parser<'a> {
                     break;
                 }
             };
-            pattern = Pattern::Repetition(Box::new(pattern), quantifier);
+            pattern = MatchRecognizePattern::Repetition(Box::new(pattern), quantifier);
         }
         Ok(pattern)
     }
 
-    fn parse_concat_pattern(&mut self) -> Result<Pattern, ParserError> {
+    fn parse_concat_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
         let mut patterns = vec![self.parse_repetition_pattern()?];
         while !matches!(self.peek_token().token, Token::RParen | Token::Pipe) {
             patterns.push(self.parse_repetition_pattern()?);
         }
-        match <[Pattern; 1]>::try_from(patterns) {
+        match <[MatchRecognizePattern; 1]>::try_from(patterns) {
             Ok([pattern]) => Ok(pattern),
-            Err(patterns) => Ok(Pattern::Concat(patterns)),
+            Err(patterns) => Ok(MatchRecognizePattern::Concat(patterns)),
         }
     }
 
-    fn parse_pattern(&mut self) -> Result<Pattern, ParserError> {
+    fn parse_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
         let pattern = self.parse_concat_pattern()?;
         if self.consume_token(&Token::Pipe) {
             match self.parse_pattern()? {
                 // flatten nested alternations
-                Pattern::Alternation(mut patterns) => {
+                MatchRecognizePattern::Alternation(mut patterns) => {
                     patterns.insert(0, pattern);
-                    Ok(Pattern::Alternation(patterns))
+                    Ok(MatchRecognizePattern::Alternation(patterns))
                 }
-                next => Ok(Pattern::Alternation(vec![pattern, next])),
+                next => Ok(MatchRecognizePattern::Alternation(vec![pattern, next])),
             }
         } else {
             Ok(pattern)

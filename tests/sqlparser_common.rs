@@ -8688,6 +8688,10 @@ fn parse_map_access_expr() {
 
 #[test]
 fn test_match_recognize() {
+    use MatchRecognizePattern::*;
+    use MatchRecognizeSymbol::*;
+    use RepetitionQuantifier::*;
+
     let table = TableFactor::Table {
         name: ObjectName(vec![Ident::new("my_table")]),
         alias: None,
@@ -8743,19 +8747,15 @@ fn test_match_recognize() {
             after_match_skip: Some(AfterMatchSkip::ToLast(Ident::new(
                 "row_with_price_increase",
             ))),
-            pattern: Pattern::Concat(vec![
-                Pattern::Symbol(Symbol::Named(Ident::new("row_before_decrease"))),
-                Pattern::Repetition(
-                    Box::new(Pattern::Symbol(Symbol::Named(Ident::new(
-                        "row_with_price_decrease",
-                    )))),
-                    Quantifier::OneOrMore,
+            pattern: Concat(vec![
+                Symbol(Named(Ident::new("row_before_decrease"))),
+                Repetition(
+                    Box::new(Symbol(Named(Ident::new("row_with_price_decrease")))),
+                    OneOrMore,
                 ),
-                Pattern::Repetition(
-                    Box::new(Pattern::Symbol(Symbol::Named(Ident::new(
-                        "row_with_price_increase",
-                    )))),
-                    Quantifier::OneOrMore,
+                Repetition(
+                    Box::new(Symbol(Named(Ident::new("row_with_price_increase")))),
+                    OneOrMore,
                 ),
             ]),
             symbols: vec![
@@ -8783,7 +8783,11 @@ fn test_match_recognize() {
 
 #[test]
 fn test_match_recognize_patterns() {
-    fn check(pattern: &str, expect: Pattern) {
+    use MatchRecognizePattern::*;
+    use MatchRecognizeSymbol::*;
+    use RepetitionQuantifier::*;
+
+    fn check(pattern: &str, expect: MatchRecognizePattern) {
         let select =
             all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(&format!(
                 "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN({pattern}) DEFINE DUMMY AS true)" // "select * from my_table match_recognize ("
@@ -8798,149 +8802,125 @@ fn test_match_recognize_patterns() {
     }
 
     // just a symbol
-    check("FOO", Pattern::Symbol(Symbol::Named(Ident::new("FOO"))));
+    check("FOO", Symbol(Named(Ident::new("FOO"))));
 
     // just a symbol
     check(
         "^ FOO $",
-        Pattern::Concat(vec![
-            Pattern::Symbol(Symbol::Start),
-            Pattern::Symbol(Symbol::Named(Ident::new("FOO"))),
-            Pattern::Symbol(Symbol::End),
+        Concat(vec![
+            Symbol(Start),
+            Symbol(Named(Ident::new("FOO"))),
+            Symbol(End),
         ]),
     );
 
     // exclusion
-    check(
-        "{- FOO -}",
-        Pattern::Exclude(Symbol::Named(Ident::new("FOO"))),
-    );
+    check("{- FOO -}", Exclude(Named(Ident::new("FOO"))));
 
     check(
         "PERMUTE(A, B, C)",
-        Pattern::Permute(vec![
-            Symbol::Named(Ident::new("A")),
-            Symbol::Named(Ident::new("B")),
-            Symbol::Named(Ident::new("C")),
+        Permute(vec![
+            Named(Ident::new("A")),
+            Named(Ident::new("B")),
+            Named(Ident::new("C")),
         ]),
     );
 
     // various identifiers
     check(
         "FOO | \"BAR\" | baz42",
-        Pattern::Alternation(vec![
-            Pattern::Symbol(Symbol::Named(Ident::new("FOO"))),
-            Pattern::Symbol(Symbol::Named(Ident::with_quote('"', "BAR"))),
-            Pattern::Symbol(Symbol::Named(Ident::new("baz42"))),
+        Alternation(vec![
+            Symbol(Named(Ident::new("FOO"))),
+            Symbol(Named(Ident::with_quote('"', "BAR"))),
+            Symbol(Named(Ident::new("baz42"))),
         ]),
     );
 
     // concatenated basic quantifiers
     check(
         "S1* S2+ S3?",
-        Pattern::Concat(vec![
-            Pattern::Repetition(
-                Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S1")))),
-                Quantifier::ZeroOrMore,
-            ),
-            Pattern::Repetition(
-                Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S2")))),
-                Quantifier::OneOrMore,
-            ),
-            Pattern::Repetition(
-                Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S3")))),
-                Quantifier::AtMostOne,
-            ),
+        Concat(vec![
+            Repetition(Box::new(Symbol(Named(Ident::new("S1")))), ZeroOrMore),
+            Repetition(Box::new(Symbol(Named(Ident::new("S2")))), OneOrMore),
+            Repetition(Box::new(Symbol(Named(Ident::new("S3")))), AtMostOne),
         ]),
     );
 
     // double repetition
     check(
         "S2*?",
-        Pattern::Repetition(
-            Box::new(Pattern::Repetition(
-                Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S2")))),
-                Quantifier::ZeroOrMore,
+        Repetition(
+            Box::new(Repetition(
+                Box::new(Symbol(Named(Ident::new("S2")))),
+                ZeroOrMore,
             )),
-            Quantifier::AtMostOne,
+            AtMostOne,
         ),
     );
 
     // range quantifiers in an alternation
     check(
         "S1{1} | S2{2,3} | S3{4,} | S4{,5}",
-        Pattern::Alternation(vec![
-            Pattern::Repetition(
-                Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S1")))),
-                Quantifier::Exactly(1),
-            ),
-            Pattern::Repetition(
-                Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S2")))),
-                Quantifier::Range(2, 3),
-            ),
-            Pattern::Repetition(
-                Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S3")))),
-                Quantifier::AtLeast(4),
-            ),
-            Pattern::Repetition(
-                Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S4")))),
-                Quantifier::AtMost(5),
-            ),
+        Alternation(vec![
+            Repetition(Box::new(Symbol(Named(Ident::new("S1")))), Exactly(1)),
+            Repetition(Box::new(Symbol(Named(Ident::new("S2")))), Range(2, 3)),
+            Repetition(Box::new(Symbol(Named(Ident::new("S3")))), AtLeast(4)),
+            Repetition(Box::new(Symbol(Named(Ident::new("S4")))), AtMost(5)),
         ]),
     );
 
     // grouping case 1
     check(
         "S1 ( S2 )",
-        Pattern::Concat(vec![
-            Pattern::Symbol(Symbol::Named(Ident::new("S1"))),
-            Pattern::Group(Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S2"))))),
+        Concat(vec![
+            Symbol(Named(Ident::new("S1"))),
+            Group(Box::new(Symbol(Named(Ident::new("S2"))))),
         ]),
     );
 
     // grouping case 2
     check(
         "( {- S3 -} S4 )+",
-        Pattern::Repetition(
-            Box::new(Pattern::Group(Box::new(Pattern::Concat(vec![
-                Pattern::Exclude(Symbol::Named(Ident::new("S3"))),
-                Pattern::Symbol(Symbol::Named(Ident::new("S4"))),
+        Repetition(
+            Box::new(Group(Box::new(Concat(vec![
+                Exclude(Named(Ident::new("S3"))),
+                Symbol(Named(Ident::new("S4"))),
             ])))),
-            Quantifier::OneOrMore,
+            OneOrMore,
         ),
     );
 
     // the grand finale (example taken from snowflake docs)
     check(
         "^ S1 S2*? ( {- S3 -} S4 )+ | PERMUTE(S1, S2){1,2} $",
-        Pattern::Alternation(vec![
-            Pattern::Concat(vec![
-                Pattern::Symbol(Symbol::Start),
-                Pattern::Symbol(Symbol::Named(Ident::new("S1"))),
-                Pattern::Repetition(
-                    Box::new(Pattern::Repetition(
-                        Box::new(Pattern::Symbol(Symbol::Named(Ident::new("S2")))),
-                        Quantifier::ZeroOrMore,
+        Alternation(vec![
+            Concat(vec![
+                Symbol(Start),
+                Symbol(Named(Ident::new("S1"))),
+                Repetition(
+                    Box::new(Repetition(
+                        Box::new(Symbol(Named(Ident::new("S2")))),
+                        ZeroOrMore,
                     )),
-                    Quantifier::AtMostOne,
+                    AtMostOne,
                 ),
-                Pattern::Repetition(
-                    Box::new(Pattern::Group(Box::new(Pattern::Concat(vec![
-                        Pattern::Exclude(Symbol::Named(Ident::new("S3"))),
-                        Pattern::Symbol(Symbol::Named(Ident::new("S4"))),
+                Repetition(
+                    Box::new(Group(Box::new(Concat(vec![
+                        Exclude(Named(Ident::new("S3"))),
+                        Symbol(Named(Ident::new("S4"))),
                     ])))),
-                    Quantifier::OneOrMore,
+                    OneOrMore,
                 ),
             ]),
-            Pattern::Concat(vec![
-                Pattern::Repetition(
-                    Box::new(Pattern::Permute(vec![
-                        Symbol::Named(Ident::new("S1")),
-                        Symbol::Named(Ident::new("S2")),
+            Concat(vec![
+                Repetition(
+                    Box::new(Permute(vec![
+                        Named(Ident::new("S1")),
+                        Named(Ident::new("S2")),
                     ])),
-                    Quantifier::Range(1, 2),
+                    Range(1, 2),
                 ),
-                Pattern::Symbol(Symbol::End),
+                Symbol(End),
             ]),
         ]),
     );

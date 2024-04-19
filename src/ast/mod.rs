@@ -40,8 +40,8 @@ pub use self::ddl::{
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     ConnectBy, Cte, CteAsMaterialized, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch,
-    ForClause, ForJson, ForXml, GroupByExpr, IdentWithAlias, Join, JoinConstraint, JoinOperator,
-    JsonTableColumn, JsonTableColumnErrorHandling, LateralView, LockClause, LockType,
+    ForClause, ForJson, ForXml, GroupByExpr, IdentWithAlias, IlikeSelectItem, Join, JoinConstraint,
+    JoinOperator, JsonTableColumn, JsonTableColumnErrorHandling, LateralView, LockClause, LockType,
     NamedWindowDefinition, NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem,
     ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator,
     SetQuantifier, Table, TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity,

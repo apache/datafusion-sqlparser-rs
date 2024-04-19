@@ -477,6 +477,9 @@ impl fmt::Display for IdentWithAlias {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WildcardAdditionalOptions {
+    /// `[ILIKE...]`.
+    /// Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select>
+    pub opt_ilike: Option<IlikeSelectItem>,
     /// `[EXCLUDE...]`.
     pub opt_exclude: Option<ExcludeSelectItem>,
     /// `[EXCEPT...]`.
@@ -492,6 +495,9 @@ pub struct WildcardAdditionalOptions {
 
 impl fmt::Display for WildcardAdditionalOptions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(ilike) = &self.opt_ilike {
+            write!(f, " {ilike}")?;
+        }
         if let Some(exclude) = &self.opt_exclude {
             write!(f, " {exclude}")?;
         }
@@ -508,6 +514,25 @@ impl fmt::Display for WildcardAdditionalOptions {
     }
 }
 
+/// Snowflake `ILIKE` information.
+///
+/// # Syntax
+/// ```plaintext
+/// ILIKE <value>
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IlikeSelectItem {
+    pub pattern: Expr,
+}
+
+impl fmt::Display for IlikeSelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ILIKE {}", self.pattern)?;
+        Ok(())
+    }
+}
 /// Snowflake `EXCLUDE` information.
 ///
 /// # Syntax

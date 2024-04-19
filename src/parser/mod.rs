@@ -8775,9 +8775,14 @@ impl<'a> Parser<'a> {
     pub fn parse_wildcard_additional_options(
         &mut self,
     ) -> Result<WildcardAdditionalOptions, ParserError> {
+        let opt_ilike = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+            self.parse_optional_select_item_ilike()?
+        } else {
+            None
+        };
         let opt_exclude = if dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
         {
-            self.parse_optional_select_item_exclude()?
+            self.parse_optional_select_item_exclude(opt_ilike.is_some())?
         } else {
             None
         };
@@ -8801,6 +8806,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(WildcardAdditionalOptions {
+            opt_ilike,
             opt_exclude,
             opt_except,
             opt_rename,
@@ -8808,13 +8814,31 @@ impl<'a> Parser<'a> {
         })
     }
 
+    pub fn parse_optional_select_item_ilike(
+        &mut self,
+    ) -> Result<Option<IlikeSelectItem>, ParserError> {
+        let opt_ilike = if self.parse_keyword(Keyword::ILIKE) {
+            let pattern = self.parse_value()?;
+            Some(IlikeSelectItem {
+                pattern: Expr::Value(pattern),
+            })
+        } else {
+            None
+        };
+        Ok(opt_ilike)
+    }
+
     /// Parse an [`Exclude`](ExcludeSelectItem) information for wildcard select items.
     ///
     /// If it is not possible to parse it, will return an option.
     pub fn parse_optional_select_item_exclude(
         &mut self,
+        opt_ilike: bool,
     ) -> Result<Option<ExcludeSelectItem>, ParserError> {
         let opt_exclude = if self.parse_keyword(Keyword::EXCLUDE) {
+            if opt_ilike {
+                return Err(ParserError::ParserError("Unexpected EXCLUDE".to_string()));
+            }
             if self.consume_token(&Token::LParen) {
                 let columns =
                     self.parse_comma_separated(|parser| parser.parse_identifier(false))?;

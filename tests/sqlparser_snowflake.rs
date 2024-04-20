@@ -1642,7 +1642,7 @@ fn test_select_wildcard_with_ilike_number() {
     let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE 42 FROM tbl"#);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "sql parser error: Expected literal string, found: 42"
+        "sql parser error: Expected single quoted string, found: 42"
     );
 }
 

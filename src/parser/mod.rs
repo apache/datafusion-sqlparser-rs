@@ -8780,7 +8780,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_exclude = if !opt_ilike.is_some()
+        let opt_exclude = if opt_ilike.is_none()
             && dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
         {
             self.parse_optional_select_item_exclude()?

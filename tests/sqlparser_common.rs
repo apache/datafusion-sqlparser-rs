@@ -8685,3 +8685,81 @@ fn parse_map_access_expr() {
         let _ = dialects.verified_expr(sql);
     }
 }
+
+#[test]
+fn test_select_wildcard_with_replace() {
+    let sql = r#"SELECT * REPLACE (lower(city) AS city) FROM addresses"#;
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(ClickHouseDialect {}),
+            Box::new(SnowflakeDialect {}),
+            Box::new(DuckDbDialect {}),
+        ],
+        options: None,
+    };
+    let select = dialects.verified_only_select(sql);
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![Box::new(ReplaceSelectElement {
+                expr: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("lower")]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                        Expr::Identifier(Ident::new("city")),
+                    ))],
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                }),
+                column_name: Ident::new("city"),
+                as_keyword: true,
+            })],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    let select =
+        dialects.verified_only_select(r#"SELECT * REPLACE ('widget' AS item_name) FROM orders"#);
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![Box::new(ReplaceSelectElement {
+                expr: Expr::Value(Value::SingleQuotedString("widget".to_owned())),
+                column_name: Ident::new("item_name"),
+                as_keyword: true,
+            })],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    let select = dialects.verified_only_select(
+        r#"SELECT * REPLACE (quantity / 2 AS quantity, 3 AS order_id) FROM orders"#,
+    );
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![
+                Box::new(ReplaceSelectElement {
+                    expr: Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("quantity"))),
+                        op: BinaryOperator::Divide,
+                        right: Box::new(Expr::Value(number("2"))),
+                    },
+                    column_name: Ident::new("quantity"),
+                    as_keyword: true,
+                }),
+                Box::new(ReplaceSelectElement {
+                    expr: Expr::Value(number("3")),
+                    column_name: Ident::new("order_id"),
+                    as_keyword: true,
+                }),
+            ],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+}

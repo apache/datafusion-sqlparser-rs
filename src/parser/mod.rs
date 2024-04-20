@@ -8824,7 +8824,7 @@ impl<'a> Parser<'a> {
                 Token::SingleQuotedString(s) => s,
                 _ => return self.expected("ilike pattern", next_token),
             };
-            Some(IlikeSelectItem { pattern: pattern })
+            Some(IlikeSelectItem { pattern })
         } else {
             None
         };

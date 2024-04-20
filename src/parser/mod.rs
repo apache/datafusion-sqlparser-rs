@@ -8780,9 +8780,10 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_exclude = if dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
+        let opt_exclude = if !opt_ilike.is_some()
+            && dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
         {
-            self.parse_optional_select_item_exclude(opt_ilike.is_some())?
+            self.parse_optional_select_item_exclude()?
         } else {
             None
         };
@@ -8818,8 +8819,12 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<IlikeSelectItem>, ParserError> {
         let opt_ilike = if self.parse_keyword(Keyword::ILIKE) {
-            let pattern = self.parse_literal_string()?;
-            Some(IlikeSelectItem { pattern })
+            let next_token = self.next_token();
+            let pattern = match next_token.token {
+                Token::SingleQuotedString(s) => Ok(s),
+                _ => self.expected("single quoted string", next_token),
+            };
+            Some(IlikeSelectItem { pattern: pattern? })
         } else {
             None
         };
@@ -8831,12 +8836,8 @@ impl<'a> Parser<'a> {
     /// If it is not possible to parse it, will return an option.
     pub fn parse_optional_select_item_exclude(
         &mut self,
-        opt_ilike: bool,
     ) -> Result<Option<ExcludeSelectItem>, ParserError> {
         let opt_exclude = if self.parse_keyword(Keyword::EXCLUDE) {
-            if opt_ilike {
-                return Err(ParserError::ParserError("Unexpected EXCLUDE".to_string()));
-            }
             if self.consume_token(&Token::LParen) {
                 let columns =
                     self.parse_comma_separated(|parser| parser.parse_identifier(false))?;

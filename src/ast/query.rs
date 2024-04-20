@@ -529,7 +529,11 @@ pub struct IlikeSelectItem {
 
 impl fmt::Display for IlikeSelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ILIKE '{}'", self.pattern)?;
+        write!(
+            f,
+            "ILIKE '{}'",
+            value::escape_single_quote_string(&self.pattern)
+        )?;
         Ok(())
     }
 }

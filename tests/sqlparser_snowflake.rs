@@ -1629,11 +1629,11 @@ fn test_select_wildcard_with_ilike() {
 }
 
 #[test]
-fn test_select_wildcard_with_ilike_non_literal() {
-    let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE %id FROM tbl"#);
+fn test_select_wildcard_with_ilike_double_quote() {
+    let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE "%id" FROM tbl"#);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "sql parser error: Expected literal string, found: %"
+        "sql parser error: Expected single quoted string, found: \"%id\""
     );
 }
 
@@ -1651,6 +1651,6 @@ fn test_select_wildcard_with_ilike_replace() {
     let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE '%id%' EXCLUDE col FROM tbl"#);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "sql parser error: Unexpected EXCLUDE"
+        "sql parser error: Expected end of statement, found: EXCLUDE"
     );
 }

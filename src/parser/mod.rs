@@ -8821,10 +8821,10 @@ impl<'a> Parser<'a> {
         let opt_ilike = if self.parse_keyword(Keyword::ILIKE) {
             let next_token = self.next_token();
             let pattern = match next_token.token {
-                Token::SingleQuotedString(s) => Ok(s),
-                _ => self.expected("ilike pattern", next_token),
+                Token::SingleQuotedString(s) => s,
+                _ => return self.expected("ilike pattern", next_token),
             };
-            Some(IlikeSelectItem { pattern: pattern? })
+            Some(IlikeSelectItem { pattern: pattern })
         } else {
             None
         };

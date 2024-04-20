@@ -1633,7 +1633,7 @@ fn test_select_wildcard_with_ilike_double_quote() {
     let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE "%id" FROM tbl"#);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "sql parser error: Expected single quoted string, found: \"%id\""
+        "sql parser error: Expected ilike pattern, found: \"%id\""
     );
 }
 
@@ -1642,7 +1642,7 @@ fn test_select_wildcard_with_ilike_number() {
     let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE 42 FROM tbl"#);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "sql parser error: Expected single quoted string, found: 42"
+        "sql parser error: Expected ilike pattern, found: 42"
     );
 }
 

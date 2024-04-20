@@ -8822,7 +8822,7 @@ impl<'a> Parser<'a> {
             let next_token = self.next_token();
             let pattern = match next_token.token {
                 Token::SingleQuotedString(s) => Ok(s),
-                _ => self.expected("single quoted string", next_token),
+                _ => self.expected("ilike pattern", next_token),
             };
             Some(IlikeSelectItem { pattern: pattern? })
         } else {

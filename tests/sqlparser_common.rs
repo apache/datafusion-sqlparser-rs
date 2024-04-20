@@ -6611,6 +6611,7 @@ fn lateral_function() {
         distinct: None,
         top: None,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
+            opt_ilike: None,
             opt_exclude: None,
             opt_except: None,
             opt_rename: None,

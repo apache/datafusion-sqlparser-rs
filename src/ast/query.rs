@@ -524,12 +524,12 @@ impl fmt::Display for WildcardAdditionalOptions {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IlikeSelectItem {
-    pub pattern: Expr,
+    pub pattern: String,
 }
 
 impl fmt::Display for IlikeSelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ILIKE {}", self.pattern)?;
+        write!(f, "ILIKE '{}'", self.pattern)?;
         Ok(())
     }
 }

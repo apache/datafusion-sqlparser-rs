@@ -1621,11 +1621,29 @@ fn test_select_wildcard_with_ilike() {
     let select = snowflake_and_generic().verified_only_select(r#"SELECT * ILIKE '%id%' FROM tbl"#);
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_ilike: Some(IlikeSelectItem {
-            pattern: Expr::Value(Value::SingleQuotedString("%id%".to_owned())),
+            pattern: "%id%".to_owned(),
         }),
         ..Default::default()
     });
     assert_eq!(expected, select.projection[0]);
+}
+
+#[test]
+fn test_select_wildcard_with_ilike_non_literal() {
+    let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE %id FROM tbl"#);
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "sql parser error: Expected literal string, found: %"
+    );
+}
+
+#[test]
+fn test_select_wildcard_with_ilike_number() {
+    let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE 42 FROM tbl"#);
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "sql parser error: Expected literal string, found: 42"
+    );
 }
 
 #[test]

@@ -8818,10 +8818,8 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<IlikeSelectItem>, ParserError> {
         let opt_ilike = if self.parse_keyword(Keyword::ILIKE) {
-            let pattern = self.parse_value()?;
-            Some(IlikeSelectItem {
-                pattern: Expr::Value(pattern),
-            })
+            let pattern = self.parse_literal_string()?;
+            Some(IlikeSelectItem { pattern })
         } else {
             None
         };

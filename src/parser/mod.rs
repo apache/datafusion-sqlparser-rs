@@ -5757,6 +5757,23 @@ impl<'a> Parser<'a> {
                 options,
                 column_position,
             }
+        } else if self.parse_keyword(Keyword::MODIFY) {
+            let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
+            let col_name = self.parse_identifier(false)?;
+            let data_type = self.parse_data_type()?;
+            let mut options = vec![];
+            while let Some(option) = self.parse_optional_column_option()? {
+                options.push(option);
+            }
+
+            let column_position = self.parse_column_position()?;
+
+            AlterTableOperation::ModifyColumn {
+                col_name,
+                data_type,
+                options,
+                column_position,
+            }
         } else if self.parse_keyword(Keyword::ALTER) {
             let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
             let column_name = self.parse_identifier(false)?;

@@ -408,6 +408,26 @@ impl fmt::Display for MapAccessKey {
     }
 }
 
+/// The syntax used for in a cast expression.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CastKind {
+    /// The standard SQL cast syntax, e.g. `CAST(<expr> as <datatype>)`
+    Cast,
+    /// A cast that returns `NULL` on failure, e.g. `TRY_CAST(<expr> as <datatype>)`.
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/functions/try_cast>.
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/functions/try-cast-transact-sql>.
+    TryCast,
+    /// A cast that returns `NULL` on failure, bigQuery-specific ,  e.g. `SAFE_CAST(<expr> as <datatype>)`.
+    ///
+    /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#safe_casting>.
+    SafeCast,
+    /// `<expr> :: <datatype>`
+    DoubleColon,
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -546,25 +566,7 @@ pub enum Expr {
     },
     /// `CAST` an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
-        expr: Box<Expr>,
-        data_type: DataType,
-        // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
-        // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
-        format: Option<CastFormat>,
-    },
-    /// `TRY_CAST` an expression to a different data type e.g. `TRY_CAST(foo AS VARCHAR(123))`
-    //  this differs from CAST in the choice of how to implement invalid conversions
-    TryCast {
-        expr: Box<Expr>,
-        data_type: DataType,
-        // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
-        // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
-        format: Option<CastFormat>,
-    },
-    /// `SAFE_CAST` an expression to a different data type e.g. `SAFE_CAST(foo AS FLOAT64)`
-    //  only available for BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#safe_casting
-    //  this works the same as `TRY_CAST`
-    SafeCast {
+        kind: CastKind,
         expr: Box<Expr>,
         data_type: DataType,
         // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
@@ -989,38 +991,36 @@ impl fmt::Display for Expr {
                 write!(f, ")")
             }
             Expr::Cast {
+                kind,
                 expr,
                 data_type,
                 format,
-            } => {
-                if let Some(format) = format {
-                    write!(f, "CAST({expr} AS {data_type} FORMAT {format})")
-                } else {
-                    write!(f, "CAST({expr} AS {data_type})")
+            } => match kind {
+                CastKind::Cast => {
+                    if let Some(format) = format {
+                        write!(f, "CAST({expr} AS {data_type} FORMAT {format})")
+                    } else {
+                        write!(f, "CAST({expr} AS {data_type})")
+                    }
                 }
-            }
-            Expr::TryCast {
-                expr,
-                data_type,
-                format,
-            } => {
-                if let Some(format) = format {
-                    write!(f, "TRY_CAST({expr} AS {data_type} FORMAT {format})")
-                } else {
-                    write!(f, "TRY_CAST({expr} AS {data_type})")
+                CastKind::TryCast => {
+                    if let Some(format) = format {
+                        write!(f, "TRY_CAST({expr} AS {data_type} FORMAT {format})")
+                    } else {
+                        write!(f, "TRY_CAST({expr} AS {data_type})")
+                    }
                 }
-            }
-            Expr::SafeCast {
-                expr,
-                data_type,
-                format,
-            } => {
-                if let Some(format) = format {
-                    write!(f, "SAFE_CAST({expr} AS {data_type} FORMAT {format})")
-                } else {
-                    write!(f, "SAFE_CAST({expr} AS {data_type})")
+                CastKind::SafeCast => {
+                    if let Some(format) = format {
+                        write!(f, "SAFE_CAST({expr} AS {data_type} FORMAT {format})")
+                    } else {
+                        write!(f, "SAFE_CAST({expr} AS {data_type})")
+                    }
                 }
-            }
+                CastKind::DoubleColon => {
+                    write!(f, "{expr}::{data_type}")
+                }
+            },
             Expr::Extract { field, expr } => write!(f, "EXTRACT({field} FROM {expr})"),
             Expr::Ceil { expr, field } => {
                 if field == &DateTimeField::NoDateTime {

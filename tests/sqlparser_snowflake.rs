@@ -168,6 +168,7 @@ fn parse_array() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("a"))),
             data_type: DataType::Array(ArrayElemTypeDef::None),
             format: None,
@@ -228,7 +229,7 @@ fn parse_json_using_colon() {
         select.projection[0]
     );
 
-    snowflake().one_statement_parses_to("SELECT a:b::int FROM t", "SELECT CAST(a:b AS INT) FROM t");
+    snowflake().verified_stmt("SELECT a:b::INT FROM t");
 
     let sql = "SELECT a:start, a:end FROM t";
     let select = snowflake().verified_only_select(sql);

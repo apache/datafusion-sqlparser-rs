@@ -328,6 +328,7 @@ fn parse_create_table_with_defaults() {
             location: None,
             ..
         } => {
+            use pretty_assertions::assert_eq;
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
                 columns,
@@ -422,9 +423,7 @@ fn parse_create_table_with_defaults() {
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Default(
-                                    pg().verified_expr("CAST(now() AS TEXT)")
-                                )
+                                option: ColumnOption::Default(pg().verified_expr("now()::TEXT"))
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -498,15 +497,15 @@ fn parse_create_table_from_pg_dump() {
             active int
         )";
     pg().one_statement_parses_to(sql, "CREATE TABLE public.customer (\
-            customer_id INTEGER DEFAULT nextval(CAST('public.customer_customer_id_seq' AS REGCLASS)) NOT NULL, \
+            customer_id INTEGER DEFAULT nextval('public.customer_customer_id_seq'::REGCLASS) NOT NULL, \
             store_id SMALLINT NOT NULL, \
             first_name CHARACTER VARYING(45) NOT NULL, \
             last_name CHARACTER VARYING(45) NOT NULL, \
             info TEXT[], \
             address_id SMALLINT NOT NULL, \
             activebool BOOLEAN DEFAULT true NOT NULL, \
-            create_date DATE DEFAULT CAST(now() AS DATE) NOT NULL, \
-            create_date1 DATE DEFAULT CAST(CAST('now' AS TEXT) AS DATE) NOT NULL, \
+            create_date DATE DEFAULT now()::DATE NOT NULL, \
+            create_date1 DATE DEFAULT 'now'::TEXT::DATE NOT NULL, \
             last_update TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), \
             release_year public.year, \
             active INT\
@@ -1448,11 +1447,13 @@ fn parse_execute() {
             parameters: vec![],
             using: vec![
                 Expr::Cast {
+                    kind: CastKind::Cast,
                     expr: Box::new(Expr::Value(Value::Number("1337".parse().unwrap(), false))),
                     data_type: DataType::SmallInt(None),
                     format: None
                 },
                 Expr::Cast {
+                    kind: CastKind::Cast,
                     expr: Box::new(Expr::Value(Value::Number("7331".parse().unwrap(), false))),
                     data_type: DataType::SmallInt(None),
                     format: None
@@ -1908,6 +1909,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Nested(Box::new(Expr::Cast {
+                kind: CastKind::Cast,
                 expr: Box::new(Expr::Array(Array {
                     elem: vec![Expr::Array(Array {
                         elem: vec![num[2].clone(), num[3].clone(),],

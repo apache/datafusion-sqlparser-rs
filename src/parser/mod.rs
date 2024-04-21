@@ -1004,9 +1004,9 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CONVERT => self.parse_convert_expr(),
-                Keyword::CAST => self.parse_cast_expr(),
-                Keyword::TRY_CAST => self.parse_try_cast_expr(),
-                Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
+                Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
+                Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
+                Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
                 Keyword::EXISTS => self.parse_exists_expr(false),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::CEIL => self.parse_ceil_floor_expr(true),
@@ -1491,7 +1491,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
-    pub fn parse_cast_expr(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_cast_expr(&mut self, kind: CastKind) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
@@ -1499,36 +1499,7 @@ impl<'a> Parser<'a> {
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
-            expr: Box::new(expr),
-            data_type,
-            format,
-        })
-    }
-
-    /// Parse a SQL TRY_CAST function e.g. `TRY_CAST(expr AS FLOAT)`
-    pub fn parse_try_cast_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::AS)?;
-        let data_type = self.parse_data_type()?;
-        let format = self.parse_optional_cast_format()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Expr::TryCast {
-            expr: Box::new(expr),
-            data_type,
-            format,
-        })
-    }
-
-    /// Parse a BigQuery SAFE_CAST function e.g. `SAFE_CAST(expr AS FLOAT64)`
-    pub fn parse_safe_cast_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::AS)?;
-        let data_type = self.parse_data_type()?;
-        let format = self.parse_optional_cast_format()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Expr::SafeCast {
+            kind,
             expr: Box::new(expr),
             data_type,
             format,
@@ -2528,7 +2499,12 @@ impl<'a> Parser<'a> {
                 ),
             }
         } else if Token::DoubleColon == tok {
-            self.parse_pg_cast(expr)
+            Ok(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(expr),
+                data_type: self.parse_data_type()?,
+                format: None,
+            })
         } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
             Ok(Expr::UnaryOp {
@@ -2702,6 +2678,7 @@ impl<'a> Parser<'a> {
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         Ok(Expr::Cast {
+            kind: CastKind::DoubleColon,
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
             format: None,

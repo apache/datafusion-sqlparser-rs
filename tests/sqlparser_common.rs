@@ -2107,6 +2107,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
             format: None,
@@ -2118,6 +2119,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::TinyInt(None),
             format: None,
@@ -2145,6 +2147,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Nvarchar(Some(50)),
             format: None,
@@ -2156,6 +2159,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(None),
             format: None,
@@ -2167,6 +2171,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(Some(50)),
             format: None,
@@ -2178,6 +2183,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Binary(Some(50)),
             format: None,
@@ -2189,6 +2195,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Varbinary(Some(50)),
             format: None,
@@ -2200,6 +2207,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(None),
             format: None,
@@ -2211,6 +2219,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(Some(50)),
             format: None,
@@ -2222,6 +2231,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("details"))),
             data_type: DataType::JSONB,
             format: None,
@@ -2235,7 +2245,8 @@ fn parse_try_cast() {
     let sql = "SELECT TRY_CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TryCast {
+        &Expr::Cast {
+            kind: CastKind::TryCast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
             format: None,

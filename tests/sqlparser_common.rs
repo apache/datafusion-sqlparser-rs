@@ -33,8 +33,8 @@ use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
-    all_dialects, alter_table_op, assert_eq_vec, expr_from_projection, join, number, only, table,
-    table_alias, TestedDialects,
+    all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, expr_from_projection, join,
+    number, only, table, table_alias, TestedDialects,
 };
 
 #[macro_use]
@@ -2062,6 +2062,7 @@ fn parse_select_qualify() {
                 null_treatment: None,
                 filter: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
@@ -2270,6 +2271,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(DAYOFWEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAYOFYEAR FROM d)");
     verified_stmt("SELECT EXTRACT(DATE FROM d)");
+    verified_stmt("SELECT EXTRACT(DATETIME FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
     verified_stmt("SELECT EXTRACT(SECOND FROM d)");
@@ -2299,7 +2301,8 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(TIMEZONE_REGION FROM d)");
     verified_stmt("SELECT EXTRACT(TIME FROM d)");
 
-    let res = parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
+    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
     assert_eq!(
         ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
         res.unwrap_err()
@@ -2337,7 +2340,8 @@ fn parse_ceil_datetime() {
     verified_stmt("SELECT CEIL(d TO SECOND) FROM df");
     verified_stmt("SELECT CEIL(d TO MILLISECOND) FROM df");
 
-    let res = parse_sql_statements("SELECT CEIL(d TO JIFFY) FROM df");
+    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements("SELECT CEIL(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
         res.unwrap_err()
@@ -2363,7 +2367,8 @@ fn parse_floor_datetime() {
     verified_stmt("SELECT FLOOR(d TO SECOND) FROM df");
     verified_stmt("SELECT FLOOR(d TO MILLISECOND) FROM df");
 
-    let res = parse_sql_statements("SELECT FLOOR(d TO JIFFY) FROM df");
+    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements("SELECT FLOOR(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
         res.unwrap_err()
@@ -3511,11 +3516,13 @@ fn parse_alter_table() {
             column_keyword,
             if_not_exists,
             column_def,
+            column_position,
         } => {
             assert!(column_keyword);
             assert!(!if_not_exists);
             assert_eq!("foo", column_def.name.to_string());
             assert_eq!("TEXT", column_def.data_type.to_string());
+            assert_eq!(None, column_position);
         }
         _ => unreachable!(),
     };
@@ -4045,7 +4052,9 @@ fn parse_named_argument_function() {
 #[test]
 fn parse_named_argument_function_with_eq_operator() {
     let sql = "SELECT FUN(a = '1', b = '2') FROM foo";
-    let select = verified_only_select(sql);
+
+    let select = all_dialects_where(|d| d.supports_named_fn_args_with_eq_operator())
+        .verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
@@ -4074,6 +4083,33 @@ fn parse_named_argument_function_with_eq_operator() {
         }),
         expr_from_projection(only(&select.projection))
     );
+
+    // Ensure that bar = 42 in a function argument parses as an equality binop
+    // rather than a named function argument.
+    assert_eq!(
+        all_dialects_except(|d| d.supports_named_fn_args_with_eq_operator())
+            .verified_expr("foo(bar = 42)"),
+        Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("foo")]),
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("bar"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(number("42"))),
+                },
+            ))],
+            filter: None,
+            null_treatment: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![],
+        })
+    );
+
+    // TODO: should this parse for all dialects?
+    all_dialects_except(|d| d.supports_named_fn_args_with_eq_operator())
+        .verified_expr("iff(1 = 1, 1, 0)");
 }
 
 #[test]
@@ -4093,7 +4129,10 @@ fn parse_window_functions() {
                GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(7, select.projection.len());
+
+    const EXPECTED_PROJ_QTY: usize = 7;
+    assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
+
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
@@ -4101,6 +4140,7 @@ fn parse_window_functions() {
             null_treatment: None,
             filter: None,
             over: Some(WindowType::WindowSpec(WindowSpec {
+                window_name: None,
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
@@ -4115,6 +4155,66 @@ fn parse_window_functions() {
         }),
         expr_from_projection(&select.projection[0])
     );
+
+    for i in 0..EXPECTED_PROJ_QTY {
+        assert!(matches!(
+            expr_from_projection(&select.projection[i]),
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
+                    ..
+                })),
+                ..
+            })
+        ));
+    }
+}
+
+#[test]
+fn parse_named_window_functions() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MySqlDialect {}),
+            Box::new(BigQueryDialect {}),
+        ],
+        options: None,
+    };
+
+    let sql = "SELECT row_number() OVER (w ORDER BY dt DESC), \
+               sum(foo) OVER (win PARTITION BY a, b ORDER BY c, d \
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) \
+               FROM foo \
+               WINDOW w AS (PARTITION BY x), win AS (ORDER BY y)";
+    supported_dialects.verified_stmt(sql);
+
+    let select = verified_only_select(sql);
+
+    const EXPECTED_PROJ_QTY: usize = 2;
+    assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
+
+    const EXPECTED_WIN_NAMES: [&str; 2] = ["w", "win"];
+    for (i, win_name) in EXPECTED_WIN_NAMES.iter().enumerate() {
+        assert!(matches!(
+            expr_from_projection(&select.projection[i]),
+            Expr::Function(Function {
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: Some(Ident { value, .. }),
+                    ..
+                })),
+                ..
+            }) if value == win_name
+        ));
+    }
+
+    let sql = "SELECT \
+        FIRST_VALUE(x) OVER (w ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS first, \
+        FIRST_VALUE(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS last, \
+        SUM(y) OVER (win PARTITION BY x) AS last \
+        FROM EMPLOYEE \
+        WINDOW w AS (PARTITION BY x), win AS (w ORDER BY y)";
+    supported_dialects.verified_stmt(sql);
 }
 
 #[test]
@@ -4215,6 +4315,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    window_name: None,
                     partition_by: vec![],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident {
@@ -4233,6 +4334,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    window_name: None,
                     partition_by: vec![Expr::Identifier(Ident {
                         value: "C11".to_string(),
                         quote_style: None,
@@ -8512,6 +8614,24 @@ fn test_release_savepoint() {
 }
 
 #[test]
+fn test_comment_hash_syntax() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(SnowflakeDialect {})],
+        options: None,
+    };
+    let sql = r#"
+    # comment
+    SELECT a, b, c # , d, e
+    FROM T
+    ####### comment #################
+    WHERE true
+    # comment
+    "#;
+    let canonical = "SELECT a, b, c FROM T WHERE true";
+    dialects.verified_only_select_with_canonical(sql, canonical);
+}
+
+#[test]
 fn test_buffer_reuse() {
     let d = GenericDialect {};
     let q = "INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)";
@@ -8522,6 +8642,48 @@ fn test_buffer_reuse() {
     let mut p = Parser::new(&d).with_tokens_with_locations(buf);
     p.parse_statements().unwrap();
     let _ = p.into_tokens();
+}
+
+#[test]
+fn parse_map_access_expr() {
+    let sql = "users[-1][safe_offset(2)]";
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(ClickHouseDialect {})],
+        options: None,
+    };
+    let expr = dialects.verified_expr(sql);
+    let expected = Expr::MapAccess {
+        column: Expr::Identifier(Ident::new("users")).into(),
+        keys: vec![
+            MapAccessKey {
+                key: Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: Expr::Value(number("1")).into(),
+                },
+                syntax: MapAccessSyntax::Bracket,
+            },
+            MapAccessKey {
+                key: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("safe_offset")]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        number("2"),
+                    )))],
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                }),
+                syntax: MapAccessSyntax::Bracket,
+            },
+        ],
+    };
+    assert_eq!(expr, expected);
+
+    for sql in ["users[1]", "a[array_length(b) - 1 + 2][c + 3][d * 4]"] {
+        let _ = dialects.verified_expr(sql);
+    }
 }
 
 #[test]

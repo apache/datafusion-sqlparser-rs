@@ -10,6 +10,37 @@ changes that break via addition as "Added".
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.45.0] 2024-04-12
+
+### Added
+* Support `DateTimeField` variants: `CUSTOM` and `WEEK(MONDAY)` (#1191) - Thanks @iffyio
+* Support for arbitrary expr in `MapAccessSyntax`  (#1179) - Thanks @iffyio
+* Support unquoted hyphen in table/view declaration for BigQuery (#1178) - Thanks @iffyio
+* Support `CREATE/DROP SECRET` for duckdb dialect (#1208) - Thanks @JichaoS
+* Support MySQL `UNIQUE` table constraint (#1164) - Thanks @Nikita-str
+* Support tailing commas on Snowflake. (#1205) - Thanks @yassun7010
+* Support `[FIRST | AFTER column_name]`  in `ALTER TABLE` for MySQL (#1180)  - Thanks @xring
+* Support inline comment with hash syntax for BigQuery  (#1192) - Thanks @iffyio
+* Support named windows in OVER (window_definition) clause (#1166) - Thanks @Nikita-str
+* Support PARALLEL ... and for ..ON NULL INPUT ... to CREATE FUNCTION` (#1202) - Thanks @dimfeld
+* Support DuckDB functions named arguments with assignment operator (#1195) - Thanks @alamb
+* Support DuckDB struct literal syntax (#1194) - Thanks @gstvg
+* Support `$$` in generic dialect ... (#1185)- Thanks @milenkovicm
+* Support row_alias and col_aliases in `INSERT` statement for MySQL and Generic dialects (#1136) - Thanks @emin100
+
+### Fixed
+* Fix dollar quoted string tokenizer (#1193) - Thanks @ZacJW
+* Do not allocate in `impl Display` for `DateTimeField` (#1209) - Thanks @alamb
+* Fix parse `COPY INTO` stage names without parens for SnowFlake (#1187) - Thanks @mobuchowski
+* Solve stack overflow on RecursionLimitExceeded on debug builds (#1171) - Thanks @Nikita-str
+* Fix parsing of equality binary operator in function argument (#1182) - Thanks @jmhain
+* Fix some comments (#1184) - Thanks @sunxunle
+
+### Changed
+* Cleanup `CREATE FUNCTION` tests (#1203) - Thanks @alamb
+* Parse `SUBSTRING FROM` syntax in all dialects, reflect change in the AST (#1173) - Thanks @lovasoa
+* Add identifier quote style to Dialect trait (#1170) - Thanks @backkem
+
 ## [0.44.0] 2024-03-02
 
 ### Added

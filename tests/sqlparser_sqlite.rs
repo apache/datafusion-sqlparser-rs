@@ -55,7 +55,7 @@ fn pragma_eq_style() {
     }
 }
 #[test]
-fn pragma_funciton_style() {
+fn pragma_function_style() {
     let sql = "PRAGMA cache_size(10)";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::Pragma {
@@ -103,7 +103,7 @@ fn pragma_function_string_style() {
 }
 
 #[test]
-fn pragma_eq_placehoder_style() {
+fn pragma_eq_placeholder_style() {
     let sql = "PRAGMA table_info = ?";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::Pragma {
@@ -446,6 +446,7 @@ fn parse_window_function_with_filter() {
                 ))],
                 null_treatment: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
                     partition_by: vec![],
                     order_by: vec![],
                     window_frame: None,

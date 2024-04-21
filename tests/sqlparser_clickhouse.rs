@@ -39,23 +39,26 @@ fn parse_map_access_expr() {
                     value: "string_values".to_string(),
                     quote_style: None,
                 })),
-                keys: vec![Expr::Function(Function {
-                    name: ObjectName(vec!["indexOf".into()]),
-                    args: vec![
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new(
-                            "string_names"
-                        )))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            Value::SingleQuotedString("endpoint".to_string())
-                        ))),
-                    ],
-                    null_treatment: None,
-                    filter: None,
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                })],
+                keys: vec![MapAccessKey {
+                    key: Expr::Function(Function {
+                        name: ObjectName(vec!["indexOf".into()]),
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                Ident::new("string_names")
+                            ))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString("endpoint".to_string())
+                            ))),
+                        ],
+                        null_treatment: None,
+                        filter: None,
+                        over: None,
+                        distinct: false,
+                        special: false,
+                        order_by: vec![],
+                    }),
+                    syntax: MapAccessSyntax::Bracket
+                }],
             })],
             into: None,
             from: vec![TableWithJoins {
@@ -80,23 +83,26 @@ fn parse_map_access_expr() {
                 right: Box::new(BinaryOp {
                     left: Box::new(MapAccess {
                         column: Box::new(Identifier(Ident::new("string_value"))),
-                        keys: vec![Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("indexOf")]),
-                            args: vec![
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
-                                    Ident::new("string_name")
-                                ))),
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                    Value::SingleQuotedString("app".to_string())
-                                ))),
-                            ],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })],
+                        keys: vec![MapAccessKey {
+                            key: Expr::Function(Function {
+                                name: ObjectName(vec![Ident::new("indexOf")]),
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident::new("string_name")
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                        Value::SingleQuotedString("app".to_string())
+                                    ))),
+                                ],
+                                null_treatment: None,
+                                filter: None,
+                                over: None,
+                                distinct: false,
+                                special: false,
+                                order_by: vec![],
+                            }),
+                            syntax: MapAccessSyntax::Bracket
+                        }],
                     }),
                     op: BinaryOperator::NotEq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),

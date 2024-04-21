@@ -1338,6 +1338,48 @@ fn test_snowflake_stage_object_names() {
 }
 
 #[test]
+fn test_snowflake_copy_into() {
+    let sql = "COPY INTO a.b FROM @namespace.stage_name";
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            into, from_stage, ..
+        } => {
+            assert_eq!(into, ObjectName(vec![Ident::new("a"), Ident::new("b")]));
+            assert_eq!(
+                from_stage,
+                ObjectName(vec![Ident::new("@namespace"), Ident::new("stage_name")])
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_copy_into_stage_name_ends_with_parens() {
+    let sql = "COPY INTO SCHEMA.SOME_MONITORING_SYSTEM FROM (SELECT t.$1:st AS st FROM @schema.general_finished)";
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            into, from_stage, ..
+        } => {
+            assert_eq!(
+                into,
+                ObjectName(vec![
+                    Ident::new("SCHEMA"),
+                    Ident::new("SOME_MONITORING_SYSTEM")
+                ])
+            );
+            assert_eq!(
+                from_stage,
+                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_snowflake_trim() {
     let real_sql = r#"SELECT customer_id, TRIM(sub_items.value:item_price_id, '"', "a") AS item_price_id FROM models_staging.subscriptions"#;
     assert_eq!(snowflake().verified_stmt(real_sql).to_string(), real_sql);
@@ -1431,6 +1473,19 @@ fn parse_top() {
 }
 
 #[test]
+fn parse_extract_custom_part() {
+    let sql = "SELECT EXTRACT(eod FROM d)";
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Custom(Ident::new("eod")),
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_comma_outer_join() {
     // compound identifiers
     let case1 =
@@ -1493,4 +1548,9 @@ fn parse_comma_outer_join() {
         "SELECT t1.c1, t2.c2 FROM t1, t2 WHERE t1.c1 = t2.c2(   +     )",
         "SELECT t1.c1, t2.c2 FROM t1, t2 WHERE t1.c1 = t2.c2 (+)",
     );
+}
+
+#[test]
+fn test_sf_trailing_commas() {
+    snowflake().verified_only_select_with_canonical("SELECT 1, 2, FROM t", "SELECT 1, 2 FROM t");
 }

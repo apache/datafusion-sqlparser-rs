@@ -93,7 +93,7 @@ macro_rules! dialect_of {
 pub trait Dialect: Debug + Any {
     /// Determine the [`TypeId`] of this dialect.
     ///
-    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overriden
+    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overridden
     /// by dialects that behave like other dialects
     /// (for example when wrapping a dialect).
     fn dialect(&self) -> TypeId {
@@ -141,6 +141,10 @@ pub trait Dialect: Debug + Any {
     }
     /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
+    fn supports_named_fn_args_with_eq_operator(&self) -> bool {
         false
     }
     /// Returns true if the dialect has a CONVERT function which accepts a type first

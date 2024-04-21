@@ -37,6 +37,7 @@ pub use self::ddl::{
     ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
 };
+pub use self::dml::{Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     Cte, CteAsMaterialized, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, ForClause,
@@ -60,6 +61,7 @@ pub use visitor::*;
 mod data_type;
 mod dcl;
 mod ddl;
+mod dml;
 pub mod helpers;
 mod operator;
 mod query;
@@ -1800,40 +1802,7 @@ pub enum Statement {
     /// ```sql
     /// INSERT
     /// ```
-    Insert {
-        /// Only for Sqlite
-        or: Option<SqliteOnConflict>,
-        /// Only for mysql
-        ignore: bool,
-        /// INTO - optional keyword
-        into: bool,
-        /// TABLE
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        /// table_name as foo (for PostgreSQL)
-        table_alias: Option<Ident>,
-        /// COLUMNS
-        columns: Vec<Ident>,
-        /// Overwrite (Hive)
-        overwrite: bool,
-        /// A SQL query that specifies what to insert
-        source: Option<Box<Query>>,
-        /// partitioned insert (Hive)
-        partitioned: Option<Vec<Expr>>,
-        /// Columns defined after PARTITION
-        after_columns: Vec<Ident>,
-        /// whether the insert has the table keyword (Hive)
-        table: bool,
-        on: Option<OnInsert>,
-        /// RETURNING
-        returning: Option<Vec<SelectItem>>,
-        /// Only for mysql
-        replace_into: bool,
-        /// Only for mysql
-        priority: Option<MysqlInsertPriority>,
-        /// Only for mysql
-        insert_alias: Option<InsertAliases>,
-    },
+    Insert(Insert),
     /// ```sql
     /// INSTALL
     /// ```
@@ -1923,22 +1892,7 @@ pub enum Statement {
     /// ```sql
     /// DELETE
     /// ```
-    Delete {
-        /// Multi tables delete are supported in mysql
-        tables: Vec<ObjectName>,
-        /// FROM
-        from: FromTable,
-        /// USING (Snowflake, Postgres, MySQL)
-        using: Option<Vec<TableWithJoins>>,
-        /// WHERE
-        selection: Option<Expr>,
-        /// RETURNING
-        returning: Option<Vec<SelectItem>>,
-        /// ORDER BY (MySQL)
-        order_by: Vec<OrderByExpr>,
-        /// LIMIT (MySQL)
-        limit: Option<Expr>,
-    },
+    Delete(Delete),
     /// ```sql
     /// CREATE VIEW
     /// ```
@@ -2912,24 +2866,25 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Insert {
-                or,
-                ignore,
-                into,
-                table_name,
-                table_alias,
-                overwrite,
-                partitioned,
-                columns,
-                after_columns,
-                source,
-                table,
-                on,
-                returning,
-                replace_into,
-                priority,
-                insert_alias,
-            } => {
+            Statement::Insert(insert) => {
+                let Insert {
+                    or,
+                    ignore,
+                    into,
+                    table_name,
+                    table_alias,
+                    overwrite,
+                    partitioned,
+                    columns,
+                    after_columns,
+                    source,
+                    table,
+                    on,
+                    returning,
+                    replace_into,
+                    priority,
+                    insert_alias,
+                } = insert;
                 let table_name = if let Some(alias) = table_alias {
                     format!("{table_name} AS {alias}")
                 } else {
@@ -3074,15 +3029,16 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Delete {
-                tables,
-                from,
-                using,
-                selection,
-                returning,
-                order_by,
-                limit,
-            } => {
+            Statement::Delete(delete) => {
+                let Delete {
+                    tables,
+                    from,
+                    using,
+                    selection,
+                    returning,
+                    order_by,
+                    limit,
+                } = delete;
                 write!(f, "DELETE ")?;
                 if !tables.is_empty() {
                     write!(f, "{} ", display_comma_separated(tables))?;

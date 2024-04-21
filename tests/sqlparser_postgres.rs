@@ -1482,12 +1482,12 @@ fn parse_prepare() {
         _ => unreachable!(),
     };
     match sub_stmt.as_ref() {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source: Some(source),
             ..
-        } => {
+        }) => {
             assert_eq!(table_name.to_string(), "customers");
             assert!(columns.is_empty());
 
@@ -1539,14 +1539,14 @@ fn parse_pg_on_conflict() {
         DO UPDATE SET dname = EXCLUDED.dname",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::Columns(cols)),
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(vec![Ident::from("did")], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
@@ -1569,14 +1569,14 @@ fn parse_pg_on_conflict() {
         DO UPDATE SET dname = EXCLUDED.dname, area = EXCLUDED.area",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::Columns(cols)),
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(vec![Ident::from("did"), Ident::from("area"),], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
@@ -1607,14 +1607,14 @@ fn parse_pg_on_conflict() {
     ON CONFLICT DO NOTHING",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: None,
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(OnConflictAction::DoNothing, action);
         }
         _ => unreachable!(),
@@ -1627,14 +1627,14 @@ fn parse_pg_on_conflict() {
         DO UPDATE SET dname = $1 WHERE dsize > $2",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::Columns(cols)),
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(vec![Ident::from("did")], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
@@ -1664,14 +1664,14 @@ fn parse_pg_on_conflict() {
         DO UPDATE SET dname = $1 WHERE dsize > $2",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::OnConstraint(cname)),
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(vec![Ident::from("distributors_did_pkey")], cname.0);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
@@ -1701,7 +1701,7 @@ fn parse_pg_returning() {
         "INSERT INTO distributors (did, dname) VALUES (DEFAULT, 'XYZ Widgets') RETURNING did",
     );
     match stmt {
-        Statement::Insert { returning, .. } => {
+        Statement::Insert(Insert { returning, .. }) => {
             assert_eq!(
                 Some(vec![SelectItem::UnnamedExpr(Expr::Identifier(
                     "did".into()
@@ -1739,7 +1739,7 @@ fn parse_pg_returning() {
     let stmt =
         pg_and_generic().verified_stmt("DELETE FROM tasks WHERE status = 'DONE' RETURNING *");
     match stmt {
-        Statement::Delete { returning, .. } => {
+        Statement::Delete(Delete { returning, .. }) => {
             assert_eq!(
                 Some(vec![SelectItem::Wildcard(
                     WildcardAdditionalOptions::default()
@@ -3570,7 +3570,7 @@ fn test_simple_postgres_insert_with_alias() {
 
     assert_eq!(
         statement,
-        Statement::Insert {
+        Statement::Insert(Insert {
             or: None,
             ignore: false,
             into: true,
@@ -3621,7 +3621,7 @@ fn test_simple_postgres_insert_with_alias() {
             replace_into: false,
             priority: None,
             insert_alias: None
-        }
+        })
     )
 }
 
@@ -3634,7 +3634,7 @@ fn test_simple_postgres_insert_with_alias() {
 
     assert_eq!(
         statement,
-        Statement::Insert {
+        Statement::Insert(Insert {
             or: None,
             ignore: false,
             into: true,
@@ -3688,7 +3688,7 @@ fn test_simple_postgres_insert_with_alias() {
             replace_into: false,
             priority: None,
             insert_alias: None
-        }
+        })
     )
 }
 
@@ -3700,7 +3700,7 @@ fn test_simple_insert_with_quoted_alias() {
 
     assert_eq!(
         statement,
-        Statement::Insert {
+        Statement::Insert(Insert {
             or: None,
             ignore: false,
             into: true,
@@ -3751,7 +3751,7 @@ fn test_simple_insert_with_quoted_alias() {
             replace_into: false,
             priority: None,
             insert_alias: None,
-        }
+        })
     )
 }
 

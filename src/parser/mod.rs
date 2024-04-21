@@ -7082,7 +7082,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::Delete {
+        Ok(Statement::Delete(Delete {
             tables,
             from: if with_from_keyword {
                 FromTable::WithFromKeyword(from)
@@ -7094,7 +7094,7 @@ impl<'a> Parser<'a> {
             returning,
             order_by,
             limit,
-        })
+        }))
     }
 
     // KILL [CONNECTION | QUERY | MUTATION] processlist_id
@@ -8658,7 +8658,7 @@ impl<'a> Parser<'a> {
         }
 
         let insert = &mut self.parse_insert()?;
-        if let Statement::Insert { replace_into, .. } = insert {
+        if let Statement::Insert(Insert { replace_into, .. }) = insert {
             *replace_into = true;
         }
 
@@ -8826,7 +8826,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Statement::Insert {
+            Ok(Statement::Insert(Insert {
                 or,
                 table_name,
                 table_alias,
@@ -8843,7 +8843,7 @@ impl<'a> Parser<'a> {
                 replace_into,
                 priority,
                 insert_alias,
-            })
+            }))
         }
     }
 

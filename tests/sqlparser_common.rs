@@ -8523,3 +8523,18 @@ fn test_buffer_reuse() {
     p.parse_statements().unwrap();
     let _ = p.into_tokens();
 }
+
+#[test]
+fn insert_into_with_parentheses() {
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(SnowflakeDialect {}),
+            Box::new(RedshiftSqlDialect {}),
+        ],
+        options: None,
+    };
+    dialects.one_statement_parses_to(
+        "INSERT INTO t1 (id, name) ( SELECT t2.id, t2.name FROM t2 )",
+        "INSERT INTO t1 (id, name) SELECT t2.id, t2.name FROM t2",
+    );
+}

@@ -1004,9 +1004,9 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CONVERT => self.parse_convert_expr(),
-                Keyword::CAST => self.parse_cast_expr(),
-                Keyword::TRY_CAST => self.parse_try_cast_expr(),
-                Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
+                Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
+                Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
+                Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
                 Keyword::EXISTS => self.parse_exists_expr(false),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::CEIL => self.parse_ceil_floor_expr(true),
@@ -1491,7 +1491,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
-    pub fn parse_cast_expr(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_cast_expr(&mut self, kind: CastKind) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
@@ -1499,36 +1499,7 @@ impl<'a> Parser<'a> {
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
-            expr: Box::new(expr),
-            data_type,
-            format,
-        })
-    }
-
-    /// Parse a SQL TRY_CAST function e.g. `TRY_CAST(expr AS FLOAT)`
-    pub fn parse_try_cast_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::AS)?;
-        let data_type = self.parse_data_type()?;
-        let format = self.parse_optional_cast_format()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Expr::TryCast {
-            expr: Box::new(expr),
-            data_type,
-            format,
-        })
-    }
-
-    /// Parse a BigQuery SAFE_CAST function e.g. `SAFE_CAST(expr AS FLOAT64)`
-    pub fn parse_safe_cast_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::AS)?;
-        let data_type = self.parse_data_type()?;
-        let format = self.parse_optional_cast_format()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Expr::SafeCast {
+            kind,
             expr: Box::new(expr),
             data_type,
             format,
@@ -2528,7 +2499,12 @@ impl<'a> Parser<'a> {
                 ),
             }
         } else if Token::DoubleColon == tok {
-            self.parse_pg_cast(expr)
+            Ok(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(expr),
+                data_type: self.parse_data_type()?,
+                format: None,
+            })
         } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
             Ok(Expr::UnaryOp {
@@ -2584,9 +2560,9 @@ impl<'a> Parser<'a> {
     }
 
     /// parse the ESCAPE CHAR portion of LIKE, ILIKE, and SIMILAR TO
-    pub fn parse_escape_char(&mut self) -> Result<Option<char>, ParserError> {
+    pub fn parse_escape_char(&mut self) -> Result<Option<String>, ParserError> {
         if self.parse_keyword(Keyword::ESCAPE) {
-            Ok(Some(self.parse_literal_char()?))
+            Ok(Some(self.parse_literal_string()?))
         } else {
             Ok(None)
         }
@@ -2702,6 +2678,7 @@ impl<'a> Parser<'a> {
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         Ok(Expr::Cast {
+            kind: CastKind::DoubleColon,
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
             format: None,
@@ -5780,6 +5757,23 @@ impl<'a> Parser<'a> {
                 options,
                 column_position,
             }
+        } else if self.parse_keyword(Keyword::MODIFY) {
+            let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
+            let col_name = self.parse_identifier(false)?;
+            let data_type = self.parse_data_type()?;
+            let mut options = vec![];
+            while let Some(option) = self.parse_optional_column_option()? {
+                options.push(option);
+            }
+
+            let column_position = self.parse_column_position()?;
+
+            AlterTableOperation::ModifyColumn {
+                col_name,
+                data_type,
+                options,
+                column_position,
+            }
         } else if self.parse_keyword(Keyword::ALTER) {
             let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
             let column_name = self.parse_identifier(false)?;
@@ -7088,7 +7082,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::Delete {
+        Ok(Statement::Delete(Delete {
             tables,
             from: if with_from_keyword {
                 FromTable::WithFromKeyword(from)
@@ -7100,7 +7094,7 @@ impl<'a> Parser<'a> {
             returning,
             order_by,
             limit,
-        })
+        }))
     }
 
     // KILL [CONNECTION | QUERY | MUTATION] processlist_id
@@ -8901,7 +8895,7 @@ impl<'a> Parser<'a> {
         }
 
         let insert = &mut self.parse_insert()?;
-        if let Statement::Insert { replace_into, .. } = insert {
+        if let Statement::Insert(Insert { replace_into, .. }) = insert {
             *replace_into = true;
         }
 
@@ -9069,7 +9063,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Statement::Insert {
+            Ok(Statement::Insert(Insert {
                 or,
                 table_name,
                 table_alias,
@@ -9086,7 +9080,7 @@ impl<'a> Parser<'a> {
                 replace_into,
                 priority,
                 insert_alias,
-            })
+            }))
         }
     }
 
@@ -9278,7 +9272,13 @@ impl<'a> Parser<'a> {
     pub fn parse_wildcard_additional_options(
         &mut self,
     ) -> Result<WildcardAdditionalOptions, ParserError> {
-        let opt_exclude = if dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
+        let opt_ilike = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+            self.parse_optional_select_item_ilike()?
+        } else {
+            None
+        };
+        let opt_exclude = if opt_ilike.is_none()
+            && dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
         {
             self.parse_optional_select_item_exclude()?
         } else {
@@ -9296,7 +9296,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect |  DuckDbDialect | SnowflakeDialect)
         {
             self.parse_optional_select_item_replace()?
         } else {
@@ -9304,11 +9304,31 @@ impl<'a> Parser<'a> {
         };
 
         Ok(WildcardAdditionalOptions {
+            opt_ilike,
             opt_exclude,
             opt_except,
             opt_rename,
             opt_replace,
         })
+    }
+
+    /// Parse an [`Ilike`](IlikeSelectItem) information for wildcard select items.
+    ///
+    /// If it is not possible to parse it, will return an option.
+    pub fn parse_optional_select_item_ilike(
+        &mut self,
+    ) -> Result<Option<IlikeSelectItem>, ParserError> {
+        let opt_ilike = if self.parse_keyword(Keyword::ILIKE) {
+            let next_token = self.next_token();
+            let pattern = match next_token.token {
+                Token::SingleQuotedString(s) => s,
+                _ => return self.expected("ilike pattern", next_token),
+            };
+            Some(IlikeSelectItem { pattern })
+        } else {
+            None
+        };
+        Ok(opt_ilike)
     }
 
     /// Parse an [`Exclude`](ExcludeSelectItem) information for wildcard select items.

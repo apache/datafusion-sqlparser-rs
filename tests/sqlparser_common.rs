@@ -84,12 +84,12 @@ fn parse_insert_values() {
         expected_rows: &[Vec<Expr>],
     ) {
         match verified_stmt(sql) {
-            Statement::Insert {
+            Statement::Insert(Insert {
                 table_name,
                 columns,
                 source: Some(source),
                 ..
-            } => {
+            }) => {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
@@ -125,7 +125,7 @@ fn parse_insert_default_values() {
     let insert_with_default_values = verified_stmt("INSERT INTO test_table DEFAULT VALUES");
 
     match insert_with_default_values {
-        Statement::Insert {
+        Statement::Insert(Insert {
             after_columns,
             columns,
             on,
@@ -134,7 +134,7 @@ fn parse_insert_default_values() {
             source,
             table_name,
             ..
-        } => {
+        }) => {
             assert_eq!(columns, vec![]);
             assert_eq!(after_columns, vec![]);
             assert_eq!(on, None);
@@ -150,7 +150,7 @@ fn parse_insert_default_values() {
         verified_stmt("INSERT INTO test_table DEFAULT VALUES RETURNING test_column");
 
     match insert_with_default_values_and_returning {
-        Statement::Insert {
+        Statement::Insert(Insert {
             after_columns,
             columns,
             on,
@@ -159,7 +159,7 @@ fn parse_insert_default_values() {
             source,
             table_name,
             ..
-        } => {
+        }) => {
             assert_eq!(after_columns, vec![]);
             assert_eq!(columns, vec![]);
             assert_eq!(on, None);
@@ -175,7 +175,7 @@ fn parse_insert_default_values() {
         verified_stmt("INSERT INTO test_table DEFAULT VALUES ON CONFLICT DO NOTHING");
 
     match insert_with_default_values_and_on_conflict {
-        Statement::Insert {
+        Statement::Insert(Insert {
             after_columns,
             columns,
             on,
@@ -184,7 +184,7 @@ fn parse_insert_default_values() {
             source,
             table_name,
             ..
-        } => {
+        }) => {
             assert_eq!(after_columns, vec![]);
             assert_eq!(columns, vec![]);
             assert!(on.is_some());
@@ -230,11 +230,11 @@ fn parse_insert_select_returning() {
     verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
     let stmt = verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             returning: Some(ret),
             source: Some(_),
             ..
-        } => assert_eq!(ret.len(), 1),
+        }) => assert_eq!(ret.len(), 1),
         _ => unreachable!(),
     }
 }
@@ -255,7 +255,7 @@ fn parse_insert_sqlite() {
     .pop()
     .unwrap()
     {
-        Statement::Insert { or, .. } => assert_eq!(or, expected_action),
+        Statement::Insert(Insert { or, .. }) => assert_eq!(or, expected_action),
         _ => panic!("{}", sql),
     };
 
@@ -545,10 +545,10 @@ fn parse_no_table_name() {
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             from: FromTable::WithFromKeyword(from),
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
@@ -582,11 +582,11 @@ fn parse_delete_statement_for_multi_tables() {
     let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
     let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
     match dialects.verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             tables,
             from: FromTable::WithFromKeyword(from),
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
                 tables[0]
@@ -626,11 +626,11 @@ fn parse_delete_statement_for_multi_tables() {
 fn parse_delete_statement_for_multi_tables_with_using() {
     let sql = "DELETE FROM schema1.table1, schema2.table2 USING schema1.table1 JOIN schema2.table2 ON schema2.table2.pk = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
     match verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             from: FromTable::WithFromKeyword(from),
             using: Some(using),
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
@@ -686,14 +686,14 @@ fn parse_where_delete_statement() {
 
     let sql = "DELETE FROM foo WHERE name = 5";
     match verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             tables: _,
             from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::new("foo")]),
@@ -727,14 +727,14 @@ fn parse_where_delete_with_alias_statement() {
 
     let sql = "DELETE FROM basket AS a USING basket AS b WHERE a.id < b.id";
     match verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             tables: _,
             from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::new("basket")]),
@@ -1599,7 +1599,7 @@ fn parse_ilike() {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('^'),
+                escape_char: Some('^'.to_string()),
             },
             select.selection.unwrap()
         );
@@ -1617,6 +1617,115 @@ fn parse_ilike() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
+fn parse_like() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '^'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('^'.to_string()),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that LIKE and NOT LIKE have the same precedence.
+        // This was previously mishandled (#81).
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
+fn parse_similar_to() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '^'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('^'.to_string()),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '^' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('^'.to_string()),
             })),
             select.selection.unwrap()
         );
@@ -2107,6 +2216,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
             format: None,
@@ -2118,6 +2228,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::TinyInt(None),
             format: None,
@@ -2145,6 +2256,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Nvarchar(Some(50)),
             format: None,
@@ -2156,6 +2268,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(None),
             format: None,
@@ -2167,6 +2280,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(Some(50)),
             format: None,
@@ -2178,6 +2292,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Binary(Some(50)),
             format: None,
@@ -2189,6 +2304,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Varbinary(Some(50)),
             format: None,
@@ -2200,6 +2316,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(None),
             format: None,
@@ -2211,6 +2328,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(Some(50)),
             format: None,
@@ -2222,6 +2340,7 @@ fn parse_cast() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("details"))),
             data_type: DataType::JSONB,
             format: None,
@@ -2235,7 +2354,8 @@ fn parse_try_cast() {
     let sql = "SELECT TRY_CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TryCast {
+        &Expr::Cast {
+            kind: CastKind::TryCast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
             format: None,
@@ -6611,6 +6731,7 @@ fn lateral_function() {
         distinct: None,
         top: None,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
+            opt_ilike: None,
             opt_exclude: None,
             opt_except: None,
             opt_rename: None,
@@ -8155,6 +8276,86 @@ fn parse_with_recursion_limit() {
 }
 
 #[test]
+fn parse_escaped_string_with_unescape() {
+    fn assert_mysql_query_value(sql: &str, quoted: &str) {
+        let stmt = TestedDialects {
+            dialects: vec![
+                Box::new(MySqlDialect {}),
+                Box::new(BigQueryDialect {}),
+                Box::new(SnowflakeDialect {}),
+            ],
+            options: None,
+        }
+        .one_statement_parses_to(sql, "");
+
+        match stmt {
+            Statement::Query(query) => match *query.body {
+                SetExpr::Select(value) => {
+                    let expr = expr_from_projection(only(&value.projection));
+                    assert_eq!(
+                        *expr,
+                        Expr::Value(Value::SingleQuotedString(quoted.to_string()))
+                    );
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        };
+    }
+    let sql = r"SELECT 'I\'m fine'";
+    assert_mysql_query_value(sql, "I'm fine");
+
+    let sql = r#"SELECT 'I''m fine'"#;
+    assert_mysql_query_value(sql, "I'm fine");
+
+    let sql = r#"SELECT 'I\"m fine'"#;
+    assert_mysql_query_value(sql, "I\"m fine");
+
+    let sql = r"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \h \ '";
+    assert_mysql_query_value(sql, "Testing: \0 \\ % _ \u{8} \n \r \t \u{1a} \u{7} h  ");
+}
+
+#[test]
+fn parse_escaped_string_without_unescape() {
+    fn assert_mysql_query_value(sql: &str, quoted: &str) {
+        let stmt = TestedDialects {
+            dialects: vec![
+                Box::new(MySqlDialect {}),
+                Box::new(BigQueryDialect {}),
+                Box::new(SnowflakeDialect {}),
+            ],
+            options: Some(ParserOptions::new().with_unescape(false)),
+        }
+        .one_statement_parses_to(sql, "");
+
+        match stmt {
+            Statement::Query(query) => match *query.body {
+                SetExpr::Select(value) => {
+                    let expr = expr_from_projection(only(&value.projection));
+                    assert_eq!(
+                        *expr,
+                        Expr::Value(Value::SingleQuotedString(quoted.to_string()))
+                    );
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        };
+    }
+    let sql = r"SELECT 'I\'m fine'";
+    assert_mysql_query_value(sql, r"I\'m fine");
+
+    let sql = r#"SELECT 'I''m fine'"#;
+    assert_mysql_query_value(sql, r#"I''m fine"#);
+
+    let sql = r#"SELECT 'I\"m fine'"#;
+    assert_mysql_query_value(sql, r#"I\"m fine"#);
+
+    let sql = r"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '";
+    assert_mysql_query_value(sql, r"Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ ");
+}
+
+#[test]
 fn parse_pivot_table() {
     let sql = concat!(
         "SELECT * FROM monthly_sales AS a ",
@@ -8977,4 +9178,82 @@ fn test_match_recognize_patterns() {
             ]),
         ]),
     );
+}
+
+#[test]
+fn test_select_wildcard_with_replace() {
+    let sql = r#"SELECT * REPLACE (lower(city) AS city) FROM addresses"#;
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(ClickHouseDialect {}),
+            Box::new(SnowflakeDialect {}),
+            Box::new(DuckDbDialect {}),
+        ],
+        options: None,
+    };
+    let select = dialects.verified_only_select(sql);
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![Box::new(ReplaceSelectElement {
+                expr: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("lower")]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                        Expr::Identifier(Ident::new("city")),
+                    ))],
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                }),
+                column_name: Ident::new("city"),
+                as_keyword: true,
+            })],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    let select =
+        dialects.verified_only_select(r#"SELECT * REPLACE ('widget' AS item_name) FROM orders"#);
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![Box::new(ReplaceSelectElement {
+                expr: Expr::Value(Value::SingleQuotedString("widget".to_owned())),
+                column_name: Ident::new("item_name"),
+                as_keyword: true,
+            })],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    let select = dialects.verified_only_select(
+        r#"SELECT * REPLACE (quantity / 2 AS quantity, 3 AS order_id) FROM orders"#,
+    );
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![
+                Box::new(ReplaceSelectElement {
+                    expr: Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("quantity"))),
+                        op: BinaryOperator::Divide,
+                        right: Box::new(Expr::Value(number("2"))),
+                    },
+                    column_name: Ident::new("quantity"),
+                    as_keyword: true,
+                }),
+                Box::new(ReplaceSelectElement {
+                    expr: Expr::Value(number("3")),
+                    column_name: Ident::new("order_id"),
+                    as_keyword: true,
+                }),
+            ],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
 }

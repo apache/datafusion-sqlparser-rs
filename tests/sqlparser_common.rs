@@ -8695,8 +8695,5 @@ fn insert_into_with_parentheses() {
         ],
         options: None,
     };
-    dialects.one_statement_parses_to(
-        "INSERT INTO t1 (id, name) ( SELECT t2.id, t2.name FROM t2 )",
-        "INSERT INTO t1 (id, name) SELECT t2.id, t2.name FROM t2",
-    );
+    dialects.verified_stmt("INSERT INTO t1 (id, name) (SELECT t2.id, t2.name FROM t2)");
 }

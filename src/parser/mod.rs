@@ -7473,16 +7473,10 @@ impl<'a> Parser<'a> {
         let mut expr = if self.parse_keyword(Keyword::SELECT) {
             SetExpr::Select(self.parse_select().map(Box::new)?)
         } else if self.consume_token(&Token::LParen) {
-            if self.parse_keyword(Keyword::SELECT) {
-                let subquery = self.parse_select()?;
-                self.expect_token(&Token::RParen)?;
-                SetExpr::Select(Box::new(subquery))
-            } else {
-                // CTEs are not allowed here, but the parser currently accepts them
-                let subquery = self.parse_boxed_query()?;
-                self.expect_token(&Token::RParen)?;
-                SetExpr::Query(subquery)
-            }
+            // CTEs are not allowed here, but the parser currently accepts them
+            let subquery = self.parse_boxed_query()?;
+            self.expect_token(&Token::RParen)?;
+            SetExpr::Query(subquery)
         } else if self.parse_keyword(Keyword::VALUES) {
             let is_mysql = dialect_of!(self is MySqlDialect);
             SetExpr::Values(self.parse_values(is_mysql)?)

@@ -19,7 +19,7 @@ use sqlparser::ast::helpers::stmt_data_loading::{
 };
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SnowflakeDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::*;
 use test_utils::*;
 
@@ -310,115 +310,6 @@ fn parse_delimited_identifiers() {
 }
 
 #[test]
-fn parse_like() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that LIKE and NOT LIKE have the same precedence.
-        // This was previously mishandled (#81).
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
-fn parse_similar_to() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
 fn test_array_agg_func() {
     for sql in [
         "SELECT ARRAY_AGG(x) WITHIN GROUP (ORDER BY x) AS a FROM T",
@@ -441,6 +332,13 @@ fn snowflake() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {})],
         options: None,
+    }
+}
+
+fn snowflake_without_unescape() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(SnowflakeDialect {})],
+        options: Some(ParserOptions::new().with_unescape(false)),
     }
 }
 
@@ -985,10 +883,10 @@ fn test_create_stage_with_file_format() {
     let sql = concat!(
         "CREATE OR REPLACE STAGE my_ext_stage ",
         "URL='s3://load/files/' ",
-        "FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"
+        r#"FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"#
     );
 
-    match snowflake().verified_stmt(sql) {
+    match snowflake_without_unescape().verified_stmt(sql) {
         Statement::CreateStage { file_format, .. } => {
             assert!(file_format.options.contains(&DataLoadingOption {
                 option_name: "COMPRESSION".to_string(),
@@ -1003,12 +901,15 @@ fn test_create_stage_with_file_format() {
             assert!(file_format.options.contains(&DataLoadingOption {
                 option_name: "ESCAPE".to_string(),
                 option_type: DataLoadingOptionType::STRING,
-                value: "\\".to_string()
+                value: r#"\\"#.to_string()
             }));
         }
         _ => unreachable!(),
     };
-    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    assert_eq!(
+        snowflake_without_unescape().verified_stmt(sql).to_string(),
+        sql
+    );
 }
 
 #[test]
@@ -1243,10 +1144,10 @@ fn test_copy_into_file_format() {
         "FROM 'gcs://mybucket/./../a.csv' ",
         "FILES = ('file1.json', 'file2.json') ",
         "PATTERN = '.*employees0[1-5].csv.gz' ",
-        "FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"
+        r#"FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"#
     );
 
-    match snowflake().verified_stmt(sql) {
+    match snowflake_without_unescape().verified_stmt(sql) {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&DataLoadingOption {
                 option_name: "COMPRESSION".to_string(),
@@ -1261,12 +1162,15 @@ fn test_copy_into_file_format() {
             assert!(file_format.options.contains(&DataLoadingOption {
                 option_name: "ESCAPE".to_string(),
                 option_type: DataLoadingOptionType::STRING,
-                value: "\\".to_string()
+                value: r#"\\"#.to_string()
             }));
         }
         _ => unreachable!(),
     }
-    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    assert_eq!(
+        snowflake_without_unescape().verified_stmt(sql).to_string(),
+        sql
+    );
 }
 
 #[test]

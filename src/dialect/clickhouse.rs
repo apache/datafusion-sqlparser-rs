@@ -25,4 +25,8 @@ impl Dialect for ClickHouseDialect {
     fn is_identifier_part(&self, ch: char) -> bool {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
     }
+
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        true
+    }
 }

@@ -328,6 +328,7 @@ fn parse_create_table_with_defaults() {
             location: None,
             ..
         } => {
+            use pretty_assertions::assert_eq;
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
                 columns,
@@ -422,9 +423,7 @@ fn parse_create_table_with_defaults() {
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Default(
-                                    pg().verified_expr("CAST(now() AS TEXT)")
-                                )
+                                option: ColumnOption::Default(pg().verified_expr("now()::TEXT"))
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -498,15 +497,15 @@ fn parse_create_table_from_pg_dump() {
             active int
         )";
     pg().one_statement_parses_to(sql, "CREATE TABLE public.customer (\
-            customer_id INTEGER DEFAULT nextval(CAST('public.customer_customer_id_seq' AS REGCLASS)) NOT NULL, \
+            customer_id INTEGER DEFAULT nextval('public.customer_customer_id_seq'::REGCLASS) NOT NULL, \
             store_id SMALLINT NOT NULL, \
             first_name CHARACTER VARYING(45) NOT NULL, \
             last_name CHARACTER VARYING(45) NOT NULL, \
             info TEXT[], \
             address_id SMALLINT NOT NULL, \
             activebool BOOLEAN DEFAULT true NOT NULL, \
-            create_date DATE DEFAULT CAST(now() AS DATE) NOT NULL, \
-            create_date1 DATE DEFAULT CAST(CAST('now' AS TEXT) AS DATE) NOT NULL, \
+            create_date DATE DEFAULT now()::DATE NOT NULL, \
+            create_date1 DATE DEFAULT 'now'::TEXT::DATE NOT NULL, \
             last_update TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), \
             release_year public.year, \
             active INT\
@@ -1448,11 +1447,13 @@ fn parse_execute() {
             parameters: vec![],
             using: vec![
                 Expr::Cast {
+                    kind: CastKind::Cast,
                     expr: Box::new(Expr::Value(Value::Number("1337".parse().unwrap(), false))),
                     data_type: DataType::SmallInt(None),
                     format: None
                 },
                 Expr::Cast {
+                    kind: CastKind::Cast,
                     expr: Box::new(Expr::Value(Value::Number("7331".parse().unwrap(), false))),
                     data_type: DataType::SmallInt(None),
                     format: None
@@ -1481,12 +1482,12 @@ fn parse_prepare() {
         _ => unreachable!(),
     };
     match sub_stmt.as_ref() {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source: Some(source),
             ..
-        } => {
+        }) => {
             assert_eq!(table_name.to_string(), "customers");
             assert!(columns.is_empty());
 
@@ -1538,14 +1539,14 @@ fn parse_pg_on_conflict() {
         DO UPDATE SET dname = EXCLUDED.dname",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::Columns(cols)),
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(vec![Ident::from("did")], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
@@ -1568,14 +1569,14 @@ fn parse_pg_on_conflict() {
         DO UPDATE SET dname = EXCLUDED.dname, area = EXCLUDED.area",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::Columns(cols)),
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(vec![Ident::from("did"), Ident::from("area"),], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
@@ -1606,14 +1607,14 @@ fn parse_pg_on_conflict() {
     ON CONFLICT DO NOTHING",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: None,
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(OnConflictAction::DoNothing, action);
         }
         _ => unreachable!(),
@@ -1626,14 +1627,14 @@ fn parse_pg_on_conflict() {
         DO UPDATE SET dname = $1 WHERE dsize > $2",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::Columns(cols)),
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(vec![Ident::from("did")], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
@@ -1663,14 +1664,14 @@ fn parse_pg_on_conflict() {
         DO UPDATE SET dname = $1 WHERE dsize > $2",
     );
     match stmt {
-        Statement::Insert {
+        Statement::Insert(Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
                     conflict_target: Some(ConflictTarget::OnConstraint(cname)),
                     action,
                 })),
             ..
-        } => {
+        }) => {
             assert_eq!(vec![Ident::from("distributors_did_pkey")], cname.0);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
@@ -1700,7 +1701,7 @@ fn parse_pg_returning() {
         "INSERT INTO distributors (did, dname) VALUES (DEFAULT, 'XYZ Widgets') RETURNING did",
     );
     match stmt {
-        Statement::Insert { returning, .. } => {
+        Statement::Insert(Insert { returning, .. }) => {
             assert_eq!(
                 Some(vec![SelectItem::UnnamedExpr(Expr::Identifier(
                     "did".into()
@@ -1738,7 +1739,7 @@ fn parse_pg_returning() {
     let stmt =
         pg_and_generic().verified_stmt("DELETE FROM tasks WHERE status = 'DONE' RETURNING *");
     match stmt {
-        Statement::Delete { returning, .. } => {
+        Statement::Delete(Delete { returning, .. }) => {
             assert_eq!(
                 Some(vec![SelectItem::Wildcard(
                     WildcardAdditionalOptions::default()
@@ -1908,6 +1909,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Nested(Box::new(Expr::Cast {
+                kind: CastKind::Cast,
                 expr: Box::new(Expr::Array(Array {
                     elem: vec![Expr::Array(Array {
                         elem: vec![num[2].clone(), num[3].clone(),],
@@ -3170,115 +3172,6 @@ fn parse_update_in_with_subquery() {
 }
 
 #[test]
-fn parse_like() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = pg().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = pg().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that LIKE and NOT LIKE have the same precedence.
-        // This was previously mishandled (#81).
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = pg().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
-fn parse_similar_to() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = pg().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = pg().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = pg().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
 fn parse_create_function() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS 'select $1 + $2;'";
     assert_eq!(
@@ -3677,7 +3570,7 @@ fn test_simple_postgres_insert_with_alias() {
 
     assert_eq!(
         statement,
-        Statement::Insert {
+        Statement::Insert(Insert {
             or: None,
             ignore: false,
             into: true,
@@ -3728,7 +3621,7 @@ fn test_simple_postgres_insert_with_alias() {
             replace_into: false,
             priority: None,
             insert_alias: None
-        }
+        })
     )
 }
 
@@ -3741,7 +3634,7 @@ fn test_simple_postgres_insert_with_alias() {
 
     assert_eq!(
         statement,
-        Statement::Insert {
+        Statement::Insert(Insert {
             or: None,
             ignore: false,
             into: true,
@@ -3795,7 +3688,7 @@ fn test_simple_postgres_insert_with_alias() {
             replace_into: false,
             priority: None,
             insert_alias: None
-        }
+        })
     )
 }
 
@@ -3807,7 +3700,7 @@ fn test_simple_insert_with_quoted_alias() {
 
     assert_eq!(
         statement,
-        Statement::Insert {
+        Statement::Insert(Insert {
             or: None,
             ignore: false,
             into: true,
@@ -3858,7 +3751,7 @@ fn test_simple_insert_with_quoted_alias() {
             replace_into: false,
             priority: None,
             insert_alias: None,
-        }
+        })
     )
 }
 

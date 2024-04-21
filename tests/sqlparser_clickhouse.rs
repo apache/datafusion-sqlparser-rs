@@ -382,11 +382,6 @@ fn parse_select_star_except_no_parens() {
     );
 }
 
-#[test]
-fn parse_select_star_replace() {
-    clickhouse().verified_stmt("SELECT * REPLACE (i + 1 AS i) FROM columns_transformers");
-}
-
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

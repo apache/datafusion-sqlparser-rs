@@ -6567,7 +6567,6 @@ impl<'a> Parser<'a> {
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;
-                    println!("type_name: {:?}", type_name);
                     if let Some(modifiers) = self.parse_optional_type_modifiers()? {
                         Ok(DataType::Custom(type_name, modifiers))
                     } else {

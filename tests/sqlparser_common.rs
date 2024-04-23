@@ -3132,7 +3132,7 @@ fn parse_create_table_hive_array() {
         let expected = if angle_bracket_syntax {
             ArrayElemTypeDef::AngleBracket(expected)
         } else {
-            ArrayElemTypeDef::SquareBracket(expected)
+            ArrayElemTypeDef::SquareBracket(expected, None)
         };
 
         match dialects.one_statement_parses_to(sql.as_str(), sql.as_str()) {
@@ -9256,4 +9256,22 @@ fn test_select_wildcard_with_replace() {
         ..Default::default()
     });
     assert_eq!(expected, select.projection[0]);
+}
+
+#[test]
+fn parse_sized_list() {
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(DuckDbDialect {}),
+        ],
+        options: None,
+    };
+    let sql = r#"CREATE TABLE embeddings (data FLOAT[1536])"#;
+    dialects.verified_stmt(sql);
+    let sql = r#"CREATE TABLE embeddings (data FLOAT[1536][3])"#;
+    dialects.verified_stmt(sql);
+    let sql = r#"SELECT data::FLOAT[1536] FROM embeddings"#;
+    dialects.verified_stmt(sql);
 }

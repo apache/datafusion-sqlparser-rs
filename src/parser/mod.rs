@@ -6360,7 +6360,7 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let next_token = self.next_token();
-        let mut trailing_bracket = false.into();
+        let mut trailing_bracket: MatchedTrailingBracket = false.into();
         let mut data = match next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
@@ -6567,6 +6567,7 @@ impl<'a> Parser<'a> {
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;
+                    println!("type_name: {:?}", type_name);
                     if let Some(modifiers) = self.parse_optional_type_modifiers()? {
                         Ok(DataType::Custom(type_name, modifiers))
                     } else {
@@ -6580,8 +6581,13 @@ impl<'a> Parser<'a> {
         // Parse array data types. Note: this is postgresql-specific and different from
         // Keyword::ARRAY syntax from above
         while self.consume_token(&Token::LBracket) {
+            let size = if dialect_of!(self is GenericDialect | DuckDbDialect | PostgreSqlDialect) {
+                self.maybe_parse(|p| p.parse_literal_uint())
+            } else {
+                None
+            };
             self.expect_token(&Token::RBracket)?;
-            data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data)))
+            data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
         }
         Ok((data, trailing_bracket))
     }

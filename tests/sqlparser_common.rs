@@ -8692,6 +8692,7 @@ fn insert_into_with_parentheses() {
         dialects: vec![
             Box::new(SnowflakeDialect {}),
             Box::new(RedshiftSqlDialect {}),
+            Box::new(GenericDialect {}),
         ],
         options: None,
     };

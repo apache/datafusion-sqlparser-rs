@@ -2258,7 +2258,10 @@ fn parse_cast() {
         &Expr::Cast {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Nvarchar(Some(50)),
+            data_type: DataType::Nvarchar(Some(CharacterLength::IntegerLength {
+                length: 50,
+                unit: None,
+            })),
             format: None,
         },
         expr_from_projection(only(&select.projection))

@@ -9275,3 +9275,16 @@ fn parse_sized_list() {
     let sql = r#"SELECT data::FLOAT[1536] FROM embeddings"#;
     dialects.verified_stmt(sql);
 }
+
+#[test]
+fn insert_into_with_parentheses() {
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(SnowflakeDialect {}),
+            Box::new(RedshiftSqlDialect {}),
+            Box::new(GenericDialect {}),
+        ],
+        options: None,
+    };
+    dialects.verified_stmt("INSERT INTO t1 (id, name) (SELECT t2.id, t2.name FROM t2)");
+}

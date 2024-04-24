@@ -8993,9 +8993,12 @@ impl<'a> Parser<'a> {
                     let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
                     let partitioned = self.parse_insert_partition()?;
-
                     // Hive allows you to specify columns after partitions as well if you want.
-                    let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+                    let after_columns = if dialect_of!(self is HiveDialect) {
+                        self.parse_parenthesized_column_list(Optional, false)?
+                    } else {
+                        vec![]
+                    };
 
                     let source = Some(self.parse_boxed_query()?);
 
@@ -10809,13 +10812,6 @@ mod tests {
     #[test]
     fn test_replace_into_set_placeholder() {
         let sql = "REPLACE INTO t SET ?";
-
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
-    }
-
-    #[test]
-    fn test_replace_into_select() {
-        let sql = r#"REPLACE INTO t1 (a, b, c) (SELECT * FROM t2)"#;
 
         assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
     }

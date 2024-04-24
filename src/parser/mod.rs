@@ -5320,6 +5320,9 @@ impl<'a> Parser<'a> {
             Default::default()
         };
 
+        let copy_grants = dialect_of!(self is SnowflakeDialect)
+            && self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
+
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_boxed_query()?)
@@ -5408,6 +5411,7 @@ impl<'a> Parser<'a> {
             .options(big_query_config.options)
             .primary_key(primary_key)
             .strict(strict)
+            .copy_grants(copy_grants)
             .build())
     }
 
@@ -7783,7 +7787,7 @@ impl<'a> Parser<'a> {
     /// This function can be used to reduce the stack size required in debug
     /// builds. Instead of `sizeof(Query)` only a pointer (`Box<Query>`)
     /// is used.
-    fn parse_boxed_query(&mut self) -> Result<Box<Query>, ParserError> {
+    pub fn parse_boxed_query(&mut self) -> Result<Box<Query>, ParserError> {
         self.parse_query().map(Box::new)
     }
 

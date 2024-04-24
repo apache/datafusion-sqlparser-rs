@@ -24,8 +24,8 @@ pub use super::ddl::{ColumnDef, TableConstraint};
 use super::{
     display_comma_separated, display_separated, Expr, FileFormat, FromTable, HiveDistributionStyle,
     HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName,
-    OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, SelectItem, SqlOption,
-    SqliteOnConflict, TableEngine, TableWithJoins,
+    OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem,
+    SqlOption, SqliteOnConflict, TableEngine, TableWithJoins, Tag,
 };
 
 /// CREATE INDEX statement.
@@ -102,6 +102,24 @@ pub struct CreateTable {
     /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
     /// then strict typing rules apply to that table.
     pub strict: bool,
+    /// Snowflake "COPY GRANTS" clause
+    pub copy_grants: bool,
+    /// Snowflake "ENABLE_SCHEMA_EVOLUTION" clause
+    pub enable_schema_evolution: Option<bool>,
+    /// Snowflake "CHANGE_TRACKING" clause
+    pub change_tracking: Option<bool>,
+    /// Snowflake "DATA_RETENTION_TIME_IN_DAYS" clause
+    pub data_retention_time_in_days: Option<u64>,
+    /// Snowflake "MAX_DATA_EXTENSION_TIME_IN_DAYS" clause
+    pub max_data_extension_time_in_days: Option<u64>,
+    /// Snowflake "DEFAULT_DDL_COLLATION" clause
+    pub default_ddl_collation: Option<String>,
+    /// Snowflake "WITH AGGREGATION POLICY" clause
+    pub with_aggregation_policy: Option<ObjectName>,
+    /// Snowflake "WITH ROW ACCESS POLICY" clause
+    pub with_row_access_policy: Option<RowAccessPolicy>,
+    /// Snowflake "WITH TAG" clause
+    pub with_tags: Option<Vec<Tag>>,
 }
 
 impl Display for CreateTable {
@@ -289,6 +307,57 @@ impl Display for CreateTable {
                 display_comma_separated(options.as_slice())
             )?;
         }
+
+        if self.copy_grants {
+            write!(f, " COPY GRANTS")?;
+        }
+
+        if let Some(is_enabled) = self.enable_schema_evolution {
+            write!(
+                f,
+                " ENABLE_SCHEMA_EVOLUTION={}",
+                is_enabled.to_string().to_uppercase()
+            )?;
+        }
+
+        if let Some(is_enabled) = self.change_tracking {
+            write!(
+                f,
+                " CHANGE_TRACKING={}",
+                is_enabled.to_string().to_uppercase()
+            )?;
+        }
+
+        if let Some(data_retention_time_in_days) = self.data_retention_time_in_days {
+            write!(
+                f,
+                " DATA_RETENTION_TIME_IN_DAYS={data_retention_time_in_days}",
+            )?;
+        }
+
+        if let Some(max_data_extension_time_in_days) = self.max_data_extension_time_in_days {
+            write!(
+                f,
+                " MAX_DATA_EXTENSION_TIME_IN_DAYS={max_data_extension_time_in_days}",
+            )?;
+        }
+
+        if let Some(default_ddl_collation) = &self.default_ddl_collation {
+            write!(f, " DEFAULT_DDL_COLLATION='{default_ddl_collation}'",)?;
+        }
+
+        if let Some(with_aggregation_policy) = &self.with_aggregation_policy {
+            write!(f, " WITH AGGREGATION POLICY {with_aggregation_policy}",)?;
+        }
+
+        if let Some(row_access_policy) = &self.with_row_access_policy {
+            write!(f, " {row_access_policy}",)?;
+        }
+
+        if let Some(tag) = &self.with_tags {
+            write!(f, " WITH TAG {}", display_comma_separated(tag.as_slice()))?;
+        }
+
         if let Some(query) = &self.query {
             write!(f, " AS {query}")?;
         }

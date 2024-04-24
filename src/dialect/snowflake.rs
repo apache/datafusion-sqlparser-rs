@@ -12,11 +12,12 @@
 
 #[cfg(not(feature = "std"))]
 use crate::alloc::string::ToString;
+use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOption, DataLoadingOptionType, DataLoadingOptions, StageLoadSelectItem,
     StageParamsObject,
 };
-use crate::ast::{Ident, ObjectName, Statement};
+use crate::ast::{Ident, ObjectName, RowAccessPolicy, Statement, Tag};
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -91,12 +92,20 @@ impl Dialect for SnowflakeDialect {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
             let or_replace = parser.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
-            //[ TEMPORARY ]
-            let temporary = parser.parse_keyword(Keyword::TEMPORARY);
+            let local =
+                parser.parse_keyword(Keyword::LOCAL) || !parser.parse_keyword(Keyword::GLOBAL);
+            let temporary =
+                parser.parse_keyword(Keyword::TEMP) || parser.parse_keyword(Keyword::TEMPORARY);
+            let volatile = parser.parse_keyword(Keyword::VOLATILE);
+            let transient = parser.parse_keyword(Keyword::TRANSIENT);
 
             if parser.parse_keyword(Keyword::STAGE) {
                 // OK - this is CREATE STAGE statement
                 return Some(parse_create_stage(or_replace, temporary, parser));
+            } else if parser.parse_keyword(Keyword::TABLE) {
+                return Some(parse_create_table(
+                    or_replace, local, temporary, volatile, transient, parser,
+                ));
             } else {
                 // need to go back with the cursor
                 let mut back = 1;
@@ -118,6 +127,170 @@ impl Dialect for SnowflakeDialect {
 
         None
     }
+}
+
+pub fn parse_create_table(
+    or_replace: bool,
+    local: bool,
+    temporary: bool,
+    _volatile: bool,
+    transient: bool,
+    parser: &mut Parser,
+) -> Result<Statement, ParserError> {
+    let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    let table_name = parser.parse_object_name(false)?;
+
+    let mut builder = CreateTableBuilder::new(table_name)
+        .or_replace(or_replace)
+        .if_not_exists(if_not_exists)
+        .temporary(temporary)
+        .transient(transient)
+        .hive_formats(Some(Default::default()));
+
+    if !local {
+        builder = builder.global(Some(local));
+    }
+
+    loop {
+        let next_token = parser.next_token();
+        match &next_token.token {
+            Token::Word(word) => match word.keyword {
+                Keyword::COPY => {
+                    parser.expect_keyword(Keyword::GRANTS)?;
+                    builder = builder.copy_grants(true);
+                }
+                Keyword::COMMENT => {
+                    parser.expect_token(&Token::Eq)?;
+                    let next_token = parser.next_token();
+                    let comment = match next_token.token {
+                        Token::SingleQuotedString(str) => Some(str),
+                        _ => parser.expected("comment", next_token)?,
+                    };
+                    builder = builder.comment(comment);
+                }
+                Keyword::AS => {
+                    let query = parser.parse_boxed_query()?;
+                    builder = builder.query(Some(query));
+                    break;
+                }
+                Keyword::CLONE => {
+                    let clone = parser.parse_object_name(false).ok();
+                    builder = builder.clone_clause(clone);
+                    break;
+                }
+                Keyword::LIKE => {
+                    let like = parser.parse_object_name(false).ok();
+                    builder = builder.like(like);
+                    break;
+                }
+                Keyword::CLUSTER => {
+                    parser.expect_keyword(Keyword::BY)?;
+                    let cluster_by =
+                        Some(parser.parse_comma_separated(|p| p.parse_identifier(false))?);
+                    builder = builder.cluster_by(cluster_by)
+                }
+                Keyword::ENABLE_SCHEMA_EVOLUTION => {
+                    parser.expect_token(&Token::Eq)?;
+                    let enable_schema_evolution =
+                        match parser.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
+                            Some(Keyword::TRUE) => true,
+                            Some(Keyword::FALSE) => false,
+                            _ => {
+                                return parser.expected("TRUE or FALSE", next_token);
+                            }
+                        };
+
+                    builder = builder.enable_schema_evolution(Some(enable_schema_evolution));
+                }
+                Keyword::CHANGE_TRACKING => {
+                    parser.expect_token(&Token::Eq)?;
+                    let change_tracking =
+                        match parser.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
+                            Some(Keyword::TRUE) => true,
+                            Some(Keyword::FALSE) => false,
+                            _ => {
+                                return parser.expected("TRUE or FALSE", next_token);
+                            }
+                        };
+
+                    builder = builder.change_tracking(Some(change_tracking));
+                }
+                Keyword::DATA_RETENTION_TIME_IN_DAYS => {
+                    parser.expect_token(&Token::Eq)?;
+                    let data_retention_time_in_days = parser.parse_literal_uint()?;
+                    builder =
+                        builder.data_retention_time_in_days(Some(data_retention_time_in_days));
+                }
+                Keyword::MAX_DATA_EXTENSION_TIME_IN_DAYS => {
+                    parser.expect_token(&Token::Eq)?;
+                    let max_data_extension_time_in_days = parser.parse_literal_uint()?;
+                    builder = builder
+                        .max_data_extension_time_in_days(Some(max_data_extension_time_in_days));
+                }
+                Keyword::DEFAULT_DDL_COLLATION => {
+                    parser.expect_token(&Token::Eq)?;
+                    let default_ddl_collation = parser.parse_literal_string()?;
+                    builder = builder.default_ddl_collation(Some(default_ddl_collation));
+                }
+                // WITH is optional, we just verify that next token is one of the expected ones and
+                // fallback to the default match statement
+                Keyword::WITH => {
+                    parser.expect_one_of_keywords(&[
+                        Keyword::AGGREGATION,
+                        Keyword::TAG,
+                        Keyword::ROW,
+                    ])?;
+                    parser.prev_token();
+                }
+                Keyword::AGGREGATION => {
+                    parser.expect_keyword(Keyword::POLICY)?;
+                    let aggregation_policy = parser.parse_object_name(false)?;
+                    builder = builder.with_aggregation_policy(Some(aggregation_policy));
+                }
+                Keyword::ROW => {
+                    parser.expect_keywords(&[Keyword::ACCESS, Keyword::POLICY])?;
+                    let policy = parser.parse_object_name(false)?;
+                    parser.expect_keyword(Keyword::ON)?;
+                    let columns = parser.parse_comma_separated(|p| p.parse_identifier(false))?;
+
+                    builder =
+                        builder.with_row_access_policy(Some(RowAccessPolicy::new(policy, columns)))
+                }
+                Keyword::TAG => {
+                    fn parse_tag(parser: &mut Parser) -> Result<Tag, ParserError> {
+                        let name = parser.parse_identifier(false)?;
+                        parser.expect_token(&Token::Eq)?;
+                        let value = parser.parse_literal_string()?;
+
+                        Ok(Tag::new(name, value))
+                    }
+
+                    let tags = parser.parse_comma_separated(parse_tag)?;
+                    builder = builder.with_tags(Some(tags));
+                }
+                _ => {
+                    return parser.expected("end of statement", next_token);
+                }
+            },
+            Token::LParen => {
+                parser.prev_token();
+                let (columns, constraints) = parser.parse_columns()?;
+                builder = builder.columns(columns).constraints(constraints);
+            }
+            Token::EOF => {
+                break;
+            }
+            Token::SemiColon => {
+                parser.prev_token();
+                break;
+            }
+            _ => {
+                return parser.expected("end of statement", next_token);
+            }
+        }
+    }
+
+    Ok(builder.build())
 }
 
 pub fn parse_create_stage(

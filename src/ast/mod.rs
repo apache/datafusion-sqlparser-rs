@@ -6338,6 +6338,51 @@ impl Display for TableEngine {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RowAccessPolicy {
+    pub policy: ObjectName,
+    pub on: Vec<Ident>,
+}
+
+impl RowAccessPolicy {
+    pub fn new(policy: ObjectName, on: Vec<Ident>) -> Self {
+        Self { policy, on }
+    }
+}
+
+impl Display for RowAccessPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WITH ROW ACCESS POLICY {} ON {}",
+            self.policy,
+            display_comma_separated(self.on.as_slice())
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Tag {
+    pub key: Ident,
+    pub value: String,
+}
+
+impl Tag {
+    pub fn new(key: Ident, value: String) -> Self {
+        Self { key, value }
+    }
+}
+
+impl Display for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}='{}'", self.key, self.value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

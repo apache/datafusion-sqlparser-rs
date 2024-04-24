@@ -46,7 +46,16 @@ impl Dialect for SnowflakeDialect {
             || ch == '_'
     }
 
+    // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#escape_sequences
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        true
+    }
+
     fn supports_within_after_array_aggregation(&self) -> bool {
+        true
+    }
+
+    fn supports_match_recognize(&self) -> bool {
         true
     }
 

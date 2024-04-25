@@ -4181,6 +4181,9 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is SnowflakeDialect) {
             return self.parse_snowflake_declare();
         }
+        if dialect_of!(self is MsSqlDialect) {
+            return self.parse_mssql_declare();
+        }
 
         let name = self.parse_identifier(false)?;
 
@@ -4394,6 +4397,74 @@ impl<'a> Parser<'a> {
         Ok(Statement::Declare { stmts })
     }
 
+    /// Parse a [MsSql] `DECLARE` statement.
+    ///
+    /// Syntax:
+    /// ```text
+    /// DECLARE
+    // {
+    //   { @local_variable [AS] data_type [ = value ] }
+    //   | { @cursor_variable_name CURSOR }
+    // } [ ,...n ]
+    // | { @table_variable_name [AS] <table_type_definition> }
+    /// ```
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/declare-local-variable-transact-sql?view=sql-server-ver16
+    pub fn parse_mssql_declare(&mut self) -> Result<Statement, ParserError> {
+        let mut stmnts = vec![];
+
+        loop {
+        let name = {
+            let ident = self.parse_identifier(false)?;
+            if !ident.value.starts_with("@") {
+                Err(ParserError::TokenizerError(
+                    "Invalid MsSql variable declaration.".to_string(),
+                ))
+            } else {
+                Ok(ident)
+            }
+        }?;
+
+        let (data_type, none) = {
+            // Effectively a no-op since AS is optional in MsSql syntax
+            if self.parse_keyword(Keyword::AS) {}
+            let dt = match self.peek_token().token {
+                Token::Word(w) if w.keyword == Keyword::DEFAULT => None,
+                _ => Some(self.parse_data_type()?),
+            };
+
+            (dt, None)
+        };
+
+        if let Some(assignment) = self.parse_mssql_variable_declaration_expression()?;
+
+            stmnts.push(Declare {
+                names: vec![name],
+                data_type,
+                assignment,
+                declare_type: None,
+                binary: None,
+                sensitive: None,
+                scroll: None,
+                hold: None,
+                for_query: None,
+            })
+        }
+
+        Ok(Statement::Declare {
+            stmts: vec![Declare {
+                names: vec![name],
+                data_type,
+                assignment,
+                declare_type: None,
+                binary: None,
+                sensitive: None,
+                scroll: None,
+                hold: None,
+                for_query: None,
+            }],
+        })
+    }
+
     /// Parses the assigned expression in a variable declaration.
     ///
     /// Syntax:
@@ -4412,6 +4483,24 @@ impl<'a> Parser<'a> {
             Token::Assignment => {
                 self.next_token(); // Skip `:=`
                 Some(DeclareAssignment::DuckAssignment(Box::new(
+                    self.parse_expr()?,
+                )))
+            }
+            _ => None,
+        })
+    }
+
+    /// Parses the assigned expression in a variable declaration.
+    ///
+    /// Syntax:
+    /// ```text
+    /// [ = <expression>]
+    /// ```
+    pub fn parse_mssql_variable_declaration_expression(&mut self) -> Result<Option<DeclareAssignment>, ParserError> {
+        Ok(match self.peek_token().token {
+            Token::Assignment => {
+                self.next_token(); // Skip `=`
+                Some(DeclareAssignment::MsSqlAssignment(Box::new(
                     self.parse_expr()?,
                 )))
             }

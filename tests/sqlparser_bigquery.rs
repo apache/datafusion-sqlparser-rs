@@ -1460,3 +1460,11 @@ fn test_create_table_options_expression() {
         "CREATE OR REPLACE TABLE `myproject`.`mydataset`.`mytable` OPTIONS (description = \"\"\"Project entity stream base\"\"\") AS (SELECT * FROM `myproject`.`mydataset`.`othertable`)",
     );
 }
+
+#[test]
+fn test_create_table_options_empty() {
+    bigquery().one_statement_parses_to(
+        "CREATE OR REPLACE TABLE `myproject`.`mydataset`.`mytable` OPTIONS () AS (SELECT * FROM `myproject`.`mydataset`.`othertable`)",
+        "CREATE OR REPLACE TABLE `myproject`.`mydataset`.`mytable` AS (SELECT * FROM `myproject`.`mydataset`.`othertable`)",
+    );
+}

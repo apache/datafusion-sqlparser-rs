@@ -346,6 +346,19 @@ fn parse_within_group() {
 }
 
 #[test]
+fn parse_trim() {
+    redshift().verified_only_select("SELECT TRIM(col, ' ') FROM tbl");
+    redshift().verified_only_select("SELECT TRIM('    dog    ')");
+    redshift().one_statement_parses_to(
+        "SELECT TRIM(BOTH FROM '    dog    ')",
+        "SELECT TRIM(BOTH '    dog    ')",
+    );
+    redshift().verified_only_select(r#"SELECT TRIM(LEADING '"' FROM '"dog"')"#);
+    redshift().verified_only_select(r#"SELECT TRIM(TRAILING '"' FROM '"dog"')"#);
+    redshift().verified_only_select(r#"SELECT TRIM('CDG' FROM venuename)"#);
+}
+
+#[test]
 fn parse_listagg() {
     redshift().verified_only_select(r#"SELECT LISTAGG(a.attname, '|') WITHIN GROUP (ORDER BY a.attsortkeyord) OVER (PARTITION BY n.nspname, c.relname) AS sort_keys FROM bar"#);
 }

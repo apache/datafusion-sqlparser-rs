@@ -1421,36 +1421,47 @@ impl<'a> Parser<'a> {
                 trim_where = Some(self.parse_trim_where()?);
             }
         }
-        let expr = self.parse_expr()?;
         if self.parse_keyword(Keyword::FROM) {
-            let trim_what = Box::new(expr);
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
             Ok(Expr::Trim {
                 expr: Box::new(expr),
                 trim_where,
-                trim_what: Some(trim_what),
-                trim_characters: None,
-            })
-        } else if self.consume_token(&Token::Comma)
-            && dialect_of!(self is SnowflakeDialect | BigQueryDialect)
-        {
-            let characters = self.parse_comma_separated(Parser::parse_expr)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(Expr::Trim {
-                expr: Box::new(expr),
-                trim_where: None,
                 trim_what: None,
-                trim_characters: Some(characters),
+                trim_characters: None,
             })
         } else {
-            self.expect_token(&Token::RParen)?;
-            Ok(Expr::Trim {
-                expr: Box::new(expr),
-                trim_where,
-                trim_what: None,
-                trim_characters: None,
-            })
+            let expr = self.parse_expr()?;
+            if self.parse_keyword(Keyword::FROM) {
+                let trim_what = Box::new(expr);
+                let expr = self.parse_expr()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Trim {
+                    expr: Box::new(expr),
+                    trim_where,
+                    trim_what: Some(trim_what),
+                    trim_characters: None,
+                })
+            } else if self.consume_token(&Token::Comma)
+                && dialect_of!(self is SnowflakeDialect | BigQueryDialect | RedshiftSqlDialect)
+            {
+                let characters = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Trim {
+                    expr: Box::new(expr),
+                    trim_where: None,
+                    trim_what: None,
+                    trim_characters: Some(characters),
+                })
+            } else {
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Trim {
+                    expr: Box::new(expr),
+                    trim_where,
+                    trim_what: None,
+                    trim_characters: None,
+                })
+            }
         }
     }
 

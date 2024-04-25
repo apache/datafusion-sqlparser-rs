@@ -5592,7 +5592,7 @@ fn parse_trim() {
             Box::new(AnsiDialect {}),
             //Box::new(SnowflakeDialect {}),
             Box::new(HiveDialect {}),
-            Box::new(RedshiftSqlDialect {}),
+            //Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
             //Box::new(BigQueryDialect {}),
             Box::new(SQLiteDialect {}),

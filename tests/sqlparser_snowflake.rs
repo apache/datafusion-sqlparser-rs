@@ -1392,3 +1392,9 @@ fn parse_constraints() {
 fn test_sf_trailing_commas() {
     snowflake().verified_only_select_with_canonical("SELECT 1, 2, FROM t", "SELECT 1, 2 FROM t");
 }
+
+#[test]
+fn test_distribution_styles() {
+    let sql = "CREATE TABLE foo (id VARCHAR(32)) DISTSTYLE KEY DISTKEY (id) COMPOUND SORTKEY(id)";
+    snowflake().verified_stmt(sql);
+}

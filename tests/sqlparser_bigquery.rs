@@ -115,7 +115,8 @@ fn parse_nested_data_types() {
                         collation: None,
                         codec: None,
                         options: vec![],
-                        column_options: vec![]
+                        column_options: vec![],
+                        mask: None,
                     },
                     ColumnDef {
                         name: Ident::new("y").empty_span(),
@@ -129,7 +130,8 @@ fn parse_nested_data_types() {
                         collation: None,
                         codec: None,
                         options: vec![],
-                        column_options: vec![]
+                        column_options: vec![],
+                        mask: None,
                     },
                 ]
             );

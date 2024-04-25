@@ -568,6 +568,7 @@ pub struct ColumnDef {
     pub codec: Option<Vec<Expr>>,
     pub options: Vec<ColumnOptionDef>,
     pub column_options: Vec<SqlOption>,
+    pub mask: Option<ObjectName>,
 }
 
 impl fmt::Display for ColumnDef {
@@ -588,6 +589,9 @@ impl fmt::Display for ColumnDef {
                 " OPTIONS({})",
                 display_comma_separated(&self.column_options)
             )?;
+        }
+        if let Some(mask) = &self.mask {
+            write!(f, " MASK {mask}")?;
         }
         Ok(())
     }

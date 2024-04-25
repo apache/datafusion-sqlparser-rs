@@ -381,6 +381,7 @@ define_keywords!(
     MACRO,
     MANAGEDLOCATION,
     MAP,
+    MASK,
     MATCH,
     MATCHED,
     MATERIALIZED,

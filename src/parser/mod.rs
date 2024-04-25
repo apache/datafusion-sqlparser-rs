@@ -4404,6 +4404,12 @@ impl<'a> Parser<'a> {
 
         let column_options = self.parse_options(Keyword::OPTIONS)?;
 
+        let mask = if self.parse_keyword(Keyword::MASK) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
         Ok(ColumnDef {
             name,
             data_type,
@@ -4411,6 +4417,7 @@ impl<'a> Parser<'a> {
             codec,
             options,
             column_options,
+            mask,
         })
     }
 

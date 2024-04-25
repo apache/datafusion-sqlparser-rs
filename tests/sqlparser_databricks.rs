@@ -120,3 +120,8 @@ fn test_underscore_column_name() {
 
     databricks().verified_stmt("SELECT other AS _column FROM `myproject`.`mydataset`.`mytable`");
 }
+
+#[test]
+fn test_create_table_column_mask() {
+    databricks().verified_stmt("CREATE TABLE persons (name STRING, ssn STRING MASK mask_ssn)");
+}

@@ -9777,15 +9777,28 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
-        let mut clauses: Vec<MergeClause> = vec![];
+        let mut clauses = vec![];
         loop {
             if self.peek_token() == Token::EOF || self.peek_token() == Token::SemiColon {
                 break;
             }
             self.expect_keyword(Keyword::WHEN)?;
 
-            let is_not_matched = self.parse_keyword(Keyword::NOT);
+            let mut clause_kind = MergeClauseKind::Matched;
+            if self.parse_keyword(Keyword::NOT) {
+                clause_kind = MergeClauseKind::NotMatched;
+            }
             self.expect_keyword(Keyword::MATCHED)?;
+
+            if matches!(clause_kind, MergeClauseKind::NotMatched)
+                && self.parse_keywords(&[Keyword::BY, Keyword::SOURCE])
+            {
+                clause_kind = MergeClauseKind::NotMatchedBySource;
+            } else if matches!(clause_kind, MergeClauseKind::NotMatched)
+                && self.parse_keywords(&[Keyword::BY, Keyword::TARGET])
+            {
+                clause_kind = MergeClauseKind::NotMatchedByTarget;
+            }
 
             let predicate = if self.parse_keyword(Keyword::AND) {
                 Some(self.parse_expr()?)
@@ -9795,61 +9808,70 @@ impl<'a> Parser<'a> {
 
             self.expect_keyword(Keyword::THEN)?;
 
-            clauses.push(
-                match self.parse_one_of_keywords(&[
-                    Keyword::UPDATE,
-                    Keyword::INSERT,
-                    Keyword::DELETE,
-                ]) {
-                    Some(Keyword::UPDATE) => {
-                        if is_not_matched {
-                            return Err(ParserError::ParserError(
-                                "UPDATE in NOT MATCHED merge clause".to_string(),
-                            ));
-                        }
-                        self.expect_keyword(Keyword::SET)?;
-                        let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
-                        MergeClause::MatchedUpdate {
-                            predicate,
-                            assignments,
-                        }
+            let merge_clause = match self.parse_one_of_keywords(&[
+                Keyword::UPDATE,
+                Keyword::INSERT,
+                Keyword::DELETE,
+            ]) {
+                Some(Keyword::UPDATE) => {
+                    if matches!(
+                        clause_kind,
+                        MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
+                    ) {
+                        return Err(ParserError::ParserError(format!(
+                            "UPDATE is not allowed in a {clause_kind} merge clause"
+                        )));
                     }
-                    Some(Keyword::DELETE) => {
-                        if is_not_matched {
-                            return Err(ParserError::ParserError(
-                                "DELETE in NOT MATCHED merge clause".to_string(),
-                            ));
-                        }
-                        MergeClause::MatchedDelete(predicate)
+                    self.expect_keyword(Keyword::SET)?;
+                    MergeAction::Update {
+                        assignments: self.parse_comma_separated(Parser::parse_assignment)?,
                     }
-                    Some(Keyword::INSERT) => {
-                        if !is_not_matched {
-                            return Err(ParserError::ParserError(
-                                "INSERT in MATCHED merge clause".to_string(),
-                            ));
-                        }
-                        let is_mysql = dialect_of!(self is MySqlDialect);
-                        let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+                }
+                Some(Keyword::DELETE) => {
+                    if matches!(
+                        clause_kind,
+                        MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
+                    ) {
+                        return Err(ParserError::ParserError(format!(
+                            "DELETE is not allowed in a {clause_kind} merge clause"
+                        )));
+                    }
+                    MergeAction::Delete
+                }
+                Some(Keyword::INSERT) => {
+                    if !matches!(
+                        clause_kind,
+                        MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
+                    ) {
+                        return Err(ParserError::ParserError(format!(
+                            "INSERT is not allowed in a {clause_kind} merge clause"
+                        )));
+                    }
+                    let is_mysql = dialect_of!(self is MySqlDialect);
+
+                    let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+                    let kind = if dialect_of!(self is BigQueryDialect | GenericDialect)
+                        && self.parse_keyword(Keyword::ROW)
+                    {
+                        MergeInsertKind::Row
+                    } else {
                         self.expect_keyword(Keyword::VALUES)?;
                         let values = self.parse_values(is_mysql)?;
-                        MergeClause::NotMatched {
-                            predicate,
-                            columns,
-                            values,
-                        }
-                    }
-                    Some(_) => {
-                        return Err(ParserError::ParserError(
-                            "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
-                        ));
-                    }
-                    None => {
-                        return Err(ParserError::ParserError(
-                            "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
-                        ));
-                    }
-                },
-            );
+                        MergeInsertKind::Values(values)
+                    };
+                    MergeAction::Insert(MergeInsertExpr { columns, kind })
+                }
+                _ => {
+                    return Err(ParserError::ParserError(
+                        "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
+                    ));
+                }
+            };
+            clauses.push(MergeClause {
+                clause_kind,
+                predicate,
+                action: merge_clause,
+            });
         }
         Ok(clauses)
     }

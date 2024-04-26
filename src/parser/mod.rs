@@ -6451,7 +6451,9 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_character_length()?)),
-                Keyword::NVARCHAR => Ok(DataType::Nvarchar(self.parse_optional_precision()?)),
+                Keyword::NVARCHAR => {
+                    Ok(DataType::Nvarchar(self.parse_optional_character_length()?))
+                }
                 Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {
                         Ok(DataType::CharacterVarying(

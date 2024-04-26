@@ -1917,11 +1917,13 @@ fn parse_array_index_expr() {
                     })],
                     named: true,
                 })),
-                data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(
-                    DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(DataType::Int(
+                data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                    Box::new(DataType::Array(ArrayElemTypeDef::SquareBracket(
+                        Box::new(DataType::Int(None)),
                         None
-                    ))))
-                ))),
+                    ))),
+                    None
+                )),
                 format: None,
             }))),
             indexes: vec![num[1].clone(), num[2].clone()],

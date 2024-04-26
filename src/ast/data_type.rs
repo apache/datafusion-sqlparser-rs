@@ -349,7 +349,8 @@ impl fmt::Display for DataType {
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => match ty {
                 ArrayElemTypeDef::None => write!(f, "ARRAY"),
-                ArrayElemTypeDef::SquareBracket(t) => write!(f, "{t}[]"),
+                ArrayElemTypeDef::SquareBracket(t, None) => write!(f, "{t}[]"),
+                ArrayElemTypeDef::SquareBracket(t, Some(size)) => write!(f, "{t}[{size}]"),
                 ArrayElemTypeDef::AngleBracket(t) => write!(f, "ARRAY<{t}>"),
             },
             DataType::Custom(ty, modifiers) => {
@@ -592,6 +593,6 @@ pub enum ArrayElemTypeDef {
     None,
     /// `ARRAY<INT>`
     AngleBracket(Box<DataType>),
-    /// `[]INT`
-    SquareBracket(Box<DataType>),
+    /// `INT[]` or `INT[2]`
+    SquareBracket(Box<DataType>, Option<u64>),
 }

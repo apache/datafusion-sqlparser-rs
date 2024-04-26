@@ -6360,7 +6360,7 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let next_token = self.next_token();
-        let mut trailing_bracket = false.into();
+        let mut trailing_bracket: MatchedTrailingBracket = false.into();
         let mut data = match next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
@@ -6580,8 +6580,13 @@ impl<'a> Parser<'a> {
         // Parse array data types. Note: this is postgresql-specific and different from
         // Keyword::ARRAY syntax from above
         while self.consume_token(&Token::LBracket) {
+            let size = if dialect_of!(self is GenericDialect | DuckDbDialect | PostgreSqlDialect) {
+                self.maybe_parse(|p| p.parse_literal_uint())
+            } else {
+                None
+            };
             self.expect_token(&Token::RBracket)?;
-            data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data)))
+            data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
         }
         Ok((data, trailing_bracket))
     }
@@ -8228,6 +8233,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::Pivot { alias, .. }
                         | TableFactor::Unpivot { alias, .. }
+                        | TableFactor::MatchRecognize { alias, .. }
                         | TableFactor::NestedJoin { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
@@ -8351,7 +8357,243 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            if self.dialect.supports_match_recognize()
+                && self.parse_keyword(Keyword::MATCH_RECOGNIZE)
+            {
+                table = self.parse_match_recognize(table)?;
+            }
+
             Ok(table)
+        }
+    }
+
+    fn parse_match_recognize(&mut self, table: TableFactor) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+
+        let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
+        } else {
+            vec![]
+        };
+
+        let measures = if self.parse_keyword(Keyword::MEASURES) {
+            self.parse_comma_separated(|p| {
+                let expr = p.parse_expr()?;
+                let _ = p.parse_keyword(Keyword::AS);
+                let alias = p.parse_identifier(false)?;
+                Ok(Measure { expr, alias })
+            })?
+        } else {
+            vec![]
+        };
+
+        let rows_per_match =
+            if self.parse_keywords(&[Keyword::ONE, Keyword::ROW, Keyword::PER, Keyword::MATCH]) {
+                Some(RowsPerMatch::OneRow)
+            } else if self.parse_keywords(&[
+                Keyword::ALL,
+                Keyword::ROWS,
+                Keyword::PER,
+                Keyword::MATCH,
+            ]) {
+                Some(RowsPerMatch::AllRows(
+                    if self.parse_keywords(&[Keyword::SHOW, Keyword::EMPTY, Keyword::MATCHES]) {
+                        Some(EmptyMatchesMode::Show)
+                    } else if self.parse_keywords(&[
+                        Keyword::OMIT,
+                        Keyword::EMPTY,
+                        Keyword::MATCHES,
+                    ]) {
+                        Some(EmptyMatchesMode::Omit)
+                    } else if self.parse_keywords(&[
+                        Keyword::WITH,
+                        Keyword::UNMATCHED,
+                        Keyword::ROWS,
+                    ]) {
+                        Some(EmptyMatchesMode::WithUnmatched)
+                    } else {
+                        None
+                    },
+                ))
+            } else {
+                None
+            };
+
+        let after_match_skip =
+            if self.parse_keywords(&[Keyword::AFTER, Keyword::MATCH, Keyword::SKIP]) {
+                if self.parse_keywords(&[Keyword::PAST, Keyword::LAST, Keyword::ROW]) {
+                    Some(AfterMatchSkip::PastLastRow)
+                } else if self.parse_keywords(&[Keyword::TO, Keyword::NEXT, Keyword::ROW]) {
+                    Some(AfterMatchSkip::ToNextRow)
+                } else if self.parse_keywords(&[Keyword::TO, Keyword::FIRST]) {
+                    Some(AfterMatchSkip::ToFirst(self.parse_identifier(false)?))
+                } else if self.parse_keywords(&[Keyword::TO, Keyword::LAST]) {
+                    Some(AfterMatchSkip::ToLast(self.parse_identifier(false)?))
+                } else {
+                    let found = self.next_token();
+                    return self.expected("after match skip option", found);
+                }
+            } else {
+                None
+            };
+
+        self.expect_keyword(Keyword::PATTERN)?;
+        self.expect_token(&Token::LParen)?;
+        let pattern = self.parse_pattern()?;
+        self.expect_token(&Token::RParen)?;
+
+        self.expect_keyword(Keyword::DEFINE)?;
+
+        let symbols = self.parse_comma_separated(|p| {
+            let symbol = p.parse_identifier(false)?;
+            p.expect_keyword(Keyword::AS)?;
+            let definition = p.parse_expr()?;
+            Ok(SymbolDefinition { symbol, definition })
+        })?;
+
+        self.expect_token(&Token::RParen)?;
+
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+
+        Ok(TableFactor::MatchRecognize {
+            table: Box::new(table),
+            partition_by,
+            order_by,
+            measures,
+            rows_per_match,
+            after_match_skip,
+            pattern,
+            symbols,
+            alias,
+        })
+    }
+
+    fn parse_base_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
+        match self.next_token().token {
+            Token::Caret => Ok(MatchRecognizePattern::Symbol(MatchRecognizeSymbol::Start)),
+            Token::Placeholder(s) if s == "$" => {
+                Ok(MatchRecognizePattern::Symbol(MatchRecognizeSymbol::End))
+            }
+            Token::LBrace => {
+                self.expect_token(&Token::Minus)?;
+                let symbol = self
+                    .parse_identifier(false)
+                    .map(MatchRecognizeSymbol::Named)?;
+                self.expect_token(&Token::Minus)?;
+                self.expect_token(&Token::RBrace)?;
+                Ok(MatchRecognizePattern::Exclude(symbol))
+            }
+            Token::Word(Word {
+                value,
+                quote_style: None,
+                ..
+            }) if value == "PERMUTE" => {
+                self.expect_token(&Token::LParen)?;
+                let symbols = self.parse_comma_separated(|p| {
+                    p.parse_identifier(false).map(MatchRecognizeSymbol::Named)
+                })?;
+                self.expect_token(&Token::RParen)?;
+                Ok(MatchRecognizePattern::Permute(symbols))
+            }
+            Token::LParen => {
+                let pattern = self.parse_pattern()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(MatchRecognizePattern::Group(Box::new(pattern)))
+            }
+            _ => {
+                self.prev_token();
+                self.parse_identifier(false)
+                    .map(MatchRecognizeSymbol::Named)
+                    .map(MatchRecognizePattern::Symbol)
+            }
+        }
+    }
+
+    fn parse_repetition_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
+        let mut pattern = self.parse_base_pattern()?;
+        loop {
+            let token = self.next_token();
+            let quantifier = match token.token {
+                Token::Mul => RepetitionQuantifier::ZeroOrMore,
+                Token::Plus => RepetitionQuantifier::OneOrMore,
+                Token::Placeholder(s) if s == "?" => RepetitionQuantifier::AtMostOne,
+                Token::LBrace => {
+                    // quantifier is a range like {n} or {n,} or {,m} or {n,m}
+                    let token = self.next_token();
+                    match token.token {
+                        Token::Comma => {
+                            let next_token = self.next_token();
+                            let Token::Number(n, _) = next_token.token else {
+                                return self.expected("literal number", next_token);
+                            };
+                            self.expect_token(&Token::RBrace)?;
+                            RepetitionQuantifier::AtMost(n.parse().expect("literal int"))
+                        }
+                        Token::Number(n, _) if self.consume_token(&Token::Comma) => {
+                            let next_token = self.next_token();
+                            match next_token.token {
+                                Token::Number(m, _) => {
+                                    self.expect_token(&Token::RBrace)?;
+                                    RepetitionQuantifier::Range(
+                                        n.parse().expect("literal int"),
+                                        m.parse().expect("literal int"),
+                                    )
+                                }
+                                Token::RBrace => {
+                                    RepetitionQuantifier::AtLeast(n.parse().expect("literal int"))
+                                }
+                                _ => {
+                                    return self.expected("} or upper bound", next_token);
+                                }
+                            }
+                        }
+                        Token::Number(n, _) => {
+                            self.expect_token(&Token::RBrace)?;
+                            RepetitionQuantifier::Exactly(n.parse().expect("literal int"))
+                        }
+                        _ => return self.expected("quantifier range", token),
+                    }
+                }
+                _ => {
+                    self.prev_token();
+                    break;
+                }
+            };
+            pattern = MatchRecognizePattern::Repetition(Box::new(pattern), quantifier);
+        }
+        Ok(pattern)
+    }
+
+    fn parse_concat_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
+        let mut patterns = vec![self.parse_repetition_pattern()?];
+        while !matches!(self.peek_token().token, Token::RParen | Token::Pipe) {
+            patterns.push(self.parse_repetition_pattern()?);
+        }
+        match <[MatchRecognizePattern; 1]>::try_from(patterns) {
+            Ok([pattern]) => Ok(pattern),
+            Err(patterns) => Ok(MatchRecognizePattern::Concat(patterns)),
+        }
+    }
+
+    fn parse_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
+        let pattern = self.parse_concat_pattern()?;
+        if self.consume_token(&Token::Pipe) {
+            match self.parse_pattern()? {
+                // flatten nested alternations
+                MatchRecognizePattern::Alternation(mut patterns) => {
+                    patterns.insert(0, pattern);
+                    Ok(MatchRecognizePattern::Alternation(patterns))
+                }
+                next => Ok(MatchRecognizePattern::Alternation(vec![pattern, next])),
+            }
+        } else {
+            Ok(pattern)
         }
     }
 
@@ -8751,9 +8993,12 @@ impl<'a> Parser<'a> {
                     let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
                     let partitioned = self.parse_insert_partition()?;
-
                     // Hive allows you to specify columns after partitions as well if you want.
-                    let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+                    let after_columns = if dialect_of!(self is HiveDialect) {
+                        self.parse_parenthesized_column_list(Optional, false)?
+                    } else {
+                        vec![]
+                    };
 
                     let source = Some(self.parse_boxed_query()?);
 
@@ -10567,13 +10812,6 @@ mod tests {
     #[test]
     fn test_replace_into_set_placeholder() {
         let sql = "REPLACE INTO t SET ?";
-
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
-    }
-
-    #[test]
-    fn test_replace_into_select() {
-        let sql = r#"REPLACE INTO t1 (a, b, c) (SELECT * FROM t2)"#;
 
         assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
     }

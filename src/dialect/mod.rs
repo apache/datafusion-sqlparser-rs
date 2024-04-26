@@ -120,6 +120,23 @@ pub trait Dialect: Debug + Any {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
+    /// Determine if the dialect supports escaping characters via '\' in string literals.
+    ///
+    /// Some dialects like BigQuery and Snowflake support this while others like
+    /// Postgres do not. Such that the following is accepted by the former but
+    /// rejected by the latter.
+    /// ```sql
+    /// SELECT 'ab\'cd';
+    /// ```
+    ///
+    /// Conversely, such dialects reject the following statement which
+    /// otherwise would be valid in the other dialects.
+    /// ```sql
+    /// SELECT '\';
+    /// ```
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        false
+    }
     /// Does the dialect support `FILTER (WHERE expr)` for aggregate queries?
     fn supports_filter_during_aggregation(&self) -> bool {
         false
@@ -137,6 +154,10 @@ pub trait Dialect: Debug + Any {
     }
     /// Returns true if the dialect supports CONNECT BY.
     fn supports_connect_by(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports the MATCH_RECOGNIZE operation.
+    fn supports_match_recognize(&self) -> bool {
         false
     }
     /// Returns true if the dialect supports `(NOT) IN ()` expressions
@@ -308,6 +329,10 @@ mod tests {
 
             fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
                 self.0.identifier_quote_style(identifier)
+            }
+
+            fn supports_string_literal_backslash_escape(&self) -> bool {
+                self.0.supports_string_literal_backslash_escape()
             }
 
             fn is_proper_identifier_inside_quotes(

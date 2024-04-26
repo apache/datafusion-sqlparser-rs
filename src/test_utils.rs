@@ -317,3 +317,20 @@ pub fn join(relation: TableFactor) -> Join {
         join_operator: JoinOperator::Inner(JoinConstraint::Natural),
     }
 }
+
+pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
+    Expr::Function(Function {
+        name: ObjectName(vec![Ident::new(function)]),
+        args: args
+            .into_iter()
+            .map(FunctionArgExpr::Expr)
+            .map(FunctionArg::Unnamed)
+            .collect(),
+        filter: None,
+        null_treatment: None,
+        over: None,
+        distinct: false,
+        special: false,
+        order_by: vec![],
+    })
+}

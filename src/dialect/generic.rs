@@ -43,6 +43,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_match_recognize(&self) -> bool {
+        true
+    }
+
     fn supports_start_transaction_modifier(&self) -> bool {
         true
     }

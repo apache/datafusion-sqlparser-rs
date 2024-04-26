@@ -2620,6 +2620,19 @@ impl<'a> Parser<'a> {
         true
     }
 
+    /// Look for next keyword ignoring any other tokens, e.g. `((`
+    #[must_use]
+    pub fn peek_next_keyword(&mut self) -> Option<Keyword> {
+        let mut n = 1;
+        loop {
+            match self.peek_nth_token(n).token {
+                Token::EOF => return None,
+                Token::Word(w) => return Some(w.keyword),
+                _ => n += 1,
+            }
+        }
+    }
+
     /// Look for one of the given keywords and return the one that matches.
     #[must_use]
     pub fn parse_one_of_keywords(&mut self, keywords: &[Keyword]) -> Option<Keyword> {
@@ -6528,8 +6541,17 @@ impl<'a> Parser<'a> {
                 from: None,
             }
         } else {
-            let columns = self.parse_parenthesized_column_list(Optional, false)?;
-            self.expect_keyword(Keyword::AS)?;
+            let next_keyword = self.peek_next_keyword();
+            let columns = if let Some(keyword) = next_keyword {
+                match keyword {
+                    Keyword::WITH | Keyword::AS | Keyword::SELECT => vec![],
+                    _ => self.parse_parenthesized_column_list(Optional, false)?,
+                }
+            } else {
+                self.parse_parenthesized_column_list(Optional, false)?
+            };
+            // AS is not mandatory for Databricks
+            _ = self.parse_keyword(Keyword::AS);
             self.expect_token(&Token::LParen)?;
             let query = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;

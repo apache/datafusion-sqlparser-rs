@@ -125,3 +125,21 @@ fn test_underscore_column_name() {
 fn test_create_table_column_mask() {
     databricks().verified_stmt("CREATE TABLE persons (name STRING, ssn STRING MASK mask_ssn)");
 }
+
+#[test]
+fn test_cte_columns() {
+    databricks()
+        .verified_stmt("WITH t (x, y) AS (SELECT 1, 2) SELECT * FROM t WHERE x = 1 AND y = 2");
+}
+
+#[test]
+fn test_cte_no_as() {
+    databricks().one_statement_parses_to(
+        "WITH foo (SELECT 'bar' as baz) SELECT * FROM foo",
+        "WITH foo AS (SELECT 'bar' AS baz) SELECT * FROM foo",
+    );
+    databricks().one_statement_parses_to(
+        "WITH foo (WITH b (SELECT * FROM bb) SELECT 'bar' as baz FROM b) SELECT * FROM foo",
+        "WITH foo AS (WITH b AS (SELECT * FROM bb) SELECT 'bar' AS baz FROM b) SELECT * FROM foo",
+    );
+}

@@ -13,6 +13,7 @@
 mod ansi;
 mod bigquery;
 mod clickhouse;
+mod databricks;
 mod duckdb;
 mod generic;
 mod hive;
@@ -32,6 +33,7 @@ use core::str::Chars;
 pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
+pub use self::databricks::DatabricksDialect;
 pub use self::duckdb::DuckDbDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
@@ -170,6 +172,11 @@ pub trait Dialect: Debug + Any {
     }
     /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports defining structs or objects using a
+    /// syntax like `{'x': 1, 'y': 2, 'z': 3}`.
+    fn supports_dictionary_syntax(&self) -> bool {
         false
     }
     /// Returns true if the dialect has a CONVERT function which accepts a type first

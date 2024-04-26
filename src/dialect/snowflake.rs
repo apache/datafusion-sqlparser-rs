@@ -63,6 +63,14 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    // Snowflake uses this syntax for "object constants" (the values of which
+    // are not actually required to be constants).
+    //
+    // https://docs.snowflake.com/en/sql-reference/data-types-semistructured#label-object-constant
+    fn supports_dictionary_syntax(&self) -> bool {
+        true
+    }
+
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE

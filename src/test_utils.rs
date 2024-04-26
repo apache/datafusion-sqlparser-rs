@@ -217,6 +217,7 @@ pub fn all_dialects() -> TestedDialects {
         Box::new(BigQueryDialect {}) as Box<dyn Dialect>,
         Box::new(SQLiteDialect {}) as Box<dyn Dialect>,
         Box::new(DuckDbDialect {}) as Box<dyn Dialect>,
+        Box::new(DatabricksDialect {}) as Box<dyn Dialect>,
     ];
     TestedDialects {
         dialects: all_dialects,

@@ -2259,7 +2259,10 @@ fn parse_cast() {
         &Expr::Cast {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Nvarchar(Some(50)),
+            data_type: DataType::Nvarchar(Some(CharacterLength::IntegerLength {
+                length: 50,
+                unit: None,
+            })),
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -7477,19 +7480,32 @@ fn parse_merge() {
             assert_eq!(
                 clauses,
                 vec![
-                    MergeClause::NotMatched {
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
                         predicate: None,
-                        columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
-                        values: Values {
-                            explicit_row: false,
-                            rows: vec![vec![
-                                Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("A")]),
-                                Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("B")]),
-                                Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("C")]),
-                            ]]
-                        },
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
+                            kind: MergeInsertKind::Values(Values {
+                                explicit_row: false,
+                                rows: vec![vec![
+                                    Expr::CompoundIdentifier(vec![
+                                        Ident::new("stg"),
+                                        Ident::new("A")
+                                    ]),
+                                    Expr::CompoundIdentifier(vec![
+                                        Ident::new("stg"),
+                                        Ident::new("B")
+                                    ]),
+                                    Expr::CompoundIdentifier(vec![
+                                        Ident::new("stg"),
+                                        Ident::new("C")
+                                    ]),
+                                ]]
+                            }),
+                        }),
                     },
-                    MergeClause::MatchedUpdate {
+                    MergeClause {
+                        clause_kind: MergeClauseKind::Matched,
                         predicate: Some(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
                                 Ident::new("dest"),
@@ -7500,30 +7516,39 @@ fn parse_merge() {
                                 "a".to_string()
                             ))),
                         }),
-                        assignments: vec![
-                            Assignment {
-                                id: vec![Ident::new("dest"), Ident::new("F")],
-                                value: Expr::CompoundIdentifier(vec![
-                                    Ident::new("stg"),
-                                    Ident::new("F"),
-                                ]),
-                            },
-                            Assignment {
-                                id: vec![Ident::new("dest"), Ident::new("G")],
-                                value: Expr::CompoundIdentifier(vec![
-                                    Ident::new("stg"),
-                                    Ident::new("G"),
-                                ]),
-                            },
-                        ],
+                        action: MergeAction::Update {
+                            assignments: vec![
+                                Assignment {
+                                    id: vec![Ident::new("dest"), Ident::new("F")],
+                                    value: Expr::CompoundIdentifier(vec![
+                                        Ident::new("stg"),
+                                        Ident::new("F"),
+                                    ]),
+                                },
+                                Assignment {
+                                    id: vec![Ident::new("dest"), Ident::new("G")],
+                                    value: Expr::CompoundIdentifier(vec![
+                                        Ident::new("stg"),
+                                        Ident::new("G"),
+                                    ]),
+                                },
+                            ],
+                        },
                     },
-                    MergeClause::MatchedDelete(None),
+                    MergeClause {
+                        clause_kind: MergeClauseKind::Matched,
+                        predicate: None,
+                        action: MergeAction::Delete,
+                    },
                 ]
             );
             assert_eq!(clauses, clauses_no_into);
         }
         _ => unreachable!(),
-    }
+    };
+
+    let sql = "MERGE INTO s.bar AS dest USING newArrivals AS S ON false WHEN NOT MATCHED THEN INSERT VALUES (stg.A, stg.B, stg.C)";
+    verified_stmt(sql);
 }
 
 #[test]
@@ -7550,6 +7575,31 @@ fn test_merge_with_delimiter() {
     match parse_sql_statements(sql) {
         Ok(_) => {}
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_merge_invalid_statements() {
+    let dialects = all_dialects();
+    for (sql, err_msg) in [
+        (
+            "MERGE INTO T USING U ON TRUE WHEN NOT MATCHED THEN UPDATE SET a = b",
+            "UPDATE is not allowed in a NOT MATCHED merge clause",
+        ),
+        (
+            "MERGE INTO T USING U ON TRUE WHEN NOT MATCHED THEN DELETE",
+            "DELETE is not allowed in a NOT MATCHED merge clause",
+        ),
+        (
+            "MERGE INTO T USING U ON TRUE WHEN MATCHED THEN INSERT(a) VALUES(b)",
+            "INSERT is not allowed in a MATCHED merge clause",
+        ),
+    ] {
+        let res = dialects.parse_sql_statements(sql);
+        assert_eq!(
+            ParserError::ParserError(err_msg.to_string()),
+            res.unwrap_err()
+        );
     }
 }
 
@@ -9055,6 +9105,77 @@ fn parse_connect_by() {
 }
 
 #[test]
+fn test_selective_aggregation() {
+    let sql = concat!(
+        "SELECT ",
+        "ARRAY_AGG(name) FILTER (WHERE name IS NOT NULL), ",
+        "ARRAY_AGG(name) FILTER (WHERE name LIKE 'a%') AS agg2 ",
+        "FROM region"
+    );
+    assert_eq!(
+        all_dialects_where(|d| d.supports_filter_during_aggregation())
+            .verified_only_select(sql)
+            .projection,
+        vec![
+            SelectItem::UnnamedExpr(Expr::AggregateExpressionWithFilter {
+                expr: Box::new(Expr::ArrayAgg(ArrayAgg {
+                    distinct: false,
+                    expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                    order_by: None,
+                    limit: None,
+                    within_group: false,
+                })),
+                filter: Box::new(Expr::IsNotNull(Box::new(Expr::Identifier(Ident::new(
+                    "name"
+                ))))),
+            }),
+            SelectItem::ExprWithAlias {
+                expr: Expr::AggregateExpressionWithFilter {
+                    expr: Box::new(Expr::ArrayAgg(ArrayAgg {
+                        distinct: false,
+                        expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                        order_by: None,
+                        limit: None,
+                        within_group: false,
+                    })),
+                    filter: Box::new(Expr::Like {
+                        negated: false,
+                        expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                        pattern: Box::new(Expr::Value(Value::SingleQuotedString("a%".to_owned()))),
+                        escape_char: None,
+                    }),
+                },
+                alias: Ident::new("agg2")
+            },
+        ]
+    )
+}
+
+#[test]
+fn test_group_by_grouping_sets() {
+    let sql = concat!(
+        "SELECT city, car_model, sum(quantity) AS sum ",
+        "FROM dealer ",
+        "GROUP BY GROUPING SETS ((city, car_model), (city), (car_model), ()) ",
+        "ORDER BY city",
+    );
+    assert_eq!(
+        all_dialects_where(|d| d.supports_group_by_expr())
+            .verified_only_select(sql)
+            .group_by,
+        GroupByExpr::Expressions(vec![Expr::GroupingSets(vec![
+            vec![
+                Expr::Identifier(Ident::new("city")),
+                Expr::Identifier(Ident::new("car_model"))
+            ],
+            vec![Expr::Identifier(Ident::new("city")),],
+            vec![Expr::Identifier(Ident::new("car_model"))],
+            vec![]
+        ])])
+    );
+}
+
+#[test]
 fn test_match_recognize() {
     use MatchRecognizePattern::*;
     use MatchRecognizeSymbol::*;
@@ -9454,4 +9575,60 @@ fn insert_into_with_parentheses() {
         options: None,
     };
     dialects.verified_stmt("INSERT INTO t1 (id, name) (SELECT t2.id, t2.name FROM t2)");
+}
+
+#[test]
+fn test_dictionary_syntax() {
+    fn check(sql: &str, expect: Expr) {
+        assert_eq!(
+            all_dialects_where(|d| d.supports_dictionary_syntax()).verified_expr(sql),
+            expect
+        );
+    }
+
+    check(
+        "{'Alberta': 'Edmonton', 'Manitoba': 'Winnipeg'}",
+        Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "Alberta"),
+                value: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "Edmonton".to_owned(),
+                ))),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "Manitoba"),
+                value: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "Winnipeg".to_owned(),
+                ))),
+            },
+        ]),
+    );
+
+    check(
+        "{'start': CAST('2023-04-01' AS TIMESTAMP), 'end': CAST('2023-04-05' AS TIMESTAMP)}",
+        Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "start"),
+                value: Box::new(Expr::Cast {
+                    kind: CastKind::Cast,
+                    expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "2023-04-01".to_owned(),
+                    ))),
+                    data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                    format: None,
+                }),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "end"),
+                value: Box::new(Expr::Cast {
+                    kind: CastKind::Cast,
+                    expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "2023-04-05".to_owned(),
+                    ))),
+                    data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                    format: None,
+                }),
+            },
+        ]),
+    )
 }

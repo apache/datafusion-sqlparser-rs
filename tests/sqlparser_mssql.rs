@@ -432,6 +432,7 @@ fn parse_for_json_expect_ast() {
 #[test]
 fn parse_cast_varchar_max() {
     ms_and_generic().verified_expr("CAST('foo' AS VARCHAR(MAX))");
+    ms_and_generic().verified_expr("CAST('foo' AS NVARCHAR(MAX))");
 }
 
 #[test]

@@ -1192,7 +1192,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-            Token::LBrace if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+            Token::LBrace if self.dialect.supports_dictionary_syntax() => {
                 self.prev_token();
                 self.parse_duckdb_struct_literal()
             }

@@ -46,4 +46,8 @@ impl Dialect for GenericDialect {
     fn supports_start_transaction_modifier(&self) -> bool {
         true
     }
+
+    fn supports_dictionary_syntax(&self) -> bool {
+        true
+    }
 }

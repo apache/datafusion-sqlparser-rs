@@ -8938,6 +8938,76 @@ fn parse_map_access_expr() {
 }
 
 #[test]
+fn test_selective_aggregation() {
+    let sql = concat!(
+        "SELECT ",
+        "ARRAY_AGG(name) FILTER (WHERE name IS NOT NULL), ",
+        "ARRAY_AGG(name) FILTER (WHERE name LIKE 'a%') AS agg2 ",
+        "FROM region"
+    );
+    assert_eq!(
+        all_dialects_where(|d| d.supports_filter_during_aggregation())
+            .verified_only_select(sql)
+            .projection,
+        vec![
+            SelectItem::UnnamedExpr(Expr::AggregateExpressionWithFilter {
+                expr: Box::new(Expr::ArrayAgg(ArrayAgg {
+                    distinct: false,
+                    expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                    order_by: None,
+                    limit: None,
+                    within_group: false,
+                })),
+                filter: Box::new(Expr::IsNotNull(Box::new(Expr::Identifier(Ident::new(
+                    "name"
+                ))))),
+            }),
+            SelectItem::ExprWithAlias {
+                expr: Expr::AggregateExpressionWithFilter {
+                    expr: Box::new(Expr::ArrayAgg(ArrayAgg {
+                        distinct: false,
+                        expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                        order_by: None,
+                        limit: None,
+                        within_group: false,
+                    })),
+                    filter: Box::new(Expr::Like {
+                        negated: false,
+                        expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                        pattern: Box::new(Expr::Value(Value::SingleQuotedString("a%".to_owned()))),
+                        escape_char: None,
+                    }),
+                },
+                alias: Ident::new("agg2")
+            },
+        ]
+    )
+}
+
+#[test]
+fn test_group_by_grouping_sets() {
+    let sql = concat!(
+        "SELECT city, car_model, sum(quantity) AS sum ",
+        "FROM dealer ",
+        "GROUP BY GROUPING SETS ((city, car_model), (city), (car_model), ()) ",
+        "ORDER BY city",
+    );
+    assert_eq!(
+        all_dialects_where(|d| d.supports_group_by_expr())
+            .verified_only_select(sql)
+            .group_by,
+        GroupByExpr::Expressions(vec![Expr::GroupingSets(vec![
+            vec![
+                Expr::Identifier(Ident::new("city")),
+                Expr::Identifier(Ident::new("car_model"))
+            ],
+            vec![Expr::Identifier(Ident::new("city")),],
+            vec![Expr::Identifier(Ident::new("car_model"))],
+            vec![]
+        ])])
+    );
+}
+#[test]
 fn test_match_recognize() {
     use MatchRecognizePattern::*;
     use MatchRecognizeSymbol::*;

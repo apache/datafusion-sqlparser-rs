@@ -402,6 +402,7 @@ fn parse_update_set_from() {
                             named_window: vec![],
                             qualify: None,
                             value_table_mode: None,
+                            connect_by: None,
                         }))),
                         order_by: vec![],
                         limit: None,
@@ -4469,6 +4470,7 @@ fn test_parse_named_window() {
         ],
         qualify: None,
         value_table_mode: None,
+        connect_by: None,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -4825,6 +4827,7 @@ fn parse_interval_and_or_xor() {
             named_window: vec![],
             qualify: None,
             value_table_mode: None,
+            connect_by: None,
         }))),
         order_by: vec![],
         limit: None,
@@ -6778,6 +6781,7 @@ fn lateral_function() {
         named_window: vec![],
         qualify: None,
         value_table_mode: None,
+        connect_by: None,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -7422,6 +7426,7 @@ fn parse_merge() {
                             named_window: vec![],
                             qualify: None,
                             value_table_mode: None,
+                            connect_by: None,
                         }))),
                         order_by: vec![],
                         limit: None,
@@ -8817,6 +8822,7 @@ fn parse_unload() {
                     named_window: vec![],
                     qualify: None,
                     value_table_mode: None,
+                    connect_by: None,
                 }))),
                 with: None,
                 limit: None,
@@ -8938,6 +8944,167 @@ fn parse_map_access_expr() {
 }
 
 #[test]
+fn parse_connect_by() {
+    let expect_query = Select {
+        distinct: None,
+        top: None,
+        projection: vec![
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
+        ],
+        from: vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("employees")]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+            },
+            joins: vec![],
+        }],
+        into: None,
+        lateral_views: vec![],
+        selection: None,
+        group_by: GroupByExpr::Expressions(vec![]),
+        cluster_by: vec![],
+        distribute_by: vec![],
+        sort_by: vec![],
+        having: None,
+        named_window: vec![],
+        qualify: None,
+        value_table_mode: None,
+        connect_by: Some(ConnectBy {
+            condition: Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("title"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "president".to_owned(),
+                ))),
+            },
+            relationships: vec![Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
+                    "employee_id",
+                ))))),
+            }],
+        }),
+    };
+
+    let connect_by_1 = concat!(
+        "SELECT employee_id, manager_id, title FROM employees ",
+        "START WITH title = 'president' ",
+        "CONNECT BY manager_id = PRIOR employee_id ",
+        "ORDER BY employee_id"
+    );
+
+    assert_eq!(
+        all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_1),
+        expect_query
+    );
+
+    // CONNECT BY can come before START WITH
+    let connect_by_2 = concat!(
+        "SELECT employee_id, manager_id, title FROM employees ",
+        "CONNECT BY manager_id = PRIOR employee_id ",
+        "START WITH title = 'president' ",
+        "ORDER BY employee_id"
+    );
+    assert_eq!(
+        all_dialects_where(|d| d.supports_connect_by())
+            .verified_only_select_with_canonical(connect_by_2, connect_by_1),
+        expect_query
+    );
+
+    // WHERE must come before CONNECT BY
+    let connect_by_3 = concat!(
+        "SELECT employee_id, manager_id, title FROM employees ",
+        "WHERE employee_id <> 42 ",
+        "START WITH title = 'president' ",
+        "CONNECT BY manager_id = PRIOR employee_id ",
+        "ORDER BY employee_id"
+    );
+    assert_eq!(
+        all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_3),
+        Select {
+            distinct: None,
+            top: None,
+            projection: vec![
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
+            ],
+            from: vec![TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("employees")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                    version: None,
+                    partitions: vec![],
+                },
+                joins: vec![],
+            }],
+            into: None,
+            lateral_views: vec![],
+            selection: Some(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("employee_id"))),
+                op: BinaryOperator::NotEq,
+                right: Box::new(Expr::Value(number("42"))),
+            }),
+            group_by: GroupByExpr::Expressions(vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            qualify: None,
+            value_table_mode: None,
+            connect_by: Some(ConnectBy {
+                condition: Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("title"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "president".to_owned(),
+                    ))),
+                },
+                relationships: vec![Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
+                        "employee_id",
+                    ))))),
+                }],
+            }),
+        }
+    );
+
+    let connect_by_4 = concat!(
+        "SELECT employee_id, manager_id, title FROM employees ",
+        "START WITH title = 'president' ",
+        "CONNECT BY manager_id = PRIOR employee_id ",
+        "WHERE employee_id <> 42 ",
+        "ORDER BY employee_id"
+    );
+    all_dialects_where(|d| d.supports_connect_by())
+        .parse_sql_statements(connect_by_4)
+        .expect_err("should have failed");
+
+    // PRIOR expressions are only valid within a CONNECT BY, and the the token
+    // `prior` is valid as an identifier anywhere else.
+    assert_eq!(
+        all_dialects()
+            .verified_only_select("SELECT prior FROM some_table")
+            .projection,
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
+            "prior"
+        )))]
+    );
+}
+
+#[test]
 fn test_selective_aggregation() {
     let sql = concat!(
         "SELECT ",
@@ -9007,6 +9174,7 @@ fn test_group_by_grouping_sets() {
         ])])
     );
 }
+
 #[test]
 fn test_match_recognize() {
     use MatchRecognizePattern::*;

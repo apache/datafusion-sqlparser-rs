@@ -55,6 +55,10 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_connect_by(&self) -> bool {
+        true
+    }
+
     fn supports_match_recognize(&self) -> bool {
         true
     }

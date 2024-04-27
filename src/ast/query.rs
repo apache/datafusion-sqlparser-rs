@@ -247,6 +247,8 @@ pub struct Select {
     pub qualify: Option<Expr>,
     /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
     pub value_table_mode: Option<ValueTableMode>,
+    /// STARTING WITH .. CONNECT BY
+    pub connect_by: Option<ConnectBy>,
 }
 
 impl fmt::Display for Select {
@@ -313,6 +315,9 @@ impl fmt::Display for Select {
         }
         if let Some(ref qualify) = self.qualify {
             write!(f, " QUALIFY {qualify}")?;
+        }
+        if let Some(ref connect_by) = self.connect_by {
+            write!(f, " {connect_by}")?;
         }
         Ok(())
     }
@@ -728,6 +733,30 @@ impl fmt::Display for TableWithJoins {
             write!(f, "{join}")?;
         }
         Ok(())
+    }
+}
+
+/// Joins a table to itself to process hierarchical data in the table.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ConnectBy {
+    /// START WITH
+    pub condition: Expr,
+    /// CONNECT BY
+    pub relationships: Vec<Expr>,
+}
+
+impl fmt::Display for ConnectBy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "START WITH {condition} CONNECT BY {relationships}",
+            condition = self.condition,
+            relationships = display_comma_separated(&self.relationships)
+        )
     }
 }
 

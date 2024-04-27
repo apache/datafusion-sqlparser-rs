@@ -154,6 +154,10 @@ pub trait Dialect: Debug + Any {
     fn supports_group_by_expr(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports CONNECT BY.
+    fn supports_connect_by(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect supports the MATCH_RECOGNIZE operation.
     fn supports_match_recognize(&self) -> bool {
         false

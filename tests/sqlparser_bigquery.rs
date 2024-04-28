@@ -395,19 +395,25 @@ fn parse_nested_data_types() {
 fn parse_invalid_brackets() {
     let sql = "SELECT STRUCT<INT64>>(NULL)";
     assert_eq!(
-        bigquery_and_generic().parse_sql_statements(sql).unwrap_err(),
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
         ParserError::ParserError("unmatched > in STRUCT literal".to_string())
     );
 
     let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
     assert_eq!(
-        bigquery_and_generic().parse_sql_statements(sql).unwrap_err(),
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
         ParserError::ParserError("Expected (, found: >".to_string())
     );
 
     let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
     assert_eq!(
-        bigquery_and_generic().parse_sql_statements(sql).unwrap_err(),
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
         ParserError::ParserError(
             "Expected ',' or ')' after column definition, found: >".to_string()
         )

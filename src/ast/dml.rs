@@ -355,7 +355,7 @@ impl Display for CreateTable {
         }
 
         if let Some(tag) = &self.with_tags {
-            write!(f, " WITH TAG {}", display_comma_separated(tag.as_slice()))?;
+            write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
         }
 
         if let Some(query) = &self.query {

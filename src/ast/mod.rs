@@ -6356,7 +6356,7 @@ impl Display for RowAccessPolicy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "WITH ROW ACCESS POLICY {} ON {}",
+            "WITH ROW ACCESS POLICY {} ON ({})",
             self.policy,
             display_comma_separated(self.on.as_slice())
         )

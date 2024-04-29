@@ -194,7 +194,8 @@ fn test_snowflake_create_table_with_aggregation_policy() {
 
 #[test]
 fn test_snowflake_create_table_with_row_access_policy() {
-    let sql = "CREATE TABLE my_table (a number, b number) WITH ROW ACCESS POLICY policy_name ON a";
+    let sql =
+        "CREATE TABLE my_table (a number, b number) WITH ROW ACCESS POLICY policy_name ON (a)";
     match snowflake().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -203,7 +204,7 @@ fn test_snowflake_create_table_with_row_access_policy() {
         }) => {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
-                Some("WITH ROW ACCESS POLICY policy_name ON a".to_string()),
+                Some("WITH ROW ACCESS POLICY policy_name ON (a)".to_string()),
                 with_row_access_policy.map(|policy| policy.to_string())
             );
         }
@@ -213,7 +214,7 @@ fn test_snowflake_create_table_with_row_access_policy() {
 
 #[test]
 fn test_snowflake_create_table_with_tag() {
-    let sql = "CREATE TABLE my_table (a number) WITH TAG A='TAG A', B='TAG B'";
+    let sql = "CREATE TABLE my_table (a number) WITH TAG (A='TAG A', B='TAG B')";
     match snowflake().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name, with_tags, ..

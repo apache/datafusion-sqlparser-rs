@@ -251,7 +251,9 @@ pub fn parse_create_table(
                     parser.expect_keywords(&[Keyword::ACCESS, Keyword::POLICY])?;
                     let policy = parser.parse_object_name(false)?;
                     parser.expect_keyword(Keyword::ON)?;
+                    parser.expect_token(&Token::LParen)?;
                     let columns = parser.parse_comma_separated(|p| p.parse_identifier(false))?;
+                    parser.expect_token(&Token::RParen)?;
 
                     builder =
                         builder.with_row_access_policy(Some(RowAccessPolicy::new(policy, columns)))
@@ -265,7 +267,9 @@ pub fn parse_create_table(
                         Ok(Tag::new(name, value))
                     }
 
+                    parser.expect_token(&Token::LParen)?;
                     let tags = parser.parse_comma_separated(parse_tag)?;
+                    parser.expect_token(&Token::RParen)?;
                     builder = builder.with_tags(Some(tags));
                 }
                 _ => {

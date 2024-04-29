@@ -5320,9 +5320,6 @@ impl<'a> Parser<'a> {
             Default::default()
         };
 
-        let copy_grants = dialect_of!(self is SnowflakeDialect)
-            && self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
-
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_boxed_query()?)
@@ -5411,7 +5408,6 @@ impl<'a> Parser<'a> {
             .options(big_query_config.options)
             .primary_key(primary_key)
             .strict(strict)
-            .copy_grants(copy_grants)
             .build())
     }
 

@@ -103,22 +103,31 @@ pub struct CreateTable {
     /// then strict typing rules apply to that table.
     pub strict: bool,
     /// Snowflake "COPY GRANTS" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub copy_grants: bool,
     /// Snowflake "ENABLE_SCHEMA_EVOLUTION" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub enable_schema_evolution: Option<bool>,
     /// Snowflake "CHANGE_TRACKING" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub change_tracking: Option<bool>,
     /// Snowflake "DATA_RETENTION_TIME_IN_DAYS" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub data_retention_time_in_days: Option<u64>,
     /// Snowflake "MAX_DATA_EXTENSION_TIME_IN_DAYS" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub max_data_extension_time_in_days: Option<u64>,
     /// Snowflake "DEFAULT_DDL_COLLATION" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub default_ddl_collation: Option<String>,
     /// Snowflake "WITH AGGREGATION POLICY" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_aggregation_policy: Option<ObjectName>,
     /// Snowflake "WITH ROW ACCESS POLICY" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_row_access_policy: Option<RowAccessPolicy>,
     /// Snowflake "WITH TAG" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_tags: Option<Vec<Tag>>,
 }
 

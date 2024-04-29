@@ -129,6 +129,8 @@ impl Dialect for SnowflakeDialect {
     }
 }
 
+/// Parse snowflake create table statement.
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
 pub fn parse_create_table(
     or_replace: bool,
     local: bool,
@@ -150,6 +152,12 @@ pub fn parse_create_table(
     if !local {
         builder = builder.global(Some(local));
     }
+
+    // Snowflake does not enforce order of the parameters in the statement. The parser needs to
+    // parse the statement in a loop.
+    //
+    // "CREATE TABLE x COPY GRANTS (c INT)" and "CREATE TABLE x (c INT) COPY GRANTS" are both
+    // accepted by Snowflake
 
     loop {
         let next_token = parser.next_token();

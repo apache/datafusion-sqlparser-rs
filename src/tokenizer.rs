@@ -36,7 +36,8 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
 use crate::dialect::{
-    BigQueryDialect, DuckDbDialect, GenericDialect, HiveDialect, SnowflakeDialect,
+    BigQueryDialect, DuckDbDialect, GenericDialect, HiveDialect, PostgreSqlDialect,
+    SnowflakeDialect,
 };
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
@@ -199,6 +200,15 @@ pub enum Token {
     /// for the specified JSON value. Only the first item of the result is taken into
     /// account. If the result is not Boolean, then NULL is returned.
     AtAt,
+    /// jsonb ? text -> boolean: Checks whether the string exists as a top-level key within the
+    /// jsonb object
+    Question,
+    /// jsonb ?& text[] -> boolean: Check whether all members of the text array exist as top-level
+    /// keys within the jsonb object
+    QuestionAnd,
+    /// jsonb ?| text[] -> boolean: Check whether any member of the text array exists as top-level
+    /// keys within the jsonb object
+    QuestionPipe,
 }
 
 impl fmt::Display for Token {
@@ -278,6 +288,9 @@ impl fmt::Display for Token {
             Token::HashMinus => write!(f, "#-"),
             Token::AtQuestion => write!(f, "@?"),
             Token::AtAt => write!(f, "@@"),
+            Token::Question => write!(f, "?"),
+            Token::QuestionAnd => write!(f, "?&"),
+            Token::QuestionPipe => write!(f, "?|"),
         }
     }
 }
@@ -1057,6 +1070,15 @@ impl<'a> Tokenizer<'a> {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
                         _ => Ok(Some(Token::AtSign)),
+                    }
+                }
+                // Postgres uses ? for jsonb operators, not prepared statements
+                '?' if dialect_of!(self is PostgreSqlDialect) => {
+                    chars.next();
+                    match chars.peek() {
+                        Some('|') => self.consume_and_return(chars, Token::QuestionPipe),
+                        Some('&') => self.consume_and_return(chars, Token::QuestionAnd),
+                        _ => self.consume_and_return(chars, Token::Question),
                     }
                 }
                 '?' => {

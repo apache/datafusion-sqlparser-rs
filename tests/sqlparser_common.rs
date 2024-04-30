@@ -1048,6 +1048,7 @@ fn parse_select_count_wildcard() {
             distinct: false,
             special: false,
             order_by: vec![],
+            within_group: vec![]
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -1070,6 +1071,7 @@ fn parse_select_count_distinct() {
             distinct: true,
             special: false,
             order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -2148,6 +2150,7 @@ fn parse_select_having() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                within_group: vec![]
             })),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("1"))),
@@ -2184,6 +2187,7 @@ fn parse_select_qualify() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                within_group: vec![]
             })),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(number("1"))),
@@ -4073,18 +4077,7 @@ fn parse_scalar_function_in_projection() {
         let sql = dbg!(format!("SELECT {function_name}(id) FROM foo"));
         let select = verified_only_select(&sql);
         assert_eq!(
-            &Expr::Function(Function {
-                name: ObjectName(vec![Ident::new(function_name)]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                    Expr::Identifier(Ident::new("id"))
-                ))],
-                null_treatment: None,
-                filter: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-            }),
+            &call(function_name, [Expr::Identifier(Ident::new("id"))]),
             expr_from_projection(only(&select.projection))
         );
     }
@@ -4220,6 +4213,7 @@ fn parse_named_argument_function() {
             distinct: false,
             special: false,
             order_by: vec![],
+            within_group: vec![]
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -4256,6 +4250,7 @@ fn parse_named_argument_function_with_eq_operator() {
             distinct: false,
             special: false,
             order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -4265,22 +4260,14 @@ fn parse_named_argument_function_with_eq_operator() {
     assert_eq!(
         all_dialects_except(|d| d.supports_named_fn_args_with_eq_operator())
             .verified_expr("foo(bar = 42)"),
-        Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("foo")]),
-            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("bar"))),
-                    op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value(number("42"))),
-                },
-            ))],
-            filter: None,
-            null_treatment: None,
-            over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
-        })
+        call(
+            "foo",
+            [Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("bar"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Value(number("42"))),
+            }]
+        ),
     );
 
     // TODO: should this parse for all dialects?
@@ -4328,6 +4315,7 @@ fn parse_window_functions() {
             distinct: false,
             special: false,
             order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -4453,6 +4441,7 @@ fn test_parse_named_window() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    within_group: vec![],
                 }),
                 alias: Ident {
                     value: "min1".to_string(),
@@ -4480,6 +4469,7 @@ fn test_parse_named_window() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    within_group: vec![],
                 }),
                 alias: Ident {
                     value: "max1".to_string(),
@@ -4958,19 +4948,7 @@ fn parse_at_timezone() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::AtTimeZone {
-            timestamp: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident {
-                    value: "FROM_UNIXTIME".to_string(),
-                    quote_style: None,
-                }]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero.clone()))],
-                null_treatment: None,
-                filter: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-            })),
+            timestamp: Box::new(call("FROM_UNIXTIME", [zero.clone()])),
             time_zone: "UTC-06:00".to_string(),
         },
         expr_from_projection(only(&select.projection)),
@@ -4980,39 +4958,16 @@ fn parse_at_timezone() {
     let select = verified_only_select(sql);
     assert_eq!(
         &SelectItem::ExprWithAlias {
-            expr: Expr::Function(Function {
-                name: ObjectName(vec![Ident {
-                    value: "DATE_FORMAT".to_string(),
-                    quote_style: None,
-                },],),
-                args: vec![
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::AtTimeZone {
-                        timestamp: Box::new(Expr::Function(Function {
-                            name: ObjectName(vec![Ident {
-                                value: "FROM_UNIXTIME".to_string(),
-                                quote_style: None,
-                            },],),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        },)),
+            expr: call(
+                "DATE_FORMAT",
+                [
+                    Expr::AtTimeZone {
+                        timestamp: Box::new(call("FROM_UNIXTIME", [zero])),
                         time_zone: "UTC-06:00".to_string(),
-                    },),),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("%Y-%m-%dT%H".to_string()),
-                    ),),),
-                ],
-                null_treatment: None,
-                filter: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-            },),
+                    },
+                    Expr::Value(Value::SingleQuotedString("%Y-%m-%dT%H".to_string()),)
+                ]
+            ),
             alias: Ident {
                 value: "hour".to_string(),
                 quote_style: Some('"'),
@@ -5172,6 +5127,7 @@ fn parse_table_function() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                within_group: vec![],
             });
             assert_eq!(expr, expected_expr);
             assert_eq!(alias, table_alias("a"))
@@ -5312,20 +5268,14 @@ fn parse_unnest_in_from_clause() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
-                array_exprs: vec![Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("make_array")]),
-                    args: vec![
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
+                array_exprs: vec![call(
+                    "make_array",
+                    [
+                        Expr::Value(number("1")),
+                        Expr::Value(number("2")),
+                        Expr::Value(number("3")),
                     ],
-                    null_treatment: None,
-                    filter: None,
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                })],
+                )],
                 with_offset: false,
                 with_offset_alias: None,
             },
@@ -5343,33 +5293,18 @@ fn parse_unnest_in_from_clause() {
             relation: TableFactor::UNNEST {
                 alias: None,
                 array_exprs: vec![
-                    Expr::Function(Function {
-                        name: ObjectName(vec![Ident::new("make_array")]),
-                        args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
+                    call(
+                        "make_array",
+                        [
+                            Expr::Value(number("1")),
+                            Expr::Value(number("2")),
+                            Expr::Value(number("3")),
                         ],
-                        null_treatment: None,
-                        filter: None,
-                        over: None,
-                        distinct: false,
-                        special: false,
-                        order_by: vec![],
-                    }),
-                    Expr::Function(Function {
-                        name: ObjectName(vec![Ident::new("make_array")]),
-                        args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("5")))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("6")))),
-                        ],
-                        null_treatment: None,
-                        filter: None,
-                        over: None,
-                        distinct: false,
-                        special: false,
-                        order_by: vec![],
-                    }),
+                    ),
+                    call(
+                        "make_array",
+                        [Expr::Value(number("5")), Expr::Value(number("6"))],
+                    ),
                 ],
                 with_offset: false,
                 with_offset_alias: None,
@@ -7982,6 +7917,7 @@ fn parse_time_functions() {
             distinct: false,
             special: false,
             order_by: vec![],
+            within_group: vec![],
         };
         assert_eq!(
             &Expr::Function(select_localtime_func_call_ast.clone()),
@@ -8541,6 +8477,7 @@ fn parse_pivot_table() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                within_group: vec![],
             }),
             alias: alias.map(Ident::new),
         }
@@ -8724,6 +8661,7 @@ fn parse_pivot_unpivot_table() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    within_group: vec![],
                 }),
                 alias: None
             }],
@@ -8859,7 +8797,8 @@ fn parse_call() {
             over: None,
             distinct: false,
             special: false,
-            order_by: vec![]
+            order_by: vec![],
+            within_group: vec![],
         })
     );
 }
@@ -9058,18 +8997,7 @@ fn parse_map_access_expr() {
                 syntax: MapAccessSyntax::Bracket,
             },
             MapAccessKey {
-                key: Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("safe_offset")]),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        number("2"),
-                    )))],
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                }),
+                key: call("safe_offset", [Expr::Value(number("2"))]),
                 syntax: MapAccessSyntax::Bracket,
             },
         ],
@@ -9634,6 +9562,7 @@ fn test_select_wildcard_with_replace() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    within_group: vec![],
                 }),
                 column_name: Ident::new("city"),
                 as_keyword: true,

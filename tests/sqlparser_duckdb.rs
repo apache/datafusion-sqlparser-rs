@@ -508,6 +508,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
             distinct: false,
             special: false,
             order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );

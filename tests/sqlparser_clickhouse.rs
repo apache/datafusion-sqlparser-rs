@@ -56,6 +56,7 @@ fn parse_map_access_expr() {
                         distinct: false,
                         special: false,
                         order_by: vec![],
+                        within_group: vec![],
                     }),
                     syntax: MapAccessSyntax::Bracket
                 }],
@@ -100,6 +101,7 @@ fn parse_map_access_expr() {
                                 distinct: false,
                                 special: false,
                                 order_by: vec![],
+                                within_group: vec![],
                             }),
                             syntax: MapAccessSyntax::Bracket
                         }],
@@ -155,6 +157,7 @@ fn parse_array_fn() {
             distinct: false,
             special: false,
             order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -215,6 +218,7 @@ fn parse_delimited_identifiers() {
             distinct: false,
             special: false,
             order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[1]),
     );

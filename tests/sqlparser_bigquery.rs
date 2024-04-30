@@ -1835,6 +1835,7 @@ fn parse_map_access_expr() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    within_group: vec![],
                 }),
                 MapAccessSyntax::Bracket,
             ),

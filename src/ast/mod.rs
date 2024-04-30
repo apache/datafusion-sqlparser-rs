@@ -4845,6 +4845,14 @@ pub struct Function {
     pub special: bool,
     /// Required ordering for the function (if empty, there is no requirement).
     pub order_by: Vec<OrderByExpr>,
+    /// A clause used with certain aggregate functions to control the ordering
+    /// within grouped sets before the function is applied.
+    ///
+    /// Syntax:
+    /// ```plaintext
+    /// <aggregate_function>(expression) WITHIN GROUP (ORDER BY key [ASC | DESC], ...)
+    /// ```
+    pub within_group: Vec<OrderByExpr>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -4890,6 +4898,14 @@ impl fmt::Display for Function {
                     _ => Cow::from(""),
                 }
             )?;
+
+            if !self.within_group.is_empty() {
+                write!(
+                    f,
+                    " WITHIN GROUP (ORDER BY {})",
+                    display_comma_separated(&self.within_group)
+                )?;
+            }
 
             if let Some(filter_cond) = &self.filter {
                 write!(f, " FILTER (WHERE {filter_cond})")?;

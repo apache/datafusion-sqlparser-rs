@@ -1013,6 +1013,7 @@ impl<'a> Parser<'a> {
                         distinct: false,
                         special: true,
                         order_by: vec![],
+                        within_group: vec![],
                     }))
                 }
                 Keyword::CURRENT_TIMESTAMP
@@ -1280,6 +1281,7 @@ impl<'a> Parser<'a> {
             distinct,
             special: false,
             order_by,
+            within_group: vec![],
         }))
     }
 
@@ -1319,6 +1321,7 @@ impl<'a> Parser<'a> {
             distinct: false,
             special,
             order_by,
+            within_group: vec![],
         }))
     }
 
@@ -6138,6 +6141,7 @@ impl<'a> Parser<'a> {
                 null_treatment: None,
                 special: true,
                 order_by: vec![],
+                within_group: vec![],
             }))
         }
     }

@@ -345,7 +345,8 @@ fn parse_window_function_with_filter() {
                 filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),
                 distinct: false,
                 special: false,
-                order_by: vec![]
+                order_by: vec![],
+                within_group: vec![],
             }))]
         );
     }

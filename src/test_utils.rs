@@ -333,5 +333,6 @@ pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
         distinct: false,
         special: false,
         order_by: vec![],
+        within_group: vec![],
     })
 }

@@ -389,6 +389,7 @@ fn parse_delimited_identifiers() {
             distinct: false,
             special: false,
             order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[1]),
     );
@@ -1539,7 +1540,8 @@ fn parse_comma_outer_join() {
                 over: None,
                 distinct: false,
                 special: false,
-                order_by: vec![]
+                order_by: vec![],
+                within_group: vec![],
             }))
         })
     );

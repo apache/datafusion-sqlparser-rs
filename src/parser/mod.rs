@@ -256,10 +256,22 @@ impl ParserOptions {
     }
 }
 
+#[derive(Copy, Clone)]
+enum ParserState {
+    /// The default state of the parser.
+    Normal,
+    /// The state when parsing a CONNECT BY expression. This allows parsing
+    /// PRIOR expressions while still allowing prior as an identifier name
+    /// in other contexts.
+    ConnectBy,
+}
+
 pub struct Parser<'a> {
     tokens: Vec<TokenWithLocation>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
+    /// The current state of the parser.
+    state: ParserState,
     /// The current dialect to use
     dialect: &'a dyn Dialect,
     /// Additional options that allow you to mix & match behavior
@@ -290,6 +302,7 @@ impl<'a> Parser<'a> {
         Self {
             tokens: vec![],
             index: 0,
+            state: ParserState::Normal,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
             options: ParserOptions::default(),
@@ -1004,9 +1017,9 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CONVERT => self.parse_convert_expr(),
-                Keyword::CAST => self.parse_cast_expr(),
-                Keyword::TRY_CAST => self.parse_try_cast_expr(),
-                Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
+                Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
+                Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
+                Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
                 Keyword::EXISTS => self.parse_exists_expr(false),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::CEIL => self.parse_ceil_floor_expr(true),
@@ -1039,6 +1052,10 @@ impl<'a> Parser<'a> {
                 Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     self.prev_token();
                     self.parse_bigquery_struct_literal()
+                }
+                Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
+                    let expr = self.parse_subexpr(Self::PLUS_MINUS_PREC)?;
+                    Ok(Expr::Prior(Box::new(expr)))
                 }
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
@@ -1192,7 +1209,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-            Token::LBrace if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+            Token::LBrace if self.dialect.supports_dictionary_syntax() => {
                 self.prev_token();
                 self.parse_duckdb_struct_literal()
             }
@@ -1445,12 +1462,18 @@ impl<'a> Parser<'a> {
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::Comma)?;
         let expr = self.parse_expr()?;
+        let styles = if self.consume_token(&Token::Comma) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            Default::default()
+        };
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Convert {
             expr: Box::new(expr),
             data_type: Some(data_type),
             charset: None,
             target_before_value: true,
+            styles,
         })
     }
 
@@ -1472,6 +1495,7 @@ impl<'a> Parser<'a> {
                 data_type: None,
                 charset: Some(charset),
                 target_before_value: false,
+                styles: vec![],
             });
         }
         self.expect_token(&Token::Comma)?;
@@ -1487,11 +1511,12 @@ impl<'a> Parser<'a> {
             data_type: Some(data_type),
             charset,
             target_before_value: false,
+            styles: vec![],
         })
     }
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
-    pub fn parse_cast_expr(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_cast_expr(&mut self, kind: CastKind) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
@@ -1499,36 +1524,7 @@ impl<'a> Parser<'a> {
         let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
-            expr: Box::new(expr),
-            data_type,
-            format,
-        })
-    }
-
-    /// Parse a SQL TRY_CAST function e.g. `TRY_CAST(expr AS FLOAT)`
-    pub fn parse_try_cast_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::AS)?;
-        let data_type = self.parse_data_type()?;
-        let format = self.parse_optional_cast_format()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Expr::TryCast {
-            expr: Box::new(expr),
-            data_type,
-            format,
-        })
-    }
-
-    /// Parse a BigQuery SAFE_CAST function e.g. `SAFE_CAST(expr AS FLOAT64)`
-    pub fn parse_safe_cast_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::AS)?;
-        let data_type = self.parse_data_type()?;
-        let format = self.parse_optional_cast_format()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Expr::SafeCast {
+            kind,
             expr: Box::new(expr),
             data_type,
             format,
@@ -2538,7 +2534,12 @@ impl<'a> Parser<'a> {
                 ),
             }
         } else if Token::DoubleColon == tok {
-            self.parse_pg_cast(expr)
+            Ok(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(expr),
+                data_type: self.parse_data_type()?,
+                format: None,
+            })
         } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
             Ok(Expr::UnaryOp {
@@ -2568,9 +2569,9 @@ impl<'a> Parser<'a> {
     }
 
     /// parse the ESCAPE CHAR portion of LIKE, ILIKE, and SIMILAR TO
-    pub fn parse_escape_char(&mut self) -> Result<Option<char>, ParserError> {
+    pub fn parse_escape_char(&mut self) -> Result<Option<String>, ParserError> {
         if self.parse_keyword(Keyword::ESCAPE) {
-            Ok(Some(self.parse_literal_char()?))
+            Ok(Some(self.parse_literal_string()?))
         } else {
             Ok(None)
         }
@@ -2740,6 +2741,7 @@ impl<'a> Parser<'a> {
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         Ok(Expr::Cast {
+            kind: CastKind::DoubleColon,
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
             format: None,
@@ -5818,6 +5820,23 @@ impl<'a> Parser<'a> {
                 options,
                 column_position,
             }
+        } else if self.parse_keyword(Keyword::MODIFY) {
+            let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
+            let col_name = self.parse_identifier(false)?;
+            let data_type = self.parse_data_type()?;
+            let mut options = vec![];
+            while let Some(option) = self.parse_optional_column_option()? {
+                options.push(option);
+            }
+
+            let column_position = self.parse_column_position()?;
+
+            AlterTableOperation::ModifyColumn {
+                col_name,
+                data_type,
+                options,
+                column_position,
+            }
         } else if self.parse_keyword(Keyword::ALTER) {
             let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
             let column_name = self.parse_identifier(false)?;
@@ -6393,7 +6412,7 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let next_token = self.next_token();
-        let mut trailing_bracket = false.into();
+        let mut trailing_bracket: MatchedTrailingBracket = false.into();
         let mut data = match next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
@@ -6484,7 +6503,9 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_character_length()?)),
-                Keyword::NVARCHAR => Ok(DataType::Nvarchar(self.parse_optional_precision()?)),
+                Keyword::NVARCHAR => {
+                    Ok(DataType::Nvarchar(self.parse_optional_character_length()?))
+                }
                 Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {
                         Ok(DataType::CharacterVarying(
@@ -6613,8 +6634,13 @@ impl<'a> Parser<'a> {
         // Parse array data types. Note: this is postgresql-specific and different from
         // Keyword::ARRAY syntax from above
         while self.consume_token(&Token::LBracket) {
+            let size = if dialect_of!(self is GenericDialect | DuckDbDialect | PostgreSqlDialect) {
+                self.maybe_parse(|p| p.parse_literal_uint())
+            } else {
+                None
+            };
             self.expect_token(&Token::RBracket)?;
-            data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data)))
+            data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
         }
         Ok((data, trailing_bracket))
     }
@@ -7115,7 +7141,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::Delete {
+        Ok(Statement::Delete(Delete {
             tables,
             from: if with_from_keyword {
                 FromTable::WithFromKeyword(from)
@@ -7127,7 +7153,7 @@ impl<'a> Parser<'a> {
             returning,
             order_by,
             limit,
-        })
+        }))
     }
 
     // KILL [CONNECTION | QUERY | MUTATION] processlist_id
@@ -7721,6 +7747,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let connect_by = if self.dialect.supports_connect_by()
+            && self
+                .parse_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
+                .is_some()
+        {
+            self.prev_token();
+            Some(self.parse_connect_by()?)
+        } else {
+            None
+        };
+
         Ok(Select {
             distinct,
             top,
@@ -7737,6 +7774,44 @@ impl<'a> Parser<'a> {
             named_window: named_windows,
             qualify,
             value_table_mode,
+            connect_by,
+        })
+    }
+
+    /// Invoke `f` after first setting the parser's `ParserState` to `state`.
+    ///
+    /// Upon return, restores the parser's state to what it started at.
+    fn with_state<T, F>(&mut self, state: ParserState, mut f: F) -> Result<T, ParserError>
+    where
+        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+    {
+        let current_state = self.state;
+        self.state = state;
+        let res = f(self);
+        self.state = current_state;
+        res
+    }
+
+    pub fn parse_connect_by(&mut self) -> Result<ConnectBy, ParserError> {
+        let (condition, relationships) = if self.parse_keywords(&[Keyword::CONNECT, Keyword::BY]) {
+            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
+                parser.parse_comma_separated(Parser::parse_expr)
+            })?;
+            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
+            let condition = self.parse_expr()?;
+            (condition, relationships)
+        } else {
+            self.expect_keywords(&[Keyword::START, Keyword::WITH])?;
+            let condition = self.parse_expr()?;
+            self.expect_keywords(&[Keyword::CONNECT, Keyword::BY])?;
+            let relationships = self.with_state(ParserState::ConnectBy, |parser| {
+                parser.parse_comma_separated(Parser::parse_expr)
+            })?;
+            (condition, relationships)
+        };
+        Ok(ConnectBy {
+            condition,
+            relationships,
         })
     }
 
@@ -8261,6 +8336,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::Pivot { alias, .. }
                         | TableFactor::Unpivot { alias, .. }
+                        | TableFactor::MatchRecognize { alias, .. }
                         | TableFactor::NestedJoin { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
@@ -8384,7 +8460,243 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            if self.dialect.supports_match_recognize()
+                && self.parse_keyword(Keyword::MATCH_RECOGNIZE)
+            {
+                table = self.parse_match_recognize(table)?;
+            }
+
             Ok(table)
+        }
+    }
+
+    fn parse_match_recognize(&mut self, table: TableFactor) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+
+        let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
+        } else {
+            vec![]
+        };
+
+        let measures = if self.parse_keyword(Keyword::MEASURES) {
+            self.parse_comma_separated(|p| {
+                let expr = p.parse_expr()?;
+                let _ = p.parse_keyword(Keyword::AS);
+                let alias = p.parse_identifier(false)?;
+                Ok(Measure { expr, alias })
+            })?
+        } else {
+            vec![]
+        };
+
+        let rows_per_match =
+            if self.parse_keywords(&[Keyword::ONE, Keyword::ROW, Keyword::PER, Keyword::MATCH]) {
+                Some(RowsPerMatch::OneRow)
+            } else if self.parse_keywords(&[
+                Keyword::ALL,
+                Keyword::ROWS,
+                Keyword::PER,
+                Keyword::MATCH,
+            ]) {
+                Some(RowsPerMatch::AllRows(
+                    if self.parse_keywords(&[Keyword::SHOW, Keyword::EMPTY, Keyword::MATCHES]) {
+                        Some(EmptyMatchesMode::Show)
+                    } else if self.parse_keywords(&[
+                        Keyword::OMIT,
+                        Keyword::EMPTY,
+                        Keyword::MATCHES,
+                    ]) {
+                        Some(EmptyMatchesMode::Omit)
+                    } else if self.parse_keywords(&[
+                        Keyword::WITH,
+                        Keyword::UNMATCHED,
+                        Keyword::ROWS,
+                    ]) {
+                        Some(EmptyMatchesMode::WithUnmatched)
+                    } else {
+                        None
+                    },
+                ))
+            } else {
+                None
+            };
+
+        let after_match_skip =
+            if self.parse_keywords(&[Keyword::AFTER, Keyword::MATCH, Keyword::SKIP]) {
+                if self.parse_keywords(&[Keyword::PAST, Keyword::LAST, Keyword::ROW]) {
+                    Some(AfterMatchSkip::PastLastRow)
+                } else if self.parse_keywords(&[Keyword::TO, Keyword::NEXT, Keyword::ROW]) {
+                    Some(AfterMatchSkip::ToNextRow)
+                } else if self.parse_keywords(&[Keyword::TO, Keyword::FIRST]) {
+                    Some(AfterMatchSkip::ToFirst(self.parse_identifier(false)?))
+                } else if self.parse_keywords(&[Keyword::TO, Keyword::LAST]) {
+                    Some(AfterMatchSkip::ToLast(self.parse_identifier(false)?))
+                } else {
+                    let found = self.next_token();
+                    return self.expected("after match skip option", found);
+                }
+            } else {
+                None
+            };
+
+        self.expect_keyword(Keyword::PATTERN)?;
+        self.expect_token(&Token::LParen)?;
+        let pattern = self.parse_pattern()?;
+        self.expect_token(&Token::RParen)?;
+
+        self.expect_keyword(Keyword::DEFINE)?;
+
+        let symbols = self.parse_comma_separated(|p| {
+            let symbol = p.parse_identifier(false)?;
+            p.expect_keyword(Keyword::AS)?;
+            let definition = p.parse_expr()?;
+            Ok(SymbolDefinition { symbol, definition })
+        })?;
+
+        self.expect_token(&Token::RParen)?;
+
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+
+        Ok(TableFactor::MatchRecognize {
+            table: Box::new(table),
+            partition_by,
+            order_by,
+            measures,
+            rows_per_match,
+            after_match_skip,
+            pattern,
+            symbols,
+            alias,
+        })
+    }
+
+    fn parse_base_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
+        match self.next_token().token {
+            Token::Caret => Ok(MatchRecognizePattern::Symbol(MatchRecognizeSymbol::Start)),
+            Token::Placeholder(s) if s == "$" => {
+                Ok(MatchRecognizePattern::Symbol(MatchRecognizeSymbol::End))
+            }
+            Token::LBrace => {
+                self.expect_token(&Token::Minus)?;
+                let symbol = self
+                    .parse_identifier(false)
+                    .map(MatchRecognizeSymbol::Named)?;
+                self.expect_token(&Token::Minus)?;
+                self.expect_token(&Token::RBrace)?;
+                Ok(MatchRecognizePattern::Exclude(symbol))
+            }
+            Token::Word(Word {
+                value,
+                quote_style: None,
+                ..
+            }) if value == "PERMUTE" => {
+                self.expect_token(&Token::LParen)?;
+                let symbols = self.parse_comma_separated(|p| {
+                    p.parse_identifier(false).map(MatchRecognizeSymbol::Named)
+                })?;
+                self.expect_token(&Token::RParen)?;
+                Ok(MatchRecognizePattern::Permute(symbols))
+            }
+            Token::LParen => {
+                let pattern = self.parse_pattern()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(MatchRecognizePattern::Group(Box::new(pattern)))
+            }
+            _ => {
+                self.prev_token();
+                self.parse_identifier(false)
+                    .map(MatchRecognizeSymbol::Named)
+                    .map(MatchRecognizePattern::Symbol)
+            }
+        }
+    }
+
+    fn parse_repetition_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
+        let mut pattern = self.parse_base_pattern()?;
+        loop {
+            let token = self.next_token();
+            let quantifier = match token.token {
+                Token::Mul => RepetitionQuantifier::ZeroOrMore,
+                Token::Plus => RepetitionQuantifier::OneOrMore,
+                Token::Placeholder(s) if s == "?" => RepetitionQuantifier::AtMostOne,
+                Token::LBrace => {
+                    // quantifier is a range like {n} or {n,} or {,m} or {n,m}
+                    let token = self.next_token();
+                    match token.token {
+                        Token::Comma => {
+                            let next_token = self.next_token();
+                            let Token::Number(n, _) = next_token.token else {
+                                return self.expected("literal number", next_token);
+                            };
+                            self.expect_token(&Token::RBrace)?;
+                            RepetitionQuantifier::AtMost(n.parse().expect("literal int"))
+                        }
+                        Token::Number(n, _) if self.consume_token(&Token::Comma) => {
+                            let next_token = self.next_token();
+                            match next_token.token {
+                                Token::Number(m, _) => {
+                                    self.expect_token(&Token::RBrace)?;
+                                    RepetitionQuantifier::Range(
+                                        n.parse().expect("literal int"),
+                                        m.parse().expect("literal int"),
+                                    )
+                                }
+                                Token::RBrace => {
+                                    RepetitionQuantifier::AtLeast(n.parse().expect("literal int"))
+                                }
+                                _ => {
+                                    return self.expected("} or upper bound", next_token);
+                                }
+                            }
+                        }
+                        Token::Number(n, _) => {
+                            self.expect_token(&Token::RBrace)?;
+                            RepetitionQuantifier::Exactly(n.parse().expect("literal int"))
+                        }
+                        _ => return self.expected("quantifier range", token),
+                    }
+                }
+                _ => {
+                    self.prev_token();
+                    break;
+                }
+            };
+            pattern = MatchRecognizePattern::Repetition(Box::new(pattern), quantifier);
+        }
+        Ok(pattern)
+    }
+
+    fn parse_concat_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
+        let mut patterns = vec![self.parse_repetition_pattern()?];
+        while !matches!(self.peek_token().token, Token::RParen | Token::Pipe) {
+            patterns.push(self.parse_repetition_pattern()?);
+        }
+        match <[MatchRecognizePattern; 1]>::try_from(patterns) {
+            Ok([pattern]) => Ok(pattern),
+            Err(patterns) => Ok(MatchRecognizePattern::Concat(patterns)),
+        }
+    }
+
+    fn parse_pattern(&mut self) -> Result<MatchRecognizePattern, ParserError> {
+        let pattern = self.parse_concat_pattern()?;
+        if self.consume_token(&Token::Pipe) {
+            match self.parse_pattern()? {
+                // flatten nested alternations
+                MatchRecognizePattern::Alternation(mut patterns) => {
+                    patterns.insert(0, pattern);
+                    Ok(MatchRecognizePattern::Alternation(patterns))
+                }
+                next => Ok(MatchRecognizePattern::Alternation(vec![pattern, next])),
+            }
+        } else {
+            Ok(pattern)
         }
     }
 
@@ -8691,7 +9003,7 @@ impl<'a> Parser<'a> {
         }
 
         let insert = &mut self.parse_insert()?;
-        if let Statement::Insert { replace_into, .. } = insert {
+        if let Statement::Insert(Insert { replace_into, .. }) = insert {
             *replace_into = true;
         }
 
@@ -8784,9 +9096,12 @@ impl<'a> Parser<'a> {
                     let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
                     let partitioned = self.parse_insert_partition()?;
-
                     // Hive allows you to specify columns after partitions as well if you want.
-                    let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+                    let after_columns = if dialect_of!(self is HiveDialect) {
+                        self.parse_parenthesized_column_list(Optional, false)?
+                    } else {
+                        vec![]
+                    };
 
                     let source = Some(self.parse_boxed_query()?);
 
@@ -8859,7 +9174,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Statement::Insert {
+            Ok(Statement::Insert(Insert {
                 or,
                 table_name,
                 table_alias,
@@ -8876,7 +9191,7 @@ impl<'a> Parser<'a> {
                 replace_into,
                 priority,
                 insert_alias,
-            })
+            }))
         }
     }
 
@@ -9068,7 +9383,13 @@ impl<'a> Parser<'a> {
     pub fn parse_wildcard_additional_options(
         &mut self,
     ) -> Result<WildcardAdditionalOptions, ParserError> {
-        let opt_exclude = if dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
+        let opt_ilike = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+            self.parse_optional_select_item_ilike()?
+        } else {
+            None
+        };
+        let opt_exclude = if opt_ilike.is_none()
+            && dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
         {
             self.parse_optional_select_item_exclude()?
         } else {
@@ -9086,7 +9407,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect |  DuckDbDialect | SnowflakeDialect)
         {
             self.parse_optional_select_item_replace()?
         } else {
@@ -9094,11 +9415,31 @@ impl<'a> Parser<'a> {
         };
 
         Ok(WildcardAdditionalOptions {
+            opt_ilike,
             opt_exclude,
             opt_except,
             opt_rename,
             opt_replace,
         })
+    }
+
+    /// Parse an [`Ilike`](IlikeSelectItem) information for wildcard select items.
+    ///
+    /// If it is not possible to parse it, will return an option.
+    pub fn parse_optional_select_item_ilike(
+        &mut self,
+    ) -> Result<Option<IlikeSelectItem>, ParserError> {
+        let opt_ilike = if self.parse_keyword(Keyword::ILIKE) {
+            let next_token = self.next_token();
+            let pattern = match next_token.token {
+                Token::SingleQuotedString(s) => s,
+                _ => return self.expected("ilike pattern", next_token),
+            };
+            Some(IlikeSelectItem { pattern })
+        } else {
+            None
+        };
+        Ok(opt_ilike)
     }
 
     /// Parse an [`Exclude`](ExcludeSelectItem) information for wildcard select items.
@@ -9537,15 +9878,28 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
-        let mut clauses: Vec<MergeClause> = vec![];
+        let mut clauses = vec![];
         loop {
             if self.peek_token() == Token::EOF || self.peek_token() == Token::SemiColon {
                 break;
             }
             self.expect_keyword(Keyword::WHEN)?;
 
-            let is_not_matched = self.parse_keyword(Keyword::NOT);
+            let mut clause_kind = MergeClauseKind::Matched;
+            if self.parse_keyword(Keyword::NOT) {
+                clause_kind = MergeClauseKind::NotMatched;
+            }
             self.expect_keyword(Keyword::MATCHED)?;
+
+            if matches!(clause_kind, MergeClauseKind::NotMatched)
+                && self.parse_keywords(&[Keyword::BY, Keyword::SOURCE])
+            {
+                clause_kind = MergeClauseKind::NotMatchedBySource;
+            } else if matches!(clause_kind, MergeClauseKind::NotMatched)
+                && self.parse_keywords(&[Keyword::BY, Keyword::TARGET])
+            {
+                clause_kind = MergeClauseKind::NotMatchedByTarget;
+            }
 
             let predicate = if self.parse_keyword(Keyword::AND) {
                 Some(self.parse_expr()?)
@@ -9555,61 +9909,70 @@ impl<'a> Parser<'a> {
 
             self.expect_keyword(Keyword::THEN)?;
 
-            clauses.push(
-                match self.parse_one_of_keywords(&[
-                    Keyword::UPDATE,
-                    Keyword::INSERT,
-                    Keyword::DELETE,
-                ]) {
-                    Some(Keyword::UPDATE) => {
-                        if is_not_matched {
-                            return Err(ParserError::ParserError(
-                                "UPDATE in NOT MATCHED merge clause".to_string(),
-                            ));
-                        }
-                        self.expect_keyword(Keyword::SET)?;
-                        let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
-                        MergeClause::MatchedUpdate {
-                            predicate,
-                            assignments,
-                        }
+            let merge_clause = match self.parse_one_of_keywords(&[
+                Keyword::UPDATE,
+                Keyword::INSERT,
+                Keyword::DELETE,
+            ]) {
+                Some(Keyword::UPDATE) => {
+                    if matches!(
+                        clause_kind,
+                        MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
+                    ) {
+                        return Err(ParserError::ParserError(format!(
+                            "UPDATE is not allowed in a {clause_kind} merge clause"
+                        )));
                     }
-                    Some(Keyword::DELETE) => {
-                        if is_not_matched {
-                            return Err(ParserError::ParserError(
-                                "DELETE in NOT MATCHED merge clause".to_string(),
-                            ));
-                        }
-                        MergeClause::MatchedDelete(predicate)
+                    self.expect_keyword(Keyword::SET)?;
+                    MergeAction::Update {
+                        assignments: self.parse_comma_separated(Parser::parse_assignment)?,
                     }
-                    Some(Keyword::INSERT) => {
-                        if !is_not_matched {
-                            return Err(ParserError::ParserError(
-                                "INSERT in MATCHED merge clause".to_string(),
-                            ));
-                        }
-                        let is_mysql = dialect_of!(self is MySqlDialect);
-                        let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+                }
+                Some(Keyword::DELETE) => {
+                    if matches!(
+                        clause_kind,
+                        MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
+                    ) {
+                        return Err(ParserError::ParserError(format!(
+                            "DELETE is not allowed in a {clause_kind} merge clause"
+                        )));
+                    }
+                    MergeAction::Delete
+                }
+                Some(Keyword::INSERT) => {
+                    if !matches!(
+                        clause_kind,
+                        MergeClauseKind::NotMatched | MergeClauseKind::NotMatchedByTarget
+                    ) {
+                        return Err(ParserError::ParserError(format!(
+                            "INSERT is not allowed in a {clause_kind} merge clause"
+                        )));
+                    }
+                    let is_mysql = dialect_of!(self is MySqlDialect);
+
+                    let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+                    let kind = if dialect_of!(self is BigQueryDialect | GenericDialect)
+                        && self.parse_keyword(Keyword::ROW)
+                    {
+                        MergeInsertKind::Row
+                    } else {
                         self.expect_keyword(Keyword::VALUES)?;
                         let values = self.parse_values(is_mysql)?;
-                        MergeClause::NotMatched {
-                            predicate,
-                            columns,
-                            values,
-                        }
-                    }
-                    Some(_) => {
-                        return Err(ParserError::ParserError(
-                            "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
-                        ));
-                    }
-                    None => {
-                        return Err(ParserError::ParserError(
-                            "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
-                        ));
-                    }
-                },
-            );
+                        MergeInsertKind::Values(values)
+                    };
+                    MergeAction::Insert(MergeInsertExpr { columns, kind })
+                }
+                _ => {
+                    return Err(ParserError::ParserError(
+                        "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
+                    ));
+                }
+            };
+            clauses.push(MergeClause {
+                clause_kind,
+                predicate,
+                action: merge_clause,
+            });
         }
         Ok(clauses)
     }
@@ -9793,9 +10156,16 @@ impl<'a> Parser<'a> {
     pub fn parse_named_window(&mut self) -> Result<NamedWindowDefinition, ParserError> {
         let ident = self.parse_identifier(false)?;
         self.expect_keyword(Keyword::AS)?;
-        self.expect_token(&Token::LParen)?;
-        let window_spec = self.parse_window_spec()?;
-        Ok(NamedWindowDefinition(ident, window_spec))
+
+        let window_expr = if self.consume_token(&Token::LParen) {
+            NamedWindowExpr::WindowSpec(self.parse_window_spec()?)
+        } else if self.dialect.supports_window_clause_named_window_reference() {
+            NamedWindowExpr::NamedWindow(self.parse_identifier(false)?)
+        } else {
+            return self.expected("(", self.peek_token());
+        };
+
+        Ok(NamedWindowDefinition(ident, window_expr))
     }
 
     pub fn parse_create_procedure(&mut self, or_alter: bool) -> Result<Statement, ParserError> {
@@ -10574,13 +10944,6 @@ mod tests {
     #[test]
     fn test_replace_into_set_placeholder() {
         let sql = "REPLACE INTO t SET ?";
-
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
-    }
-
-    #[test]
-    fn test_replace_into_select() {
-        let sql = r#"REPLACE INTO t1 (a, b, c) (SELECT * FROM t2)"#;
 
         assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
     }

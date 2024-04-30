@@ -148,6 +148,7 @@ fn test_select_union_by_name() {
                 distinct: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
+                    opt_ilike: None,
                     opt_exclude: None,
                     opt_except: None,
                     opt_rename: None,
@@ -178,11 +179,13 @@ fn test_select_union_by_name() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
+                    opt_ilike: None,
                     opt_exclude: None,
                     opt_except: None,
                     opt_rename: None,
@@ -213,6 +216,7 @@ fn test_select_union_by_name() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
         });
         assert_eq!(ast.body, expected);

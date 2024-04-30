@@ -160,3 +160,17 @@ fn test_create_or_replace_temporary_function_returns_select() {
         "CREATE FUNCTION avg_score(p INT) RETURNS FLOAT COMMENT 'get an average score of the player' RETURN SELECT AVG(score) FROM scores WHERE player = p",
     );
 }
+
+#[test]
+fn test_struct_literal() {
+    databricks().verified_stmt(
+        "SELECT STRUCT(loan_app.bank_statement_regular_income_alimony AS alimony, loan_app.bank_statement_regular_income_pension AS pension, loan_app.bank_statement_regular_income_salary AS salary) AS bank_statement_regular_income FROM loan_app",
+    );
+}
+
+#[test]
+fn test_create_table_struct_column() {
+    databricks().verified_stmt(
+        "CREATE TABLE foo (bank_statement_regular_income STRUCT<alimony: DECIMAL(19,5), pension: DECIMAL(19,5), salary: DECIMAL(19,5)>)",
+    );
+}

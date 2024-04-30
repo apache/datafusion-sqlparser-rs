@@ -104,11 +104,13 @@ fn parse_nested_data_types() {
                                 field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(
                                     Box::new(DataType::Int64)
                                 )),
+                                colon: false,
                                 options: vec![],
                             },
                             StructField {
                                 field_name: Some(Ident::new("b").empty_span()),
                                 field_type: DataType::Bytes(Some(42)),
+                                colon: false,
                                 options: vec![],
                             },
                         ]),
@@ -124,6 +126,7 @@ fn parse_nested_data_types() {
                             DataType::Struct(vec![StructField {
                                 field_name: None,
                                 field_type: DataType::Int64,
+                                colon: false,
                                 options: vec![],
                             }]),
                         ))),
@@ -271,6 +274,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
+                colon: false,
                 options: vec![],
             }],
         },
@@ -299,16 +303,19 @@ fn parse_typed_struct_syntax() {
                 StructField {
                     field_name: Some(Ident::new("x").empty_span()),
                     field_type: DataType::Int64,
+                    colon: false,
                     options: vec![],
                 },
                 StructField {
                     field_name: Some(Ident::new("y").empty_span()),
                     field_type: DataType::String(None),
+                    colon: false,
                     options: vec![],
                 },
                 StructField {
                     field_name: Some(Ident::new("timezone").empty_span()),
                     field_type: DataType::String(None),
+                    colon: false,
                     options: vec![],
                 },
             ],
@@ -324,6 +331,7 @@ fn parse_typed_struct_syntax() {
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                         DataType::Float64
                     ))),
+                    colon: false,
                     options: vec![],
                 },
                 StructField {
@@ -331,8 +339,10 @@ fn parse_typed_struct_syntax() {
                     field_type: DataType::Struct(vec![StructField {
                         field_name: None,
                         field_type: DataType::Bool,
+                        colon: false,
                         options: vec![],
                     }]),
+                    colon: false,
                     options: vec![],
                 },
             ],
@@ -350,6 +360,7 @@ fn parse_typed_struct_syntax() {
                 StructField {
                     field_name: Some(Ident::new("x").empty_span()),
                     field_type: DataType::Struct(Default::default()),
+                    colon: false,
                     options: vec![],
                 },
                 StructField {
@@ -357,6 +368,7 @@ fn parse_typed_struct_syntax() {
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                         DataType::Struct(Default::default())
                     ))),
+                    colon: false,
                     options: vec![],
                 },
             ],
@@ -373,6 +385,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Bool,
+                colon: false,
                 options: vec![],
             }],
         },
@@ -386,6 +399,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Bytes(Some(42)),
+                colon: false,
                 options: vec![],
             }],
         },
@@ -403,6 +417,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Date,
+                colon: false,
                 options: vec![],
             }],
         },
@@ -417,6 +432,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Datetime(None),
+                colon: false,
                 options: vec![],
             }],
         },
@@ -428,6 +444,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Float64,
+                colon: false,
                 options: vec![],
             }],
         },
@@ -439,6 +456,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
+                colon: false,
                 options: vec![],
             }],
         },
@@ -462,6 +480,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Interval,
+                colon: false,
                 options: vec![],
             }],
         },
@@ -476,6 +495,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::JSON,
+                colon: false,
                 options: vec![],
             }],
         },
@@ -491,6 +511,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::String(Some(42)),
+                colon: false,
                 options: vec![],
             }],
         },
@@ -505,6 +526,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Timestamp(None, TimezoneInfo::None),
+                colon: false,
                 options: vec![],
             }],
         },
@@ -520,6 +542,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Time(None, TimezoneInfo::None),
+                colon: false,
                 options: vec![],
             }],
         },
@@ -538,6 +561,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Numeric(ExactNumberInfo::None),
+                colon: false,
                 options: vec![],
             }],
         },
@@ -552,6 +576,7 @@ fn parse_typed_struct_syntax() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::BigNumeric(ExactNumberInfo::None),
+                colon: false,
                 options: vec![],
             }],
         },
@@ -570,6 +595,7 @@ fn parse_typed_struct_with_field_name() {
             fields: vec![StructField {
                 field_name: Some(Ident::from("x").empty_span()),
                 field_type: DataType::Int64,
+                colon: false,
                 options: vec![],
             }],
         },
@@ -581,6 +607,7 @@ fn parse_typed_struct_with_field_name() {
             fields: vec![StructField {
                 field_name: Some(Ident::from("y").empty_span()),
                 field_type: DataType::String(None),
+                colon: false,
                 options: vec![],
             }],
         },
@@ -597,11 +624,13 @@ fn parse_typed_struct_with_field_name() {
                 StructField {
                     field_name: Some(Ident::from("x").empty_span()),
                     field_type: DataType::Int64,
+                    colon: false,
                     options: vec![],
                 },
                 StructField {
                     field_name: Some(Ident::from("y").empty_span()),
                     field_type: DataType::Int64,
+                    colon: false,
                     options: vec![],
                 },
             ],

@@ -843,7 +843,8 @@ impl<'a> Parser<'a> {
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
                 }
-                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect | DatabricksDialect) =>
+                {
                     self.prev_token();
                     self.parse_bigquery_struct_literal()
                 }
@@ -1872,6 +1873,33 @@ impl<'a> Parser<'a> {
             StructField {
                 field_name,
                 field_type,
+                colon: false,
+                options,
+            },
+            trailing_bracket,
+        ))
+    }
+
+    /// Parse a field definition in a BigQuery struct.
+    /// Syntax:
+    ///
+    /// ```sql
+    /// [field_name] field_type
+    /// ```
+    fn parse_databricks_query_struct_field_def(
+        &mut self,
+    ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
+        let field_name: WithSpan<Ident> = self.parse_identifier(false)?;
+        self.expect_token(&Token::Colon)?;
+
+        let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
+        let options = self.parse_options(Keyword::OPTIONS)?;
+
+        Ok((
+            StructField {
+                field_name: Some(field_name),
+                field_type,
+                colon: true,
                 options,
             },
             trailing_bracket,
@@ -5827,6 +5855,15 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) = self.parse_struct_type_def(
                         Self::parse_big_query_struct_field_def,
+                        Keyword::STRUCT,
+                    )?;
+                    trailing_bracket = _trailing_bracket;
+                    Ok(DataType::Struct(field_defs))
+                }
+                Keyword::STRUCT if dialect_of!(self is DatabricksDialect) => {
+                    self.prev_token();
+                    let (field_defs, _trailing_bracket) = self.parse_struct_type_def(
+                        Self::parse_databricks_query_struct_field_def,
                         Keyword::STRUCT,
                     )?;
                     trailing_bracket = _trailing_bracket;

@@ -92,8 +92,6 @@ impl fmt::Display for Query {
 pub enum SetExpr {
     /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
     Select(Box<Select>),
-    /// SELECT .. FROM .. STARTING WITH .. CONNECT BY
-    ConnectBy(ConnectBy),
     /// Parenthesized SELECT subquery, which may include more set operations
     /// in its body and an optional ORDER BY / LIMIT.
     Query(Box<Query>),
@@ -114,7 +112,6 @@ impl fmt::Display for SetExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SetExpr::Select(s) => write!(f, "{s}"),
-            SetExpr::ConnectBy(c) => write!(f, "{c}"),
             SetExpr::Query(q) => write!(f, "({q})"),
             SetExpr::Values(v) => write!(f, "{v}"),
             SetExpr::Insert(v) => write!(f, "{v}"),
@@ -702,36 +699,6 @@ impl fmt::Display for TableWithJoins {
             write!(f, "{join}")?;
         }
         Ok(())
-    }
-}
-
-/// Joins a table to itself to process hierarchical data in the table.
-///
-/// See <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ConnectBy {
-    /// SELECT
-    pub projection: Vec<SelectItem>,
-    /// FROM
-    pub from: Vec<TableWithJoins>,
-    /// START WITH
-    pub condition: Expr,
-    /// CONNECT BY
-    pub relationships: Vec<Expr>,
-}
-
-impl fmt::Display for ConnectBy {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "SELECT {projection} FROM {from} START WITH {condition} CONNECT BY {relationships}",
-            projection = display_comma_separated(&self.projection),
-            from = display_comma_separated(&self.from),
-            condition = self.condition,
-            relationships = display_comma_separated(&self.relationships)
-        )
     }
 }
 

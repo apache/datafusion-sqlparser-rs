@@ -3287,6 +3287,7 @@ fn parse_create_function() {
                 OperateFunctionArg::unnamed(DataType::Integer(None)),
             ]),
             return_type: Some(DataType::Integer(None)),
+            comment: None,
             params: CreateFunctionBody {
                 language: Some("SQL".into()),
                 behavior: Some(FunctionBehavior::Immutable),
@@ -3315,6 +3316,7 @@ fn parse_create_function() {
                 }
             ]),
             return_type: Some(DataType::Integer(None)),
+            comment: None,
             params: CreateFunctionBody {
                 language: Some("SQL".into()),
                 behavior: Some(FunctionBehavior::Immutable),
@@ -3340,10 +3342,12 @@ fn parse_create_function() {
                 DataType::Integer(None)
             )]),
             return_type: Some(DataType::Integer(None)),
+            comment: None,
             params: CreateFunctionBody {
                 language: Some("plpgsql".into()),
                 behavior: None,
                 return_: None,
+                return_select_: None,
                 as_: Some(FunctionDefinition::DoubleDollarDef(
                     " BEGIN RETURN i + 1; END; ".into()
                 )),

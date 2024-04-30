@@ -143,3 +143,20 @@ fn test_cte_no_as() {
         "WITH foo AS (WITH b AS (SELECT * FROM bb) SELECT 'bar' AS baz FROM b) SELECT * FROM foo",
     );
 }
+
+#[test]
+fn test_create_or_replace_temporary_function_returns_expression() {
+    databricks().verified_stmt(
+        "CREATE OR REPLACE TEMPORARY FUNCTION GG_Account_ID RETURN '0F98682E-005D-43A9-A5EC-464E8AC478C9'",
+    );
+    databricks()
+        .verified_stmt("CREATE FUNCTION area(x DOUBLE, y DOUBLE) RETURNS DOUBLE RETURN x * y");
+    databricks().verified_stmt("CREATE FUNCTION square(x DOUBLE) RETURNS DOUBLE RETURN area(x, x)");
+}
+
+#[test]
+fn test_create_or_replace_temporary_function_returns_select() {
+    databricks().verified_stmt(
+        "CREATE FUNCTION avg_score(p INT) RETURNS FLOAT COMMENT 'get an average score of the player' RETURN SELECT AVG(score) FROM scores WHERE player = p",
+    );
+}

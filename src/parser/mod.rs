@@ -3086,22 +3086,38 @@ impl<'a> Parser<'a> {
                 name,
                 args: None,
                 return_type: None,
+                comment: None,
                 params,
             })
-        } else if dialect_of!(self is PostgreSqlDialect) {
+        } else if dialect_of!(self is PostgreSqlDialect | DatabricksDialect) {
             let name = self.parse_object_name(false)?;
-            self.expect_token(&Token::LParen)?;
-            let args = if self.consume_token(&Token::RParen) {
-                self.prev_token();
-                None
-            } else {
-                Some(self.parse_comma_separated(Parser::parse_function_arg)?)
-            };
 
-            self.expect_token(&Token::RParen)?;
+            let args: Option<Vec<OperateFunctionArg>> = if self.consume_token(&Token::LParen) {
+                let _args = if self.consume_token(&Token::RParen) {
+                    self.prev_token();
+                    None
+                } else {
+                    Some(self.parse_comma_separated(Parser::parse_function_arg)?)
+                };
+                self.expect_token(&Token::RParen)?;
+                _args
+            } else {
+                None
+            };
 
             let return_type = if self.parse_keyword(Keyword::RETURNS) {
                 Some(self.parse_data_type()?)
+            } else {
+                None
+            };
+
+            let comment = if self.parse_keyword(Keyword::COMMENT) {
+                let _ = self.consume_token(&Token::Eq);
+                let next_token = self.next_token();
+                match next_token.token {
+                    Token::SingleQuotedString(str) => Some(str),
+                    _ => self.expected("comment", next_token)?,
+                }
             } else {
                 None
             };
@@ -3114,6 +3130,7 @@ impl<'a> Parser<'a> {
                 name,
                 args,
                 return_type,
+                comment,
                 params,
             })
         } else if dialect_of!(self is DuckDbDialect) {
@@ -3185,8 +3202,17 @@ impl<'a> Parser<'a> {
                 ensure_not_set(&body.behavior, "IMMUTABLE | STABLE | VOLATILE")?;
                 body.behavior = Some(FunctionBehavior::Volatile);
             } else if self.parse_keyword(Keyword::RETURN) {
-                ensure_not_set(&body.return_, "RETURN")?;
-                body.return_ = Some(self.parse_expr()?);
+                if self
+                    .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
+                    .is_some()
+                {
+                    self.prev_token();
+                    ensure_not_set(&body.return_select_, "RETURN SELECT")?;
+                    body.return_select_ = Some(self.parse_query()?)
+                } else {
+                    ensure_not_set(&body.return_, "RETURN")?;
+                    body.return_ = Some(self.parse_expr()?);
+                }
             } else {
                 return Ok(body);
             }

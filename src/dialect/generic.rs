@@ -39,7 +39,19 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_connect_by(&self) -> bool {
+        true
+    }
+
+    fn supports_match_recognize(&self) -> bool {
+        true
+    }
+
     fn supports_start_transaction_modifier(&self) -> bool {
+        true
+    }
+
+    fn supports_dictionary_syntax(&self) -> bool {
         true
     }
 }

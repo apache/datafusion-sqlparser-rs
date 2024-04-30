@@ -247,6 +247,8 @@ pub struct Select {
     pub qualify: Option<Expr>,
     /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
     pub value_table_mode: Option<ValueTableMode>,
+    /// STARTING WITH .. CONNECT BY
+    pub connect_by: Option<ConnectBy>,
 }
 
 impl fmt::Display for Select {
@@ -313,6 +315,9 @@ impl fmt::Display for Select {
         }
         if let Some(ref qualify) = self.qualify {
             write!(f, " QUALIFY {qualify}")?;
+        }
+        if let Some(ref connect_by) = self.connect_by {
+            write!(f, " {connect_by}")?;
         }
         Ok(())
     }
@@ -474,6 +479,9 @@ impl fmt::Display for IdentWithAlias {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WildcardAdditionalOptions {
+    /// `[ILIKE...]`.
+    /// Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select>
+    pub opt_ilike: Option<IlikeSelectItem>,
     /// `[EXCLUDE...]`.
     pub opt_exclude: Option<ExcludeSelectItem>,
     /// `[EXCEPT...]`.
@@ -489,6 +497,9 @@ pub struct WildcardAdditionalOptions {
 
 impl fmt::Display for WildcardAdditionalOptions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(ilike) = &self.opt_ilike {
+            write!(f, " {ilike}")?;
+        }
         if let Some(exclude) = &self.opt_exclude {
             write!(f, " {exclude}")?;
         }
@@ -505,6 +516,29 @@ impl fmt::Display for WildcardAdditionalOptions {
     }
 }
 
+/// Snowflake `ILIKE` information.
+///
+/// # Syntax
+/// ```plaintext
+/// ILIKE <value>
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IlikeSelectItem {
+    pub pattern: String,
+}
+
+impl fmt::Display for IlikeSelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ILIKE '{}'",
+            value::escape_single_quote_string(&self.pattern)
+        )?;
+        Ok(())
+    }
+}
 /// Snowflake `EXCLUDE` information.
 ///
 /// # Syntax
@@ -702,6 +736,30 @@ impl fmt::Display for TableWithJoins {
     }
 }
 
+/// Joins a table to itself to process hierarchical data in the table.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ConnectBy {
+    /// START WITH
+    pub condition: Expr,
+    /// CONNECT BY
+    pub relationships: Vec<Expr>,
+}
+
+impl fmt::Display for ConnectBy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "START WITH {condition} CONNECT BY {relationships}",
+            condition = self.condition,
+            relationships = display_comma_separated(&self.relationships)
+        )
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -828,6 +886,238 @@ pub enum TableFactor {
         columns: Vec<Ident>,
         alias: Option<TableAlias>,
     },
+    /// A `MATCH_RECOGNIZE` operation on a table.
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize>.
+    MatchRecognize {
+        table: Box<TableFactor>,
+        /// `PARTITION BY <expr> [, ... ]`
+        partition_by: Vec<Expr>,
+        /// `ORDER BY <expr> [, ... ]`
+        order_by: Vec<OrderByExpr>,
+        /// `MEASURES <expr> [AS] <alias> [, ... ]`
+        measures: Vec<Measure>,
+        /// `ONE ROW PER MATCH | ALL ROWS PER MATCH [ <option> ]`
+        rows_per_match: Option<RowsPerMatch>,
+        /// `AFTER MATCH SKIP <option>`
+        after_match_skip: Option<AfterMatchSkip>,
+        /// `PATTERN ( <pattern> )`
+        pattern: MatchRecognizePattern,
+        /// `DEFINE <symbol> AS <expr> [, ... ]`
+        symbols: Vec<SymbolDefinition>,
+        alias: Option<TableAlias>,
+    },
+}
+
+/// An item in the `MEASURES` subclause of a `MATCH_RECOGNIZE` operation.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize#measures-specifying-additional-output-columns>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Measure {
+    pub expr: Expr,
+    pub alias: Ident,
+}
+
+impl fmt::Display for Measure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} AS {}", self.expr, self.alias)
+    }
+}
+
+/// The rows per match option in a `MATCH_RECOGNIZE` operation.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize#row-s-per-match-specifying-the-rows-to-return>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RowsPerMatch {
+    /// `ONE ROW PER MATCH`
+    OneRow,
+    /// `ALL ROWS PER MATCH <mode>`
+    AllRows(Option<EmptyMatchesMode>),
+}
+
+impl fmt::Display for RowsPerMatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RowsPerMatch::OneRow => write!(f, "ONE ROW PER MATCH"),
+            RowsPerMatch::AllRows(mode) => {
+                write!(f, "ALL ROWS PER MATCH")?;
+                if let Some(mode) = mode {
+                    write!(f, " {}", mode)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// The after match skip option in a `MATCH_RECOGNIZE` operation.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize#after-match-skip-specifying-where-to-continue-after-a-match>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AfterMatchSkip {
+    /// `PAST LAST ROW`
+    PastLastRow,
+    /// `TO NEXT ROW`
+    ToNextRow,
+    /// `TO FIRST <symbol>`
+    ToFirst(Ident),
+    /// `TO LAST <symbol>`
+    ToLast(Ident),
+}
+
+impl fmt::Display for AfterMatchSkip {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "AFTER MATCH SKIP ")?;
+        match self {
+            AfterMatchSkip::PastLastRow => write!(f, "PAST LAST ROW"),
+            AfterMatchSkip::ToNextRow => write!(f, " TO NEXT ROW"),
+            AfterMatchSkip::ToFirst(symbol) => write!(f, "TO FIRST {symbol}"),
+            AfterMatchSkip::ToLast(symbol) => write!(f, "TO LAST {symbol}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum EmptyMatchesMode {
+    /// `SHOW EMPTY MATCHES`
+    Show,
+    /// `OMIT EMPTY MATCHES`
+    Omit,
+    /// `WITH UNMATCHED ROWS`
+    WithUnmatched,
+}
+
+impl fmt::Display for EmptyMatchesMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EmptyMatchesMode::Show => write!(f, "SHOW EMPTY MATCHES"),
+            EmptyMatchesMode::Omit => write!(f, "OMIT EMPTY MATCHES"),
+            EmptyMatchesMode::WithUnmatched => write!(f, "WITH UNMATCHED ROWS"),
+        }
+    }
+}
+
+/// A symbol defined in a `MATCH_RECOGNIZE` operation.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize#define-defining-symbols>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SymbolDefinition {
+    pub symbol: Ident,
+    pub definition: Expr,
+}
+
+impl fmt::Display for SymbolDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} AS {}", self.symbol, self.definition)
+    }
+}
+
+/// A symbol in a `MATCH_RECOGNIZE` pattern.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MatchRecognizeSymbol {
+    /// A named symbol, e.g. `S1`.
+    Named(Ident),
+    /// A virtual symbol representing the start of the of partition (`^`).
+    Start,
+    /// A virtual symbol representing the end of the partition (`$`).
+    End,
+}
+
+impl fmt::Display for MatchRecognizeSymbol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MatchRecognizeSymbol::Named(symbol) => write!(f, "{symbol}"),
+            MatchRecognizeSymbol::Start => write!(f, "^"),
+            MatchRecognizeSymbol::End => write!(f, "$"),
+        }
+    }
+}
+
+/// The pattern in a `MATCH_RECOGNIZE` operation.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/constructs/match_recognize#pattern-specifying-the-pattern-to-match>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MatchRecognizePattern {
+    /// A named symbol such as `S1` or a virtual symbol such as `^`.
+    Symbol(MatchRecognizeSymbol),
+    /// {- symbol -}
+    Exclude(MatchRecognizeSymbol),
+    /// PERMUTE(symbol_1, ..., symbol_n)
+    Permute(Vec<MatchRecognizeSymbol>),
+    /// pattern_1 pattern_2 ... pattern_n
+    Concat(Vec<MatchRecognizePattern>),
+    /// ( pattern )
+    Group(Box<MatchRecognizePattern>),
+    /// pattern_1 | pattern_2 | ... | pattern_n
+    Alternation(Vec<MatchRecognizePattern>),
+    /// e.g. pattern*
+    Repetition(Box<MatchRecognizePattern>, RepetitionQuantifier),
+}
+
+impl fmt::Display for MatchRecognizePattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use MatchRecognizePattern::*;
+        match self {
+            Symbol(symbol) => write!(f, "{}", symbol),
+            Exclude(symbol) => write!(f, "{{- {symbol} -}}"),
+            Permute(symbols) => write!(f, "PERMUTE({})", display_comma_separated(symbols)),
+            Concat(patterns) => write!(f, "{}", display_separated(patterns, " ")),
+            Group(pattern) => write!(f, "( {pattern} )"),
+            Alternation(patterns) => write!(f, "{}", display_separated(patterns, " | ")),
+            Repetition(pattern, op) => write!(f, "{pattern}{op}"),
+        }
+    }
+}
+
+/// Determines the minimum and maximum allowed occurrences of a pattern in a
+/// `MATCH_RECOGNIZE` operation.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RepetitionQuantifier {
+    /// `*`
+    ZeroOrMore,
+    /// `+`
+    OneOrMore,
+    /// `?`
+    AtMostOne,
+    /// `{n}`
+    Exactly(u32),
+    /// `{n,}`
+    AtLeast(u32),
+    /// `{,n}`
+    AtMost(u32),
+    /// `{n,m}
+    Range(u32, u32),
+}
+
+impl fmt::Display for RepetitionQuantifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use RepetitionQuantifier::*;
+        match self {
+            ZeroOrMore => write!(f, "*"),
+            OneOrMore => write!(f, "+"),
+            AtMostOne => write!(f, "?"),
+            Exactly(n) => write!(f, "{{{n}}}"),
+            AtLeast(n) => write!(f, "{{{n},}}"),
+            AtMost(n) => write!(f, "{{,{n}}}"),
+            Range(n, m) => write!(f, "{{{n},{m}}}"),
+        }
+    }
 }
 
 impl fmt::Display for TableFactor {
@@ -983,6 +1273,40 @@ impl fmt::Display for TableFactor {
                     name,
                     display_comma_separated(columns)
                 )?;
+                if alias.is_some() {
+                    write!(f, " AS {}", alias.as_ref().unwrap())?;
+                }
+                Ok(())
+            }
+            TableFactor::MatchRecognize {
+                table,
+                partition_by,
+                order_by,
+                measures,
+                rows_per_match,
+                after_match_skip,
+                pattern,
+                symbols,
+                alias,
+            } => {
+                write!(f, "{table} MATCH_RECOGNIZE(")?;
+                if !partition_by.is_empty() {
+                    write!(f, "PARTITION BY {} ", display_comma_separated(partition_by))?;
+                }
+                if !order_by.is_empty() {
+                    write!(f, "ORDER BY {} ", display_comma_separated(order_by))?;
+                }
+                if !measures.is_empty() {
+                    write!(f, "MEASURES {} ", display_comma_separated(measures))?;
+                }
+                if let Some(rows_per_match) = rows_per_match {
+                    write!(f, "{rows_per_match} ")?;
+                }
+                if let Some(after_match_skip) = after_match_skip {
+                    write!(f, "{after_match_skip} ")?;
+                }
+                write!(f, "PATTERN ({pattern}) ")?;
+                write!(f, "DEFINE {})", display_comma_separated(symbols))?;
                 if alias.is_some() {
                     write!(f, " AS {}", alias.as_ref().unwrap())?;
                 }

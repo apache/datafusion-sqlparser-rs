@@ -19,7 +19,7 @@ use matches::assert_matches;
 use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
-use sqlparser::parser::ParserOptions;
+use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Token;
 use test_utils::*;
 
@@ -500,63 +500,186 @@ fn parse_create_table_auto_increment() {
     }
 }
 
-#[test]
-fn parse_create_table_unique_key() {
-    let sql = "CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, UNIQUE KEY bar_key (bar))";
-    let canonical = "CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, CONSTRAINT bar_key UNIQUE (bar))";
-    match mysql().one_statement_parses_to(sql, canonical) {
-        Statement::CreateTable {
+/// if `unique_index_type_display` is `Some` create `TableConstraint::Unique`
+///  otherwise create `TableConstraint::Primary`
+fn table_constraint_unique_primary_ctor(
+    name: Option<Ident>,
+    index_name: Option<Ident>,
+    index_type: Option<IndexType>,
+    columns: Vec<Ident>,
+    index_options: Vec<IndexOption>,
+    characteristics: Option<ConstraintCharacteristics>,
+    unique_index_type_display: Option<KeyOrIndexDisplay>,
+) -> TableConstraint {
+    match unique_index_type_display {
+        Some(index_type_display) => TableConstraint::Unique {
             name,
+            index_name,
+            index_type_display,
+            index_type,
             columns,
-            constraints,
-            ..
-        } => {
-            assert_eq!(name.to_string(), "foo");
-            assert_eq!(
-                vec![TableConstraint::Unique {
-                    name: Some(Ident::new("bar_key")),
-                    columns: vec![Ident::new("bar")],
-                    is_primary: false,
-                    characteristics: None,
-                }],
-                constraints
-            );
-            assert_eq!(
-                vec![
-                    ColumnDef {
-                        name: Ident::new("id"),
-                        data_type: DataType::Int(None),
-                        collation: None,
-                        options: vec![
-                            ColumnOptionDef {
-                                name: None,
-                                option: ColumnOption::Unique {
-                                    is_primary: true,
-                                    characteristics: None
+            index_options,
+            characteristics,
+        },
+        None => TableConstraint::PrimaryKey {
+            name,
+            index_name,
+            index_type,
+            columns,
+            index_options,
+            characteristics,
+        },
+    }
+}
+
+#[test]
+fn parse_create_table_primary_and_unique_key() {
+    let sqls = ["UNIQUE KEY", "PRIMARY KEY"]
+        .map(|key_ty|format!("CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, CONSTRAINT bar_key {key_ty} (bar))"));
+
+    let index_type_display = [Some(KeyOrIndexDisplay::Key), None];
+
+    for (sql, index_type_display) in sqls.iter().zip(index_type_display) {
+        match mysql().one_statement_parses_to(sql, "") {
+            Statement::CreateTable {
+                name,
+                columns,
+                constraints,
+                ..
+            } => {
+                assert_eq!(name.to_string(), "foo");
+
+                let expected_constraint = table_constraint_unique_primary_ctor(
+                    Some(Ident::new("bar_key")),
+                    None,
+                    None,
+                    vec![Ident::new("bar")],
+                    vec![],
+                    None,
+                    index_type_display,
+                );
+                assert_eq!(vec![expected_constraint], constraints);
+
+                assert_eq!(
+                    vec![
+                        ColumnDef {
+                            name: Ident::new("id"),
+                            data_type: DataType::Int(None),
+                            collation: None,
+                            options: vec![
+                                ColumnOptionDef {
+                                    name: None,
+                                    option: ColumnOption::Unique {
+                                        is_primary: true,
+                                        characteristics: None
+                                    },
                                 },
-                            },
-                            ColumnOptionDef {
+                                ColumnOptionDef {
+                                    name: None,
+                                    option: ColumnOption::DialectSpecific(vec![
+                                        Token::make_keyword("AUTO_INCREMENT")
+                                    ]),
+                                },
+                            ],
+                        },
+                        ColumnDef {
+                            name: Ident::new("bar"),
+                            data_type: DataType::Int(None),
+                            collation: None,
+                            options: vec![ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                                    "AUTO_INCREMENT"
-                                )]),
-                            },
-                        ],
-                    },
-                    ColumnDef {
-                        name: Ident::new("bar"),
-                        data_type: DataType::Int(None),
-                        collation: None,
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::NotNull,
-                        },],
-                    },
-                ],
-                columns
-            );
+                                option: ColumnOption::NotNull,
+                            },],
+                        },
+                    ],
+                    columns
+                );
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_primary_and_unique_key_with_index_options() {
+    let sqls = ["UNIQUE INDEX", "PRIMARY KEY"]
+        .map(|key_ty|format!("CREATE TABLE foo (bar INT, var INT, CONSTRAINT constr {key_ty} index_name (bar, var) USING HASH COMMENT 'yes, ' USING BTREE COMMENT 'MySQL allows')"));
+
+    let index_type_display = [Some(KeyOrIndexDisplay::Index), None];
+
+    for (sql, index_type_display) in sqls.iter().zip(index_type_display) {
+        match mysql_and_generic().one_statement_parses_to(sql, "") {
+            Statement::CreateTable {
+                name, constraints, ..
+            } => {
+                assert_eq!(name.to_string(), "foo");
+
+                let expected_constraint = table_constraint_unique_primary_ctor(
+                    Some(Ident::new("constr")),
+                    Some(Ident::new("index_name")),
+                    None,
+                    vec![Ident::new("bar"), Ident::new("var")],
+                    vec![
+                        IndexOption::Using(IndexType::Hash),
+                        IndexOption::Comment("yes, ".into()),
+                        IndexOption::Using(IndexType::BTree),
+                        IndexOption::Comment("MySQL allows".into()),
+                    ],
+                    None,
+                    index_type_display,
+                );
+                assert_eq!(vec![expected_constraint], constraints);
+            }
+            _ => unreachable!(),
+        }
+
+        mysql_and_generic().verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_create_table_primary_and_unique_key_with_index_type() {
+    let sqls = ["UNIQUE", "PRIMARY KEY"].map(|key_ty| {
+        format!("CREATE TABLE foo (bar INT, {key_ty} index_name USING BTREE (bar) USING HASH)")
+    });
+
+    let index_type_display = [Some(KeyOrIndexDisplay::None), None];
+
+    for (sql, index_type_display) in sqls.iter().zip(index_type_display) {
+        match mysql_and_generic().one_statement_parses_to(sql, "") {
+            Statement::CreateTable {
+                name, constraints, ..
+            } => {
+                assert_eq!(name.to_string(), "foo");
+
+                let expected_constraint = table_constraint_unique_primary_ctor(
+                    None,
+                    Some(Ident::new("index_name")),
+                    Some(IndexType::BTree),
+                    vec![Ident::new("bar")],
+                    vec![IndexOption::Using(IndexType::Hash)],
+                    None,
+                    index_type_display,
+                );
+                assert_eq!(vec![expected_constraint], constraints);
+            }
+            _ => unreachable!(),
+        }
+        mysql_and_generic().verified_stmt(sql);
+    }
+
+    let sql = "CREATE TABLE foo (bar INT, UNIQUE INDEX index_name USING BTREE (bar) USING HASH)";
+    mysql_and_generic().verified_stmt(sql);
+    let sql = "CREATE TABLE foo (bar INT, PRIMARY KEY index_name USING BTREE (bar) USING HASH)";
+    mysql_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_table_primary_and_unique_key_characteristic_test() {
+    let sqls = ["UNIQUE INDEX", "PRIMARY KEY"]
+        .map(|key_ty|format!("CREATE TABLE x (y INT, CONSTRAINT constr {key_ty} (y) NOT DEFERRABLE INITIALLY IMMEDIATE)"));
+    for sql in &sqls {
+        mysql_and_generic().verified_stmt(sql);
     }
 }
 
@@ -786,6 +909,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -831,6 +955,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -873,6 +998,7 @@ fn parse_escaped_backticks_with_escape() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -915,6 +1041,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -936,78 +1063,6 @@ fn parse_unterminated_escape() {
     let sql = r"SELECT 'I\\'m not fine'";
     let result = std::panic::catch_unwind(|| mysql().one_statement_parses_to(sql, ""));
     assert!(result.is_err());
-}
-
-#[test]
-fn parse_escaped_string_with_escape() {
-    fn assert_mysql_query_value(sql: &str, quoted: &str) {
-        let stmt = TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
-            options: None,
-        }
-        .one_statement_parses_to(sql, "");
-
-        match stmt {
-            Statement::Query(query) => match *query.body {
-                SetExpr::Select(value) => {
-                    let expr = expr_from_projection(only(&value.projection));
-                    assert_eq!(
-                        *expr,
-                        Expr::Value(Value::SingleQuotedString(quoted.to_string()))
-                    );
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        };
-    }
-    let sql = r"SELECT 'I\'m fine'";
-    assert_mysql_query_value(sql, "I'm fine");
-
-    let sql = r#"SELECT 'I''m fine'"#;
-    assert_mysql_query_value(sql, "I'm fine");
-
-    let sql = r#"SELECT 'I\"m fine'"#;
-    assert_mysql_query_value(sql, "I\"m fine");
-
-    let sql = r"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '";
-    assert_mysql_query_value(sql, "Testing: \0 \\ % _ \u{8} \n \r \t \u{1a} a  ");
-}
-
-#[test]
-fn parse_escaped_string_with_no_escape() {
-    fn assert_mysql_query_value(sql: &str, quoted: &str) {
-        let stmt = TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
-            options: Some(ParserOptions::new().with_unescape(false)),
-        }
-        .one_statement_parses_to(sql, "");
-
-        match stmt {
-            Statement::Query(query) => match *query.body {
-                SetExpr::Select(value) => {
-                    let expr = expr_from_projection(only(&value.projection));
-                    assert_eq!(
-                        *expr,
-                        Expr::Value(Value::SingleQuotedString(quoted.to_string()))
-                    );
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        };
-    }
-    let sql = r"SELECT 'I\'m fine'";
-    assert_mysql_query_value(sql, r"I\'m fine");
-
-    let sql = r#"SELECT 'I''m fine'"#;
-    assert_mysql_query_value(sql, r#"I''m fine"#);
-
-    let sql = r#"SELECT 'I\"m fine'"#;
-    assert_mysql_query_value(sql, r#"I\"m fine"#);
-
-    let sql = r"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '";
-    assert_mysql_query_value(sql, r"Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ ");
 }
 
 #[test]
@@ -1160,13 +1215,13 @@ fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";
 
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1212,14 +1267,14 @@ fn parse_ignore_insert() {
     let sql = r"INSERT IGNORE INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ignore,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1254,14 +1309,14 @@ fn parse_priority_insert() {
     let sql = r"INSERT HIGH_PRIORITY INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             priority,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1293,14 +1348,14 @@ fn parse_priority_insert() {
     let sql2 = r"INSERT LOW_PRIORITY INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
     match mysql().verified_stmt(sql2) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             priority,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1331,10 +1386,116 @@ fn parse_priority_insert() {
 }
 
 #[test]
+fn parse_insert_as() {
+    let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias`";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Insert(Insert {
+            table_name,
+            columns,
+            source,
+            insert_alias,
+            ..
+        }) => {
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "table")]),
+                table_name
+            );
+            assert_eq!(vec![Ident::with_quote('`', "date")], columns);
+            let insert_alias = insert_alias.unwrap();
+
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "alias")]),
+                insert_alias.row_alias
+            );
+            assert_eq!(Some(vec![]), insert_alias.col_aliases);
+            assert_eq!(
+                Some(Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![Expr::Value(Value::SingleQuotedString(
+                            "2024-01-01".to_string()
+                        ))]]
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    limit_by: vec![],
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                })),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias` ()";
+    assert!(matches!(
+        mysql_and_generic().parse_sql_statements(sql),
+        Err(ParserError::ParserError(_))
+    ));
+
+    let sql = r"INSERT INTO `table` (`id`, `date`) VALUES (1, '2024-01-01') AS `alias` (`mek_id`, `mek_date`)";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Insert(Insert {
+            table_name,
+            columns,
+            source,
+            insert_alias,
+            ..
+        }) => {
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "table")]),
+                table_name
+            );
+            assert_eq!(
+                vec![Ident::with_quote('`', "id"), Ident::with_quote('`', "date")],
+                columns
+            );
+            let insert_alias = insert_alias.unwrap();
+            assert_eq!(
+                ObjectName(vec![Ident::with_quote('`', "alias")]),
+                insert_alias.row_alias
+            );
+            assert_eq!(
+                Some(vec![
+                    Ident::with_quote('`', "mek_id"),
+                    Ident::with_quote('`', "mek_date")
+                ]),
+                insert_alias.col_aliases
+            );
+            assert_eq!(
+                Some(Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![
+                            Expr::Value(number("1")),
+                            Expr::Value(Value::SingleQuotedString("2024-01-01".to_string()))
+                        ]]
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    limit_by: vec![],
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                })),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_replace_insert() {
     let sql = r"REPLACE DELAYED INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
@@ -1342,7 +1503,7 @@ fn parse_replace_insert() {
             replace_into,
             priority,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1378,13 +1539,13 @@ fn parse_empty_row_insert() {
     let sql = "INSERT INTO tb () VALUES (), ()";
 
     match mysql().one_statement_parses_to(sql, "INSERT INTO tb VALUES (), ()") {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tb")]), table_name);
             assert!(columns.is_empty());
             assert!(on.is_none());
@@ -1415,13 +1576,13 @@ fn parse_insert_with_on_duplicate_update() {
     let sql = "INSERT INTO permission_groups (name, description, perm_create, perm_read, perm_update, perm_delete) VALUES ('accounting_manager', 'Some description about the group', true, true, true, true) ON DUPLICATE KEY UPDATE description = VALUES(description), perm_create = VALUES(perm_create), perm_read = VALUES(perm_read), perm_update = VALUES(perm_update), perm_delete = VALUES(perm_delete)";
 
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::new("permission_groups")]),
                 table_name
@@ -1590,6 +1751,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     named_window: vec![],
                     qualify: None,
                     value_table_mode: None,
+                    connect_by: None,
                 })))
             );
         }
@@ -1641,6 +1803,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     named_window: vec![],
                     qualify: None,
                     value_table_mode: None,
+                    connect_by: None,
                 })))
             );
         }
@@ -1652,11 +1815,11 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
 fn parse_insert_with_numeric_prefix_column_name() {
     let sql = "INSERT INTO s1.t1 (123col_$@length123) VALUES (67.654)";
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::new("s1"), Ident::new("t1")]),
                 table_name
@@ -1746,7 +1909,7 @@ fn parse_update_with_joins() {
 fn parse_delete_with_order_by() {
     let sql = "DELETE FROM customers ORDER BY id DESC";
     match mysql().verified_stmt(sql) {
-        Statement::Delete { order_by, .. } => {
+        Statement::Delete(Delete { order_by, .. }) => {
             assert_eq!(
                 vec![OrderByExpr {
                     expr: Expr::Identifier(Ident {
@@ -1767,8 +1930,122 @@ fn parse_delete_with_order_by() {
 fn parse_delete_with_limit() {
     let sql = "DELETE FROM customers LIMIT 100";
     match mysql().verified_stmt(sql) {
-        Statement::Delete { limit, .. } => {
+        Statement::Delete(Delete { limit, .. }) => {
             assert_eq!(Some(Expr::Value(number("100"))), limit);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_add_column() {
+    match mysql().verified_stmt("ALTER TABLE tab ADD COLUMN b INT FIRST") {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only,
+            operations,
+            location: _,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert!(!if_exists);
+            assert!(!only);
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddColumn {
+                    column_keyword: true,
+                    if_not_exists: false,
+                    column_def: ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                    column_position: Some(MySQLColumnPosition::First),
+                },]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match mysql().verified_stmt("ALTER TABLE tab ADD COLUMN b INT AFTER foo") {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only,
+            operations,
+            location: _,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert!(!if_exists);
+            assert!(!only);
+            assert_eq!(
+                operations,
+                vec![AlterTableOperation::AddColumn {
+                    column_keyword: true,
+                    if_not_exists: false,
+                    column_def: ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                    column_position: Some(MySQLColumnPosition::After(Ident {
+                        value: String::from("foo"),
+                        quote_style: None
+                    })),
+                },]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_add_columns() {
+    match mysql()
+        .verified_stmt("ALTER TABLE tab ADD COLUMN a TEXT FIRST, ADD COLUMN b INT AFTER foo")
+    {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only,
+            operations,
+            location: _,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert!(!if_exists);
+            assert!(!only);
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::AddColumn {
+                        column_keyword: true,
+                        if_not_exists: false,
+                        column_def: ColumnDef {
+                            name: "a".into(),
+                            data_type: DataType::Text,
+                            collation: None,
+                            options: vec![],
+                        },
+                        column_position: Some(MySQLColumnPosition::First),
+                    },
+                    AlterTableOperation::AddColumn {
+                        column_keyword: true,
+                        if_not_exists: false,
+                        column_def: ColumnDef {
+                            name: "b".into(),
+                            data_type: DataType::Int(None),
+                            collation: None,
+                            options: vec![],
+                        },
+                        column_position: Some(MySQLColumnPosition::After(Ident {
+                            value: String::from("foo"),
+                            quote_style: None,
+                        })),
+                    },
+                ]
+            );
         }
         _ => unreachable!(),
     }
@@ -1790,6 +2067,7 @@ fn parse_alter_table_change_column() {
         new_name: Ident::new("desc"),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
+        column_position: None,
     };
 
     let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL";
@@ -1803,6 +2081,173 @@ fn parse_alter_table_change_column() {
         &expected_name.to_string(),
     );
     assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ChangeColumn {
+        old_name: Ident::new("description"),
+        new_name: Ident::new("desc"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+    let sql3 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql3), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ChangeColumn {
+        old_name: Ident::new("description"),
+        new_name: Ident::new("desc"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("foo"),
+            quote_style: None,
+        })),
+    };
+    let sql4 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL AFTER foo";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql4), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+}
+
+#[test]
+fn parse_alter_table_change_column_with_column_position() {
+    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_operation_first = AlterTableOperation::ChangeColumn {
+        old_name: Ident::new("description"),
+        new_name: Ident::new("desc"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+
+    let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_first, operation);
+
+    let sql2 = "ALTER TABLE orders CHANGE description desc TEXT NOT NULL FIRST";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_first, operation);
+
+    let expected_operation_after = AlterTableOperation::ChangeColumn {
+        old_name: Ident::new("description"),
+        new_name: Ident::new("desc"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("total_count"),
+            quote_style: None,
+        })),
+    };
+
+    let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL AFTER total_count";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_after, operation);
+
+    let sql2 = "ALTER TABLE orders CHANGE description desc TEXT NOT NULL AFTER total_count";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_after, operation);
+}
+
+#[test]
+fn parse_alter_table_modify_column() {
+    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_operation = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: None,
+    };
+
+    let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+
+    let sql2 = "ALTER TABLE orders MODIFY description TEXT NOT NULL";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+    let sql3 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql3), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("foo"),
+            quote_style: None,
+        })),
+    };
+    let sql4 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL AFTER foo";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql4), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+}
+
+#[test]
+fn parse_alter_table_modify_column_with_column_position() {
+    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_operation_first = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+
+    let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_first, operation);
+
+    let sql2 = "ALTER TABLE orders MODIFY description TEXT NOT NULL FIRST";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_first, operation);
+
+    let expected_operation_after = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("total_count"),
+            quote_style: None,
+        })),
+    };
+
+    let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL AFTER total_count";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_after, operation);
+
+    let sql2 = "ALTER TABLE orders MODIFY description TEXT NOT NULL AFTER total_count";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_after, operation);
 }
 
 #[test]
@@ -1810,7 +2255,7 @@ fn parse_substring_in_select() {
     let sql = "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test";
     match mysql().one_statement_parses_to(
         sql,
-        "SELECT DISTINCT SUBSTRING(description FROM 0 FOR 1) FROM test",
+        "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test",
     ) {
         Statement::Query(query) => {
             assert_eq!(
@@ -1826,7 +2271,7 @@ fn parse_substring_in_select() {
                             })),
                             substring_from: Some(Box::new(Expr::Value(number("0")))),
                             substring_for: Some(Box::new(Expr::Value(number("1")))),
-                            special: false,
+                            special: true,
                         })],
                         into: None,
                         from: vec![TableWithJoins {
@@ -1853,6 +2298,7 @@ fn parse_substring_in_select() {
                         named_window: vec![],
                         qualify: None,
                         value_table_mode: None,
+                        connect_by: None,
                     }))),
                     order_by: vec![],
                     limit: None,
@@ -2045,6 +2491,15 @@ fn parse_create_table_with_index_definition() {
 }
 
 #[test]
+fn parse_create_table_unallow_constraint_then_index() {
+    let sql = "CREATE TABLE foo (bar INT, CONSTRAINT constr INDEX index (bar))";
+    assert!(mysql_and_generic().parse_sql_statements(sql).is_err());
+
+    let sql = "CREATE TABLE foo (bar INT, INDEX index (bar))";
+    assert!(mysql_and_generic().parse_sql_statements(sql).is_ok());
+}
+
+#[test]
 fn parse_create_table_with_fulltext_definition() {
     mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, FULLTEXT (id))");
 
@@ -2156,7 +2611,8 @@ fn parse_hex_string_introducer() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
-                into: None
+                into: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,

@@ -55,7 +55,7 @@ fn pragma_eq_style() {
     }
 }
 #[test]
-fn pragma_funciton_style() {
+fn pragma_function_style() {
     let sql = "PRAGMA cache_size(10)";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::Pragma {
@@ -103,7 +103,7 @@ fn pragma_function_string_style() {
 }
 
 #[test]
-fn pragma_eq_placehoder_style() {
+fn pragma_eq_placeholder_style() {
     let sql = "PRAGMA table_info = ?";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::Pragma {
@@ -291,115 +291,6 @@ fn test_placeholder() {
 }
 
 #[test]
-fn parse_like() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = sqlite().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = sqlite().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that LIKE and NOT LIKE have the same precedence.
-        // This was previously mishandled (#81).
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = sqlite().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
-fn parse_similar_to() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = sqlite().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = sqlite().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = sqlite().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
 fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
     if let Statement::CreateTable { name, strict, .. } = sqlite().verified_stmt(sql) {
@@ -413,6 +304,18 @@ fn parse_single_quoted_identified() {
     sqlite().verified_only_select("SELECT 't'.*, t.'x' FROM 't'");
     // TODO: add support for select 't'.x
 }
+
+#[test]
+fn parse_substring() {
+    // SQLite supports the SUBSTRING function since v3.34, but does not support the SQL standard
+    // SUBSTRING(expr FROM start FOR length) syntax.
+    // https://www.sqlite.org/lang_corefunc.html#substr
+    sqlite().verified_only_select("SELECT SUBSTRING('SQLITE', 3, 4)");
+    sqlite().verified_only_select("SELECT SUBSTR('SQLITE', 3, 4)");
+    sqlite().verified_only_select("SELECT SUBSTRING('SQLITE', 3)");
+    sqlite().verified_only_select("SELECT SUBSTR('SQLITE', 3)");
+}
+
 #[test]
 fn parse_window_function_with_filter() {
     for func_name in [
@@ -435,6 +338,7 @@ fn parse_window_function_with_filter() {
                 null_treatment: None,
                 within_group: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
+                    window_name: None,
                     partition_by: vec![],
                     order_by: vec![],
                     window_frame: None,

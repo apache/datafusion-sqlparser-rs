@@ -90,10 +90,10 @@ fn parse_raw_literal() {
 fn parse_delete_statement() {
     let sql = "DELETE \"table\" WHERE 1";
     match bigquery_and_generic().verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(Delete {
             from: FromTable::WithoutKeyword(from),
             ..
-        } => {
+        }) => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
@@ -201,6 +201,51 @@ fn parse_create_view_if_not_exists() {
             assert!(!late_binding);
             assert!(if_not_exists);
             assert!(!temporary);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_view_with_unquoted_hyphen() {
+    let sql = "CREATE VIEW IF NOT EXISTS my-pro-ject.mydataset.myview AS SELECT 1";
+    match bigquery().verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            query,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq!("my-pro-ject.mydataset.myview", name.to_string());
+            assert_eq!("SELECT 1", query.to_string());
+            assert!(if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_unquoted_hyphen() {
+    let sql = "CREATE TABLE my-pro-ject.mydataset.mytable (x INT64)";
+    match bigquery().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(
+                name,
+                ObjectName(vec![
+                    "my-pro-ject".into(),
+                    "mydataset".into(),
+                    "mytable".into()
+                ])
+            );
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("x"),
+                    data_type: DataType::Int64,
+                    collation: None,
+                    options: vec![]
+                },],
+                columns
+            );
         }
         _ => unreachable!(),
     }
@@ -1030,6 +1075,225 @@ fn parse_join_constraint_unnest_alias() {
 }
 
 #[test]
+fn parse_merge() {
+    let sql = concat!(
+        "MERGE inventory AS T USING newArrivals AS S ON false ",
+        "WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) VALUES (1, 2) ",
+        "WHEN NOT MATCHED BY TARGET AND 1 THEN INSERT (product, quantity) VALUES (1, 2) ",
+        "WHEN NOT MATCHED BY TARGET THEN INSERT (product, quantity) VALUES (1, 2) ",
+        "WHEN NOT MATCHED BY SOURCE AND 2 THEN DELETE ",
+        "WHEN NOT MATCHED BY SOURCE THEN DELETE ",
+        "WHEN NOT MATCHED BY SOURCE AND 1 THEN UPDATE SET a = 1, b = 2 ",
+        "WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW ",
+        "WHEN NOT MATCHED THEN INSERT (product, quantity) ROW ",
+        "WHEN NOT MATCHED AND 1 THEN INSERT ROW ",
+        "WHEN NOT MATCHED THEN INSERT ROW ",
+        "WHEN MATCHED AND 1 THEN DELETE ",
+        "WHEN MATCHED THEN UPDATE SET a = 1, b = 2 ",
+        "WHEN NOT MATCHED THEN INSERT (a, b) VALUES (1, DEFAULT) ",
+        "WHEN NOT MATCHED THEN INSERT VALUES (1, DEFAULT)",
+    );
+    let insert_action = MergeAction::Insert(MergeInsertExpr {
+        columns: vec![Ident::new("product"), Ident::new("quantity")],
+        kind: MergeInsertKind::Values(Values {
+            explicit_row: false,
+            rows: vec![vec![Expr::Value(number("1")), Expr::Value(number("2"))]],
+        }),
+    });
+    let update_action = MergeAction::Update {
+        assignments: vec![
+            Assignment {
+                id: vec![Ident::new("a")],
+                value: Expr::Value(number("1")),
+            },
+            Assignment {
+                id: vec![Ident::new("b")],
+                value: Expr::Value(number("2")),
+            },
+        ],
+    };
+    match bigquery_and_generic().verified_stmt(sql) {
+        Statement::Merge {
+            into,
+            table,
+            source,
+            on,
+            clauses,
+        } => {
+            assert!(!into);
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("inventory")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("T"),
+                        columns: vec![],
+                    }),
+                    args: Default::default(),
+                    with_hints: Default::default(),
+                    version: Default::default(),
+                    partitions: Default::default(),
+                },
+                table
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("newArrivals")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("S"),
+                        columns: vec![],
+                    }),
+                    args: Default::default(),
+                    with_hints: Default::default(),
+                    version: Default::default(),
+                    partitions: Default::default(),
+                },
+                source
+            );
+            assert_eq!(Expr::Value(Value::Boolean(false)), *on);
+            assert_eq!(
+                vec![
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: insert_action.clone(),
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedByTarget,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: insert_action.clone(),
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedByTarget,
+                        predicate: None,
+                        action: insert_action,
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedBySource,
+                        predicate: Some(Expr::Value(number("2"))),
+                        action: MergeAction::Delete
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedBySource,
+                        predicate: None,
+                        action: MergeAction::Delete
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedBySource,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: update_action.clone(),
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            kind: MergeInsertKind::Row,
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            kind: MergeInsertKind::Row,
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![],
+                            kind: MergeInsertKind::Row
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![],
+                            kind: MergeInsertKind::Row
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::Matched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: MergeAction::Delete,
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::Matched,
+                        predicate: None,
+                        action: update_action,
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("a"), Ident::new("b"),],
+                            kind: MergeInsertKind::Values(Values {
+                                explicit_row: false,
+                                rows: vec![vec![
+                                    Expr::Value(number("1")),
+                                    Expr::Identifier(Ident::new("DEFAULT")),
+                                ]]
+                            })
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![],
+                            kind: MergeInsertKind::Values(Values {
+                                explicit_row: false,
+                                rows: vec![vec![
+                                    Expr::Value(number("1")),
+                                    Expr::Identifier(Ident::new("DEFAULT")),
+                                ]]
+                            })
+                        })
+                    },
+                ],
+                clauses
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_merge_invalid_statements() {
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    for (sql, err_msg) in [
+        (
+            "MERGE T USING U ON TRUE WHEN MATCHED BY TARGET AND 1 THEN DELETE",
+            "Expected THEN, found: BY",
+        ),
+        (
+            "MERGE T USING U ON TRUE WHEN MATCHED BY SOURCE AND 1 THEN DELETE",
+            "Expected THEN, found: BY",
+        ),
+        (
+            "MERGE T USING U ON TRUE WHEN NOT MATCHED BY SOURCE THEN INSERT(a) VALUES (b)",
+            "INSERT is not allowed in a NOT MATCHED BY SOURCE merge clause",
+        ),
+        (
+            "MERGE INTO T USING U ON TRUE WHEN NOT MATCHED BY TARGET THEN DELETE",
+            "DELETE is not allowed in a NOT MATCHED BY TARGET merge clause",
+        ),
+        (
+            "MERGE INTO T USING U ON TRUE WHEN NOT MATCHED BY TARGET THEN UPDATE SET a = b",
+            "UPDATE is not allowed in a NOT MATCHED BY TARGET merge clause",
+        ),
+    ] {
+        let res = dialects.parse_sql_statements(sql);
+        assert_eq!(
+            ParserError::ParserError(err_msg.to_string()),
+            res.unwrap_err()
+        );
+    }
+}
+
+#[test]
 fn parse_trailing_comma() {
     for (sql, canonical) in [
         ("SELECT a,", "SELECT a"),
@@ -1084,115 +1348,6 @@ fn parse_cast_bytes_to_string_format() {
 }
 
 #[test]
-fn parse_like() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = bigquery().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = bigquery().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that LIKE and NOT LIKE have the same precedence.
-        // This was previously mishandled (#81).
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = bigquery().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
-fn parse_similar_to() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = bigquery().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = bigquery().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = bigquery().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
 fn parse_array_agg_func() {
     for sql in [
         "SELECT ARRAY_AGG(x ORDER BY x) AS a FROM T",
@@ -1233,49 +1388,6 @@ fn test_select_wildcard_with_except() {
             .to_string(),
         "sql parser error: Expected identifier, found: )"
     );
-}
-
-#[test]
-fn test_select_wildcard_with_replace() {
-    let select = bigquery_and_generic()
-        .verified_only_select(r#"SELECT * REPLACE ('widget' AS item_name) FROM orders"#);
-    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_replace: Some(ReplaceSelectItem {
-            items: vec![Box::new(ReplaceSelectElement {
-                expr: Expr::Value(Value::SingleQuotedString("widget".to_owned())),
-                column_name: Ident::new("item_name"),
-                as_keyword: true,
-            })],
-        }),
-        ..Default::default()
-    });
-    assert_eq!(expected, select.projection[0]);
-
-    let select = bigquery_and_generic().verified_only_select(
-        r#"SELECT * REPLACE (quantity / 2 AS quantity, 3 AS order_id) FROM orders"#,
-    );
-    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_replace: Some(ReplaceSelectItem {
-            items: vec![
-                Box::new(ReplaceSelectElement {
-                    expr: Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("quantity"))),
-                        op: BinaryOperator::Divide,
-                        right: Box::new(Expr::Value(number("2"))),
-                    },
-                    column_name: Ident::new("quantity"),
-                    as_keyword: true,
-                }),
-                Box::new(ReplaceSelectElement {
-                    expr: Expr::Value(number("3")),
-                    column_name: Ident::new("order_id"),
-                    as_keyword: true,
-                }),
-            ],
-        }),
-        ..Default::default()
-    });
-    assert_eq!(expected, select.projection[0]);
 }
 
 #[test]
@@ -1357,40 +1469,49 @@ fn bigquery_and_generic() -> TestedDialects {
 }
 
 #[test]
-fn parse_map_access_offset() {
-    let sql = "SELECT d[offset(0)]";
-    let _select = bigquery().verified_only_select(sql);
-    assert_eq!(
-        _select.projection[0],
-        SelectItem::UnnamedExpr(Expr::MapAccess {
-            column: Box::new(Expr::Identifier(Ident {
-                value: "d".to_string(),
-                quote_style: None,
-            })),
-            keys: vec![Expr::Function(Function {
-                name: ObjectName(vec!["offset".into()]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    number("0")
-                ))),],
-                null_treatment: None,
-                filter: None,
-                within_group: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-            })],
-        })
-    );
+fn parse_map_access_expr() {
+    let sql = "users[-1][safe_offset(2)].a.b";
+    let expr = bigquery().verified_expr(sql);
 
-    // test other operators
-    for sql in [
-        "SELECT d[SAFE_OFFSET(0)]",
-        "SELECT d[ORDINAL(0)]",
-        "SELECT d[SAFE_ORDINAL(0)]",
-    ] {
-        bigquery().verified_only_select(sql);
+    fn map_access_key(key: Expr, syntax: MapAccessSyntax) -> MapAccessKey {
+        MapAccessKey { key, syntax }
     }
+    let expected = Expr::MapAccess {
+        column: Expr::Identifier(Ident::new("users")).into(),
+        keys: vec![
+            map_access_key(
+                Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: Expr::Value(number("1")).into(),
+                },
+                MapAccessSyntax::Bracket,
+            ),
+            map_access_key(
+                Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("safe_offset")]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        number("2"),
+                    )))],
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                    within_group: None,
+                }),
+                MapAccessSyntax::Bracket,
+            ),
+            map_access_key(
+                Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("b")]),
+                MapAccessSyntax::Period,
+            ),
+        ],
+    };
+    assert_eq!(expr, expected);
+
+    let sql = "SELECT myfunc()[-1].a[SAFE_OFFSET(2)].b";
+    bigquery().verified_only_select(sql);
 }
 
 #[test]
@@ -1415,6 +1536,19 @@ fn test_bigquery_trim() {
     assert_eq!(
         ParserError::ParserError("Expected ), found: 'a'".to_owned()),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
+    );
+}
+
+#[test]
+fn parse_extract_weekday() {
+    let sql = "SELECT EXTRACT(WEEK(MONDAY) FROM d)";
+    let select = bigquery_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Week(Some(Ident::new("MONDAY"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+        },
+        expr_from_projection(only(&select.projection)),
     );
 }
 

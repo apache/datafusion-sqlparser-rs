@@ -44,6 +44,15 @@ impl Dialect for MySqlDialect {
         ch == '`'
     }
 
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('`')
+    }
+
+    // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        true
+    }
+
     fn parse_infix(
         &self,
         parser: &mut crate::parser::Parser,

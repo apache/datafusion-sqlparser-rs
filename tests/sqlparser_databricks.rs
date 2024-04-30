@@ -227,3 +227,8 @@ fn test_array_struct_access() {
     databricks()
         .verified_stmt("SELECT id, extra_questions[0].label AS question, FROM AS detailed_survey");
 }
+
+#[test]
+fn test_cross_join() {
+    databricks_and_generic().verified_stmt("SELECT * FROM tbl CROSS JOIN tbl2 ON tbl.id = tbl2.id");
+}

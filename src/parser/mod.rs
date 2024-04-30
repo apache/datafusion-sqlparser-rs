@@ -7205,13 +7205,15 @@ impl<'a> Parser<'a> {
                     JoinOperator::CrossJoin
                 } else if self.parse_keyword(Keyword::APPLY) {
                     // MSSQL extension, similar to CROSS JOIN LATERAL
-                    JoinOperator::CrossApply
+                    |_| JoinOperator::CrossApply
                 } else {
                     return self.expected("JOIN or APPLY after CROSS", self.peek_token());
                 };
+                let relation = self.parse_table_factor()?;
+                let join_constraint = self.parse_join_constraint(false)?;
                 Join {
-                    relation: self.parse_table_factor()?,
-                    join_operator,
+                    relation,
+                    join_operator: join_operator(join_constraint),
                 }
             } else if self.parse_keyword(Keyword::OUTER) {
                 // MSSQL extension, similar to LEFT JOIN LATERAL .. ON 1=1

@@ -4962,7 +4962,7 @@ fn parse_cross_join() {
                 version: None,
                 partitions: vec![],
             },
-            join_operator: JoinOperator::CrossJoin,
+            join_operator: JoinOperator::CrossJoin(JoinConstraint::None),
         },
         only(only(select.from).joins),
     );

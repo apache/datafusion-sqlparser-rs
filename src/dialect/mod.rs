@@ -185,6 +185,20 @@ pub trait Dialect: Debug + Any {
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
         false
     }
+    /// Returns true if the dialects supports specifying null treatment
+    /// as part of a window function's parameter list. As opposed
+    /// to after the parameter list.
+    /// i.e The following syntax returns true
+    /// ```sql
+    /// FIRST_VALUE(a IGNORE NULLS) OVER ()
+    /// ```
+    /// while the following syntax returns false
+    /// ```sql
+    /// FIRST_VALUE(a) IGNORE NULLS OVER ()
+    /// ```
+    fn supports_window_function_null_treatment_arg(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect supports defining structs or objects using a
     /// syntax like `{'x': 1, 'y': 2, 'z': 3}`.
     fn supports_dictionary_syntax(&self) -> bool {

@@ -875,7 +875,7 @@ impl<'a> Parser<'a> {
                         if self.consume_token(&Token::LParen) {
                             self.prev_token();
                             let function = self.parse_function(ObjectName(id_parts))?;
-                            if dialect_of!(self is BigQueryDialect)
+                            if dialect_of!(self is BigQueryDialect | DatabricksDialect)
                                 && self.consume_token(&Token::Period)
                             {
                                 Ok(Expr::JsonAccess {
@@ -2191,17 +2191,17 @@ impl<'a> Parser<'a> {
             }
             let expr = self.parse_map_access(expr)?;
             // Snowflake and BigQuery allows col[1].key syntax
-            if dialect_of!(self is SnowflakeDialect | BigQueryDialect)
+            return if dialect_of!(self is SnowflakeDialect | BigQueryDialect | DatabricksDialect)
                 && self.consume_token(&Token::Period)
             {
-                return Ok(Expr::JsonAccess {
+                Ok(Expr::JsonAccess {
                     left: Box::new(expr),
                     operator: JsonOperator::Period,
                     right: Box::new(Expr::Value(self.parse_snowflake_json_path()?)),
-                });
+                })
             } else {
-                return Ok(expr);
-            }
+                Ok(expr)
+            };
         } else if Token::Colon == tok {
             Ok(Expr::JsonAccess {
                 left: Box::new(expr),
@@ -5617,6 +5617,11 @@ impl<'a> Parser<'a> {
                     return self.parse_function(ObjectName(vec![Ident::new(value)]));
                 }
                 Ok(Expr::Value(Value::SingleQuotedString(value)))
+            }
+            Token::LParen => {
+                let r = self.parse_map_key()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(r)
             }
             Token::SingleQuotedString(s) => Ok(Expr::Value(Value::SingleQuotedString(s))),
             #[cfg(not(feature = "bigdecimal"))]

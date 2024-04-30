@@ -207,3 +207,23 @@ fn test_parse_substring() {
     databricks().verified_expr("SUBSTRING('Spark SQL' FROM 5)");
     databricks().verified_expr("SUBSTRING('Spark SQL' FROM 5 FOR 1)");
 }
+
+#[test]
+fn test_array_access() {
+    databricks()
+        .verified_stmt("SELECT id, extra_questions[0] AS question, FROM AS detailed_survey");
+}
+
+#[test]
+fn test_array_access_paren() {
+    databricks().one_statement_parses_to(
+        "SELECT id, extra_questions[(0)] AS question, FROM AS detailed_survey",
+        "SELECT id, extra_questions[0] AS question, FROM AS detailed_survey",
+    );
+}
+
+#[test]
+fn test_array_struct_access() {
+    databricks()
+        .verified_stmt("SELECT id, extra_questions[0].label AS question, FROM AS detailed_survey");
+}

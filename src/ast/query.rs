@@ -802,6 +802,31 @@ impl fmt::Display for ConnectBy {
     }
 }
 
+/// An expression optionally followed by an alias.
+///
+/// Example:
+/// ```sql
+/// 42 AS myint
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExprWithAlias {
+    pub expr: Expr,
+    pub alias: Option<Ident>,
+}
+
+impl fmt::Display for ExprWithAlias {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ExprWithAlias { expr, alias } = self;
+        write!(f, "{expr}")?;
+        if let Some(alias) = alias {
+            write!(f, " AS {alias}")?;
+        }
+        Ok(())
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -900,12 +925,14 @@ pub enum TableFactor {
     },
     /// Represents PIVOT operation on a table.
     /// For example `FROM monthly_sales PIVOT(sum(amount) FOR MONTH IN ('JAN', 'FEB'))`
-    /// See <https://docs.snowflake.com/en/sql-reference/constructs/pivot>
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#pivot_operator)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/pivot)
     Pivot {
         table: Box<TableFactor>,
-        aggregate_function: Expr, // Function expression
+        aggregate_functions: Vec<ExprWithAlias>, // Function expression
         value_column: Vec<Ident>,
-        pivot_values: Vec<Value>,
+        pivot_values: Vec<ExprWithAlias>,
         alias: Option<TableAlias>,
     },
     /// An UNPIVOT operation on a table.
@@ -1270,7 +1297,7 @@ impl fmt::Display for TableFactor {
             }
             TableFactor::Pivot {
                 table,
-                aggregate_function,
+                aggregate_functions,
                 value_column,
                 pivot_values,
                 alias,
@@ -1279,7 +1306,7 @@ impl fmt::Display for TableFactor {
                     f,
                     "{} PIVOT({} FOR {} IN ({}))",
                     table,
-                    aggregate_function,
+                    display_comma_separated(aggregate_functions),
                     Expr::CompoundIdentifier(value_column.to_vec()),
                     display_comma_separated(pivot_values)
                 )?;

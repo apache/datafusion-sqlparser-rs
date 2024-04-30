@@ -121,6 +121,7 @@ fn parse_create_procedure() {
                     named_window: vec![],
                     qualify: None,
                     value_table_mode: None,
+                    connect_by: None,
                 })))
             }))],
             params: Some(vec![
@@ -438,13 +439,44 @@ fn parse_for_json_expect_ast() {
 #[test]
 fn parse_cast_varchar_max() {
     ms_and_generic().verified_expr("CAST('foo' AS VARCHAR(MAX))");
+    ms_and_generic().verified_expr("CAST('foo' AS NVARCHAR(MAX))");
 }
 
 #[test]
 fn parse_convert() {
+    let sql = "CONVERT(INT, 1, 2, 3, NULL)";
+    let Expr::Convert {
+        expr,
+        data_type,
+        charset,
+        target_before_value,
+        styles,
+    } = ms().verified_expr(sql)
+    else {
+        unreachable!()
+    };
+    assert_eq!(Expr::Value(number("1")), *expr);
+    assert_eq!(Some(DataType::Int(None)), data_type);
+    assert!(charset.is_none());
+    assert!(target_before_value);
+    assert_eq!(
+        vec![
+            Expr::Value(number("2")),
+            Expr::Value(number("3")),
+            Expr::Value(Value::Null),
+        ],
+        styles
+    );
+
     ms().verified_expr("CONVERT(VARCHAR(MAX), 'foo')");
     ms().verified_expr("CONVERT(VARCHAR(10), 'foo')");
     ms().verified_expr("CONVERT(DECIMAL(10,5), 12.55)");
+
+    let error_sql = "SELECT CONVERT(INT, 'foo',) FROM T";
+    assert_eq!(
+        ParserError::ParserError("Expected an expression:, found: )".to_owned()),
+        ms().parse_sql_statements(error_sql).unwrap_err()
+    );
 }
 
 #[test]
@@ -496,6 +528,7 @@ fn parse_substring_in_select() {
                         named_window: vec![],
                         qualify: None,
                         value_table_mode: None,
+                        connect_by: None,
                     }))),
                     order_by: vec![],
                     limit: None,

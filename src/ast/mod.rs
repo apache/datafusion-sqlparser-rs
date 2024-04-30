@@ -40,18 +40,19 @@ pub use self::ddl::{
 pub use self::dml::{Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    AfterMatchSkip, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode, ExceptSelectItem,
-    ExcludeSelectItem, Fetch, ForClause, ForJson, ForXml, GroupByExpr, IdentWithAlias,
-    IlikeSelectItem, Join, JoinConstraint, JoinOperator, JsonTableColumn,
+    AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
+    ExceptSelectItem, ExcludeSelectItem, Fetch, ForClause, ForJson, ForXml, GroupByExpr,
+    IdentWithAlias, IlikeSelectItem, Join, JoinConstraint, JoinOperator, JsonTableColumn,
     JsonTableColumnErrorHandling, LateralView, LockClause, LockType, MatchRecognizePattern,
-    MatchRecognizeSymbol, Measure, NamedWindowDefinition, NonBlock, Offset, OffsetRows,
-    OrderByExpr, Query, RenameSelectItem, RepetitionQuantifier, ReplaceSelectElement,
+    MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset,
+    OffsetRows, OrderByExpr, Query, RenameSelectItem, RepetitionQuantifier, ReplaceSelectElement,
     ReplaceSelectItem, RowsPerMatch, Select, SelectInto, SelectItem, SetExpr, SetOperator,
     SetQuantifier, SymbolDefinition, Table, TableAlias, TableFactor, TableVersion, TableWithJoins,
     Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
-    escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
+    escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
+    TrimWhereField, Value,
 };
 
 use crate::ast::helpers::stmt_data_loading::{
@@ -270,66 +271,6 @@ impl fmt::Display for Interval {
     }
 }
 
-/// JsonOperator
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum JsonOperator {
-    /// -> keeps the value as json
-    Arrow,
-    /// ->> keeps the value as text or int.
-    LongArrow,
-    /// #> Extracts JSON sub-object at the specified path
-    HashArrow,
-    /// #>> Extracts JSON sub-object at the specified path as text
-    HashLongArrow,
-    /// : Colon is used by Snowflake (Which is similar to LongArrow)
-    Colon,
-    /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
-    AtArrow,
-    /// jsonb <@ jsonb -> boolean: Test whether right json contains the left json
-    ArrowAt,
-    /// jsonb #- text[] -> jsonb: Deletes the field or array element at the specified
-    /// path, where path elements can be either field keys or array indexes.
-    HashMinus,
-    /// jsonb @? jsonpath -> boolean: Does JSON path return any item for the specified
-    /// JSON value?
-    AtQuestion,
-    /// jsonb @@ jsonpath → boolean: Returns the result of a JSON path predicate check
-    /// for the specified JSON value. Only the first item of the result is taken into
-    /// account. If the result is not Boolean, then NULL is returned.
-    AtAt,
-}
-
-impl fmt::Display for JsonOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            JsonOperator::Arrow => {
-                write!(f, "->")
-            }
-            JsonOperator::LongArrow => {
-                write!(f, "->>")
-            }
-            JsonOperator::HashArrow => {
-                write!(f, "#>")
-            }
-            JsonOperator::HashLongArrow => {
-                write!(f, "#>>")
-            }
-            JsonOperator::Colon => {
-                write!(f, ":")
-            }
-            JsonOperator::AtArrow => {
-                write!(f, "@>")
-            }
-            JsonOperator::ArrowAt => write!(f, "<@"),
-            JsonOperator::HashMinus => write!(f, "#-"),
-            JsonOperator::AtQuestion => write!(f, "@?"),
-            JsonOperator::AtAt => write!(f, "@@"),
-        }
-    }
-}
-
 /// A field definition within a struct.
 ///
 /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
@@ -412,6 +353,59 @@ impl fmt::Display for MapAccessKey {
     }
 }
 
+/// An element of a JSON path.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonPathElem {
+    /// Accesses an object field using dot notation, e.g. `obj:foo.bar.baz`.
+    ///
+    /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation>.
+    Dot { key: String, quoted: bool },
+    /// Accesses an object field or array element using bracket notation,
+    /// e.g. `obj['foo']`.
+    ///
+    /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured#bracket-notation>.
+    Bracket { key: Expr },
+}
+
+/// A JSON path.
+///
+/// See <https://docs.snowflake.com/en/user-guide/querying-semistructured>.
+/// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-json-path-expression.html>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JsonPath {
+    pub path: Vec<JsonPathElem>,
+}
+
+impl fmt::Display for JsonPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, elem) in self.path.iter().enumerate() {
+            match elem {
+                JsonPathElem::Dot { key, quoted } => {
+                    if i == 0 {
+                        write!(f, ":")?;
+                    } else {
+                        write!(f, ".")?;
+                    }
+
+                    if *quoted {
+                        write!(f, "\"{}\"", escape_double_quote_string(key))?;
+                    } else {
+                        write!(f, "{key}")?;
+                    }
+                }
+                JsonPathElem::Bracket { key } => {
+                    write!(f, "[{key}]")?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// The syntax used for in a cast expression.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -449,11 +443,16 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
-    /// JSON access (postgres)  eg: data->'tags'
+    /// Access data nested in a value containing semi-structured data, such as
+    /// the `VARIANT` type on Snowflake. for example `src:customer[0].name`.
+    ///
+    /// See <https://docs.snowflake.com/en/user-guide/querying-semistructured>.
+    /// See <https://docs.databricks.com/en/sql/language-manual/functions/colonsign.html>.
     JsonAccess {
-        left: Box<Expr>,
-        operator: JsonOperator,
-        right: Box<Expr>,
+        /// The value being queried.
+        value: Box<Expr>,
+        /// The path to the data to extract.
+        path: JsonPath,
     },
     /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
     CompositeAccess {
@@ -567,6 +566,10 @@ pub enum Expr {
         charset: Option<ObjectName>,
         /// whether the target comes before the expr (MSSQL syntax)
         target_before_value: bool,
+        /// How to translate the expression.
+        ///
+        /// [MSSQL]: https://learn.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql?view=sql-server-ver16#style
+        styles: Vec<Expr>,
     },
     /// `CAST` an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
@@ -798,6 +801,8 @@ pub enum Expr {
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/where#joins-in-the-where-clause>.
     OuterJoin(Box<Expr>),
+    /// A reference to the prior level in a CONNECT BY clause.
+    Prior(Box<Expr>),
 }
 
 impl fmt::Display for CastFormat {
@@ -977,6 +982,7 @@ impl fmt::Display for Expr {
                 target_before_value,
                 data_type,
                 charset,
+                styles,
             } => {
                 write!(f, "CONVERT(")?;
                 if let Some(data_type) = data_type {
@@ -992,6 +998,9 @@ impl fmt::Display for Expr {
                 } else {
                     write!(f, "{expr}") // This should never happen
                 }?;
+                if !styles.is_empty() {
+                    write!(f, ", {}", display_comma_separated(styles))?;
+                }
                 write!(f, ")")
             }
             Expr::Cast {
@@ -1214,16 +1223,8 @@ impl fmt::Display for Expr {
             Expr::Array(set) => {
                 write!(f, "{set}")
             }
-            Expr::JsonAccess {
-                left,
-                operator,
-                right,
-            } => {
-                if operator == &JsonOperator::Colon {
-                    write!(f, "{left}{operator}{right}")
-                } else {
-                    write!(f, "{left} {operator} {right}")
-                }
+            Expr::JsonAccess { value, path } => {
+                write!(f, "{value}{path}")
             }
             Expr::CompositeAccess { expr, key } => {
                 write!(f, "{expr}.{key}")
@@ -1255,6 +1256,7 @@ impl fmt::Display for Expr {
             Expr::OuterJoin(expr) => {
                 write!(f, "{expr} (+)")
             }
+            Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
         }
     }
 }
@@ -2560,20 +2562,23 @@ pub enum Statement {
     /// RELEASE [ SAVEPOINT ] savepoint_name
     /// ```
     ReleaseSavepoint { name: Ident },
+    /// A `MERGE` statement.
+    ///
     /// ```sql
-    /// MERGE INTO <statement>
+    /// MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]
     /// ```
-    /// Based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
     Merge {
-        // optional INTO keyword
+        /// optional INTO keyword
         into: bool,
-        // Specifies the table to merge
+        /// Specifies the table to merge
         table: TableFactor,
-        // Specifies the table or subquery to join with the target table
+        /// Specifies the table or subquery to join with the target table
         source: TableFactor,
-        // Specifies the expression on which to join the target table and source
+        /// Specifies the expression on which to join the target table and source
         on: Box<Expr>,
-        // Specifies the actions to perform when values match or do not match.
+        /// Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
     },
     /// ```sql
@@ -5560,72 +5565,193 @@ impl fmt::Display for CopyLegacyCsvOption {
     }
 }
 
-/// `MERGE` Statement
+/// Variant of `WHEN` clause used within a `MERGE` Statement.
 ///
+/// Example:
 /// ```sql
-/// MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]
+/// MERGE INTO T USING U ON FALSE WHEN MATCHED THEN DELETE
 /// ```
-///
-/// See [Snowflake documentation](https://docs.snowflake.com/en/sql-reference/sql/merge)
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
+/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum MergeClause {
-    MatchedUpdate {
-        predicate: Option<Expr>,
-        assignments: Vec<Assignment>,
-    },
-    MatchedDelete(Option<Expr>),
-    NotMatched {
-        predicate: Option<Expr>,
-        columns: Vec<Ident>,
-        values: Values,
-    },
+pub enum MergeClauseKind {
+    /// `WHEN MATCHED`
+    Matched,
+    /// `WHEN NOT MATCHED`
+    NotMatched,
+    /// `WHEN MATCHED BY TARGET`
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
+    NotMatchedByTarget,
+    /// `WHEN MATCHED BY SOURCE`
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
+    NotMatchedBySource,
 }
 
-impl fmt::Display for MergeClause {
+impl Display for MergeClauseKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use MergeClause::*;
-        write!(f, "WHEN")?;
         match self {
-            MatchedUpdate {
-                predicate,
-                assignments,
-            } => {
-                write!(f, " MATCHED")?;
-                if let Some(pred) = predicate {
-                    write!(f, " AND {pred}")?;
-                }
-                write!(
-                    f,
-                    " THEN UPDATE SET {}",
-                    display_comma_separated(assignments)
-                )
+            MergeClauseKind::Matched => write!(f, "MATCHED"),
+            MergeClauseKind::NotMatched => write!(f, "NOT MATCHED"),
+            MergeClauseKind::NotMatchedByTarget => write!(f, "NOT MATCHED BY TARGET"),
+            MergeClauseKind::NotMatchedBySource => write!(f, "NOT MATCHED BY SOURCE"),
+        }
+    }
+}
+
+/// The type of expression used to insert rows within a `MERGE` statement.
+///
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
+/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MergeInsertKind {
+    /// The insert expression is defined from an explicit `VALUES` clause
+    ///
+    /// Example:
+    /// ```sql
+    /// INSERT VALUES(product, quantity)
+    /// ```
+    Values(Values),
+    /// The insert expression is defined using only the `ROW` keyword.
+    ///
+    /// Example:
+    /// ```sql
+    /// INSERT ROW
+    /// ```
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
+    Row,
+}
+
+impl Display for MergeInsertKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MergeInsertKind::Values(values) => {
+                write!(f, "{values}")
             }
-            MatchedDelete(predicate) => {
-                write!(f, " MATCHED")?;
-                if let Some(pred) = predicate {
-                    write!(f, " AND {pred}")?;
-                }
-                write!(f, " THEN DELETE")
-            }
-            NotMatched {
-                predicate,
-                columns,
-                values,
-            } => {
-                write!(f, " NOT MATCHED")?;
-                if let Some(pred) = predicate {
-                    write!(f, " AND {pred}")?;
-                }
-                write!(
-                    f,
-                    " THEN INSERT ({}) {}",
-                    display_comma_separated(columns),
-                    values
-                )
+            MergeInsertKind::Row => {
+                write!(f, "ROW")
             }
         }
+    }
+}
+
+/// The expression used to insert rows within a `MERGE` statement.
+///
+/// Examples
+/// ```sql
+/// INSERT (product, quantity) VALUES(product, quantity)
+/// INSERT ROW
+/// ```
+///
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
+/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MergeInsertExpr {
+    /// Columns (if any) specified by the insert.
+    ///
+    /// Example:
+    /// ```sql
+    /// INSERT (product, quantity) VALUES(product, quantity)
+    /// INSERT (product, quantity) ROW
+    /// ```
+    pub columns: Vec<Ident>,
+    /// The insert type used by the statement.
+    pub kind: MergeInsertKind,
+}
+
+impl Display for MergeInsertExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if !self.columns.is_empty() {
+            write!(f, "({}) ", display_comma_separated(self.columns.as_slice()))?;
+        }
+        write!(f, "{}", self.kind)
+    }
+}
+
+/// Underlying statement of a when clause within a `MERGE` Statement
+///
+/// Example
+/// ```sql
+/// INSERT (product, quantity) VALUES(product, quantity)
+/// ```
+///
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
+/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MergeAction {
+    /// An `INSERT` clause
+    ///
+    /// Example:
+    /// ```sql
+    /// INSERT (product, quantity) VALUES(product, quantity)
+    /// ```
+    Insert(MergeInsertExpr),
+    /// An `UPDATE` clause
+    ///
+    /// Example:
+    /// ```sql
+    /// UPDATE SET quantity = T.quantity + S.quantity
+    /// ```
+    Update { assignments: Vec<Assignment> },
+    /// A plain `DELETE` clause
+    Delete,
+}
+
+impl Display for MergeAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MergeAction::Insert(insert) => {
+                write!(f, "INSERT {insert}")
+            }
+            MergeAction::Update { assignments } => {
+                write!(f, "UPDATE SET {}", display_comma_separated(assignments))
+            }
+            MergeAction::Delete => {
+                write!(f, "DELETE")
+            }
+        }
+    }
+}
+
+/// A when clause within a `MERGE` Statement
+///
+/// Example:
+/// ```sql
+/// WHEN NOT MATCHED BY SOURCE AND product LIKE '%washer%' THEN DELETE
+/// ```
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
+/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MergeClause {
+    pub clause_kind: MergeClauseKind,
+    pub predicate: Option<Expr>,
+    pub action: MergeAction,
+}
+
+impl Display for MergeClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let MergeClause {
+            clause_kind,
+            predicate,
+            action,
+        } = self;
+
+        write!(f, "WHEN {clause_kind}")?;
+        if let Some(pred) = predicate {
+            write!(f, " AND {pred}")?;
+        }
+        write!(f, " THEN {action}")
     }
 }
 

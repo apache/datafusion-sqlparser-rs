@@ -55,7 +55,19 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_connect_by(&self) -> bool {
+        true
+    }
+
     fn supports_match_recognize(&self) -> bool {
+        true
+    }
+
+    // Snowflake uses this syntax for "object constants" (the values of which
+    // are not actually required to be constants).
+    //
+    // https://docs.snowflake.com/en/sql-reference/data-types-semistructured#label-object-constant
+    fn supports_dictionary_syntax(&self) -> bool {
         true
     }
 

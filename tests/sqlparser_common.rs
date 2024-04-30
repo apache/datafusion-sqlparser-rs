@@ -1308,13 +1308,13 @@ fn parse_escaped_single_quote_string_predicate_with_no_escape() {
 fn parse_number() {
     let expr = verified_expr("1.0");
 
-    #[cfg(feature = "bigdecimal")]
+    #[cfg(feature = "bigdecimal-sql")]
     assert_eq!(
         expr,
         Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1), false))
     );
 
-    #[cfg(not(feature = "bigdecimal"))]
+    #[cfg(not(feature = "bigdecimal-sql"))]
     assert_eq!(expr, Expr::Value(Value::Number("1.0".into(), false)));
 }
 
@@ -13088,5 +13088,266 @@ fn test_trailing_commas_in_from() {
     dialects.verified_only_select_with_canonical(
         "SELECT 1, 2 FROM (SELECT * FROM t1), (SELECT * FROM t2),",
         "SELECT 1, 2 FROM (SELECT * FROM t1), (SELECT * FROM t2)",
+    );
+}
+
+fn assert_sql(input: &str, expected: &str) {
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+    dialects.verified_query_with_canonical(input, expected);
+}
+
+fn assert_sql_err(input: &str, expected: &str) {
+    let res = parse_sql_statements(input);
+    let res_str = format!("{:?}", res.unwrap_err());
+    assert!(
+        res_str.contains(expected),
+        "`{}` doesn't contains `{}`",
+        res_str,
+        expected
+    );
+}
+
+#[test]
+fn parse_range_select() {
+    // rewrite format `range_fn(func, range, fill, byc, [byv], align, to)`
+    // regular without by
+    assert_sql("SELECT rate(metrics) RANGE '5m', sum(metrics) RANGE '10m' FILL MAX, sum(metrics) RANGE '10m' FROM t ALIGN '1h' FILL NULL;",
+     "SELECT range_fn(rate(metrics), '5m', 'NULL', '0', '1h', ''), range_fn(sum(metrics), '10m', 'MAX', '0', '1h', ''), range_fn(sum(metrics), '10m', 'NULL', '0', '1h', '') FROM t");
+
+    // regular with by
+    assert_sql("SELECT rate(metrics) RANGE '5m', sum(metrics) RANGE '10m' FILL MAX, sum(metrics) RANGE '10m' FROM t ALIGN '1h' by ((a+1)/2, b) FILL NULL;",
+    "SELECT range_fn(rate(metrics), '5m', 'NULL', '2', (a + 1) / 2, b, '1h', ''), range_fn(sum(metrics), '10m', 'MAX', '2', (a + 1) / 2, b, '1h', ''), range_fn(sum(metrics), '10m', 'NULL', '2', (a + 1) / 2, b, '1h', '') FROM t GROUP BY a, b");
+
+    // explicit empty by
+    assert_sql("SELECT rate(metrics) RANGE '5m', sum(metrics) RANGE '10m' FILL MAX, sum(metrics) RANGE '10m' FROM t ALIGN '1h' by () FILL NULL;",
+    "SELECT range_fn(rate(metrics), '5m', 'NULL', '1', 1, '1h', ''), range_fn(sum(metrics), '10m', 'MAX', '1', 1, '1h', ''), range_fn(sum(metrics), '10m', 'NULL', '1', 1, '1h', '') FROM t");
+
+    // expression1
+    assert_sql(
+        "SELECT avg(a/2 + 1) RANGE '5m' FILL NULL FROM t ALIGN '1h' FILL NULL;",
+        "SELECT range_fn(avg(a / 2 + 1), '5m', 'NULL', '0', '1h', '') FROM t",
+    );
+
+    // expression2
+    assert_sql(
+        "SELECT avg(a) RANGE '5m' FILL NULL + 1 FROM t ALIGN '1h' FILL NULL;",
+        "SELECT range_fn(avg(a), '5m', 'NULL', '0', '1h', '') + 1 FROM t",
+    );
+
+    // expression3
+    assert_sql(
+        "SELECT ((avg(a) + sum(b))/2) RANGE '5m' FILL NULL FROM t ALIGN '1h' FILL NULL;",
+        "SELECT ((range_fn(avg(a), '5m', 'NULL', '0', '1h', '') + range_fn(sum(b), '5m', 'NULL', '0', '1h', '')) / 2) FROM t",
+    );
+
+    // expression4
+    assert_sql(
+        "SELECT covariance(a, b) RANGE '5m' FILL NULL FROM t ALIGN '1h' FILL NULL;",
+        "SELECT range_fn(covariance(a, b), '5m', 'NULL', '0', '1h', '') FROM t",
+    );
+
+    // expression5
+    assert_sql(
+        "SELECT covariance(cos(a), sin(b)) RANGE '5m' FILL NULL FROM t ALIGN '1h' FILL NULL;",
+        "SELECT range_fn(covariance(cos(a), sin(b)), '5m', 'NULL', '0', '1h', '') FROM t",
+    );
+
+    // expression6
+    assert_sql(
+        "SELECT ((covariance(a+1, b/2) + sum(b))/2) RANGE '5m' FILL NULL FROM t ALIGN '1h' FILL NULL;",
+        "SELECT ((range_fn(covariance(a + 1, b / 2), '5m', 'NULL', '0', '1h', '') + range_fn(sum(b), '5m', 'NULL', '0', '1h', '')) / 2) FROM t",
+    );
+
+    // FILL... ALIGN...
+    assert_sql(
+        "SELECT sum(metrics) RANGE '10m' FROM t FILL NULL ALIGN '1h';",
+        "SELECT range_fn(sum(metrics), '10m', 'NULL', '0', '1h', '') FROM t",
+    );
+
+    // FILL ... FILL ...
+    assert_sql_err(
+        "SELECT sum(metrics) RANGE '10m' FILL MAX FROM t FILL NULL FILL NULL;",
+        "Duplicate FILL keyword detected in SELECT clause.",
+    );
+
+    // ALIGN ... ALIGN ...
+    assert_sql_err(
+        "SELECT sum(metrics) RANGE '10m' FILL MAX FROM t ALIGN '1h' ALIGN '1h';",
+        "Duplicate ALIGN keyword detected in SELECT clause.",
+    );
+
+    // FILL without RANGE
+    assert_sql_err(
+        "SELECT sum(metrics) FILL MAX FROM t FILL NULL ALIGN '1h';",
+        "Detect FILL keyword in SELECT Expr, but no RANGE given or RANGE after FILL",
+    );
+
+    // RANGE after FILL
+    assert_sql_err(
+        "SELECT sum(metrics) FILL MAX RANGE '10m' FROM t FILL NULL ALIGN '1h';",
+        "Detect FILL keyword in SELECT Expr, but no RANGE given or RANGE after FILL",
+    );
+
+    // INVALID Duration String
+    assert_sql_err(
+        "SELECT sum(metrics) RANGE '10m' FILL MAX FROM t FILL NULL ALIGN '1ff';",
+        "not a valid duration string: 1ff",
+    );
+    assert_sql_err(
+        "SELECT sum(metrics) RANGE '1regr' FILL MAX FROM t FILL NULL ALIGN '1h';",
+        "not a valid duration string: 1regr",
+    );
+
+    // omit RANGE
+    assert_sql_err(
+        "SELECT sum(metrics) FROM t ALIGN '1h' FILL NULL;",
+        "Illegal Range select, no RANGE keyword found in any SelectItem",
+    );
+
+    // omit ALIGN
+    assert_sql_err(
+        "SELECT sum(metrics) RANGE '10m' FILL MAX FROM t FILL NULL;",
+        "ALIGN argument cannot be omitted in the range select query",
+    );
+
+    assert_sql_err(
+        "SELECT sum(metrics) RANGE '10m', * FROM t FILL NULL ALIGN '1h';",
+        "Wildcard `*` is not allowed in range select query",
+    );
+}
+
+#[test]
+fn parse_range_in_expr() {
+    // use range in expr
+    assert_sql(
+        "SELECT rate(a) RANGE '6m' + 1 FROM t ALIGN '1h' FILL NULL;",
+        "SELECT range_fn(rate(a), '6m', 'NULL', '0', '1h', '') + 1 FROM t",
+    );
+
+    assert_sql(
+        "SELECT sin(rate(a) RANGE '6m' + 1) FROM t ALIGN '1h' FILL NULL;",
+        "SELECT sin(range_fn(rate(a), '6m', 'NULL', '0', '1h', '') + 1) FROM t",
+    );
+
+    assert_sql(
+        "SELECT sin(first_value(a ORDER BY b ASC NULLS LAST) RANGE '6m' + 1) FROM t ALIGN '1h' by (tag0, tag1) FILL NULL;",
+        "SELECT sin(range_fn(first_value(a ORDER BY b ASC NULLS LAST), '6m', 'NULL', '2', tag0, tag1, '1h', '') + 1) FROM t GROUP BY tag0, tag1",
+    );
+
+    assert_sql(
+        "SELECT sin(count(distinct a) RANGE '6m' + 1) FROM t ALIGN '1h' by (tag0, tag1) FILL NULL;",
+        "SELECT sin(range_fn(count(DISTINCT a), '6m', 'NULL', '2', tag0, tag1, '1h', '') + 1) FROM t GROUP BY tag0, tag1",
+    );
+
+    assert_sql(
+        "SELECT sin(rank() OVER (PARTITION BY a ORDER BY b DESC) RANGE '6m' + 1) FROM t ALIGN '1h' by (tag0, tag1) FILL NULL;",
+        "SELECT sin(range_fn(rank() OVER (PARTITION BY a ORDER BY b DESC), '6m', 'NULL', '2', tag0, tag1, '1h', '') + 1) FROM t GROUP BY tag0, tag1",
+    );
+
+    assert_sql(
+        "SELECT sin(cos(round(sin(avg(a + b) RANGE '5m' + 1)))) FROM test ALIGN '1h' by (tag_0,tag_1);",
+        "SELECT sin(cos(round(sin(range_fn(avg(a + b), '5m', '', '2', tag_0, tag_1, '1h', '') + 1)))) FROM test GROUP BY tag_0, tag_1",
+    );
+
+    assert_sql("SELECT rate(a) RANGE '6m' + rate(a) RANGE '5m' FROM t ALIGN '1h' FILL NULL;",
+    "SELECT range_fn(rate(a), '6m', 'NULL', '0', '1h', '') + range_fn(rate(a), '5m', 'NULL', '0', '1h', '') FROM t");
+
+    assert_sql("SELECT (rate(a) RANGE '6m' + rate(a) RANGE '5m')/b + b * rate(a) RANGE '5m' FROM t ALIGN '1h' FILL NULL;",
+    "SELECT (range_fn(rate(a), '6m', 'NULL', '0', '1h', '') + range_fn(rate(a), '5m', 'NULL', '0', '1h', '')) / b + b * range_fn(rate(a), '5m', 'NULL', '0', '1h', '') FROM t GROUP BY b");
+
+    assert_sql("SELECT round(max(a+1) Range '5m' FILL NULL), sin((max(a) + 1) Range '5m' FILL NULL) from t ALIGN '1h' by (b) FILL NULL;",
+    "SELECT round(range_fn(max(a + 1), '5m', 'NULL', '1', b, '1h', '')), sin((range_fn(max(a), '5m', 'NULL', '1', b, '1h', '') + 1)) FROM t GROUP BY b");
+
+    assert_sql(
+        "SELECT floor(ceil((min(a * 2) + max(a *2)) RANGE '20s' + 1.0)) FROM t ALIGN '1h';",
+        "SELECT FLOOR(CEIL((range_fn(min(a * 2), '20s', '', '0', '1h', '') + range_fn(max(a * 2), '20s', '', '0', '1h', '')) + 1.0)) FROM t",
+    );
+
+    assert_sql(
+        "SELECT gcd(CAST(max(a + 1) Range '5m' FILL NULL AS INT64), CAST(b AS INT64)) + round(max(c+1) Range '6m' FILL NULL + 1) + max(d+3) Range '10m' FILL NULL * CAST(e AS FLOAT64) + 1 FROM test ALIGN '1h' by (f, g);",
+        "SELECT gcd(CAST(range_fn(max(a + 1), '5m', 'NULL', '2', f, g, '1h', '') AS INT64), CAST(b AS INT64)) + round(range_fn(max(c + 1), '6m', 'NULL', '2', f, g, '1h', '') + 1) + range_fn(max(d + 3), '10m', 'NULL', '2', f, g, '1h', '') * CAST(e AS FLOAT64) + 1 FROM test GROUP BY b, e, f, g",
+    );
+
+    // Legal syntax but illegal semantic, nested range semantics are problematic, leave semantic problem to greptimedb
+    assert_sql(
+        "SELECT rate(max(a) RANGE '6m') RANGE '6m' + 1 FROM t ALIGN '1h' FILL NULL;",
+        "SELECT range_fn(rate(range_fn(max(a), '6m', '')), '6m', 'NULL', '0', '1h', '') + 1 FROM t",
+    );
+
+    assert_sql_err(
+        "SELECT rate(a) RANGE '6m' RANGE '6m' + 1 FROM t ALIGN '1h' FILL NULL;",
+        "Expected: end of statement, found: RANGE",
+    );
+
+    assert_sql_err(
+        "SELECT rate(a) + 1 RANGE '5m' FROM t ALIGN '1h' FILL NULL;",
+        "Can't use the RANGE keyword in Expr 1 without function",
+    );
+
+    assert_sql_err(
+        "SELECT 1 RANGE '5m' FILL NULL FROM t ALIGN '1h' FILL NULL;",
+        "Can't use the RANGE keyword in Expr 1 without function",
+    );
+}
+
+#[test]
+fn parse_range_interval() {
+    assert_sql(
+        "SELECT rate(a) RANGE (INTERVAL '1 year 2 hours 3 minutes') FROM t ALIGN (INTERVAL '1 year 2 hours 3 minutes') FILL NULL;",
+        "SELECT range_fn(rate(a), INTERVAL '1 year 2 hours 3 minutes', 'NULL', '0', INTERVAL '1 year 2 hours 3 minutes', '') FROM t",
+    );
+    assert_sql(
+        "SELECT rate(a) RANGE (INTERVAL '1' YEAR) FROM t ALIGN (INTERVAL '1' YEAR) FILL NULL;",
+        "SELECT range_fn(rate(a), INTERVAL '1' YEAR, 'NULL', '0', INTERVAL '1' YEAR, '') FROM t",
+    );
+    assert_sql(
+        "SELECT sin(count(distinct a) RANGE (INTERVAL '1 year 2 hours 3 minutes') + 1) FROM t ALIGN (INTERVAL '1 year 2 hours 3 minutes') FILL NULL;",
+        "SELECT sin(range_fn(count(DISTINCT a), INTERVAL '1 year 2 hours 3 minutes', 'NULL', '0', INTERVAL '1 year 2 hours 3 minutes', '') + 1) FROM t",
+    );
+    assert_sql(
+        "SELECT rate(a) RANGE (INTERVAL '1' YEAR) FROM t ALIGN (INTERVAL '1' YEAR) TO '1970-01-01T00:00:00+08:00' BY (b, c) FILL NULL;",
+        "SELECT range_fn(rate(a), INTERVAL '1' YEAR, 'NULL', '2', b, c, INTERVAL '1' YEAR, '1970-01-01T00:00:00+08:00') FROM t GROUP BY b, c",
+    );
+    assert_sql_err(
+        "SELECT rate(a) RANGE INTERVAL '1 year 2 hours 3 minutes' FROM t ALIGN '1h' FILL NULL;",
+        "Expected: end of statement, found: RANGE",
+    );
+}
+
+#[test]
+fn parse_range_to() {
+    assert_sql(
+        "SELECT rate(a) RANGE '6m' FROM t ALIGN '1h' TO NOW FILL NULL;",
+        "SELECT range_fn(rate(a), '6m', 'NULL', '0', '1h', 'NOW') FROM t",
+    );
+    assert_sql(
+        "SELECT rate(a) RANGE '6m' FROM t ALIGN '1h' TO CALENDAR FILL NULL;",
+        "SELECT range_fn(rate(a), '6m', 'NULL', '0', '1h', 'CALENDAR') FROM t",
+    );
+    assert_sql(
+        "SELECT rate(a) RANGE '6m' FROM t ALIGN '1h' TO '2021-07-01 00:00:00' FILL NULL;",
+        "SELECT range_fn(rate(a), '6m', 'NULL', '0', '1h', '2021-07-01 00:00:00') FROM t",
+    );
+}
+
+#[test]
+fn parse_range_range_align_to_calculate() {
+    assert_sql(
+        "SELECT ts, min(val) RANGE (INTERVAL '1' day + INTERVAL '1 year 2 hours 3 minutes') FROM host ALIGN (INTERVAL '1' day + INTERVAL '1 year 2 hours 3 minutes') TO (now() - INTERVAL '1' day) by (1);",
+        "SELECT ts, range_fn(min(val), INTERVAL '1' DAY + INTERVAL '1 year 2 hours 3 minutes', '', '1', 1, INTERVAL '1' DAY + INTERVAL '1 year 2 hours 3 minutes', now() - INTERVAL '1' DAY) FROM host GROUP BY ts",
+    );
+    assert_sql(
+        "SELECT rate(a) RANGE '6m' FROM t ALIGN '1h' TO (( (now()) - ((INTERVAL '1' day)) )) FILL NULL;",
+        "SELECT range_fn(rate(a), '6m', 'NULL', '0', '1h', ((now()) - ((INTERVAL '1' DAY)))) FROM t",
+    );
+    // missing the last comma
+    assert_sql_err(
+        "SELECT rate(a) RANGE '6m' FROM t ALIGN '1h' TO (( (now()) - ((INTERVAL '1' day)) ) FILL NULL;",
+        "Detect FILL keyword in SELECT Expr, but no RANGE given or RANGE after FILL",
+    );
+    // addition last comma
+    assert_sql_err(
+        "SELECT rate(a) RANGE '6m' FROM t ALIGN '1h' TO (( (now()) - ((INTERVAL '1' day)) ) ) ) FILL NULL;",
+        "Expected: end of statement, found: )",
     );
 }

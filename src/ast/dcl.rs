@@ -18,9 +18,11 @@
 //! AST types specific to GRANT/REVOKE/ROLE variants of [`Statement`](crate::ast::Statement)
 //! (commonly referred to as Data Control Language, or DCL)
 
+use crate::ast::Convert;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::fmt;
+use sqlparser_derive::DFConvert;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -34,7 +36,7 @@ use crate::ast::{display_separated, ObjectName};
 /// An option in `ROLE` statement.
 ///
 /// <https://www.postgresql.org/docs/current/sql-createrole.html>
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, DFConvert)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum RoleOption {
@@ -99,7 +101,7 @@ impl fmt::Display for RoleOption {
 /// SET config value option:
 /// * SET `configuration_parameter` { TO | = } { `value` | DEFAULT }
 /// * SET `configuration_parameter` FROM CURRENT
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, DFConvert)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SetConfigValue {
@@ -111,7 +113,7 @@ pub enum SetConfigValue {
 /// RESET config option:
 /// * RESET `configuration_parameter`
 /// * RESET ALL
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, DFConvert)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ResetConfig {
@@ -120,7 +122,7 @@ pub enum ResetConfig {
 }
 
 /// An `ALTER ROLE` (`Statement::AlterRole`) operation
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, DFConvert)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterRoleOperation {
@@ -200,7 +202,7 @@ impl fmt::Display for AlterRoleOperation {
 }
 
 /// A `USE` (`Statement::Use`) operation
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, DFConvert)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Use {
@@ -234,7 +236,7 @@ impl fmt::Display for Use {
 
 /// Snowflake `SECONDARY ROLES` USE variant
 /// See: <https://docs.snowflake.com/en/sql-reference/sql/use-secondary-roles>
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, DFConvert)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SecondaryRoles {

@@ -19,11 +19,13 @@ use core::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use core::fmt::{self, Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
+use crate::ast::Convert;
 use crate::tokenizer::TokenWithSpan;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use sqlparser_derive::DFConvert;
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -78,7 +80,8 @@ use sqlparser_derive::{Visit, VisitMut};
 /// ```
 /// // period @ line 2, column 20
 #[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, DFConvert))]
+#[df_path(df_sqlparser::ast::helpers::attached_token)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AttachedToken(pub TokenWithSpan);
 

@@ -28,8 +28,11 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use super::display_separated;
 
+use crate::ast::Convert;
+use crate::ast::DFConvert;
+
 /// Unary operators
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, DFConvert)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum UnaryOperator {
@@ -73,7 +76,7 @@ impl fmt::Display for UnaryOperator {
 }
 
 /// Binary operators
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, DFConvert)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum BinaryOperator {

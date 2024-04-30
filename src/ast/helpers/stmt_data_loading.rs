@@ -33,7 +33,11 @@ use crate::ast::{Ident, ObjectName};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+use crate::ast::Convert;
+use sqlparser_derive::DFConvert;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, DFConvert)]
+#[df_path(df_sqlparser::ast::helpers::stmt_data_loading)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct StageParamsObject {
@@ -44,14 +48,16 @@ pub struct StageParamsObject {
     pub credentials: DataLoadingOptions,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, DFConvert)]
+#[df_path(df_sqlparser::ast::helpers::stmt_data_loading)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DataLoadingOptions {
     pub options: Vec<DataLoadingOption>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, DFConvert)]
+#[df_path(df_sqlparser::ast::helpers::stmt_data_loading)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DataLoadingOptionType {
@@ -60,7 +66,8 @@ pub enum DataLoadingOptionType {
     ENUM,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, DFConvert)]
+#[df_path(df_sqlparser::ast::helpers::stmt_data_loading)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DataLoadingOption {
@@ -69,7 +76,8 @@ pub struct DataLoadingOption {
     pub value: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, DFConvert)]
+#[df_path(df_sqlparser::ast::helpers::stmt_data_loading)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct StageLoadSelectItem {
@@ -157,7 +165,8 @@ impl fmt::Display for StageLoadSelectItem {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, DFConvert)]
+#[df_path(df_sqlparser::ast::helpers::stmt_data_loading)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FileStagingCommand {

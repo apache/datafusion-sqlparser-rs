@@ -92,8 +92,13 @@ impl Dialect for SnowflakeDialect {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
             let or_replace = parser.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
-            let local =
-                parser.parse_keyword(Keyword::LOCAL) || !parser.parse_keyword(Keyword::GLOBAL);
+            let mut global = None;
+            if parser.parse_keyword(Keyword::LOCAL) {
+                global = Some(false)
+            }
+            if parser.parse_keyword(Keyword::GLOBAL) {
+                global = Some(true)
+            }
             let temporary =
                 parser.parse_keyword(Keyword::TEMP) || parser.parse_keyword(Keyword::TEMPORARY);
             let volatile = parser.parse_keyword(Keyword::VOLATILE);
@@ -104,7 +109,7 @@ impl Dialect for SnowflakeDialect {
                 return Some(parse_create_stage(or_replace, temporary, parser));
             } else if parser.parse_keyword(Keyword::TABLE) {
                 return Some(parse_create_table(
-                    or_replace, local, temporary, volatile, transient, parser,
+                    or_replace, global, temporary, volatile, transient, parser,
                 ));
             } else {
                 // need to go back with the cursor
@@ -133,7 +138,7 @@ impl Dialect for SnowflakeDialect {
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
 pub fn parse_create_table(
     or_replace: bool,
-    local: bool,
+    global: Option<bool>,
     temporary: bool,
     volatile: bool,
     transient: bool,
@@ -148,11 +153,8 @@ pub fn parse_create_table(
         .temporary(temporary)
         .transient(transient)
         .volatile(volatile)
+        .global(global)
         .hive_formats(Some(Default::default()));
-
-    if !local {
-        builder = builder.global(Some(local));
-    }
 
     // Snowflake does not enforce order of the parameters in the statement. The parser needs to
     // parse the statement in a loop.
@@ -194,8 +196,11 @@ pub fn parse_create_table(
                 }
                 Keyword::CLUSTER => {
                     parser.expect_keyword(Keyword::BY)?;
+                    parser.expect_token(&Token::LParen)?;
                     let cluster_by =
                         Some(parser.parse_comma_separated(|p| p.parse_identifier(false))?);
+                    parser.expect_token(&Token::RParen)?;
+
                     builder = builder.cluster_by(cluster_by)
                 }
                 Keyword::ENABLE_SCHEMA_EVOLUTION => {

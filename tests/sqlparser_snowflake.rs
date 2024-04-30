@@ -175,8 +175,29 @@ fn test_snowflake_create_table_max_data_extension_time_in_days() {
 
 #[test]
 fn test_snowflake_create_table_with_aggregation_policy() {
-    let sql = "CREATE TABLE my_table (a number) WITH AGGREGATION POLICY policy_name";
-    match snowflake().verified_stmt(sql) {
+    match snowflake()
+        .verified_stmt("CREATE TABLE my_table (a number) WITH AGGREGATION POLICY policy_name")
+    {
+        Statement::CreateTable(CreateTable {
+            name,
+            with_aggregation_policy,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some("policy_name".to_string()),
+                with_aggregation_policy.map(|name| name.to_string())
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake()
+        .parse_sql_statements("CREATE TABLE my_table (a number)  AGGREGATION POLICY policy_name")
+        .unwrap()
+        .pop()
+        .unwrap()
+    {
         Statement::CreateTable(CreateTable {
             name,
             with_aggregation_policy,
@@ -194,9 +215,31 @@ fn test_snowflake_create_table_with_aggregation_policy() {
 
 #[test]
 fn test_snowflake_create_table_with_row_access_policy() {
-    let sql =
-        "CREATE TABLE my_table (a number, b number) WITH ROW ACCESS POLICY policy_name ON (a)";
-    match snowflake().verified_stmt(sql) {
+    match snowflake().verified_stmt(
+        "CREATE TABLE my_table (a number, b number) WITH ROW ACCESS POLICY policy_name ON (a)",
+    ) {
+        Statement::CreateTable(CreateTable {
+            name,
+            with_row_access_policy,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some("WITH ROW ACCESS POLICY policy_name ON (a)".to_string()),
+                with_row_access_policy.map(|policy| policy.to_string())
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake()
+        .parse_sql_statements(
+            "CREATE TABLE my_table (a number, b number) ROW ACCESS POLICY policy_name ON (a)",
+        )
+        .unwrap()
+        .pop()
+        .unwrap()
+    {
         Statement::CreateTable(CreateTable {
             name,
             with_row_access_policy,
@@ -214,8 +257,30 @@ fn test_snowflake_create_table_with_row_access_policy() {
 
 #[test]
 fn test_snowflake_create_table_with_tag() {
-    let sql = "CREATE TABLE my_table (a number) WITH TAG (A='TAG A', B='TAG B')";
-    match snowflake().verified_stmt(sql) {
+    match snowflake()
+        .verified_stmt("CREATE TABLE my_table (a number) WITH TAG (A='TAG A', B='TAG B')")
+    {
+        Statement::CreateTable(CreateTable {
+            name, with_tags, ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some(vec![
+                    Tag::new("A".into(), "TAG A".to_string()),
+                    Tag::new("B".into(), "TAG B".to_string())
+                ]),
+                with_tags
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake()
+        .parse_sql_statements("CREATE TABLE my_table (a number) TAG (A='TAG A', B='TAG B')")
+        .unwrap()
+        .pop()
+        .unwrap()
+    {
         Statement::CreateTable(CreateTable {
             name, with_tags, ..
         }) => {
@@ -280,6 +345,64 @@ fn test_snowflake_create_table_column_comment() {
                 }],
                 columns
             )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_local_table() {
+    match snowflake().verified_stmt("CREATE TABLE my_table (a INT)") {
+        Statement::CreateTable(CreateTable { name, global, .. }) => {
+            assert_eq!("my_table", name.to_string());
+            assert!(global.is_none())
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake().verified_stmt("CREATE LOCAL TABLE my_table (a INT)") {
+        Statement::CreateTable(CreateTable { name, global, .. }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some(false), global)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_global_table() {
+    match snowflake().verified_stmt("CREATE GLOBAL TABLE my_table (a INT)") {
+        Statement::CreateTable(CreateTable { name, global, .. }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some(true), global)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_if_not_exists() {
+    match snowflake().verified_stmt("CREATE TABLE IF NOT EXISTS my_table (a INT)") {
+        Statement::CreateTable(CreateTable {
+            name,
+            if_not_exists,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert!(if_not_exists)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_cluster_by() {
+    match snowflake().verified_stmt("CREATE TABLE my_table (a INT) CLUSTER BY (a, b)") {
+        Statement::CreateTable(CreateTable {
+            name, cluster_by, ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some(vec![Ident::new("a"), Ident::new("b"),]), cluster_by)
         }
         _ => unreachable!(),
     }

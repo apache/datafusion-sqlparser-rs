@@ -307,7 +307,7 @@ impl Display for CreateTable {
         if let Some(cluster_by) = self.cluster_by.as_ref() {
             write!(
                 f,
-                " CLUSTER BY {}",
+                " CLUSTER BY ({})",
                 display_comma_separated(cluster_by.as_slice())
             )?;
         }

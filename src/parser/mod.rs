@@ -143,6 +143,7 @@ mod recursion {
     pub struct DepthGuard {}
 }
 
+use crate::ast::KeyOrIndexDisplay::Key;
 use recursion::RecursionCounter;
 
 #[derive(PartialEq, Eq)]
@@ -4406,63 +4407,58 @@ impl<'a> Parser<'a> {
     //   { @local_variable [AS] data_type [ = value ] }
     //   | { @cursor_variable_name CURSOR }
     // } [ ,...n ]
-    // | { @table_variable_name [AS] <table_type_definition> }
     /// ```
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/declare-local-variable-transact-sql?view=sql-server-ver16
     pub fn parse_mssql_declare(&mut self) -> Result<Statement, ParserError> {
-        let mut stmnts = vec![];
+        let mut stmts = vec![];
 
         loop {
-        let name = {
-            let ident = self.parse_identifier(false)?;
-            if !ident.value.starts_with("@") {
-                Err(ParserError::TokenizerError(
-                    "Invalid MsSql variable declaration.".to_string(),
-                ))
-            } else {
-                Ok(ident)
-            }
-        }?;
+            let name = {
+                let ident = self.parse_identifier(false)?;
+                if !ident.value.starts_with("@") {
+                    Err(ParserError::TokenizerError(
+                        "Invalid MsSql variable declaration.".to_string(),
+                    ))
+                } else {
+                    Ok(ident)
+                }
+            }?;
 
-        let (data_type, none) = {
-            // Effectively a no-op since AS is optional in MsSql syntax
-            if self.parse_keyword(Keyword::AS) {}
-            let dt = match self.peek_token().token {
-                Token::Word(w) if w.keyword == Keyword::DEFAULT => None,
-                _ => Some(self.parse_data_type()?),
+            let (declare_type, data_type) = match self.peek_token().token {
+                Token::Word(w) => match w.keyword {
+                    Keyword::CURSOR => {
+                        self.next_token();
+                        (Some(DeclareType::Cursor), None)
+                    }
+                    Keyword::AS => {
+                        self.next_token();
+                        (None, Some(self.parse_data_type()?))
+                    }
+                    _ => (None, Some(self.parse_data_type()?)),
+                },
+                _ => (None, Some(self.parse_data_type()?)),
             };
 
-            (dt, None)
-        };
+            let assignment = self.parse_mssql_variable_declaration_expression()?;
 
-        if let Some(assignment) = self.parse_mssql_variable_declaration_expression()?;
-
-            stmnts.push(Declare {
+            stmts.push(Declare {
                 names: vec![name],
                 data_type,
                 assignment,
-                declare_type: None,
+                declare_type,
                 binary: None,
                 sensitive: None,
                 scroll: None,
                 hold: None,
                 for_query: None,
-            })
+            });
+
+            if self.next_token() != Token::Comma {
+                break;
+            }
         }
 
-        Ok(Statement::Declare {
-            stmts: vec![Declare {
-                names: vec![name],
-                data_type,
-                assignment,
-                declare_type: None,
-                binary: None,
-                sensitive: None,
-                scroll: None,
-                hold: None,
-                for_query: None,
-            }],
-        })
+        Ok(Statement::Declare { stmts })
     }
 
     /// Parses the assigned expression in a variable declaration.
@@ -4496,9 +4492,11 @@ impl<'a> Parser<'a> {
     /// ```text
     /// [ = <expression>]
     /// ```
-    pub fn parse_mssql_variable_declaration_expression(&mut self) -> Result<Option<DeclareAssignment>, ParserError> {
+    pub fn parse_mssql_variable_declaration_expression(
+        &mut self,
+    ) -> Result<Option<DeclareAssignment>, ParserError> {
         Ok(match self.peek_token().token {
-            Token::Assignment => {
+            Token::Eq => {
                 self.next_token(); // Skip `=`
                 Some(DeclareAssignment::MsSqlAssignment(Box::new(
                     self.parse_expr()?,

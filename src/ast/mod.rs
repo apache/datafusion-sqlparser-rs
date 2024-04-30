@@ -1552,6 +1552,9 @@ impl fmt::Display for DeclareAssignment {
             DeclareAssignment::DuckAssignment(expr) => {
                 write!(f, ":= {expr}")
             }
+            DeclareAssignment::MsSqlAssignment(expr) => {
+                write!(f, "= {expr}")
+            }
             DeclareAssignment::For(expr) => {
                 write!(f, "FOR {expr}")
             }

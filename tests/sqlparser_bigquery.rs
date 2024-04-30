@@ -1075,6 +1075,225 @@ fn parse_join_constraint_unnest_alias() {
 }
 
 #[test]
+fn parse_merge() {
+    let sql = concat!(
+        "MERGE inventory AS T USING newArrivals AS S ON false ",
+        "WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) VALUES (1, 2) ",
+        "WHEN NOT MATCHED BY TARGET AND 1 THEN INSERT (product, quantity) VALUES (1, 2) ",
+        "WHEN NOT MATCHED BY TARGET THEN INSERT (product, quantity) VALUES (1, 2) ",
+        "WHEN NOT MATCHED BY SOURCE AND 2 THEN DELETE ",
+        "WHEN NOT MATCHED BY SOURCE THEN DELETE ",
+        "WHEN NOT MATCHED BY SOURCE AND 1 THEN UPDATE SET a = 1, b = 2 ",
+        "WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW ",
+        "WHEN NOT MATCHED THEN INSERT (product, quantity) ROW ",
+        "WHEN NOT MATCHED AND 1 THEN INSERT ROW ",
+        "WHEN NOT MATCHED THEN INSERT ROW ",
+        "WHEN MATCHED AND 1 THEN DELETE ",
+        "WHEN MATCHED THEN UPDATE SET a = 1, b = 2 ",
+        "WHEN NOT MATCHED THEN INSERT (a, b) VALUES (1, DEFAULT) ",
+        "WHEN NOT MATCHED THEN INSERT VALUES (1, DEFAULT)",
+    );
+    let insert_action = MergeAction::Insert(MergeInsertExpr {
+        columns: vec![Ident::new("product"), Ident::new("quantity")],
+        kind: MergeInsertKind::Values(Values {
+            explicit_row: false,
+            rows: vec![vec![Expr::Value(number("1")), Expr::Value(number("2"))]],
+        }),
+    });
+    let update_action = MergeAction::Update {
+        assignments: vec![
+            Assignment {
+                id: vec![Ident::new("a")],
+                value: Expr::Value(number("1")),
+            },
+            Assignment {
+                id: vec![Ident::new("b")],
+                value: Expr::Value(number("2")),
+            },
+        ],
+    };
+    match bigquery_and_generic().verified_stmt(sql) {
+        Statement::Merge {
+            into,
+            table,
+            source,
+            on,
+            clauses,
+        } => {
+            assert!(!into);
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("inventory")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("T"),
+                        columns: vec![],
+                    }),
+                    args: Default::default(),
+                    with_hints: Default::default(),
+                    version: Default::default(),
+                    partitions: Default::default(),
+                },
+                table
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("newArrivals")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("S"),
+                        columns: vec![],
+                    }),
+                    args: Default::default(),
+                    with_hints: Default::default(),
+                    version: Default::default(),
+                    partitions: Default::default(),
+                },
+                source
+            );
+            assert_eq!(Expr::Value(Value::Boolean(false)), *on);
+            assert_eq!(
+                vec![
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: insert_action.clone(),
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedByTarget,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: insert_action.clone(),
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedByTarget,
+                        predicate: None,
+                        action: insert_action,
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedBySource,
+                        predicate: Some(Expr::Value(number("2"))),
+                        action: MergeAction::Delete
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedBySource,
+                        predicate: None,
+                        action: MergeAction::Delete
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedBySource,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: update_action.clone(),
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            kind: MergeInsertKind::Row,
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            kind: MergeInsertKind::Row,
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![],
+                            kind: MergeInsertKind::Row
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![],
+                            kind: MergeInsertKind::Row
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::Matched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: MergeAction::Delete,
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::Matched,
+                        predicate: None,
+                        action: update_action,
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("a"), Ident::new("b"),],
+                            kind: MergeInsertKind::Values(Values {
+                                explicit_row: false,
+                                rows: vec![vec![
+                                    Expr::Value(number("1")),
+                                    Expr::Identifier(Ident::new("DEFAULT")),
+                                ]]
+                            })
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![],
+                            kind: MergeInsertKind::Values(Values {
+                                explicit_row: false,
+                                rows: vec![vec![
+                                    Expr::Value(number("1")),
+                                    Expr::Identifier(Ident::new("DEFAULT")),
+                                ]]
+                            })
+                        })
+                    },
+                ],
+                clauses
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_merge_invalid_statements() {
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    for (sql, err_msg) in [
+        (
+            "MERGE T USING U ON TRUE WHEN MATCHED BY TARGET AND 1 THEN DELETE",
+            "Expected THEN, found: BY",
+        ),
+        (
+            "MERGE T USING U ON TRUE WHEN MATCHED BY SOURCE AND 1 THEN DELETE",
+            "Expected THEN, found: BY",
+        ),
+        (
+            "MERGE T USING U ON TRUE WHEN NOT MATCHED BY SOURCE THEN INSERT(a) VALUES (b)",
+            "INSERT is not allowed in a NOT MATCHED BY SOURCE merge clause",
+        ),
+        (
+            "MERGE INTO T USING U ON TRUE WHEN NOT MATCHED BY TARGET THEN DELETE",
+            "DELETE is not allowed in a NOT MATCHED BY TARGET merge clause",
+        ),
+        (
+            "MERGE INTO T USING U ON TRUE WHEN NOT MATCHED BY TARGET THEN UPDATE SET a = b",
+            "UPDATE is not allowed in a NOT MATCHED BY TARGET merge clause",
+        ),
+    ] {
+        let res = dialects.parse_sql_statements(sql);
+        assert_eq!(
+            ParserError::ParserError(err_msg.to_string()),
+            res.unwrap_err()
+        );
+    }
+}
+
+#[test]
 fn parse_trailing_comma() {
     for (sql, canonical) in [
         ("SELECT a,", "SELECT a"),

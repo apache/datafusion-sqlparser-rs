@@ -909,6 +909,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -954,6 +955,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -996,6 +998,7 @@ fn parse_escaped_backticks_with_escape() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -1038,6 +1041,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -1742,6 +1746,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     named_window: vec![],
                     qualify: None,
                     value_table_mode: None,
+                    connect_by: None,
                 })))
             );
         }
@@ -1793,6 +1798,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     named_window: vec![],
                     qualify: None,
                     value_table_mode: None,
+                    connect_by: None,
                 })))
             );
         }
@@ -2287,6 +2293,7 @@ fn parse_substring_in_select() {
                         named_window: vec![],
                         qualify: None,
                         value_table_mode: None,
+                        connect_by: None,
                     }))),
                     order_by: vec![],
                     limit: None,
@@ -2598,7 +2605,8 @@ fn parse_hex_string_introducer() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
-                into: None
+                into: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,

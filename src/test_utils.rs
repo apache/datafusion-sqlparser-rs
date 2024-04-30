@@ -157,6 +157,16 @@ impl TestedDialects {
         }
     }
 
+    /// Ensures that `sql` parses as a single [Query], and that
+    /// re-serializing the parse result matches the given canonical
+    /// sql string.
+    pub fn verified_query_with_canonical(&self, query: &str, canonical: &str) -> Query {
+        match self.one_statement_parses_to(query, canonical) {
+            Statement::Query(query) => *query,
+            _ => panic!("Expected Query"),
+        }
+    }
+
     /// Ensures that `sql` parses as a single [Select], and that
     /// re-serializing the parse result produces the same `sql`
     /// string (is not modified after a serialization round-trip).
@@ -207,6 +217,7 @@ pub fn all_dialects() -> TestedDialects {
         Box::new(BigQueryDialect {}) as Box<dyn Dialect>,
         Box::new(SQLiteDialect {}) as Box<dyn Dialect>,
         Box::new(DuckDbDialect {}) as Box<dyn Dialect>,
+        Box::new(DatabricksDialect {}) as Box<dyn Dialect>,
     ];
     TestedDialects {
         dialects: all_dialects,

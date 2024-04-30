@@ -247,6 +247,8 @@ pub struct Select {
     pub qualify: Option<Expr>,
     /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
     pub value_table_mode: Option<ValueTableMode>,
+    /// STARTING WITH .. CONNECT BY
+    pub connect_by: Option<ConnectBy>,
 }
 
 impl fmt::Display for Select {
@@ -314,6 +316,9 @@ impl fmt::Display for Select {
         if let Some(ref qualify) = self.qualify {
             write!(f, " QUALIFY {qualify}")?;
         }
+        if let Some(ref connect_by) = self.connect_by {
+            write!(f, " {connect_by}")?;
+        }
         Ok(())
     }
 }
@@ -353,14 +358,56 @@ impl fmt::Display for LateralView {
     }
 }
 
+/// An expression used in a named window declaration.
+///
+/// ```sql
+/// WINDOW mywindow AS [named_window_expr]
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct NamedWindowDefinition(pub Ident, pub WindowSpec);
+pub enum NamedWindowExpr {
+    /// A direct reference to another named window definition.
+    /// [BigQuery]
+    ///
+    /// Example:
+    /// ```sql
+    /// WINDOW mywindow AS prev_window
+    /// ```
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#ref_named_window
+    NamedWindow(Ident),
+    /// A window expression.
+    ///
+    /// Example:
+    /// ```sql
+    /// WINDOW mywindow AS (ORDER BY 1)
+    /// ```
+    WindowSpec(WindowSpec),
+}
+
+impl fmt::Display for NamedWindowExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NamedWindowExpr::NamedWindow(named_window) => {
+                write!(f, "{named_window}")?;
+            }
+            NamedWindowExpr::WindowSpec(window_spec) => {
+                write!(f, "({window_spec})")?;
+            }
+        };
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct NamedWindowDefinition(pub Ident, pub NamedWindowExpr);
 
 impl fmt::Display for NamedWindowDefinition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} AS ({})", self.0, self.1)
+        write!(f, "{} AS {}", self.0, self.1)
     }
 }
 
@@ -728,6 +775,30 @@ impl fmt::Display for TableWithJoins {
             write!(f, "{join}")?;
         }
         Ok(())
+    }
+}
+
+/// Joins a table to itself to process hierarchical data in the table.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ConnectBy {
+    /// START WITH
+    pub condition: Expr,
+    /// CONNECT BY
+    pub relationships: Vec<Expr>,
+}
+
+impl fmt::Display for ConnectBy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "START WITH {condition} CONNECT BY {relationships}",
+            condition = self.condition,
+            relationships = display_comma_separated(&self.relationships)
+        )
     }
 }
 

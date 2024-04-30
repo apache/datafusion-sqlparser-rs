@@ -13,6 +13,7 @@
 mod ansi;
 mod bigquery;
 mod clickhouse;
+mod databricks;
 mod duckdb;
 mod generic;
 mod hive;
@@ -32,6 +33,7 @@ use core::str::Chars;
 pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
+pub use self::databricks::DatabricksDialect;
 pub use self::duckdb::DuckDbDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
@@ -141,6 +143,17 @@ pub trait Dialect: Debug + Any {
     fn supports_filter_during_aggregation(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports referencing another named window
+    /// within a window clause declaration.
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT * FROM mytable
+    /// WINDOW mynamed_window AS another_named_window
+    /// ```
+    fn supports_window_clause_named_window_reference(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect supports `ARRAY_AGG() [WITHIN GROUP (ORDER BY)]` expressions.
     /// Otherwise, the dialect should expect an `ORDER BY` without the `WITHIN GROUP` clause, e.g. [`ANSI`]
     ///
@@ -150,6 +163,10 @@ pub trait Dialect: Debug + Any {
     }
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports CONNECT BY.
+    fn supports_connect_by(&self) -> bool {
         false
     }
     /// Returns true if the dialect supports the MATCH_RECOGNIZE operation.
@@ -166,6 +183,11 @@ pub trait Dialect: Debug + Any {
     }
     /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports defining structs or objects using a
+    /// syntax like `{'x': 1, 'y': 2, 'z': 3}`.
+    fn supports_dictionary_syntax(&self) -> bool {
         false
     }
     /// Returns true if the dialect has a CONVERT function which accepts a type first

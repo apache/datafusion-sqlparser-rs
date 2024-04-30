@@ -174,3 +174,13 @@ fn test_create_table_struct_column() {
         "CREATE TABLE foo (bank_statement_regular_income STRUCT<alimony: DECIMAL(19,5), pension: DECIMAL(19,5), salary: DECIMAL(19,5)>)",
     );
 }
+
+#[test]
+fn test_functions_without_parens() {
+    databricks().verified_expr("current_timestamp");
+    databricks().verified_expr("current_timestamp()");
+    databricks().verified_expr("current_date");
+    databricks().verified_expr("current_date()");
+    databricks().verified_expr("now()");
+    databricks().verified_expr("current_timezone()");
+}

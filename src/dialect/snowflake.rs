@@ -135,7 +135,7 @@ pub fn parse_create_table(
     or_replace: bool,
     local: bool,
     temporary: bool,
-    _volatile: bool,
+    volatile: bool,
     transient: bool,
     parser: &mut Parser,
 ) -> Result<Statement, ParserError> {
@@ -147,6 +147,7 @@ pub fn parse_create_table(
         .if_not_exists(if_not_exists)
         .temporary(temporary)
         .transient(transient)
+        .volatile(volatile)
         .hive_formats(Some(Default::default()));
 
     if !local {

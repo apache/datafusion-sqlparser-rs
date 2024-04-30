@@ -53,6 +53,7 @@ pub struct CreateTableBuilder {
     pub global: Option<bool>,
     pub if_not_exists: bool,
     pub transient: bool,
+    pub volatile: bool,
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub constraints: Vec<TableConstraint>,
@@ -99,6 +100,7 @@ impl CreateTableBuilder {
             global: None,
             if_not_exists: false,
             transient: false,
+            volatile: false,
             name,
             columns: vec![],
             constraints: vec![],
@@ -163,6 +165,11 @@ impl CreateTableBuilder {
 
     pub fn transient(mut self, transient: bool) -> Self {
         self.transient = transient;
+        self
+    }
+
+    pub fn volatile(mut self, volatile: bool) -> Self {
+        self.volatile = volatile;
         self
     }
 
@@ -348,6 +355,7 @@ impl CreateTableBuilder {
             global: self.global,
             if_not_exists: self.if_not_exists,
             transient: self.transient,
+            volatile: self.volatile,
             name: self.name,
             columns: self.columns,
             constraints: self.constraints,
@@ -401,6 +409,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 global,
                 if_not_exists,
                 transient,
+                volatile,
                 name,
                 columns,
                 constraints,
@@ -478,6 +487,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 with_aggregation_policy,
                 with_row_access_policy,
                 with_tags,
+                volatile,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"

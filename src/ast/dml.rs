@@ -57,6 +57,7 @@ pub struct CreateTable {
     pub global: Option<bool>,
     pub if_not_exists: bool,
     pub transient: bool,
+    pub volatile: bool,
     /// Table name
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
@@ -142,7 +143,7 @@ impl Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             global = self.global
@@ -157,6 +158,7 @@ impl Display for CreateTable {
             if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
             temporary = if self.temporary { "TEMPORARY " } else { "" },
             transient = if self.transient { "TRANSIENT " } else { "" },
+            volatile = if self.volatile { "VOLATILE " } else { "" },
             name = self.name,
         )?;
         if let Some(on_cluster) = &self.on_cluster {

@@ -4342,6 +4342,31 @@ fn parse_named_window_functions() {
 }
 
 #[test]
+fn parse_window_clause() {
+    let sql = "SELECT * \
+    FROM mytable \
+    WINDOW \
+        window1 AS (ORDER BY 1 ASC, 2 DESC, 3 NULLS FIRST), \
+        window2 AS (window1), \
+        window3 AS (PARTITION BY a, b, c), \
+        window4 AS (ROWS UNBOUNDED PRECEDING), \
+        window5 AS (window1 PARTITION BY a), \
+        window6 AS (window1 ORDER BY a), \
+        window7 AS (window1 ROWS UNBOUNDED PRECEDING), \
+        window8 AS (window1 PARTITION BY a ORDER BY b ROWS UNBOUNDED PRECEDING) \
+    ORDER BY C3";
+    verified_only_select(sql);
+
+    let sql = "SELECT from mytable WINDOW window1 AS window2";
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected (, found: window2".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn test_parse_named_window() {
     let sql = "SELECT \
     MIN(c12) OVER window1 AS min1, \
@@ -4438,7 +4463,7 @@ fn test_parse_named_window() {
                     value: "window1".to_string(),
                     quote_style: None,
                 },
-                WindowSpec {
+                NamedWindowExpr::WindowSpec(WindowSpec {
                     window_name: None,
                     partition_by: vec![],
                     order_by: vec![OrderByExpr {
@@ -4450,14 +4475,14 @@ fn test_parse_named_window() {
                         nulls_first: None,
                     }],
                     window_frame: None,
-                },
+                }),
             ),
             NamedWindowDefinition(
                 Ident {
                     value: "window2".to_string(),
                     quote_style: None,
                 },
-                WindowSpec {
+                NamedWindowExpr::WindowSpec(WindowSpec {
                     window_name: None,
                     partition_by: vec![Expr::Identifier(Ident {
                         value: "C11".to_string(),
@@ -4465,7 +4490,7 @@ fn test_parse_named_window() {
                     })],
                     order_by: vec![],
                     window_frame: None,
-                },
+                }),
             ),
         ],
         qualify: None,
@@ -4473,6 +4498,21 @@ fn test_parse_named_window() {
         connect_by: None,
     };
     assert_eq!(actual_select_only, expected);
+}
+
+#[test]
+fn parse_window_clause_named_window() {
+    let sql = "SELECT * FROM mytable WINDOW window1 AS window2";
+    let Select { named_window, .. } =
+        all_dialects_where(|d| d.supports_window_clause_named_window_reference())
+            .verified_only_select(sql);
+    assert_eq!(
+        vec![NamedWindowDefinition(
+            Ident::new("window1"),
+            NamedWindowExpr::NamedWindow(Ident::new("window2"))
+        )],
+        named_window
+    );
 }
 
 #[test]

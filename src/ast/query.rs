@@ -358,14 +358,56 @@ impl fmt::Display for LateralView {
     }
 }
 
+/// An expression used in a named window declaration.
+///
+/// ```sql
+/// WINDOW mywindow AS [named_window_expr]
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct NamedWindowDefinition(pub Ident, pub WindowSpec);
+pub enum NamedWindowExpr {
+    /// A direct reference to another named window definition.
+    /// [BigQuery]
+    ///
+    /// Example:
+    /// ```sql
+    /// WINDOW mywindow AS prev_window
+    /// ```
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#ref_named_window
+    NamedWindow(Ident),
+    /// A window expression.
+    ///
+    /// Example:
+    /// ```sql
+    /// WINDOW mywindow AS (ORDER BY 1)
+    /// ```
+    WindowSpec(WindowSpec),
+}
+
+impl fmt::Display for NamedWindowExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NamedWindowExpr::NamedWindow(named_window) => {
+                write!(f, "{named_window}")?;
+            }
+            NamedWindowExpr::WindowSpec(window_spec) => {
+                write!(f, "({window_spec})")?;
+            }
+        };
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct NamedWindowDefinition(pub Ident, pub NamedWindowExpr);
 
 impl fmt::Display for NamedWindowDefinition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} AS ({})", self.0, self.1)
+        write!(f, "{} AS {}", self.0, self.1)
     }
 }
 

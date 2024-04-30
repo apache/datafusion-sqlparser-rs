@@ -10121,9 +10121,16 @@ impl<'a> Parser<'a> {
     pub fn parse_named_window(&mut self) -> Result<NamedWindowDefinition, ParserError> {
         let ident = self.parse_identifier(false)?;
         self.expect_keyword(Keyword::AS)?;
-        self.expect_token(&Token::LParen)?;
-        let window_spec = self.parse_window_spec()?;
-        Ok(NamedWindowDefinition(ident, window_spec))
+
+        let window_expr = if self.consume_token(&Token::LParen) {
+            NamedWindowExpr::WindowSpec(self.parse_window_spec()?)
+        } else if self.dialect.supports_window_clause_named_window_reference() {
+            NamedWindowExpr::NamedWindow(self.parse_identifier(false)?)
+        } else {
+            return self.expected("(", self.peek_token());
+        };
+
+        Ok(NamedWindowDefinition(ident, window_expr))
     }
 
     pub fn parse_create_procedure(&mut self, or_alter: bool) -> Result<Statement, ParserError> {

@@ -143,7 +143,6 @@ mod recursion {
     pub struct DepthGuard {}
 }
 
-use crate::ast::KeyOrIndexDisplay::Key;
 use recursion::RecursionCounter;
 
 #[derive(PartialEq, Eq)]
@@ -4415,7 +4414,7 @@ impl<'a> Parser<'a> {
         loop {
             let name = {
                 let ident = self.parse_identifier(false)?;
-                if !ident.value.starts_with("@") {
+                if !ident.value.starts_with('@') {
                     Err(ParserError::TokenizerError(
                         "Invalid MsSql variable declaration.".to_string(),
                     ))

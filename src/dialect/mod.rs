@@ -13,6 +13,7 @@
 mod ansi;
 mod bigquery;
 mod clickhouse;
+mod databricks;
 mod duckdb;
 mod generic;
 mod hive;
@@ -32,6 +33,7 @@ use core::str::Chars;
 pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
+pub use self::databricks::DatabricksDialect;
 pub use self::duckdb::DuckDbDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
@@ -93,7 +95,7 @@ macro_rules! dialect_of {
 pub trait Dialect: Debug + Any {
     /// Determine the [`TypeId`] of this dialect.
     ///
-    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overriden
+    /// By default, return the same [`TypeId`] as [`Any::type_id`]. Can be overridden
     /// by dialects that behave like other dialects
     /// (for example when wrapping a dialect).
     fn dialect(&self) -> TypeId {
@@ -108,6 +110,10 @@ pub trait Dialect: Debug + Any {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '`'
     }
+    /// Return the character used to quote identifiers.
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        None
+    }
     /// Determine if quoted characters are proper for identifier
     fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
         true
@@ -116,6 +122,23 @@ pub trait Dialect: Debug + Any {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
+    /// Determine if the dialect supports escaping characters via '\' in string literals.
+    ///
+    /// Some dialects like BigQuery and Snowflake support this while others like
+    /// Postgres do not. Such that the following is accepted by the former but
+    /// rejected by the latter.
+    /// ```sql
+    /// SELECT 'ab\'cd';
+    /// ```
+    ///
+    /// Conversely, such dialects reject the following statement which
+    /// otherwise would be valid in the other dialects.
+    /// ```sql
+    /// SELECT '\';
+    /// ```
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        false
+    }
     /// Does the dialect support `FILTER (WHERE expr)` for aggregate queries?
     fn supports_filter_during_aggregation(&self) -> bool {
         false
@@ -131,9 +154,13 @@ pub trait Dialect: Debug + Any {
     fn supports_group_by_expr(&self) -> bool {
         false
     }
-    /// Returns true if the dialect supports `SUBSTRING(expr [FROM start] [FOR len])` expressions
-    fn supports_substring_from_for_expr(&self) -> bool {
-        true
+    /// Returns true if the dialect supports CONNECT BY.
+    fn supports_connect_by(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports the MATCH_RECOGNIZE operation.
+    fn supports_match_recognize(&self) -> bool {
+        false
     }
     /// Returns true if the dialect supports `(NOT) IN ()` expressions
     fn supports_in_empty_list(&self) -> bool {
@@ -141,6 +168,15 @@ pub trait Dialect: Debug + Any {
     }
     /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
+    fn supports_named_fn_args_with_eq_operator(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports defining structs or objects using a
+    /// syntax like `{'x': 1, 'y': 2, 'z': 3}`.
+    fn supports_dictionary_syntax(&self) -> bool {
         false
     }
     /// Returns true if the dialect has a CONVERT function which accepts a type first
@@ -263,6 +299,21 @@ mod tests {
     }
 
     #[test]
+    fn identifier_quote_style() {
+        let tests: Vec<(&dyn Dialect, &str, Option<char>)> = vec![
+            (&GenericDialect {}, "id", None),
+            (&SQLiteDialect {}, "id", Some('`')),
+            (&PostgreSqlDialect {}, "id", Some('"')),
+        ];
+
+        for (dialect, ident, expected) in tests {
+            let actual = dialect.identifier_quote_style(ident);
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
     fn parse_with_wrapped_dialect() {
         /// Wrapper for a dialect. In a real-world example, this wrapper
         /// would tweak the behavior of the dialect. For the test case,
@@ -283,6 +334,14 @@ mod tests {
                 self.0.is_delimited_identifier_start(ch)
             }
 
+            fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
+                self.0.identifier_quote_style(identifier)
+            }
+
+            fn supports_string_literal_backslash_escape(&self) -> bool {
+                self.0.supports_string_literal_backslash_escape()
+            }
+
             fn is_proper_identifier_inside_quotes(
                 &self,
                 chars: std::iter::Peekable<std::str::Chars<'_>>,
@@ -300,10 +359,6 @@ mod tests {
 
             fn supports_group_by_expr(&self) -> bool {
                 self.0.supports_group_by_expr()
-            }
-
-            fn supports_substring_from_for_expr(&self) -> bool {
-                self.0.supports_substring_from_for_expr()
             }
 
             fn supports_in_empty_list(&self) -> bool {

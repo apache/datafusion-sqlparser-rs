@@ -179,6 +179,7 @@ fn test_select_union_by_name() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
@@ -215,6 +216,7 @@ fn test_select_union_by_name() {
                 named_window: vec![],
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
         });
         assert_eq!(ast.body, expected);
@@ -250,30 +252,264 @@ fn test_duckdb_load_extension() {
 }
 
 #[test]
-fn test_select_wildcard_with_replace() {
-    let select = duckdb_and_generic()
-        .verified_only_select(r#"SELECT * REPLACE (lower(city) AS city) FROM addresses"#);
-    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_replace: Some(ReplaceSelectItem {
-            items: vec![Box::new(ReplaceSelectElement {
-                expr: Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("lower")]),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("city")),
-                    ))],
-                    filter: None,
-                    null_treatment: None,
-                    within_group: None,
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                }),
-                column_name: Ident::new("city"),
-                as_keyword: true,
-            })],
+fn test_duckdb_struct_literal() {
+    //struct literal syntax https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    //syntax: {'field_name': expr1[, ... ]}
+    let sql = "SELECT {'a': 1, 'b': 2, 'c': 3}, [{'a': 'abc'}], {'a': 1, 'b': [t.str_col]}, {'a': 1, 'b': 'abc'}, {'abc': str_col}, {'a': {'aa': 1}}";
+    let select = duckdb_and_generic().verified_only_select(sql);
+    assert_eq!(6, select.projection.len());
+    assert_eq!(
+        &Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "a"),
+                value: Box::new(Expr::Value(number("1"))),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "b"),
+                value: Box::new(Expr::Value(number("2"))),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "c"),
+                value: Box::new(Expr::Value(number("3"))),
+            },
+        ],),
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Array(Array {
+            elem: vec![Expr::Dictionary(vec![DictionaryField {
+                key: Ident::with_quote('\'', "a"),
+                value: Box::new(Expr::Value(Value::SingleQuotedString("abc".to_string()))),
+            },],)],
+            named: false
         }),
-        ..Default::default()
-    });
-    assert_eq!(expected, select.projection[0]);
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "a"),
+                value: Box::new(Expr::Value(number("1"))),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "b"),
+                value: Box::new(Expr::Array(Array {
+                    elem: vec![Expr::CompoundIdentifier(vec![
+                        Ident::from("t"),
+                        Ident::from("str_col")
+                    ])],
+                    named: false
+                })),
+            },
+        ],),
+        expr_from_projection(&select.projection[2])
+    );
+    assert_eq!(
+        &Expr::Dictionary(vec![
+            DictionaryField {
+                key: Ident::with_quote('\'', "a"),
+                value: Expr::Value(number("1")).into(),
+            },
+            DictionaryField {
+                key: Ident::with_quote('\'', "b"),
+                value: Expr::Value(Value::SingleQuotedString("abc".to_string())).into(),
+            },
+        ],),
+        expr_from_projection(&select.projection[3])
+    );
+    assert_eq!(
+        &Expr::Dictionary(vec![DictionaryField {
+            key: Ident::with_quote('\'', "abc"),
+            value: Expr::Identifier(Ident::from("str_col")).into(),
+        }],),
+        expr_from_projection(&select.projection[4])
+    );
+    assert_eq!(
+        &Expr::Dictionary(vec![DictionaryField {
+            key: Ident::with_quote('\'', "a"),
+            value: Expr::Dictionary(vec![DictionaryField {
+                key: Ident::with_quote('\'', "aa"),
+                value: Expr::Value(number("1")).into(),
+            }],)
+            .into(),
+        }],),
+        expr_from_projection(&select.projection[5])
+    );
+}
+
+#[test]
+fn test_create_secret() {
+    let sql = r#"CREATE OR REPLACE PERSISTENT SECRET IF NOT EXISTS name IN storage ( TYPE type, key1 value1, key2 value2 )"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::CreateSecret {
+            or_replace: true,
+            temporary: Some(false),
+            if_not_exists: true,
+            name: Some(Ident::new("name")),
+            storage_specifier: Some(Ident::new("storage")),
+            secret_type: Ident::new("type"),
+            options: vec![
+                SecretOption {
+                    key: Ident::new("key1"),
+                    value: Ident::new("value1"),
+                },
+                SecretOption {
+                    key: Ident::new("key2"),
+                    value: Ident::new("value2"),
+                }
+            ]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_create_secret_simple() {
+    let sql = r#"CREATE SECRET ( TYPE type )"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::CreateSecret {
+            or_replace: false,
+            temporary: None,
+            if_not_exists: false,
+            name: None,
+            storage_specifier: None,
+            secret_type: Ident::new("type"),
+            options: vec![]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_drop_secret() {
+    let sql = r#"DROP PERSISTENT SECRET IF EXISTS secret FROM storage"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DropSecret {
+            if_exists: true,
+            temporary: Some(false),
+            name: Ident::new("secret"),
+            storage_specifier: Some(Ident::new("storage"))
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_drop_secret_simple() {
+    let sql = r#"DROP SECRET secret"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DropSecret {
+            if_exists: false,
+            temporary: None,
+            name: Ident::new("secret"),
+            storage_specifier: None
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_attach_database() {
+    let sql = r#"ATTACH DATABASE IF NOT EXISTS 'sqlite_file.db' AS sqlite_db (READ_ONLY false, TYPE SQLITE)"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::AttachDuckDBDatabase {
+            if_not_exists: true,
+            database: true,
+            database_path: Ident::with_quote('\'', "sqlite_file.db"),
+            database_alias: Some(Ident::new("sqlite_db")),
+            attach_options: vec![
+                AttachDuckDBDatabaseOption::ReadOnly(Some(false)),
+                AttachDuckDBDatabaseOption::Type(Ident::new("SQLITE")),
+            ]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_attach_database_simple() {
+    let sql = r#"ATTACH 'postgres://user.name:pass-word@some.url.com:5432/postgres'"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::AttachDuckDBDatabase {
+            if_not_exists: false,
+            database: false,
+            database_path: Ident::with_quote(
+                '\'',
+                "postgres://user.name:pass-word@some.url.com:5432/postgres"
+            ),
+            database_alias: None,
+            attach_options: vec![]
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_detach_database() {
+    let sql = r#"DETACH DATABASE IF EXISTS db_name"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DetachDuckDBDatabase {
+            if_exists: true,
+            database: true,
+            database_alias: Ident::new("db_name"),
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_detach_database_simple() {
+    let sql = r#"DETACH db_name"#;
+    let stmt = duckdb().verified_stmt(sql);
+    assert_eq!(
+        Statement::DetachDuckDBDatabase {
+            if_exists: false,
+            database: false,
+            database_alias: Ident::new("db_name"),
+        },
+        stmt
+    );
+}
+
+#[test]
+fn test_duckdb_named_argument_function_with_assignment_operator() {
+    let sql = "SELECT FUN(a := '1', b := '2') FROM foo";
+    let select = duckdb_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("FUN")]),
+            args: vec![
+                FunctionArg::Named {
+                    name: Ident::new("a"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "1".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Assignment
+                },
+                FunctionArg::Named {
+                    name: Ident::new("b"),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "2".to_owned()
+                    ))),
+                    operator: FunctionArgOperator::Assignment
+                },
+            ],
+            null_treatment: None,
+            filter: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![],
+            within_group: None
+        }),
+        expr_from_projection(only(&select.projection))
+    );
 }

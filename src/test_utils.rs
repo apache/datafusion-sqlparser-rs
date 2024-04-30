@@ -68,7 +68,7 @@ impl TestedDialects {
                 }
                 Some((dialect, parsed))
             })
-            .unwrap()
+            .expect("tested dialects cannot be empty")
             .1
     }
 
@@ -205,15 +205,6 @@ impl TestedDialects {
 
 /// Returns all available dialects.
 pub fn all_dialects() -> TestedDialects {
-    all_dialects_except(|_| false)
-}
-
-/// Returns available dialects. The `except` predicate is used
-/// to filter out specific dialects.
-pub fn all_dialects_except<F>(except: F) -> TestedDialects
-where
-    F: Fn(&dyn Dialect) -> bool,
-{
     let all_dialects = vec![
         Box::new(GenericDialect {}) as Box<dyn Dialect>,
         Box::new(PostgreSqlDialect {}) as Box<dyn Dialect>,
@@ -226,14 +217,31 @@ where
         Box::new(BigQueryDialect {}) as Box<dyn Dialect>,
         Box::new(SQLiteDialect {}) as Box<dyn Dialect>,
         Box::new(DuckDbDialect {}) as Box<dyn Dialect>,
+        Box::new(DatabricksDialect {}) as Box<dyn Dialect>,
     ];
     TestedDialects {
-        dialects: all_dialects
-            .into_iter()
-            .filter(|d| !except(d.as_ref()))
-            .collect(),
+        dialects: all_dialects,
         options: None,
     }
+}
+
+/// Returns all dialects matching the given predicate.
+pub fn all_dialects_where<F>(predicate: F) -> TestedDialects
+where
+    F: Fn(&dyn Dialect) -> bool,
+{
+    let mut dialects = all_dialects();
+    dialects.dialects.retain(|d| predicate(&**d));
+    dialects
+}
+
+/// Returns available dialects. The `except` predicate is used
+/// to filter out specific dialects.
+pub fn all_dialects_except<F>(except: F) -> TestedDialects
+where
+    F: Fn(&dyn Dialect) -> bool,
+{
+    all_dialects_where(|d| !except(d))
 }
 
 pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {
@@ -309,4 +317,22 @@ pub fn join(relation: TableFactor) -> Join {
         relation,
         join_operator: JoinOperator::Inner(JoinConstraint::Natural),
     }
+}
+
+pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
+    Expr::Function(Function {
+        name: ObjectName(vec![Ident::new(function)]),
+        args: args
+            .into_iter()
+            .map(FunctionArgExpr::Expr)
+            .map(FunctionArg::Unnamed)
+            .collect(),
+        filter: None,
+        null_treatment: None,
+        over: None,
+        distinct: false,
+        special: false,
+        order_by: vec![],
+        within_group: None,
+    })
 }

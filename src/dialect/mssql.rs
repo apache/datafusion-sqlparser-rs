@@ -41,7 +41,7 @@ impl Dialect for MsSqlDialect {
         true
     }
 
-    fn supports_substring_from_for_expr(&self) -> bool {
-        false
+    fn supports_connect_by(&self) -> bool {
+        true
     }
 }

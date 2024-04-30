@@ -1242,6 +1242,17 @@ impl<'a> Parser<'a> {
             order_by,
             null_treatment,
         } = self.parse_window_function_args()?;
+
+        let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
+            self.expect_token(&Token::LParen)?;
+            self.expect_keywords(&[Keyword::ORDER, Keyword::BY])?;
+            let order_by = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+            self.expect_token(&Token::RParen)?;
+            order_by
+        } else {
+            vec![]
+        };
+
         let filter = if self.dialect.supports_filter_during_aggregation()
             && self.parse_keyword(Keyword::FILTER)
             && self.consume_token(&Token::LParen)
@@ -1281,7 +1292,7 @@ impl<'a> Parser<'a> {
             distinct,
             special: false,
             order_by,
-            within_group: vec![],
+            within_group,
         }))
     }
 

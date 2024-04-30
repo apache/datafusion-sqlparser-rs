@@ -1462,12 +1462,18 @@ impl<'a> Parser<'a> {
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::Comma)?;
         let expr = self.parse_expr()?;
+        let styles = if self.consume_token(&Token::Comma) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            Default::default()
+        };
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Convert {
             expr: Box::new(expr),
             data_type: Some(data_type),
             charset: None,
             target_before_value: true,
+            styles,
         })
     }
 
@@ -1489,6 +1495,7 @@ impl<'a> Parser<'a> {
                 data_type: None,
                 charset: Some(charset),
                 target_before_value: false,
+                styles: vec![],
             });
         }
         self.expect_token(&Token::Comma)?;
@@ -1504,6 +1511,7 @@ impl<'a> Parser<'a> {
             data_type: Some(data_type),
             charset,
             target_before_value: false,
+            styles: vec![],
         })
     }
 

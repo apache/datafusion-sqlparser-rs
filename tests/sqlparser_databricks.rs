@@ -184,3 +184,8 @@ fn test_functions_without_parens() {
     databricks().verified_expr("now()");
     databricks().verified_expr("current_timezone()");
 }
+
+#[test]
+fn test_parse_literal_array() {
+    databricks().verified_stmt("SELECT array(current_date, current_date)");
+}

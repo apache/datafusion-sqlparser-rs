@@ -516,7 +516,7 @@ fn parse_typed_struct_syntax() {
     // syntax: STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
 
     let sql = r#"SELECT STRUCT<INT64>(5), STRUCT<x INT64, y STRING>(1, t.str_col), STRUCT<arr ARRAY<FLOAT64>, str STRUCT<BOOL>>(nested_col)"#;
-    let select = bigquery_and_generic().verified_only_select(sql);
+    let select = bigquery().verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
@@ -588,7 +588,7 @@ fn parse_typed_struct_syntax() {
     );
 
     let sql = r#"SELECT STRUCT<x STRUCT, y ARRAY<STRUCT>>(nested_col)"#;
-    let select = bigquery_and_generic().verified_only_select(sql);
+    let select = bigquery().verified_only_select(sql);
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
@@ -613,7 +613,7 @@ fn parse_typed_struct_syntax() {
     );
 
     let sql = r#"SELECT STRUCT<BOOL>(true), STRUCT<BYTES(42)>(B'abc')"#;
-    let select = bigquery_and_generic().verified_only_select(sql);
+    let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
@@ -638,12 +638,12 @@ fn parse_typed_struct_syntax() {
         expr_from_projection(&select.projection[1])
     );
 
-    let sql = r#"SELECT STRUCT<DATE>('2011-05-05'), STRUCT<DATETIME>(DATETIME '1999-01-01 01:23:34.45'), STRUCT<FLOAT64>(5.0), STRUCT<INT64>(1)"#;
-    let select = bigquery_and_generic().verified_only_select(sql);
+    let sql = r#"SELECT STRUCT<DATE>("2011-05-05"), STRUCT<DATETIME>(DATETIME '1999-01-01 01:23:34.45'), STRUCT<FLOAT64>(5.0), STRUCT<INT64>(1)"#;
+    let select = bigquery().verified_only_select(sql);
     assert_eq!(4, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::SingleQuotedString(
+            values: vec![Expr::Value(Value::DoubleQuotedString(
                 "2011-05-05".to_string()
             )),],
             fields: vec![StructField {
@@ -688,7 +688,7 @@ fn parse_typed_struct_syntax() {
     );
 
     let sql = r#"SELECT STRUCT<INTERVAL>(INTERVAL '1-2 3 4:5:6.789999'), STRUCT<JSON>(JSON '{"class" : {"students" : [{"name" : "Jane"}]}}')"#;
-    let select = bigquery_and_generic().verified_only_select(sql);
+    let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
@@ -722,8 +722,8 @@ fn parse_typed_struct_syntax() {
         expr_from_projection(&select.projection[1])
     );
 
-    let sql = r#"SELECT STRUCT<STRING(42)>('foo'), STRUCT<TIMESTAMP>(TIMESTAMP '2008-12-25 15:30:00 America/Los_Angeles'), STRUCT<TIME>(TIME '15:30:00')"#;
-    let select = bigquery_and_generic().verified_only_select(sql);
+    let sql = r#"SELECT STRUCT<STRING(42)>("foo"), STRUCT<TIMESTAMP>(TIMESTAMP '2008-12-25 15:30:00 America/Los_Angeles'), STRUCT<TIME>(TIME '15:30:00')"#;
+    let select = bigquery().verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
@@ -764,7 +764,7 @@ fn parse_typed_struct_syntax() {
     );
 
     let sql = r#"SELECT STRUCT<NUMERIC>(NUMERIC '1'), STRUCT<BIGNUMERIC>(BIGNUMERIC '1')"#;
-    let select = bigquery_and_generic().verified_only_select(sql);
+    let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
@@ -796,7 +796,7 @@ fn parse_typed_struct_syntax() {
 
 #[test]
 fn parse_typed_struct_with_field_name() {
-    let sql = r#"SELECT STRUCT<x INT64>(5), STRUCT<y STRING>('foo')"#;
+    let sql = r#"SELECT STRUCT<x INT64>(5), STRUCT<y STRING>("foo")"#;
     let select = bigquery_and_generic().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(

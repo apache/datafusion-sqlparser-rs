@@ -189,3 +189,21 @@ fn test_functions_without_parens() {
 fn test_parse_literal_array() {
     databricks().verified_stmt("SELECT array(current_date, current_date)");
 }
+
+#[test]
+fn test_parse_substring() {
+    databricks().one_statement_parses_to(
+        "SELECT SUBSTR('Spark SQL', 5)",
+        "SELECT SUBSTRING('Spark SQL' FROM 5)",
+    );
+    databricks().one_statement_parses_to(
+        "SELECT SUBSTR('Spark SQL' FROM 5 FOR 1)",
+        "SELECT SUBSTRING('Spark SQL' FROM 5 FOR 1)",
+    );
+    databricks().one_statement_parses_to(
+        "SELECT SUBSTRING('Spark SQL', 5)",
+        "SELECT SUBSTRING('Spark SQL' FROM 5)",
+    );
+    databricks().verified_expr("SUBSTRING('Spark SQL' FROM 5)");
+    databricks().verified_expr("SUBSTRING('Spark SQL' FROM 5 FOR 1)");
+}

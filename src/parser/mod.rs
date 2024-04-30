@@ -817,7 +817,7 @@ impl<'a> Parser<'a> {
                 Keyword::POSITION if self.peek_token().token == Token::LParen => {
                     self.parse_position_expr()
                 }
-                Keyword::SUBSTRING => self.parse_substring_expr(),
+                Keyword::SUBSTR | Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL

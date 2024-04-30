@@ -812,12 +812,20 @@ impl<'a> Parser<'a> {
                 Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(false),
                 Keyword::EXTRACT => self.parse_extract_expr(),
-                Keyword::CEIL => self.parse_ceil_floor_expr(true),
-                Keyword::FLOOR => self.parse_ceil_floor_expr(false),
+                Keyword::CEIL if self.peek_token().token == Token::LParen => {
+                    self.parse_ceil_floor_expr(true)
+                }
+                Keyword::FLOOR if self.peek_token().token == Token::LParen => {
+                    self.parse_ceil_floor_expr(false)
+                }
                 Keyword::POSITION if self.peek_token().token == Token::LParen => {
                     self.parse_position_expr()
                 }
-                Keyword::SUBSTR | Keyword::SUBSTRING => self.parse_substring_expr(),
+                Keyword::SUBSTR | Keyword::SUBSTRING
+                    if self.peek_token().token == Token::LParen =>
+                {
+                    self.parse_substring_expr()
+                }
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL

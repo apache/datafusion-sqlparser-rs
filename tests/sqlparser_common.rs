@@ -8236,6 +8236,14 @@ fn parse_create_table_collate() {
 }
 
 #[test]
+fn parse_floor_ceil_substr_column() {
+    all_dialects().verified_stmt("SELECT floor");
+    all_dialects().verified_stmt("SELECT ceil");
+    all_dialects().verified_stmt("SELECT substr");
+    all_dialects().verified_stmt("SELECT position");
+}
+
+#[test]
 fn parse_binary_operators_without_whitespace() {
     // x + y
     all_dialects().one_statement_parses_to(

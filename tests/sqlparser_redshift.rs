@@ -376,3 +376,8 @@ fn test_escape_string() {
     redshift_unescaped().verified_stmt(r#"SELECT 'I\\\'m fine'"#);
     redshift_unescaped().verified_stmt(r#"SELECT '[\'\\[\\]]'"#);
 }
+
+#[test]
+fn test_utf8_column_names() {
+    redshift().verified_stmt("SELECT financing_cost_€k FROM tbl");
+}

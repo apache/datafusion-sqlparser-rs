@@ -2346,6 +2346,16 @@ impl<'a> Parser<'a> {
             Token::DoubleTildeAsterisk => Some(BinaryOperator::PGILikeMatch),
             Token::ExclamationMarkDoubleTilde => Some(BinaryOperator::PGNotLikeMatch),
             Token::ExclamationMarkDoubleTildeAsterisk => Some(BinaryOperator::PGNotILikeMatch),
+            Token::Arrow => Some(BinaryOperator::Arrow),
+            Token::LongArrow => Some(BinaryOperator::LongArrow),
+            Token::HashArrow => Some(BinaryOperator::HashArrow),
+            Token::HashLongArrow => Some(BinaryOperator::HashLongArrow),
+            Token::AtArrow => Some(BinaryOperator::AtArrow),
+            Token::ArrowAt => Some(BinaryOperator::ArrowAt),
+            Token::HashMinus => Some(BinaryOperator::HashMinus),
+            Token::AtQuestion => Some(BinaryOperator::AtQuestion),
+            Token::AtAt => Some(BinaryOperator::AtAt),
+
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
@@ -2539,42 +2549,16 @@ impl<'a> Parser<'a> {
         } else if Token::LBracket == tok {
             if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
                 // parse index
-                return self.parse_array_index(expr);
+                self.parse_array_index(expr)
+            } else if dialect_of!(self is SnowflakeDialect) {
+                self.prev_token();
+                self.parse_json_access(expr)
+            } else {
+                self.parse_map_access(expr)
             }
-            self.parse_map_access(expr)
-        } else if Token::Colon == tok {
-            Ok(Expr::JsonAccess {
-                left: Box::new(expr),
-                operator: JsonOperator::Colon,
-                right: Box::new(Expr::Value(self.parse_value()?)),
-            })
-        } else if Token::Arrow == tok
-            || Token::LongArrow == tok
-            || Token::HashArrow == tok
-            || Token::HashLongArrow == tok
-            || Token::AtArrow == tok
-            || Token::ArrowAt == tok
-            || Token::HashMinus == tok
-            || Token::AtQuestion == tok
-            || Token::AtAt == tok
-        {
-            let operator = match tok.token {
-                Token::Arrow => JsonOperator::Arrow,
-                Token::LongArrow => JsonOperator::LongArrow,
-                Token::HashArrow => JsonOperator::HashArrow,
-                Token::HashLongArrow => JsonOperator::HashLongArrow,
-                Token::AtArrow => JsonOperator::AtArrow,
-                Token::ArrowAt => JsonOperator::ArrowAt,
-                Token::HashMinus => JsonOperator::HashMinus,
-                Token::AtQuestion => JsonOperator::AtQuestion,
-                Token::AtAt => JsonOperator::AtAt,
-                _ => unreachable!(),
-            };
-            Ok(Expr::JsonAccess {
-                left: Box::new(expr),
-                operator,
-                right: Box::new(self.parse_expr()?),
-            })
+        } else if dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == tok {
+            self.prev_token();
+            self.parse_json_access(expr)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(
@@ -2605,6 +2589,60 @@ impl<'a> Parser<'a> {
         Ok(Expr::ArrayIndex {
             obj: Box::new(expr),
             indexes,
+        })
+    }
+
+    fn parse_json_path_object_key(&mut self) -> Result<JsonPathElem, ParserError> {
+        let token = self.next_token();
+        match token.token {
+            Token::Word(Word {
+                value,
+                // path segments in SF dot notation can be unquoted or double quoted
+                quote_style: quote_style @ (Some('"') | None),
+                // some experimentation suggests that snowflake permits
+                // any keyword here unquoted.
+                keyword: _,
+            }) => Ok(JsonPathElem::Dot {
+                key: value,
+                quoted: quote_style.is_some(),
+            }),
+
+            // This token should never be generated on snowflake or generic
+            // dialects, but we handle it just in case this is used on future
+            // dialects.
+            Token::DoubleQuotedString(key) => Ok(JsonPathElem::Dot { key, quoted: true }),
+
+            _ => self.expected("variant object key name", token),
+        }
+    }
+
+    fn parse_json_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let mut path = Vec::new();
+        loop {
+            match self.next_token().token {
+                Token::Colon if path.is_empty() => {
+                    path.push(self.parse_json_path_object_key()?);
+                }
+                Token::Period if !path.is_empty() => {
+                    path.push(self.parse_json_path_object_key()?);
+                }
+                Token::LBracket => {
+                    let key = self.parse_expr()?;
+                    self.expect_token(&Token::RBracket)?;
+
+                    path.push(JsonPathElem::Bracket { key });
+                }
+                _ => {
+                    self.prev_token();
+                    break;
+                }
+            };
+        }
+
+        debug_assert!(!path.is_empty());
+        Ok(Expr::JsonAccess {
+            value: Box::new(expr),
+            path: JsonPath { path },
         })
     }
 
@@ -2711,6 +2749,7 @@ impl<'a> Parser<'a> {
     }
 
     // use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
+    // higher number = higher precedence
     const MUL_DIV_MOD_OP_PREC: u8 = 40;
     const PLUS_MINUS_PREC: u8 = 30;
     const XOR_PREC: u8 = 24;
@@ -2718,6 +2757,7 @@ impl<'a> Parser<'a> {
     const BETWEEN_PREC: u8 = 20;
     const LIKE_PREC: u8 = 19;
     const IS_PREC: u8 = 17;
+    const PG_OTHER_PREC: u8 = 16;
     const UNARY_NOT_PREC: u8 = 15;
     const AND_PREC: u8 = 10;
     const OR_PREC: u8 = 5;
@@ -2802,18 +2842,16 @@ impl<'a> Parser<'a> {
             Token::DoubleColon => Ok(50),
             Token::Colon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket
+            Token::LBracket | Token::Overlap | Token::CaretAt => Ok(50),
+            Token::Arrow
             | Token::LongArrow
-            | Token::Arrow
-            | Token::Overlap
-            | Token::CaretAt
             | Token::HashArrow
             | Token::HashLongArrow
             | Token::AtArrow
             | Token::ArrowAt
             | Token::HashMinus
             | Token::AtQuestion
-            | Token::AtAt => Ok(50),
+            | Token::AtAt => Ok(Self::PG_OTHER_PREC),
             _ => Ok(0),
         }
     }
@@ -6236,17 +6274,6 @@ impl<'a> Parser<'a> {
                         },
                     )?,
                 },
-                // Case when Snowflake Semi-structured data like key:value
-                Keyword::NoKeyword
-                | Keyword::LOCATION
-                | Keyword::TYPE
-                | Keyword::DATE
-                | Keyword::START
-                | Keyword::END
-                    if dialect_of!(self is SnowflakeDialect | GenericDialect) =>
-                {
-                    Ok(Value::UnQuotedString(w.value))
-                }
                 _ => self.expected(
                     "a concrete value",
                     TokenWithLocation {

@@ -8793,7 +8793,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect | SnowflakeDialect | DuckDbDialect)
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
         {
             self.parse_optional_select_item_replace()?
         } else {

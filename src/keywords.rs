@@ -87,7 +87,6 @@ define_keywords!(
     ARCHIVE,
     ARE,
     ARRAY,
-    ARRAY_AGG,
     ARRAY_MAX_CARDINALITY,
     AS,
     ASC,

@@ -1896,8 +1896,10 @@ fn test_select_as_value() {
 #[test]
 fn test_array_agg() {
     bigquery_and_generic().verified_expr("ARRAY_AGG(state)");
+    bigquery_and_generic().verified_expr("ARRAY_CONCAT_AGG(x LIMIT 2)");
     bigquery_and_generic().verified_expr("ARRAY_AGG(state IGNORE NULLS LIMIT 10)");
     bigquery_and_generic().verified_expr("ARRAY_AGG(state RESPECT NULLS ORDER BY population)");
     bigquery_and_generic()
         .verified_expr("ARRAY_AGG(DISTINCT state IGNORE NULLS ORDER BY population DESC LIMIT 10)");
+    bigquery_and_generic().verified_expr("ARRAY_CONCAT_AGG(x ORDER BY ARRAY_LENGTH(x))");
 }

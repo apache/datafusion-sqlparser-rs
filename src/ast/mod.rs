@@ -4782,7 +4782,7 @@ impl fmt::Display for CloseCursor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Function {
     pub name: ObjectName,
-    /// The arguments to the function, including any options specified withinthe
+    /// The arguments to the function, including any options specified within the
     /// delimiting parentheses.
     pub args: FunctionArguments,
     /// e.g. `x > 5` in `COUNT(x) FILTER (WHERE x > 5)`
@@ -4794,8 +4794,6 @@ pub struct Function {
     /// FIRST_VALUE( <expr> ) [ { IGNORE | RESPECT } NULLS ] OVER ...
     /// ```
     ///
-    /// Note: Some dialects specify this inside of the argument list instead.
-    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value)
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions/first_value)
     pub null_treatment: Option<NullTreatment>,
     /// The `OVER` clause, indicating a window function call.
@@ -4894,9 +4892,24 @@ impl fmt::Display for FunctionArgumentList {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionArgumentClause {
+    /// Indicates how `NULL`s should be handled in the calculation, e.g. in `FIRST_VALUE` on [BigQuery].
+    ///
+    /// Syntax:
+    /// ```plaintext
+    /// { IGNORE | RESPECT } NULLS ]
+    /// ```
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value
     IgnoreOrRespectNulls(NullTreatment),
+    /// Specifies the the ordering for some ordered set aggregates, e.g. `ARRAY_AGG` on [BigQuery].
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
     OrderBy(Vec<OrderByExpr>),
+    /// Specifies a limit for the `ARRAY_AGG` and `ARRAY_CONCAT_AGG` functions on BigQuery.
     Limit(Expr),
+    /// Specifies the behavior on overflow of the `LISTAGG` function.
+    ///
+    /// See <https://trino.io/docs/current/functions/aggregate.html>.
     OnOverflow(ListAggOnOverflow),
 }
 

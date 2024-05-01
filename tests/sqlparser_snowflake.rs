@@ -385,8 +385,7 @@ fn parse_delimited_identifiers() {
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
-                null_treatment: None,
-                order_by: vec![]
+                clauses: vec![],
             }),
             filter: None,
             null_treatment: None,
@@ -416,15 +415,6 @@ fn test_array_agg_func() {
     ] {
         snowflake().verified_stmt(sql);
     }
-
-    let sql = "select array_agg(x order by x) as a from T";
-    let result = snowflake().parse_sql_statements(sql);
-    assert_eq!(
-        result,
-        Err(ParserError::ParserError(String::from(
-            "Expected ), found: order"
-        )))
-    )
 }
 
 fn snowflake() -> TestedDialects {

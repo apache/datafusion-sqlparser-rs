@@ -139,8 +139,7 @@ fn parse_delimited_identifiers() {
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
-                null_treatment: None,
-                order_by: vec![]
+                clauses: vec![],
             }),
             null_treatment: None,
             filter: None,

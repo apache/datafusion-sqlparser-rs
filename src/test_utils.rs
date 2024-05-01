@@ -328,8 +328,7 @@ pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
                 .into_iter()
                 .map(|arg| FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)))
                 .collect(),
-            null_treatment: None,
-            order_by: vec![],
+            clauses: vec![],
         }),
         filter: None,
         null_treatment: None,

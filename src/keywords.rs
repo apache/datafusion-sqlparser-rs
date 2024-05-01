@@ -401,7 +401,6 @@ define_keywords!(
     LIKE_REGEX,
     LIMIT,
     LINES,
-    LISTAGG,
     LN,
     LOAD,
     LOCAL,

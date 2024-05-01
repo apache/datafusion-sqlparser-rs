@@ -528,8 +528,7 @@ where
 ///           args: FunctionArguments::List(FunctionArgumentList {
 ///               duplicate_treatment: None,
 ///               args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],
-///               order_by: vec![],
-///               null_treatment: None,
+///               clauses: vec![],
 ///           }),
 ///           null_treatment: None,
 ///           filter: None,

@@ -1044,8 +1044,7 @@ fn parse_select_count_wildcard() {
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
-                null_treatment: None,
-                order_by: vec![],
+                clauses: vec![],
             }),
             null_treatment: None,
             filter: None,
@@ -1069,8 +1068,7 @@ fn parse_select_count_distinct() {
                     op: UnaryOperator::Plus,
                     expr: Box::new(Expr::Identifier(Ident::new("x"))),
                 }))],
-                null_treatment: None,
-                order_by: vec![]
+                clauses: vec![],
             }),
             null_treatment: None,
             within_group: vec![],
@@ -2147,8 +2145,7 @@ fn parse_select_having() {
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
-                    null_treatment: None,
-                    order_by: vec![],
+                    clauses: vec![],
                 }),
                 null_treatment: None,
                 filter: None,
@@ -2177,8 +2174,7 @@ fn parse_select_qualify() {
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![],
-                    null_treatment: None,
-                    order_by: vec![],
+                    clauses: vec![],
                 }),
                 null_treatment: None,
                 filter: None,
@@ -2510,9 +2506,57 @@ fn parse_floor_datetime() {
 
 #[test]
 fn parse_listagg() {
-    let sql = "SELECT LISTAGG(DISTINCT dateid, ', ' ON OVERFLOW TRUNCATE '%' WITHOUT COUNT) \
-               WITHIN GROUP (ORDER BY id, username)";
-    let select = verified_only_select(sql);
+    let select = verified_only_select(concat!(
+        "SELECT LISTAGG(DISTINCT dateid, ', ' ON OVERFLOW TRUNCATE '%' WITHOUT COUNT) ",
+        "WITHIN GROUP (ORDER BY id, username)",
+    ));
+
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("LISTAGG")]),
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: Some(DuplicateTreatment::Distinct),
+                args: vec![
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new(
+                        "dateid"
+                    )))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString(", ".to_owned())
+                    )))
+                ],
+                clauses: vec![FunctionArgumentClause::OnOverflow(
+                    ListAggOnOverflow::Truncate {
+                        filler: Some(Box::new(Expr::Value(Value::SingleQuotedString(
+                            "%".to_string(),
+                        )))),
+                        with_count: false,
+                    }
+                )],
+            }),
+            filter: None,
+            null_treatment: None,
+            over: None,
+            within_group: vec![
+                OrderByExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "id".to_string(),
+                        quote_style: None,
+                    }),
+                    asc: None,
+                    nulls_first: None,
+                },
+                OrderByExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "username".to_string(),
+                        quote_style: None,
+                    }),
+                    asc: None,
+                    nulls_first: None,
+                },
+            ]
+        }),
+        expr_from_projection(only(&select.projection))
+    );
 
     verified_stmt("SELECT LISTAGG(sellerid) WITHIN GROUP (ORDER BY dateid)");
     verified_stmt("SELECT LISTAGG(dateid)");
@@ -2520,44 +2564,6 @@ fn parse_listagg() {
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW ERROR)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE X'deadbeef' WITH COUNT)");
-
-    let expr = Box::new(Expr::Identifier(Ident::new("dateid")));
-    let on_overflow = Some(ListAggOnOverflow::Truncate {
-        filler: Some(Box::new(Expr::Value(Value::SingleQuotedString(
-            "%".to_string(),
-        )))),
-        with_count: false,
-    });
-    let within_group = vec![
-        OrderByExpr {
-            expr: Expr::Identifier(Ident {
-                value: "id".to_string(),
-                quote_style: None,
-            }),
-            asc: None,
-            nulls_first: None,
-        },
-        OrderByExpr {
-            expr: Expr::Identifier(Ident {
-                value: "username".to_string(),
-                quote_style: None,
-            }),
-            asc: None,
-            nulls_first: None,
-        },
-    ];
-    assert_eq!(
-        &Expr::ListAgg(ListAgg {
-            distinct: true,
-            expr,
-            separator: Some(Box::new(Expr::Value(Value::SingleQuotedString(
-                ", ".to_string()
-            )))),
-            on_overflow,
-            within_group,
-        }),
-        expr_from_projection(only(&select.projection))
-    );
 }
 
 #[test]
@@ -2583,12 +2589,6 @@ fn parse_array_agg_func() {
     ] {
         supported_dialects.verified_stmt(sql);
     }
-
-    // follows special-case array_agg code path. fails in everything except postgres
-    let wc_sql = "SELECT ARRAY_AGG(sections_tbl.*) AS sections FROM sections_tbl";
-    all_dialects_but_pg()
-        .parse_sql_statements(wc_sql)
-        .expect_err("should have failed");
 }
 
 #[test]
@@ -2675,7 +2675,12 @@ fn parse_window_function_null_treatment_arg() {
         let FunctionArguments::List(arg_list) = &actual.args else {
             panic!("expected argument list")
         };
-        assert!(arg_list.order_by.is_empty());
+        assert!({
+            arg_list
+                .clauses
+                .iter()
+                .all(|clause| !matches!(clause, FunctionArgumentClause::OrderBy(_)))
+        });
         assert_eq!(1, arg_list.args.len());
         let FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(actual_expr))) =
             &arg_list.args[0]
@@ -2683,7 +2688,13 @@ fn parse_window_function_null_treatment_arg() {
             unreachable!()
         };
         assert_eq!(&Ident::new(expected_expr), actual_expr);
-        assert_eq!(Some(expected_null_treatment), arg_list.null_treatment);
+        assert_eq!(
+            Some(expected_null_treatment),
+            arg_list.clauses.iter().find_map(|clause| match clause {
+                FunctionArgumentClause::IgnoreOrRespectNulls(nt) => Some(*nt),
+                _ => None,
+            })
+        );
     }
 
     let sql = "SELECT LAG(1 IGNORE NULLS) IGNORE NULLS OVER () FROM t1";
@@ -4210,8 +4221,7 @@ fn parse_named_argument_function() {
                         operator: FunctionArgOperator::RightArrow
                     },
                 ],
-                null_treatment: None,
-                order_by: vec![],
+                clauses: vec![],
             }),
             null_treatment: None,
             filter: None,
@@ -4249,8 +4259,7 @@ fn parse_named_argument_function_with_eq_operator() {
                         operator: FunctionArgOperator::Equals
                     },
                 ],
-                null_treatment: None,
-                order_by: vec![],
+                clauses: vec![],
             }),
             null_treatment: None,
             filter: None,
@@ -4307,8 +4316,7 @@ fn parse_window_functions() {
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
-                null_treatment: None,
-                order_by: vec![],
+                clauses: vec![],
             }),
             null_treatment: None,
             filter: None,
@@ -4441,8 +4449,7 @@ fn test_parse_named_window() {
                                 quote_style: None,
                             }),
                         ))],
-                        null_treatment: None,
-                        order_by: vec![],
+                        clauses: vec![],
                     }),
                     null_treatment: None,
                     filter: None,
@@ -4471,8 +4478,7 @@ fn test_parse_named_window() {
                                 quote_style: None,
                             }),
                         ))],
-                        null_treatment: None,
-                        order_by: vec![],
+                        clauses: vec![],
                     }),
                     null_treatment: None,
                     filter: None,
@@ -7917,8 +7923,7 @@ fn parse_time_functions() {
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
-                null_treatment: None,
-                order_by: vec![],
+                clauses: vec![],
             }),
             null_treatment: None,
             filter: None,
@@ -8781,8 +8786,7 @@ fn parse_call() {
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                     Value::SingleQuotedString("a".to_string())
                 )))],
-                order_by: vec![],
-                null_treatment: None,
+                clauses: vec![],
             }),
             name: ObjectName(vec![Ident::new("my_procedure")]),
             filter: None,
@@ -9173,34 +9177,42 @@ fn test_selective_aggregation() {
             .verified_only_select(sql)
             .projection,
         vec![
-            SelectItem::UnnamedExpr(Expr::AggregateExpressionWithFilter {
-                expr: Box::new(Expr::ArrayAgg(ArrayAgg {
-                    distinct: false,
-                    expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                    order_by: None,
-                    limit: None,
-                    within_group: false,
-                })),
-                filter: Box::new(Expr::IsNotNull(Box::new(Expr::Identifier(Ident::new(
-                    "name"
+            SelectItem::UnnamedExpr(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("ARRAY_AGG")]),
+                args: FunctionArguments::List(FunctionArgumentList {
+                    duplicate_treatment: None,
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                        Expr::Identifier(Ident::new("name"))
+                    ))],
+                    clauses: vec![],
+                }),
+                filter: Some(Box::new(Expr::IsNotNull(Box::new(Expr::Identifier(
+                    Ident::new("name")
                 ))))),
-            }),
+                over: None,
+                within_group: vec![],
+                null_treatment: None
+            })),
             SelectItem::ExprWithAlias {
-                expr: Expr::AggregateExpressionWithFilter {
-                    expr: Box::new(Expr::ArrayAgg(ArrayAgg {
-                        distinct: false,
-                        expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                        order_by: None,
-                        limit: None,
-                        within_group: false,
-                    })),
-                    filter: Box::new(Expr::Like {
+                expr: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("ARRAY_AGG")]),
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::Identifier(Ident::new("name"))
+                        ))],
+                        clauses: vec![],
+                    }),
+                    filter: Some(Box::new(Expr::Like {
                         negated: false,
                         expr: Box::new(Expr::Identifier(Ident::new("name"))),
                         pattern: Box::new(Expr::Value(Value::SingleQuotedString("a%".to_owned()))),
                         escape_char: None,
-                    }),
-                },
+                    })),
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![]
+                }),
                 alias: Ident::new("agg2")
             },
         ]

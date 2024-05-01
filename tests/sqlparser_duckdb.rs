@@ -504,8 +504,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
                         operator: FunctionArgOperator::Assignment
                     },
                 ],
-                null_treatment: None,
-                order_by: vec![],
+                clauses: vec![],
             }),
             null_treatment: None,
             filter: None,

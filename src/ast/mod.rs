@@ -686,11 +686,6 @@ pub enum Expr {
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
-    /// Aggregate function with filter
-    AggregateExpressionWithFilter {
-        expr: Box<Expr>,
-        filter: Box<Expr>,
-    },
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -713,10 +708,6 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// An array subquery constructor, e.g. `SELECT ARRAY(SELECT 1 UNION SELECT 2)`
     ArraySubquery(Box<Query>),
-    /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
-    ListAgg(ListAgg),
-    /// The `ARRAY_AGG` function `SELECT ARRAY_AGG(... ORDER BY ...)`
-    ArrayAgg(ArrayAgg),
     /// The `GROUPING SETS` expr.
     GroupingSets(Vec<Vec<Expr>>),
     /// The `CUBE` expr.
@@ -1060,9 +1051,6 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{fun}"),
-            Expr::AggregateExpressionWithFilter { expr, filter } => {
-                write!(f, "{expr} FILTER (WHERE {filter})")
-            }
             Expr::Case {
                 operand,
                 conditions,
@@ -1090,8 +1078,6 @@ impl fmt::Display for Expr {
             ),
             Expr::Subquery(s) => write!(f, "({s})"),
             Expr::ArraySubquery(s) => write!(f, "ARRAY({s})"),
-            Expr::ListAgg(listagg) => write!(f, "{listagg}"),
-            Expr::ArrayAgg(arrayagg) => write!(f, "{arrayagg}"),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;
                 let mut sep = "";
@@ -4887,10 +4873,8 @@ pub struct FunctionArgumentList {
     pub duplicate_treatment: Option<DuplicateTreatment>,
     /// The function arguments.
     pub args: Vec<FunctionArg>,
-    /// Indicates how `NULL`s should be handled in the calculation.
-    pub null_treatment: Option<NullTreatment>,
-    /// Required ordering for the function (if empty, there is no requirement).
-    pub order_by: Vec<OrderByExpr>,
+    /// Additional clauses specified within the argument list.
+    pub clauses: Vec<FunctionArgumentClause>,
 }
 
 impl fmt::Display for FunctionArgumentList {
@@ -4899,13 +4883,35 @@ impl fmt::Display for FunctionArgumentList {
             write!(f, "{} ", duplicate_treatment)?;
         }
         write!(f, "{}", display_comma_separated(&self.args))?;
-        if !self.order_by.is_empty() {
-            write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
-        }
-        if let Some(null_treatment) = self.null_treatment {
-            write!(f, " {}", null_treatment)?;
+        if !self.clauses.is_empty() {
+            write!(f, " {}", display_separated(&self.clauses, " "))?;
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionArgumentClause {
+    IgnoreOrRespectNulls(NullTreatment),
+    OrderBy(Vec<OrderByExpr>),
+    Limit(Expr),
+    OnOverflow(ListAggOnOverflow),
+}
+
+impl fmt::Display for FunctionArgumentClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment) => {
+                write!(f, "{}", null_treatment)
+            }
+            FunctionArgumentClause::OrderBy(order_by) => {
+                write!(f, "ORDER BY {}", display_comma_separated(order_by))
+            }
+            FunctionArgumentClause::Limit(limit) => write!(f, "LIMIT {limit}"),
+            FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
+        }
     }
 }
 
@@ -4976,45 +4982,6 @@ impl fmt::Display for FileFormat {
     }
 }
 
-/// A `LISTAGG` invocation `LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] ) )
-/// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ListAgg {
-    pub distinct: bool,
-    pub expr: Box<Expr>,
-    pub separator: Option<Box<Expr>>,
-    pub on_overflow: Option<ListAggOnOverflow>,
-    pub within_group: Vec<OrderByExpr>,
-}
-
-impl fmt::Display for ListAgg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "LISTAGG({}{}",
-            if self.distinct { "DISTINCT " } else { "" },
-            self.expr
-        )?;
-        if let Some(separator) = &self.separator {
-            write!(f, ", {separator}")?;
-        }
-        if let Some(on_overflow) = &self.on_overflow {
-            write!(f, "{on_overflow}")?;
-        }
-        write!(f, ")")?;
-        if !self.within_group.is_empty() {
-            write!(
-                f,
-                " WITHIN GROUP (ORDER BY {})",
-                display_comma_separated(&self.within_group)
-            )?;
-        }
-        Ok(())
-    }
-}
-
 /// The `ON OVERFLOW` clause of a LISTAGG invocation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -5032,7 +4999,7 @@ pub enum ListAggOnOverflow {
 
 impl fmt::Display for ListAggOnOverflow {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " ON OVERFLOW")?;
+        write!(f, "ON OVERFLOW")?;
         match self {
             ListAggOnOverflow::Error => write!(f, " ERROR"),
             ListAggOnOverflow::Truncate { filler, with_count } => {
@@ -5048,50 +5015,6 @@ impl fmt::Display for ListAggOnOverflow {
                 write!(f, " COUNT")
             }
         }
-    }
-}
-
-/// An `ARRAY_AGG` invocation `ARRAY_AGG( [ DISTINCT ] <expr> [ORDER BY <expr>] [LIMIT <n>] )`
-/// Or `ARRAY_AGG( [ DISTINCT ] <expr> ) [ WITHIN GROUP ( ORDER BY <expr> ) ]`
-/// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ArrayAgg {
-    pub distinct: bool,
-    pub expr: Box<Expr>,
-    pub order_by: Option<Vec<OrderByExpr>>,
-    pub limit: Option<Box<Expr>>,
-    pub within_group: bool, // order by is used inside a within group or not
-}
-
-impl fmt::Display for ArrayAgg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "ARRAY_AGG({}{}",
-            if self.distinct { "DISTINCT " } else { "" },
-            self.expr
-        )?;
-        if !self.within_group {
-            if let Some(order_by) = &self.order_by {
-                write!(f, " ORDER BY {}", display_comma_separated(order_by))?;
-            }
-            if let Some(limit) = &self.limit {
-                write!(f, " LIMIT {limit}")?;
-            }
-        }
-        write!(f, ")")?;
-        if self.within_group {
-            if let Some(order_by) = &self.order_by {
-                write!(
-                    f,
-                    " WITHIN GROUP (ORDER BY {})",
-                    display_comma_separated(order_by)
-                )?;
-            }
-        }
-        Ok(())
     }
 }
 

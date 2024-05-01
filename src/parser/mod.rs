@@ -1029,7 +1029,6 @@ impl<'a> Parser<'a> {
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_interval(),
-                Keyword::LISTAGG => self.parse_listagg_expr(),
                 // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
                 Keyword::ARRAY if self.peek_token() == Token::LBracket => {
                     self.expect_token(&Token::LBracket)?;
@@ -1042,7 +1041,6 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::LParen)?;
                     self.parse_array_subquery()
                 }
-                Keyword::ARRAY_AGG => self.parse_array_agg_expr(),
                 Keyword::NOT => self.parse_not(),
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
@@ -1273,7 +1271,11 @@ impl<'a> Parser<'a> {
 
         // Syntax for null treatment shows up either in the args list
         // or after the function call, but not both.
-        let null_treatment = if args.null_treatment.is_none() {
+        let null_treatment = if args
+            .clauses
+            .iter()
+            .all(|clause| !matches!(clause, FunctionArgumentClause::IgnoreOrRespectNulls(_)))
+        {
             self.parse_null_treatment()?
         } else {
             None
@@ -1767,21 +1769,10 @@ impl<'a> Parser<'a> {
         Ok(Expr::ArraySubquery(query))
     }
 
-    /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
-    pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_all_or_distinct()?.is_some();
-        let expr = Box::new(self.parse_expr()?);
-        // While ANSI SQL would would require the separator, Redshift makes this optional. Here we
-        // choose to make the separator optional as this provides the more general implementation.
-        let separator = if self.consume_token(&Token::Comma) {
-            Some(Box::new(self.parse_expr()?))
-        } else {
-            None
-        };
-        let on_overflow = if self.parse_keywords(&[Keyword::ON, Keyword::OVERFLOW]) {
+    pub fn parse_listagg_on_overflow(&mut self) -> Result<Option<ListAggOnOverflow>, ParserError> {
+        if self.parse_keywords(&[Keyword::ON, Keyword::OVERFLOW]) {
             if self.parse_keyword(Keyword::ERROR) {
-                Some(ListAggOnOverflow::Error)
+                Ok(Some(ListAggOnOverflow::Error))
             } else {
                 self.expect_keyword(Keyword::TRUNCATE)?;
                 let filler = match self.peek_token().token {
@@ -1804,80 +1795,11 @@ impl<'a> Parser<'a> {
                     self.expected("either WITH or WITHOUT in LISTAGG", self.peek_token())?;
                 }
                 self.expect_keyword(Keyword::COUNT)?;
-                Some(ListAggOnOverflow::Truncate { filler, with_count })
+                Ok(Some(ListAggOnOverflow::Truncate { filler, with_count }))
             }
         } else {
-            None
-        };
-        self.expect_token(&Token::RParen)?;
-        // Once again ANSI SQL requires WITHIN GROUP, but Redshift does not. Again we choose the
-        // more general implementation.
-        let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
-            self.expect_token(&Token::LParen)?;
-            self.expect_keywords(&[Keyword::ORDER, Keyword::BY])?;
-            let order_by_expr = self.parse_comma_separated(Parser::parse_order_by_expr)?;
-            self.expect_token(&Token::RParen)?;
-            order_by_expr
-        } else {
-            vec![]
-        };
-        Ok(Expr::ListAgg(ListAgg {
-            distinct,
-            expr,
-            separator,
-            on_overflow,
-            within_group,
-        }))
-    }
-
-    pub fn parse_array_agg_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_keyword(Keyword::DISTINCT);
-        let expr = Box::new(self.parse_expr()?);
-        // ANSI SQL and BigQuery define ORDER BY inside function.
-        if !self.dialect.supports_within_after_array_aggregation() {
-            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
-            } else {
-                None
-            };
-            let limit = if self.parse_keyword(Keyword::LIMIT) {
-                self.parse_limit()?.map(Box::new)
-            } else {
-                None
-            };
-            self.expect_token(&Token::RParen)?;
-            return Ok(Expr::ArrayAgg(ArrayAgg {
-                distinct,
-                expr,
-                order_by,
-                limit,
-                within_group: false,
-            }));
+            Ok(None)
         }
-        // Snowflake defines ORDER BY in within group instead of inside the function like
-        // ANSI SQL.
-        self.expect_token(&Token::RParen)?;
-        let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
-            self.expect_token(&Token::LParen)?;
-            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
-            } else {
-                None
-            };
-            self.expect_token(&Token::RParen)?;
-            order_by
-        } else {
-            None
-        };
-
-        Ok(Expr::ArrayAgg(ArrayAgg {
-            distinct,
-            expr,
-            order_by: within_group,
-            limit: None,
-            within_group: true,
-        }))
     }
 
     // This function parses date/time fields for the EXTRACT function-like
@@ -9466,32 +9388,40 @@ impl<'a> Parser<'a> {
             return Ok(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
-                null_treatment: None,
-                order_by: vec![],
+                clauses: vec![],
             });
         }
 
         let duplicate_treatment = self.parse_duplicate_treatment()?;
         let args = self.parse_comma_separated(Parser::parse_function_args)?;
 
-        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_order_by_expr)?
-        } else {
-            Default::default()
-        };
+        let mut clauses = vec![];
 
-        let null_treatment = if self.dialect.supports_window_function_null_treatment_arg() {
-            self.parse_null_treatment()?
-        } else {
-            None
-        };
+        if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            clauses.push(FunctionArgumentClause::OrderBy(
+                self.parse_comma_separated(Parser::parse_order_by_expr)?,
+            ));
+        }
+
+        if self.parse_keyword(Keyword::LIMIT) {
+            clauses.push(FunctionArgumentClause::Limit(self.parse_expr()?));
+        }
+
+        if let Some(on_overflow) = self.parse_listagg_on_overflow()? {
+            clauses.push(FunctionArgumentClause::OnOverflow(on_overflow));
+        }
+
+        if self.dialect.supports_window_function_null_treatment_arg() {
+            if let Some(null_treatment) = self.parse_null_treatment()? {
+                clauses.push(FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment));
+            }
+        }
 
         self.expect_token(&Token::RParen)?;
         Ok(FunctionArgumentList {
             duplicate_treatment,
             args,
-            null_treatment,
-            order_by,
+            clauses,
         })
     }
 
@@ -9518,31 +9448,12 @@ impl<'a> Parser<'a> {
             Expr::Wildcard => Ok(SelectItem::Wildcard(
                 self.parse_wildcard_additional_options()?,
             )),
-            expr => {
-                let expr: Expr = if self.dialect.supports_filter_during_aggregation()
-                    && self.parse_keyword(Keyword::FILTER)
-                {
-                    let i = self.index - 1;
-                    if self.consume_token(&Token::LParen) && self.parse_keyword(Keyword::WHERE) {
-                        let filter = self.parse_expr()?;
-                        self.expect_token(&Token::RParen)?;
-                        Expr::AggregateExpressionWithFilter {
-                            expr: Box::new(expr),
-                            filter: Box::new(filter),
-                        }
-                    } else {
-                        self.index = i;
-                        expr
-                    }
-                } else {
-                    expr
-                };
-                self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
-                    .map(|alias| match alias {
-                        Some(alias) => SelectItem::ExprWithAlias { expr, alias },
-                        None => SelectItem::UnnamedExpr(expr),
-                    })
-            }
+            expr => self
+                .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
+                .map(|alias| match alias {
+                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
+                    None => SelectItem::UnnamedExpr(expr),
+                }),
         }
     }
 

@@ -16,11 +16,15 @@
 
 #[macro_use]
 mod test_utils;
+
 use test_utils::*;
 
+use sqlparser::ast::DataType::{Int, Text};
+use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
+use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{Parser, ParserError};
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -537,6 +541,64 @@ fn parse_substring_in_select() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_mssql_declare() {
+    let sql = "DECLARE @foo CURSOR, @bar INT, @baz AS TEXT = 'foobar';";
+    let ast = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();
+
+    assert_eq!(
+        vec![Statement::Declare {
+            stmts: vec![
+                Declare {
+                    names: vec![Ident {
+                        value: "@foo".to_string(),
+                        quote_style: None
+                    }],
+                    data_type: None,
+                    assignment: None,
+                    declare_type: Some(DeclareType::Cursor),
+                    binary: None,
+                    sensitive: None,
+                    scroll: None,
+                    hold: None,
+                    for_query: None
+                },
+                Declare {
+                    names: vec![Ident {
+                        value: "@bar".to_string(),
+                        quote_style: None
+                    }],
+                    data_type: Some(Int(None)),
+                    assignment: None,
+                    declare_type: None,
+                    binary: None,
+                    sensitive: None,
+                    scroll: None,
+                    hold: None,
+                    for_query: None
+                },
+                Declare {
+                    names: vec![Ident {
+                        value: "@baz".to_string(),
+                        quote_style: None
+                    }],
+                    data_type: Some(Text),
+                    assignment: Some(MsSqlAssignment(Box::new(Expr::Value(SingleQuotedString(
+                        "foobar".to_string()
+                    ))))),
+                    declare_type: None,
+                    binary: None,
+                    sensitive: None,
+                    scroll: None,
+                    hold: None,
+                    for_query: None
+                }
+            ]
+        }],
+        ast
+    );
 }
 
 fn ms() -> TestedDialects {

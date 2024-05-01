@@ -1566,6 +1566,14 @@ pub enum DeclareAssignment {
     /// DECLARE c1 CURSOR FOR res
     /// ```
     For(Box<Expr>),
+
+    /// Expression via the `=` syntax.
+    ///
+    /// Example:
+    /// ```sql
+    /// DECLARE @variable AS INT = 100
+    /// ```
+    MsSqlAssignment(Box<Expr>),
 }
 
 impl fmt::Display for DeclareAssignment {
@@ -1579,6 +1587,9 @@ impl fmt::Display for DeclareAssignment {
             }
             DeclareAssignment::DuckAssignment(expr) => {
                 write!(f, ":= {expr}")
+            }
+            DeclareAssignment::MsSqlAssignment(expr) => {
+                write!(f, "= {expr}")
             }
             DeclareAssignment::For(expr) => {
                 write!(f, "FOR {expr}")

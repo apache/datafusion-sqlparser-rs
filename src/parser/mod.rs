@@ -9397,6 +9397,12 @@ impl<'a> Parser<'a> {
 
         let mut clauses = vec![];
 
+        if self.dialect.supports_window_function_null_treatment_arg() {
+            if let Some(null_treatment) = self.parse_null_treatment()? {
+                clauses.push(FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment));
+            }
+        }
+
         if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             clauses.push(FunctionArgumentClause::OrderBy(
                 self.parse_comma_separated(Parser::parse_order_by_expr)?,
@@ -9409,12 +9415,6 @@ impl<'a> Parser<'a> {
 
         if let Some(on_overflow) = self.parse_listagg_on_overflow()? {
             clauses.push(FunctionArgumentClause::OnOverflow(on_overflow));
-        }
-
-        if self.dialect.supports_window_function_null_treatment_arg() {
-            if let Some(null_treatment) = self.parse_null_treatment()? {
-                clauses.push(FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment));
-            }
         }
 
         self.expect_token(&Token::RParen)?;

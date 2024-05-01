@@ -1892,3 +1892,12 @@ fn test_select_as_value() {
     let select = bigquery().verified_only_select("SELECT AS VALUE STRUCT(1 AS a, 2 AS b) AS xyz");
     assert_eq!(Some(ValueTableMode::AsValue), select.value_table_mode);
 }
+
+#[test]
+fn test_array_agg() {
+    bigquery_and_generic().verified_expr("ARRAY_AGG(state)");
+    bigquery_and_generic().verified_expr("ARRAY_AGG(state IGNORE NULLS LIMIT 10)");
+    bigquery_and_generic().verified_expr("ARRAY_AGG(state RESPECT NULLS ORDER BY population)");
+    bigquery_and_generic()
+        .verified_expr("ARRAY_AGG(DISTINCT state IGNORE NULLS ORDER BY population DESC LIMIT 10)");
+}

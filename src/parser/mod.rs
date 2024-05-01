@@ -1039,19 +1039,16 @@ impl<'a> Parser<'a> {
                         && !dialect_of!(self is ClickHouseDialect) =>
                 {
                     self.expect_token(&Token::LParen)?;
-                    {
-                        let this = &mut *self;
-                        let query = this.parse_boxed_query()?;
-                        this.expect_token(&Token::RParen)?;
-                        Ok(Expr::Function(Function {
-                            name: ObjectName(vec![w.to_ident()]),
-                            args: FunctionArguments::Subquery(query),
-                            filter: None,
-                            null_treatment: None,
-                            over: None,
-                            within_group: vec![],
-                        }))
-                    }
+                    let query = self.parse_boxed_query()?;
+                    self.expect_token(&Token::RParen)?;
+                    Ok(Expr::Function(Function {
+                        name: ObjectName(vec![w.to_ident()]),
+                        args: FunctionArguments::Subquery(query),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                    }))
                 }
                 Keyword::NOT => self.parse_not(),
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {

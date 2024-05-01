@@ -17,16 +17,14 @@
 #[macro_use]
 mod test_utils;
 
-use sqlparser::ast;
 use test_utils::*;
 
-use sqlparser::ast::DataType::{BigDecimal, Int, Text};
+use sqlparser::ast::DataType::{Int, Text};
 use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::Parser;
-use sqlparser::tokenizer::Token::Number;
+use sqlparser::parser::{Parser, ParserError};
 
 #[test]
 fn parse_mssql_identifiers() {

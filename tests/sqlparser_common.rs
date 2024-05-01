@@ -9680,3 +9680,12 @@ fn test_dictionary_syntax() {
         ]),
     )
 }
+
+#[test]
+fn parse_within_group() {
+    verified_expr("PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sales_amount)");
+    verified_expr(concat!(
+        "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sales_amount) ",
+        "OVER (PARTITION BY department)",
+    ));
+}

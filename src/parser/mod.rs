@@ -2382,6 +2382,9 @@ impl<'a> Parser<'a> {
             Token::HashMinus => Some(BinaryOperator::HashMinus),
             Token::AtQuestion => Some(BinaryOperator::AtQuestion),
             Token::AtAt => Some(BinaryOperator::AtAt),
+            Token::Question => Some(BinaryOperator::Question),
+            Token::QuestionAnd => Some(BinaryOperator::QuestionAnd),
+            Token::QuestionPipe => Some(BinaryOperator::QuestionPipe),
 
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
@@ -2878,7 +2881,10 @@ impl<'a> Parser<'a> {
             | Token::ArrowAt
             | Token::HashMinus
             | Token::AtQuestion
-            | Token::AtAt => Ok(Self::PG_OTHER_PREC),
+            | Token::AtAt
+            | Token::Question
+            | Token::QuestionAnd
+            | Token::QuestionPipe => Ok(Self::PG_OTHER_PREC),
             _ => Ok(0),
         }
     }

@@ -214,6 +214,27 @@ pub enum BinaryOperator {
     ///
     /// See <https://www.postgresql.org/docs/current/functions-json.html>.
     AtQuestion,
+    /// The `?` operator.
+    ///
+    /// On PostgreSQL, this operator is used to check whether a string exists as a top-level key
+    /// within the JSON value
+    ///
+    /// See <https://www.postgresql.org/docs/current/functions-json.html>.
+    Question,
+    /// The `?&` operator.
+    ///
+    /// On PostgreSQL, this operator is used to check whether all of the the indicated array
+    /// members exist as top-level keys.
+    ///
+    /// See <https://www.postgresql.org/docs/current/functions-json.html>.
+    QuestionAnd,
+    /// The `?|` operator.
+    ///
+    /// On PostgreSQL, this operator is used to check whether any of the the indicated array
+    /// members exist as top-level keys.
+    ///
+    /// See <https://www.postgresql.org/docs/current/functions-json.html>.
+    QuestionPipe,
     /// PostgreSQL-specific custom operator.
     ///
     /// See [CREATE OPERATOR](https://www.postgresql.org/docs/current/sql-createoperator.html)
@@ -269,6 +290,9 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::ArrowAt => f.write_str("<@"),
             BinaryOperator::HashMinus => f.write_str("#-"),
             BinaryOperator::AtQuestion => f.write_str("@?"),
+            BinaryOperator::Question => f.write_str("?"),
+            BinaryOperator::QuestionAnd => f.write_str("?&"),
+            BinaryOperator::QuestionPipe => f.write_str("?|"),
             BinaryOperator::PGCustomBinaryOperator(idents) => {
                 write!(f, "OPERATOR({})", display_separated(idents, "."))
             }

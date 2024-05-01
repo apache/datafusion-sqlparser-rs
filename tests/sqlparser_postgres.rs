@@ -2401,6 +2401,51 @@ fn test_json() {
         },
         select.selection.unwrap(),
     );
+
+    let sql = r#"SELECT info FROM orders WHERE info ? 'b'"#;
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            op: BinaryOperator::Question,
+            right: Box::new(Expr::Value(Value::SingleQuotedString("b".to_string()))),
+        },
+        select.selection.unwrap(),
+    );
+
+    let sql = r#"SELECT info FROM orders WHERE info ?& ARRAY['b', 'c']"#;
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            op: BinaryOperator::QuestionAnd,
+            right: Box::new(Expr::Array(Array {
+                elem: vec![
+                    Expr::Value(Value::SingleQuotedString("b".to_string())),
+                    Expr::Value(Value::SingleQuotedString("c".to_string()))
+                ],
+                named: true
+            }))
+        },
+        select.selection.unwrap(),
+    );
+
+    let sql = r#"SELECT info FROM orders WHERE info ?| ARRAY['b', 'c']"#;
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            op: BinaryOperator::QuestionPipe,
+            right: Box::new(Expr::Array(Array {
+                elem: vec![
+                    Expr::Value(Value::SingleQuotedString("b".to_string())),
+                    Expr::Value(Value::SingleQuotedString("c".to_string()))
+                ],
+                named: true
+            }))
+        },
+        select.selection.unwrap(),
+    );
 }
 
 #[test]

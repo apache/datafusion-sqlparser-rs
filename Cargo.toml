@@ -37,7 +37,7 @@ serde_json = { version = "1.0", optional = true }
 sqlparser_derive = { version = "0.2.0", path = "derive", optional = true }
 
 [dev-dependencies]
-simple_logger = "4.0"
+simple_logger = "5.0"
 matches = "0.1"
 pretty_assertions = "1"
 

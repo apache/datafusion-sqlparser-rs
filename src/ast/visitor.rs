@@ -515,7 +515,7 @@ where
 /// ```
 /// # use sqlparser::parser::Parser;
 /// # use sqlparser::dialect::GenericDialect;
-/// # use sqlparser::ast::{Expr, Function, FunctionArg, FunctionArgExpr, Ident, ObjectName, Value, visit_expressions_mut, visit_statements_mut};
+/// # use sqlparser::ast::*;
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT x, y FROM t";
 /// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
@@ -525,13 +525,15 @@ where
 ///     let old_expr = std::mem::replace(expr, Expr::Value(Value::Null));
 ///     *expr = Expr::Function(Function {
 ///           name: ObjectName(vec![Ident::new("f")]),
-///           args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],
+///           args: FunctionArguments::List(FunctionArgumentList {
+///               distinct: false,
+///               args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],
+///               order_by: vec![],
+///               null_treatment: None,
+///           }),
 ///           null_treatment: None,
 ///           filter: None,
 ///           over: None,
-///           distinct: false,
-///           special: false,
-///           order_by: vec![],
 ///           within_group: vec![],
 ///      });
 ///   }

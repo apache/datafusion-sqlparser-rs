@@ -13,15 +13,11 @@
 //! SQL Abstract Syntax Tree (AST) types
 #[cfg(not(feature = "std"))]
 use alloc::{
-    borrow::Cow,
     boxed::Box,
     format,
     string::{String, ToString},
     vec::Vec,
 };
-
-#[cfg(feature = "std")]
-use std::borrow::Cow;
 
 use core::fmt::{self, Display};
 
@@ -1408,35 +1404,6 @@ impl fmt::Display for NullTreatment {
             NullTreatment::IgnoreNulls => "IGNORE NULLS",
             NullTreatment::RespectNulls => "RESPECT NULLS",
         })
-    }
-}
-
-/// Specifies Ignore / Respect NULL within window functions.
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum NullTreatmentType {
-    /// The declaration is part of the function's arguments.
-    ///
-    /// ```sql
-    /// FIRST_VALUE(x IGNORE NULLS) OVER ()
-    /// ```
-    FunctionArg(NullTreatment),
-    /// The declaration occurs after the function call.
-    ///
-    /// ```sql
-    /// FIRST_VALUE(x) IGNORE NULLS OVER ()
-    /// ```
-    AfterFunction(NullTreatment),
-}
-
-impl Display for NullTreatmentType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let null_treatment = match self {
-            NullTreatmentType::FunctionArg(n) => n,
-            NullTreatmentType::AfterFunction(n) => n,
-        };
-        write!(f, "{null_treatment}")
     }
 }
 
@@ -4829,22 +4796,24 @@ impl fmt::Display for CloseCursor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Function {
     pub name: ObjectName,
-    pub args: Vec<FunctionArg>,
+    /// The arguments to the function, including any options specified withinthe
+    /// delimiting parentheses.
+    pub args: FunctionArguments,
     /// e.g. `x > 5` in `COUNT(x) FILTER (WHERE x > 5)`
     pub filter: Option<Box<Expr>>,
-    /// Specifies Ignore / Respect NULL within window functions.
+    /// Indicates how `NULL`s should be handled in the calculation.
     ///
+    /// Example:
+    /// ```plaintext
+    /// FIRST_VALUE( <expr> ) [ { IGNORE | RESPECT } NULLS ] OVER ...
+    /// ```
+    ///
+    /// Note: Some dialects specify this inside of the argument list instead.
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value)
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions/first_value)
-    pub null_treatment: Option<NullTreatmentType>,
+    pub null_treatment: Option<NullTreatment>,
+    /// The `OVER` clause, indicating a window function call.
     pub over: Option<WindowType>,
-    /// aggregate functions may specify eg `COUNT(DISTINCT x)`
-    pub distinct: bool,
-    /// Some functions must be called without trailing parentheses, for example Postgres
-    /// do it for current_catalog, current_schema, etc. This flags is used for formatting.
-    pub special: bool,
-    /// Required ordering for the function (if empty, there is no requirement).
-    pub order_by: Vec<OrderByExpr>,
     /// A clause used with certain aggregate functions to control the ordering
     /// within grouped sets before the function is applied.
     ///
@@ -4853,6 +4822,92 @@ pub struct Function {
     /// <aggregate_function>(expression) WITHIN GROUP (ORDER BY key [ASC | DESC], ...)
     /// ```
     pub within_group: Vec<OrderByExpr>,
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}", self.name, self.args)?;
+
+        if !self.within_group.is_empty() {
+            write!(
+                f,
+                " WITHIN GROUP (ORDER BY {})",
+                display_comma_separated(&self.within_group)
+            )?;
+        }
+
+        if let Some(filter_cond) = &self.filter {
+            write!(f, " FILTER (WHERE {filter_cond})")?;
+        }
+
+        if let Some(null_treatment) = &self.null_treatment {
+            write!(f, " {null_treatment}")?;
+        }
+
+        if let Some(o) = &self.over {
+            write!(f, " OVER {o}")?;
+        }
+
+        Ok(())
+    }
+}
+
+/// The arguments passed to a function call.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionArguments {
+    /// Used for special functions like `CURRENT_TIMESTAMP` that are invoked
+    /// without parentheses.
+    None,
+    /// On some dialects, a subquery can be passed without surrounding
+    /// parentheses if it's the sole argument to the function.
+    Subquery(Box<Query>),
+    /// A normal function argument list, including any clauses within it such as
+    /// `DISTINCT` or `ORDER BY`.
+    List(FunctionArgumentList),
+}
+
+impl fmt::Display for FunctionArguments {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FunctionArguments::None => Ok(()),
+            FunctionArguments::Subquery(query) => write!(f, "({})", query),
+            FunctionArguments::List(args) => write!(f, "({})", args),
+        }
+    }
+}
+
+/// This represents everything inside the parentheses when calling a function.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct FunctionArgumentList {
+    /// The `DISTINCT` keyword is used with aggregate functions to make them
+    /// consider only the unique values in the calculation, e.g. `COUNT(DISTINCT x)`.
+    pub distinct: bool,
+    /// The function arguments.
+    pub args: Vec<FunctionArg>,
+    /// Indicates how `NULL`s should be handled in the calculation.
+    pub null_treatment: Option<NullTreatment>,
+    /// Required ordering for the function (if empty, there is no requirement).
+    pub order_by: Vec<OrderByExpr>,
+}
+
+impl fmt::Display for FunctionArgumentList {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.distinct {
+            write!(f, "DISTINCT ")?;
+        }
+        write!(f, "{}", display_comma_separated(&self.args))?;
+        if !self.order_by.is_empty() {
+            write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
+        }
+        if let Some(null_treatment) = self.null_treatment {
+            write!(f, " {}", null_treatment)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -4871,56 +4926,6 @@ impl fmt::Display for AnalyzeFormat {
             AnalyzeFormat::GRAPHVIZ => "GRAPHVIZ",
             AnalyzeFormat::JSON => "JSON",
         })
-    }
-}
-
-impl fmt::Display for Function {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.special {
-            write!(f, "{}", self.name)?;
-        } else {
-            let order_by = if !self.order_by.is_empty() {
-                " ORDER BY "
-            } else {
-                ""
-            };
-            write!(
-                f,
-                "{}({}{}{order_by}{}{})",
-                self.name,
-                if self.distinct { "DISTINCT " } else { "" },
-                display_comma_separated(&self.args),
-                display_comma_separated(&self.order_by),
-                match self.null_treatment {
-                    Some(NullTreatmentType::FunctionArg(null_treatment)) => {
-                        Cow::from(format!(" {null_treatment}"))
-                    }
-                    _ => Cow::from(""),
-                }
-            )?;
-
-            if !self.within_group.is_empty() {
-                write!(
-                    f,
-                    " WITHIN GROUP (ORDER BY {})",
-                    display_comma_separated(&self.within_group)
-                )?;
-            }
-
-            if let Some(filter_cond) = &self.filter {
-                write!(f, " FILTER (WHERE {filter_cond})")?;
-            }
-
-            if let Some(NullTreatmentType::AfterFunction(null_treatment)) = &self.null_treatment {
-                write!(f, " {null_treatment}")?;
-            }
-
-            if let Some(o) = &self.over {
-                write!(f, " OVER {o}")?;
-            }
-        }
-
-        Ok(())
     }
 }
 

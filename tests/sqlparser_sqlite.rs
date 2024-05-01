@@ -332,9 +332,14 @@ fn parse_window_function_with_filter() {
             select.projection,
             vec![SelectItem::UnnamedExpr(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new(func_name)]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                    Expr::Identifier(Ident::new("x"))
-                ))],
+                args: FunctionArguments::List(FunctionArgumentList {
+                    distinct: false,
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                        Expr::Identifier(Ident::new("x"))
+                    ))],
+                    null_treatment: None,
+                    order_by: vec![],
+                }),
                 null_treatment: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
                     window_name: None,
@@ -343,9 +348,6 @@ fn parse_window_function_with_filter() {
                     window_frame: None,
                 })),
                 filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),
-                distinct: false,
-                special: false,
-                order_by: vec![],
                 within_group: vec![],
             }))]
         );

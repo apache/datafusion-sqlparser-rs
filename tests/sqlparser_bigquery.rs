@@ -1824,19 +1824,7 @@ fn parse_map_access_expr() {
                 MapAccessSyntax::Bracket,
             ),
             map_access_key(
-                Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("safe_offset")]),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        number("2"),
-                    )))],
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                    within_group: vec![],
-                }),
+                call("safe_offset", [Expr::Value(number("2"))]),
                 MapAccessSyntax::Bracket,
             ),
             map_access_key(

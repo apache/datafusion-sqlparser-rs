@@ -1041,13 +1041,15 @@ fn parse_select_count_wildcard() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
-            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: false,
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
+                null_treatment: None,
+                order_by: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
             within_group: vec![]
         }),
         expr_from_projection(only(&select.projection))
@@ -1061,17 +1063,19 @@ fn parse_select_count_distinct() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
-            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
-                op: UnaryOperator::Plus,
-                expr: Box::new(Expr::Identifier(Ident::new("x"))),
-            }))],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: true,
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
+                    op: UnaryOperator::Plus,
+                    expr: Box::new(Expr::Identifier(Ident::new("x"))),
+                }))],
+                null_treatment: None,
+                order_by: vec![]
+            }),
             null_treatment: None,
-            filter: None,
-            over: None,
-            distinct: true,
-            special: false,
-            order_by: vec![],
             within_group: vec![],
+            filter: None,
+            over: None
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -2143,13 +2147,15 @@ fn parse_select_having() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("COUNT")]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
+                args: FunctionArguments::List(FunctionArgumentList {
+                    distinct: false,
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
+                    null_treatment: None,
+                    order_by: vec![],
+                }),
                 null_treatment: None,
                 filter: None,
                 over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
                 within_group: vec![]
             })),
             op: BinaryOperator::Gt,
@@ -2171,7 +2177,12 @@ fn parse_select_qualify() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
-                args: vec![],
+                args: FunctionArguments::List(FunctionArgumentList {
+                    distinct: false,
+                    args: vec![],
+                    null_treatment: None,
+                    order_by: vec![],
+                }),
                 null_treatment: None,
                 filter: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
@@ -2184,9 +2195,6 @@ fn parse_select_qualify() {
                     }],
                     window_frame: None,
                 })),
-                distinct: false,
-                special: false,
-                order_by: vec![],
                 within_group: vec![]
             })),
             op: BinaryOperator::Eq,
@@ -2667,19 +2675,18 @@ fn parse_window_function_null_treatment_arg() {
             unreachable!()
         };
         assert_eq!(ObjectName(vec![Ident::new("FIRST_VALUE")]), actual.name);
-        assert!(actual.order_by.is_empty());
-        assert_eq!(1, actual.args.len());
+        let FunctionArguments::List(arg_list) = &actual.args else {
+            panic!("expected argument list")
+        };
+        assert!(arg_list.order_by.is_empty());
+        assert_eq!(1, arg_list.args.len());
         let FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(actual_expr))) =
-            &actual.args[0]
+            &arg_list.args[0]
         else {
             unreachable!()
         };
         assert_eq!(&Ident::new(expected_expr), actual_expr);
-        let Some(NullTreatmentType::FunctionArg(actual_null_treatment)) = actual.null_treatment
-        else {
-            unreachable!()
-        };
-        assert_eq!(expected_null_treatment, actual_null_treatment);
+        assert_eq!(Some(expected_null_treatment), arg_list.null_treatment);
     }
 
     let sql = "SELECT FIRST_VALUE(a ORDER BY b IGNORE NULLS) OVER () FROM t1";
@@ -4191,28 +4198,30 @@ fn parse_named_argument_function() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
-            args: vec![
-                FunctionArg::Named {
-                    name: Ident::new("a"),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "1".to_owned()
-                    ))),
-                    operator: FunctionArgOperator::RightArrow
-                },
-                FunctionArg::Named {
-                    name: Ident::new("b"),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "2".to_owned()
-                    ))),
-                    operator: FunctionArgOperator::RightArrow
-                },
-            ],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: false,
+                args: vec![
+                    FunctionArg::Named {
+                        name: Ident::new("a"),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "1".to_owned()
+                        ))),
+                        operator: FunctionArgOperator::RightArrow
+                    },
+                    FunctionArg::Named {
+                        name: Ident::new("b"),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "2".to_owned()
+                        ))),
+                        operator: FunctionArgOperator::RightArrow
+                    },
+                ],
+                null_treatment: None,
+                order_by: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
             within_group: vec![]
         }),
         expr_from_projection(only(&select.projection))
@@ -4228,28 +4237,30 @@ fn parse_named_argument_function_with_eq_operator() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
-            args: vec![
-                FunctionArg::Named {
-                    name: Ident::new("a"),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "1".to_owned()
-                    ))),
-                    operator: FunctionArgOperator::Equals
-                },
-                FunctionArg::Named {
-                    name: Ident::new("b"),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "2".to_owned()
-                    ))),
-                    operator: FunctionArgOperator::Equals
-                },
-            ],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: false,
+                args: vec![
+                    FunctionArg::Named {
+                        name: Ident::new("a"),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "1".to_owned()
+                        ))),
+                        operator: FunctionArgOperator::Equals
+                    },
+                    FunctionArg::Named {
+                        name: Ident::new("b"),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "2".to_owned()
+                        ))),
+                        operator: FunctionArgOperator::Equals
+                    },
+                ],
+                null_treatment: None,
+                order_by: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
             within_group: vec![],
         }),
         expr_from_projection(only(&select.projection))
@@ -4299,7 +4310,12 @@ fn parse_window_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
-            args: vec![],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: false,
+                args: vec![],
+                null_treatment: None,
+                order_by: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: Some(WindowType::WindowSpec(WindowSpec {
@@ -4312,9 +4328,6 @@ fn parse_window_functions() {
                 }],
                 window_frame: None,
             })),
-            distinct: false,
-            special: false,
-            order_by: vec![],
             within_group: vec![],
         }),
         expr_from_projection(&select.projection[0])
@@ -4426,21 +4439,23 @@ fn test_parse_named_window() {
                         value: "MIN".to_string(),
                         quote_style: None,
                     }]),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident {
-                            value: "c12".to_string(),
-                            quote_style: None,
-                        }),
-                    ))],
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        distinct: false,
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::Identifier(Ident {
+                                value: "c12".to_string(),
+                                quote_style: None,
+                            }),
+                        ))],
+                        null_treatment: None,
+                        order_by: vec![],
+                    }),
                     null_treatment: None,
                     filter: None,
                     over: Some(WindowType::NamedWindow(Ident {
                         value: "window1".to_string(),
                         quote_style: None,
                     })),
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
                     within_group: vec![],
                 }),
                 alias: Ident {
@@ -4454,21 +4469,23 @@ fn test_parse_named_window() {
                         value: "MAX".to_string(),
                         quote_style: None,
                     }]),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident {
-                            value: "c12".to_string(),
-                            quote_style: None,
-                        }),
-                    ))],
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        distinct: false,
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::Identifier(Ident {
+                                value: "c12".to_string(),
+                                quote_style: None,
+                            }),
+                        ))],
+                        null_treatment: None,
+                        order_by: vec![],
+                    }),
                     null_treatment: None,
                     filter: None,
                     over: Some(WindowType::NamedWindow(Ident {
                         value: "window2".to_string(),
                         quote_style: None,
                     })),
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
                     within_group: vec![],
                 }),
                 alias: Ident {
@@ -5116,20 +5133,13 @@ fn parse_table_function() {
 
     match only(select.from).relation {
         TableFactor::TableFunction { expr, alias } => {
-            let expected_expr = Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("FUN")]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    Value::SingleQuotedString("1".to_owned()),
-                )))],
-                null_treatment: None,
-                filter: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-                within_group: vec![],
-            });
-            assert_eq!(expr, expected_expr);
+            assert_eq!(
+                call(
+                    "FUN",
+                    [Expr::Value(Value::SingleQuotedString("1".to_owned()))],
+                ),
+                expr
+            );
             assert_eq!(alias, table_alias("a"))
         }
         _ => panic!("Expecting TableFactor::TableFunction"),
@@ -7910,13 +7920,15 @@ fn parse_time_functions() {
         let select = verified_only_select(&sql);
         let select_localtime_func_call_ast = Function {
             name: ObjectName(vec![Ident::new(func_name)]),
-            args: vec![],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: false,
+                args: vec![],
+                null_treatment: None,
+                order_by: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
             within_group: vec![],
         };
         assert_eq!(
@@ -7927,7 +7939,7 @@ fn parse_time_functions() {
         // Validating Parenthesis
         let sql_without_parens = format!("SELECT {}", func_name);
         let mut ast_without_parens = select_localtime_func_call_ast;
-        ast_without_parens.special = true;
+        ast_without_parens.args = FunctionArguments::None;
         assert_eq!(
             &Expr::Function(ast_without_parens),
             expr_from_projection(&verified_only_select(&sql_without_parens).projection[0])
@@ -8466,19 +8478,13 @@ fn parse_pivot_table() {
 
     fn expected_function(table: &'static str, alias: Option<&'static str>) -> ExprWithAlias {
         ExprWithAlias {
-            expr: Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("SUM")]),
-                args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                    Expr::CompoundIdentifier(vec![Ident::new(table), Ident::new("amount")]),
-                ))]),
-                null_treatment: None,
-                filter: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-                within_group: vec![],
-            }),
+            expr: call(
+                "SUM",
+                [Expr::CompoundIdentifier(vec![
+                    Ident::new(table),
+                    Ident::new("amount"),
+                ])],
+            ),
             alias: alias.map(Ident::new),
         }
     }
@@ -8650,19 +8656,7 @@ fn parse_pivot_unpivot_table() {
                 }),
             }),
             aggregate_functions: vec![ExprWithAlias {
-                expr: Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("sum")]),
-                    args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("population"))
-                    ))]),
-                    null_treatment: None,
-                    filter: None,
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                    within_group: vec![],
-                }),
+                expr: call("sum", [Expr::Identifier(Ident::new("population"))]),
                 alias: None
             }],
             value_column: vec![Ident::new("year")],
@@ -8788,16 +8782,18 @@ fn parse_call() {
     assert_eq!(
         verified_stmt("CALL my_procedure('a')"),
         Statement::Call(Function {
-            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                Value::SingleQuotedString("a".to_string())
-            ))),],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: false,
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                    Value::SingleQuotedString("a".to_string())
+                )))],
+                order_by: vec![],
+                null_treatment: None,
+            }),
             name: ObjectName(vec![Ident::new("my_procedure")]),
             filter: None,
             null_treatment: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
             within_group: vec![],
         })
     );
@@ -9551,19 +9547,7 @@ fn test_select_wildcard_with_replace() {
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_replace: Some(ReplaceSelectItem {
             items: vec![Box::new(ReplaceSelectElement {
-                expr: Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("lower")]),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("city")),
-                    ))],
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                    within_group: vec![],
-                }),
+                expr: call("lower", [Expr::Identifier(Ident::new("city"))]),
                 column_name: Ident::new("city"),
                 as_keyword: true,
             })],

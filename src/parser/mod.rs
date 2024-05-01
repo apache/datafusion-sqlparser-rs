@@ -208,13 +208,6 @@ impl From<bool> for MatchedTrailingBracket {
     }
 }
 
-/// Output of the [`Parser::parse_window_function_args`] function.
-struct ParseWindowFunctionArgsOutput {
-    args: Vec<FunctionArg>,
-    order_by: Vec<OrderByExpr>,
-    null_treatment: Option<NullTreatment>,
-}
-
 /// Options that control how the [`Parser`] parses SQL text
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParserOptions {
@@ -1006,13 +999,10 @@ impl<'a> Parser<'a> {
                 {
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
-                        args: vec![],
+                        args: FunctionArguments::None,
                         null_treatment: None,
                         filter: None,
                         over: None,
-                        distinct: false,
-                        special: true,
-                        order_by: vec![],
                         within_group: vec![],
                     }))
                 }
@@ -1236,12 +1226,28 @@ impl<'a> Parser<'a> {
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_all_or_distinct()?.is_some();
-        let ParseWindowFunctionArgsOutput {
-            args,
-            order_by,
-            null_treatment,
-        } = self.parse_window_function_args()?;
+
+        // Snowflake permits a subquery to be passed as an argument without
+        // an enclosing set of parens if it's the only argument.
+        if dialect_of!(self is SnowflakeDialect)
+            && self
+                .parse_one_of_keywords(&[Keyword::WITH, Keyword::SELECT])
+                .is_some()
+        {
+            self.prev_token();
+            let subquery = self.parse_boxed_query()?;
+            self.expect_token(&Token::RParen)?;
+            return Ok(Expr::Function(Function {
+                name,
+                args: FunctionArguments::Subquery(subquery),
+                filter: None,
+                null_treatment: None,
+                over: None,
+                within_group: vec![],
+            }));
+        }
+
+        let args = self.parse_function_argument_list()?;
 
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
             self.expect_token(&Token::LParen)?;
@@ -1267,12 +1273,12 @@ impl<'a> Parser<'a> {
 
         // Syntax for null treatment shows up either in the args list
         // or after the function call, but not both.
-        let mut null_treatment = null_treatment.map(NullTreatmentType::FunctionArg);
-        if null_treatment.is_none() {
-            null_treatment = self
-                .parse_null_treatment()?
-                .map(NullTreatmentType::AfterFunction);
-        }
+        let null_treatment = if args.null_treatment.is_none() {
+            self.parse_null_treatment()?
+        } else {
+            None
+        };
+
         let over = if self.parse_keyword(Keyword::OVER) {
             if self.consume_token(&Token::LParen) {
                 let window_spec = self.parse_window_spec()?;
@@ -1283,15 +1289,13 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
         Ok(Expr::Function(Function {
             name,
-            args,
+            args: FunctionArguments::List(args),
             null_treatment,
             filter,
             over,
-            distinct,
-            special: false,
-            order_by,
             within_group,
         }))
     }
@@ -1313,25 +1317,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_time_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
-        let (args, order_by, null_treatment, special) = if self.consume_token(&Token::LParen) {
-            let ParseWindowFunctionArgsOutput {
-                args,
-                order_by,
-                null_treatment,
-            } = self.parse_window_function_args()?;
-            (args, order_by, null_treatment, false)
+        let args = if self.consume_token(&Token::LParen) {
+            FunctionArguments::List(self.parse_function_argument_list()?)
         } else {
-            (vec![], vec![], None, true)
+            FunctionArguments::None
         };
         Ok(Expr::Function(Function {
             name,
             args,
-            null_treatment: null_treatment.map(NullTreatmentType::FunctionArg),
             filter: None,
             over: None,
-            distinct: false,
-            special,
-            order_by,
+            null_treatment: None,
             within_group: vec![],
         }))
     }
@@ -6145,13 +6141,10 @@ impl<'a> Parser<'a> {
         } else {
             Ok(Statement::Call(Function {
                 name: object_name,
-                args: vec![],
+                args: FunctionArguments::None,
                 over: None,
-                distinct: false,
                 filter: None,
                 null_treatment: None,
-                special: true,
-                order_by: vec![],
                 within_group: vec![],
             }))
         }
@@ -9468,53 +9461,38 @@ impl<'a> Parser<'a> {
     /// FIRST_VALUE(x ORDER BY 1,2,3);
     /// FIRST_VALUE(x IGNORE NULL);
     /// ```
-    fn parse_window_function_args(&mut self) -> Result<ParseWindowFunctionArgsOutput, ParserError> {
+    fn parse_function_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
         if self.consume_token(&Token::RParen) {
-            Ok(ParseWindowFunctionArgsOutput {
+            return Ok(FunctionArgumentList {
+                distinct: false,
                 args: vec![],
-                order_by: vec![],
                 null_treatment: None,
-            })
-        } else {
-            // Snowflake permits a subquery to be passed as an argument without
-            // an enclosing set of parens if it's the only argument.
-            if dialect_of!(self is SnowflakeDialect)
-                && self
-                    .parse_one_of_keywords(&[Keyword::WITH, Keyword::SELECT])
-                    .is_some()
-            {
-                self.prev_token();
-                let subquery = self.parse_boxed_query()?;
-                self.expect_token(&Token::RParen)?;
-                return Ok(ParseWindowFunctionArgsOutput {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::from(Expr::Subquery(
-                        subquery,
-                    )))],
-                    order_by: vec![],
-                    null_treatment: None,
-                });
-            }
-
-            let args = self.parse_comma_separated(Parser::parse_function_args)?;
-            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                self.parse_comma_separated(Parser::parse_order_by_expr)?
-            } else {
-                Default::default()
-            };
-
-            let null_treatment = if self.dialect.supports_window_function_null_treatment_arg() {
-                self.parse_null_treatment()?
-            } else {
-                None
-            };
-
-            self.expect_token(&Token::RParen)?;
-            Ok(ParseWindowFunctionArgsOutput {
-                args,
-                order_by,
-                null_treatment,
-            })
+                order_by: vec![],
+            });
         }
+
+        let distinct = self.parse_all_or_distinct()?.is_some();
+        let args = self.parse_comma_separated(Parser::parse_function_args)?;
+
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
+        } else {
+            Default::default()
+        };
+
+        let null_treatment = if self.dialect.supports_window_function_null_treatment_arg() {
+            self.parse_null_treatment()?
+        } else {
+            None
+        };
+
+        self.expect_token(&Token::RParen)?;
+        Ok(FunctionArgumentList {
+            distinct,
+            args,
+            null_treatment,
+            order_by,
+        })
     }
 
     /// Parse a comma-delimited list of projections after SELECT

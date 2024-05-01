@@ -2503,21 +2503,23 @@ fn test_composite_value() {
                     Ident::new("information_schema"),
                     Ident::new("_pg_expandarray")
                 ]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
-                    Array {
-                        elem: vec![
-                            Expr::Value(Value::SingleQuotedString("i".to_string())),
-                            Expr::Value(Value::SingleQuotedString("i".to_string())),
-                        ],
-                        named: true
-                    }
-                )))],
+                args: FunctionArguments::List(FunctionArgumentList {
+                    distinct: false,
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
+                        Array {
+                            elem: vec![
+                                Expr::Value(Value::SingleQuotedString("i".to_string())),
+                                Expr::Value(Value::SingleQuotedString("i".to_string())),
+                            ],
+                            named: true
+                        }
+                    )))],
+                    null_treatment: None,
+                    order_by: vec![],
+                }),
                 null_treatment: None,
                 filter: None,
                 over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
                 within_group: vec![],
             }))))
         }),
@@ -2728,13 +2730,10 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_CATALOG")]),
-            args: vec![],
+            args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: true,
-            order_by: vec![],
             within_group: vec![],
         }),
         expr_from_projection(&select.projection[0])
@@ -2742,13 +2741,10 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_USER")]),
-            args: vec![],
+            args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: true,
-            order_by: vec![],
             within_group: vec![],
         }),
         expr_from_projection(&select.projection[1])
@@ -2756,13 +2752,10 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("SESSION_USER")]),
-            args: vec![],
+            args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: true,
-            order_by: vec![],
             within_group: vec![],
         }),
         expr_from_projection(&select.projection[2])
@@ -2770,13 +2763,10 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("USER")]),
-            args: vec![],
+            args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: true,
-            order_by: vec![],
             within_group: vec![],
         }),
         expr_from_projection(&select.projection[3])
@@ -3223,13 +3213,15 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
-            args: vec![],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: false,
+                args: vec![],
+                null_treatment: None,
+                order_by: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
             within_group: vec![],
         }),
         expr_from_projection(&select.projection[1]),

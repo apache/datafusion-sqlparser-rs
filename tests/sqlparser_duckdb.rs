@@ -486,28 +486,30 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
-            args: vec![
-                FunctionArg::Named {
-                    name: Ident::new("a"),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "1".to_owned()
-                    ))),
-                    operator: FunctionArgOperator::Assignment
-                },
-                FunctionArg::Named {
-                    name: Ident::new("b"),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "2".to_owned()
-                    ))),
-                    operator: FunctionArgOperator::Assignment
-                },
-            ],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: false,
+                args: vec![
+                    FunctionArg::Named {
+                        name: Ident::new("a"),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "1".to_owned()
+                        ))),
+                        operator: FunctionArgOperator::Assignment
+                    },
+                    FunctionArg::Named {
+                        name: Ident::new("b"),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "2".to_owned()
+                        ))),
+                        operator: FunctionArgOperator::Assignment
+                    },
+                ],
+                null_treatment: None,
+                order_by: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
             within_group: vec![],
         }),
         expr_from_projection(only(&select.projection))

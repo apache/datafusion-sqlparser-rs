@@ -353,13 +353,15 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
-            args: vec![],
+            args: FunctionArguments::List(FunctionArgumentList {
+                distinct: false,
+                args: vec![],
+                null_treatment: None,
+                order_by: vec![]
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
             within_group: vec![],
         }),
         expr_from_projection(&select.projection[1]),

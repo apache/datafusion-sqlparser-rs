@@ -4883,9 +4883,8 @@ impl fmt::Display for FunctionArguments {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FunctionArgumentList {
-    /// The `DISTINCT` keyword is used with aggregate functions to make them
-    /// consider only the unique values in the calculation, e.g. `COUNT(DISTINCT x)`.
-    pub distinct: bool,
+    /// `[ ALL | DISTINCT ]
+    pub duplicate_treatment: Option<DuplicateTreatment>,
     /// The function arguments.
     pub args: Vec<FunctionArg>,
     /// Indicates how `NULL`s should be handled in the calculation.
@@ -4896,8 +4895,8 @@ pub struct FunctionArgumentList {
 
 impl fmt::Display for FunctionArgumentList {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.distinct {
-            write!(f, "DISTINCT ")?;
+        if let Some(duplicate_treatment) = self.duplicate_treatment {
+            write!(f, "{} ", duplicate_treatment)?;
         }
         write!(f, "{}", display_comma_separated(&self.args))?;
         if !self.order_by.is_empty() {
@@ -4907,6 +4906,25 @@ impl fmt::Display for FunctionArgumentList {
             write!(f, " {}", null_treatment)?;
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DuplicateTreatment {
+    /// Perform the calculation only unique values.
+    Distinct,
+    /// Retain all duplicate values (the default).
+    All,
+}
+
+impl fmt::Display for DuplicateTreatment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DuplicateTreatment::Distinct => write!(f, "DISTINCT"),
+            DuplicateTreatment::All => write!(f, "ALL"),
+        }
     }
 }
 

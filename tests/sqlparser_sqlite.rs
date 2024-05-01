@@ -333,7 +333,7 @@ fn parse_window_function_with_filter() {
             vec![SelectItem::UnnamedExpr(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new(func_name)]),
                 args: FunctionArguments::List(FunctionArgumentList {
-                    distinct: false,
+                    duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                         Expr::Identifier(Ident::new("x"))
                     ))],

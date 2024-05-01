@@ -487,7 +487,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
             args: FunctionArguments::List(FunctionArgumentList {
-                distinct: false,
+                duplicate_treatment: None,
                 args: vec![
                     FunctionArg::Named {
                         name: Ident::new("a"),

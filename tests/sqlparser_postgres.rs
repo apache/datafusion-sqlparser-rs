@@ -2504,7 +2504,7 @@ fn test_composite_value() {
                     Ident::new("_pg_expandarray")
                 ]),
                 args: FunctionArguments::List(FunctionArgumentList {
-                    distinct: false,
+                    duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
                         Array {
                             elem: vec![
@@ -3214,7 +3214,7 @@ fn parse_delimited_identifiers() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             args: FunctionArguments::List(FunctionArgumentList {
-                distinct: false,
+                duplicate_treatment: None,
                 args: vec![],
                 null_treatment: None,
                 order_by: vec![],

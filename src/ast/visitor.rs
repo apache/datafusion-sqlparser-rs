@@ -526,7 +526,7 @@ where
 ///     *expr = Expr::Function(Function {
 ///           name: ObjectName(vec![Ident::new("f")]),
 ///           args: FunctionArguments::List(FunctionArgumentList {
-///               distinct: false,
+///               duplicate_treatment: None,
 ///               args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],
 ///               order_by: vec![],
 ///               null_treatment: None,

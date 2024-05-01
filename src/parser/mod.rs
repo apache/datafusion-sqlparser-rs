@@ -9464,14 +9464,14 @@ impl<'a> Parser<'a> {
     fn parse_function_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
         if self.consume_token(&Token::RParen) {
             return Ok(FunctionArgumentList {
-                distinct: false,
+                duplicate_treatment: None,
                 args: vec![],
                 null_treatment: None,
                 order_by: vec![],
             });
         }
 
-        let distinct = self.parse_all_or_distinct()?.is_some();
+        let duplicate_treatment = self.parse_duplicate_treatment()?;
         let args = self.parse_comma_separated(Parser::parse_function_args)?;
 
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
@@ -9488,11 +9488,24 @@ impl<'a> Parser<'a> {
 
         self.expect_token(&Token::RParen)?;
         Ok(FunctionArgumentList {
-            distinct,
+            duplicate_treatment,
             args,
             null_treatment,
             order_by,
         })
+    }
+
+    fn parse_duplicate_treatment(&mut self) -> Result<Option<DuplicateTreatment>, ParserError> {
+        let loc = self.peek_token().location;
+        match (
+            self.parse_keyword(Keyword::ALL),
+            self.parse_keyword(Keyword::DISTINCT),
+        ) {
+            (true, false) => Ok(Some(DuplicateTreatment::All)),
+            (false, true) => Ok(Some(DuplicateTreatment::Distinct)),
+            (false, false) => Ok(None),
+            (true, true) => parser_err!("Cannot specify both ALL and DISTINCT".to_string(), loc),
+        }
     }
 
     /// Parse a comma-delimited list of projections after SELECT

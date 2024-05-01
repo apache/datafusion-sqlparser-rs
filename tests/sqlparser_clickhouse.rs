@@ -183,7 +183,7 @@ fn parse_delimited_identifiers() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             args: FunctionArguments::List(FunctionArgumentList {
-                distinct: false,
+                duplicate_treatment: None,
                 args: vec![],
                 null_treatment: None,
                 order_by: vec![]

@@ -323,7 +323,7 @@ pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
     Expr::Function(Function {
         name: ObjectName(vec![Ident::new(function)]),
         args: FunctionArguments::List(FunctionArgumentList {
-            distinct: false,
+            duplicate_treatment: None,
             args: args
                 .into_iter()
                 .map(|arg| FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)))

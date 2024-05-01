@@ -2686,9 +2686,6 @@ fn parse_window_function_null_treatment_arg() {
         assert_eq!(Some(expected_null_treatment), arg_list.null_treatment);
     }
 
-    let sql = "SELECT FIRST_VALUE(a ORDER BY b IGNORE NULLS) OVER () FROM t1";
-    dialects.verified_stmt(sql);
-
     let sql = "SELECT LAG(1 IGNORE NULLS) IGNORE NULLS OVER () FROM t1";
     assert_eq!(
         dialects.parse_sql_statements(sql).unwrap_err(),

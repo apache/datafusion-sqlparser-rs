@@ -1,7 +1,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
 
-use crate::ast::WithSpan;
+use crate::ast::{SortKey, WithSpan};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    ColumnDef, EngineSpec, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName,
-    OnCommit, Query, SqlOption, Statement, TableConstraint,
+    ColumnDef, DistributionStyle, EngineSpec, Expr, FileFormat, HiveDistributionStyle, HiveFormat,
+    Ident, ObjectName, OnCommit, Query, SqlOption, Statement, TableConstraint,
 };
 use crate::parser::ParserError;
 
@@ -58,6 +58,9 @@ pub struct CreateTableBuilder {
     pub constraints: Vec<TableConstraint>,
     pub hive_distribution: HiveDistributionStyle,
     pub hive_formats: Option<HiveFormat>,
+    pub dist_style: Option<DistributionStyle>,
+    pub dist_key: Option<WithSpan<Ident>>,
+    pub sort_key: Option<SortKey>,
     pub table_options: Vec<SqlOption>,
     pub table_properties: Vec<SqlOption>,
     pub with_options: Vec<SqlOption>,
@@ -98,6 +101,9 @@ impl CreateTableBuilder {
             constraints: vec![],
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
+            dist_style: None,
+            dist_key: None,
+            sort_key: None,
             table_options: vec![],
             table_properties: vec![],
             with_options: vec![],
@@ -171,6 +177,21 @@ impl CreateTableBuilder {
 
     pub fn hive_formats(mut self, hive_formats: Option<HiveFormat>) -> Self {
         self.hive_formats = hive_formats;
+        self
+    }
+
+    pub fn dist_style(mut self, dist_style: Option<DistributionStyle>) -> Self {
+        self.dist_style = dist_style;
+        self
+    }
+
+    pub fn dist_key(mut self, dist_key: Option<WithSpan<Ident>>) -> Self {
+        self.dist_key = dist_key;
+        self
+    }
+
+    pub fn sort_key(mut self, sort_key: Option<SortKey>) -> Self {
+        self.sort_key = sort_key;
         self
     }
 
@@ -305,6 +326,9 @@ impl CreateTableBuilder {
             constraints: self.constraints,
             hive_distribution: self.hive_distribution,
             hive_formats: self.hive_formats,
+            dist_style: self.dist_style,
+            dist_key: self.dist_key,
+            sort_key: self.sort_key,
             table_options: self.table_options,
             table_properties: self.table_properties,
             with_options: self.with_options,
@@ -352,6 +376,9 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 constraints,
                 hive_distribution,
                 hive_formats,
+                dist_style,
+                dist_key,
+                sort_key,
                 table_options,
                 table_properties,
                 with_options,
@@ -388,6 +415,9 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 constraints,
                 hive_distribution,
                 hive_formats,
+                dist_style,
+                dist_key,
+                sort_key,
                 table_options,
                 table_properties,
                 with_options,

@@ -363,3 +363,9 @@ fn test_escape_string() {
     redshift_unescaped().verified_stmt(r#"SELECT 'I\\\'m fine'"#);
     redshift_unescaped().verified_stmt(r#"SELECT '[\'\\[\\]]'"#);
 }
+
+#[test]
+fn test_distribution_styles() {
+    let sql = "CREATE TABLE foo (id VARCHAR(32)) DISTSTYLE KEY DISTKEY(id) COMPOUND SORTKEY(id)";
+    redshift().verified_stmt(sql);
+}

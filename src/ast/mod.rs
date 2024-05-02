@@ -1643,6 +1643,9 @@ pub enum Statement {
         constraints: Vec<TableConstraint>,
         hive_distribution: HiveDistributionStyle,
         hive_formats: Option<HiveFormat>,
+        dist_style: Option<DistributionStyle>,
+        dist_key: Option<WithSpan<Ident>>,
+        sort_key: Option<SortKey>,
         table_properties: Vec<SqlOption>,
         table_options: Vec<SqlOption>,
         with_options: Vec<SqlOption>,
@@ -2752,6 +2755,9 @@ impl fmt::Display for Statement {
                 transient,
                 hive_distribution,
                 hive_formats,
+                dist_style,
+                dist_key,
+                sort_key,
                 external,
                 global,
                 temporary,
@@ -2819,6 +2825,22 @@ impl fmt::Display for Statement {
                 } else if query.is_none() && like.is_none() && clone.is_none() {
                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
                     write!(f, " ()")?;
+                }
+
+                if let Some(dist_style) = dist_style {
+                    write!(f, " DISTSTYLE {style}", style = dist_style)?;
+                }
+
+                if let Some(dist_key) = dist_key {
+                    write!(f, " DISTKEY({dist_key})")?;
+                }
+
+                if let Some(SortKey { compound, columns }) = sort_key {
+                    if *compound {
+                        write!(f, " COMPOUND SORTKEY({})", display_comma_separated(columns))?;
+                    } else {
+                        write!(f, " SORTKEY({})", display_comma_separated(columns))?;
+                    }
                 }
 
                 if let Some(using) = using {
@@ -4354,6 +4376,35 @@ impl fmt::Display for KillType {
             KillType::Mutation => "MUTATION",
         })
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DistributionStyle {
+    Auto,
+    Even,
+    Key,
+    All,
+}
+
+impl fmt::Display for DistributionStyle {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            DistributionStyle::Auto => "AUTO",
+            DistributionStyle::Even => "EVEN",
+            DistributionStyle::Key => "KEY",
+            DistributionStyle::All => "ALL",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SortKey {
+    pub compound: bool,
+    pub columns: Vec<WithSpan<Ident>>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

@@ -4082,6 +4082,48 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // Redshift allows specifying DISTSTYLE after column definitions
+        let dist_style = if self.parse_keywords(&[Keyword::DISTSTYLE]) {
+            match self.parse_one_of_keywords(&[
+                Keyword::EVEN,
+                Keyword::ALL,
+                Keyword::AUTO,
+                Keyword::KEY,
+            ]) {
+                Some(Keyword::EVEN) => Some(DistributionStyle::Even),
+                Some(Keyword::ALL) => Some(DistributionStyle::All),
+                Some(Keyword::AUTO) => Some(DistributionStyle::Auto),
+                Some(Keyword::KEY) => Some(DistributionStyle::Key),
+                _ => self.expected("KEY, EVEN, ALL or AUTO", self.peek_token())?,
+            }
+        } else {
+            None
+        };
+
+        // Redshift allows specifying DISTKEY after column definitions
+        let dist_key = if self.parse_keywords(&[Keyword::DISTKEY]) {
+            self.expect_token(&Token::LParen)?;
+            let key = self.parse_identifier(false)?;
+            self.expect_token(&Token::RParen)?;
+            Some(key)
+        } else {
+            None
+        };
+
+        // Redshift allows specifying SORTKEY after column definitions
+        let compound_sort_key = self.parse_keywords(&[Keyword::COMPOUND]);
+        let sort_key = if self.parse_keywords(&[Keyword::SORTKEY]) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(|p| p.parse_identifier(false))?;
+            self.expect_token(&Token::RParen)?;
+            Some(SortKey {
+                compound: compound_sort_key,
+                columns,
+            })
+        } else {
+            None
+        };
+
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
@@ -4269,6 +4311,9 @@ impl<'a> Parser<'a> {
             .transient(transient)
             .hive_distribution(hive_distribution)
             .hive_formats(Some(hive_formats))
+            .dist_style(dist_style)
+            .dist_key(dist_key)
+            .sort_key(sort_key)
             .global(global)
             .query(query)
             .without_rowid(without_rowid)

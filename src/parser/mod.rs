@@ -812,12 +812,20 @@ impl<'a> Parser<'a> {
                 Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(false),
                 Keyword::EXTRACT => self.parse_extract_expr(),
-                Keyword::CEIL => self.parse_ceil_floor_expr(true),
-                Keyword::FLOOR => self.parse_ceil_floor_expr(false),
+                Keyword::CEIL if self.peek_token().token == Token::LParen => {
+                    self.parse_ceil_floor_expr(true)
+                }
+                Keyword::FLOOR if self.peek_token().token == Token::LParen => {
+                    self.parse_ceil_floor_expr(false)
+                }
                 Keyword::POSITION if self.peek_token().token == Token::LParen => {
                     self.parse_position_expr()
                 }
-                Keyword::SUBSTRING => self.parse_substring_expr(),
+                Keyword::SUBSTR | Keyword::SUBSTRING
+                    if self.peek_token().token == Token::LParen =>
+                {
+                    self.parse_substring_expr()
+                }
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL
@@ -834,7 +842,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::ARRAY
                     if self.peek_token() == Token::LParen
-                        && !dialect_of!(self is ClickHouseDialect) =>
+                        && !dialect_of!(self is ClickHouseDialect | DatabricksDialect) =>
                 {
                     self.expect_token(&Token::LParen)?;
                     self.parse_array_subquery()
@@ -843,7 +851,8 @@ impl<'a> Parser<'a> {
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
                 }
-                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect | DatabricksDialect) =>
+                {
                     self.prev_token();
                     self.parse_bigquery_struct_literal()
                 }
@@ -866,7 +875,7 @@ impl<'a> Parser<'a> {
                         if self.consume_token(&Token::LParen) {
                             self.prev_token();
                             let function = self.parse_function(ObjectName(id_parts))?;
-                            if dialect_of!(self is BigQueryDialect)
+                            if dialect_of!(self is BigQueryDialect | DatabricksDialect)
                                 && self.consume_token(&Token::Period)
                             {
                                 Ok(Expr::JsonAccess {
@@ -1421,36 +1430,47 @@ impl<'a> Parser<'a> {
                 trim_where = Some(self.parse_trim_where()?);
             }
         }
-        let expr = self.parse_expr()?;
         if self.parse_keyword(Keyword::FROM) {
-            let trim_what = Box::new(expr);
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
             Ok(Expr::Trim {
                 expr: Box::new(expr),
                 trim_where,
-                trim_what: Some(trim_what),
-                trim_characters: None,
-            })
-        } else if self.consume_token(&Token::Comma)
-            && dialect_of!(self is SnowflakeDialect | BigQueryDialect)
-        {
-            let characters = self.parse_comma_separated(Parser::parse_expr)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(Expr::Trim {
-                expr: Box::new(expr),
-                trim_where: None,
                 trim_what: None,
-                trim_characters: Some(characters),
+                trim_characters: None,
             })
         } else {
-            self.expect_token(&Token::RParen)?;
-            Ok(Expr::Trim {
-                expr: Box::new(expr),
-                trim_where,
-                trim_what: None,
-                trim_characters: None,
-            })
+            let expr = self.parse_expr()?;
+            if self.parse_keyword(Keyword::FROM) {
+                let trim_what = Box::new(expr);
+                let expr = self.parse_expr()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Trim {
+                    expr: Box::new(expr),
+                    trim_where,
+                    trim_what: Some(trim_what),
+                    trim_characters: None,
+                })
+            } else if self.consume_token(&Token::Comma)
+                && dialect_of!(self is SnowflakeDialect | BigQueryDialect | RedshiftSqlDialect)
+            {
+                let characters = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Trim {
+                    expr: Box::new(expr),
+                    trim_where: None,
+                    trim_what: None,
+                    trim_characters: Some(characters),
+                })
+            } else {
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Trim {
+                    expr: Box::new(expr),
+                    trim_where,
+                    trim_what: None,
+                    trim_characters: None,
+                })
+            }
         }
     }
 
@@ -1861,6 +1881,33 @@ impl<'a> Parser<'a> {
             StructField {
                 field_name,
                 field_type,
+                colon: false,
+                options,
+            },
+            trailing_bracket,
+        ))
+    }
+
+    /// Parse a field definition in a BigQuery struct.
+    /// Syntax:
+    ///
+    /// ```sql
+    /// [field_name] field_type
+    /// ```
+    fn parse_databricks_query_struct_field_def(
+        &mut self,
+    ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
+        let field_name: WithSpan<Ident> = self.parse_identifier(false)?;
+        self.expect_token(&Token::Colon)?;
+
+        let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
+        let options = self.parse_options(Keyword::OPTIONS)?;
+
+        Ok((
+            StructField {
+                field_name: Some(field_name),
+                field_type,
+                colon: true,
                 options,
             },
             trailing_bracket,
@@ -2144,17 +2191,17 @@ impl<'a> Parser<'a> {
             }
             let expr = self.parse_map_access(expr)?;
             // Snowflake and BigQuery allows col[1].key syntax
-            if dialect_of!(self is SnowflakeDialect | BigQueryDialect)
+            return if dialect_of!(self is SnowflakeDialect | BigQueryDialect | DatabricksDialect)
                 && self.consume_token(&Token::Period)
             {
-                return Ok(Expr::JsonAccess {
+                Ok(Expr::JsonAccess {
                     left: Box::new(expr),
                     operator: JsonOperator::Period,
                     right: Box::new(Expr::Value(self.parse_snowflake_json_path()?)),
-                });
+                })
             } else {
-                return Ok(expr);
-            }
+                Ok(expr)
+            };
         } else if Token::Colon == tok {
             Ok(Expr::JsonAccess {
                 left: Box::new(expr),
@@ -2607,6 +2654,19 @@ impl<'a> Parser<'a> {
             }
         }
         true
+    }
+
+    /// Look for next keyword ignoring any other tokens, e.g. `((`
+    #[must_use]
+    pub fn peek_next_keyword(&mut self) -> Option<Keyword> {
+        let mut n = 1;
+        loop {
+            match self.peek_nth_token(n).token {
+                Token::EOF => return None,
+                Token::Word(w) => return Some(w.keyword),
+                _ => n += 1,
+            }
+        }
     }
 
     /// Look for one of the given keywords and return the one that matches.
@@ -3062,22 +3122,38 @@ impl<'a> Parser<'a> {
                 name,
                 args: None,
                 return_type: None,
+                comment: None,
                 params,
             })
-        } else if dialect_of!(self is PostgreSqlDialect) {
+        } else if dialect_of!(self is PostgreSqlDialect | DatabricksDialect) {
             let name = self.parse_object_name(false)?;
-            self.expect_token(&Token::LParen)?;
-            let args = if self.consume_token(&Token::RParen) {
-                self.prev_token();
-                None
-            } else {
-                Some(self.parse_comma_separated(Parser::parse_function_arg)?)
-            };
 
-            self.expect_token(&Token::RParen)?;
+            let args: Option<Vec<OperateFunctionArg>> = if self.consume_token(&Token::LParen) {
+                let _args = if self.consume_token(&Token::RParen) {
+                    self.prev_token();
+                    None
+                } else {
+                    Some(self.parse_comma_separated(Parser::parse_function_arg)?)
+                };
+                self.expect_token(&Token::RParen)?;
+                _args
+            } else {
+                None
+            };
 
             let return_type = if self.parse_keyword(Keyword::RETURNS) {
                 Some(self.parse_data_type()?)
+            } else {
+                None
+            };
+
+            let comment = if self.parse_keyword(Keyword::COMMENT) {
+                let _ = self.consume_token(&Token::Eq);
+                let next_token = self.next_token();
+                match next_token.token {
+                    Token::SingleQuotedString(str) => Some(str),
+                    _ => self.expected("comment", next_token)?,
+                }
             } else {
                 None
             };
@@ -3090,6 +3166,7 @@ impl<'a> Parser<'a> {
                 name,
                 args,
                 return_type,
+                comment,
                 params,
             })
         } else if dialect_of!(self is DuckDbDialect) {
@@ -3161,8 +3238,17 @@ impl<'a> Parser<'a> {
                 ensure_not_set(&body.behavior, "IMMUTABLE | STABLE | VOLATILE")?;
                 body.behavior = Some(FunctionBehavior::Volatile);
             } else if self.parse_keyword(Keyword::RETURN) {
-                ensure_not_set(&body.return_, "RETURN")?;
-                body.return_ = Some(self.parse_expr()?);
+                if self
+                    .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
+                    .is_some()
+                {
+                    self.prev_token();
+                    ensure_not_set(&body.return_select_, "RETURN SELECT")?;
+                    body.return_select_ = Some(self.parse_query()?)
+                } else {
+                    ensure_not_set(&body.return_, "RETURN")?;
+                    body.return_ = Some(self.parse_expr()?);
+                }
             } else {
                 return Ok(body);
             }
@@ -4438,6 +4524,12 @@ impl<'a> Parser<'a> {
 
         let column_options = self.parse_options(Keyword::OPTIONS)?;
 
+        let mask = if self.parse_keyword(Keyword::MASK) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
         Ok(ColumnDef {
             name,
             data_type,
@@ -4445,6 +4537,7 @@ impl<'a> Parser<'a> {
             codec,
             options,
             column_options,
+            mask,
         })
     }
 
@@ -4792,6 +4885,9 @@ impl<'a> Parser<'a> {
     pub fn parse_options(&mut self, keyword: Keyword) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keyword(keyword) {
             self.expect_token(&Token::LParen)?;
+            if self.consume_token(&Token::RParen) {
+                return Ok(vec![]);
+            }
             let options = self.parse_comma_separated(Parser::parse_sql_option)?;
             self.expect_token(&Token::RParen)?;
             Ok(options)
@@ -5567,6 +5663,11 @@ impl<'a> Parser<'a> {
                 }
                 Ok(Expr::Value(Value::SingleQuotedString(value)))
             }
+            Token::LParen => {
+                let r = self.parse_map_key()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(r)
+            }
             Token::SingleQuotedString(s) => Ok(Expr::Value(Value::SingleQuotedString(s))),
             #[cfg(not(feature = "bigdecimal"))]
             Token::Number(s, _) => Ok(Expr::Value(Value::Number(s, false))),
@@ -5812,6 +5913,15 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) = self.parse_struct_type_def(
                         Self::parse_big_query_struct_field_def,
+                        Keyword::STRUCT,
+                    )?;
+                    trailing_bracket = _trailing_bracket;
+                    Ok(DataType::Struct(field_defs))
+                }
+                Keyword::STRUCT if dialect_of!(self is DatabricksDialect) => {
+                    self.prev_token();
+                    let (field_defs, _trailing_bracket) = self.parse_struct_type_def(
+                        Self::parse_databricks_query_struct_field_def,
                         Keyword::STRUCT,
                     )?;
                     trailing_bracket = _trailing_bracket;
@@ -6552,8 +6662,17 @@ impl<'a> Parser<'a> {
                 from: None,
             }
         } else {
-            let columns = self.parse_parenthesized_column_list(Optional, false)?;
-            self.expect_keyword(Keyword::AS)?;
+            let next_keyword = self.peek_next_keyword();
+            let columns = if let Some(keyword) = next_keyword {
+                match keyword {
+                    Keyword::WITH | Keyword::AS | Keyword::SELECT => vec![],
+                    _ => self.parse_parenthesized_column_list(Optional, false)?,
+                }
+            } else {
+                self.parse_parenthesized_column_list(Optional, false)?
+            };
+            // AS is not mandatory for Databricks
+            _ = self.parse_keyword(Keyword::AS);
             self.expect_token(&Token::LParen)?;
             let query = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
@@ -7131,13 +7250,15 @@ impl<'a> Parser<'a> {
                     JoinOperator::CrossJoin
                 } else if self.parse_keyword(Keyword::APPLY) {
                     // MSSQL extension, similar to CROSS JOIN LATERAL
-                    JoinOperator::CrossApply
+                    |_| JoinOperator::CrossApply
                 } else {
                     return self.expected("JOIN or APPLY after CROSS", self.peek_token());
                 };
+                let relation = self.parse_table_factor()?;
+                let join_constraint = self.parse_join_constraint(false)?;
                 Join {
-                    relation: self.parse_table_factor()?,
-                    join_operator,
+                    relation,
+                    join_operator: join_operator(join_constraint),
                 }
             } else if self.parse_keyword(Keyword::OUTER) {
                 // MSSQL extension, similar to LEFT JOIN LATERAL .. ON 1=1

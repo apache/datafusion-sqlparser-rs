@@ -372,15 +372,20 @@ pub struct StructField {
     pub field_name: Option<WithSpan<Ident>>,
     pub field_type: DataType,
     pub options: Vec<SqlOption>,
+    pub colon: bool,
 }
 
 impl fmt::Display for StructField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(name) = &self.field_name {
-            write!(f, "{name} {}", self.field_type)?;
-        } else {
-            write!(f, "{}", self.field_type)?;
-        };
+            if self.colon {
+                write!(f, "{name}: ")?;
+            } else {
+                write!(f, "{name} ")?;
+            }
+        }
+        write!(f, "{}", self.field_type)?;
+
         if !self.options.is_empty() {
             write!(f, " OPTIONS({})", display_comma_separated(&self.options))?;
         }
@@ -2040,6 +2045,7 @@ pub enum Statement {
         name: ObjectName,
         args: Option<Vec<OperateFunctionArg>>,
         return_type: Option<DataType>,
+        comment: Option<String>,
         /// Optional parameters.
         params: CreateFunctionBody,
     },
@@ -2590,6 +2596,7 @@ impl fmt::Display for Statement {
                 name,
                 args,
                 return_type,
+                comment,
                 params,
             } => {
                 write!(
@@ -2603,6 +2610,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(return_type) = return_type {
                     write!(f, " RETURNS {return_type}")?;
+                }
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT '{comment}'")?;
                 }
                 write!(f, "{params}")?;
                 Ok(())
@@ -5027,6 +5037,8 @@ pub struct CreateFunctionBody {
     pub as_: Option<FunctionDefinition>,
     /// RETURN expression
     pub return_: Option<Expr>,
+    /// RETURN SELECT
+    pub return_select_: Option<Query>,
     /// USING ... (Hive only)
     pub using: Option<CreateFunctionUsing>,
 }
@@ -5043,6 +5055,9 @@ impl fmt::Display for CreateFunctionBody {
             write!(f, " AS {definition}")?;
         }
         if let Some(expr) = &self.return_ {
+            write!(f, " RETURN {expr}")?;
+        }
+        if let Some(expr) = &self.return_select_ {
             write!(f, " RETURN {expr}")?;
         }
         if let Some(using) = &self.using {

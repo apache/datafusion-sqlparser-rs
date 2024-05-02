@@ -346,6 +346,19 @@ fn parse_within_group() {
 }
 
 #[test]
+fn parse_trim() {
+    redshift().verified_only_select("SELECT TRIM(col, ' ') FROM tbl");
+    redshift().verified_only_select("SELECT TRIM('    dog    ')");
+    redshift().one_statement_parses_to(
+        "SELECT TRIM(BOTH FROM '    dog    ')",
+        "SELECT TRIM(BOTH '    dog    ')",
+    );
+    redshift().verified_only_select(r#"SELECT TRIM(LEADING '"' FROM '"dog"')"#);
+    redshift().verified_only_select(r#"SELECT TRIM(TRAILING '"' FROM '"dog"')"#);
+    redshift().verified_only_select(r#"SELECT TRIM('CDG' FROM venuename)"#);
+}
+
+#[test]
 fn parse_listagg() {
     redshift().verified_only_select(r#"SELECT LISTAGG(a.attname, '|') WITHIN GROUP (ORDER BY a.attsortkeyord) OVER (PARTITION BY n.nspname, c.relname) AS sort_keys FROM bar"#);
 }
@@ -368,4 +381,9 @@ fn test_escape_string() {
 fn test_distribution_styles() {
     let sql = "CREATE TABLE foo (id VARCHAR(32)) DISTSTYLE KEY DISTKEY(id) COMPOUND SORTKEY(id)";
     redshift().verified_stmt(sql);
+}
+
+#[test]
+fn test_utf8_column_names() {
+    redshift().verified_stmt("SELECT financing_cost_€k FROM tbl");
 }

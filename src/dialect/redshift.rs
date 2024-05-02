@@ -35,6 +35,6 @@ impl Dialect for RedshiftSqlDialect {
 
     fn is_identifier_part(&self, ch: char) -> bool {
         // Extends Postgres dialect with sharp
-        PostgreSqlDialect {}.is_identifier_part(ch) || ch == '#'
+        PostgreSqlDialect {}.is_identifier_part(ch) || ch == '#' || ch == '€'
     }
 }

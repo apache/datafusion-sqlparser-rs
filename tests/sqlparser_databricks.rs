@@ -120,3 +120,115 @@ fn test_underscore_column_name() {
 
     databricks().verified_stmt("SELECT other AS _column FROM `myproject`.`mydataset`.`mytable`");
 }
+
+#[test]
+fn test_create_table_column_mask() {
+    databricks().verified_stmt("CREATE TABLE persons (name STRING, ssn STRING MASK mask_ssn)");
+}
+
+#[test]
+fn test_cte_columns() {
+    databricks()
+        .verified_stmt("WITH t (x, y) AS (SELECT 1, 2) SELECT * FROM t WHERE x = 1 AND y = 2");
+}
+
+#[test]
+fn test_cte_no_as() {
+    databricks().one_statement_parses_to(
+        "WITH foo (SELECT 'bar' as baz) SELECT * FROM foo",
+        "WITH foo AS (SELECT 'bar' AS baz) SELECT * FROM foo",
+    );
+    databricks().one_statement_parses_to(
+        "WITH foo (WITH b (SELECT * FROM bb) SELECT 'bar' as baz FROM b) SELECT * FROM foo",
+        "WITH foo AS (WITH b AS (SELECT * FROM bb) SELECT 'bar' AS baz FROM b) SELECT * FROM foo",
+    );
+}
+
+#[test]
+fn test_create_or_replace_temporary_function_returns_expression() {
+    databricks().verified_stmt(
+        "CREATE OR REPLACE TEMPORARY FUNCTION GG_Account_ID RETURN '0F98682E-005D-43A9-A5EC-464E8AC478C9'",
+    );
+    databricks()
+        .verified_stmt("CREATE FUNCTION area(x DOUBLE, y DOUBLE) RETURNS DOUBLE RETURN x * y");
+    databricks().verified_stmt("CREATE FUNCTION square(x DOUBLE) RETURNS DOUBLE RETURN area(x, x)");
+}
+
+#[test]
+fn test_create_or_replace_temporary_function_returns_select() {
+    databricks().verified_stmt(
+        "CREATE FUNCTION avg_score(p INT) RETURNS FLOAT COMMENT 'get an average score of the player' RETURN SELECT AVG(score) FROM scores WHERE player = p",
+    );
+}
+
+#[test]
+fn test_struct_literal() {
+    databricks().verified_stmt(
+        "SELECT STRUCT(loan_app.bank_statement_regular_income_alimony AS alimony, loan_app.bank_statement_regular_income_pension AS pension, loan_app.bank_statement_regular_income_salary AS salary) AS bank_statement_regular_income FROM loan_app",
+    );
+}
+
+#[test]
+fn test_create_table_struct_column() {
+    databricks().verified_stmt(
+        "CREATE TABLE foo (bank_statement_regular_income STRUCT<alimony: DECIMAL(19,5), pension: DECIMAL(19,5), salary: DECIMAL(19,5)>)",
+    );
+}
+
+#[test]
+fn test_functions_without_parens() {
+    databricks().verified_expr("current_timestamp");
+    databricks().verified_expr("current_timestamp()");
+    databricks().verified_expr("current_date");
+    databricks().verified_expr("current_date()");
+    databricks().verified_expr("now()");
+    databricks().verified_expr("current_timezone()");
+}
+
+#[test]
+fn test_parse_literal_array() {
+    databricks().verified_stmt("SELECT array(current_date, current_date)");
+}
+
+#[test]
+fn test_parse_substring() {
+    databricks().one_statement_parses_to(
+        "SELECT SUBSTR('Spark SQL', 5)",
+        "SELECT SUBSTRING('Spark SQL' FROM 5)",
+    );
+    databricks().one_statement_parses_to(
+        "SELECT SUBSTR('Spark SQL' FROM 5 FOR 1)",
+        "SELECT SUBSTRING('Spark SQL' FROM 5 FOR 1)",
+    );
+    databricks().one_statement_parses_to(
+        "SELECT SUBSTRING('Spark SQL', 5)",
+        "SELECT SUBSTRING('Spark SQL' FROM 5)",
+    );
+    databricks().verified_expr("SUBSTRING('Spark SQL' FROM 5)");
+    databricks().verified_expr("SUBSTRING('Spark SQL' FROM 5 FOR 1)");
+}
+
+#[test]
+fn test_array_access() {
+    databricks()
+        .verified_stmt("SELECT id, extra_questions[0] AS question, FROM AS detailed_survey");
+}
+
+#[test]
+fn test_array_access_paren() {
+    databricks().one_statement_parses_to(
+        "SELECT id, extra_questions[(0)] AS question, FROM AS detailed_survey",
+        "SELECT id, extra_questions[0] AS question, FROM AS detailed_survey",
+    );
+}
+
+#[test]
+fn test_array_struct_access() {
+    databricks()
+        .verified_stmt("SELECT id, extra_questions[0].label AS question, FROM AS detailed_survey");
+}
+
+#[test]
+fn test_cross_join() {
+    databricks_and_generic().verified_stmt("SELECT * FROM tbl CROSS JOIN tbl2 ON tbl.id = tbl2.id");
+}

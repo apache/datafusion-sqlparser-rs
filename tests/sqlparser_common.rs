@@ -2488,6 +2488,7 @@ fn parse_create_table() {
                             option: ColumnOption::NotNull,
                         }],
                         column_options: vec![],
+                        mask: None,
                     },
                     ColumnDef {
                         name: Ident::new("lat").empty_span(),
@@ -2499,6 +2500,7 @@ fn parse_create_table() {
                             option: ColumnOption::Null,
                         }],
                         column_options: vec![],
+                        mask: None,
                     },
                     ColumnDef {
                         name: Ident::new("lng").empty_span(),
@@ -2507,6 +2509,7 @@ fn parse_create_table() {
                         codec: None,
                         options: vec![],
                         column_options: vec![],
+                        mask: None,
                     },
                     ColumnDef {
                         name: Ident::new("constrained").empty_span(),
@@ -2536,6 +2539,7 @@ fn parse_create_table() {
                             },
                         ],
                         column_options: vec![],
+                        mask: None,
                     },
                     ColumnDef {
                         name: Ident::new("ref").empty_span(),
@@ -2555,6 +2559,7 @@ fn parse_create_table() {
                             },
                         }],
                         column_options: vec![],
+                        mask: None,
                     },
                     ColumnDef {
                         name: Ident::new("ref2").empty_span(),
@@ -2571,6 +2576,7 @@ fn parse_create_table() {
                             },
                         },],
                         column_options: vec![],
+                        mask: None,
                     },
                 ]
             );
@@ -2689,6 +2695,7 @@ fn parse_create_table_hive_array() {
                             codec: None,
                             options: vec![],
                             column_options: vec![],
+                            mask: None,
                         },
                         ColumnDef {
                             name: Ident::new("val").empty_span(),
@@ -2697,6 +2704,7 @@ fn parse_create_table_hive_array() {
                             codec: None,
                             options: vec![],
                             column_options: vec![],
+                            mask: None,
                         },
                     ],
                 )
@@ -3061,6 +3069,7 @@ fn parse_create_external_table() {
                             option: ColumnOption::NotNull,
                         }],
                         column_options: vec![],
+                        mask: None,
                     },
                     ColumnDef {
                         name: Ident::new("lat").empty_span(),
@@ -3072,6 +3081,7 @@ fn parse_create_external_table() {
                             option: ColumnOption::Null,
                         }],
                         column_options: vec![],
+                        mask: None,
                     },
                     ColumnDef {
                         name: Ident::new("lng").empty_span(),
@@ -3080,6 +3090,7 @@ fn parse_create_external_table() {
                         codec: None,
                         options: vec![],
                         column_options: vec![],
+                        mask: None,
                     },
                 ]
             );
@@ -3138,6 +3149,7 @@ fn parse_create_or_replace_external_table() {
                         option: ColumnOption::NotNull,
                     }],
                     column_options: vec![],
+                    mask: None,
                 },]
             );
             assert!(constraints.is_empty());
@@ -4950,7 +4962,7 @@ fn parse_cross_join() {
                 version: None,
                 partitions: vec![],
             },
-            join_operator: JoinOperator::CrossJoin,
+            join_operator: JoinOperator::CrossJoin(JoinConstraint::None),
         },
         only(only(select.from).joins),
     );
@@ -5592,7 +5604,7 @@ fn parse_trim() {
             Box::new(AnsiDialect {}),
             //Box::new(SnowflakeDialect {}),
             Box::new(HiveDialect {}),
-            Box::new(RedshiftSqlDialect {}),
+            //Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
             //Box::new(BigQueryDialect {}),
             Box::new(SQLiteDialect {}),
@@ -8221,6 +8233,14 @@ fn parse_create_type() {
 #[test]
 fn parse_create_table_collate() {
     pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
+}
+
+#[test]
+fn parse_floor_ceil_substr_column() {
+    all_dialects().verified_stmt("SELECT floor");
+    all_dialects().verified_stmt("SELECT ceil");
+    all_dialects().verified_stmt("SELECT substr");
+    all_dialects().verified_stmt("SELECT position");
 }
 
 #[test]

@@ -17,7 +17,9 @@ use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOption, DataLoadingOptionType, DataLoadingOptions, StageLoadSelectItem,
     StageParamsObject,
 };
-use crate::ast::{Ident, ObjectName, RowAccessPolicy, Statement, Tag};
+use crate::ast::{
+    CommentDef, Ident, ObjectName, RowAccessPolicy, Statement, Tag, WrappedCollection,
+};
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -174,7 +176,7 @@ pub fn parse_create_table(
                     parser.expect_token(&Token::Eq)?;
                     let next_token = parser.next_token();
                     let comment = match next_token.token {
-                        Token::SingleQuotedString(str) => Some(str),
+                        Token::SingleQuotedString(str) => Some(CommentDef::WithEq(str)),
                         _ => parser.expected("comment", next_token)?,
                     };
                     builder = builder.comment(comment);
@@ -197,8 +199,9 @@ pub fn parse_create_table(
                 Keyword::CLUSTER => {
                     parser.expect_keyword(Keyword::BY)?;
                     parser.expect_token(&Token::LParen)?;
-                    let cluster_by =
-                        Some(parser.parse_comma_separated(|p| p.parse_identifier(false))?);
+                    let cluster_by = Some(WrappedCollection::Parentheses(
+                        parser.parse_comma_separated(|p| p.parse_identifier(false))?,
+                    ));
                     parser.expect_token(&Token::RParen)?;
 
                     builder = builder.cluster_by(cluster_by)

@@ -22,10 +22,11 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, Expr, FileFormat, FromTable, HiveDistributionStyle,
-    HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName,
-    OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem,
-    SqlOption, SqliteOnConflict, TableEngine, TableWithJoins, Tag,
+    display_comma_separated, display_separated, CommentDef, Expr, FileFormat, FromTable,
+    HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InsertAliases,
+    MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query,
+    RowAccessPolicy, SelectItem, SqlOption, SqliteOnConflict, TableEngine, TableWithJoins, Tag,
+    WrappedCollection,
 };
 
 /// CREATE INDEX statement.
@@ -75,7 +76,7 @@ pub struct CreateTable {
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
     pub engine: Option<TableEngine>,
-    pub comment: Option<String>,
+    pub comment: Option<CommentDef>,
     pub auto_increment_offset: Option<u32>,
     pub default_charset: Option<String>,
     pub collation: Option<String>,
@@ -95,7 +96,7 @@ pub struct CreateTable {
     pub partition_by: Option<Box<Expr>>,
     /// BigQuery: Table clustering column list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-    pub cluster_by: Option<Vec<Ident>>,
+    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     /// BigQuery: Table options list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     pub options: Option<Vec<SqlOption>>,
@@ -305,12 +306,17 @@ impl Display for CreateTable {
             write!(f, " PARTITION BY {partition_by}")?;
         }
         if let Some(cluster_by) = self.cluster_by.as_ref() {
-            write!(
-                f,
-                " CLUSTER BY ({})",
-                display_comma_separated(cluster_by.as_slice())
-            )?;
+            write!(f, " CLUSTER BY ")?;
+            match cluster_by {
+                WrappedCollection::NoWrapping(cluster_by) => {
+                    write!(f, "{}", display_comma_separated(cluster_by.as_slice()))?;
+                }
+                WrappedCollection::Parentheses(cluster_by) => {
+                    write!(f, "({})", display_comma_separated(cluster_by.as_slice()))?;
+                }
+            }
         }
+
         if let Some(options) = self.options.as_ref() {
             write!(
                 f,

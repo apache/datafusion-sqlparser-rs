@@ -9,9 +9,9 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use super::super::dml::CreateTable;
 use crate::ast::{
-    ColumnDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit,
-    OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement, TableConstraint,
-    TableEngine, Tag,
+    ColumnDef, CommentDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName,
+    OnCommit, OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement, TableConstraint,
+    TableEngine, Tag, WrappedCollection,
 };
 use crate::parser::ParserError;
 
@@ -68,7 +68,7 @@ pub struct CreateTableBuilder {
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
     pub engine: Option<TableEngine>,
-    pub comment: Option<String>,
+    pub comment: Option<CommentDef>,
     pub auto_increment_offset: Option<u32>,
     pub default_charset: Option<String>,
     pub collation: Option<String>,
@@ -77,7 +77,7 @@ pub struct CreateTableBuilder {
     pub primary_key: Option<Box<Expr>>,
     pub order_by: Option<OneOrManyWithParens<Expr>>,
     pub partition_by: Option<Box<Expr>>,
-    pub cluster_by: Option<Vec<Ident>>,
+    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub options: Option<Vec<SqlOption>>,
     pub strict: bool,
     pub copy_grants: bool,
@@ -236,7 +236,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn comment(mut self, comment: Option<String>) -> Self {
+    pub fn comment(mut self, comment: Option<CommentDef>) -> Self {
         self.comment = comment;
         self
     }
@@ -281,7 +281,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn cluster_by(mut self, cluster_by: Option<Vec<Ident>>) -> Self {
+    pub fn cluster_by(mut self, cluster_by: Option<WrappedCollection<Vec<Ident>>>) -> Self {
         self.cluster_by = cluster_by;
         self
     }
@@ -500,7 +500,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
 #[derive(Default)]
 pub(crate) struct BigQueryTableConfiguration {
     pub partition_by: Option<Box<Expr>>,
-    pub cluster_by: Option<Vec<Ident>>,
+    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub options: Option<Vec<SqlOption>>,
 }
 

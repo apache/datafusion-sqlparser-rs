@@ -6383,6 +6383,31 @@ impl Display for Tag {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CommentDef {
+    WithEq(String),
+    WithoutEq(String),
+}
+
+impl Display for CommentDef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CommentDef::WithEq(comment) | CommentDef::WithoutEq(comment) => write!(f, "{comment}"),
+        }
+    }
+}
+
+/// Helper to indicate if a collection should be wrapped by a symbol when displaying
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WrappedCollection<T> {
+    NoWrapping(T),
+    Parentheses(T),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

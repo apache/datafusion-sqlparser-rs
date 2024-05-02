@@ -402,7 +402,24 @@ fn test_snowflake_create_table_cluster_by() {
             name, cluster_by, ..
         }) => {
             assert_eq!("my_table", name.to_string());
-            assert_eq!(Some(vec![Ident::new("a"), Ident::new("b"),]), cluster_by)
+            assert_eq!(
+                Some(WrappedCollection::Parentheses(vec![
+                    Ident::new("a"),
+                    Ident::new("b"),
+                ])),
+                cluster_by
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_comment() {
+    match snowflake().verified_stmt("CREATE TABLE my_table (a INT) COMMENT = 'some comment'") {
+        Statement::CreateTable(CreateTable { name, comment, .. }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!("some comment", comment.unwrap().to_string());
         }
         _ => unreachable!(),
     }

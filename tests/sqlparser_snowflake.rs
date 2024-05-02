@@ -426,6 +426,23 @@ fn test_snowflake_create_table_comment() {
 }
 
 #[test]
+fn test_snowflake_create_table_incomplete_statement() {
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TABLE my_table"),
+        Err(ParserError::ParserError(
+            "unexpected end of input".to_string()
+        ))
+    );
+
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TABLE my_table; (c int)"),
+        Err(ParserError::ParserError(
+            "unexpected end of input".to_string()
+        ))
+    );
+}
+
+#[test]
 fn test_snowflake_single_line_tokenize() {
     let sql = "CREATE TABLE# this is a comment \ntable_1";
     let dialect = SnowflakeDialect {};

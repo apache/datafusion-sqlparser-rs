@@ -299,9 +299,21 @@ pub fn parse_create_table(
                 builder = builder.columns(columns).constraints(constraints);
             }
             Token::EOF => {
+                if builder.columns.is_empty() {
+                    return Err(ParserError::ParserError(
+                        "unexpected end of input".to_string(),
+                    ));
+                }
+
                 break;
             }
             Token::SemiColon => {
+                if builder.columns.is_empty() {
+                    return Err(ParserError::ParserError(
+                        "unexpected end of input".to_string(),
+                    ));
+                }
+
                 parser.prev_token();
                 break;
             }

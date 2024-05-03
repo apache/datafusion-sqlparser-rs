@@ -114,6 +114,7 @@ fn parse_map_access_expr() {
             sort_by: vec![],
             having: None,
             named_window: vec![],
+            window_before_qualify: false,
             qualify: None,
             value_table_mode: None,
             connect_by: None,

@@ -13,15 +13,11 @@
 //! SQL Abstract Syntax Tree (AST) types
 #[cfg(not(feature = "std"))]
 use alloc::{
-    borrow::Cow,
     boxed::Box,
     format,
     string::{String, ToString},
     vec::Vec,
 };
-
-#[cfg(feature = "std")]
-use std::borrow::Cow;
 
 use core::fmt::{self, Display};
 
@@ -690,11 +686,6 @@ pub enum Expr {
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
-    /// Aggregate function with filter
-    AggregateExpressionWithFilter {
-        expr: Box<Expr>,
-        filter: Box<Expr>,
-    },
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -715,12 +706,6 @@ pub enum Expr {
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
-    /// An array subquery constructor, e.g. `SELECT ARRAY(SELECT 1 UNION SELECT 2)`
-    ArraySubquery(Box<Query>),
-    /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
-    ListAgg(ListAgg),
-    /// The `ARRAY_AGG` function `SELECT ARRAY_AGG(... ORDER BY ...)`
-    ArrayAgg(ArrayAgg),
     /// The `GROUPING SETS` expr.
     GroupingSets(Vec<Vec<Expr>>),
     /// The `CUBE` expr.
@@ -1064,9 +1049,6 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{fun}"),
-            Expr::AggregateExpressionWithFilter { expr, filter } => {
-                write!(f, "{expr} FILTER (WHERE {filter})")
-            }
             Expr::Case {
                 operand,
                 conditions,
@@ -1093,9 +1075,6 @@ impl fmt::Display for Expr {
                 subquery
             ),
             Expr::Subquery(s) => write!(f, "({s})"),
-            Expr::ArraySubquery(s) => write!(f, "ARRAY({s})"),
-            Expr::ListAgg(listagg) => write!(f, "{listagg}"),
-            Expr::ArrayAgg(arrayagg) => write!(f, "{arrayagg}"),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;
                 let mut sep = "";
@@ -1408,35 +1387,6 @@ impl fmt::Display for NullTreatment {
             NullTreatment::IgnoreNulls => "IGNORE NULLS",
             NullTreatment::RespectNulls => "RESPECT NULLS",
         })
-    }
-}
-
-/// Specifies Ignore / Respect NULL within window functions.
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum NullTreatmentType {
-    /// The declaration is part of the function's arguments.
-    ///
-    /// ```sql
-    /// FIRST_VALUE(x IGNORE NULLS) OVER ()
-    /// ```
-    FunctionArg(NullTreatment),
-    /// The declaration occurs after the function call.
-    ///
-    /// ```sql
-    /// FIRST_VALUE(x) IGNORE NULLS OVER ()
-    /// ```
-    AfterFunction(NullTreatment),
-}
-
-impl Display for NullTreatmentType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let null_treatment = match self {
-            NullTreatmentType::FunctionArg(n) => n,
-            NullTreatmentType::AfterFunction(n) => n,
-        };
-        write!(f, "{null_treatment}")
     }
 }
 
@@ -4829,22 +4779,169 @@ impl fmt::Display for CloseCursor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Function {
     pub name: ObjectName,
-    pub args: Vec<FunctionArg>,
+    /// The arguments to the function, including any options specified within the
+    /// delimiting parentheses.
+    pub args: FunctionArguments,
     /// e.g. `x > 5` in `COUNT(x) FILTER (WHERE x > 5)`
     pub filter: Option<Box<Expr>>,
-    /// Specifies Ignore / Respect NULL within window functions.
+    /// Indicates how `NULL`s should be handled in the calculation.
     ///
-    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value)
+    /// Example:
+    /// ```plaintext
+    /// FIRST_VALUE( <expr> ) [ { IGNORE | RESPECT } NULLS ] OVER ...
+    /// ```
+    ///
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions/first_value)
-    pub null_treatment: Option<NullTreatmentType>,
+    pub null_treatment: Option<NullTreatment>,
+    /// The `OVER` clause, indicating a window function call.
     pub over: Option<WindowType>,
-    /// aggregate functions may specify eg `COUNT(DISTINCT x)`
-    pub distinct: bool,
-    /// Some functions must be called without trailing parentheses, for example Postgres
-    /// do it for current_catalog, current_schema, etc. This flags is used for formatting.
-    pub special: bool,
-    /// Required ordering for the function (if empty, there is no requirement).
-    pub order_by: Vec<OrderByExpr>,
+    /// A clause used with certain aggregate functions to control the ordering
+    /// within grouped sets before the function is applied.
+    ///
+    /// Syntax:
+    /// ```plaintext
+    /// <aggregate_function>(expression) WITHIN GROUP (ORDER BY key [ASC | DESC], ...)
+    /// ```
+    pub within_group: Vec<OrderByExpr>,
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}", self.name, self.args)?;
+
+        if !self.within_group.is_empty() {
+            write!(
+                f,
+                " WITHIN GROUP (ORDER BY {})",
+                display_comma_separated(&self.within_group)
+            )?;
+        }
+
+        if let Some(filter_cond) = &self.filter {
+            write!(f, " FILTER (WHERE {filter_cond})")?;
+        }
+
+        if let Some(null_treatment) = &self.null_treatment {
+            write!(f, " {null_treatment}")?;
+        }
+
+        if let Some(o) = &self.over {
+            write!(f, " OVER {o}")?;
+        }
+
+        Ok(())
+    }
+}
+
+/// The arguments passed to a function call.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionArguments {
+    /// Used for special functions like `CURRENT_TIMESTAMP` that are invoked
+    /// without parentheses.
+    None,
+    /// On some dialects, a subquery can be passed without surrounding
+    /// parentheses if it's the sole argument to the function.
+    Subquery(Box<Query>),
+    /// A normal function argument list, including any clauses within it such as
+    /// `DISTINCT` or `ORDER BY`.
+    List(FunctionArgumentList),
+}
+
+impl fmt::Display for FunctionArguments {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FunctionArguments::None => Ok(()),
+            FunctionArguments::Subquery(query) => write!(f, "({})", query),
+            FunctionArguments::List(args) => write!(f, "({})", args),
+        }
+    }
+}
+
+/// This represents everything inside the parentheses when calling a function.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct FunctionArgumentList {
+    /// `[ ALL | DISTINCT ]
+    pub duplicate_treatment: Option<DuplicateTreatment>,
+    /// The function arguments.
+    pub args: Vec<FunctionArg>,
+    /// Additional clauses specified within the argument list.
+    pub clauses: Vec<FunctionArgumentClause>,
+}
+
+impl fmt::Display for FunctionArgumentList {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(duplicate_treatment) = self.duplicate_treatment {
+            write!(f, "{} ", duplicate_treatment)?;
+        }
+        write!(f, "{}", display_comma_separated(&self.args))?;
+        if !self.clauses.is_empty() {
+            write!(f, " {}", display_separated(&self.clauses, " "))?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FunctionArgumentClause {
+    /// Indicates how `NULL`s should be handled in the calculation, e.g. in `FIRST_VALUE` on [BigQuery].
+    ///
+    /// Syntax:
+    /// ```plaintext
+    /// { IGNORE | RESPECT } NULLS ]
+    /// ```
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value
+    IgnoreOrRespectNulls(NullTreatment),
+    /// Specifies the the ordering for some ordered set aggregates, e.g. `ARRAY_AGG` on [BigQuery].
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
+    OrderBy(Vec<OrderByExpr>),
+    /// Specifies a limit for the `ARRAY_AGG` and `ARRAY_CONCAT_AGG` functions on BigQuery.
+    Limit(Expr),
+    /// Specifies the behavior on overflow of the `LISTAGG` function.
+    ///
+    /// See <https://trino.io/docs/current/functions/aggregate.html>.
+    OnOverflow(ListAggOnOverflow),
+}
+
+impl fmt::Display for FunctionArgumentClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment) => {
+                write!(f, "{}", null_treatment)
+            }
+            FunctionArgumentClause::OrderBy(order_by) => {
+                write!(f, "ORDER BY {}", display_comma_separated(order_by))
+            }
+            FunctionArgumentClause::Limit(limit) => write!(f, "LIMIT {limit}"),
+            FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DuplicateTreatment {
+    /// Perform the calculation only unique values.
+    Distinct,
+    /// Retain all duplicate values (the default).
+    All,
+}
+
+impl fmt::Display for DuplicateTreatment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DuplicateTreatment::Distinct => write!(f, "DISTINCT"),
+            DuplicateTreatment::All => write!(f, "ALL"),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -4863,48 +4960,6 @@ impl fmt::Display for AnalyzeFormat {
             AnalyzeFormat::GRAPHVIZ => "GRAPHVIZ",
             AnalyzeFormat::JSON => "JSON",
         })
-    }
-}
-
-impl fmt::Display for Function {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.special {
-            write!(f, "{}", self.name)?;
-        } else {
-            let order_by = if !self.order_by.is_empty() {
-                " ORDER BY "
-            } else {
-                ""
-            };
-            write!(
-                f,
-                "{}({}{}{order_by}{}{})",
-                self.name,
-                if self.distinct { "DISTINCT " } else { "" },
-                display_comma_separated(&self.args),
-                display_comma_separated(&self.order_by),
-                match self.null_treatment {
-                    Some(NullTreatmentType::FunctionArg(null_treatment)) => {
-                        Cow::from(format!(" {null_treatment}"))
-                    }
-                    _ => Cow::from(""),
-                }
-            )?;
-
-            if let Some(filter_cond) = &self.filter {
-                write!(f, " FILTER (WHERE {filter_cond})")?;
-            }
-
-            if let Some(NullTreatmentType::AfterFunction(null_treatment)) = &self.null_treatment {
-                write!(f, " {null_treatment}")?;
-            }
-
-            if let Some(o) = &self.over {
-                write!(f, " OVER {o}")?;
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -4937,45 +4992,6 @@ impl fmt::Display for FileFormat {
     }
 }
 
-/// A `LISTAGG` invocation `LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] ) )
-/// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ListAgg {
-    pub distinct: bool,
-    pub expr: Box<Expr>,
-    pub separator: Option<Box<Expr>>,
-    pub on_overflow: Option<ListAggOnOverflow>,
-    pub within_group: Vec<OrderByExpr>,
-}
-
-impl fmt::Display for ListAgg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "LISTAGG({}{}",
-            if self.distinct { "DISTINCT " } else { "" },
-            self.expr
-        )?;
-        if let Some(separator) = &self.separator {
-            write!(f, ", {separator}")?;
-        }
-        if let Some(on_overflow) = &self.on_overflow {
-            write!(f, "{on_overflow}")?;
-        }
-        write!(f, ")")?;
-        if !self.within_group.is_empty() {
-            write!(
-                f,
-                " WITHIN GROUP (ORDER BY {})",
-                display_comma_separated(&self.within_group)
-            )?;
-        }
-        Ok(())
-    }
-}
-
 /// The `ON OVERFLOW` clause of a LISTAGG invocation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -4993,7 +5009,7 @@ pub enum ListAggOnOverflow {
 
 impl fmt::Display for ListAggOnOverflow {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " ON OVERFLOW")?;
+        write!(f, "ON OVERFLOW")?;
         match self {
             ListAggOnOverflow::Error => write!(f, " ERROR"),
             ListAggOnOverflow::Truncate { filler, with_count } => {
@@ -5009,50 +5025,6 @@ impl fmt::Display for ListAggOnOverflow {
                 write!(f, " COUNT")
             }
         }
-    }
-}
-
-/// An `ARRAY_AGG` invocation `ARRAY_AGG( [ DISTINCT ] <expr> [ORDER BY <expr>] [LIMIT <n>] )`
-/// Or `ARRAY_AGG( [ DISTINCT ] <expr> ) [ WITHIN GROUP ( ORDER BY <expr> ) ]`
-/// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ArrayAgg {
-    pub distinct: bool,
-    pub expr: Box<Expr>,
-    pub order_by: Option<Vec<OrderByExpr>>,
-    pub limit: Option<Box<Expr>>,
-    pub within_group: bool, // order by is used inside a within group or not
-}
-
-impl fmt::Display for ArrayAgg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "ARRAY_AGG({}{}",
-            if self.distinct { "DISTINCT " } else { "" },
-            self.expr
-        )?;
-        if !self.within_group {
-            if let Some(order_by) = &self.order_by {
-                write!(f, " ORDER BY {}", display_comma_separated(order_by))?;
-            }
-            if let Some(limit) = &self.limit {
-                write!(f, " LIMIT {limit}")?;
-            }
-        }
-        write!(f, ")")?;
-        if self.within_group {
-            if let Some(order_by) = &self.order_by {
-                write!(
-                    f,
-                    " WITHIN GROUP (ORDER BY {})",
-                    display_comma_separated(order_by)
-                )?;
-            }
-        }
-        Ok(())
     }
 }
 

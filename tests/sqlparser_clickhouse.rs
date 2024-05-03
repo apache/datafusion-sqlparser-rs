@@ -40,23 +40,13 @@ fn parse_map_access_expr() {
                     quote_style: None,
                 })),
                 keys: vec![MapAccessKey {
-                    key: Expr::Function(Function {
-                        name: ObjectName(vec!["indexOf".into()]),
-                        args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
-                                Ident::new("string_names")
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString("endpoint".to_string())
-                            ))),
-                        ],
-                        null_treatment: None,
-                        filter: None,
-                        over: None,
-                        distinct: false,
-                        special: false,
-                        order_by: vec![],
-                    }),
+                    key: call(
+                        "indexOf",
+                        [
+                            Expr::Identifier(Ident::new("string_names")),
+                            Expr::Value(Value::SingleQuotedString("endpoint".to_string()))
+                        ]
+                    ),
                     syntax: MapAccessSyntax::Bracket
                 }],
             })],
@@ -84,23 +74,13 @@ fn parse_map_access_expr() {
                     left: Box::new(MapAccess {
                         column: Box::new(Identifier(Ident::new("string_value"))),
                         keys: vec![MapAccessKey {
-                            key: Expr::Function(Function {
-                                name: ObjectName(vec![Ident::new("indexOf")]),
-                                args: vec![
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
-                                        Ident::new("string_name")
-                                    ))),
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                        Value::SingleQuotedString("app".to_string())
-                                    ))),
-                                ],
-                                null_treatment: None,
-                                filter: None,
-                                over: None,
-                                distinct: false,
-                                special: false,
-                                order_by: vec![],
-                            }),
+                            key: call(
+                                "indexOf",
+                                [
+                                    Expr::Identifier(Ident::new("string_name")),
+                                    Expr::Value(Value::SingleQuotedString("app".to_string()))
+                                ]
+                            ),
                             syntax: MapAccessSyntax::Bracket
                         }],
                     }),
@@ -144,19 +124,13 @@ fn parse_array_fn() {
     let sql = "SELECT array(x1, x2) FROM foo";
     let select = clickhouse().verified_only_select(sql);
     assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("array")]),
-            args: vec![
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x1")))),
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x2")))),
-            ],
-            null_treatment: None,
-            filter: None,
-            over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
-        }),
+        &call(
+            "array",
+            [
+                Expr::Identifier(Ident::new("x1")),
+                Expr::Identifier(Ident::new("x2"))
+            ]
+        ),
         expr_from_projection(only(&select.projection))
     );
 }
@@ -209,13 +183,15 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
-            args: vec![],
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[1]),
     );

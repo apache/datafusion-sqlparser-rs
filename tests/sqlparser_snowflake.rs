@@ -382,13 +382,15 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
-            args: vec![],
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            }),
             filter: None,
             null_treatment: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[1]),
     );
@@ -413,15 +415,6 @@ fn test_array_agg_func() {
     ] {
         snowflake().verified_stmt(sql);
     }
-
-    let sql = "select array_agg(x order by x) as a from T";
-    let result = snowflake().parse_sql_statements(sql);
-    assert_eq!(
-        result,
-        Err(ParserError::ParserError(String::from(
-            "Expected ), found: order"
-        )))
-    )
 }
 
 fn snowflake() -> TestedDialects {
@@ -1429,20 +1422,15 @@ fn parse_position_not_function_columns() {
 fn parse_subquery_function_argument() {
     // Snowflake allows passing an unparenthesized subquery as the single
     // argument to a function.
-    snowflake().one_statement_parses_to(
-        "SELECT parse_json(SELECT '{}')",
-        "SELECT parse_json((SELECT '{}'))",
-    );
+    snowflake().verified_stmt("SELECT parse_json(SELECT '{}')");
 
     // Subqueries that begin with WITH work too.
-    snowflake().one_statement_parses_to(
-        "SELECT parse_json(WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q)",
-        "SELECT parse_json((WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q))",
-    );
+    snowflake()
+        .verified_stmt("SELECT parse_json(WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q)");
 
     // Commas are parsed as part of the subquery, not additional arguments to
     // the function.
-    snowflake().one_statement_parses_to("SELECT func(SELECT 1, 2)", "SELECT func((SELECT 1, 2))");
+    snowflake().verified_stmt("SELECT func(SELECT 1, 2)");
 }
 
 #[test]
@@ -1528,19 +1516,13 @@ fn parse_comma_outer_join() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("c1"))),
             op: BinaryOperator::Eq,
-            right: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("myudf")]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
+            right: Box::new(call(
+                "myudf",
+                [Expr::UnaryOp {
                     op: UnaryOperator::Plus,
                     expr: Box::new(Expr::Value(number("42")))
-                }))],
-                filter: None,
-                null_treatment: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![]
-            }))
+                }]
+            )),
         })
     );
 

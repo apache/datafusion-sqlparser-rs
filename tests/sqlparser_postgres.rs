@@ -2151,58 +2151,65 @@ fn parse_array_subquery_expr() {
     let sql = "SELECT ARRAY(SELECT 1 UNION SELECT 2)";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        &Expr::ArraySubquery(Box::new(Query {
-            with: None,
-            body: Box::new(SetExpr::SetOperation {
-                op: SetOperator::Union,
-                set_quantifier: SetQuantifier::None,
-                left: Box::new(SetExpr::Select(Box::new(Select {
-                    distinct: None,
-                    top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
-                    into: None,
-                    from: vec![],
-                    lateral_views: vec![],
-                    selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
-                    cluster_by: vec![],
-                    distribute_by: vec![],
-                    sort_by: vec![],
-                    having: None,
-                    named_window: vec![],
-                    qualify: None,
-                    window_before_qualify: false,
-                    value_table_mode: None,
-                    connect_by: None,
-                }))),
-                right: Box::new(SetExpr::Select(Box::new(Select {
-                    distinct: None,
-                    top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("2")))],
-                    into: None,
-                    from: vec![],
-                    lateral_views: vec![],
-                    selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
-                    cluster_by: vec![],
-                    distribute_by: vec![],
-                    sort_by: vec![],
-                    having: None,
-                    named_window: vec![],
-                    qualify: None,
-                    window_before_qualify: false,
-                    value_table_mode: None,
-                    connect_by: None,
-                }))),
-            }),
-            order_by: vec![],
-            limit: None,
-            limit_by: vec![],
-            offset: None,
-            fetch: None,
-            locks: vec![],
-            for_clause: None,
-        })),
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("ARRAY")]),
+            args: FunctionArguments::Subquery(Box::new(Query {
+                with: None,
+                body: Box::new(SetExpr::SetOperation {
+                    op: SetOperator::Union,
+                    set_quantifier: SetQuantifier::None,
+                    left: Box::new(SetExpr::Select(Box::new(Select {
+                        distinct: None,
+                        top: None,
+                        projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
+                        into: None,
+                        from: vec![],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: GroupByExpr::Expressions(vec![]),
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        qualify: None,
+                        window_before_qualify: false,
+                        value_table_mode: None,
+                        connect_by: None,
+                    }))),
+                    right: Box::new(SetExpr::Select(Box::new(Select {
+                        distinct: None,
+                        top: None,
+                        projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("2")))],
+                        into: None,
+                        from: vec![],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: GroupByExpr::Expressions(vec![]),
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        qualify: None,
+                        window_before_qualify: false,
+                        value_table_mode: None,
+                        connect_by: None,
+                    }))),
+                }),
+                order_by: vec![],
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+            })),
+            filter: None,
+            null_treatment: None,
+            over: None,
+            within_group: vec![]
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -2506,21 +2513,23 @@ fn test_composite_value() {
                     Ident::new("information_schema"),
                     Ident::new("_pg_expandarray")
                 ]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
-                    Array {
-                        elem: vec![
-                            Expr::Value(Value::SingleQuotedString("i".to_string())),
-                            Expr::Value(Value::SingleQuotedString("i".to_string())),
-                        ],
-                        named: true
-                    }
-                )))],
+                args: FunctionArguments::List(FunctionArgumentList {
+                    duplicate_treatment: None,
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
+                        Array {
+                            elem: vec![
+                                Expr::Value(Value::SingleQuotedString("i".to_string())),
+                                Expr::Value(Value::SingleQuotedString("i".to_string())),
+                            ],
+                            named: true
+                        }
+                    )))],
+                    clauses: vec![],
+                }),
                 null_treatment: None,
                 filter: None,
                 over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
+                within_group: vec![],
             }))))
         }),
         select.projection[0]
@@ -2730,52 +2739,44 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_CATALOG")]),
-            args: vec![],
+            args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: true,
-            order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_USER")]),
-            args: vec![],
+            args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: true,
-            order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[1])
     );
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("SESSION_USER")]),
-            args: vec![],
+            args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: true,
-            order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[2])
     );
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("USER")]),
-            args: vec![],
+            args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: true,
-            order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[3])
     );
@@ -3221,13 +3222,15 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
-            args: vec![],
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[1]),
     );

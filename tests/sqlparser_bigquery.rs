@@ -1824,18 +1824,7 @@ fn parse_map_access_expr() {
                 MapAccessSyntax::Bracket,
             ),
             map_access_key(
-                Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("safe_offset")]),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        number("2"),
-                    )))],
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                }),
+                call("safe_offset", [Expr::Value(number("2"))]),
                 MapAccessSyntax::Bracket,
             ),
             map_access_key(
@@ -1902,4 +1891,15 @@ fn test_select_as_value() {
     );
     let select = bigquery().verified_only_select("SELECT AS VALUE STRUCT(1 AS a, 2 AS b) AS xyz");
     assert_eq!(Some(ValueTableMode::AsValue), select.value_table_mode);
+}
+
+#[test]
+fn test_array_agg() {
+    bigquery_and_generic().verified_expr("ARRAY_AGG(state)");
+    bigquery_and_generic().verified_expr("ARRAY_CONCAT_AGG(x LIMIT 2)");
+    bigquery_and_generic().verified_expr("ARRAY_AGG(state IGNORE NULLS LIMIT 10)");
+    bigquery_and_generic().verified_expr("ARRAY_AGG(state RESPECT NULLS ORDER BY population)");
+    bigquery_and_generic()
+        .verified_expr("ARRAY_AGG(DISTINCT state IGNORE NULLS ORDER BY population DESC LIMIT 10)");
+    bigquery_and_generic().verified_expr("ARRAY_CONCAT_AGG(x ORDER BY ARRAY_LENGTH(x))");
 }

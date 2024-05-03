@@ -1634,78 +1634,23 @@ fn parse_insert_with_on_duplicate_update() {
                 Some(OnInsert::DuplicateKeyUpdate(vec![
                     Assignment {
                         id: vec![Ident::new("description".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("description"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("description"))]),
                     },
                     Assignment {
                         id: vec![Ident::new("perm_create".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_create"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_create"))]),
                     },
                     Assignment {
                         id: vec![Ident::new("perm_read".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_read"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_read"))]),
                     },
                     Assignment {
                         id: vec![Ident::new("perm_update".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_update"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_update"))]),
                     },
                     Assignment {
                         id: vec![Ident::new("perm_delete".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_delete"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_delete"))]),
                     },
                 ])),
                 on
@@ -2385,16 +2330,7 @@ fn parse_table_colum_option_on_update() {
                     collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
-                        option: ColumnOption::OnUpdate(Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
-                            args: vec![],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })),
+                        option: ColumnOption::OnUpdate(call("CURRENT_TIMESTAMP", [])),
                     },],
                 }],
                 columns

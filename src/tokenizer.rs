@@ -35,11 +35,10 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
+use crate::dialect::Dialect;
 use crate::dialect::{
-    BigQueryDialect, DuckDbDialect, GenericDialect, HiveDialect, PostgreSqlDialect,
-    SnowflakeDialect,
+    BigQueryDialect, DuckDbDialect, GenericDialect, PostgreSqlDialect, SnowflakeDialect,
 };
-use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
 /// SQL Token enumeration
@@ -821,10 +820,7 @@ impl<'a> Tokenizer<'a> {
 
                     // mysql dialect supports identifiers that start with a numeric prefix,
                     // as long as they aren't an exponent number.
-                    if (dialect_of!(self is MySqlDialect | HiveDialect)
-                        || self.dialect.supports_numeric_prefix())
-                        && exponent_part.is_empty()
-                    {
+                    if self.dialect.supports_numeric_prefix() && exponent_part.is_empty() {
                         let word =
                             peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
 
@@ -1547,7 +1543,9 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dialect::{BigQueryDialect, ClickHouseDialect, MsSqlDialect};
+    use crate::dialect::{
+        BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect,
+    };
     use core::fmt::Debug;
 
     #[test]

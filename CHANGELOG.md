@@ -24,6 +24,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Fix redundant brackets in Hive/Snowflake/Redshift (#1229) - Thanks @yuval-illumex
 
 ### Added
+* Support values without parens in Snowflake and DataBricks (#1249) - Thanks @HiranmayaGundu
 * Support WINDOW clause after QUALIFY when parsing (#1248) - Thanks @iffyio
 * Support `DECLARE` parsing for mssql (#1235) - Thanks @devanbenz
 * Support `?`-based jsonb operators in Postgres (#1242) - THanks @ReppCodes

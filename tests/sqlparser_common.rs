@@ -401,6 +401,7 @@ fn parse_update_set_from() {
                             having: None,
                             named_window: vec![],
                             qualify: None,
+                            window_before_qualify: false,
                             value_table_mode: None,
                             connect_by: None,
                         }))),
@@ -4553,10 +4554,32 @@ fn test_parse_named_window() {
             ),
         ],
         qualify: None,
+        window_before_qualify: true,
         value_table_mode: None,
         connect_by: None,
     };
     assert_eq!(actual_select_only, expected);
+}
+
+#[test]
+fn parse_window_and_qualify_clause() {
+    let sql = "SELECT \
+    MIN(c12) OVER window1 AS min1 \
+    FROM aggregate_test_100 \
+    QUALIFY ROW_NUMBER() OVER my_window \
+    WINDOW window1 AS (ORDER BY C12), \
+    window2 AS (PARTITION BY C11) \
+    ORDER BY C3";
+    verified_only_select(sql);
+
+    let sql = "SELECT \
+    MIN(c12) OVER window1 AS min1 \
+    FROM aggregate_test_100 \
+    WINDOW window1 AS (ORDER BY C12), \
+    window2 AS (PARTITION BY C11) \
+    QUALIFY ROW_NUMBER() OVER my_window \
+    ORDER BY C3";
+    verified_only_select(sql);
 }
 
 #[test]
@@ -4925,6 +4948,7 @@ fn parse_interval_and_or_xor() {
             having: None,
             named_window: vec![],
             qualify: None,
+            window_before_qualify: false,
             value_table_mode: None,
             connect_by: None,
         }))),
@@ -6817,6 +6841,7 @@ fn lateral_function() {
         having: None,
         named_window: vec![],
         qualify: None,
+        window_before_qualify: false,
         value_table_mode: None,
         connect_by: None,
     };
@@ -7461,6 +7486,7 @@ fn parse_merge() {
                             sort_by: vec![],
                             having: None,
                             named_window: vec![],
+                            window_before_qualify: false,
                             qualify: None,
                             value_table_mode: None,
                             connect_by: None,
@@ -8891,6 +8917,7 @@ fn parse_unload() {
                     sort_by: vec![],
                     having: None,
                     named_window: vec![],
+                    window_before_qualify: false,
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
@@ -9034,6 +9061,7 @@ fn parse_connect_by() {
         having: None,
         named_window: vec![],
         qualify: None,
+        window_before_qualify: false,
         value_table_mode: None,
         connect_by: Some(ConnectBy {
             condition: Expr::BinaryOp {
@@ -9121,6 +9149,7 @@ fn parse_connect_by() {
             having: None,
             named_window: vec![],
             qualify: None,
+            window_before_qualify: false,
             value_table_mode: None,
             connect_by: Some(ConnectBy {
                 condition: Expr::BinaryOp {

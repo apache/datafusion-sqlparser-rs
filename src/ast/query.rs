@@ -245,6 +245,11 @@ pub struct Select {
     pub named_window: Vec<NamedWindowDefinition>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
+    /// The positioning of QUALIFY and WINDOW clauses differ between dialects.
+    /// e.g. BigQuery requires that WINDOW comes after QUALIFY, while DUCKDB accepts
+    /// WINDOW before QUALIFY.
+    /// We accept either positioning and flag the accepted variant.
+    pub window_before_qualify: bool,
     /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
     pub value_table_mode: Option<ValueTableMode>,
     /// STARTING WITH .. CONNECT BY
@@ -310,11 +315,20 @@ impl fmt::Display for Select {
         if let Some(ref having) = self.having {
             write!(f, " HAVING {having}")?;
         }
-        if !self.named_window.is_empty() {
-            write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
-        }
-        if let Some(ref qualify) = self.qualify {
-            write!(f, " QUALIFY {qualify}")?;
+        if self.window_before_qualify {
+            if !self.named_window.is_empty() {
+                write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+            }
+            if let Some(ref qualify) = self.qualify {
+                write!(f, " QUALIFY {qualify}")?;
+            }
+        } else {
+            if let Some(ref qualify) = self.qualify {
+                write!(f, " QUALIFY {qualify}")?;
+            }
+            if !self.named_window.is_empty() {
+                write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+            }
         }
         if let Some(ref connect_by) = self.connect_by {
             write!(f, " {connect_by}")?;

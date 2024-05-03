@@ -53,6 +53,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_numeric_prefix(&self) -> bool {
+        true
+    }
+
     fn parse_infix(
         &self,
         parser: &mut crate::parser::Parser,

@@ -13,6 +13,7 @@
 mod ansi;
 mod bigquery;
 mod clickhouse;
+mod databricks;
 mod duckdb;
 mod generic;
 mod hive;
@@ -32,6 +33,7 @@ use core::str::Chars;
 pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
+pub use self::databricks::DatabricksDialect;
 pub use self::duckdb::DuckDbDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
@@ -120,8 +122,36 @@ pub trait Dialect: Debug + Any {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
+    /// Determine if the dialect supports escaping characters via '\' in string literals.
+    ///
+    /// Some dialects like BigQuery and Snowflake support this while others like
+    /// Postgres do not. Such that the following is accepted by the former but
+    /// rejected by the latter.
+    /// ```sql
+    /// SELECT 'ab\'cd';
+    /// ```
+    ///
+    /// Conversely, such dialects reject the following statement which
+    /// otherwise would be valid in the other dialects.
+    /// ```sql
+    /// SELECT '\';
+    /// ```
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        false
+    }
     /// Does the dialect support `FILTER (WHERE expr)` for aggregate queries?
     fn supports_filter_during_aggregation(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports referencing another named window
+    /// within a window clause declaration.
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT * FROM mytable
+    /// WINDOW mynamed_window AS another_named_window
+    /// ```
+    fn supports_window_clause_named_window_reference(&self) -> bool {
         false
     }
     /// Returns true if the dialect supports `ARRAY_AGG() [WITHIN GROUP (ORDER BY)]` expressions.
@@ -133,6 +163,14 @@ pub trait Dialect: Debug + Any {
     }
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports CONNECT BY.
+    fn supports_connect_by(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports the MATCH_RECOGNIZE operation.
+    fn supports_match_recognize(&self) -> bool {
         false
     }
     /// Returns true if the dialect supports `(NOT) IN ()` expressions
@@ -150,6 +188,25 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports identifiers starting with a numeric prefix
     /// e.g. Table Name: 59901_user_login
     fn supports_numeric_prefix(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialects supports specifying null treatment
+    /// as part of a window function's parameter list. As opposed
+    /// to after the parameter list.
+    /// i.e The following syntax returns true
+    /// ```sql
+    /// FIRST_VALUE(a IGNORE NULLS) OVER ()
+    /// ```
+    /// while the following syntax returns false
+    /// ```sql
+    /// FIRST_VALUE(a) IGNORE NULLS OVER ()
+    /// ```
+    fn supports_window_function_null_treatment_arg(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports defining structs or objects using a
+    /// syntax like `{'x': 1, 'y': 2, 'z': 3}`.
+    fn supports_dictionary_syntax(&self) -> bool {
         false
     }
     /// Returns true if the dialect has a CONVERT function which accepts a type first
@@ -309,6 +366,10 @@ mod tests {
 
             fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
                 self.0.identifier_quote_style(identifier)
+            }
+
+            fn supports_string_literal_backslash_escape(&self) -> bool {
+                self.0.supports_string_literal_backslash_escape()
             }
 
             fn is_proper_identifier_inside_quotes(

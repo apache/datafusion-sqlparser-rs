@@ -40,7 +40,7 @@ pub enum DataType {
     /// Variable-length character type e.g. VARCHAR(10)
     Varchar(Option<CharacterLength>),
     /// Variable-length character type e.g. NVARCHAR(10)
-    Nvarchar(Option<u64>),
+    Nvarchar(Option<CharacterLength>),
     /// Uuid type
     Uuid,
     /// Large character object with optional length e.g. CHARACTER LARGE OBJECT, CHARACTER LARGE OBJECT(1000), [standard]
@@ -238,9 +238,7 @@ impl fmt::Display for DataType {
 
             DataType::CharVarying(size) => format_character_string_type(f, "CHAR VARYING", size),
             DataType::Varchar(size) => format_character_string_type(f, "VARCHAR", size),
-            DataType::Nvarchar(size) => {
-                format_type_with_optional_length(f, "NVARCHAR", size, false)
-            }
+            DataType::Nvarchar(size) => format_character_string_type(f, "NVARCHAR", size),
             DataType::Uuid => write!(f, "UUID"),
             DataType::CharacterLargeObject(size) => {
                 format_type_with_optional_length(f, "CHARACTER LARGE OBJECT", size, false)
@@ -349,7 +347,8 @@ impl fmt::Display for DataType {
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => match ty {
                 ArrayElemTypeDef::None => write!(f, "ARRAY"),
-                ArrayElemTypeDef::SquareBracket(t) => write!(f, "{t}[]"),
+                ArrayElemTypeDef::SquareBracket(t, None) => write!(f, "{t}[]"),
+                ArrayElemTypeDef::SquareBracket(t, Some(size)) => write!(f, "{t}[{size}]"),
                 ArrayElemTypeDef::AngleBracket(t) => write!(f, "ARRAY<{t}>"),
             },
             DataType::Custom(ty, modifiers) => {
@@ -592,6 +591,6 @@ pub enum ArrayElemTypeDef {
     None,
     /// `ARRAY<INT>`
     AngleBracket(Box<DataType>),
-    /// `[]INT`
-    SquareBracket(Box<DataType>),
+    /// `INT[]` or `INT[2]`
+    SquareBracket(Box<DataType>, Option<u64>),
 }

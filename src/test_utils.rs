@@ -157,6 +157,16 @@ impl TestedDialects {
         }
     }
 
+    /// Ensures that `sql` parses as a single [Query], and that
+    /// re-serializing the parse result matches the given canonical
+    /// sql string.
+    pub fn verified_query_with_canonical(&self, query: &str, canonical: &str) -> Query {
+        match self.one_statement_parses_to(query, canonical) {
+            Statement::Query(query) => *query,
+            _ => panic!("Expected Query"),
+        }
+    }
+
     /// Ensures that `sql` parses as a single [Select], and that
     /// re-serializing the parse result produces the same `sql`
     /// string (is not modified after a serialization round-trip).
@@ -207,6 +217,7 @@ pub fn all_dialects() -> TestedDialects {
         Box::new(BigQueryDialect {}) as Box<dyn Dialect>,
         Box::new(SQLiteDialect {}) as Box<dyn Dialect>,
         Box::new(DuckDbDialect {}) as Box<dyn Dialect>,
+        Box::new(DatabricksDialect {}) as Box<dyn Dialect>,
     ];
     TestedDialects {
         dialects: all_dialects,
@@ -306,4 +317,21 @@ pub fn join(relation: TableFactor) -> Join {
         relation,
         join_operator: JoinOperator::Inner(JoinConstraint::Natural),
     }
+}
+
+pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
+    Expr::Function(Function {
+        name: ObjectName(vec![Ident::new(function)]),
+        args: args
+            .into_iter()
+            .map(FunctionArgExpr::Expr)
+            .map(FunctionArg::Unnamed)
+            .collect(),
+        filter: None,
+        null_treatment: None,
+        over: None,
+        distinct: false,
+        special: false,
+        order_by: vec![],
+    })
 }

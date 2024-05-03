@@ -59,4 +59,8 @@ impl Dialect for RedshiftSqlDialect {
     fn convert_type_before_value(&self) -> bool {
         true
     }
+
+    fn supports_connect_by(&self) -> bool {
+        true
+    }
 }

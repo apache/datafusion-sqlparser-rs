@@ -33,4 +33,19 @@ impl Dialect for BigQueryDialect {
     fn is_identifier_part(&self, ch: char) -> bool {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_'
     }
+
+    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value)
+    fn supports_window_function_null_treatment_arg(&self) -> bool {
+        true
+    }
+
+    // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#escape_sequences
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#ref_named_window)
+    fn supports_window_clause_named_window_reference(&self) -> bool {
+        true
+    }
 }

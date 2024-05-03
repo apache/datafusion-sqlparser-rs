@@ -1080,6 +1080,7 @@ fn parse_select_count_distinct() {
     );
 
     verified_stmt("SELECT COUNT(ALL +x) FROM customer");
+    verified_stmt("SELECT COUNT(+x) FROM customer");
 
     let sql = "SELECT COUNT(ALL DISTINCT + x) FROM customer";
     let res = parse_sql_statements(sql);

@@ -25,9 +25,9 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::{Pivot, Unpivot};
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    AnsiDialect, BigQueryDialect, ClickHouseDialect, Dialect, DuckDbDialect, GenericDialect,
-    HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect,
-    SnowflakeDialect,
+    AnsiDialect, BigQueryDialect, ClickHouseDialect, DatabricksDialect, Dialect, DuckDbDialect,
+    GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect,
+    SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
@@ -9657,4 +9657,53 @@ fn test_dictionary_syntax() {
             },
         ]),
     )
+}
+
+#[test]
+fn tests_select_values_without_parens() {
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(SnowflakeDialect {}),
+            Box::new(DatabricksDialect {}),
+        ],
+        options: None,
+    };
+    let sql = "SELECT * FROM VALUES (1, 2), (2,3) AS tbl (id, val)";
+    let canonical = "SELECT * FROM (VALUES (1, 2), (2, 3)) AS tbl (id, val)";
+    dialects.verified_only_select_with_canonical(sql, canonical);
+}
+
+#[test]
+fn tests_select_values_without_parens_and_set_op() {
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(SnowflakeDialect {}),
+            Box::new(DatabricksDialect {}),
+        ],
+        options: None,
+    };
+    let sql = "SELECT id + 1, name FROM VALUES (1, 'Apple'), (2, 'Banana'), (3, 'Orange') AS fruits (id, name) UNION ALL SELECT 5, 'Strawberry'";
+    let canonical = "SELECT id + 1, name FROM (VALUES (1, 'Apple'), (2, 'Banana'), (3, 'Orange')) AS fruits (id, name) UNION ALL SELECT 5, 'Strawberry'";
+    let query = dialects.verified_query_with_canonical(sql, canonical);
+    match *query.body {
+        SetExpr::SetOperation {
+            op,
+            set_quantifier: _,
+            left,
+            right,
+        } => {
+            assert_eq!(SetOperator::Union, op);
+            match *left {
+                SetExpr::Select(_) => {}
+                _ => panic!("Expected a SELECT statement"),
+            }
+            match *right {
+                SetExpr::Select(_) => {}
+                _ => panic!("Expected a SELECT statement"),
+            }
+        }
+        _ => panic!("Expected a SET OPERATION"),
+    }
 }

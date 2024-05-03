@@ -117,6 +117,7 @@ fn parse_map_access_expr() {
             window_before_qualify: false,
             qualify: None,
             value_table_mode: None,
+            connect_by: None,
         },
         select
     );
@@ -232,115 +233,6 @@ fn parse_delimited_identifiers() {
 }
 
 #[test]
-fn parse_like() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = clickhouse().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = clickhouse().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that LIKE and NOT LIKE have the same precedence.
-        // This was previously mishandled (#81).
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = clickhouse().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
-fn parse_similar_to() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = clickhouse().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = clickhouse().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = clickhouse().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
 fn parse_create_table() {
     clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY ("x")"#);
     clickhouse().one_statement_parses_to(
@@ -381,11 +273,6 @@ fn parse_select_star_except_no_parens() {
         "SELECT * EXCEPT prev_status FROM anomalies",
         "SELECT * EXCEPT (prev_status) FROM anomalies",
     );
-}
-
-#[test]
-fn parse_select_star_replace() {
-    clickhouse().verified_stmt("SELECT * REPLACE (i + 1 AS i) FROM columns_transformers");
 }
 
 fn clickhouse() -> TestedDialects {

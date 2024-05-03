@@ -134,6 +134,14 @@ pub enum AlterTableOperation {
         /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
         column_position: Option<MySQLColumnPosition>,
     },
+    // CHANGE [ COLUMN ] <col_name> <data_type> [ <options> ]
+    ModifyColumn {
+        col_name: Ident,
+        data_type: DataType,
+        options: Vec<ColumnOption>,
+        /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
+        column_position: Option<MySQLColumnPosition>,
+    },
     /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -283,6 +291,22 @@ impl fmt::Display for AlterTableOperation {
                 column_position,
             } => {
                 write!(f, "CHANGE COLUMN {old_name} {new_name} {data_type}")?;
+                if !options.is_empty() {
+                    write!(f, " {}", display_separated(options, " "))?;
+                }
+                if let Some(position) = column_position {
+                    write!(f, " {position}")?;
+                }
+
+                Ok(())
+            }
+            AlterTableOperation::ModifyColumn {
+                col_name,
+                data_type,
+                options,
+                column_position,
+            } => {
+                write!(f, "MODIFY COLUMN {col_name} {data_type}")?;
                 if !options.is_empty() {
                     write!(f, " {}", display_separated(options, " "))?;
                 }

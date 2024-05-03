@@ -19,7 +19,7 @@ use sqlparser::ast::helpers::stmt_data_loading::{
 };
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SnowflakeDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::*;
 use test_utils::*;
 
@@ -168,6 +168,7 @@ fn parse_array() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
+            kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("a"))),
             data_type: DataType::Array(ArrayElemTypeDef::None),
             format: None,
@@ -182,69 +183,165 @@ fn parse_lateral_flatten() {
     snowflake().verified_only_select(r#"SELECT emp.employee_ID, emp.last_name, index, value AS project_name FROM employees AS emp, LATERAL FLATTEN(INPUT => emp.project_names) AS proj_names"#);
 }
 
+// https://docs.snowflake.com/en/user-guide/querying-semistructured
 #[test]
-fn parse_json_using_colon() {
+fn parse_semi_structured_data_traversal() {
+    // most basic case
     let sql = "SELECT a:b FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("b".to_string()))),
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Dot {
+                    key: "b".to_owned(),
+                    quoted: false
+                }]
+            },
         }),
         select.projection[0]
     );
 
-    let sql = "SELECT a:type FROM t";
+    // identifier can be quoted
+    let sql = r#"SELECT a:"my long object key name" FROM t"#;
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("type".to_string()))),
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Dot {
+                    key: "my long object key name".to_owned(),
+                    quoted: true
+                }]
+            },
         }),
         select.projection[0]
     );
 
-    let sql = "SELECT a:location FROM t";
+    // expressions are allowed in bracket notation
+    let sql = r#"SELECT a[2 + 2] FROM t"#;
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("location".to_string()))),
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Bracket {
+                    key: Expr::BinaryOp {
+                        left: Box::new(Expr::Value(number("2"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("2")))
+                    },
+                }]
+            },
         }),
         select.projection[0]
     );
 
-    let sql = "SELECT a:date FROM t";
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("date".to_string()))),
-        }),
-        select.projection[0]
-    );
+    snowflake().verified_stmt("SELECT a:b::INT FROM t");
 
-    snowflake().one_statement_parses_to("SELECT a:b::int FROM t", "SELECT CAST(a:b AS INT) FROM t");
-
-    let sql = "SELECT a:start, a:end FROM t";
+    // unquoted keywords are permitted in the object key
+    let sql = "SELECT a:select, a:from FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         vec![
             SelectItem::UnnamedExpr(Expr::JsonAccess {
-                left: Box::new(Expr::Identifier(Ident::new("a"))),
-                operator: JsonOperator::Colon,
-                right: Box::new(Expr::Value(Value::UnQuotedString("start".to_string()))),
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![JsonPathElem::Dot {
+                        key: "select".to_owned(),
+                        quoted: false
+                    }]
+                },
             }),
             SelectItem::UnnamedExpr(Expr::JsonAccess {
-                left: Box::new(Expr::Identifier(Ident::new("a"))),
-                operator: JsonOperator::Colon,
-                right: Box::new(Expr::Value(Value::UnQuotedString("end".to_string()))),
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![JsonPathElem::Dot {
+                        key: "from".to_owned(),
+                        quoted: false
+                    }]
+                },
             })
         ],
+        select.projection
+    );
+
+    // multiple levels can be traversed
+    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
+    let sql = r#"SELECT a:foo."bar".baz"#;
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: "foo".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Dot {
+                        key: "bar".to_owned(),
+                        quoted: true,
+                    },
+                    JsonPathElem::Dot {
+                        key: "baz".to_owned(),
+                        quoted: false,
+                    }
+                ]
+            },
+        })],
+        select.projection
+    );
+
+    // dot and bracket notation can be mixed (starting with : case)
+    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
+    let sql = r#"SELECT a:foo[0].bar"#;
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: "foo".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(number("0")),
+                    },
+                    JsonPathElem::Dot {
+                        key: "bar".to_owned(),
+                        quoted: false,
+                    }
+                ]
+            },
+        })],
+        select.projection
+    );
+
+    // dot and bracket notation can be mixed (starting with bracket case)
+    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
+    let sql = r#"SELECT a[0].foo.bar"#;
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(number("0")),
+                    },
+                    JsonPathElem::Dot {
+                        key: "foo".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Dot {
+                        key: "bar".to_owned(),
+                        quoted: false,
+                    }
+                ]
+            },
+        })],
         select.projection
     );
 }
@@ -309,115 +406,6 @@ fn parse_delimited_identifiers() {
 }
 
 #[test]
-fn parse_like() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that LIKE and NOT LIKE have the same precedence.
-        // This was previously mishandled (#81).
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
-fn parse_similar_to() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = snowflake().verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
 fn test_array_agg_func() {
     for sql in [
         "SELECT ARRAY_AGG(x) WITHIN GROUP (ORDER BY x) AS a FROM T",
@@ -440,6 +428,13 @@ fn snowflake() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {})],
         options: None,
+    }
+}
+
+fn snowflake_without_unescape() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(SnowflakeDialect {})],
+        options: Some(ParserOptions::new().with_unescape(false)),
     }
 }
 
@@ -984,10 +979,10 @@ fn test_create_stage_with_file_format() {
     let sql = concat!(
         "CREATE OR REPLACE STAGE my_ext_stage ",
         "URL='s3://load/files/' ",
-        "FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"
+        r#"FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"#
     );
 
-    match snowflake().verified_stmt(sql) {
+    match snowflake_without_unescape().verified_stmt(sql) {
         Statement::CreateStage { file_format, .. } => {
             assert!(file_format.options.contains(&DataLoadingOption {
                 option_name: "COMPRESSION".to_string(),
@@ -1002,12 +997,15 @@ fn test_create_stage_with_file_format() {
             assert!(file_format.options.contains(&DataLoadingOption {
                 option_name: "ESCAPE".to_string(),
                 option_type: DataLoadingOptionType::STRING,
-                value: "\\".to_string()
+                value: r#"\\"#.to_string()
             }));
         }
         _ => unreachable!(),
     };
-    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    assert_eq!(
+        snowflake_without_unescape().verified_stmt(sql).to_string(),
+        sql
+    );
 }
 
 #[test]
@@ -1242,10 +1240,10 @@ fn test_copy_into_file_format() {
         "FROM 'gcs://mybucket/./../a.csv' ",
         "FILES = ('file1.json', 'file2.json') ",
         "PATTERN = '.*employees0[1-5].csv.gz' ",
-        "FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"
+        r#"FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"#
     );
 
-    match snowflake().verified_stmt(sql) {
+    match snowflake_without_unescape().verified_stmt(sql) {
         Statement::CopyIntoSnowflake { file_format, .. } => {
             assert!(file_format.options.contains(&DataLoadingOption {
                 option_name: "COMPRESSION".to_string(),
@@ -1260,12 +1258,15 @@ fn test_copy_into_file_format() {
             assert!(file_format.options.contains(&DataLoadingOption {
                 option_name: "ESCAPE".to_string(),
                 option_type: DataLoadingOptionType::STRING,
-                value: "\\".to_string()
+                value: r#"\\"#.to_string()
             }));
         }
         _ => unreachable!(),
     }
-    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+    assert_eq!(
+        snowflake_without_unescape().verified_stmt(sql).to_string(),
+        sql
+    );
 }
 
 #[test]
@@ -1553,4 +1554,43 @@ fn parse_comma_outer_join() {
 #[test]
 fn test_sf_trailing_commas() {
     snowflake().verified_only_select_with_canonical("SELECT 1, 2, FROM t", "SELECT 1, 2 FROM t");
+}
+
+#[test]
+fn test_select_wildcard_with_ilike() {
+    let select = snowflake_and_generic().verified_only_select(r#"SELECT * ILIKE '%id%' FROM tbl"#);
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_ilike: Some(IlikeSelectItem {
+            pattern: "%id%".to_owned(),
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+}
+
+#[test]
+fn test_select_wildcard_with_ilike_double_quote() {
+    let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE "%id" FROM tbl"#);
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "sql parser error: Expected ilike pattern, found: \"%id\""
+    );
+}
+
+#[test]
+fn test_select_wildcard_with_ilike_number() {
+    let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE 42 FROM tbl"#);
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "sql parser error: Expected ilike pattern, found: 42"
+    );
+}
+
+#[test]
+fn test_select_wildcard_with_ilike_replace() {
+    let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE '%id%' EXCLUDE col FROM tbl"#);
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "sql parser error: Expected end of statement, found: EXCLUDE"
+    );
 }

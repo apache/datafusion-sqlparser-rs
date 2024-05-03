@@ -910,6 +910,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 qualify: None,
                 window_before_qualify: false,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -956,6 +957,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 qualify: None,
                 window_before_qualify: false,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -999,6 +1001,7 @@ fn parse_escaped_backticks_with_escape() {
                 qualify: None,
                 window_before_qualify: false,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -1042,6 +1045,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 qualify: None,
                 window_before_qualify: false,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -1063,78 +1067,6 @@ fn parse_unterminated_escape() {
     let sql = r"SELECT 'I\\'m not fine'";
     let result = std::panic::catch_unwind(|| mysql().one_statement_parses_to(sql, ""));
     assert!(result.is_err());
-}
-
-#[test]
-fn parse_escaped_string_with_escape() {
-    fn assert_mysql_query_value(sql: &str, quoted: &str) {
-        let stmt = TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
-            options: None,
-        }
-        .one_statement_parses_to(sql, "");
-
-        match stmt {
-            Statement::Query(query) => match *query.body {
-                SetExpr::Select(value) => {
-                    let expr = expr_from_projection(only(&value.projection));
-                    assert_eq!(
-                        *expr,
-                        Expr::Value(Value::SingleQuotedString(quoted.to_string()))
-                    );
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        };
-    }
-    let sql = r"SELECT 'I\'m fine'";
-    assert_mysql_query_value(sql, "I'm fine");
-
-    let sql = r#"SELECT 'I''m fine'"#;
-    assert_mysql_query_value(sql, "I'm fine");
-
-    let sql = r#"SELECT 'I\"m fine'"#;
-    assert_mysql_query_value(sql, "I\"m fine");
-
-    let sql = r"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '";
-    assert_mysql_query_value(sql, "Testing: \0 \\ % _ \u{8} \n \r \t \u{1a} a  ");
-}
-
-#[test]
-fn parse_escaped_string_with_no_escape() {
-    fn assert_mysql_query_value(sql: &str, quoted: &str) {
-        let stmt = TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
-            options: Some(ParserOptions::new().with_unescape(false)),
-        }
-        .one_statement_parses_to(sql, "");
-
-        match stmt {
-            Statement::Query(query) => match *query.body {
-                SetExpr::Select(value) => {
-                    let expr = expr_from_projection(only(&value.projection));
-                    assert_eq!(
-                        *expr,
-                        Expr::Value(Value::SingleQuotedString(quoted.to_string()))
-                    );
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        };
-    }
-    let sql = r"SELECT 'I\'m fine'";
-    assert_mysql_query_value(sql, r"I\'m fine");
-
-    let sql = r#"SELECT 'I''m fine'"#;
-    assert_mysql_query_value(sql, r#"I''m fine"#);
-
-    let sql = r#"SELECT 'I\"m fine'"#;
-    assert_mysql_query_value(sql, r#"I\"m fine"#);
-
-    let sql = r"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '";
-    assert_mysql_query_value(sql, r"Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ ");
 }
 
 #[test]
@@ -1287,13 +1219,13 @@ fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";
 
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1339,14 +1271,14 @@ fn parse_ignore_insert() {
     let sql = r"INSERT IGNORE INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ignore,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1381,14 +1313,14 @@ fn parse_priority_insert() {
     let sql = r"INSERT HIGH_PRIORITY INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             priority,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1420,14 +1352,14 @@ fn parse_priority_insert() {
     let sql2 = r"INSERT LOW_PRIORITY INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
     match mysql().verified_stmt(sql2) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             priority,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1461,13 +1393,13 @@ fn parse_priority_insert() {
 fn parse_insert_as() {
     let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias`";
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             insert_alias,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::with_quote('`', "table")]),
                 table_name
@@ -1511,13 +1443,13 @@ fn parse_insert_as() {
 
     let sql = r"INSERT INTO `table` (`id`, `date`) VALUES (1, '2024-01-01') AS `alias` (`mek_id`, `mek_date`)";
     match mysql_and_generic().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             insert_alias,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::with_quote('`', "table")]),
                 table_name
@@ -1567,7 +1499,7 @@ fn parse_insert_as() {
 fn parse_replace_insert() {
     let sql = r"REPLACE DELAYED INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
@@ -1575,7 +1507,7 @@ fn parse_replace_insert() {
             replace_into,
             priority,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
@@ -1611,13 +1543,13 @@ fn parse_empty_row_insert() {
     let sql = "INSERT INTO tb () VALUES (), ()";
 
     match mysql().one_statement_parses_to(sql, "INSERT INTO tb VALUES (), ()") {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("tb")]), table_name);
             assert!(columns.is_empty());
             assert!(on.is_none());
@@ -1648,13 +1580,13 @@ fn parse_insert_with_on_duplicate_update() {
     let sql = "INSERT INTO permission_groups (name, description, perm_create, perm_read, perm_update, perm_delete) VALUES ('accounting_manager', 'Some description about the group', true, true, true, true) ON DUPLICATE KEY UPDATE description = VALUES(description), perm_create = VALUES(perm_create), perm_read = VALUES(perm_read), perm_update = VALUES(perm_update), perm_delete = VALUES(perm_delete)";
 
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             on,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::new("permission_groups")]),
                 table_name
@@ -1819,6 +1751,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     qualify: None,
                     window_before_qualify: false,
                     value_table_mode: None,
+                    connect_by: None,
                 })))
             );
         }
@@ -1871,6 +1804,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     qualify: None,
                     window_before_qualify: false,
                     value_table_mode: None,
+                    connect_by: None,
                 })))
             );
         }
@@ -1882,11 +1816,11 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
 fn parse_insert_with_numeric_prefix_column_name() {
     let sql = "INSERT INTO s1.t1 (123col_$@length123) VALUES (67.654)";
     match mysql().verified_stmt(sql) {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 ObjectName(vec![Ident::new("s1"), Ident::new("t1")]),
                 table_name
@@ -1976,7 +1910,7 @@ fn parse_update_with_joins() {
 fn parse_delete_with_order_by() {
     let sql = "DELETE FROM customers ORDER BY id DESC";
     match mysql().verified_stmt(sql) {
-        Statement::Delete { order_by, .. } => {
+        Statement::Delete(Delete { order_by, .. }) => {
             assert_eq!(
                 vec![OrderByExpr {
                     expr: Expr::Identifier(Ident {
@@ -1997,7 +1931,7 @@ fn parse_delete_with_order_by() {
 fn parse_delete_with_limit() {
     let sql = "DELETE FROM customers LIMIT 100";
     match mysql().verified_stmt(sql) {
-        Statement::Delete { limit, .. } => {
+        Statement::Delete(Delete { limit, .. }) => {
             assert_eq!(Some(Expr::Value(number("100"))), limit);
         }
         _ => unreachable!(),
@@ -2225,6 +2159,99 @@ fn parse_alter_table_change_column_with_column_position() {
 }
 
 #[test]
+fn parse_alter_table_modify_column() {
+    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_operation = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: None,
+    };
+
+    let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+
+    let sql2 = "ALTER TABLE orders MODIFY description TEXT NOT NULL";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+    let sql3 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql3), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+
+    let expected_operation = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("foo"),
+            quote_style: None,
+        })),
+    };
+    let sql4 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL AFTER foo";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql4), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
+}
+
+#[test]
+fn parse_alter_table_modify_column_with_column_position() {
+    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_operation_first = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::First),
+    };
+
+    let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL FIRST";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_first, operation);
+
+    let sql2 = "ALTER TABLE orders MODIFY description TEXT NOT NULL FIRST";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_first, operation);
+
+    let expected_operation_after = AlterTableOperation::ModifyColumn {
+        col_name: Ident::new("description"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+        column_position: Some(MySQLColumnPosition::After(Ident {
+            value: String::from("total_count"),
+            quote_style: None,
+        })),
+    };
+
+    let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL AFTER total_count";
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation_after, operation);
+
+    let sql2 = "ALTER TABLE orders MODIFY description TEXT NOT NULL AFTER total_count";
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation_after, operation);
+}
+
+#[test]
 fn parse_substring_in_select() {
     let sql = "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test";
     match mysql().one_statement_parses_to(
@@ -2273,6 +2300,7 @@ fn parse_substring_in_select() {
                         window_before_qualify: false,
                         qualify: None,
                         value_table_mode: None,
+                        connect_by: None,
                     }))),
                     order_by: vec![],
                     limit: None,
@@ -2585,7 +2613,8 @@ fn parse_hex_string_introducer() {
                 window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
-                into: None
+                into: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,

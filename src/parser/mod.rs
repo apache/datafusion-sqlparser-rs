@@ -2801,9 +2801,7 @@ impl<'a> Parser<'a> {
 
         let token = self.peek_token();
         debug!("get_next_precedence() {:?}", token);
-        let token_0 = self.peek_nth_token(0);
-        let token_1 = self.peek_nth_token(1);
-        let token_2 = self.peek_nth_token(2);
+        let [token_0, token_1, token_2] = self.peek_tokens_with_location();
         debug!("0: {token_0} 1: {token_1} 2: {token_2}");
         match token.token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(Self::OR_PREC),
@@ -2910,14 +2908,19 @@ impl<'a> Parser<'a> {
     /// // Note that the Rust infers the number of tokens to peek based on the
     /// // slice pattern!
     /// assert!(matches!(
-    ///     parser.peek_tokens().map(|with_loc| with_loc.token),
+    ///     parser.peek_tokens(),
     ///     [
     ///         Token::Word(Word { keyword: Keyword::ORDER, .. }),
     ///         Token::Word(Word { keyword: Keyword::BY, .. }),
     ///     ]
     /// ));
     /// ```
-    pub fn peek_tokens<const N: usize>(&self) -> [TokenWithLocation; N] {
+    pub fn peek_tokens<const N: usize>(&self) -> [Token; N] {
+        self.peek_tokens_with_location()
+            .map(|with_loc| with_loc.token)
+    }
+
+    pub fn peek_tokens_with_location<const N: usize>(&self) -> [TokenWithLocation; N] {
         let mut index = self.index;
         core::array::from_fn(|_| loop {
             let token = self.tokens.get(index);
@@ -3230,8 +3233,7 @@ impl<'a> Parser<'a> {
         }
         // (,)
         if self.options.trailing_commas
-            && matches!(self.peek_nth_token(0).token, Token::Comma)
-            && matches!(self.peek_nth_token(1).token, Token::RParen)
+            && matches!(self.peek_tokens(), [Token::Comma, Token::RParen])
         {
             let _ = self.consume_token(&Token::Comma);
             return Ok(vec![]);
@@ -10527,7 +10529,7 @@ mod tests {
     fn test_peek_tokens() {
         all_dialects().run_parser_method("SELECT foo AS bar FROM baz", |parser| {
             assert!(matches!(
-                parser.peek_tokens().map(|t| t.token),
+                parser.peek_tokens(),
                 [Token::Word(Word {
                     keyword: Keyword::SELECT,
                     ..
@@ -10535,7 +10537,7 @@ mod tests {
             ));
 
             assert!(matches!(
-                parser.peek_tokens().map(|t| t.token),
+                parser.peek_tokens(),
                 [
                     Token::Word(Word {
                         keyword: Keyword::SELECT,
@@ -10554,7 +10556,7 @@ mod tests {
             }
 
             assert!(matches!(
-                parser.peek_tokens().map(|t| t.token),
+                parser.peek_tokens(),
                 [
                     Token::Word(Word {
                         keyword: Keyword::FROM,

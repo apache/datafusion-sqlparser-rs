@@ -2895,6 +2895,47 @@ impl<'a> Parser<'a> {
         self.peek_nth_token(0)
     }
 
+    /// Returns the `N` next non-whitespace tokens that have not yet been
+    /// processed.
+    ///
+    /// Example:
+    /// ```rust
+    /// # use sqlparser::dialect::GenericDialect;
+    /// # use sqlparser::parser::Parser;
+    /// # use sqlparser::keywords::Keyword;
+    /// # use sqlparser::tokenizer::{Token, Word};
+    /// let dialect = GenericDialect {};
+    /// let mut parser = Parser::new(&dialect).try_with_sql("ORDER BY foo, bar").unwrap();
+    ///
+    /// // Note that the Rust infers the number of tokens to peek based on the
+    /// // slice pattern!
+    /// assert!(matches!(
+    ///     parser.peek_tokens().map(|with_loc| with_loc.token),
+    ///     [
+    ///         Token::Word(Word { keyword: Keyword::ORDER, .. }),
+    ///         Token::Word(Word { keyword: Keyword::BY, .. }),
+    ///     ]
+    /// ));
+    /// ```
+    pub fn peek_tokens<const N: usize>(&self) -> [TokenWithLocation; N] {
+        let mut index = self.index;
+        std::array::from_fn(|_| loop {
+            let token = self.tokens.get(index);
+            index += 1;
+            if let Some(TokenWithLocation {
+                token: Token::Whitespace(_),
+                location: _,
+            }) = token
+            {
+                continue;
+            }
+            break token.cloned().unwrap_or(TokenWithLocation {
+                token: Token::EOF,
+                location: Location { line: 0, column: 0 },
+            });
+        })
+    }
+
     /// Return nth non-whitespace token that has not yet been processed
     pub fn peek_nth_token(&self, mut n: usize) -> TokenWithLocation {
         let mut index = self.index;
@@ -10480,6 +10521,51 @@ mod tests {
             assert_eq!(parser.next_token(), Token::EOF);
             parser.prev_token();
         });
+    }
+
+    #[test]
+    fn test_peek_tokens() {
+        all_dialects().run_parser_method("SELECT foo AS bar FROM baz", |parser| {
+            assert!(matches!(
+                parser.peek_tokens().map(|t| t.token),
+                [Token::Word(Word {
+                    keyword: Keyword::SELECT,
+                    ..
+                })]
+            ));
+
+            assert!(matches!(
+                parser.peek_tokens().map(|t| t.token),
+                [
+                    Token::Word(Word {
+                        keyword: Keyword::SELECT,
+                        ..
+                    }),
+                    Token::Word(_),
+                    Token::Word(Word {
+                        keyword: Keyword::AS,
+                        ..
+                    }),
+                ]
+            ));
+
+            for _ in 0..4 {
+                parser.next_token();
+            }
+
+            assert!(matches!(
+                parser.peek_tokens().map(|t| t.token),
+                [
+                    Token::Word(Word {
+                        keyword: Keyword::FROM,
+                        ..
+                    }),
+                    Token::Word(_),
+                    Token::EOF,
+                    Token::EOF,
+                ]
+            ))
+        })
     }
 
     #[cfg(test)]

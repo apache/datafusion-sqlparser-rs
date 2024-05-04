@@ -4908,6 +4908,10 @@ pub enum FunctionArgumentClause {
     ///
     /// See <https://trino.io/docs/current/functions/aggregate.html>.
     OnOverflow(ListAggOnOverflow),
+    /// The `SEPARATOR` clause to the [`GROUP_CONCAT`] function in MySQL.
+    ///
+    /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
+    Separator(Value),
 }
 
 impl fmt::Display for FunctionArgumentClause {
@@ -4921,6 +4925,7 @@ impl fmt::Display for FunctionArgumentClause {
             }
             FunctionArgumentClause::Limit(limit) => write!(f, "LIMIT {limit}"),
             FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
+            FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
         }
     }
 }

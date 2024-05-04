@@ -1022,7 +1022,7 @@ impl<'a> Parser<'a> {
                     // Support parsing Databricks has a function named `exists`.
                     if !dialect_of!(self is DatabricksDialect)
                         || matches!(
-                            dbg!(self.peek_nth_token(1).token),
+                            self.peek_nth_token(1).token,
                             Token::Word(Word {
                                 keyword: Keyword::SELECT | Keyword::WITH,
                                 ..

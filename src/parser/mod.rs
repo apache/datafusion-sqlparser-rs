@@ -2155,13 +2155,12 @@ impl<'a> Parser<'a> {
     fn parse_big_query_struct_field_def(
         &mut self,
     ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
-        let is_anonymous_field = if let Token::Word(w) = self.peek_token().token {
-            ALL_KEYWORDS
-                .binary_search(&w.value.to_uppercase().as_str())
-                .is_ok()
-        } else {
-            false
-        };
+        // Look beyond the next item to infer whether both field name
+        // and type are specified.
+        let is_anonymous_field = !matches!(
+            (self.peek_nth_token(0).token, self.peek_nth_token(1).token),
+            (Token::Word(_), Token::Word(_))
+        );
 
         let field_name = if is_anonymous_field {
             None

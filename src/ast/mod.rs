@@ -4912,10 +4912,10 @@ pub enum FunctionArgumentClause {
     ///
     /// Syntax:
     /// ```plaintext
-    /// ANY_VALUE(expression [ HAVING { MAX | MIN } expression2 ]
+    /// HAVING { MAX | MIN } expression
     /// ```
     ///
-    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#any_value)
+    /// [`ANY_VALUE`]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#any_value
     Having(HavingBound),
 }
 
@@ -5038,7 +5038,7 @@ impl fmt::Display for ListAggOnOverflow {
     }
 }
 
-/// The HAVING clause in a call to `ANY_VALUE` on BigQuery.
+/// The `HAVING` clause in a call to `ANY_VALUE` on BigQuery.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

@@ -1143,7 +1143,6 @@ impl<'a> Parser<'a> {
                             body: Box::new(self.parse_expr()?),
                         }));
                     }
-                    // HERE
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word

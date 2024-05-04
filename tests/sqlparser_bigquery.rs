@@ -1903,3 +1903,13 @@ fn test_array_agg() {
         .verified_expr("ARRAY_AGG(DISTINCT state IGNORE NULLS ORDER BY population DESC LIMIT 10)");
     bigquery_and_generic().verified_expr("ARRAY_CONCAT_AGG(x ORDER BY ARRAY_LENGTH(x))");
 }
+
+#[test]
+fn test_any_value() {
+    bigquery_and_generic().verified_expr("ANY_VALUE(fruit)");
+    bigquery_and_generic().verified_expr(
+        "ANY_VALUE(fruit) OVER (ORDER BY LENGTH(fruit) ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)",
+    );
+    bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MAX sold)");
+    bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MIN sold)");
+}

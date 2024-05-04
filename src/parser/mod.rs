@@ -3590,95 +3590,53 @@ impl<'a> Parser<'a> {
         temporary: bool,
     ) -> Result<Statement, ParserError> {
         if dialect_of!(self is HiveDialect) {
-            let name = self.parse_object_name(false)?;
-            self.expect_keyword(Keyword::AS)?;
-            let class_name = self.parse_function_definition()?;
-            let params = CreateFunctionBody {
-                as_: Some(class_name),
-                using: self.parse_optional_create_function_using()?,
-                ..Default::default()
-            };
-
-            Ok(Statement::CreateFunction {
-                or_replace,
-                temporary,
-                name,
-                args: None,
-                return_type: None,
-                params,
-            })
+            self.parse_hive_create_function(or_replace, temporary)
         } else if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
-            let name = self.parse_object_name(false)?;
-            self.expect_token(&Token::LParen)?;
-            let args = if self.consume_token(&Token::RParen) {
-                self.prev_token();
-                None
-            } else {
-                Some(self.parse_comma_separated(Parser::parse_function_arg)?)
-            };
-
-            self.expect_token(&Token::RParen)?;
-
-            let return_type = if self.parse_keyword(Keyword::RETURNS) {
-                Some(self.parse_data_type()?)
-            } else {
-                None
-            };
-
-            let params = self.parse_create_function_body()?;
-
-            Ok(Statement::CreateFunction {
-                or_replace,
-                temporary,
-                name,
-                args,
-                return_type,
-                params,
-            })
+            self.parse_postgres_create_function(or_replace, temporary)
         } else if dialect_of!(self is DuckDbDialect) {
             self.parse_create_macro(or_replace, temporary)
+        } else if dialect_of!(self is BigQueryDialect) {
+            self.parse_bigquery_create_function(or_replace, temporary)
         } else {
             self.prev_token();
             self.expected("an object type after CREATE", self.peek_token())
         }
     }
 
-    fn parse_function_arg(&mut self) -> Result<OperateFunctionArg, ParserError> {
-        let mode = if self.parse_keyword(Keyword::IN) {
-            Some(ArgMode::In)
-        } else if self.parse_keyword(Keyword::OUT) {
-            Some(ArgMode::Out)
-        } else if self.parse_keyword(Keyword::INOUT) {
-            Some(ArgMode::InOut)
+    /// Parse `CREATE FUNCTION` for [Postgres]
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/15/sql-createfunction.html
+    fn parse_postgres_create_function(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_token(&Token::LParen)?;
+        let args = if self.consume_token(&Token::RParen) {
+            self.prev_token();
+            None
+        } else {
+            Some(self.parse_comma_separated(Parser::parse_function_arg)?)
+        };
+
+        self.expect_token(&Token::RParen)?;
+
+        let return_type = if self.parse_keyword(Keyword::RETURNS) {
+            Some(self.parse_data_type()?)
         } else {
             None
         };
 
-        // parse: [ argname ] argtype
-        let mut name = None;
-        let mut data_type = self.parse_data_type()?;
-        if let DataType::Custom(n, _) = &data_type {
-            // the first token is actually a name
-            name = Some(n.0[0].clone());
-            data_type = self.parse_data_type()?;
+        #[derive(Default)]
+        struct Body {
+            language: Option<Ident>,
+            behavior: Option<FunctionBehavior>,
+            function_body: Option<CreateFunctionBody>,
+            called_on_null: Option<FunctionCalledOnNull>,
+            parallel: Option<FunctionParallel>,
         }
-
-        let default_expr = if self.parse_keyword(Keyword::DEFAULT) || self.consume_token(&Token::Eq)
-        {
-            Some(self.parse_expr()?)
-        } else {
-            None
-        };
-        Ok(OperateFunctionArg {
-            mode,
-            name,
-            data_type,
-            default_expr,
-        })
-    }
-
-    fn parse_create_function_body(&mut self) -> Result<CreateFunctionBody, ParserError> {
-        let mut body = CreateFunctionBody::default();
+        let mut body = Body::default();
         loop {
             fn ensure_not_set<T>(field: &Option<T>, name: &str) -> Result<(), ParserError> {
                 if field.is_some() {
@@ -3689,8 +3647,10 @@ impl<'a> Parser<'a> {
                 Ok(())
             }
             if self.parse_keyword(Keyword::AS) {
-                ensure_not_set(&body.as_, "AS")?;
-                body.as_ = Some(self.parse_function_definition()?);
+                ensure_not_set(&body.function_body, "AS")?;
+                body.function_body = Some(CreateFunctionBody::AsBeforeOptions(
+                    self.parse_create_function_body_string()?,
+                ));
             } else if self.parse_keyword(Keyword::LANGUAGE) {
                 ensure_not_set(&body.language, "LANGUAGE")?;
                 body.language = Some(self.parse_identifier(false)?);
@@ -3744,12 +3704,186 @@ impl<'a> Parser<'a> {
                     return self.expected("one of UNSAFE | RESTRICTED | SAFE", self.peek_token());
                 }
             } else if self.parse_keyword(Keyword::RETURN) {
-                ensure_not_set(&body.return_, "RETURN")?;
-                body.return_ = Some(self.parse_expr()?);
+                ensure_not_set(&body.function_body, "RETURN")?;
+                body.function_body = Some(CreateFunctionBody::Return(self.parse_expr()?));
             } else {
-                return Ok(body);
+                break;
             }
         }
+
+        Ok(Statement::CreateFunction {
+            or_replace,
+            temporary,
+            name,
+            args,
+            return_type,
+            behavior: body.behavior,
+            called_on_null: body.called_on_null,
+            parallel: body.parallel,
+            language: body.language,
+            function_body: body.function_body,
+            if_not_exists: false,
+            using: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        })
+    }
+
+    /// Parse `CREATE FUNCTION` for [Hive]
+    ///
+    /// [Hive]: https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction
+    fn parse_hive_create_function(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_keyword(Keyword::AS)?;
+
+        let as_ = self.parse_create_function_body_string()?;
+        let using = self.parse_optional_create_function_using()?;
+
+        Ok(Statement::CreateFunction {
+            or_replace,
+            temporary,
+            name,
+            function_body: Some(CreateFunctionBody::AsBeforeOptions(as_)),
+            using,
+            if_not_exists: false,
+            args: None,
+            return_type: None,
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            language: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        })
+    }
+
+    /// Parse `CREATE FUNCTION` for [BigQuery]
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement
+    fn parse_bigquery_create_function(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+
+        let parse_function_param =
+            |parser: &mut Parser| -> Result<OperateFunctionArg, ParserError> {
+                let name = parser.parse_identifier(false)?;
+                let data_type = parser.parse_data_type()?;
+                Ok(OperateFunctionArg {
+                    mode: None,
+                    name: Some(name),
+                    data_type,
+                    default_expr: None,
+                })
+            };
+        self.expect_token(&Token::LParen)?;
+        let args = self.parse_comma_separated0(parse_function_param)?;
+        self.expect_token(&Token::RParen)?;
+
+        let return_type = if self.parse_keyword(Keyword::RETURNS) {
+            Some(self.parse_data_type()?)
+        } else {
+            None
+        };
+
+        let determinism_specifier = if self.parse_keyword(Keyword::DETERMINISTIC) {
+            Some(FunctionDeterminismSpecifier::Deterministic)
+        } else if self.parse_keywords(&[Keyword::NOT, Keyword::DETERMINISTIC]) {
+            Some(FunctionDeterminismSpecifier::NotDeterministic)
+        } else {
+            None
+        };
+
+        let language = if self.parse_keyword(Keyword::LANGUAGE) {
+            Some(self.parse_identifier(false)?)
+        } else {
+            None
+        };
+
+        let remote_connection =
+            if self.parse_keywords(&[Keyword::REMOTE, Keyword::WITH, Keyword::CONNECTION]) {
+                Some(self.parse_object_name(false)?)
+            } else {
+                None
+            };
+
+        // `OPTIONS` may come before of after the function body but
+        // may be specified at most once.
+        let mut options = self.maybe_parse_options(Keyword::OPTIONS)?;
+
+        let function_body = if remote_connection.is_none() {
+            self.expect_keyword(Keyword::AS)?;
+            let expr = self.parse_expr()?;
+            if options.is_none() {
+                options = self.maybe_parse_options(Keyword::OPTIONS)?;
+                Some(CreateFunctionBody::AsBeforeOptions(expr))
+            } else {
+                Some(CreateFunctionBody::AsAfterOptions(expr))
+            }
+        } else {
+            None
+        };
+
+        Ok(Statement::CreateFunction {
+            or_replace,
+            temporary,
+            if_not_exists,
+            name,
+            args: Some(args),
+            return_type,
+            function_body,
+            language,
+            determinism_specifier,
+            options,
+            remote_connection,
+            using: None,
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+        })
+    }
+
+    fn parse_function_arg(&mut self) -> Result<OperateFunctionArg, ParserError> {
+        let mode = if self.parse_keyword(Keyword::IN) {
+            Some(ArgMode::In)
+        } else if self.parse_keyword(Keyword::OUT) {
+            Some(ArgMode::Out)
+        } else if self.parse_keyword(Keyword::INOUT) {
+            Some(ArgMode::InOut)
+        } else {
+            None
+        };
+
+        // parse: [ argname ] argtype
+        let mut name = None;
+        let mut data_type = self.parse_data_type()?;
+        if let DataType::Custom(n, _) = &data_type {
+            // the first token is actually a name
+            name = Some(n.0[0].clone());
+            data_type = self.parse_data_type()?;
+        }
+
+        let default_expr = if self.parse_keyword(Keyword::DEFAULT) || self.consume_token(&Token::Eq)
+        {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(OperateFunctionArg {
+            mode,
+            name,
+            data_type,
+            default_expr,
+        })
     }
 
     pub fn parse_create_macro(
@@ -3893,12 +4027,9 @@ impl<'a> Parser<'a> {
         };
 
         if dialect_of!(self is BigQueryDialect | GenericDialect) {
-            if let Token::Word(word) = self.peek_token().token {
-                if word.keyword == Keyword::OPTIONS {
-                    let opts = self.parse_options(Keyword::OPTIONS)?;
-                    if !opts.is_empty() {
-                        options = CreateTableOptions::Options(opts);
-                    }
+            if let Some(opts) = self.maybe_parse_options(Keyword::OPTIONS)? {
+                if !opts.is_empty() {
+                    options = CreateTableOptions::Options(opts);
                 }
             };
         }
@@ -5680,6 +5811,18 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn maybe_parse_options(
+        &mut self,
+        keyword: Keyword,
+    ) -> Result<Option<Vec<SqlOption>>, ParserError> {
+        if let Token::Word(word) = self.peek_token().token {
+            if word.keyword == keyword {
+                return Ok(Some(self.parse_options(keyword)?));
+            }
+        };
+        Ok(None)
+    }
+
     pub fn parse_options(&mut self, keyword: Keyword) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keyword(keyword) {
             self.expect_token(&Token::LParen)?;
@@ -6521,19 +6664,22 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_function_definition(&mut self) -> Result<FunctionDefinition, ParserError> {
+    /// Parse the body of a `CREATE FUNCTION` specified as a string.
+    /// e.g. `CREATE FUNCTION ... AS $$ body $$`.
+    fn parse_create_function_body_string(&mut self) -> Result<Expr, ParserError> {
         let peek_token = self.peek_token();
         match peek_token.token {
-            Token::DollarQuotedString(value) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+            Token::DollarQuotedString(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
             {
                 self.next_token();
-                Ok(FunctionDefinition::DoubleDollarDef(value.value))
+                Ok(Expr::Value(Value::DollarQuotedString(s)))
             }
-            _ => Ok(FunctionDefinition::SingleQuotedDef(
+            _ => Ok(Expr::Value(Value::SingleQuotedString(
                 self.parse_literal_string()?,
-            )),
+            ))),
         }
     }
+
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         let next_token = self.next_token();

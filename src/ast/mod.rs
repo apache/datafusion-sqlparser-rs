@@ -2454,14 +2454,64 @@ pub enum Statement {
     /// Supported variants:
     /// 1. [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction)
     /// 2. [Postgres](https://www.postgresql.org/docs/15/sql-createfunction.html)
+    /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
     CreateFunction {
         or_replace: bool,
         temporary: bool,
+        if_not_exists: bool,
         name: ObjectName,
         args: Option<Vec<OperateFunctionArg>>,
         return_type: Option<DataType>,
-        /// Optional parameters.
-        params: CreateFunctionBody,
+        /// The expression that defines the function.
+        ///
+        /// Examples:
+        /// ```sql
+        /// AS ((SELECT 1))
+        /// AS "console.log();"
+        /// ```
+        function_body: Option<CreateFunctionBody>,
+        /// Behavior attribute for the function
+        ///
+        /// IMMUTABLE | STABLE | VOLATILE
+        ///
+        /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+        behavior: Option<FunctionBehavior>,
+        /// CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
+        ///
+        /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+        called_on_null: Option<FunctionCalledOnNull>,
+        /// PARALLEL { UNSAFE | RESTRICTED | SAFE }
+        ///
+        /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+        parallel: Option<FunctionParallel>,
+        /// USING ... (Hive only)
+        using: Option<CreateFunctionUsing>,
+        /// Language used in a UDF definition.
+        ///
+        /// Example:
+        /// ```sql
+        /// CREATE FUNCTION foo() LANGUAGE js AS "console.log();"
+        /// ```
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_javascript_udf)
+        language: Option<Ident>,
+        /// Determinism keyword used for non-sql UDF definitions.
+        ///
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11)
+        determinism_specifier: Option<FunctionDeterminismSpecifier>,
+        /// List of options for creating the function.
+        ///
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11)
+        options: Option<Vec<SqlOption>>,
+        /// Connection resource for a remote function.
+        ///
+        /// Example:
+        /// ```sql
+        /// CREATE FUNCTION foo()
+        /// RETURNS FLOAT64
+        /// REMOTE WITH CONNECTION us.myconnection
+        /// ```
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_remote_function)
+        remote_connection: Option<ObjectName>,
     },
     /// ```sql
     /// CREATE PROCEDURE
@@ -3152,16 +3202,26 @@ impl fmt::Display for Statement {
             Statement::CreateFunction {
                 or_replace,
                 temporary,
+                if_not_exists,
                 name,
                 args,
                 return_type,
-                params,
+                function_body,
+                language,
+                behavior,
+                called_on_null,
+                parallel,
+                using,
+                determinism_specifier,
+                options,
+                remote_connection,
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{temp}FUNCTION {name}",
+                    "CREATE {or_replace}{temp}FUNCTION {if_not_exists}{name}",
                     temp = if *temporary { "TEMPORARY " } else { "" },
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 )?;
                 if let Some(args) = args {
                     write!(f, "({})", display_comma_separated(args))?;
@@ -3169,7 +3229,43 @@ impl fmt::Display for Statement {
                 if let Some(return_type) = return_type {
                     write!(f, " RETURNS {return_type}")?;
                 }
-                write!(f, "{params}")?;
+                if let Some(determinism_specifier) = determinism_specifier {
+                    write!(f, " {determinism_specifier}")?;
+                }
+                if let Some(language) = language {
+                    write!(f, " LANGUAGE {language}")?;
+                }
+                if let Some(behavior) = behavior {
+                    write!(f, " {behavior}")?;
+                }
+                if let Some(called_on_null) = called_on_null {
+                    write!(f, " {called_on_null}")?;
+                }
+                if let Some(parallel) = parallel {
+                    write!(f, " {parallel}")?;
+                }
+                if let Some(remote_connection) = remote_connection {
+                    write!(f, " REMOTE WITH CONNECTION {remote_connection}")?;
+                }
+                if let Some(CreateFunctionBody::AsBeforeOptions(function_body)) = function_body {
+                    write!(f, " AS {function_body}")?;
+                }
+                if let Some(CreateFunctionBody::Return(function_body)) = function_body {
+                    write!(f, " RETURN {function_body}")?;
+                }
+                if let Some(using) = using {
+                    write!(f, " {using}")?;
+                }
+                if let Some(options) = options {
+                    write!(
+                        f,
+                        " OPTIONS({})",
+                        display_comma_separated(options.as_slice())
+                    )?;
+                }
+                if let Some(CreateFunctionBody::AsAfterOptions(function_body)) = function_body {
+                    write!(f, " AS {function_body}")?;
+                }
                 Ok(())
             }
             Statement::CreateProcedure {
@@ -6143,75 +6239,74 @@ impl fmt::Display for FunctionParallel {
     }
 }
 
+/// [BigQuery] Determinism specifier used in a UDF definition.
+///
+/// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum FunctionDefinition {
-    SingleQuotedDef(String),
-    DoubleDollarDef(String),
+pub enum FunctionDeterminismSpecifier {
+    Deterministic,
+    NotDeterministic,
 }
 
-impl fmt::Display for FunctionDefinition {
+impl fmt::Display for FunctionDeterminismSpecifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FunctionDefinition::SingleQuotedDef(s) => write!(f, "'{s}'")?,
-            FunctionDefinition::DoubleDollarDef(s) => write!(f, "$${s}$$")?,
+            FunctionDeterminismSpecifier::Deterministic => {
+                write!(f, "DETERMINISTIC")
+            }
+            FunctionDeterminismSpecifier::NotDeterministic => {
+                write!(f, "NOT DETERMINISTIC")
+            }
         }
-        Ok(())
     }
 }
 
-/// Postgres specific feature.
+/// Represent the expression body of a `CREATE FUNCTION` statement as well as
+/// where within the statement, the body shows up.
 ///
-/// See [Postgres docs](https://www.postgresql.org/docs/15/sql-createfunction.html)
-/// for more details
-#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+/// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
+/// [Postgres]: https://www.postgresql.org/docs/15/sql-createfunction.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CreateFunctionBody {
-    /// LANGUAGE lang_name
-    pub language: Option<Ident>,
-    /// IMMUTABLE | STABLE | VOLATILE
-    pub behavior: Option<FunctionBehavior>,
-    /// CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
-    pub called_on_null: Option<FunctionCalledOnNull>,
-    /// PARALLEL { UNSAFE | RESTRICTED | SAFE }
-    pub parallel: Option<FunctionParallel>,
-    /// AS 'definition'
+pub enum CreateFunctionBody {
+    /// A function body expression using the 'AS' keyword and shows up
+    /// before any `OPTIONS` clause.
     ///
-    /// Note that Hive's `AS class_name` is also parsed here.
-    pub as_: Option<FunctionDefinition>,
-    /// RETURN expression
-    pub return_: Option<Expr>,
-    /// USING ... (Hive only)
-    pub using: Option<CreateFunctionUsing>,
-}
-
-impl fmt::Display for CreateFunctionBody {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(language) = &self.language {
-            write!(f, " LANGUAGE {language}")?;
-        }
-        if let Some(behavior) = &self.behavior {
-            write!(f, " {behavior}")?;
-        }
-        if let Some(called_on_null) = &self.called_on_null {
-            write!(f, " {called_on_null}")?;
-        }
-        if let Some(parallel) = &self.parallel {
-            write!(f, " {parallel}")?;
-        }
-        if let Some(definition) = &self.as_ {
-            write!(f, " AS {definition}")?;
-        }
-        if let Some(expr) = &self.return_ {
-            write!(f, " RETURN {expr}")?;
-        }
-        if let Some(using) = &self.using {
-            write!(f, " {using}")?;
-        }
-        Ok(())
-    }
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION myfunc(x FLOAT64, y FLOAT64) RETURNS FLOAT64
+    /// AS (x * y)
+    /// OPTIONS(description="desc");
+    /// ```
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
+    AsBeforeOptions(Expr),
+    /// A function body expression using the 'AS' keyword and shows up
+    /// after any `OPTIONS` clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION myfunc(x FLOAT64, y FLOAT64) RETURNS FLOAT64
+    /// OPTIONS(description="desc")
+    /// AS (x * y);
+    /// ```
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
+    AsAfterOptions(Expr),
+    /// Function body expression using the 'RETURN' keyword.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION myfunc(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER
+    /// LANGUAGE SQL
+    /// RETURN a + b;
+    /// ```
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    Return(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

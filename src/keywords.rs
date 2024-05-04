@@ -572,6 +572,7 @@ define_keywords!(
     RELATIVE,
     RELAY,
     RELEASE,
+    REMOTE,
     RENAME,
     REORG,
     REPAIR,

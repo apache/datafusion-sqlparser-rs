@@ -1951,6 +1951,145 @@ fn parse_map_access_expr() {
 }
 
 #[test]
+fn test_bigquery_create_function() {
+    let sql = concat!(
+        "CREATE OR REPLACE TEMPORARY FUNCTION ",
+        "project1.mydataset.myfunction(x FLOAT64) ",
+        "RETURNS FLOAT64 ",
+        "OPTIONS(x = 'y') ",
+        "AS 42"
+    );
+
+    let stmt = bigquery().verified_stmt(sql);
+    assert_eq!(
+        stmt,
+        Statement::CreateFunction {
+            or_replace: true,
+            temporary: true,
+            if_not_exists: false,
+            name: ObjectName(vec![
+                Ident::new("project1"),
+                Ident::new("mydataset"),
+                Ident::new("myfunction"),
+            ]),
+            args: Some(vec![OperateFunctionArg::with_name("x", DataType::Float64),]),
+            return_type: Some(DataType::Float64),
+            function_body: Some(CreateFunctionBody::AsAfterOptions(Expr::Value(number(
+                "42"
+            )))),
+            options: Some(vec![SqlOption {
+                name: Ident::new("x"),
+                value: Expr::Value(Value::SingleQuotedString("y".into())),
+            }]),
+            behavior: None,
+            using: None,
+            language: None,
+            determinism_specifier: None,
+            remote_connection: None,
+            called_on_null: None,
+            parallel: None,
+        }
+    );
+
+    let sqls = [
+        // Arbitrary Options expressions.
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "RETURNS ARRAY<FLOAT64> ",
+            "OPTIONS(a = [1, 2], b = 'two', c = [('k1', 'v1'), ('k2', 'v2')]) ",
+            "AS ((SELECT 1 FROM mytable))"
+        ),
+        // Options after body.
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "RETURNS ARRAY<FLOAT64> ",
+            "AS ((SELECT 1 FROM mytable)) ",
+            "OPTIONS(a = [1, 2], b = 'two', c = [('k1', 'v1'), ('k2', 'v2')])",
+        ),
+        // IF NOT EXISTS
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION IF NOT EXISTS ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "RETURNS ARRAY<FLOAT64> ",
+            "OPTIONS(a = [1, 2]) ",
+            "AS ((SELECT 1 FROM mytable))"
+        ),
+        // No return type.
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "OPTIONS(a = [1, 2]) ",
+            "AS ((SELECT 1 FROM mytable))"
+        ),
+        // With language - body after options
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "DETERMINISTIC ",
+            "LANGUAGE js ",
+            "OPTIONS(a = [1, 2]) ",
+            "AS \"console.log('hello');\""
+        ),
+        // With language - body before options
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "NOT DETERMINISTIC ",
+            "LANGUAGE js ",
+            "AS \"console.log('hello');\" ",
+            "OPTIONS(a = [1, 2])",
+        ),
+        // Remote
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "RETURNS INT64 ",
+            "REMOTE WITH CONNECTION us.myconnection ",
+            "OPTIONS(a = [1, 2])",
+        ),
+    ];
+    for sql in sqls {
+        bigquery().verified_stmt(sql);
+    }
+
+    let error_sqls = [
+        (
+            concat!(
+                "CREATE TEMPORARY FUNCTION myfunction() ",
+                "OPTIONS(a = [1, 2]) ",
+                "AS ((SELECT 1 FROM mytable)) ",
+                "OPTIONS(a = [1, 2])",
+            ),
+            "Expected end of statement, found: OPTIONS",
+        ),
+        (
+            concat!(
+                "CREATE TEMPORARY FUNCTION myfunction() ",
+                "IMMUTABLE ",
+                "AS ((SELECT 1 FROM mytable)) ",
+            ),
+            "Expected AS, found: IMMUTABLE",
+        ),
+        (
+            concat!(
+                "CREATE TEMPORARY FUNCTION myfunction() ",
+                "AS \"console.log('hello');\" ",
+                "LANGUAGE js ",
+            ),
+            "Expected end of statement, found: LANGUAGE",
+        ),
+    ];
+    for (sql, error) in error_sqls {
+        assert_eq!(
+            ParserError::ParserError(error.to_owned()),
+            bigquery().parse_sql_statements(sql).unwrap_err()
+        );
+    }
+}
+
+#[test]
 fn test_bigquery_trim() {
     let real_sql = r#"SELECT customer_id, TRIM(item_price_id, '"', "a") AS item_price_id FROM models_staging.subscriptions"#;
     assert_eq!(bigquery().verified_stmt(real_sql).to_string(), real_sql);

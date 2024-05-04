@@ -29,4 +29,8 @@ impl Dialect for DatabricksDialect {
     fn supports_group_by_expr(&self) -> bool {
         true
     }
+
+    fn supports_lambda_functions(&self) -> bool {
+        true
+    }
 }

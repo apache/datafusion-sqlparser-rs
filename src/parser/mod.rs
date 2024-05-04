@@ -2919,7 +2919,7 @@ impl<'a> Parser<'a> {
     /// ```
     pub fn peek_tokens<const N: usize>(&self) -> [TokenWithLocation; N] {
         let mut index = self.index;
-        std::array::from_fn(|_| loop {
+        core::array::from_fn(|_| loop {
             let token = self.tokens.get(index);
             index += 1;
             if let Some(TokenWithLocation {

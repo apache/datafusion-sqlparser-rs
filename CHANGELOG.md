@@ -10,6 +10,43 @@ changes that break via addition as "Added".
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.46.0] 2024-05-03
+
+### Changed
+* Consolidate representation of function calls, remove `AggregateExpressionWithFilter`, `ArraySubquery`, `ListAgg` and `ArrayAgg` (#1247) - Thanks jmhain
+* Extended dialect trait to support numeric prefixed identifiers (#1188) - Thanks @groobyming
+* Update simple_logger requirement from 4.0 to 5.0 (#1246) - Thanks @dependabot
+* Improve parsing of JSON accesses on Postgres and Snowflake (#1215) - Thanks @jmhain
+* Encapsulate Insert and Delete into specific structs (#1224) - Thanks @tisonkun
+* Preserve double colon casts (and simplify cast representations) (#1221) - Thanks @jmhain
+
+### Fixed
+* Fix redundant brackets in Hive/Snowflake/Redshift (#1229) - Thanks @yuval-illumex
+
+### Added
+* Support values without parens in Snowflake and DataBricks (#1249) - Thanks @HiranmayaGundu
+* Support WINDOW clause after QUALIFY when parsing (#1248) - Thanks @iffyio
+* Support `DECLARE` parsing for mssql (#1235) - Thanks @devanbenz
+* Support `?`-based jsonb operators in Postgres (#1242) - THanks @ReppCodes
+* Support Struct datatype parsing for GenericDialect (#1241) - Thanks @duongcongtoai
+* Support BigQuery window function null treatment (#1239) - Thanks @iffyio
+* Support extend pivot operator - Thanks @iffyio
+* Support Databricks SQL dialect (#1220) - Thanks @jmhain
+* Support for MSSQL CONVERT styles (#1219) - Thanks @iffyio
+* Support window clause using named window in BigQuery  (#1237) - Thanks @iffyio
+* Support for CONNECT BY (#1138) - Thanks @jmhain
+* Support object constants in Snowflake (#1223) - Thanks @jmhain
+* Support BigQuery MERGE syntax (#1217) - Thanks @iffyio
+* Support for MAX for NVARCHAR (#1232) - Thanks @ bombsimon
+* Support fixed size list types (#1231) - @@universalmind303
+* Support Snowflake MATCH_RECOGNIZE syntax (#1222) - Thanks @jmhain
+* Support quoted string backslash escaping (#1177) - Thanks @iffyio
+* Support Modify Column for MySQL dialect (#1216) - Thanks @KKould
+* Support `select * ilike` for snowflake (#1228) - Thanks @HiranmayaGundu
+* Support wildcard replace in duckdb and snowflake syntax (#1226) - Thanks @HiranmayaGundu
+
+
+
 ## [0.45.0] 2024-04-12
 
 ### Added

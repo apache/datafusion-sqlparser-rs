@@ -177,8 +177,10 @@ fn test_select_union_by_name() {
                 sort_by: vec![],
                 having: None,
                 named_window: vec![],
+                window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
@@ -213,8 +215,10 @@ fn test_select_union_by_name() {
                 sort_by: vec![],
                 having: None,
                 named_window: vec![],
+                window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
+                connect_by: None,
             }))),
         });
         assert_eq!(ast.body, expected);
@@ -484,28 +488,30 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
-            args: vec![
-                FunctionArg::Named {
-                    name: Ident::new("a"),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "1".to_owned()
-                    ))),
-                    operator: FunctionArgOperator::Assignment
-                },
-                FunctionArg::Named {
-                    name: Ident::new("b"),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "2".to_owned()
-                    ))),
-                    operator: FunctionArgOperator::Assignment
-                },
-            ],
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![
+                    FunctionArg::Named {
+                        name: Ident::new("a"),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "1".to_owned()
+                        ))),
+                        operator: FunctionArgOperator::Assignment
+                    },
+                    FunctionArg::Named {
+                        name: Ident::new("b"),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "2".to_owned()
+                        ))),
+                        operator: FunctionArgOperator::Assignment
+                    },
+                ],
+                clauses: vec![],
+            }),
             null_treatment: None,
             filter: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );

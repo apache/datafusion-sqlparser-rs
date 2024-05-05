@@ -245,8 +245,15 @@ pub struct Select {
     pub named_window: Vec<NamedWindowDefinition>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
+    /// The positioning of QUALIFY and WINDOW clauses differ between dialects.
+    /// e.g. BigQuery requires that WINDOW comes after QUALIFY, while DUCKDB accepts
+    /// WINDOW before QUALIFY.
+    /// We accept either positioning and flag the accepted variant.
+    pub window_before_qualify: bool,
     /// BigQuery syntax: `SELECT AS VALUE | SELECT AS STRUCT`
     pub value_table_mode: Option<ValueTableMode>,
+    /// STARTING WITH .. CONNECT BY
+    pub connect_by: Option<ConnectBy>,
 }
 
 impl fmt::Display for Select {
@@ -308,11 +315,23 @@ impl fmt::Display for Select {
         if let Some(ref having) = self.having {
             write!(f, " HAVING {having}")?;
         }
-        if !self.named_window.is_empty() {
-            write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+        if self.window_before_qualify {
+            if !self.named_window.is_empty() {
+                write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+            }
+            if let Some(ref qualify) = self.qualify {
+                write!(f, " QUALIFY {qualify}")?;
+            }
+        } else {
+            if let Some(ref qualify) = self.qualify {
+                write!(f, " QUALIFY {qualify}")?;
+            }
+            if !self.named_window.is_empty() {
+                write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+            }
         }
-        if let Some(ref qualify) = self.qualify {
-            write!(f, " QUALIFY {qualify}")?;
+        if let Some(ref connect_by) = self.connect_by {
+            write!(f, " {connect_by}")?;
         }
         Ok(())
     }
@@ -353,14 +372,56 @@ impl fmt::Display for LateralView {
     }
 }
 
+/// An expression used in a named window declaration.
+///
+/// ```sql
+/// WINDOW mywindow AS [named_window_expr]
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct NamedWindowDefinition(pub Ident, pub WindowSpec);
+pub enum NamedWindowExpr {
+    /// A direct reference to another named window definition.
+    /// [BigQuery]
+    ///
+    /// Example:
+    /// ```sql
+    /// WINDOW mywindow AS prev_window
+    /// ```
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#ref_named_window
+    NamedWindow(Ident),
+    /// A window expression.
+    ///
+    /// Example:
+    /// ```sql
+    /// WINDOW mywindow AS (ORDER BY 1)
+    /// ```
+    WindowSpec(WindowSpec),
+}
+
+impl fmt::Display for NamedWindowExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NamedWindowExpr::NamedWindow(named_window) => {
+                write!(f, "{named_window}")?;
+            }
+            NamedWindowExpr::WindowSpec(window_spec) => {
+                write!(f, "({window_spec})")?;
+            }
+        };
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct NamedWindowDefinition(pub Ident, pub NamedWindowExpr);
 
 impl fmt::Display for NamedWindowDefinition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} AS ({})", self.0, self.1)
+        write!(f, "{} AS {}", self.0, self.1)
     }
 }
 
@@ -731,6 +792,55 @@ impl fmt::Display for TableWithJoins {
     }
 }
 
+/// Joins a table to itself to process hierarchical data in the table.
+///
+/// See <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ConnectBy {
+    /// START WITH
+    pub condition: Expr,
+    /// CONNECT BY
+    pub relationships: Vec<Expr>,
+}
+
+impl fmt::Display for ConnectBy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "START WITH {condition} CONNECT BY {relationships}",
+            condition = self.condition,
+            relationships = display_comma_separated(&self.relationships)
+        )
+    }
+}
+
+/// An expression optionally followed by an alias.
+///
+/// Example:
+/// ```sql
+/// 42 AS myint
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExprWithAlias {
+    pub expr: Expr,
+    pub alias: Option<Ident>,
+}
+
+impl fmt::Display for ExprWithAlias {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ExprWithAlias { expr, alias } = self;
+        write!(f, "{expr}")?;
+        if let Some(alias) = alias {
+            write!(f, " AS {alias}")?;
+        }
+        Ok(())
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -829,12 +939,14 @@ pub enum TableFactor {
     },
     /// Represents PIVOT operation on a table.
     /// For example `FROM monthly_sales PIVOT(sum(amount) FOR MONTH IN ('JAN', 'FEB'))`
-    /// See <https://docs.snowflake.com/en/sql-reference/constructs/pivot>
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#pivot_operator)
+    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/constructs/pivot)
     Pivot {
         table: Box<TableFactor>,
-        aggregate_function: Expr, // Function expression
+        aggregate_functions: Vec<ExprWithAlias>, // Function expression
         value_column: Vec<Ident>,
-        pivot_values: Vec<Value>,
+        pivot_values: Vec<ExprWithAlias>,
         alias: Option<TableAlias>,
     },
     /// An UNPIVOT operation on a table.
@@ -1199,7 +1311,7 @@ impl fmt::Display for TableFactor {
             }
             TableFactor::Pivot {
                 table,
-                aggregate_function,
+                aggregate_functions,
                 value_column,
                 pivot_values,
                 alias,
@@ -1208,7 +1320,7 @@ impl fmt::Display for TableFactor {
                     f,
                     "{} PIVOT({} FOR {} IN ({}))",
                     table,
-                    aggregate_function,
+                    display_comma_separated(aggregate_functions),
                     Expr::CompoundIdentifier(value_column.to_vec()),
                     display_comma_separated(pivot_values)
                 )?;

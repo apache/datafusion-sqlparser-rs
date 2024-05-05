@@ -183,69 +183,165 @@ fn parse_lateral_flatten() {
     snowflake().verified_only_select(r#"SELECT emp.employee_ID, emp.last_name, index, value AS project_name FROM employees AS emp, LATERAL FLATTEN(INPUT => emp.project_names) AS proj_names"#);
 }
 
+// https://docs.snowflake.com/en/user-guide/querying-semistructured
 #[test]
-fn parse_json_using_colon() {
+fn parse_semi_structured_data_traversal() {
+    // most basic case
     let sql = "SELECT a:b FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("b".to_string()))),
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Dot {
+                    key: "b".to_owned(),
+                    quoted: false
+                }]
+            },
         }),
         select.projection[0]
     );
 
-    let sql = "SELECT a:type FROM t";
+    // identifier can be quoted
+    let sql = r#"SELECT a:"my long object key name" FROM t"#;
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("type".to_string()))),
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Dot {
+                    key: "my long object key name".to_owned(),
+                    quoted: true
+                }]
+            },
         }),
         select.projection[0]
     );
 
-    let sql = "SELECT a:location FROM t";
+    // expressions are allowed in bracket notation
+    let sql = r#"SELECT a[2 + 2] FROM t"#;
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("location".to_string()))),
-        }),
-        select.projection[0]
-    );
-
-    let sql = "SELECT a:date FROM t";
-    let select = snowflake().verified_only_select(sql);
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("date".to_string()))),
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Bracket {
+                    key: Expr::BinaryOp {
+                        left: Box::new(Expr::Value(number("2"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("2")))
+                    },
+                }]
+            },
         }),
         select.projection[0]
     );
 
     snowflake().verified_stmt("SELECT a:b::INT FROM t");
 
-    let sql = "SELECT a:start, a:end FROM t";
+    // unquoted keywords are permitted in the object key
+    let sql = "SELECT a:select, a:from FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         vec![
             SelectItem::UnnamedExpr(Expr::JsonAccess {
-                left: Box::new(Expr::Identifier(Ident::new("a"))),
-                operator: JsonOperator::Colon,
-                right: Box::new(Expr::Value(Value::UnQuotedString("start".to_string()))),
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![JsonPathElem::Dot {
+                        key: "select".to_owned(),
+                        quoted: false
+                    }]
+                },
             }),
             SelectItem::UnnamedExpr(Expr::JsonAccess {
-                left: Box::new(Expr::Identifier(Ident::new("a"))),
-                operator: JsonOperator::Colon,
-                right: Box::new(Expr::Value(Value::UnQuotedString("end".to_string()))),
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![JsonPathElem::Dot {
+                        key: "from".to_owned(),
+                        quoted: false
+                    }]
+                },
             })
         ],
+        select.projection
+    );
+
+    // multiple levels can be traversed
+    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
+    let sql = r#"SELECT a:foo."bar".baz"#;
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: "foo".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Dot {
+                        key: "bar".to_owned(),
+                        quoted: true,
+                    },
+                    JsonPathElem::Dot {
+                        key: "baz".to_owned(),
+                        quoted: false,
+                    }
+                ]
+            },
+        })],
+        select.projection
+    );
+
+    // dot and bracket notation can be mixed (starting with : case)
+    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
+    let sql = r#"SELECT a:foo[0].bar"#;
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Dot {
+                        key: "foo".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(number("0")),
+                    },
+                    JsonPathElem::Dot {
+                        key: "bar".to_owned(),
+                        quoted: false,
+                    }
+                ]
+            },
+        })],
+        select.projection
+    );
+
+    // dot and bracket notation can be mixed (starting with bracket case)
+    // https://docs.snowflake.com/en/user-guide/querying-semistructured#dot-notation
+    let sql = r#"SELECT a[0].foo.bar"#;
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(number("0")),
+                    },
+                    JsonPathElem::Dot {
+                        key: "foo".to_owned(),
+                        quoted: false,
+                    },
+                    JsonPathElem::Dot {
+                        key: "bar".to_owned(),
+                        quoted: false,
+                    }
+                ]
+            },
+        })],
         select.projection
     );
 }
@@ -286,13 +382,15 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
-            args: vec![],
+            args: FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            }),
             filter: None,
             null_treatment: None,
             over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
+            within_group: vec![],
         }),
         expr_from_projection(&select.projection[1]),
     );
@@ -317,15 +415,6 @@ fn test_array_agg_func() {
     ] {
         snowflake().verified_stmt(sql);
     }
-
-    let sql = "select array_agg(x order by x) as a from T";
-    let result = snowflake().parse_sql_statements(sql);
-    assert_eq!(
-        result,
-        Err(ParserError::ParserError(String::from(
-            "Expected ), found: order"
-        )))
-    )
 }
 
 fn snowflake() -> TestedDialects {
@@ -1333,20 +1422,15 @@ fn parse_position_not_function_columns() {
 fn parse_subquery_function_argument() {
     // Snowflake allows passing an unparenthesized subquery as the single
     // argument to a function.
-    snowflake().one_statement_parses_to(
-        "SELECT parse_json(SELECT '{}')",
-        "SELECT parse_json((SELECT '{}'))",
-    );
+    snowflake().verified_stmt("SELECT parse_json(SELECT '{}')");
 
     // Subqueries that begin with WITH work too.
-    snowflake().one_statement_parses_to(
-        "SELECT parse_json(WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q)",
-        "SELECT parse_json((WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q))",
-    );
+    snowflake()
+        .verified_stmt("SELECT parse_json(WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q)");
 
     // Commas are parsed as part of the subquery, not additional arguments to
     // the function.
-    snowflake().one_statement_parses_to("SELECT func(SELECT 1, 2)", "SELECT func((SELECT 1, 2))");
+    snowflake().verified_stmt("SELECT func(SELECT 1, 2)");
 }
 
 #[test]
@@ -1432,19 +1516,13 @@ fn parse_comma_outer_join() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("c1"))),
             op: BinaryOperator::Eq,
-            right: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("myudf")]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
+            right: Box::new(call(
+                "myudf",
+                [Expr::UnaryOp {
                     op: UnaryOperator::Plus,
                     expr: Box::new(Expr::Value(number("42")))
-                }))],
-                filter: None,
-                null_treatment: None,
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![]
-            }))
+                }]
+            )),
         })
     );
 

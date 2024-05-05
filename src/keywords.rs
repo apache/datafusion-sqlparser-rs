@@ -87,7 +87,6 @@ define_keywords!(
     ARCHIVE,
     ARE,
     ARRAY,
-    ARRAY_AGG,
     ARRAY_MAX_CARDINALITY,
     AS,
     ASC,
@@ -401,7 +400,6 @@ define_keywords!(
     LIKE_REGEX,
     LIMIT,
     LINES,
-    LISTAGG,
     LN,
     LOAD,
     LOCAL,
@@ -637,6 +635,7 @@ define_keywords!(
     SNAPSHOT,
     SOME,
     SORT,
+    SOURCE,
     SPATIAL,
     SPECIFIC,
     SPECIFICTYPE,
@@ -676,6 +675,7 @@ define_keywords!(
     TABLE,
     TABLES,
     TABLESAMPLE,
+    TARGET,
     TBLPROPERTIES,
     TEMP,
     TEMPORARY,
@@ -817,6 +817,9 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::FOR,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for Snowflake START WITH .. CONNECT BY
+    Keyword::START,
+    Keyword::CONNECT,
     // Reserved for snowflake MATCH_RECOGNIZE
     Keyword::MATCH_RECOGNIZE,
 ];

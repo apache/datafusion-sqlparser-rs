@@ -350,7 +350,7 @@ fn parse_create_table_with_options() {
 #[test]
 fn parse_nested_data_types() {
     let sql = "CREATE TABLE table (x STRUCT<a ARRAY<INT64>, b BYTES(42)>, y ARRAY<STRUCT<INT64>>)";
-    match bigquery().one_statement_parses_to(sql, sql) {
+    match bigquery_and_generic().one_statement_parses_to(sql, sql) {
         Statement::CreateTable { name, columns, .. } => {
             assert_eq!(name, ObjectName(vec!["table".into()]));
             assert_eq!(
@@ -395,19 +395,25 @@ fn parse_nested_data_types() {
 fn parse_invalid_brackets() {
     let sql = "SELECT STRUCT<INT64>>(NULL)";
     assert_eq!(
-        bigquery().parse_sql_statements(sql).unwrap_err(),
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
         ParserError::ParserError("unmatched > in STRUCT literal".to_string())
     );
 
     let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
     assert_eq!(
-        bigquery().parse_sql_statements(sql).unwrap_err(),
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
         ParserError::ParserError("Expected (, found: >".to_string())
     );
 
     let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
     assert_eq!(
-        bigquery().parse_sql_statements(sql).unwrap_err(),
+        bigquery_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err(),
         ParserError::ParserError(
             "Expected ',' or ')' after column definition, found: >".to_string()
         )
@@ -445,7 +451,7 @@ fn parse_typeless_struct_syntax() {
     // typeless struct syntax https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typeless_struct_syntax
     // syntax: STRUCT( expr1 [AS field_name] [, ... ])
     let sql = "SELECT STRUCT(1, 2, 3), STRUCT('abc'), STRUCT(1, t.str_col), STRUCT(1 AS a, 'abc' AS b), STRUCT(str_col AS abc)";
-    let select = bigquery().verified_only_select(sql);
+    let select = bigquery_and_generic().verified_only_select(sql);
     assert_eq!(5, select.projection.len());
     assert_eq!(
         &Expr::Struct {
@@ -505,7 +511,7 @@ fn parse_typeless_struct_syntax() {
 }
 
 #[test]
-fn parse_typed_struct_syntax() {
+fn parse_typed_struct_syntax_bigquery() {
     // typed struct syntax https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typed_struct_syntax
     // syntax: STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
 
@@ -789,7 +795,291 @@ fn parse_typed_struct_syntax() {
 }
 
 #[test]
-fn parse_typed_struct_with_field_name() {
+fn parse_typed_struct_syntax_bigquery_and_generic() {
+    // typed struct syntax https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typed_struct_syntax
+    // syntax: STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
+
+    let sql = r#"SELECT STRUCT<INT64>(5), STRUCT<x INT64, y STRING>(1, t.str_col), STRUCT<arr ARRAY<FLOAT64>, str STRUCT<BOOL>>(nested_col)"#;
+    let select = bigquery_and_generic().verified_only_select(sql);
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(number("5")),],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Int64,
+            }]
+        },
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![
+                Expr::Value(number("1")),
+                Expr::CompoundIdentifier(vec![
+                    Ident {
+                        value: "t".into(),
+                        quote_style: None,
+                    },
+                    Ident {
+                        value: "str_col".into(),
+                        quote_style: None,
+                    },
+                ]),
+            ],
+            fields: vec![
+                StructField {
+                    field_name: Some(Ident {
+                        value: "x".into(),
+                        quote_style: None,
+                    }),
+                    field_type: DataType::Int64
+                },
+                StructField {
+                    field_name: Some(Ident {
+                        value: "y".into(),
+                        quote_style: None,
+                    }),
+                    field_type: DataType::String(None)
+                },
+            ]
+        },
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Identifier(Ident {
+                value: "nested_col".into(),
+                quote_style: None,
+            }),],
+            fields: vec![
+                StructField {
+                    field_name: Some("arr".into()),
+                    field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
+                        DataType::Float64
+                    )))
+                },
+                StructField {
+                    field_name: Some("str".into()),
+                    field_type: DataType::Struct(vec![StructField {
+                        field_name: None,
+                        field_type: DataType::Bool
+                    }])
+                },
+            ]
+        },
+        expr_from_projection(&select.projection[2])
+    );
+
+    let sql = r#"SELECT STRUCT<x STRUCT, y ARRAY<STRUCT>>(nested_col)"#;
+    let select = bigquery_and_generic().verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Identifier(Ident {
+                value: "nested_col".into(),
+                quote_style: None,
+            }),],
+            fields: vec![
+                StructField {
+                    field_name: Some("x".into()),
+                    field_type: DataType::Struct(Default::default())
+                },
+                StructField {
+                    field_name: Some("y".into()),
+                    field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
+                        DataType::Struct(Default::default())
+                    )))
+                },
+            ]
+        },
+        expr_from_projection(&select.projection[0])
+    );
+
+    let sql = r#"SELECT STRUCT<BOOL>(true), STRUCT<BYTES(42)>(B'abc')"#;
+    let select = bigquery_and_generic().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(Value::Boolean(true)),],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Bool
+            }]
+        },
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(Value::SingleQuotedByteStringLiteral(
+                "abc".into()
+            )),],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Bytes(Some(42))
+            }]
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
+    let sql = r#"SELECT STRUCT<DATE>('2011-05-05'), STRUCT<DATETIME>(DATETIME '1999-01-01 01:23:34.45'), STRUCT<FLOAT64>(5.0), STRUCT<INT64>(1)"#;
+    let select = bigquery_and_generic().verified_only_select(sql);
+    assert_eq!(4, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(Value::SingleQuotedString(
+                "2011-05-05".to_string()
+            )),],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Date
+            }]
+        },
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::TypedString {
+                data_type: DataType::Datetime(None),
+                value: "1999-01-01 01:23:34.45".to_string()
+            },],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Datetime(None)
+            }]
+        },
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(number("5.0")),],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Float64
+            }]
+        },
+        expr_from_projection(&select.projection[2])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(number("1")),],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Int64
+            }]
+        },
+        expr_from_projection(&select.projection[3])
+    );
+
+    let sql = r#"SELECT STRUCT<INTERVAL>(INTERVAL '1-2 3 4:5:6.789999'), STRUCT<JSON>(JSON '{"class" : {"students" : [{"name" : "Jane"}]}}')"#;
+    let select = bigquery_and_generic().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Interval(ast::Interval {
+                value: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "1-2 3 4:5:6.789999".to_string()
+                ))),
+                leading_field: None,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None
+            }),],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Interval
+            }]
+        },
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::TypedString {
+                data_type: DataType::JSON,
+                value: r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.to_string()
+            },],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::JSON
+            }]
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
+    let sql = r#"SELECT STRUCT<STRING(42)>('foo'), STRUCT<TIMESTAMP>(TIMESTAMP '2008-12-25 15:30:00 America/Los_Angeles'), STRUCT<TIME>(TIME '15:30:00')"#;
+    let select = bigquery_and_generic().verified_only_select(sql);
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(Value::SingleQuotedString("foo".to_string())),],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::String(Some(42))
+            }]
+        },
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::TypedString {
+                data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                value: "2008-12-25 15:30:00 America/Los_Angeles".to_string()
+            },],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Timestamp(None, TimezoneInfo::None)
+            }]
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::TypedString {
+                data_type: DataType::Time(None, TimezoneInfo::None),
+                value: "15:30:00".to_string()
+            },],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Time(None, TimezoneInfo::None)
+            }]
+        },
+        expr_from_projection(&select.projection[2])
+    );
+
+    let sql = r#"SELECT STRUCT<NUMERIC>(NUMERIC '1'), STRUCT<BIGNUMERIC>(BIGNUMERIC '1')"#;
+    let select = bigquery_and_generic().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::TypedString {
+                data_type: DataType::Numeric(ExactNumberInfo::None),
+                value: "1".to_string()
+            },],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::Numeric(ExactNumberInfo::None)
+            }]
+        },
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::TypedString {
+                data_type: DataType::BigNumeric(ExactNumberInfo::None),
+                value: "1".to_string()
+            },],
+            fields: vec![StructField {
+                field_name: None,
+                field_type: DataType::BigNumeric(ExactNumberInfo::None)
+            }]
+        },
+        expr_from_projection(&select.projection[1])
+    );
+}
+
+#[test]
+fn parse_typed_struct_with_field_name_bigquery() {
     let sql = r#"SELECT STRUCT<x INT64>(5), STRUCT<y STRING>("foo")"#;
     let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
@@ -816,6 +1106,53 @@ fn parse_typed_struct_with_field_name() {
 
     let sql = r#"SELECT STRUCT<x INT64, y INT64>(5, 5)"#;
     let select = bigquery().verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(number("5")), Expr::Value(number("5")),],
+            fields: vec![
+                StructField {
+                    field_name: Some(Ident::from("x")),
+                    field_type: DataType::Int64
+                },
+                StructField {
+                    field_name: Some(Ident::from("y")),
+                    field_type: DataType::Int64
+                }
+            ]
+        },
+        expr_from_projection(&select.projection[0])
+    );
+}
+
+#[test]
+fn parse_typed_struct_with_field_name_bigquery_and_generic() {
+    let sql = r#"SELECT STRUCT<x INT64>(5), STRUCT<y STRING>('foo')"#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(number("5")),],
+            fields: vec![StructField {
+                field_name: Some(Ident::from("x")),
+                field_type: DataType::Int64
+            }]
+        },
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(Value::SingleQuotedString("foo".to_string())),],
+            fields: vec![StructField {
+                field_name: Some(Ident::from("y")),
+                field_type: DataType::String(None)
+            }]
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
+    let sql = r#"SELECT STRUCT<x INT64, y INT64>(5, 5)"#;
+    let select = bigquery_and_generic().verified_only_select(sql);
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
@@ -1075,6 +1412,225 @@ fn parse_join_constraint_unnest_alias() {
 }
 
 #[test]
+fn parse_merge() {
+    let sql = concat!(
+        "MERGE inventory AS T USING newArrivals AS S ON false ",
+        "WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) VALUES (1, 2) ",
+        "WHEN NOT MATCHED BY TARGET AND 1 THEN INSERT (product, quantity) VALUES (1, 2) ",
+        "WHEN NOT MATCHED BY TARGET THEN INSERT (product, quantity) VALUES (1, 2) ",
+        "WHEN NOT MATCHED BY SOURCE AND 2 THEN DELETE ",
+        "WHEN NOT MATCHED BY SOURCE THEN DELETE ",
+        "WHEN NOT MATCHED BY SOURCE AND 1 THEN UPDATE SET a = 1, b = 2 ",
+        "WHEN NOT MATCHED AND 1 THEN INSERT (product, quantity) ROW ",
+        "WHEN NOT MATCHED THEN INSERT (product, quantity) ROW ",
+        "WHEN NOT MATCHED AND 1 THEN INSERT ROW ",
+        "WHEN NOT MATCHED THEN INSERT ROW ",
+        "WHEN MATCHED AND 1 THEN DELETE ",
+        "WHEN MATCHED THEN UPDATE SET a = 1, b = 2 ",
+        "WHEN NOT MATCHED THEN INSERT (a, b) VALUES (1, DEFAULT) ",
+        "WHEN NOT MATCHED THEN INSERT VALUES (1, DEFAULT)",
+    );
+    let insert_action = MergeAction::Insert(MergeInsertExpr {
+        columns: vec![Ident::new("product"), Ident::new("quantity")],
+        kind: MergeInsertKind::Values(Values {
+            explicit_row: false,
+            rows: vec![vec![Expr::Value(number("1")), Expr::Value(number("2"))]],
+        }),
+    });
+    let update_action = MergeAction::Update {
+        assignments: vec![
+            Assignment {
+                id: vec![Ident::new("a")],
+                value: Expr::Value(number("1")),
+            },
+            Assignment {
+                id: vec![Ident::new("b")],
+                value: Expr::Value(number("2")),
+            },
+        ],
+    };
+    match bigquery_and_generic().verified_stmt(sql) {
+        Statement::Merge {
+            into,
+            table,
+            source,
+            on,
+            clauses,
+        } => {
+            assert!(!into);
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("inventory")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("T"),
+                        columns: vec![],
+                    }),
+                    args: Default::default(),
+                    with_hints: Default::default(),
+                    version: Default::default(),
+                    partitions: Default::default(),
+                },
+                table
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("newArrivals")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("S"),
+                        columns: vec![],
+                    }),
+                    args: Default::default(),
+                    with_hints: Default::default(),
+                    version: Default::default(),
+                    partitions: Default::default(),
+                },
+                source
+            );
+            assert_eq!(Expr::Value(Value::Boolean(false)), *on);
+            assert_eq!(
+                vec![
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: insert_action.clone(),
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedByTarget,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: insert_action.clone(),
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedByTarget,
+                        predicate: None,
+                        action: insert_action,
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedBySource,
+                        predicate: Some(Expr::Value(number("2"))),
+                        action: MergeAction::Delete
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedBySource,
+                        predicate: None,
+                        action: MergeAction::Delete
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatchedBySource,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: update_action.clone(),
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            kind: MergeInsertKind::Row,
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("product"), Ident::new("quantity"),],
+                            kind: MergeInsertKind::Row,
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![],
+                            kind: MergeInsertKind::Row
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![],
+                            kind: MergeInsertKind::Row
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::Matched,
+                        predicate: Some(Expr::Value(number("1"))),
+                        action: MergeAction::Delete,
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::Matched,
+                        predicate: None,
+                        action: update_action,
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![Ident::new("a"), Ident::new("b"),],
+                            kind: MergeInsertKind::Values(Values {
+                                explicit_row: false,
+                                rows: vec![vec![
+                                    Expr::Value(number("1")),
+                                    Expr::Identifier(Ident::new("DEFAULT")),
+                                ]]
+                            })
+                        })
+                    },
+                    MergeClause {
+                        clause_kind: MergeClauseKind::NotMatched,
+                        predicate: None,
+                        action: MergeAction::Insert(MergeInsertExpr {
+                            columns: vec![],
+                            kind: MergeInsertKind::Values(Values {
+                                explicit_row: false,
+                                rows: vec![vec![
+                                    Expr::Value(number("1")),
+                                    Expr::Identifier(Ident::new("DEFAULT")),
+                                ]]
+                            })
+                        })
+                    },
+                ],
+                clauses
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_merge_invalid_statements() {
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    for (sql, err_msg) in [
+        (
+            "MERGE T USING U ON TRUE WHEN MATCHED BY TARGET AND 1 THEN DELETE",
+            "Expected THEN, found: BY",
+        ),
+        (
+            "MERGE T USING U ON TRUE WHEN MATCHED BY SOURCE AND 1 THEN DELETE",
+            "Expected THEN, found: BY",
+        ),
+        (
+            "MERGE T USING U ON TRUE WHEN NOT MATCHED BY SOURCE THEN INSERT(a) VALUES (b)",
+            "INSERT is not allowed in a NOT MATCHED BY SOURCE merge clause",
+        ),
+        (
+            "MERGE INTO T USING U ON TRUE WHEN NOT MATCHED BY TARGET THEN DELETE",
+            "DELETE is not allowed in a NOT MATCHED BY TARGET merge clause",
+        ),
+        (
+            "MERGE INTO T USING U ON TRUE WHEN NOT MATCHED BY TARGET THEN UPDATE SET a = b",
+            "UPDATE is not allowed in a NOT MATCHED BY TARGET merge clause",
+        ),
+    ] {
+        let res = dialects.parse_sql_statements(sql);
+        assert_eq!(
+            ParserError::ParserError(err_msg.to_string()),
+            res.unwrap_err()
+        );
+    }
+}
+
+#[test]
 fn parse_trailing_comma() {
     for (sql, canonical) in [
         ("SELECT a,", "SELECT a"),
@@ -1268,18 +1824,7 @@ fn parse_map_access_expr() {
                 MapAccessSyntax::Bracket,
             ),
             map_access_key(
-                Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("safe_offset")]),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        number("2"),
-                    )))],
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                }),
+                call("safe_offset", [Expr::Value(number("2"))]),
                 MapAccessSyntax::Bracket,
             ),
             map_access_key(
@@ -1346,4 +1891,15 @@ fn test_select_as_value() {
     );
     let select = bigquery().verified_only_select("SELECT AS VALUE STRUCT(1 AS a, 2 AS b) AS xyz");
     assert_eq!(Some(ValueTableMode::AsValue), select.value_table_mode);
+}
+
+#[test]
+fn test_array_agg() {
+    bigquery_and_generic().verified_expr("ARRAY_AGG(state)");
+    bigquery_and_generic().verified_expr("ARRAY_CONCAT_AGG(x LIMIT 2)");
+    bigquery_and_generic().verified_expr("ARRAY_AGG(state IGNORE NULLS LIMIT 10)");
+    bigquery_and_generic().verified_expr("ARRAY_AGG(state RESPECT NULLS ORDER BY population)");
+    bigquery_and_generic()
+        .verified_expr("ARRAY_AGG(DISTINCT state IGNORE NULLS ORDER BY population DESC LIMIT 10)");
+    bigquery_and_generic().verified_expr("ARRAY_CONCAT_AGG(x ORDER BY ARRAY_LENGTH(x))");
 }

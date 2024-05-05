@@ -35,10 +35,10 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
+use crate::dialect::Dialect;
 use crate::dialect::{
-    BigQueryDialect, DuckDbDialect, GenericDialect, HiveDialect, SnowflakeDialect,
+    BigQueryDialect, DuckDbDialect, GenericDialect, PostgreSqlDialect, SnowflakeDialect,
 };
-use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
 /// SQL Token enumeration
@@ -199,6 +199,15 @@ pub enum Token {
     /// for the specified JSON value. Only the first item of the result is taken into
     /// account. If the result is not Boolean, then NULL is returned.
     AtAt,
+    /// jsonb ? text -> boolean: Checks whether the string exists as a top-level key within the
+    /// jsonb object
+    Question,
+    /// jsonb ?& text[] -> boolean: Check whether all members of the text array exist as top-level
+    /// keys within the jsonb object
+    QuestionAnd,
+    /// jsonb ?| text[] -> boolean: Check whether any member of the text array exists as top-level
+    /// keys within the jsonb object
+    QuestionPipe,
 }
 
 impl fmt::Display for Token {
@@ -278,6 +287,9 @@ impl fmt::Display for Token {
             Token::HashMinus => write!(f, "#-"),
             Token::AtQuestion => write!(f, "@?"),
             Token::AtAt => write!(f, "@@"),
+            Token::Question => write!(f, "?"),
+            Token::QuestionAnd => write!(f, "?&"),
+            Token::QuestionPipe => write!(f, "?|"),
         }
     }
 }
@@ -808,7 +820,7 @@ impl<'a> Tokenizer<'a> {
 
                     // mysql dialect supports identifiers that start with a numeric prefix,
                     // as long as they aren't an exponent number.
-                    if dialect_of!(self is MySqlDialect | HiveDialect) && exponent_part.is_empty() {
+                    if self.dialect.supports_numeric_prefix() && exponent_part.is_empty() {
                         let word =
                             peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
 
@@ -1057,6 +1069,15 @@ impl<'a> Tokenizer<'a> {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
                         _ => Ok(Some(Token::AtSign)),
+                    }
+                }
+                // Postgres uses ? for jsonb operators, not prepared statements
+                '?' if dialect_of!(self is PostgreSqlDialect) => {
+                    chars.next();
+                    match chars.peek() {
+                        Some('|') => self.consume_and_return(chars, Token::QuestionPipe),
+                        Some('&') => self.consume_and_return(chars, Token::QuestionAnd),
+                        _ => self.consume_and_return(chars, Token::Question),
                     }
                 }
                 '?' => {
@@ -1522,7 +1543,10 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dialect::{BigQueryDialect, ClickHouseDialect, MsSqlDialect};
+    use crate::dialect::{
+        BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect,
+    };
+    use core::fmt::Debug;
 
     #[test]
     fn tokenizer_error_impl() {
@@ -2390,6 +2414,54 @@ mod tests {
         );
         check_unescape(r"Hello\0", None);
         check_unescape(r"Hello\xCADRust", None);
+    }
+
+    #[test]
+    fn tokenize_numeric_prefix_trait() {
+        #[derive(Debug)]
+        struct NumericPrefixDialect;
+
+        impl Dialect for NumericPrefixDialect {
+            fn is_identifier_start(&self, ch: char) -> bool {
+                ch.is_ascii_lowercase()
+                    || ch.is_ascii_uppercase()
+                    || ch.is_ascii_digit()
+                    || ch == '$'
+            }
+
+            fn is_identifier_part(&self, ch: char) -> bool {
+                ch.is_ascii_lowercase()
+                    || ch.is_ascii_uppercase()
+                    || ch.is_ascii_digit()
+                    || ch == '_'
+                    || ch == '$'
+                    || ch == '{'
+                    || ch == '}'
+            }
+
+            fn supports_numeric_prefix(&self) -> bool {
+                true
+            }
+        }
+
+        tokenize_numeric_prefix_inner(&NumericPrefixDialect {});
+        tokenize_numeric_prefix_inner(&HiveDialect {});
+        tokenize_numeric_prefix_inner(&MySqlDialect {});
+    }
+
+    fn tokenize_numeric_prefix_inner(dialect: &dyn Dialect) {
+        let sql = r#"SELECT * FROM 1"#;
+        let tokens = Tokenizer::new(dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Mul,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("FROM"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1"), false),
+        ];
+        compare(expected, tokens);
     }
 
     #[test]

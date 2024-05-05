@@ -908,7 +908,9 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 having: None,
                 named_window: vec![],
                 qualify: None,
+                window_before_qualify: false,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -953,7 +955,9 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 having: None,
                 named_window: vec![],
                 qualify: None,
+                window_before_qualify: false,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -995,7 +999,9 @@ fn parse_escaped_backticks_with_escape() {
                 having: None,
                 named_window: vec![],
                 qualify: None,
+                window_before_qualify: false,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -1037,7 +1043,9 @@ fn parse_escaped_backticks_with_no_escape() {
                 having: None,
                 named_window: vec![],
                 qualify: None,
+                window_before_qualify: false,
                 value_table_mode: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,
@@ -1626,78 +1634,23 @@ fn parse_insert_with_on_duplicate_update() {
                 Some(OnInsert::DuplicateKeyUpdate(vec![
                     Assignment {
                         id: vec![Ident::new("description".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("description"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("description"))]),
                     },
                     Assignment {
                         id: vec![Ident::new("perm_create".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_create"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_create"))]),
                     },
                     Assignment {
                         id: vec![Ident::new("perm_read".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_read"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_read"))]),
                     },
                     Assignment {
                         id: vec![Ident::new("perm_update".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_update"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_update"))]),
                     },
                     Assignment {
                         id: vec![Ident::new("perm_delete".to_string())],
-                        value: Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_delete"))
-                            ))],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })
+                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_delete"))]),
                     },
                 ])),
                 on
@@ -1741,7 +1694,9 @@ fn parse_select_with_numeric_prefix_column_name() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    window_before_qualify: false,
                     value_table_mode: None,
+                    connect_by: None,
                 })))
             );
         }
@@ -1792,7 +1747,9 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     having: None,
                     named_window: vec![],
                     qualify: None,
+                    window_before_qualify: false,
                     value_table_mode: None,
+                    connect_by: None,
                 })))
             );
         }
@@ -2285,8 +2242,10 @@ fn parse_substring_in_select() {
                         sort_by: vec![],
                         having: None,
                         named_window: vec![],
+                        window_before_qualify: false,
                         qualify: None,
                         value_table_mode: None,
+                        connect_by: None,
                     }))),
                     order_by: vec![],
                     limit: None,
@@ -2371,16 +2330,7 @@ fn parse_table_colum_option_on_update() {
                     collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
-                        option: ColumnOption::OnUpdate(Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
-                            args: vec![],
-                            null_treatment: None,
-                            filter: None,
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                        })),
+                        option: ColumnOption::OnUpdate(call("CURRENT_TIMESTAMP", [])),
                     },],
                 }],
                 columns
@@ -2596,9 +2546,11 @@ fn parse_hex_string_introducer() {
                 sort_by: vec![],
                 having: None,
                 named_window: vec![],
+                window_before_qualify: false,
                 qualify: None,
                 value_table_mode: None,
-                into: None
+                into: None,
+                connect_by: None,
             }))),
             order_by: vec![],
             limit: None,

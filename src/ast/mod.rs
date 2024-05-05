@@ -798,8 +798,6 @@ pub enum Expr {
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/where#joins-in-the-where-clause>.
     OuterJoin(Box<Expr>),
-<<<<<<< Updated upstream
-=======
     /// A reference to the prior level in a CONNECT BY clause.
     Prior(Box<Expr>),
     /// Scalar variable creation e.g. `[@]foo INT`
@@ -807,7 +805,6 @@ pub enum Expr {
         data_type: DataType,
         name: String,
     },
->>>>>>> Stashed changes
 }
 
 impl fmt::Display for CastFormat {
@@ -1265,13 +1262,10 @@ impl fmt::Display for Expr {
             Expr::OuterJoin(expr) => {
                 write!(f, "{expr} (+)")
             }
-<<<<<<< Updated upstream
-=======
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::ScalarVariable { data_type, name } => {
                 write!(f, "{name} {data_type}")
             }
->>>>>>> Stashed changes
         }
     }
 }

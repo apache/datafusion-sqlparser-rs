@@ -209,6 +209,14 @@ pub trait Dialect: Debug + Any {
     fn supports_dictionary_syntax(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports lambda functions, for example:
+    ///
+    /// ```sql
+    /// SELECT transform(array(1, 2, 3), x -> x + 1); -- returns [2,3,4]
+    /// ```
+    fn supports_lambda_functions(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect has a CONVERT function which accepts a type first
     /// and an expression second, e.g. `CONVERT(varchar, 1)`
     fn convert_type_before_value(&self) -> bool {

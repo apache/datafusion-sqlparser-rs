@@ -1380,7 +1380,11 @@ fn pg_and_generic() -> TestedDialects {
 fn parse_json_ops_without_colon() {
     use self::BinaryOperator::*;
     let binary_ops = [
-        ("->", Arrow, all_dialects()),
+        (
+            "->",
+            Arrow,
+            all_dialects_except(|d| d.supports_lambda_functions()),
+        ),
         ("->>", LongArrow, all_dialects()),
         ("#>", HashArrow, pg_and_generic()),
         ("#>>", HashLongArrow, pg_and_generic()),
@@ -6174,7 +6178,8 @@ fn parse_exists_subquery() {
     verified_stmt("SELECT * FROM t WHERE EXISTS (WITH u AS (SELECT 1) SELECT * FROM u)");
     verified_stmt("SELECT EXISTS (SELECT 1)");
 
-    let res = parse_sql_statements("SELECT EXISTS (");
+    let res = all_dialects_except(|d| d.is::<DatabricksDialect>())
+        .parse_sql_statements("SELECT EXISTS (");
     assert_eq!(
         ParserError::ParserError(
             "Expected SELECT, VALUES, or a subquery in the query body, found: EOF".to_string()
@@ -6182,7 +6187,8 @@ fn parse_exists_subquery() {
         res.unwrap_err(),
     );
 
-    let res = parse_sql_statements("SELECT EXISTS (NULL)");
+    let res = all_dialects_except(|d| d.is::<DatabricksDialect>())
+        .parse_sql_statements("SELECT EXISTS (NULL)");
     assert_eq!(
         ParserError::ParserError(
             "Expected SELECT, VALUES, or a subquery in the query body, found: NULL".to_string()

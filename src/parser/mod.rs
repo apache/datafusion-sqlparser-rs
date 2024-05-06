@@ -1018,7 +1018,19 @@ impl<'a> Parser<'a> {
                 Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
                 Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
                 Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
-                Keyword::EXISTS => self.parse_exists_expr(false),
+                Keyword::EXISTS
+                    // Support parsing Databricks has a function named `exists`.
+                    if !dialect_of!(self is DatabricksDialect)
+                        || matches!(
+                            self.peek_nth_token(1).token,
+                            Token::Word(Word {
+                                keyword: Keyword::SELECT | Keyword::WITH,
+                                ..
+                            })
+                        ) =>
+                {
+                    self.parse_exists_expr(false)
+                }
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::CEIL => self.parse_ceil_floor_expr(true),
                 Keyword::FLOOR => self.parse_ceil_floor_expr(false),
@@ -1036,7 +1048,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::ARRAY
                     if self.peek_token() == Token::LParen
-                        && !dialect_of!(self is ClickHouseDialect) =>
+                        && !dialect_of!(self is ClickHouseDialect | DatabricksDialect) =>
                 {
                     self.expect_token(&Token::LParen)?;
                     let query = self.parse_boxed_query()?;
@@ -1124,6 +1136,13 @@ impl<'a> Parser<'a> {
                             value: self.parse_introduced_string_value()?,
                         })
                     }
+                    Token::Arrow if self.dialect.supports_lambda_functions() => {
+                        self.expect_token(&Token::Arrow)?;
+                        return Ok(Expr::Lambda(LambdaFunction {
+                            params: OneOrManyWithParens::One(w.to_ident()),
+                            body: Box::new(self.parse_expr()?),
+                        }));
+                    }
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
@@ -1182,6 +1201,8 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
                         self.prev_token();
                         Expr::Subquery(self.parse_boxed_query()?)
+                    } else if let Some(lambda) = self.try_parse_lambda() {
+                        return Ok(lambda);
                     } else {
                         let exprs = self.parse_comma_separated(Parser::parse_expr)?;
                         match exprs.len() {
@@ -1229,6 +1250,22 @@ impl<'a> Parser<'a> {
         } else {
             Ok(expr)
         }
+    }
+
+    fn try_parse_lambda(&mut self) -> Option<Expr> {
+        if !self.dialect.supports_lambda_functions() {
+            return None;
+        }
+        self.maybe_parse(|p| {
+            let params = p.parse_comma_separated(|p| p.parse_identifier(false))?;
+            p.expect_token(&Token::RParen)?;
+            p.expect_token(&Token::Arrow)?;
+            let expr = p.parse_expr()?;
+            Ok(Expr::Lambda(LambdaFunction {
+                params: OneOrManyWithParens::Many(params),
+                body: Box::new(expr),
+            }))
+        })
     }
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {

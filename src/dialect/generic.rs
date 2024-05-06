@@ -66,4 +66,8 @@ impl Dialect for GenericDialect {
     fn supports_parenthesized_set_variables(&self) -> bool {
         true
     }
+
+    fn supports_select_wildcard_except(&self) -> bool {
+        true
+    }
 }

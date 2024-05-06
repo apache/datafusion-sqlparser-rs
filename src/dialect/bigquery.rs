@@ -54,4 +54,9 @@ impl Dialect for BigQueryDialect {
     fn supports_parenthesized_set_variables(&self) -> bool {
         true
     }
+
+    // See https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_except
+    fn supports_select_wildcard_except(&self) -> bool {
+        true
+    }
 }

@@ -29,4 +29,8 @@ impl Dialect for ClickHouseDialect {
     fn supports_string_literal_backslash_escape(&self) -> bool {
         true
     }
+
+    fn supports_select_wildcard_except(&self) -> bool {
+        true
+    }
 }

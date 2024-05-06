@@ -9854,3 +9854,37 @@ fn tests_select_values_without_parens_and_set_op() {
         _ => panic!("Expected a SET OPERATION"),
     }
 }
+
+#[test]
+fn parse_select_wildcard_with_except() {
+    let dialects = all_dialects_where(|d| d.supports_select_wildcard_except());
+
+    let select = dialects.verified_only_select("SELECT * EXCEPT (col_a) FROM data");
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_except: Some(ExceptSelectItem {
+            first_element: Ident::new("col_a"),
+            additional_elements: vec![],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    let select = dialects
+        .verified_only_select("SELECT * EXCEPT (department_id, employee_id) FROM employee_table");
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_except: Some(ExceptSelectItem {
+            first_element: Ident::new("department_id"),
+            additional_elements: vec![Ident::new("employee_id")],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("SELECT * EXCEPT () FROM employee_table")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected identifier, found: )"
+    );
+}

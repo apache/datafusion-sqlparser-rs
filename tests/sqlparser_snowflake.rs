@@ -381,6 +381,47 @@ fn test_snowflake_create_global_table() {
 }
 
 #[test]
+fn test_snowflake_create_invalid_local_global_table() {
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE LOCAL GLOBAL TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an SQL statement, found: LOCAL".to_string()
+        ))
+    );
+
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE GLOBAL LOCAL TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an SQL statement, found: GLOBAL".to_string()
+        ))
+    );
+}
+
+#[test]
+fn test_snowflake_create_invalid_temporal_table() {
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TEMP TEMPORARY TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an object type after CREATE, found: TEMPORARY".to_string()
+        ))
+    );
+
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TEMP VOLATILE TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an object type after CREATE, found: VOLATILE".to_string()
+        ))
+    );
+
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TEMP TRANSIENT TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an object type after CREATE, found: TRANSIENT".to_string()
+        ))
+    );
+}
+
+#[test]
 fn test_snowflake_create_table_if_not_exists() {
     match snowflake().verified_stmt("CREATE TABLE IF NOT EXISTS my_table (a INT)") {
         Statement::CreateTable(CreateTable {

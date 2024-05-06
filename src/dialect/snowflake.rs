@@ -94,17 +94,28 @@ impl Dialect for SnowflakeDialect {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
             let or_replace = parser.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
-            let mut global = None;
-            if parser.parse_keyword(Keyword::LOCAL) {
-                global = Some(false)
+            // LOCAL | GLOBAL
+            let global = match parser.parse_one_of_keywords(&[Keyword::LOCAL, Keyword::GLOBAL]) {
+                Some(Keyword::LOCAL) => Some(false),
+                Some(Keyword::GLOBAL) => Some(true),
+                _ => None,
+            };
+
+            let mut temporary = false;
+            let mut volatile = false;
+            let mut transient = false;
+
+            match parser.parse_one_of_keywords(&[
+                Keyword::TEMP,
+                Keyword::TEMPORARY,
+                Keyword::VOLATILE,
+                Keyword::TRANSIENT,
+            ]) {
+                Some(Keyword::TEMP | Keyword::TEMPORARY) => temporary = true,
+                Some(Keyword::VOLATILE) => volatile = true,
+                Some(Keyword::TRANSIENT) => transient = true,
+                _ => {}
             }
-            if parser.parse_keyword(Keyword::GLOBAL) {
-                global = Some(true)
-            }
-            let temporary =
-                parser.parse_keyword(Keyword::TEMP) || parser.parse_keyword(Keyword::TEMPORARY);
-            let volatile = parser.parse_keyword(Keyword::VOLATILE);
-            let transient = parser.parse_keyword(Keyword::TRANSIENT);
 
             if parser.parse_keyword(Keyword::STAGE) {
                 // OK - this is CREATE STAGE statement

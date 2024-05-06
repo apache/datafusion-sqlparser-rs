@@ -6338,6 +6338,10 @@ impl Display for TableEngine {
     }
 }
 
+/// Snowflake `WITH ROW ACCESS POLICY policy_name ON (identifier, ...)`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+/// <https://docs.snowflake.com/en/user-guide/security-row-intro>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -6363,6 +6367,9 @@ impl Display for RowAccessPolicy {
     }
 }
 
+/// Snowflake `WITH TAG ( tag_name = '<tag_value>', ...)`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -6383,10 +6390,13 @@ impl Display for Tag {
     }
 }
 
+/// Helper to indicate if a comment includes the `=` in the display form
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CommentDef {
+    /// Includes `=` when printing the comment, as `COMMENT = 'comment'`
+    /// Does not include `=` when printing the comment, as `COMMENT 'comment'`
     WithEq(String),
     WithoutEq(String),
 }

@@ -1168,10 +1168,17 @@ impl<'a> Parser<'a> {
             Token::Number(_, _)
             | Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
+            | Token::TripleSingleQuotedString(_)
+            | Token::TripleDoubleQuotedString(_)
             | Token::DollarQuotedString(_)
             | Token::SingleQuotedByteStringLiteral(_)
             | Token::DoubleQuotedByteStringLiteral(_)
-            | Token::RawStringLiteral(_)
+            | Token::TripleSingleQuotedByteStringLiteral(_)
+            | Token::TripleDoubleQuotedByteStringLiteral(_)
+            | Token::SingleQuotedRawStringLiteral(_)
+            | Token::DoubleQuotedRawStringLiteral(_)
+            | Token::TripleSingleQuotedRawStringLiteral(_)
+            | Token::TripleDoubleQuotedRawStringLiteral(_)
             | Token::NationalStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
@@ -6342,6 +6349,12 @@ impl<'a> Parser<'a> {
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+            Token::TripleSingleQuotedString(ref s) => {
+                Ok(Value::TripleSingleQuotedString(s.to_string()))
+            }
+            Token::TripleDoubleQuotedString(ref s) => {
+                Ok(Value::TripleDoubleQuotedString(s.to_string()))
+            }
             Token::DollarQuotedString(ref s) => Ok(Value::DollarQuotedString(s.clone())),
             Token::SingleQuotedByteStringLiteral(ref s) => {
                 Ok(Value::SingleQuotedByteStringLiteral(s.clone()))
@@ -6349,7 +6362,24 @@ impl<'a> Parser<'a> {
             Token::DoubleQuotedByteStringLiteral(ref s) => {
                 Ok(Value::DoubleQuotedByteStringLiteral(s.clone()))
             }
-            Token::RawStringLiteral(ref s) => Ok(Value::RawStringLiteral(s.clone())),
+            Token::TripleSingleQuotedByteStringLiteral(ref s) => {
+                Ok(Value::TripleSingleQuotedByteStringLiteral(s.clone()))
+            }
+            Token::TripleDoubleQuotedByteStringLiteral(ref s) => {
+                Ok(Value::TripleDoubleQuotedByteStringLiteral(s.clone()))
+            }
+            Token::SingleQuotedRawStringLiteral(ref s) => {
+                Ok(Value::SingleQuotedRawStringLiteral(s.clone()))
+            }
+            Token::DoubleQuotedRawStringLiteral(ref s) => {
+                Ok(Value::DoubleQuotedRawStringLiteral(s.clone()))
+            }
+            Token::TripleSingleQuotedRawStringLiteral(ref s) => {
+                Ok(Value::TripleSingleQuotedRawStringLiteral(s.clone()))
+            }
+            Token::TripleDoubleQuotedRawStringLiteral(ref s) => {
+                Ok(Value::TripleDoubleQuotedRawStringLiteral(s.clone()))
+            }
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),

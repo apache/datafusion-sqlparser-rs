@@ -2706,3 +2706,14 @@ fn parse_json_table() {
         }
     );
 }
+
+#[test]
+fn test_group_concat() {
+    // examples taken from mysql docs
+    // https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
+    mysql_and_generic().verified_expr("GROUP_CONCAT(DISTINCT test_score)");
+    mysql_and_generic().verified_expr("GROUP_CONCAT(test_score ORDER BY test_score)");
+    mysql_and_generic().verified_expr("GROUP_CONCAT(test_score SEPARATOR ' ')");
+    mysql_and_generic()
+        .verified_expr("GROUP_CONCAT(DISTINCT test_score ORDER BY test_score DESC SEPARATOR ' ')");
+}

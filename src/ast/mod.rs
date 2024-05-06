@@ -793,6 +793,59 @@ pub enum Expr {
     OuterJoin(Box<Expr>),
     /// A reference to the prior level in a CONNECT BY clause.
     Prior(Box<Expr>),
+    /// A lambda function.
+    ///
+    /// Syntax:
+    /// ```plaintext
+    /// param -> expr | (param1, ...) -> expr
+    /// ```
+    ///
+    /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html>.
+    Lambda(LambdaFunction),
+}
+
+/// A lambda function.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct LambdaFunction {
+    /// The parameters to the lambda function.
+    pub params: OneOrManyWithParens<Ident>,
+    /// The body of the lambda function.
+    pub body: Box<Expr>,
+}
+
+impl fmt::Display for LambdaFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} -> {}", self.params, self.body)
+    }
+}
+
+/// Encapsulates the common pattern in SQL where either one unparenthesized item
+/// such as an identifier or expression is permitted, or multiple of the same
+/// item in a parenthesized list.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum OneOrManyWithParens<T> {
+    /// A single `T`, unparenthesized.
+    One(T),
+    /// One or more `T`s, parenthesized.
+    Many(Vec<T>),
+}
+
+impl<T> fmt::Display for OneOrManyWithParens<T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OneOrManyWithParens::One(value) => write!(f, "{value}"),
+            OneOrManyWithParens::Many(values) => {
+                write!(f, "({})", display_comma_separated(values))
+            }
+        }
+    }
 }
 
 impl fmt::Display for CastFormat {
@@ -1241,6 +1294,7 @@ impl fmt::Display for Expr {
                 write!(f, "{expr} (+)")
             }
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
+            Expr::Lambda(lambda) => write!(f, "{lambda}"),
         }
     }
 }
@@ -4917,6 +4971,10 @@ pub enum FunctionArgumentClause {
     ///
     /// [`ANY_VALUE`]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#any_value
     Having(HavingBound),
+    /// The `SEPARATOR` clause to the [`GROUP_CONCAT`] function in MySQL.
+    ///
+    /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
+    Separator(Value),
 }
 
 impl fmt::Display for FunctionArgumentClause {
@@ -4931,6 +4989,7 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::Limit(limit) => write!(f, "LIMIT {limit}"),
             FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
             FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
+            FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
         }
     }
 }

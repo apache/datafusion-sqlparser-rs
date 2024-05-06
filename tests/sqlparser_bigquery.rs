@@ -792,6 +792,27 @@ fn parse_typed_struct_syntax_bigquery() {
         },
         expr_from_projection(&select.projection[1])
     );
+
+    // Keywords in the parser may be used as field names.
+    let sql = r#"SELECT STRUCT<key INT64, value INT64>(1, 2)"#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            values: vec![Expr::Value(number("1")), Expr::Value(number("2")),],
+            fields: vec![
+                StructField {
+                    field_name: Some("key".into()),
+                    field_type: DataType::Int64,
+                },
+                StructField {
+                    field_name: Some("value".into()),
+                    field_type: DataType::Int64,
+                },
+            ]
+        },
+        expr_from_projection(&select.projection[0])
+    );
 }
 
 #[test]

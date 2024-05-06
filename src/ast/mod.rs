@@ -1301,7 +1301,7 @@ impl fmt::Display for Expr {
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::ScalarVariable { data_type, name } => {
                 write!(f, "{name} {data_type}")
-            },
+            }
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
         }
     }

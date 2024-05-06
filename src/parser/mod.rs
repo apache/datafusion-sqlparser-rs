@@ -2905,8 +2905,8 @@ impl<'a> Parser<'a> {
     /// let dialect = GenericDialect {};
     /// let mut parser = Parser::new(&dialect).try_with_sql("ORDER BY foo, bar").unwrap();
     ///
-    /// // Note that the Rust infers the number of tokens to peek based on the
-    /// // slice pattern!
+    /// // Note that Rust infers the number of tokens to peek based on the
+    /// // length of the slice pattern!
     /// assert!(matches!(
     ///     parser.peek_tokens(),
     ///     [
@@ -2920,6 +2920,10 @@ impl<'a> Parser<'a> {
             .map(|with_loc| with_loc.token)
     }
 
+    /// Returns the `N` next non-whitespace tokens with locations that have not
+    /// yet been processed.
+    ///
+    /// See [`Self::peek_token`] for an example.
     pub fn peek_tokens_with_location<const N: usize>(&self) -> [TokenWithLocation; N] {
         let mut index = self.index;
         core::array::from_fn(|_| loop {

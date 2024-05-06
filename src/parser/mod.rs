@@ -9488,6 +9488,12 @@ impl<'a> Parser<'a> {
             clauses.push(FunctionArgumentClause::Limit(self.parse_expr()?));
         }
 
+        if dialect_of!(self is GenericDialect | MySqlDialect)
+            && self.parse_keyword(Keyword::SEPARATOR)
+        {
+            clauses.push(FunctionArgumentClause::Separator(self.parse_value()?));
+        }
+
         if let Some(on_overflow) = self.parse_listagg_on_overflow()? {
             clauses.push(FunctionArgumentClause::OnOverflow(on_overflow));
         }

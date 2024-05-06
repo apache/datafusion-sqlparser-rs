@@ -616,6 +616,7 @@ define_keywords!(
     SELECT,
     SEMI,
     SENSITIVE,
+    SEPARATOR,
     SEQUENCE,
     SEQUENCEFILE,
     SEQUENCES,

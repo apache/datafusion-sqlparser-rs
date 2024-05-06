@@ -6399,13 +6399,44 @@ impl Display for CommentDef {
     }
 }
 
-/// Helper to indicate if a collection should be wrapped by a symbol when displaying
+/// Helper to indicate if a collection should be wrapped by a symbol in the display form
+///
+/// [`Display`] is implemented for every [Vec<T>] where `T: Display`.
+/// The string output is a comma separated list for the vec items
+///
+/// # Examples
+/// ```
+/// # use sqlparser::ast::WrappedCollection;
+/// let items = WrappedCollection::Parentheses(vec!["one", "two", "three"]);
+/// assert_eq!("(one, two, three)", items.to_string());
+///
+/// let items = WrappedCollection::NoWrapping(vec!["one", "two", "three"]);
+/// assert_eq!("one, two, three", items.to_string());
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum WrappedCollection<T> {
+    /// Print the collection without wrapping symbols, as `item, item, item`
     NoWrapping(T),
+    /// Wraps the collection in Parentheses, as `(item, item, item)`
     Parentheses(T),
+}
+
+impl<T> Display for WrappedCollection<Vec<T>>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WrappedCollection::NoWrapping(inner) => {
+                write!(f, "{}", display_comma_separated(inner.as_slice()))
+            }
+            WrappedCollection::Parentheses(inner) => {
+                write!(f, "({})", display_comma_separated(inner.as_slice()))
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -306,15 +306,7 @@ impl Display for CreateTable {
             write!(f, " PARTITION BY {partition_by}")?;
         }
         if let Some(cluster_by) = self.cluster_by.as_ref() {
-            write!(f, " CLUSTER BY ")?;
-            match cluster_by {
-                WrappedCollection::NoWrapping(cluster_by) => {
-                    write!(f, "{}", display_comma_separated(cluster_by.as_slice()))?;
-                }
-                WrappedCollection::Parentheses(cluster_by) => {
-                    write!(f, "({})", display_comma_separated(cluster_by.as_slice()))?;
-                }
-            }
+            write!(f, " CLUSTER BY {cluster_by}")?;
         }
 
         if let Some(options) = self.options.as_ref() {

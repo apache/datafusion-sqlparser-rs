@@ -71,6 +71,12 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    // Snowflake doesn't document this but `FIRST_VALUE(arg, { IGNORE | RESPECT } NULLS)`
+    // works (i.e. inside the argument list instead of after).
+    fn supports_window_function_null_treatment_arg(&self) -> bool {
+        true
+    }
+
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE

@@ -9534,6 +9534,20 @@ impl<'a> Parser<'a> {
             clauses.push(FunctionArgumentClause::Limit(self.parse_expr()?));
         }
 
+        if dialect_of!(self is GenericDialect | BigQueryDialect)
+            && self.parse_keyword(Keyword::HAVING)
+        {
+            let kind = match self.expect_one_of_keywords(&[Keyword::MIN, Keyword::MAX])? {
+                Keyword::MIN => HavingBoundKind::Min,
+                Keyword::MAX => HavingBoundKind::Max,
+                _ => unreachable!(),
+            };
+            clauses.push(FunctionArgumentClause::Having(HavingBound(
+                kind,
+                self.parse_expr()?,
+            )))
+        }
+
         if dialect_of!(self is GenericDialect | MySqlDialect)
             && self.parse_keyword(Keyword::SEPARATOR)
         {

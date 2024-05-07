@@ -4962,6 +4962,15 @@ pub enum FunctionArgumentClause {
     ///
     /// See <https://trino.io/docs/current/functions/aggregate.html>.
     OnOverflow(ListAggOnOverflow),
+    /// Specifies a minimum or maximum bound on the input to [`ANY_VALUE`] on BigQuery.
+    ///
+    /// Syntax:
+    /// ```plaintext
+    /// HAVING { MAX | MIN } expression
+    /// ```
+    ///
+    /// [`ANY_VALUE`]: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#any_value
+    Having(HavingBound),
     /// The `SEPARATOR` clause to the [`GROUP_CONCAT`] function in MySQL.
     ///
     /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
@@ -4979,6 +4988,7 @@ impl fmt::Display for FunctionArgumentClause {
             }
             FunctionArgumentClause::Limit(limit) => write!(f, "LIMIT {limit}"),
             FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
+            FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
             FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
         }
     }
@@ -5083,6 +5093,35 @@ impl fmt::Display for ListAggOnOverflow {
                 }
                 write!(f, " COUNT")
             }
+        }
+    }
+}
+
+/// The `HAVING` clause in a call to `ANY_VALUE` on BigQuery.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct HavingBound(pub HavingBoundKind, pub Expr);
+
+impl fmt::Display for HavingBound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "HAVING {} {}", self.0, self.1)
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum HavingBoundKind {
+    Min,
+    Max,
+}
+
+impl fmt::Display for HavingBoundKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HavingBoundKind::Min => write!(f, "MIN"),
+            HavingBoundKind::Max => write!(f, "MAX"),
         }
     }
 }

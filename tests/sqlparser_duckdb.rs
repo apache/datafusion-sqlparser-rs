@@ -539,13 +539,13 @@ fn test_array_index() {
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Array(Array {
                 elem: vec![
-                    Expr::Value(Value::SingleQuotedString("a".to_string())),
-                    Expr::Value(Value::SingleQuotedString("b".to_string())),
-                    Expr::Value(Value::SingleQuotedString("c".to_string()))
+                    Expr::Value(Value::SingleQuotedString("a".to_owned())),
+                    Expr::Value(Value::SingleQuotedString("b".to_owned())),
+                    Expr::Value(Value::SingleQuotedString("c".to_owned()))
                 ],
                 named: false
             })),
-            indexes: vec![Expr::Value(Value::Number("3".to_string(), false))]
+            indexes: vec![Expr::Value(number("3"))]
         },
         expr
     );

@@ -520,15 +520,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
 #[test]
 fn test_array_index() {
     let sql = r#"SELECT ['a', 'b', 'c'][3] AS three"#;
-    let stmt = duckdb().verified_stmt(sql);
-    let query = match stmt {
-        Statement::Query(q) => q,
-        _ => panic!("Expected a query"),
-    };
-    let select = match *query.body {
-        SetExpr::Select(s) => s,
-        _ => panic!("Expected a select"),
-    };
+    let select = duckdb().verified_only_select(sql);
     let projection = &select.projection;
     assert_eq!(1, projection.len());
     let expr = match &projection[0] {

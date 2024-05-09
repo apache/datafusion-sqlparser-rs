@@ -516,3 +516,29 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
         expr_from_projection(only(&select.projection))
     );
 }
+
+#[test]
+fn test_array_index() {
+    let sql = r#"SELECT ['a', 'b', 'c'][3] AS three"#;
+    let select = duckdb().verified_only_select(sql);
+    let projection = &select.projection;
+    assert_eq!(1, projection.len());
+    let expr = match &projection[0] {
+        SelectItem::ExprWithAlias { expr, .. } => expr,
+        _ => panic!("Expected an expression with alias"),
+    };
+    assert_eq!(
+        &Expr::ArrayIndex {
+            obj: Box::new(Expr::Array(Array {
+                elem: vec![
+                    Expr::Value(Value::SingleQuotedString("a".to_owned())),
+                    Expr::Value(Value::SingleQuotedString("b".to_owned())),
+                    Expr::Value(Value::SingleQuotedString("c".to_owned()))
+                ],
+                named: false
+            })),
+            indexes: vec![Expr::Value(number("3"))]
+        },
+        expr
+    );
+}

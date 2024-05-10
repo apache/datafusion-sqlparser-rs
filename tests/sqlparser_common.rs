@@ -7023,6 +7023,27 @@ fn parse_set_variable() {
 }
 
 #[test]
+fn parse_double_colon_cast_at_timezone() {
+    let sql = "SELECT '2001-01-01T00:00:00.000Z'::TIMESTAMP AT TIME ZONE 'Europe/Brussels' FROM t";
+    let select = verified_only_select(sql);
+
+    assert_eq!(
+        &Expr::AtTimeZone {
+            timestamp: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "2001-01-01T00:00:00.000Z".to_string()
+                ),)),
+                data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                format: None
+            }),
+            time_zone: "Europe/Brussels".to_string()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_set_time_zone() {
     match verified_stmt("SET TIMEZONE = 'UTC'") {
         Statement::SetVariable {

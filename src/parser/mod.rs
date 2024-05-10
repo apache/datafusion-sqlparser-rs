@@ -1528,14 +1528,18 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_cast_format(&mut self) -> Result<Option<CastFormat>, ParserError> {
         if self.parse_keyword(Keyword::FORMAT) {
             let value = self.parse_value()?;
-            if self.parse_keywords(&[Keyword::AT, Keyword::TIME, Keyword::ZONE]) {
-                Ok(Some(CastFormat::ValueAtTimeZone(
-                    value,
-                    self.parse_value()?,
-                )))
-            } else {
-                Ok(Some(CastFormat::Value(value)))
+            match self.parse_optional_time_zone()? {
+                Some(tz) => Ok(Some(CastFormat::ValueAtTimeZone(value, tz))),
+                None => Ok(Some(CastFormat::Value(value))),
             }
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn parse_optional_time_zone(&mut self) -> Result<Option<Value>, ParserError> {
+        if self.parse_keywords(&[Keyword::AT, Keyword::TIME, Keyword::ZONE]) {
+            self.parse_value().map(Some)
         } else {
             Ok(None)
         }
@@ -2534,12 +2538,35 @@ impl<'a> Parser<'a> {
                 ),
             }
         } else if Token::DoubleColon == tok {
-            Ok(Expr::Cast {
+            let data_type = self.parse_data_type()?;
+
+            let cast_expr = Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(expr),
-                data_type: self.parse_data_type()?,
+                data_type: data_type.clone(),
                 format: None,
-            })
+            };
+
+            match data_type {
+                DataType::Date
+                | DataType::Datetime(_)
+                | DataType::Timestamp(_, _)
+                | DataType::Time(_, _) => {
+                    let value = self.parse_optional_time_zone()?;
+                    match value {
+                        Some(Value::SingleQuotedString(tz)) => Ok(Expr::AtTimeZone {
+                            timestamp: Box::new(cast_expr),
+                            time_zone: tz,
+                        }),
+                        None => Ok(cast_expr),
+                        _ => Err(ParserError::ParserError(format!(
+                            "Expected Token::SingleQuotedString after AT TIME ZONE, but found: {}",
+                            value.unwrap()
+                        ))),
+                    }
+                }
+                _ => Ok(cast_expr),
+            }
         } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
             Ok(Expr::UnaryOp {

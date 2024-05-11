@@ -231,6 +231,11 @@ pub trait Dialect: Debug + Any {
     fn convert_type_before_value(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports triple quoted string
+    /// e.g. `"""abc"""`
+    fn supports_triple_quoted_string(&self) -> bool {
+        false
+    }
     /// Dialect-specific prefix parser override
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior

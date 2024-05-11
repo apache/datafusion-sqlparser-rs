@@ -30,6 +30,11 @@ impl Dialect for BigQueryDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_'
     }
 
+    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    fn supports_triple_quoted_string(&self) -> bool {
+        true
+    }
+
     /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value)
     fn supports_window_function_null_treatment_arg(&self) -> bool {
         true

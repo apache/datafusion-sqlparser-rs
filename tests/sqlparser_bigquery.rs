@@ -18,14 +18,30 @@ use std::ops::Deref;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{ParserError, ParserOptions};
 use test_utils::*;
 
 #[test]
 fn parse_literal_string() {
-    let sql = r#"SELECT 'single', "double""#;
-    let select = bigquery().verified_only_select(sql);
-    assert_eq!(2, select.projection.len());
+    let sql = concat!(
+        "SELECT ",
+        "'single', ",
+        r#""double", "#,
+        "'''triple-single''', ",
+        r#""""triple-double""", "#,
+        r#"'single\'escaped', "#,
+        r#"'''triple-single\'escaped''', "#,
+        r#"'''triple-single'unescaped''', "#,
+        r#""double\"escaped", "#,
+        r#""""triple-double\"escaped""", "#,
+        r#""""triple-double"unescaped""""#,
+    );
+    let dialect = TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {})],
+        options: Some(ParserOptions::new().with_unescape(false)),
+    };
+    let select = dialect.verified_only_select(sql);
+    assert_eq!(10, select.projection.len());
     assert_eq!(
         &Expr::Value(Value::SingleQuotedString("single".to_string())),
         expr_from_projection(&select.projection[0])
@@ -34,56 +50,162 @@ fn parse_literal_string() {
         &Expr::Value(Value::DoubleQuotedString("double".to_string())),
         expr_from_projection(&select.projection[1])
     );
+    assert_eq!(
+        &Expr::Value(Value::TripleSingleQuotedString("triple-single".to_string())),
+        expr_from_projection(&select.projection[2])
+    );
+    assert_eq!(
+        &Expr::Value(Value::TripleDoubleQuotedString("triple-double".to_string())),
+        expr_from_projection(&select.projection[3])
+    );
+    assert_eq!(
+        &Expr::Value(Value::SingleQuotedString(r#"single\'escaped"#.to_string())),
+        expr_from_projection(&select.projection[4])
+    );
+    assert_eq!(
+        &Expr::Value(Value::TripleSingleQuotedString(
+            r#"triple-single\'escaped"#.to_string()
+        )),
+        expr_from_projection(&select.projection[5])
+    );
+    assert_eq!(
+        &Expr::Value(Value::TripleSingleQuotedString(
+            r#"triple-single'unescaped"#.to_string()
+        )),
+        expr_from_projection(&select.projection[6])
+    );
+    assert_eq!(
+        &Expr::Value(Value::DoubleQuotedString(r#"double\"escaped"#.to_string())),
+        expr_from_projection(&select.projection[7])
+    );
+    assert_eq!(
+        &Expr::Value(Value::TripleDoubleQuotedString(
+            r#"triple-double\"escaped"#.to_string()
+        )),
+        expr_from_projection(&select.projection[8])
+    );
+    assert_eq!(
+        &Expr::Value(Value::TripleDoubleQuotedString(
+            r#"triple-double"unescaped"#.to_string()
+        )),
+        expr_from_projection(&select.projection[9])
+    );
 }
 
 #[test]
 fn parse_byte_literal() {
-    let sql = r#"SELECT B'abc', B"abc""#;
-    let select = bigquery().verified_only_select(sql);
-    assert_eq!(2, select.projection.len());
-    assert_eq!(
-        &Expr::Value(Value::SingleQuotedByteStringLiteral("abc".to_string())),
-        expr_from_projection(&select.projection[0])
+    let sql = concat!(
+        "SELECT ",
+        "B'abc', ",
+        r#"B"abc", "#,
+        r#"B'f\(abc,(.*),def\)', "#,
+        r#"B"f\(abc,(.*),def\)", "#,
+        r#"B'''abc''', "#,
+        r#"B"""abc""""#,
     );
-    assert_eq!(
-        &Expr::Value(Value::DoubleQuotedByteStringLiteral("abc".to_string())),
-        expr_from_projection(&select.projection[1])
-    );
+    let stmt = bigquery().verified_stmt(sql);
+    if let Statement::Query(query) = stmt {
+        if let SetExpr::Select(select) = *query.body {
+            assert_eq!(6, select.projection.len());
+            assert_eq!(
+                &Expr::Value(Value::SingleQuotedByteStringLiteral("abc".to_string())),
+                expr_from_projection(&select.projection[0])
+            );
+            assert_eq!(
+                &Expr::Value(Value::DoubleQuotedByteStringLiteral("abc".to_string())),
+                expr_from_projection(&select.projection[1])
+            );
+            assert_eq!(
+                &Expr::Value(Value::SingleQuotedByteStringLiteral(
+                    r"f\(abc,(.*),def\)".to_string()
+                )),
+                expr_from_projection(&select.projection[2])
+            );
+            assert_eq!(
+                &Expr::Value(Value::DoubleQuotedByteStringLiteral(
+                    r"f\(abc,(.*),def\)".to_string()
+                )),
+                expr_from_projection(&select.projection[3])
+            );
+            assert_eq!(
+                &Expr::Value(Value::TripleSingleQuotedByteStringLiteral(
+                    r"abc".to_string()
+                )),
+                expr_from_projection(&select.projection[4])
+            );
+            assert_eq!(
+                &Expr::Value(Value::TripleDoubleQuotedByteStringLiteral(
+                    r"abc".to_string()
+                )),
+                expr_from_projection(&select.projection[5])
+            );
+        }
+    } else {
+        panic!("invalid query");
+    }
 
-    let sql = r#"SELECT b'abc', b"abc""#;
-    bigquery().one_statement_parses_to(sql, r#"SELECT B'abc', B"abc""#);
+    bigquery().one_statement_parses_to(
+        r#"SELECT b'123', b"123", b'''123''', b"""123""""#,
+        r#"SELECT B'123', B"123", B'''123''', B"""123""""#,
+    );
 }
 
 #[test]
 fn parse_raw_literal() {
-    let sql = r#"SELECT R'abc', R"abc", R'f\(abc,(.*),def\)', R"f\(abc,(.*),def\)""#;
-    let stmt = bigquery().one_statement_parses_to(
-        sql,
-        r"SELECT R'abc', R'abc', R'f\(abc,(.*),def\)', R'f\(abc,(.*),def\)'",
+    let sql = concat!(
+        "SELECT ",
+        "R'abc', ",
+        r#"R"abc", "#,
+        r#"R'f\(abc,(.*),def\)', "#,
+        r#"R"f\(abc,(.*),def\)", "#,
+        r#"R'''abc''', "#,
+        r#"R"""abc""""#,
     );
+    let stmt = bigquery().verified_stmt(sql);
     if let Statement::Query(query) = stmt {
         if let SetExpr::Select(select) = *query.body {
-            assert_eq!(4, select.projection.len());
+            assert_eq!(6, select.projection.len());
             assert_eq!(
-                &Expr::Value(Value::RawStringLiteral("abc".to_string())),
+                &Expr::Value(Value::SingleQuotedRawStringLiteral("abc".to_string())),
                 expr_from_projection(&select.projection[0])
             );
             assert_eq!(
-                &Expr::Value(Value::RawStringLiteral("abc".to_string())),
+                &Expr::Value(Value::DoubleQuotedRawStringLiteral("abc".to_string())),
                 expr_from_projection(&select.projection[1])
             );
             assert_eq!(
-                &Expr::Value(Value::RawStringLiteral(r"f\(abc,(.*),def\)".to_string())),
+                &Expr::Value(Value::SingleQuotedRawStringLiteral(
+                    r"f\(abc,(.*),def\)".to_string()
+                )),
                 expr_from_projection(&select.projection[2])
             );
             assert_eq!(
-                &Expr::Value(Value::RawStringLiteral(r"f\(abc,(.*),def\)".to_string())),
+                &Expr::Value(Value::DoubleQuotedRawStringLiteral(
+                    r"f\(abc,(.*),def\)".to_string()
+                )),
                 expr_from_projection(&select.projection[3])
             );
-            return;
+            assert_eq!(
+                &Expr::Value(Value::TripleSingleQuotedRawStringLiteral(
+                    r"abc".to_string()
+                )),
+                expr_from_projection(&select.projection[4])
+            );
+            assert_eq!(
+                &Expr::Value(Value::TripleDoubleQuotedRawStringLiteral(
+                    r"abc".to_string()
+                )),
+                expr_from_projection(&select.projection[5])
+            );
         }
+    } else {
+        panic!("invalid query");
     }
-    panic!("invalid query")
+
+    bigquery().one_statement_parses_to(
+        r#"SELECT r'123', r"123", r'''123''', r"""123""""#,
+        r#"SELECT R'123', R"123", R'''123''', R"""123""""#,
+    );
 }
 
 #[test]

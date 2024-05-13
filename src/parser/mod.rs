@@ -9704,8 +9704,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
-        {
+        let opt_except = if self.dialect.supports_select_wildcard_except() {
             self.parse_optional_select_item_except()?
         } else {
             None

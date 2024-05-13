@@ -33,4 +33,9 @@ impl Dialect for DatabricksDialect {
     fn supports_lambda_functions(&self) -> bool {
         true
     }
+
+    // https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select.html#syntax
+    fn supports_select_wildcard_except(&self) -> bool {
+        true
+    }
 }

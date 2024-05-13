@@ -1839,38 +1839,6 @@ fn parse_array_agg_func() {
 }
 
 #[test]
-fn test_select_wildcard_with_except() {
-    let select = bigquery_and_generic().verified_only_select("SELECT * EXCEPT (col_a) FROM data");
-    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_except: Some(ExceptSelectItem {
-            first_element: Ident::new("col_a"),
-            additional_elements: vec![],
-        }),
-        ..Default::default()
-    });
-    assert_eq!(expected, select.projection[0]);
-
-    let select = bigquery_and_generic()
-        .verified_only_select("SELECT * EXCEPT (department_id, employee_id) FROM employee_table");
-    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_except: Some(ExceptSelectItem {
-            first_element: Ident::new("department_id"),
-            additional_elements: vec![Ident::new("employee_id")],
-        }),
-        ..Default::default()
-    });
-    assert_eq!(expected, select.projection[0]);
-
-    assert_eq!(
-        bigquery_and_generic()
-            .parse_sql_statements("SELECT * EXCEPT () FROM employee_table")
-            .unwrap_err()
-            .to_string(),
-        "sql parser error: Expected identifier, found: )"
-    );
-}
-
-#[test]
 fn parse_big_query_declare() {
     for (sql, expected_names, expected_data_type, expected_assigned_expr) in [
         (

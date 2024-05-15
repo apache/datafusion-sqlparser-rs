@@ -1576,3 +1576,12 @@ fn test_select_wildcard_with_ilike_replace() {
         "sql parser error: Expected end of statement, found: EXCLUDE"
     );
 }
+
+#[test]
+fn first_value_ignore_nulls() {
+    snowflake().verified_only_select(concat!(
+        "SELECT FIRST_VALUE(column2 IGNORE NULLS) ",
+        "OVER (PARTITION BY column1 ORDER BY column2) ",
+        "FROM some_table"
+    ));
+}

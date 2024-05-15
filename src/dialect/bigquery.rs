@@ -30,6 +30,11 @@ impl Dialect for BigQueryDialect {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_'
     }
 
+    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    fn supports_triple_quoted_string(&self) -> bool {
+        true
+    }
+
     /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value)
     fn supports_window_function_null_treatment_arg(&self) -> bool {
         true
@@ -42,6 +47,16 @@ impl Dialect for BigQueryDialect {
 
     /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#ref_named_window)
     fn supports_window_clause_named_window_reference(&self) -> bool {
+        true
+    }
+
+    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#set)
+    fn supports_parenthesized_set_variables(&self) -> bool {
+        true
+    }
+
+    // See https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_except
+    fn supports_select_wildcard_except(&self) -> bool {
         true
     }
 }

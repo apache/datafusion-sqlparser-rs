@@ -1201,7 +1201,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: ObjectName(vec![Ident::new("a")]),
+            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
             value: vec![Expr::Identifier(Ident {
                 value: "b".into(),
                 quote_style: None
@@ -1215,7 +1215,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: ObjectName(vec![Ident::new("a")]),
+            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
             value: vec![Expr::Value(Value::SingleQuotedString("b".into()))],
         }
     );
@@ -1226,7 +1226,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: ObjectName(vec![Ident::new("a")]),
+            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
             value: vec![Expr::Value(number("0"))],
         }
     );
@@ -1237,7 +1237,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: ObjectName(vec![Ident::new("a")]),
+            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
             value: vec![Expr::Identifier(Ident {
                 value: "DEFAULT".into(),
                 quote_style: None
@@ -1251,7 +1251,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: true,
             hivevar: false,
-            variable: ObjectName(vec![Ident::new("a")]),
+            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
             value: vec![Expr::Identifier("b".into())],
         }
     );
@@ -1262,7 +1262,11 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: ObjectName(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
+            variables: OneOrManyWithParens::One(ObjectName(vec![
+                Ident::new("a"),
+                Ident::new("b"),
+                Ident::new("c")
+            ])),
             value: vec![Expr::Identifier(Ident {
                 value: "b".into(),
                 quote_style: None
@@ -1279,13 +1283,13 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: ObjectName(vec![
+            variables: OneOrManyWithParens::One(ObjectName(vec![
                 Ident::new("hive"),
                 Ident::new("tez"),
                 Ident::new("auto"),
                 Ident::new("reducer"),
                 Ident::new("parallelism")
-            ]),
+            ])),
             value: vec![Expr::Value(Value::Boolean(false))],
         }
     );

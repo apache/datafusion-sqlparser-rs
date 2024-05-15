@@ -1187,10 +1187,17 @@ impl<'a> Parser<'a> {
             Token::Number(_, _)
             | Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
+            | Token::TripleSingleQuotedString(_)
+            | Token::TripleDoubleQuotedString(_)
             | Token::DollarQuotedString(_)
             | Token::SingleQuotedByteStringLiteral(_)
             | Token::DoubleQuotedByteStringLiteral(_)
-            | Token::RawStringLiteral(_)
+            | Token::TripleSingleQuotedByteStringLiteral(_)
+            | Token::TripleDoubleQuotedByteStringLiteral(_)
+            | Token::SingleQuotedRawStringLiteral(_)
+            | Token::DoubleQuotedRawStringLiteral(_)
+            | Token::TripleSingleQuotedRawStringLiteral(_)
+            | Token::TripleDoubleQuotedRawStringLiteral(_)
             | Token::NationalStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
@@ -1528,14 +1535,18 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_cast_format(&mut self) -> Result<Option<CastFormat>, ParserError> {
         if self.parse_keyword(Keyword::FORMAT) {
             let value = self.parse_value()?;
-            if self.parse_keywords(&[Keyword::AT, Keyword::TIME, Keyword::ZONE]) {
-                Ok(Some(CastFormat::ValueAtTimeZone(
-                    value,
-                    self.parse_value()?,
-                )))
-            } else {
-                Ok(Some(CastFormat::Value(value)))
+            match self.parse_optional_time_zone()? {
+                Some(tz) => Ok(Some(CastFormat::ValueAtTimeZone(value, tz))),
+                None => Ok(Some(CastFormat::Value(value))),
             }
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn parse_optional_time_zone(&mut self) -> Result<Option<Value>, ParserError> {
+        if self.parse_keywords(&[Keyword::AT, Keyword::TIME, Keyword::ZONE]) {
+            self.parse_value().map(Some)
         } else {
             Ok(None)
         }
@@ -2534,12 +2545,35 @@ impl<'a> Parser<'a> {
                 ),
             }
         } else if Token::DoubleColon == tok {
-            Ok(Expr::Cast {
+            let data_type = self.parse_data_type()?;
+
+            let cast_expr = Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(expr),
-                data_type: self.parse_data_type()?,
+                data_type: data_type.clone(),
                 format: None,
-            })
+            };
+
+            match data_type {
+                DataType::Date
+                | DataType::Datetime(_)
+                | DataType::Timestamp(_, _)
+                | DataType::Time(_, _) => {
+                    let value = self.parse_optional_time_zone()?;
+                    match value {
+                        Some(Value::SingleQuotedString(tz)) => Ok(Expr::AtTimeZone {
+                            timestamp: Box::new(cast_expr),
+                            time_zone: tz,
+                        }),
+                        None => Ok(cast_expr),
+                        _ => Err(ParserError::ParserError(format!(
+                            "Expected Token::SingleQuotedString after AT TIME ZONE, but found: {}",
+                            value.unwrap()
+                        ))),
+                    }
+                }
+                _ => Ok(cast_expr),
+            }
         } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
             Ok(Expr::UnaryOp {
@@ -2547,7 +2581,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {
-            if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+            if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
                 // parse index
                 self.parse_array_index(expr)
             } else if dialect_of!(self is SnowflakeDialect) {
@@ -6425,6 +6459,12 @@ impl<'a> Parser<'a> {
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+            Token::TripleSingleQuotedString(ref s) => {
+                Ok(Value::TripleSingleQuotedString(s.to_string()))
+            }
+            Token::TripleDoubleQuotedString(ref s) => {
+                Ok(Value::TripleDoubleQuotedString(s.to_string()))
+            }
             Token::DollarQuotedString(ref s) => Ok(Value::DollarQuotedString(s.clone())),
             Token::SingleQuotedByteStringLiteral(ref s) => {
                 Ok(Value::SingleQuotedByteStringLiteral(s.clone()))
@@ -6432,7 +6472,24 @@ impl<'a> Parser<'a> {
             Token::DoubleQuotedByteStringLiteral(ref s) => {
                 Ok(Value::DoubleQuotedByteStringLiteral(s.clone()))
             }
-            Token::RawStringLiteral(ref s) => Ok(Value::RawStringLiteral(s.clone())),
+            Token::TripleSingleQuotedByteStringLiteral(ref s) => {
+                Ok(Value::TripleSingleQuotedByteStringLiteral(s.clone()))
+            }
+            Token::TripleDoubleQuotedByteStringLiteral(ref s) => {
+                Ok(Value::TripleDoubleQuotedByteStringLiteral(s.clone()))
+            }
+            Token::SingleQuotedRawStringLiteral(ref s) => {
+                Ok(Value::SingleQuotedRawStringLiteral(s.clone()))
+            }
+            Token::DoubleQuotedRawStringLiteral(ref s) => {
+                Ok(Value::DoubleQuotedRawStringLiteral(s.clone()))
+            }
+            Token::TripleSingleQuotedRawStringLiteral(ref s) => {
+                Ok(Value::TripleSingleQuotedRawStringLiteral(s.clone()))
+            }
+            Token::TripleDoubleQuotedRawStringLiteral(ref s) => {
+                Ok(Value::TripleDoubleQuotedRawStringLiteral(s.clone()))
+            }
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
@@ -8030,14 +8087,27 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let variable = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
-            ObjectName(vec!["TIMEZONE".into()])
+        let variables = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
+            OneOrManyWithParens::One(ObjectName(vec!["TIMEZONE".into()]))
+        } else if self.dialect.supports_parenthesized_set_variables()
+            && self.consume_token(&Token::LParen)
+        {
+            let variables = OneOrManyWithParens::Many(
+                self.parse_comma_separated(|parser: &mut Parser<'a>| {
+                    parser.parse_identifier(false)
+                })?
+                .into_iter()
+                .map(|ident| ObjectName(vec![ident]))
+                .collect(),
+            );
+            self.expect_token(&Token::RParen)?;
+            variables
         } else {
-            self.parse_object_name(false)?
+            OneOrManyWithParens::One(self.parse_object_name(false)?)
         };
 
-        if variable.to_string().eq_ignore_ascii_case("NAMES")
-            && dialect_of!(self is MySqlDialect | GenericDialect)
+        if matches!(&variables, OneOrManyWithParens::One(variable) if variable.to_string().eq_ignore_ascii_case("NAMES")
+            && dialect_of!(self is MySqlDialect | GenericDialect))
         {
             if self.parse_keyword(Keyword::DEFAULT) {
                 return Ok(Statement::SetNamesDefault {});
@@ -8050,11 +8120,19 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Statement::SetNames {
+            return Ok(Statement::SetNames {
                 charset_name,
                 collation_name,
-            })
-        } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
+            });
+        }
+
+        let parenthesized_assignment = matches!(&variables, OneOrManyWithParens::Many(_));
+
+        if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
+            if parenthesized_assignment {
+                self.expect_token(&Token::LParen)?;
+            }
+
             let mut values = vec![];
             loop {
                 let value = if let Ok(expr) = self.parse_expr() {
@@ -8067,14 +8145,24 @@ impl<'a> Parser<'a> {
                 if self.consume_token(&Token::Comma) {
                     continue;
                 }
+
+                if parenthesized_assignment {
+                    self.expect_token(&Token::RParen)?;
+                }
                 return Ok(Statement::SetVariable {
                     local: modifier == Some(Keyword::LOCAL),
                     hivevar: Some(Keyword::HIVEVAR) == modifier,
-                    variable,
+                    variables,
                     value: values,
                 });
             }
-        } else if variable.to_string().eq_ignore_ascii_case("TIMEZONE") {
+        }
+
+        let OneOrManyWithParens::One(variable) = variables else {
+            return self.expected("set variable", self.peek_token());
+        };
+
+        if variable.to_string().eq_ignore_ascii_case("TIMEZONE") {
             // for some db (e.g. postgresql), SET TIME ZONE <value> is an alias for SET TIMEZONE [TO|=] <value>
             match self.parse_expr() {
                 Ok(expr) => Ok(Statement::SetTimeZone {
@@ -9616,8 +9704,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
-        {
+        let opt_except = if self.dialect.supports_select_wildcard_except() {
             self.parse_optional_select_item_except()?
         } else {
             None

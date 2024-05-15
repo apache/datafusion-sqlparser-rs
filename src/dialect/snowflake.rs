@@ -77,6 +77,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/sql/set#syntax)
+    fn supports_parenthesized_set_variables(&self) -> bool {
+        true
+    }
+
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE

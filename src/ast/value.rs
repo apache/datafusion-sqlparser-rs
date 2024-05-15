@@ -42,6 +42,12 @@ pub enum Value {
     SingleQuotedString(String),
     // $<tag_name>$string value$<tag_name>$ (postgres syntax)
     DollarQuotedString(DollarQuotedString),
+    /// Triple single quoted strings: Example '''abc'''
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    TripleSingleQuotedString(String),
+    /// Triple double quoted strings: Example """abc"""
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    TripleDoubleQuotedString(String),
     /// e'string value' (postgres extension)
     /// See [Postgres docs](https://www.postgresql.org/docs/8.3/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS)
     /// for more details.
@@ -50,9 +56,24 @@ pub enum Value {
     SingleQuotedByteStringLiteral(String),
     /// B"string value"
     DoubleQuotedByteStringLiteral(String),
-    /// R'string value' or r'string value' or r"string value"
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals>
-    RawStringLiteral(String),
+    /// Triple single quoted literal with byte string prefix. Example `B'''abc'''`
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    TripleSingleQuotedByteStringLiteral(String),
+    /// Triple double quoted literal with byte string prefix. Example `B"""abc"""`
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    TripleDoubleQuotedByteStringLiteral(String),
+    /// Single quoted literal with raw string prefix. Example `R'abc'`
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    SingleQuotedRawStringLiteral(String),
+    /// Double quoted literal with raw string prefix. Example `R"abc"`
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    DoubleQuotedRawStringLiteral(String),
+    /// Triple single quoted literal with raw string prefix. Example `R'''abc'''`
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    TripleSingleQuotedRawStringLiteral(String),
+    /// Triple double quoted literal with raw string prefix. Example `R"""abc"""`
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
+    TripleDoubleQuotedRawStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),
     /// X'hex value'
@@ -73,6 +94,12 @@ impl fmt::Display for Value {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
             Value::DoubleQuotedString(v) => write!(f, "\"{}\"", escape_double_quote_string(v)),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
+            Value::TripleSingleQuotedString(v) => {
+                write!(f, "'''{v}'''")
+            }
+            Value::TripleDoubleQuotedString(v) => {
+                write!(f, r#""""{v}""""#)
+            }
             Value::DollarQuotedString(v) => write!(f, "{v}"),
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{v}'"),
@@ -80,7 +107,12 @@ impl fmt::Display for Value {
             Value::Boolean(v) => write!(f, "{v}"),
             Value::SingleQuotedByteStringLiteral(v) => write!(f, "B'{v}'"),
             Value::DoubleQuotedByteStringLiteral(v) => write!(f, "B\"{v}\""),
-            Value::RawStringLiteral(v) => write!(f, "R'{v}'"),
+            Value::TripleSingleQuotedByteStringLiteral(v) => write!(f, "B'''{v}'''"),
+            Value::TripleDoubleQuotedByteStringLiteral(v) => write!(f, r#"B"""{v}""""#),
+            Value::SingleQuotedRawStringLiteral(v) => write!(f, "R'{v}'"),
+            Value::DoubleQuotedRawStringLiteral(v) => write!(f, "R\"{v}\""),
+            Value::TripleSingleQuotedRawStringLiteral(v) => write!(f, "R'''{v}'''"),
+            Value::TripleDoubleQuotedRawStringLiteral(v) => write!(f, r#"R"""{v}""""#),
             Value::Null => write!(f, "NULL"),
             Value::Placeholder(v) => write!(f, "{v}"),
         }

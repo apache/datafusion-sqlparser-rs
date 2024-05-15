@@ -62,4 +62,12 @@ impl Dialect for GenericDialect {
     fn supports_window_clause_named_window_reference(&self) -> bool {
         true
     }
+
+    fn supports_parenthesized_set_variables(&self) -> bool {
+        true
+    }
+
+    fn supports_select_wildcard_except(&self) -> bool {
+        true
+    }
 }

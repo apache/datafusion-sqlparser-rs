@@ -217,9 +217,33 @@ pub trait Dialect: Debug + Any {
     fn supports_lambda_functions(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports multiple variable assignment
+    /// using parentheses in a `SET` variable declaration.
+    ///
+    /// ```sql
+    /// SET (variable[, ...]) = (expression[, ...]);
+    /// ```
+    fn supports_parenthesized_set_variables(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports an `EXCEPT` clause following a
+    /// wildcard in a select list.
+    ///
+    /// For example
+    /// ```sql
+    /// SELECT * EXCEPT order_id FROM orders;
+    /// ```
+    fn supports_select_wildcard_except(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect has a CONVERT function which accepts a type first
     /// and an expression second, e.g. `CONVERT(varchar, 1)`
     fn convert_type_before_value(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports triple quoted string
+    /// e.g. `"""abc"""`
+    fn supports_triple_quoted_string(&self) -> bool {
         false
     }
     /// Dialect-specific prefix parser override

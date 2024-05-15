@@ -17,8 +17,8 @@
 
 use sqlparser::ast::{
     CreateFunctionBody, CreateFunctionUsing, Expr, Function, FunctionArgumentList,
-    FunctionArguments, FunctionDefinition, Ident, ObjectName, SelectItem, Statement, TableFactor,
-    UnaryOperator,
+    FunctionArguments, FunctionDefinition, Ident, ObjectName, OneOrManyWithParens, SelectItem,
+    Statement, TableFactor, UnaryOperator,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
@@ -268,12 +268,12 @@ fn set_statement_with_minus() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: ObjectName(vec![
+            variables: OneOrManyWithParens::One(ObjectName(vec![
                 Ident::new("hive"),
                 Ident::new("tez"),
                 Ident::new("java"),
                 Ident::new("opts")
-            ]),
+            ])),
             value: vec![Expr::UnaryOp {
                 op: UnaryOperator::Minus,
                 expr: Box::new(Expr::Identifier(Ident::new("Xmx4g")))

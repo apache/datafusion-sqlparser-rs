@@ -71,6 +71,12 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    // Snowflake doesn't document this but `FIRST_VALUE(arg, { IGNORE | RESPECT } NULLS)`
+    // works (i.e. inside the argument list instead of after).
+    fn supports_window_function_null_treatment_arg(&self) -> bool {
+        true
+    }
+
     /// See [doc](https://docs.snowflake.com/en/sql-reference/sql/set#syntax)
     fn supports_parenthesized_set_variables(&self) -> bool {
         true

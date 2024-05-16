@@ -4995,7 +4995,9 @@ fn parse_at_timezone() {
     assert_eq!(
         &Expr::AtTimeZone {
             timestamp: Box::new(call("FROM_UNIXTIME", [zero.clone()])),
-            time_zone: "UTC-06:00".to_string(),
+            time_zone: Box::new(Expr::Value(Value::SingleQuotedString(
+                "UTC-06:00".to_string()
+            ))),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5009,7 +5011,9 @@ fn parse_at_timezone() {
                 [
                     Expr::AtTimeZone {
                         timestamp: Box::new(call("FROM_UNIXTIME", [zero])),
-                        time_zone: "UTC-06:00".to_string(),
+                        time_zone: Box::new(Expr::Value(Value::SingleQuotedString(
+                            "UTC-06:00".to_string()
+                        ))),
                     },
                     Expr::Value(Value::SingleQuotedString("%Y-%m-%dT%H".to_string()),)
                 ]
@@ -7037,7 +7041,9 @@ fn parse_double_colon_cast_at_timezone() {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
                 format: None
             }),
-            time_zone: "Europe/Brussels".to_string()
+            time_zone: Box::new(Expr::Value(Value::SingleQuotedString(
+                "Europe/Brussels".to_string()
+            ))),
         },
         expr_from_projection(only(&select.projection)),
     );

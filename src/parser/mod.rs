@@ -2469,26 +2469,11 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::AT => {
-                    // if self.parse_keyword(Keyword::TIME) {
-                    //     self.expect_keyword(Keyword::ZONE)?;
-                    if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
-                        let time_zone = self.next_token();
-                        match time_zone.token {
-                            Token::SingleQuotedString(time_zone) => {
-                                log::trace!("Peek token: {:?}", self.peek_token());
-                                Ok(Expr::AtTimeZone {
-                                    timestamp: Box::new(expr),
-                                    time_zone,
-                                })
-                            }
-                            _ => self.expected(
-                                "Expected Token::SingleQuotedString after AT TIME ZONE",
-                                time_zone,
-                            ),
-                        }
-                    } else {
-                        self.expected("Expected Token::Word after AT", tok)
-                    }
+                    self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                    Ok(Expr::AtTimeZone {
+                        timestamp: Box::new(expr),
+                        time_zone: Box::new(self.parse_subexpr(precedence)?),
+                    })
                 }
                 Keyword::NOT
                 | Keyword::IN
@@ -2545,35 +2530,12 @@ impl<'a> Parser<'a> {
                 ),
             }
         } else if Token::DoubleColon == tok {
-            let data_type = self.parse_data_type()?;
-
-            let cast_expr = Expr::Cast {
+            Ok(Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(expr),
-                data_type: data_type.clone(),
+                data_type: self.parse_data_type()?,
                 format: None,
-            };
-
-            match data_type {
-                DataType::Date
-                | DataType::Datetime(_)
-                | DataType::Timestamp(_, _)
-                | DataType::Time(_, _) => {
-                    let value = self.parse_optional_time_zone()?;
-                    match value {
-                        Some(Value::SingleQuotedString(tz)) => Ok(Expr::AtTimeZone {
-                            timestamp: Box::new(cast_expr),
-                            time_zone: tz,
-                        }),
-                        None => Ok(cast_expr),
-                        _ => Err(ParserError::ParserError(format!(
-                            "Expected Token::SingleQuotedString after AT TIME ZONE, but found: {}",
-                            value.unwrap()
-                        ))),
-                    }
-                }
-                _ => Ok(cast_expr),
-            }
+            })
         } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
             Ok(Expr::UnaryOp {
@@ -2784,10 +2746,14 @@ impl<'a> Parser<'a> {
 
     // use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
     // higher number = higher precedence
+    //
+    // NOTE: The pg documentation is incomplete, e.g. the AT TIME ZONE operator
+    //       actually has higher precedence than addition.
+    //       See https://postgrespro.com/list/thread-id/2673331.
+    const AT_TZ_PREC: u8 = 41;
     const MUL_DIV_MOD_OP_PREC: u8 = 40;
     const PLUS_MINUS_PREC: u8 = 30;
     const XOR_PREC: u8 = 24;
-    const TIME_ZONE_PREC: u8 = 20;
     const BETWEEN_PREC: u8 = 20;
     const LIKE_PREC: u8 = 19;
     const IS_PREC: u8 = 17;
@@ -2817,7 +2783,7 @@ impl<'a> Parser<'a> {
                     (Token::Word(w), Token::Word(w2))
                         if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
                     {
-                        Ok(Self::TIME_ZONE_PREC)
+                        Ok(Self::AT_TZ_PREC)
                     }
                     _ => Ok(0),
                 }

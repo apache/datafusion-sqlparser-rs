@@ -3882,3 +3882,43 @@ fn parse_mat_cte() {
     let sql2 = r#"WITH cte AS NOT MATERIALIZED (SELECT id FROM accounts) SELECT id FROM cte"#;
     pg().verified_stmt(sql2);
 }
+
+#[test]
+fn parse_at_time_zone() {
+    pg_and_generic().verified_expr("CURRENT_TIMESTAMP AT TIME ZONE tz");
+    pg_and_generic().verified_expr("CURRENT_TIMESTAMP AT TIME ZONE ('America/' || 'Los_Angeles')");
+
+    // check precedence
+    let expr = Expr::BinaryOp {
+        left: Box::new(Expr::AtTimeZone {
+            timestamp: Box::new(Expr::TypedString {
+                data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                value: "2001-09-28 01:00".to_owned(),
+            }),
+            time_zone: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "America/Los_Angeles".to_owned(),
+                ))),
+                data_type: DataType::Text,
+                format: None,
+            }),
+        }),
+        op: BinaryOperator::Plus,
+        right: Box::new(Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(
+                "23 hours".to_owned(),
+            ))),
+            leading_field: None,
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        })),
+    };
+    pretty_assertions::assert_eq!(
+        pg_and_generic().verified_expr(
+            "TIMESTAMP '2001-09-28 01:00' AT TIME ZONE 'America/Los_Angeles'::TEXT + INTERVAL '23 hours'",
+        ),
+        expr
+    );
+}

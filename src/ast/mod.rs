@@ -221,6 +221,14 @@ impl fmt::Display for Array {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Interval {
     pub value: Box<Expr>,
+    pub unit: IntervalUnit,
+}
+
+/// Represents the unit in INTERVAL data types and expressions.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IntervalUnit {
     pub leading_field: Option<DateTimeField>,
     pub leading_precision: Option<u64>,
     pub last_field: Option<DateTimeField>,
@@ -234,6 +242,14 @@ pub struct Interval {
 impl fmt::Display for Interval {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let value = self.value.as_ref();
+        let unit = &self.unit;
+        write!(f, "INTERVAL {value}{unit}")?;
+        Ok(())
+    }
+}
+
+impl fmt::Display for IntervalUnit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match (
             &self.leading_field,
             self.leading_precision,
@@ -249,11 +265,10 @@ impl fmt::Display for Interval {
                 assert!(self.last_field.is_none());
                 write!(
                     f,
-                    "INTERVAL {value} SECOND ({leading_precision}, {fractional_seconds_precision})"
+                    " SECOND ({leading_precision}, {fractional_seconds_precision})"
                 )
             }
             _ => {
-                write!(f, "INTERVAL {value}")?;
                 if let Some(leading_field) = &self.leading_field {
                     write!(f, " {leading_field}")?;
                 }
@@ -281,15 +296,24 @@ impl fmt::Display for Interval {
 pub struct StructField {
     pub field_name: Option<Ident>,
     pub field_type: DataType,
+    pub not_null: bool,
+    pub comment: Option<String>,
 }
 
 impl fmt::Display for StructField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(name) = &self.field_name {
-            write!(f, "{name} {}", self.field_type)
+            write!(f, "{name} {}", self.field_type)?;
         } else {
-            write!(f, "{}", self.field_type)
+            write!(f, "{}", self.field_type)?;
         }
+        if self.not_null {
+            write!(f, " NOT NULL")?;
+        }
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT '{comment}'")?;
+        }
+        Ok(())
     }
 }
 
@@ -6549,10 +6573,12 @@ mod tests {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "123:45.67",
             )))),
-            leading_field: Some(DateTimeField::Minute),
-            leading_precision: Some(10),
-            last_field: Some(DateTimeField::Second),
-            fractional_seconds_precision: Some(9),
+            unit: IntervalUnit {
+                leading_field: Some(DateTimeField::Minute),
+                leading_precision: Some(10),
+                last_field: Some(DateTimeField::Second),
+                fractional_seconds_precision: Some(9),
+            },
         });
         assert_eq!(
             "INTERVAL '123:45.67' MINUTE (10) TO SECOND (9)",
@@ -6561,10 +6587,12 @@ mod tests {
 
         let interval = Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("5")))),
-            leading_field: Some(DateTimeField::Second),
-            leading_precision: Some(1),
-            last_field: None,
-            fractional_seconds_precision: Some(3),
+            unit: IntervalUnit {
+                leading_field: Some(DateTimeField::Second),
+                leading_precision: Some(1),
+                last_field: None,
+                fractional_seconds_precision: Some(3),
+            },
         });
         assert_eq!("INTERVAL '5' SECOND (1, 3)", format!("{interval}"));
     }

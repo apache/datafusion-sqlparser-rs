@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{display_comma_separated, ObjectName, StructField};
+use crate::ast::{display_comma_separated, IntervalUnit, ObjectName, StructField};
 
 use super::value::escape_single_quote_string;
 
@@ -29,6 +29,10 @@ use super::value::escape_single_quote_string;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DataType {
+    /// Null type
+    Null,
+    /// Void type
+    Void,
     /// Fixed-length character type e.g. CHARACTER(10)
     Character(Option<CharacterLength>),
     /// Fixed-length char type e.g. CHAR(10)
@@ -135,12 +139,16 @@ pub enum DataType {
     Int64,
     /// Integer with optional display width e.g. INTEGER or INTEGER(11)
     Integer(Option<u64>),
+    /// Long with optional display width e.g. LONG or LONG(20)
+    Long(Option<u64>),
     /// Unsigned int with optional display width e.g. INT UNSIGNED or INT(11) UNSIGNED
     UnsignedInt(Option<u64>),
     /// Unsigned int4 with optional display width e.g. INT4 UNSIGNED or INT4(11) UNSIGNED
     UnsignedInt4(Option<u64>),
-    /// Unsigned integer with optional display width e.g. INTGER UNSIGNED or INTEGER(11) UNSIGNED
+    /// Unsigned integer with optional display width e.g. INTEGER UNSIGNED or INTEGER(11) UNSIGNED
     UnsignedInteger(Option<u64>),
+    /// Unsigned long with optional display width e.g. LONG UNSIGNED or LONG(20) UNSIGNED
+    UnsignedLong(Option<u64>),
     /// Big integer with optional display width e.g. BIGINT or BIGINT(20)
     BigInt(Option<u64>),
     /// Unsigned big integer with optional display width e.g. BIGINT UNSIGNED or BIGINT(20) UNSIGNED
@@ -195,7 +203,7 @@ pub enum DataType {
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     Timestamp(Option<u64>, TimezoneInfo),
     /// Interval
-    Interval,
+    Interval(IntervalUnit),
     /// JSON type
     JSON,
     /// Binary JSON type
@@ -221,6 +229,8 @@ pub enum DataType {
     /// [hive]: https://docs.cloudera.com/cdw-runtime/cloud/impala-sql-reference/topics/impala-struct.html
     /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct(Vec<StructField>),
+    /// Map
+    Map(Box<DataType>, Box<DataType>),
     /// No type specified - only used with
     /// [`SQLiteDialect`](crate::dialect::SQLiteDialect), from statements such
     /// as `CREATE TABLE t1 (a)`.
@@ -230,6 +240,8 @@ pub enum DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            DataType::Null => write!(f, "NULL"),
+            DataType::Void => write!(f, "VOID"),
             DataType::Character(size) => format_character_string_type(f, "CHARACTER", size),
             DataType::Char(size) => format_character_string_type(f, "CHAR", size),
             DataType::CharacterVarying(size) => {
@@ -308,6 +320,12 @@ impl fmt::Display for DataType {
             DataType::UnsignedInteger(zerofill) => {
                 format_type_with_optional_length(f, "INTEGER", zerofill, true)
             }
+            DataType::Long(zerofill) => {
+                format_type_with_optional_length(f, "LONG", zerofill, false)
+            }
+            DataType::UnsignedLong(zerofill) => {
+                format_type_with_optional_length(f, "LONG", zerofill, true)
+            }
             DataType::BigInt(zerofill) => {
                 format_type_with_optional_length(f, "BIGINT", zerofill, false)
             }
@@ -338,7 +356,7 @@ impl fmt::Display for DataType {
             DataType::Timestamp(precision, timezone_info) => {
                 format_datetime_precision_and_tz(f, "TIMESTAMP", precision, timezone_info)
             }
-            DataType::Interval => write!(f, "INTERVAL"),
+            DataType::Interval(unit) => write!(f, "INTERVAL{unit}"),
             DataType::JSON => write!(f, "JSON"),
             DataType::JSONB => write!(f, "JSONB"),
             DataType::Regclass => write!(f, "REGCLASS"),
@@ -351,6 +369,7 @@ impl fmt::Display for DataType {
                 ArrayElemTypeDef::SquareBracket(t, Some(size)) => write!(f, "{t}[{size}]"),
                 ArrayElemTypeDef::AngleBracket(t) => write!(f, "ARRAY<{t}>"),
             },
+            DataType::Map(k, v) => write!(f, "MAP<{k}, {v}>"),
             DataType::Custom(ty, modifiers) => {
                 if modifiers.is_empty() {
                     write!(f, "{ty}")
@@ -459,6 +478,8 @@ pub enum TimezoneInfo {
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     /// [Postgresql]: https://www.postgresql.org/docs/current/datatype-datetime.html
     WithoutTimeZone,
+    /// Temporal type 'WITH LOCAL TIME ZONE'. E.g., TIMESTAMP WITH LOCAL TIME ZONE
+    WithLocalTimeZone,
     /// Postgresql specific `WITH TIME ZONE` formatting, for both TIME and TIMESTAMP. E.g., TIMETZ, [Postgresql]
     ///
     /// [Postgresql]: https://www.postgresql.org/docs/current/datatype-datetime.html
@@ -476,6 +497,9 @@ impl fmt::Display for TimezoneInfo {
             }
             TimezoneInfo::WithoutTimeZone => {
                 write!(f, " WITHOUT TIME ZONE")
+            }
+            TimezoneInfo::WithLocalTimeZone => {
+                write!(f, " WITH LOCAL TIME ZONE")
             }
             TimezoneInfo::Tz => {
                 // TZ is the only one that is displayed BEFORE the precision, so the datatype display

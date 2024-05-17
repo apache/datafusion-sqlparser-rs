@@ -2248,6 +2248,30 @@ fn parse_cast() {
         expr_from_projection(only(&select.projection))
     );
 
+    let sql = "SELECT CAST(id AS LONG) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            kind: CastKind::Cast,
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Long(None),
+            format: None,
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS LONG(20)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            kind: CastKind::Cast,
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Long(Some(20)),
+            format: None,
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
     one_statement_parses_to(
         "SELECT CAST(id AS MEDIUMINT) FROM customer",
         "SELECT CAST(id AS MEDIUMINT) FROM customer",
@@ -2256,6 +2280,11 @@ fn parse_cast() {
     one_statement_parses_to(
         "SELECT CAST(id AS BIGINT) FROM customer",
         "SELECT CAST(id AS BIGINT) FROM customer",
+    );
+
+    one_statement_parses_to(
+        "SELECT CAST(id AS LONG(20) UNSIGNED) FROM customer",
+        "SELECT CAST(id AS LONG(20) UNSIGNED) FROM customer",
     );
 
     verified_stmt("SELECT CAST(id AS NUMERIC) FROM customer");
@@ -4724,10 +4753,12 @@ fn parse_interval() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
-            leading_field: Some(DateTimeField::Year),
-            leading_precision: None,
-            last_field: Some(DateTimeField::Month),
-            fractional_seconds_precision: None,
+            unit: IntervalUnit {
+                leading_field: Some(DateTimeField::Year),
+                leading_precision: None,
+                last_field: Some(DateTimeField::Month),
+                fractional_seconds_precision: None,
+            },
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -4739,10 +4770,12 @@ fn parse_interval() {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "01:01.01"
             )))),
-            leading_field: Some(DateTimeField::Minute),
-            leading_precision: Some(5),
-            last_field: Some(DateTimeField::Second),
-            fractional_seconds_precision: Some(5),
+            unit: IntervalUnit {
+                leading_field: Some(DateTimeField::Minute),
+                leading_precision: Some(5),
+                last_field: Some(DateTimeField::Second),
+                fractional_seconds_precision: Some(5),
+            },
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -4752,10 +4785,12 @@ fn parse_interval() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
-            leading_field: Some(DateTimeField::Second),
-            leading_precision: Some(5),
-            last_field: None,
-            fractional_seconds_precision: Some(4),
+            unit: IntervalUnit {
+                leading_field: Some(DateTimeField::Second),
+                leading_precision: Some(5),
+                last_field: None,
+                fractional_seconds_precision: Some(4),
+            },
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -4765,10 +4800,12 @@ fn parse_interval() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
-            leading_field: Some(DateTimeField::Hour),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            unit: IntervalUnit {
+                leading_field: Some(DateTimeField::Hour),
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            },
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -4778,10 +4815,12 @@ fn parse_interval() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(number("5"))),
-            leading_field: Some(DateTimeField::Day),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            unit: IntervalUnit {
+                leading_field: Some(DateTimeField::Day),
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            },
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -4795,10 +4834,12 @@ fn parse_interval() {
                 op: BinaryOperator::Plus,
                 right: Box::new(Expr::Value(number("1"))),
             }),
-            leading_field: Some(DateTimeField::Day),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            unit: IntervalUnit {
+                leading_field: Some(DateTimeField::Day),
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            },
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -4808,10 +4849,12 @@ fn parse_interval() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
-            leading_field: Some(DateTimeField::Hour),
-            leading_precision: Some(1),
-            last_field: None,
-            fractional_seconds_precision: None,
+            unit: IntervalUnit {
+                leading_field: Some(DateTimeField::Hour),
+                leading_precision: Some(1),
+                last_field: None,
+                fractional_seconds_precision: None,
+            },
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -4823,10 +4866,12 @@ fn parse_interval() {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "1 DAY"
             )))),
-            leading_field: None,
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            unit: IntervalUnit {
+                leading_field: None,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            },
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -4914,10 +4959,12 @@ fn parse_interval_and_or_xor() {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
                                 "5 days".to_string(),
                             ))),
-                            leading_field: None,
-                            leading_precision: None,
-                            last_field: None,
-                            fractional_seconds_precision: None,
+                            unit: IntervalUnit {
+                                leading_field: None,
+                                leading_precision: None,
+                                last_field: None,
+                                fractional_seconds_precision: None,
+                            },
                         })),
                     }),
                 }),
@@ -4938,10 +4985,12 @@ fn parse_interval_and_or_xor() {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
                                 "3 days".to_string(),
                             ))),
-                            leading_field: None,
-                            leading_precision: None,
-                            last_field: None,
-                            fractional_seconds_precision: None,
+                            unit: IntervalUnit {
+                                leading_field: None,
+                                leading_precision: None,
+                                last_field: None,
+                                fractional_seconds_precision: None,
+                            },
                         })),
                     }),
                 }),

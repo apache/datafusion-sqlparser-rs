@@ -967,8 +967,10 @@ impl<'a> Parser<'a> {
         // expression that should parse as the column name "date".
         let loc = self.peek_token().location;
         return_ok_if_some!(self.maybe_parse(|parser| {
+            if parser.parse_keyword(Keyword::INTERVAL) {
+                return parser.parse_interval();
+            }
             match parser.parse_data_type()? {
-                DataType::Interval => parser.parse_interval(),
                 // PostgreSQL allows almost any identifier to be used as custom data type name,
                 // and we support that in `parse_data_type()`. But unlike Postgres we don't
                 // have a list of globally reserved keywords (since they vary across dialects),
@@ -1229,7 +1231,7 @@ impl<'a> Parser<'a> {
                             return parser_err!(
                                 format!("Expected identifier, found: {tok}"),
                                 tok.location
-                            )
+                            );
                         }
                     };
                     Ok(Expr::CompositeAccess {
@@ -2010,7 +2012,14 @@ impl<'a> Parser<'a> {
         // The first token in an interval is a string literal which specifies
         // the duration of the interval.
         let value = self.parse_interval_expr()?;
+        let unit = self.parse_interval_unit()?;
+        Ok(Expr::Interval(Interval {
+            value: Box::new(value),
+            unit,
+        }))
+    }
 
+    pub fn parse_interval_unit(&mut self) -> Result<IntervalUnit, ParserError> {
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.
         //
@@ -2080,13 +2089,12 @@ impl<'a> Parser<'a> {
                 }
             };
 
-        Ok(Expr::Interval(Interval {
-            value: Box::new(value),
+        Ok(IntervalUnit {
             leading_field,
             leading_precision,
             last_field,
             fractional_seconds_precision: fsec_precision,
-        }))
+        })
     }
 
     /// Bigquery specific: Parse a struct literal
@@ -2099,7 +2107,7 @@ impl<'a> Parser<'a> {
     /// ```
     fn parse_bigquery_struct_literal(&mut self) -> Result<Expr, ParserError> {
         let (fields, trailing_bracket) =
-            self.parse_struct_type_def(Self::parse_big_query_struct_field_def)?;
+            self.parse_struct_type_def(Self::parse_struct_field_def)?;
         if trailing_bracket.0 {
             return parser_err!("unmatched > in STRUCT literal", self.peek_token().location);
         }
@@ -2112,7 +2120,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Struct { values, fields })
     }
 
-    /// Parse an expression value for a bigquery struct [1]
+    /// Parse an expression value for a BigQuery struct [1]
     /// Syntax
     /// ```sql
     /// expr [AS name]
@@ -2166,11 +2174,25 @@ impl<'a> Parser<'a> {
         let start_token = self.peek_token();
         self.expect_keyword(Keyword::STRUCT)?;
 
+        // Handle empty struct type for all tokenization possibilities
+        // (e.g. `STRUCT <>`, `STRUCT < >`, or `STRUCT < >>`).
+        if Token::Neq == self.peek_token() {
+            self.next_token();
+            return Ok((Default::default(), false.into()));
+        }
         // Nothing to do if we have no type information.
         if Token::Lt != self.peek_token() {
             return Ok((Default::default(), false.into()));
         }
         self.next_token();
+        if Token::Gt == self.peek_token() {
+            self.next_token();
+            return Ok((Default::default(), false.into()));
+        }
+        if Token::ShiftRight == self.peek_token() {
+            self.next_token();
+            return Ok((Default::default(), true.into()));
+        }
 
         let mut field_defs = vec![];
         let trailing_bracket = loop {
@@ -2194,34 +2216,46 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    /// Parse a field definition in a BigQuery struct.
+    /// Parse a field definition in a struct.
     /// Syntax:
     ///
     /// ```sql
-    /// [field_name] field_type
+    /// [field_name [:]] field_type [NOT NULL] [COMMENT comment]
     /// ```
-    fn parse_big_query_struct_field_def(
+    fn parse_struct_field_def(
         &mut self,
     ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
         // Look beyond the next item to infer whether both field name
         // and type are specified.
-        let is_anonymous_field = !matches!(
-            (self.peek_nth_token(0).token, self.peek_nth_token(1).token),
-            (Token::Word(_), Token::Word(_))
-        );
-
-        let field_name = if is_anonymous_field {
-            None
-        } else {
-            Some(self.parse_identifier(false)?)
+        // This heuristic assumes that only single-token data types are
+        // used when the field name is omitted.
+        let field_name = match (self.peek_nth_token(0).token, self.peek_nth_token(1).token) {
+            (Token::Word(_), Token::Word(_)) => {
+                let name = self.parse_identifier(false)?;
+                Some(name)
+            }
+            (Token::Word(_), Token::Colon) => {
+                let name = self.parse_identifier(false)?;
+                self.expect_token(&Token::Colon)?;
+                Some(name)
+            }
+            _ => None,
         };
 
         let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
+        let not_null = self.parse_keywords(&[Keyword::NOT, Keyword::NULL]);
+        let comment = if self.parse_keyword(Keyword::COMMENT) {
+            Some(self.parse_literal_string()?)
+        } else {
+            None
+        };
 
         Ok((
             StructField {
                 field_name,
                 field_type,
+                not_null,
+                comment,
             },
             trailing_bracket,
         ))
@@ -3001,7 +3035,7 @@ impl<'a> Parser<'a> {
                 token => {
                     return token
                         .cloned()
-                        .unwrap_or_else(|| TokenWithLocation::wrap(Token::EOF))
+                        .unwrap_or_else(|| TokenWithLocation::wrap(Token::EOF));
                 }
             }
         }
@@ -6606,6 +6640,8 @@ impl<'a> Parser<'a> {
         let mut trailing_bracket: MatchedTrailingBracket = false.into();
         let mut data = match next_token.token {
             Token::Word(w) => match w.keyword {
+                Keyword::NULL => Ok(DataType::Null),
+                Keyword::VOID => Ok(DataType::Void),
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
                 Keyword::BOOL => Ok(DataType::Bool),
                 Keyword::FLOAT => Ok(DataType::Float(self.parse_optional_precision()?)),
@@ -6677,6 +6713,14 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Integer(optional_precision?))
                     }
                 }
+                Keyword::LONG => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedLong(optional_precision?))
+                    } else {
+                        Ok(DataType::Long(optional_precision?))
+                    }
+                }
                 Keyword::BIGINT => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
@@ -6732,8 +6776,13 @@ impl<'a> Parser<'a> {
                 Keyword::TIMESTAMP => {
                     let precision = self.parse_optional_precision()?;
                     let tz = if self.parse_keyword(Keyword::WITH) {
-                        self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        TimezoneInfo::WithTimeZone
+                        if self.parse_keyword(Keyword::LOCAL) {
+                            self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                            TimezoneInfo::WithLocalTimeZone
+                        } else {
+                            self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                            TimezoneInfo::WithTimeZone
+                        }
                     } else if self.parse_keyword(Keyword::WITHOUT) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
                         TimezoneInfo::WithoutTimeZone
@@ -6742,6 +6791,14 @@ impl<'a> Parser<'a> {
                     };
                     Ok(DataType::Timestamp(precision, tz))
                 }
+                Keyword::TIMESTAMP_LTZ => Ok(DataType::Timestamp(
+                    self.parse_optional_precision()?,
+                    TimezoneInfo::WithLocalTimeZone,
+                )),
+                Keyword::TIMESTAMP_NTZ => Ok(DataType::Timestamp(
+                    self.parse_optional_precision()?,
+                    TimezoneInfo::WithoutTimeZone,
+                )),
                 Keyword::TIMESTAMPTZ => Ok(DataType::Timestamp(
                     self.parse_optional_precision()?,
                     TimezoneInfo::Tz,
@@ -6749,8 +6806,13 @@ impl<'a> Parser<'a> {
                 Keyword::TIME => {
                     let precision = self.parse_optional_precision()?;
                     let tz = if self.parse_keyword(Keyword::WITH) {
-                        self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        TimezoneInfo::WithTimeZone
+                        if self.parse_keyword(Keyword::LOCAL) {
+                            self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                            TimezoneInfo::WithLocalTimeZone
+                        } else {
+                            self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                            TimezoneInfo::WithTimeZone
+                        }
                     } else if self.parse_keyword(Keyword::WITHOUT) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
                         TimezoneInfo::WithoutTimeZone
@@ -6763,10 +6825,7 @@ impl<'a> Parser<'a> {
                     self.parse_optional_precision()?,
                     TimezoneInfo::Tz,
                 )),
-                // Interval types can be followed by a complicated interval
-                // qualifier that we don't currently support. See
-                // parse_interval for a taste.
-                Keyword::INTERVAL => Ok(DataType::Interval),
+                Keyword::INTERVAL => Ok(DataType::Interval(self.parse_interval_unit()?)),
                 Keyword::JSON => Ok(DataType::JSON),
                 Keyword::JSONB => Ok(DataType::JSONB),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
@@ -6802,12 +6861,27 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
-                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                Keyword::STRUCT if dialect_of!(self is HiveDialect | BigQueryDialect | GenericDialect) =>
+                {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
-                        self.parse_struct_type_def(Self::parse_big_query_struct_field_def)?;
+                        self.parse_struct_type_def(Self::parse_struct_field_def)?;
                     trailing_bracket = _trailing_bracket;
                     Ok(DataType::Struct(field_defs))
+                }
+                Keyword::MAP if dialect_of!(self is HiveDialect | GenericDialect) => {
+                    self.expect_token(&Token::Lt)?;
+                    let (key_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                    if _trailing_bracket.0 {
+                        return parser_err!(
+                            "unmatched > after parsing key type of map",
+                            self.peek_token().location
+                        );
+                    }
+                    self.expect_token(&Token::Comma)?;
+                    let (value_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                    trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
+                    Ok(DataType::Map(Box::new(key_type), Box::new(value_type)))
                 }
                 _ => {
                     self.prev_token();
@@ -7025,12 +7099,12 @@ impl<'a> Parser<'a> {
             Token::EOF => {
                 return Err(ParserError::ParserError(
                     "Empty input when parsing identifier".to_string(),
-                ))?
+                ))?;
             }
             token => {
                 return Err(ParserError::ParserError(format!(
                     "Unexpected token in identifier: {token}"
-                )))?
+                )))?;
             }
         };
 
@@ -7043,19 +7117,19 @@ impl<'a> Parser<'a> {
                     Token::EOF => {
                         return Err(ParserError::ParserError(
                             "Trailing period in identifier".to_string(),
-                        ))?
+                        ))?;
                     }
                     token => {
                         return Err(ParserError::ParserError(format!(
                             "Unexpected token following period in identifier: {token}"
-                        )))?
+                        )))?;
                     }
                 },
                 Token::EOF => break,
                 token => {
                     return Err(ParserError::ParserError(format!(
                         "Unexpected token in identifier: {token}"
-                    )))?
+                    )))?;
                 }
             }
         }
@@ -8428,7 +8502,7 @@ impl<'a> Parser<'a> {
                             _ => {
                                 return Err(ParserError::ParserError(format!(
                                     "expected OUTER, SEMI, ANTI or JOIN after {kw:?}"
-                                )))
+                                )));
                             }
                         }
                     }

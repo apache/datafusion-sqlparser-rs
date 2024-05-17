@@ -485,11 +485,15 @@ fn parse_nested_data_types() {
                                 field_name: Some("a".into()),
                                 field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(
                                     Box::new(DataType::Int64,)
-                                ))
+                                )),
+                                not_null: false,
+                                comment: None,
                             },
                             StructField {
                                 field_name: Some("b".into()),
-                                field_type: DataType::Bytes(Some(42))
+                                field_type: DataType::Bytes(Some(42)),
+                                not_null: false,
+                                comment: None,
                             },
                         ]),
                         collation: None,
@@ -501,6 +505,8 @@ fn parse_nested_data_types() {
                             DataType::Struct(vec![StructField {
                                 field_name: None,
                                 field_type: DataType::Int64,
+                                not_null: false,
+                                comment: None,
                             }]),
                         ))),
                         collation: None,
@@ -646,6 +652,8 @@ fn parse_typed_struct_syntax_bigquery() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -671,14 +679,18 @@ fn parse_typed_struct_syntax_bigquery() {
                         value: "x".into(),
                         quote_style: None,
                     }),
-                    field_type: DataType::Int64
+                    field_type: DataType::Int64,
+                    not_null: false,
+                    comment: None,
                 },
                 StructField {
                     field_name: Some(Ident {
                         value: "y".into(),
                         quote_style: None,
                     }),
-                    field_type: DataType::String(None)
+                    field_type: DataType::String(None),
+                    not_null: false,
+                    comment: None,
                 },
             ]
         },
@@ -695,14 +707,20 @@ fn parse_typed_struct_syntax_bigquery() {
                     field_name: Some("arr".into()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                         DataType::Float64
-                    )))
+                    ))),
+                    not_null: false,
+                    comment: None,
                 },
                 StructField {
                     field_name: Some("str".into()),
                     field_type: DataType::Struct(vec![StructField {
                         field_name: None,
-                        field_type: DataType::Bool
-                    }])
+                        field_type: DataType::Bool,
+                        not_null: false,
+                        comment: None,
+                    }]),
+                    not_null: false,
+                    comment: None,
                 },
             ]
         },
@@ -721,13 +739,17 @@ fn parse_typed_struct_syntax_bigquery() {
             fields: vec![
                 StructField {
                     field_name: Some("x".into()),
-                    field_type: DataType::Struct(Default::default())
+                    field_type: DataType::Struct(Default::default()),
+                    not_null: false,
+                    comment: None,
                 },
                 StructField {
                     field_name: Some("y".into()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                         DataType::Struct(Default::default())
-                    )))
+                    ))),
+                    not_null: false,
+                    comment: None,
                 },
             ]
         },
@@ -742,7 +764,9 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::Value(Value::Boolean(true)),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Bool
+                field_type: DataType::Bool,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -754,7 +778,9 @@ fn parse_typed_struct_syntax_bigquery() {
             )),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Bytes(Some(42))
+                field_type: DataType::Bytes(Some(42)),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -770,7 +796,9 @@ fn parse_typed_struct_syntax_bigquery() {
             )),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Date
+                field_type: DataType::Date,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -783,7 +811,9 @@ fn parse_typed_struct_syntax_bigquery() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Datetime(None)
+                field_type: DataType::Datetime(None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -793,7 +823,9 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::Value(number("5.0")),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Float64
+                field_type: DataType::Float64,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[2])
@@ -803,7 +835,9 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::Value(number("1")),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Int64
+                field_type: DataType::Int64,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[3])
@@ -818,14 +852,23 @@ fn parse_typed_struct_syntax_bigquery() {
                 value: Box::new(Expr::Value(Value::SingleQuotedString(
                     "1-2 3 4:5:6.789999".to_string()
                 ))),
-                leading_field: None,
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None
+                unit: IntervalUnit {
+                    leading_field: None,
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None
+                },
             }),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Interval
+                field_type: DataType::Interval(IntervalUnit {
+                    leading_field: None,
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None
+                }),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -838,7 +881,9 @@ fn parse_typed_struct_syntax_bigquery() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::JSON
+                field_type: DataType::JSON,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -852,7 +897,9 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::Value(Value::DoubleQuotedString("foo".to_string())),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::String(Some(42))
+                field_type: DataType::String(Some(42)),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -865,7 +912,9 @@ fn parse_typed_struct_syntax_bigquery() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Timestamp(None, TimezoneInfo::None)
+                field_type: DataType::Timestamp(None, TimezoneInfo::None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -879,7 +928,9 @@ fn parse_typed_struct_syntax_bigquery() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Time(None, TimezoneInfo::None)
+                field_type: DataType::Time(None, TimezoneInfo::None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[2])
@@ -896,7 +947,9 @@ fn parse_typed_struct_syntax_bigquery() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Numeric(ExactNumberInfo::None)
+                field_type: DataType::Numeric(ExactNumberInfo::None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -909,7 +962,9 @@ fn parse_typed_struct_syntax_bigquery() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::BigNumeric(ExactNumberInfo::None)
+                field_type: DataType::BigNumeric(ExactNumberInfo::None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -926,10 +981,14 @@ fn parse_typed_struct_syntax_bigquery() {
                 StructField {
                     field_name: Some("key".into()),
                     field_type: DataType::Int64,
+                    not_null: false,
+                    comment: None,
                 },
                 StructField {
                     field_name: Some("value".into()),
                     field_type: DataType::Int64,
+                    not_null: false,
+                    comment: None,
                 },
             ]
         },
@@ -951,6 +1010,8 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -976,14 +1037,18 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                         value: "x".into(),
                         quote_style: None,
                     }),
-                    field_type: DataType::Int64
+                    field_type: DataType::Int64,
+                    not_null: false,
+                    comment: None,
                 },
                 StructField {
                     field_name: Some(Ident {
                         value: "y".into(),
                         quote_style: None,
                     }),
-                    field_type: DataType::String(None)
+                    field_type: DataType::String(None),
+                    not_null: false,
+                    comment: None,
                 },
             ]
         },
@@ -1000,14 +1065,20 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     field_name: Some("arr".into()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                         DataType::Float64
-                    )))
+                    ))),
+                    not_null: false,
+                    comment: None,
                 },
                 StructField {
                     field_name: Some("str".into()),
                     field_type: DataType::Struct(vec![StructField {
                         field_name: None,
-                        field_type: DataType::Bool
-                    }])
+                        field_type: DataType::Bool,
+                        not_null: false,
+                        comment: None,
+                    }]),
+                    not_null: false,
+                    comment: None,
                 },
             ]
         },
@@ -1026,13 +1097,17 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             fields: vec![
                 StructField {
                     field_name: Some("x".into()),
-                    field_type: DataType::Struct(Default::default())
+                    field_type: DataType::Struct(Default::default()),
+                    not_null: false,
+                    comment: None,
                 },
                 StructField {
                     field_name: Some("y".into()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
                         DataType::Struct(Default::default())
-                    )))
+                    ))),
+                    not_null: false,
+                    comment: None,
                 },
             ]
         },
@@ -1047,7 +1122,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::Value(Value::Boolean(true)),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Bool
+                field_type: DataType::Bool,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -1059,7 +1136,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             )),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Bytes(Some(42))
+                field_type: DataType::Bytes(Some(42)),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -1075,7 +1154,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             )),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Date
+                field_type: DataType::Date,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -1088,7 +1169,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Datetime(None)
+                field_type: DataType::Datetime(None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -1098,7 +1181,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::Value(number("5.0")),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Float64
+                field_type: DataType::Float64,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[2])
@@ -1108,7 +1193,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::Value(number("1")),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Int64
+                field_type: DataType::Int64,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[3])
@@ -1123,14 +1210,23 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                 value: Box::new(Expr::Value(Value::SingleQuotedString(
                     "1-2 3 4:5:6.789999".to_string()
                 ))),
-                leading_field: None,
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None
+                unit: IntervalUnit {
+                    leading_field: None,
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None
+                },
             }),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Interval
+                field_type: DataType::Interval(IntervalUnit {
+                    leading_field: None,
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None
+                }),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -1143,7 +1239,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::JSON
+                field_type: DataType::JSON,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -1157,7 +1255,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::Value(Value::SingleQuotedString("foo".to_string())),],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::String(Some(42))
+                field_type: DataType::String(Some(42)),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -1170,7 +1270,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Timestamp(None, TimezoneInfo::None)
+                field_type: DataType::Timestamp(None, TimezoneInfo::None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -1184,7 +1286,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Time(None, TimezoneInfo::None)
+                field_type: DataType::Time(None, TimezoneInfo::None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[2])
@@ -1201,7 +1305,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::Numeric(ExactNumberInfo::None)
+                field_type: DataType::Numeric(ExactNumberInfo::None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -1214,7 +1320,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             },],
             fields: vec![StructField {
                 field_name: None,
-                field_type: DataType::BigNumeric(ExactNumberInfo::None)
+                field_type: DataType::BigNumeric(ExactNumberInfo::None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -1231,7 +1339,9 @@ fn parse_typed_struct_with_field_name_bigquery() {
             values: vec![Expr::Value(number("5")),],
             fields: vec![StructField {
                 field_name: Some(Ident::from("x")),
-                field_type: DataType::Int64
+                field_type: DataType::Int64,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -1241,7 +1351,9 @@ fn parse_typed_struct_with_field_name_bigquery() {
             values: vec![Expr::Value(Value::DoubleQuotedString("foo".to_string())),],
             fields: vec![StructField {
                 field_name: Some(Ident::from("y")),
-                field_type: DataType::String(None)
+                field_type: DataType::String(None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -1256,11 +1368,15 @@ fn parse_typed_struct_with_field_name_bigquery() {
             fields: vec![
                 StructField {
                     field_name: Some(Ident::from("x")),
-                    field_type: DataType::Int64
+                    field_type: DataType::Int64,
+                    not_null: false,
+                    comment: None,
                 },
                 StructField {
                     field_name: Some(Ident::from("y")),
-                    field_type: DataType::Int64
+                    field_type: DataType::Int64,
+                    not_null: false,
+                    comment: None,
                 }
             ]
         },
@@ -1278,7 +1394,9 @@ fn parse_typed_struct_with_field_name_bigquery_and_generic() {
             values: vec![Expr::Value(number("5")),],
             fields: vec![StructField {
                 field_name: Some(Ident::from("x")),
-                field_type: DataType::Int64
+                field_type: DataType::Int64,
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[0])
@@ -1288,7 +1406,9 @@ fn parse_typed_struct_with_field_name_bigquery_and_generic() {
             values: vec![Expr::Value(Value::SingleQuotedString("foo".to_string())),],
             fields: vec![StructField {
                 field_name: Some(Ident::from("y")),
-                field_type: DataType::String(None)
+                field_type: DataType::String(None),
+                not_null: false,
+                comment: None,
             }]
         },
         expr_from_projection(&select.projection[1])
@@ -1303,11 +1423,15 @@ fn parse_typed_struct_with_field_name_bigquery_and_generic() {
             fields: vec![
                 StructField {
                     field_name: Some(Ident::from("x")),
-                    field_type: DataType::Int64
+                    field_type: DataType::Int64,
+                    not_null: false,
+                    comment: None,
                 },
                 StructField {
                     field_name: Some(Ident::from("y")),
-                    field_type: DataType::Int64
+                    field_type: DataType::Int64,
+                    not_null: false,
+                    comment: None,
                 }
             ]
         },

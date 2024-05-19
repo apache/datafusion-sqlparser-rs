@@ -51,8 +51,8 @@ pub enum Token {
     EOF,
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
     Word(Word),
-    /// An unsigned numeric literal
-    Number(String, bool),
+    /// An unsigned numeric literal with an optional postfix (e.g. 'L')
+    Number(String, Option<String>),
     /// A character that could not be tokenized
     Char(char),
     /// Single quoted string: i.e: 'string'
@@ -238,7 +238,7 @@ impl fmt::Display for Token {
         match self {
             Token::EOF => f.write_str("EOF"),
             Token::Word(ref w) => write!(f, "{w}"),
-            Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
+            Token::Number(ref n, postfix) => write!(f, "{}{}", n, postfix.as_deref().unwrap_or("")),
             Token::Char(ref c) => write!(f, "{c}"),
             Token::SingleQuotedString(ref s) => write!(f, "'{s}'"),
             Token::TripleSingleQuotedString(ref s) => write!(f, "'''{s}'''"),
@@ -669,7 +669,7 @@ impl<'a> Tokenizer<'a> {
             let mut s = peeking_take_while(&mut inner_state, |ch| matches!(ch, '0'..='9' | '.'));
             let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
             s += s2.as_str();
-            return Ok(Some(Token::Number(s, false)));
+            return Ok(Some(Token::Number(s, None)));
         }
 
         Ok(Some(Token::make_word(&word, None)))
@@ -934,13 +934,13 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
 
-                    let long = if chars.peek() == Some(&'L') {
-                        chars.next();
-                        true
+                    let postfix = peeking_take_while(chars, |ch| ch.is_ascii_alphanumeric());
+                    let postfix = if postfix.is_empty() {
+                        None
                     } else {
-                        false
+                        Some(postfix)
                     };
-                    Ok(Some(Token::Number(s, long)))
+                    Ok(Some(Token::Number(s, postfix)))
                 }
                 // punctuation
                 '(' => self.consume_and_return(chars, Token::LParen),
@@ -1789,7 +1789,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1"), false),
+            Token::Number(String::from("1"), None),
         ];
 
         compare(expected, tokens);
@@ -1804,7 +1804,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from(".1"), false),
+            Token::Number(String::from(".1"), None),
         ];
 
         compare(expected, tokens);
@@ -1841,26 +1841,24 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1e10"), false),
+            Token::Number(String::from("1e10"), None),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1e-10"), false),
+            Token::Number(String::from("1e-10"), None),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1e+10"), false),
+            Token::Number(String::from("1e+10"), None),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1"), false),
-            Token::make_word("ea", None),
+            Token::Number(String::from("1"), Some("ea".to_string())),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1e-10"), false),
-            Token::make_word("a", None),
+            Token::Number(String::from("1e-10"), Some("a".to_string())),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1e-10"), false),
+            Token::Number(String::from("1e-10"), None),
             Token::Minus,
-            Token::Number(String::from("10"), false),
+            Token::Number(String::from("10"), None),
         ];
 
         compare(expected, tokens);
@@ -1877,7 +1875,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_word("sqrt", None),
             Token::LParen,
-            Token::Number(String::from("1"), false),
+            Token::Number(String::from("1"), None),
             Token::RParen,
         ];
 
@@ -1985,11 +1983,11 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1"), false),
+            Token::Number(String::from("1"), None),
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("LIMIT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("5"), false),
+            Token::Number(String::from("5"), None),
         ];
 
         compare(expected, tokens);
@@ -2018,7 +2016,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1"), false),
+            Token::Number(String::from("1"), None),
         ];
 
         compare(expected, tokens);
@@ -2049,7 +2047,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1"), false),
+            Token::Number(String::from("1"), None),
         ];
 
         compare(expected, tokens);
@@ -2273,12 +2271,12 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
-            Token::Number("0".to_string(), false),
+            Token::Number("0".to_string(), None),
             Token::Whitespace(Whitespace::SingleLineComment {
                 prefix: "--".to_string(),
                 comment: "this is a comment\n".to_string(),
             }),
-            Token::Number("1".to_string(), false),
+            Token::Number("1".to_string(), None),
         ];
         compare(expected, tokens);
     }
@@ -2303,11 +2301,11 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
-            Token::Number("0".to_string(), false),
+            Token::Number("0".to_string(), None),
             Token::Whitespace(Whitespace::MultiLineComment(
                 "multi-line\n* /comment".to_string(),
             )),
-            Token::Number("1".to_string(), false),
+            Token::Number("1".to_string(), None),
         ];
         compare(expected, tokens);
     }
@@ -2319,11 +2317,11 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
-            Token::Number("0".to_string(), false),
+            Token::Number("0".to_string(), None),
             Token::Whitespace(Whitespace::MultiLineComment(
                 "multi-line\n* \n/* comment \n /*comment*/*/ */ /comment".to_string(),
             )),
-            Token::Number("1".to_string(), false),
+            Token::Number("1".to_string(), None),
         ];
         compare(expected, tokens);
     }
@@ -2400,7 +2398,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("TOP"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("5"), false),
+            Token::Number(String::from("5"), None),
             Token::Whitespace(Whitespace::Space),
             Token::make_word("bar", Some('[')),
             Token::Whitespace(Whitespace::Space),
@@ -2512,7 +2510,7 @@ mod tests {
         let expected = vec![
             Token::make_word(r#"field"#, None),
             Token::Div,
-            Token::Number("1000".to_string(), false),
+            Token::Number("1000".to_string(), None),
         ];
         compare(expected, tokens);
     }
@@ -2677,7 +2675,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1"), false),
+            Token::Number(String::from("1"), None),
         ];
         compare(expected, tokens);
     }

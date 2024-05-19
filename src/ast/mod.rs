@@ -219,8 +219,21 @@ impl fmt::Display for Array {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct Interval {
-    pub value: Box<Expr>,
+pub enum Interval {
+    Standard {
+        value: Box<Expr>,
+        unit: IntervalUnit,
+    },
+    MultiUnit {
+        values: Vec<IntervalValueWithUnit>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IntervalValueWithUnit {
+    pub value: Expr,
     pub unit: IntervalUnit,
 }
 
@@ -241,10 +254,18 @@ pub struct IntervalUnit {
 
 impl fmt::Display for Interval {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let value = self.value.as_ref();
-        let unit = &self.unit;
-        write!(f, "INTERVAL {value}{unit}")?;
-        Ok(())
+        match &self {
+            Interval::Standard { value, unit } => {
+                write!(f, "INTERVAL {}{}", value, unit)
+            }
+            Interval::MultiUnit { values } => {
+                write!(f, "INTERVAL")?;
+                for IntervalValueWithUnit { value, unit } in values.iter() {
+                    write!(f, " {}{}", value, unit)?;
+                }
+                Ok(())
+            }
+        }
     }
 }
 
@@ -6569,7 +6590,7 @@ mod tests {
 
     #[test]
     fn test_interval_display() {
-        let interval = Expr::Interval(Interval {
+        let interval = Expr::Interval(Interval::Standard {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "123:45.67",
             )))),
@@ -6585,7 +6606,7 @@ mod tests {
             format!("{interval}"),
         );
 
-        let interval = Expr::Interval(Interval {
+        let interval = Expr::Interval(Interval::Standard {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("5")))),
             unit: IntervalUnit {
                 leading_field: Some(DateTimeField::Second),

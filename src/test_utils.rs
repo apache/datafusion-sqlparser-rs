@@ -291,7 +291,7 @@ pub fn alter_table_op(stmt: Statement) -> AlterTableOperation {
 
 /// Creates a `Value::Number`, panic'ing if n is not a number
 pub fn number(n: &str) -> Value {
-    Value::Number(n.parse().unwrap(), false)
+    Value::Number(n.parse().unwrap(), None)
 }
 
 pub fn table_alias(name: impl Into<String>) -> Option<TableAlias> {

@@ -32,12 +32,12 @@ use sqlparser_derive::{Visit, VisitMut};
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]
-    Number(String, bool),
+    Number(String, Option<String>),
     #[cfg(feature = "bigdecimal")]
     // HINT: use `test_utils::number` to make an instance of
     // Value::Number This might help if you your tests pass locally
     // but fail on CI with the `--all-features` flag enabled
-    Number(BigDecimal, bool),
+    Number(BigDecimal, Option<String>),
     /// 'string value'
     SingleQuotedString(String),
     // $<tag_name>$string value$<tag_name>$ (postgres syntax)
@@ -91,7 +91,7 @@ pub enum Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
+            Value::Number(v, postfix) => write!(f, "{}{}", v, postfix.as_deref().unwrap_or("")),
             Value::DoubleQuotedString(v) => write!(f, "\"{}\"", escape_double_quote_string(v)),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
             Value::TripleSingleQuotedString(v) => {
@@ -145,7 +145,9 @@ impl fmt::Display for DollarQuotedString {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DateTimeField {
     Year,
+    Years,
     Month,
+    Months,
     /// Week optionally followed by a WEEKDAY.
     ///
     /// ```sql
@@ -154,14 +156,19 @@ pub enum DateTimeField {
     ///
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#extract)
     Week(Option<Ident>),
+    Weeks,
     Day,
+    Days,
     DayOfWeek,
     DayOfYear,
     Date,
     Datetime,
     Hour,
+    Hours,
     Minute,
+    Minutes,
     Second,
+    Seconds,
     Century,
     Decade,
     Dow,
@@ -200,7 +207,9 @@ impl fmt::Display for DateTimeField {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             DateTimeField::Year => write!(f, "YEAR"),
+            DateTimeField::Years => write!(f, "YEARS"),
             DateTimeField::Month => write!(f, "MONTH"),
+            DateTimeField::Months => write!(f, "MONTHS"),
             DateTimeField::Week(week_day) => {
                 write!(f, "WEEK")?;
                 if let Some(week_day) = week_day {
@@ -208,14 +217,19 @@ impl fmt::Display for DateTimeField {
                 }
                 Ok(())
             }
+            DateTimeField::Weeks => write!(f, "WEEKS"),
             DateTimeField::Day => write!(f, "DAY"),
+            DateTimeField::Days => write!(f, "DAYS"),
             DateTimeField::DayOfWeek => write!(f, "DAYOFWEEK"),
             DateTimeField::DayOfYear => write!(f, "DAYOFYEAR"),
             DateTimeField::Date => write!(f, "DATE"),
             DateTimeField::Datetime => write!(f, "DATETIME"),
             DateTimeField::Hour => write!(f, "HOUR"),
+            DateTimeField::Hours => write!(f, "HOURS"),
             DateTimeField::Minute => write!(f, "MINUTE"),
+            DateTimeField::Minutes => write!(f, "MINUTES"),
             DateTimeField::Second => write!(f, "SECOND"),
+            DateTimeField::Seconds => write!(f, "SECONDS"),
             DateTimeField::Century => write!(f, "CENTURY"),
             DateTimeField::Decade => write!(f, "DECADE"),
             DateTimeField::Dow => write!(f, "DOW"),

@@ -1454,13 +1454,13 @@ fn parse_execute() {
             using: vec![
                 Expr::Cast {
                     kind: CastKind::Cast,
-                    expr: Box::new(Expr::Value(Value::Number("1337".parse().unwrap(), false))),
+                    expr: Box::new(Expr::Value(Value::Number("1337".parse().unwrap(), None))),
                     data_type: DataType::SmallInt(None),
                     format: None
                 },
                 Expr::Cast {
                     kind: CastKind::Cast,
-                    expr: Box::new(Expr::Value(Value::Number("7331".parse().unwrap(), false))),
+                    expr: Box::new(Expr::Value(Value::Number("7331".parse().unwrap(), None))),
                     data_type: DataType::SmallInt(None),
                     format: None
                 },
@@ -3347,7 +3347,7 @@ fn parse_drop_function() {
                         mode: Some(ArgMode::In),
                         name: Some("b".into()),
                         data_type: DataType::Integer(None),
-                        default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                        default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), None))),
                     }
                 ]),
             }],
@@ -3374,7 +3374,7 @@ fn parse_drop_function() {
                             data_type: DataType::Integer(None),
                             default_expr: Some(Expr::Value(Value::Number(
                                 "1".parse().unwrap(),
-                                false
+                                None
                             ))),
                         }
                     ]),
@@ -3392,7 +3392,7 @@ fn parse_drop_function() {
                             data_type: DataType::Integer(None),
                             default_expr: Some(Expr::Value(Value::Number(
                                 "1".parse().unwrap(),
-                                false
+                                None
                             ))),
                         }
                     ]),
@@ -3702,7 +3702,7 @@ fn test_simple_postgres_insert_with_alias() {
                             value: "DEFAULT".to_string(),
                             quote_style: None
                         }),
-                        Expr::Value(Value::Number("123".to_string(), false))
+                        Expr::Value(Value::Number("123".to_string(), None))
                     ]]
                 })),
                 order_by: vec![],
@@ -3768,7 +3768,7 @@ fn test_simple_postgres_insert_with_alias() {
                         }),
                         Expr::Value(Value::Number(
                             bigdecimal::BigDecimal::new(123.into(), 0),
-                            false
+                            None
                         ))
                     ]]
                 })),

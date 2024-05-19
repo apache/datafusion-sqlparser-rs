@@ -1186,14 +1186,14 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
             SelectItem::UnnamedExpr(Expr::Value(number("10e-20"))),
             SelectItem::UnnamedExpr(Expr::Value(number("1e3"))),
             SelectItem::UnnamedExpr(Expr::Value(number("1e+3"))),
-            SelectItem::ExprWithAlias {
-                expr: Expr::Value(number("1e3")),
-                alias: Ident::new("a")
-            },
-            SelectItem::ExprWithAlias {
-                expr: Expr::Value(number("1")),
-                alias: Ident::new("e")
-            },
+            SelectItem::UnnamedExpr(Expr::Value(Value::Number(
+                "1e3".parse().unwrap(),
+                Some("a".to_string())
+            ))),
+            SelectItem::UnnamedExpr(Expr::Value(Value::Number(
+                "1".parse().unwrap(),
+                Some("e".to_string())
+            ))),
             SelectItem::UnnamedExpr(Expr::Value(number("0.5e2"))),
         ],
         &select.projection
@@ -1270,11 +1270,11 @@ fn parse_number() {
     #[cfg(feature = "bigdecimal")]
     assert_eq!(
         expr,
-        Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1), false))
+        Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1), None))
     );
 
     #[cfg(not(feature = "bigdecimal"))]
-    assert_eq!(expr, Expr::Value(Value::Number("1.0".into(), false)));
+    assert_eq!(expr, Expr::Value(Value::Number("1.0".into(), None)));
 }
 
 #[test]
@@ -4751,7 +4751,7 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval(Interval {
+        &Expr::Interval(Interval::Standard {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
             unit: IntervalUnit {
                 leading_field: Some(DateTimeField::Year),
@@ -4766,7 +4766,7 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval(Interval {
+        &Expr::Interval(Interval::Standard {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "01:01.01"
             )))),
@@ -4783,7 +4783,7 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval(Interval {
+        &Expr::Interval(Interval::Standard {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
             unit: IntervalUnit {
                 leading_field: Some(DateTimeField::Second),
@@ -4798,7 +4798,7 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL '10' HOUR";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval(Interval {
+        &Expr::Interval(Interval::Standard {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             unit: IntervalUnit {
                 leading_field: Some(DateTimeField::Hour),
@@ -4813,7 +4813,7 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL 5 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval(Interval {
+        &Expr::Interval(Interval::Standard {
             value: Box::new(Expr::Value(number("5"))),
             unit: IntervalUnit {
                 leading_field: Some(DateTimeField::Day),
@@ -4828,7 +4828,7 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval(Interval {
+        &Expr::Interval(Interval::Standard {
             value: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Value(number("1"))),
                 op: BinaryOperator::Plus,
@@ -4847,7 +4847,7 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval(Interval {
+        &Expr::Interval(Interval::Standard {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             unit: IntervalUnit {
                 leading_field: Some(DateTimeField::Hour),
@@ -4862,7 +4862,7 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval(Interval {
+        &Expr::Interval(Interval::Standard {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "1 DAY"
             )))),
@@ -4955,7 +4955,7 @@ fn parse_interval_and_or_xor() {
                             quote_style: None,
                         })),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Interval(Interval {
+                        right: Box::new(Expr::Interval(Interval::Standard {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
                                 "5 days".to_string(),
                             ))),
@@ -4981,7 +4981,7 @@ fn parse_interval_and_or_xor() {
                             quote_style: None,
                         })),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Interval(Interval {
+                        right: Box::new(Expr::Interval(Interval::Standard {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
                                 "3 days".to_string(),
                             ))),

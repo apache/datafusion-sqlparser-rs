@@ -1863,7 +1863,9 @@ impl<'a> Parser<'a> {
         match &next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::YEAR => Ok(DateTimeField::Year),
+                Keyword::YEARS => Ok(DateTimeField::Years),
                 Keyword::MONTH => Ok(DateTimeField::Month),
+                Keyword::MONTHS => Ok(DateTimeField::Months),
                 Keyword::WEEK => {
                     let week_day = if dialect_of!(self is BigQueryDialect | GenericDialect)
                         && self.consume_token(&Token::LParen)
@@ -1876,14 +1878,19 @@ impl<'a> Parser<'a> {
                     };
                     Ok(DateTimeField::Week(week_day))
                 }
+                Keyword::WEEKS => Ok(DateTimeField::Weeks),
                 Keyword::DAY => Ok(DateTimeField::Day),
+                Keyword::DAYS => Ok(DateTimeField::Days),
                 Keyword::DAYOFWEEK => Ok(DateTimeField::DayOfWeek),
                 Keyword::DAYOFYEAR => Ok(DateTimeField::DayOfYear),
                 Keyword::DATE => Ok(DateTimeField::Date),
                 Keyword::DATETIME => Ok(DateTimeField::Datetime),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
+                Keyword::HOURS => Ok(DateTimeField::Hours),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
+                Keyword::MINUTES => Ok(DateTimeField::Minutes),
                 Keyword::SECOND => Ok(DateTimeField::Second),
+                Keyword::SECONDS => Ok(DateTimeField::Seconds),
                 Keyword::CENTURY => Ok(DateTimeField::Century),
                 Keyword::DECADE => Ok(DateTimeField::Decade),
                 Keyword::DOY => Ok(DateTimeField::Doy),
@@ -2000,23 +2007,70 @@ impl<'a> Parser<'a> {
     ///   4. `INTERVAL '1:1:1.1' HOUR (5) TO SECOND (5)`
     ///   5. `INTERVAL '1.1' SECOND (2, 2)`
     ///   6. `INTERVAL '1:1' HOUR (5) TO MINUTE (5)`
-    ///   7. (MySql and BigQuey only):`INTERVAL 1 DAY`
+    ///   7. (MySql and BigQuey only): `INTERVAL 1 DAY`
+    ///   8. (Spark only): `INTERVAL -2 HOURS '3' MINUTES`
     ///
     /// Note that we do not currently attempt to parse the quoted value.
     pub fn parse_interval(&mut self) -> Result<Expr, ParserError> {
-        // The SQL standard allows an optional sign before the value string, but
-        // it is not clear if any implementations support that syntax, so we
-        // don't currently try to parse it. (The sign can instead be included
-        // inside the value string.)
+        // The SQL standard allows an optional sign before the value string, and
+        // it is supported by implementations such as Spark.
+        // The sign is parsed in the interval expression whose nested expression
+        // is the value string.
 
         // The first token in an interval is a string literal which specifies
         // the duration of the interval.
-        let value = self.parse_interval_expr()?;
-        let unit = self.parse_interval_unit()?;
-        Ok(Expr::Interval(Interval {
-            value: Box::new(value),
-            unit,
-        }))
+        let mut values: Vec<(Expr, IntervalUnit)> = vec![];
+        loop {
+            let item = self.maybe_parse(|parser| {
+                if !values.is_empty() && parser.parse_keyword(Keyword::TO) {
+                    // Treat "TO" as an unexpected token from the previous invalid interval unit,
+                    // rather than an identifier for the next interval value.
+                    return parser_err!("Unexpected TO", parser.peek_token().location);
+                }
+                let value = parser.parse_interval_expr()?;
+                let unit = parser.parse_interval_unit()?;
+                if !values.is_empty()
+                    && !matches!(
+                        &unit,
+                        IntervalUnit {
+                            leading_field: Some(_),
+                            leading_precision: None,
+                            last_field: None,
+                            fractional_seconds_precision: None,
+                        }
+                    )
+                {
+                    return parser_err!(
+                        "Expecting a single date/time field for multi-unit interval value",
+                        parser.peek_token().location
+                    );
+                }
+                Ok((value, unit))
+            });
+            if let Some(item) = item {
+                values.push(item);
+            } else {
+                break;
+            }
+        }
+        if values.is_empty() {
+            parser_err!(
+                "Interval must have at least one value and unit",
+                self.peek_token().location
+            )
+        } else if values.len() == 1 {
+            let (value, unit) = values.pop().unwrap();
+            Ok(Expr::Interval(Interval::Standard {
+                value: Box::new(value),
+                unit,
+            }))
+        } else {
+            let values = values
+                .into_iter()
+                .map(|(value, unit)| IntervalValueWithUnit { value, unit })
+                .collect();
+            Ok(Expr::Interval(Interval::MultiUnit { values }))
+        }
     }
 
     pub fn parse_interval_unit(&mut self) -> Result<IntervalUnit, ParserError> {
@@ -2029,12 +2083,19 @@ impl<'a> Parser<'a> {
             Token::Word(kw)
                 if [
                     Keyword::YEAR,
+                    Keyword::YEARS,
                     Keyword::MONTH,
+                    Keyword::MONTHS,
                     Keyword::WEEK,
+                    Keyword::WEEKS,
                     Keyword::DAY,
+                    Keyword::DAYS,
                     Keyword::HOUR,
+                    Keyword::HOURS,
                     Keyword::MINUTE,
+                    Keyword::MINUTES,
                     Keyword::SECOND,
+                    Keyword::SECONDS,
                     Keyword::CENTURY,
                     Keyword::DECADE,
                     Keyword::DOW,
@@ -2818,17 +2879,17 @@ impl<'a> Parser<'a> {
 
     // use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
     // higher number = higher precedence
-    const MUL_DIV_MOD_OP_PREC: u8 = 40;
-    const PLUS_MINUS_PREC: u8 = 30;
-    const XOR_PREC: u8 = 24;
-    const TIME_ZONE_PREC: u8 = 20;
-    const BETWEEN_PREC: u8 = 20;
-    const LIKE_PREC: u8 = 19;
-    const IS_PREC: u8 = 17;
-    const PG_OTHER_PREC: u8 = 16;
-    const UNARY_NOT_PREC: u8 = 15;
-    const AND_PREC: u8 = 10;
-    const OR_PREC: u8 = 5;
+    pub const MUL_DIV_MOD_OP_PREC: u8 = 40;
+    pub const PLUS_MINUS_PREC: u8 = 30;
+    pub const XOR_PREC: u8 = 24;
+    pub const TIME_ZONE_PREC: u8 = 20;
+    pub const BETWEEN_PREC: u8 = 20;
+    pub const LIKE_PREC: u8 = 19;
+    pub const IS_PREC: u8 = 17;
+    pub const PG_OTHER_PREC: u8 = 16;
+    pub const UNARY_NOT_PREC: u8 = 15;
+    pub const AND_PREC: u8 = 10;
+    pub const OR_PREC: u8 = 5;
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
@@ -6487,8 +6548,8 @@ impl<'a> Parser<'a> {
             // The call to n.parse() returns a bigdecimal when the
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
-            Token::Number(ref n, l) => match n.parse() {
-                Ok(n) => Ok(Value::Number(n, l)),
+            Token::Number(ref n, p) => match n.parse() {
+                Ok(n) => Ok(Value::Number(n, p)),
                 Err(e) => parser_err!(format!("Could not parse '{n}' as number: {e}"), location),
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
@@ -6534,7 +6595,7 @@ impl<'a> Parser<'a> {
                 let next_token = self.next_token();
                 let ident = match next_token.token {
                     Token::Word(w) => Ok(w.to_ident()),
-                    Token::Number(w, false) => Ok(Ident::new(w)),
+                    Token::Number(w, None) => Ok(Ident::new(w)),
                     _ => self.expected("placeholder", next_token),
                 }?;
                 let placeholder = tok.to_string() + &ident.value;
@@ -7174,7 +7235,7 @@ impl<'a> Parser<'a> {
                                 ident.value.push_str(&next_word.value);
                                 false
                             }
-                            Token::Number(s, false) if s.chars().all(|c| c.is_ascii_digit()) => {
+                            Token::Number(s, None) if s.chars().all(|c| c.is_ascii_digit()) => {
                                 ident.value.push_str(&s);
                                 true
                             }
@@ -10571,12 +10632,17 @@ impl<'a> Parser<'a> {
             _ => None,
         };
 
-        let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+        let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
+            || self.parse_keywords(&[Keyword::DISTRIBUTE, Keyword::BY])
+            || self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY])
+        {
             self.parse_comma_separated(Parser::parse_expr)?
         } else {
             vec![]
         };
-        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY])
+            || self.parse_keywords(&[Keyword::SORT, Keyword::BY])
+        {
             self.parse_comma_separated(Parser::parse_order_by_expr)?
         } else {
             vec![]

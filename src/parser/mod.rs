@@ -8594,8 +8594,19 @@ impl<'a> Parser<'a> {
                 self.expected("joined table", self.peek_token())
             }
         } else if dialect_of!(self is SnowflakeDialect | DatabricksDialect | GenericDialect)
-            && self.parse_keyword(Keyword::VALUES)
+            && matches!(
+                self.peek_tokens(),
+                [
+                    Token::Word(Word {
+                        keyword: Keyword::VALUES,
+                        ..
+                    }),
+                    Token::LParen
+                ]
+            )
         {
+            self.expect_keyword(Keyword::VALUES)?;
+
             // Snowflake and Databricks allow syntax like below:
             // SELECT * FROM VALUES (1, 'a'), (2, 'b') AS t (col1, col2)
             // where there are no parentheses around the VALUES clause.

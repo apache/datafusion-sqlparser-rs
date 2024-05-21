@@ -9068,16 +9068,44 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::FOR)?;
         let value_column = self.parse_object_name(false)?.0;
         self.expect_keyword(Keyword::IN)?;
+
         self.expect_token(&Token::LParen)?;
-        let pivot_values = self.parse_comma_separated(Self::parse_expr_with_alias)?;
+        let value_source = if self.parse_keyword(Keyword::ANY) {
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                self.parse_comma_separated(Parser::parse_order_by_expr)?
+            } else {
+                vec![]
+            };
+            PivotValueSource::Any(order_by)
+        } else if self
+            .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
+            .is_some()
+        {
+            self.prev_token();
+            PivotValueSource::Subquery(self.parse_query()?)
+        } else {
+            PivotValueSource::List(self.parse_comma_separated(Self::parse_expr_with_alias)?)
+        };
         self.expect_token(&Token::RParen)?;
+
+        let default_on_null =
+            if self.parse_keywords(&[Keyword::DEFAULT, Keyword::ON, Keyword::NULL]) {
+                self.expect_token(&Token::LParen)?;
+                let expr = self.parse_expr()?;
+                self.expect_token(&Token::RParen)?;
+                Some(expr)
+            } else {
+                None
+            };
+
         self.expect_token(&Token::RParen)?;
         let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(TableFactor::Pivot {
             table: Box::new(table),
             aggregate_functions,
             value_column,
-            pivot_values,
+            value_source,
+            default_on_null,
             alias,
         })
     }

@@ -8612,7 +8612,7 @@ fn parse_pivot_table() {
                 expected_function("c", Some("u")),
             ],
             value_column: vec![Ident::new("a"), Ident::new("MONTH")],
-            pivot_values: vec![
+            value_source: PivotValueSource::List(vec![
                 ExprWithAlias {
                     expr: Expr::Value(number("1")),
                     alias: Some(Ident::new("x"))
@@ -8625,7 +8625,8 @@ fn parse_pivot_table() {
                     expr: Expr::Identifier(Ident::new("three")),
                     alias: Some(Ident::new("y"))
                 },
-            ],
+            ]),
+            default_on_null: None,
             alias: Some(TableAlias {
                 name: Ident {
                     value: "p".to_string(),
@@ -8763,7 +8764,7 @@ fn parse_pivot_unpivot_table() {
                 alias: None
             }],
             value_column: vec![Ident::new("year")],
-            pivot_values: vec![
+            value_source: PivotValueSource::List(vec![
                 ExprWithAlias {
                     expr: Expr::Value(Value::SingleQuotedString("population_2000".to_string())),
                     alias: None
@@ -8772,7 +8773,8 @@ fn parse_pivot_unpivot_table() {
                     expr: Expr::Value(Value::SingleQuotedString("population_2010".to_string())),
                     alias: None
                 },
-            ],
+            ]),
+            default_on_null: None,
             alias: Some(TableAlias {
                 name: Ident::new("p"),
                 columns: vec![]

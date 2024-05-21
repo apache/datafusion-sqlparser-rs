@@ -1585,3 +1585,56 @@ fn first_value_ignore_nulls() {
         "FROM some_table"
     ));
 }
+
+#[test]
+fn test_pivot() {
+    // pivot on static list of values with default
+    #[rustfmt::skip]
+    snowflake().verified_only_select(concat!(
+        "SELECT * ",
+        "FROM quarterly_sales ",
+          "PIVOT(SUM(amount) ",
+            "FOR quarter IN (",
+              "'2023_Q1', ",
+              "'2023_Q2', ",
+              "'2023_Q3', ",
+              "'2023_Q4', ",
+              "'2024_Q1') ",
+            "DEFAULT ON NULL (0)",
+          ") ",
+        "ORDER BY empid",
+    ));
+
+    // dynamic pivot from subquery
+    #[rustfmt::skip]
+    snowflake().verified_only_select(concat!(
+        "SELECT * ",
+        "FROM quarterly_sales ",
+          "PIVOT(SUM(amount) FOR quarter IN (",
+            "SELECT DISTINCT quarter ",
+              "FROM ad_campaign_types_by_quarter ",
+              "WHERE television = true ",
+              "ORDER BY quarter)",
+          ") ",
+        "ORDER BY empid",
+    ));
+
+    // dynamic pivot on any value (with order by)
+    #[rustfmt::skip]
+    snowflake().verified_only_select(concat!(
+        "SELECT * ",
+        "FROM quarterly_sales ",
+          "PIVOT(SUM(amount) FOR quarter IN (ANY ORDER BY quarter)) ",
+        "ORDER BY empid",
+    ));
+
+    // dynamic pivot on any value (without order by)
+    #[rustfmt::skip]
+    snowflake().verified_only_select(concat!(
+        "SELECT * ",
+        "FROM sales_data ",
+          "PIVOT(SUM(total_sales) FOR fis_quarter IN (ANY)) ",
+        "WHERE fis_year IN (2023) ",
+        "ORDER BY region",
+    ));
+}

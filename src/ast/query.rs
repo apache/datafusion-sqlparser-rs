@@ -108,6 +108,17 @@ pub enum SetExpr {
     Table(Box<Table>),
 }
 
+impl SetExpr {
+    /// If this `SetExpr` is a `SELECT`, returns the [`Select`].
+    pub fn as_select(&self) -> Option<&Select> {
+        if let Self::Select(select) = self {
+            Some(&**select)
+        } else {
+            None
+        }
+    }
+}
+
 impl fmt::Display for SetExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

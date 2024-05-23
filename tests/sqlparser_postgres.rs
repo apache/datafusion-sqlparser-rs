@@ -1873,9 +1873,11 @@ fn parse_array_index_expr() {
     let sql = "SELECT foo[0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::ArrayIndex {
-            obj: Box::new(Expr::Identifier(Ident::new("foo"))),
-            indexes: vec![num[0].clone()],
+        &Expr::Subscript {
+            expr: Box::new(Expr::Identifier(Ident::new("foo"))),
+            subscript: Box::new(Subscript::Index {
+                index: num[0].clone()
+            }),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1883,9 +1885,16 @@ fn parse_array_index_expr() {
     let sql = "SELECT foo[0][0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::ArrayIndex {
-            obj: Box::new(Expr::Identifier(Ident::new("foo"))),
-            indexes: vec![num[0].clone(), num[0].clone()],
+        &Expr::Subscript {
+            expr: Box::new(Expr::Subscript {
+                expr: Box::new(Expr::Identifier(Ident::new("foo"))),
+                subscript: Box::new(Subscript::Index {
+                    index: num[0].clone()
+                }),
+            }),
+            subscript: Box::new(Subscript::Index {
+                index: num[0].clone()
+            }),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1893,19 +1902,27 @@ fn parse_array_index_expr() {
     let sql = r#"SELECT bar[0]["baz"]["fooz"] FROM foos"#;
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::ArrayIndex {
-            obj: Box::new(Expr::Identifier(Ident::new("bar"))),
-            indexes: vec![
-                num[0].clone(),
-                Expr::Identifier(Ident {
-                    value: "baz".to_string(),
-                    quote_style: Some('"')
+        &Expr::Subscript {
+            expr: Box::new(Expr::Subscript {
+                expr: Box::new(Expr::Subscript {
+                    expr: Box::new(Expr::Identifier(Ident::new("bar"))),
+                    subscript: Box::new(Subscript::Index {
+                        index: num[0].clone()
+                    })
                 }),
-                Expr::Identifier(Ident {
+                subscript: Box::new(Subscript::Index {
+                    index: Expr::Identifier(Ident {
+                        value: "baz".to_string(),
+                        quote_style: Some('"')
+                    })
+                })
+            }),
+            subscript: Box::new(Subscript::Index {
+                index: Expr::Identifier(Ident {
                     value: "fooz".to_string(),
                     quote_style: Some('"')
                 })
-            ],
+            })
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1913,26 +1930,33 @@ fn parse_array_index_expr() {
     let sql = "SELECT (CAST(ARRAY[ARRAY[2, 3]] AS INT[][]))[1][2]";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::ArrayIndex {
-            obj: Box::new(Expr::Nested(Box::new(Expr::Cast {
-                kind: CastKind::Cast,
-                expr: Box::new(Expr::Array(Array {
-                    elem: vec![Expr::Array(Array {
-                        elem: vec![num[2].clone(), num[3].clone(),],
+        &Expr::Subscript {
+            expr: Box::new(Expr::Subscript {
+                expr: Box::new(Expr::Nested(Box::new(Expr::Cast {
+                    kind: CastKind::Cast,
+                    expr: Box::new(Expr::Array(Array {
+                        elem: vec![Expr::Array(Array {
+                            elem: vec![num[2].clone(), num[3].clone(),],
+                            named: true,
+                        })],
                         named: true,
-                    })],
-                    named: true,
-                })),
-                data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
-                    Box::new(DataType::Array(ArrayElemTypeDef::SquareBracket(
-                        Box::new(DataType::Int(None)),
+                    })),
+                    data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                        Box::new(DataType::Array(ArrayElemTypeDef::SquareBracket(
+                            Box::new(DataType::Int(None)),
+                            None
+                        ))),
                         None
-                    ))),
-                    None
-                )),
-                format: None,
-            }))),
-            indexes: vec![num[1].clone(), num[2].clone()],
+                    )),
+                    format: None,
+                }))),
+                subscript: Box::new(Subscript::Index {
+                    index: num[1].clone()
+                }),
+            }),
+            subscript: Box::new(Subscript::Index {
+                index: num[2].clone()
+            }),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1946,6 +1970,75 @@ fn parse_array_index_expr() {
         }),
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn parse_array_subscript() {
+    let tests = [
+        (
+            "(ARRAY[1, 2, 3, 4, 5, 6])[2]",
+            Subscript::Index {
+                index: Expr::Value(number("2")),
+            },
+        ),
+        (
+            "(ARRAY[1, 2, 3, 4, 5, 6])[foo]",
+            Subscript::Index {
+                index: Expr::Identifier(Ident::new("foo")),
+            },
+        ),
+        (
+            "(ARRAY[1, 2, 3, 4, 5, 6])[2:5]",
+            Subscript::Slice {
+                lower_bound: Some(Expr::Value(number("2"))),
+                upper_bound: Some(Expr::Value(number("5"))),
+            },
+        ),
+        (
+            "arr[array_length(arr) - 3:array_length(arr) - 1]",
+            Subscript::Slice {
+                lower_bound: Some(Expr::BinaryOp {
+                    left: Box::new(call("array_length", [Expr::Identifier(Ident::new("arr"))])),
+                    op: BinaryOperator::Minus,
+                    right: Box::new(Expr::Value(number("3"))),
+                }),
+                upper_bound: Some(Expr::BinaryOp {
+                    left: Box::new(call("array_length", [Expr::Identifier(Ident::new("arr"))])),
+                    op: BinaryOperator::Minus,
+                    right: Box::new(Expr::Value(number("1"))),
+                }),
+            },
+        ),
+        (
+            "(ARRAY[1, 2, 3, 4, 5, 6])[:5]",
+            Subscript::Slice {
+                lower_bound: None,
+                upper_bound: Some(Expr::Value(number("5"))),
+            },
+        ),
+        (
+            "(ARRAY[1, 2, 3, 4, 5, 6])[2:]",
+            Subscript::Slice {
+                lower_bound: Some(Expr::Value(number("2"))),
+                upper_bound: None,
+            },
+        ),
+        (
+            "(ARRAY[1, 2, 3, 4, 5, 6])[:]",
+            Subscript::Slice {
+                lower_bound: None,
+                upper_bound: None,
+            },
+        ),
+    ];
+    for (sql, expect) in tests {
+        let Expr::Subscript { subscript, .. } = pg_and_generic().verified_expr(sql) else {
+            panic!("expected subscript expr");
+        };
+        assert_eq!(expect, *subscript);
+    }
+
+    // pg_and_generic().verified_expr("schedule[:2][2:]");
 }
 
 #[test]

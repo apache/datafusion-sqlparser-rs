@@ -2582,8 +2582,7 @@ impl<'a> Parser<'a> {
             })
         } else if Token::LBracket == tok {
             if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
-                // parse index
-                self.parse_array_index(expr)
+                self.parse_subscript(expr)
             } else if dialect_of!(self is SnowflakeDialect) {
                 self.prev_token();
                 self.parse_json_access(expr)
@@ -2611,18 +2610,34 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_array_index(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let index = self.parse_expr()?;
+    pub fn parse_subscript(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let parse_upper_bound = |p: &mut Parser<'a>| {
+            if let Token::RBracket = p.peek_token().token {
+                Ok(None)
+            } else {
+                p.parse_expr().map(Some)
+            }
+        };
+        let subscript = if self.consume_token(&Token::Colon) {
+            Subscript::Slice {
+                lower_bound: None,
+                upper_bound: parse_upper_bound(self)?,
+            }
+        } else {
+            let expr = self.parse_expr()?;
+            if self.consume_token(&Token::Colon) {
+                Subscript::Slice {
+                    lower_bound: Some(expr),
+                    upper_bound: parse_upper_bound(self)?,
+                }
+            } else {
+                Subscript::Index { index: expr }
+            }
+        };
         self.expect_token(&Token::RBracket)?;
-        let mut indexes: Vec<Expr> = vec![index];
-        while self.consume_token(&Token::LBracket) {
-            let index = self.parse_expr()?;
-            self.expect_token(&Token::RBracket)?;
-            indexes.push(index);
-        }
-        Ok(Expr::ArrayIndex {
-            obj: Box::new(expr),
-            indexes,
+        Ok(Expr::Subscript {
+            expr: Box::new(expr),
+            subscript: Box::new(subscript),
         })
     }
 
@@ -2872,7 +2887,7 @@ impl<'a> Parser<'a> {
                 Ok(Self::MUL_DIV_MOD_OP_PREC)
             }
             Token::DoubleColon => Ok(50),
-            Token::Colon => Ok(50),
+            Token::Colon if dialect_of!(self is SnowflakeDialect) => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket | Token::Overlap | Token::CaretAt => Ok(50),
             Token::Arrow

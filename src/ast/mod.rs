@@ -745,10 +745,10 @@ pub enum Expr {
     /// ```
     /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     Dictionary(Vec<DictionaryField>),
-    /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
-    ArrayIndex {
-        obj: Box<Expr>,
-        indexes: Vec<Expr>,
+    /// An access of nested data using subscript syntax, for example `array[2]`.
+    Subscript {
+        expr: Box<Expr>,
+        subscript: Box<Subscript>,
     },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
@@ -802,6 +802,53 @@ pub enum Expr {
     ///
     /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html>.
     Lambda(LambdaFunction),
+}
+
+/// The contents inside the `[` and `]` in a subscript expression.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Subscript {
+    /// Accesses the element of the array at the given index.
+    Index { index: Expr },
+
+    /// Accesses a slice of an array on PostgreSQL, e.g.
+    ///
+    /// ```plaintext
+    /// => select (array[1,2,3,4,5,6])[2:5];
+    /// -----------
+    /// {2,3,4,5}
+    /// ```
+    ///
+    /// The lower and/or upper bound can be omitted to slice from the start or
+    /// end of the array respectively.
+    ///
+    /// See <https://www.postgresql.org/docs/current/arrays.html#ARRAYS-ACCESSING>.
+    Slice {
+        lower_bound: Option<Expr>,
+        upper_bound: Option<Expr>,
+    },
+}
+
+impl fmt::Display for Subscript {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Subscript::Index { index } => write!(f, "{index}"),
+            Subscript::Slice {
+                lower_bound,
+                upper_bound,
+            } => {
+                if let Some(lower) = lower_bound {
+                    write!(f, "{lower}")?;
+                }
+                write!(f, ":")?;
+                if let Some(upper) = upper_bound {
+                    write!(f, "{upper}")?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 /// A lambda function.
@@ -1250,12 +1297,11 @@ impl fmt::Display for Expr {
             Expr::Dictionary(fields) => {
                 write!(f, "{{{}}}", display_comma_separated(fields))
             }
-            Expr::ArrayIndex { obj, indexes } => {
-                write!(f, "{obj}")?;
-                for i in indexes {
-                    write!(f, "[{i}]")?;
-                }
-                Ok(())
+            Expr::Subscript {
+                expr,
+                subscript: key,
+            } => {
+                write!(f, "{expr}[{key}]")
             }
             Expr::Array(set) => {
                 write!(f, "{set}")

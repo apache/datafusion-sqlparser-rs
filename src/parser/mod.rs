@@ -9885,7 +9885,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
+        let nulls_first = if !self.dialect.supports_nulls_first_in_sort() {
+            None
+        } else if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
             Some(true)
         } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
             Some(false)
@@ -11317,5 +11319,26 @@ mod tests {
         let sql = r#"REPLACE"#;
 
         assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+    }
+
+    #[test]
+    fn test_nulls_first_in_order_by() {
+        let sql = "SELECT * FROM t ORDER BY a NULLS FIRST";
+
+        // Generic dialect supports NULLS FIRST/LAST
+        let ast = Parser::parse_sql(&GenericDialect {}, sql).expect("parsed successfully");
+        assert_eq!(1, ast.len());
+        let actual = format!("{}", ast[0]);
+        assert_eq!(actual, sql);
+
+        // MySQL dialect does not support NULLS FIRST/LAST
+        let ast = Parser::parse_sql(&MySqlDialect {}, sql);
+        assert_eq!(
+            ast,
+            Err(ParserError::ParserError(
+                "Expected end of statement, found: NULLS at Line: 1, Column 28".to_string()
+            )),
+            "MySQL does not support NULLS FIRST/LAST"
+        );
     }
 }

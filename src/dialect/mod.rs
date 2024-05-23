@@ -271,6 +271,10 @@ pub trait Dialect: Debug + Any {
         // return None to fall back to the default behavior
         None
     }
+    /// Does the dialect support specifying `NULLS FIRST/LAST` in `ORDER BY` clauses?
+    fn supports_nulls_first_in_sort(&self) -> bool {
+        true
+    }
 }
 
 impl dyn Dialect {

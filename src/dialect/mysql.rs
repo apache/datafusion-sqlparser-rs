@@ -84,6 +84,10 @@ impl Dialect for MySqlDialect {
             None
         }
     }
+
+    fn supports_nulls_first_in_sort(&self) -> bool {
+        false
+    }
 }
 
 /// `LOCK TABLES`

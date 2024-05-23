@@ -584,7 +584,7 @@ pub enum Expr {
     /// AT a timestamp to a different timezone e.g. `FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00'`
     AtTimeZone {
         timestamp: Box<Expr>,
-        time_zone: String,
+        time_zone: Box<Expr>,
     },
     /// Extract a field from a timestamp e.g. `EXTRACT(MONTH FROM foo)`
     ///
@@ -1270,7 +1270,7 @@ impl fmt::Display for Expr {
                 timestamp,
                 time_zone,
             } => {
-                write!(f, "{timestamp} AT TIME ZONE '{time_zone}'")
+                write!(f, "{timestamp} AT TIME ZONE {time_zone}")
             }
             Expr::Interval(interval) => {
                 write!(f, "{interval}")

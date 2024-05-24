@@ -167,6 +167,7 @@ fn parse_create_view_temporary_if_not_exists() {
             materialized,
             options,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -178,6 +179,7 @@ fn parse_create_view_temporary_if_not_exists() {
             assert!(!or_replace);
             assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(if_not_exists);
             assert!(temporary);

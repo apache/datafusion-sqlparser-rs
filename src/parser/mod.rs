@@ -3903,16 +3903,14 @@ impl<'a> Parser<'a> {
             };
         }
 
-        let comment = if dialect_of!(self is SnowflakeDialect) {
-            if self.parse_keyword(Keyword::COMMENT) {
-                let _ = self.consume_token(&Token::Eq);
-                let next_token = self.next_token();
-                match next_token.token {
-                    Token::SingleQuotedString(str) => Some(str),
-                    _ => self.expected("comment", next_token)?,
-                }
-            } else {
-                None
+        let comment = if dialect_of!(self is SnowflakeDialect | GenericDialect)
+            && self.parse_keyword(Keyword::COMMENT)
+        {
+            self.expect_token(&Token::Eq)?;
+            let next_token = self.next_token();
+            match next_token.token {
+                Token::SingleQuotedString(str) => Some(str),
+                _ => self.expected("string literal", next_token)?,
             }
         } else {
             None

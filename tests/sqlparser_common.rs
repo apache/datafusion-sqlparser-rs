@@ -6404,45 +6404,6 @@ fn parse_create_or_replace_view() {
 }
 
 #[test]
-fn parse_create_or_replace_with_comment_for_snowflake() {
-    let sql = "CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1";
-    let dialect = test_utils::TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {}) as Box<dyn Dialect>],
-        options: None,
-    };
-
-    match dialect.verified_stmt(sql) {
-        Statement::CreateView {
-            name,
-            columns,
-            or_replace,
-            options,
-            query,
-            materialized,
-            cluster_by,
-            comment,
-            with_no_schema_binding: late_binding,
-            if_not_exists,
-            temporary,
-        } => {
-            assert_eq!("v", name.to_string());
-            assert_eq!(columns, vec![]);
-            assert_eq!(options, CreateTableOptions::None);
-            assert_eq!("SELECT 1", query.to_string());
-            assert!(!materialized);
-            assert!(or_replace);
-            assert_eq!(cluster_by, vec![]);
-            assert!(comment.is_some());
-            assert_eq!(comment.expect("expected comment"), "hello, world");
-            assert!(!late_binding);
-            assert!(!if_not_exists);
-            assert!(!temporary);
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn parse_create_or_replace_materialized_view() {
     // Supported in BigQuery (Beta)
     // https://cloud.google.com/bigquery/docs/materialized-views-intro

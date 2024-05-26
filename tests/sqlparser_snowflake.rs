@@ -1688,3 +1688,70 @@ fn test_pivot() {
         "ORDER BY region",
     ));
 }
+
+#[test]
+fn asof_joins() {
+    #[rustfmt::skip]
+    let query = snowflake_and_generic().verified_only_select(concat!(
+        "SELECT * ",
+          "FROM trades_unixtime AS tu ",
+            "ASOF JOIN quotes_unixtime AS qu ",
+            "MATCH_CONDITION (tu.trade_time >= qu.quote_time)",
+    ));
+
+    assert_eq!(
+        query.from[0],
+        TableWithJoins {
+            relation: table_with_alias("trades_unixtime", "tu"),
+            joins: vec![Join {
+                relation: table_with_alias("quotes_unixtime", "qu"),
+                join_operator: JoinOperator::AsOf {
+                    match_condition: Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("tu"),
+                            Ident::new("trade_time"),
+                        ])),
+                        op: BinaryOperator::GtEq,
+                        right: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("qu"),
+                            Ident::new("quote_time"),
+                        ])),
+                    },
+                    constraint: JoinConstraint::None,
+                },
+            }],
+        }
+    );
+
+    #[rustfmt::skip]
+    snowflake_and_generic().verified_query(concat!(
+        "SELECT t.stock_symbol, t.trade_time, t.quantity, q.quote_time, q.price ",
+        "FROM trades AS t ASOF JOIN quotes AS q ",
+          "MATCH_CONDITION (t.trade_time >= quote_time) ",
+          "ON t.stock_symbol = q.stock_symbol ",
+        "ORDER BY t.stock_symbol",
+    ));
+
+    #[rustfmt::skip]
+    snowflake_and_generic().verified_query(concat!(
+        "SELECT t.stock_symbol, c.company_name, t.trade_time, t.quantity, q.quote_time, q.price ",
+          "FROM trades AS t ASOF JOIN quotes AS q ",
+            "MATCH_CONDITION (t.trade_time <= quote_time) ",
+            "USING(stock_symbol) ",
+            "JOIN companies AS c ON c.stock_symbol = t.stock_symbol ",
+          "ORDER BY t.stock_symbol",
+    ));
+
+    #[rustfmt::skip]
+    snowflake_and_generic().verified_query(concat!(
+        "SELECT * ",
+          "FROM snowtime AS s ",
+            "ASOF JOIN raintime AS r ",
+              "MATCH_CONDITION (s.observed >= r.observed) ",
+              "ON s.state = r.state ",
+            "ASOF JOIN preciptime AS p ",
+              "MATCH_CONDITION (s.observed >= p.observed) ",
+              "ON s.state = p.state ",
+          "ORDER BY s.observed",
+    ));
+}

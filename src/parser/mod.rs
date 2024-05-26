@@ -3196,6 +3196,16 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
+    pub fn parse_parenthesized<T, F>(&mut self, mut f: F) -> Result<T, ParserError>
+    where
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+    {
+        self.expect_token(&Token::LParen)?;
+        let res = f(self)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(res)
+    }
+
     /// Parse a comma-separated list of 0+ items accepted by `F`
     pub fn parse_comma_separated0<T, F>(&mut self, f: F) -> Result<Vec<T>, ParserError>
     where
@@ -8505,6 +8515,18 @@ impl<'a> Parser<'a> {
                     relation: self.parse_table_factor()?,
                     join_operator: JoinOperator::OuterApply,
                 }
+            } else if self.parse_keyword(Keyword::ASOF) {
+                self.expect_keyword(Keyword::JOIN)?;
+                let relation = self.parse_table_factor()?;
+                self.expect_keyword(Keyword::MATCH_CONDITION)?;
+                let match_condition = self.parse_parenthesized(Self::parse_expr)?;
+                Join {
+                    relation,
+                    join_operator: JoinOperator::AsOf {
+                        match_condition,
+                        constraint: self.parse_join_constraint(false)?,
+                    },
+                }
             } else {
                 let natural = self.parse_keyword(Keyword::NATURAL);
                 let peek_keyword = if let Token::Word(w) = self.peek_token().token {
@@ -8951,9 +8973,7 @@ impl<'a> Parser<'a> {
             };
 
         self.expect_keyword(Keyword::PATTERN)?;
-        self.expect_token(&Token::LParen)?;
-        let pattern = self.parse_pattern()?;
-        self.expect_token(&Token::RParen)?;
+        let pattern = self.parse_parenthesized(Self::parse_pattern)?;
 
         self.expect_keyword(Keyword::DEFINE)?;
 

@@ -2038,7 +2038,7 @@ fn parse_array_subscript() {
         assert_eq!(expect, *subscript);
     }
 
-    // pg_and_generic().verified_expr("schedule[:2][2:]");
+    pg_and_generic().verified_expr("schedule[:2][2:]");
 }
 
 #[test]

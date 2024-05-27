@@ -2747,7 +2747,7 @@ fn parse_create_table() {
          FOREIGN KEY (lng) REFERENCES othertable4(longitude) ON UPDATE SET NULL)",
     );
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
@@ -2757,7 +2757,7 @@ fn parse_create_table() {
             file_format: None,
             location: None,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -2936,7 +2936,7 @@ fn parse_create_table_with_constraint_characteristics() {
          FOREIGN KEY (lng) REFERENCES othertable4(longitude) ON UPDATE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE ENFORCED)",
     );
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
@@ -2946,7 +2946,7 @@ fn parse_create_table_with_constraint_characteristics() {
             file_format: None,
             location: None,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -3104,7 +3104,7 @@ fn parse_create_table_column_constraint_characteristics() {
         };
 
         match ast {
-            Statement::CreateTable { columns, .. } => {
+            Statement::CreateTable(CreateTable { columns, .. }) => {
                 assert_eq!(
                     columns,
                     vec![ColumnDef {
@@ -3214,12 +3214,12 @@ fn parse_create_table_hive_array() {
         };
 
         match dialects.one_statement_parses_to(sql.as_str(), sql.as_str()) {
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTable {
                 if_not_exists,
                 name,
                 columns,
                 ..
-            } => {
+            }) => {
                 assert!(if_not_exists);
                 assert_eq!(name, ObjectName(vec!["something".into()]));
                 assert_eq!(
@@ -3373,7 +3373,7 @@ fn parse_create_table_as() {
     let sql = "CREATE TABLE t AS SELECT * FROM a";
 
     match verified_stmt(sql) {
-        Statement::CreateTable { name, query, .. } => {
+        Statement::CreateTable(CreateTable { name, query, .. }) => {
             assert_eq!(name.to_string(), "t".to_string());
             assert_eq!(query, Some(Box::new(verified_query("SELECT * FROM a"))));
         }
@@ -3385,7 +3385,7 @@ fn parse_create_table_as() {
     // (without data types) in a CTAS, but we have yet to support that.
     let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
     match verified_stmt(sql) {
-        Statement::CreateTable { columns, query, .. } => {
+        Statement::CreateTable(CreateTable { columns, query, .. }) => {
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].to_string(), "a INT".to_string());
             assert_eq!(columns[1].to_string(), "b INT".to_string());
@@ -3418,7 +3418,7 @@ fn parse_create_table_as_table() {
     });
 
     match verified_stmt(sql1) {
-        Statement::CreateTable { query, name, .. } => {
+        Statement::CreateTable(CreateTable { query, name, .. }) => {
             assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
             assert_eq!(query.unwrap(), expected_query1);
         }
@@ -3443,7 +3443,7 @@ fn parse_create_table_as_table() {
     });
 
     match verified_stmt(sql2) {
-        Statement::CreateTable { query, name, .. } => {
+        Statement::CreateTable(CreateTable { query, name, .. }) => {
             assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
             assert_eq!(query.unwrap(), expected_query2);
         }
@@ -3456,7 +3456,7 @@ fn parse_create_table_on_cluster() {
     // Using single-quote literal to define current cluster
     let sql = "CREATE TABLE t ON CLUSTER '{cluster}' (a INT, b INT)";
     match verified_stmt(sql) {
-        Statement::CreateTable { on_cluster, .. } => {
+        Statement::CreateTable(CreateTable { on_cluster, .. }) => {
             assert_eq!(on_cluster.unwrap(), "{cluster}".to_string());
         }
         _ => unreachable!(),
@@ -3465,7 +3465,7 @@ fn parse_create_table_on_cluster() {
     // Using explicitly declared cluster name
     let sql = "CREATE TABLE t ON CLUSTER my_cluster (a INT, b INT)";
     match verified_stmt(sql) {
-        Statement::CreateTable { on_cluster, .. } => {
+        Statement::CreateTable(CreateTable { on_cluster, .. }) => {
             assert_eq!(on_cluster.unwrap(), "my_cluster".to_string());
         }
         _ => unreachable!(),
@@ -3477,9 +3477,9 @@ fn parse_create_or_replace_table() {
     let sql = "CREATE OR REPLACE TABLE t (a INT)";
 
     match verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name, or_replace, ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "t".to_string());
             assert!(or_replace);
         }
@@ -3488,7 +3488,7 @@ fn parse_create_or_replace_table() {
 
     let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
     match verified_stmt(sql) {
-        Statement::CreateTable { columns, query, .. } => {
+        Statement::CreateTable(CreateTable { columns, query, .. }) => {
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].to_string(), "a INT".to_string());
             assert_eq!(columns[1].to_string(), "b INT".to_string());
@@ -3519,7 +3519,7 @@ fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), Par
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
     match verified_stmt(sql) {
-        Statement::CreateTable { with_options, .. } => {
+        Statement::CreateTable(CreateTable { with_options, .. }) => {
             assert_eq!(
                 vec![
                     SqlOption {
@@ -3542,7 +3542,7 @@ fn parse_create_table_with_options() {
 fn parse_create_table_clone() {
     let sql = "CREATE OR REPLACE TABLE a CLONE a_tmp";
     match verified_stmt(sql) {
-        Statement::CreateTable { name, clone, .. } => {
+        Statement::CreateTable(CreateTable { name, clone, .. }) => {
             assert_eq!(ObjectName(vec![Ident::new("a")]), name);
             assert_eq!(Some(ObjectName(vec![(Ident::new("a_tmp"))])), clone)
         }
@@ -3572,7 +3572,7 @@ fn parse_create_external_table() {
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
@@ -3582,7 +3582,7 @@ fn parse_create_external_table() {
             file_format,
             location,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -3643,7 +3643,7 @@ fn parse_create_or_replace_external_table() {
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
@@ -3654,7 +3654,7 @@ fn parse_create_or_replace_external_table() {
             location,
             or_replace,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -3700,7 +3700,7 @@ fn parse_create_external_table_lowercase() {
          lng DOUBLE) \
          STORED AS PARQUET LOCATION '/tmp/example.csv'",
     );
-    assert_matches!(ast, Statement::CreateTable { .. });
+    assert_matches!(ast, Statement::CreateTable(CreateTable { .. }));
 }
 
 #[test]

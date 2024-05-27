@@ -11,17 +11,75 @@
 // limitations under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+pub use super::ddl::{ColumnDef, TableConstraint};
+
 use super::{
-    Expr, FromTable, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnInsert, OrderByExpr,
-    Query, SelectItem, SqliteOnConflict, TableWithJoins,
+    Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, Ident, InsertAliases,
+    MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OrderByExpr, Query, SelectItem, SqlOption,
+    SqliteOnConflict, TableWithJoins,
 };
+
+/// CREATE TABLE statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTable {
+    pub or_replace: bool,
+    pub temporary: bool,
+    pub external: bool,
+    pub global: Option<bool>,
+    pub if_not_exists: bool,
+    pub transient: bool,
+    /// Table name
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+    /// Optional schema
+    pub columns: Vec<ColumnDef>,
+    pub constraints: Vec<TableConstraint>,
+    pub hive_distribution: HiveDistributionStyle,
+    pub hive_formats: Option<HiveFormat>,
+    pub table_properties: Vec<SqlOption>,
+    pub with_options: Vec<SqlOption>,
+    pub file_format: Option<FileFormat>,
+    pub location: Option<String>,
+    pub query: Option<Box<Query>>,
+    pub without_rowid: bool,
+    pub like: Option<ObjectName>,
+    pub clone: Option<ObjectName>,
+    pub engine: Option<String>,
+    pub comment: Option<String>,
+    pub auto_increment_offset: Option<u32>,
+    pub default_charset: Option<String>,
+    pub collation: Option<String>,
+    pub on_commit: Option<OnCommit>,
+    /// ClickHouse "ON CLUSTER" clause:
+    /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
+    pub on_cluster: Option<String>,
+    /// ClickHouse "ORDER BY " clause. Note that omitted ORDER BY is different
+    /// than empty (represented as ()), the latter meaning "no sorting".
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
+    pub order_by: Option<Vec<Ident>>,
+    /// BigQuery: A partition expression for the table.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#partition_expression>
+    pub partition_by: Option<Box<Expr>>,
+    /// BigQuery: Table clustering column list.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
+    pub cluster_by: Option<Vec<Ident>>,
+    /// BigQuery: Table options list.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
+    pub options: Option<Vec<SqlOption>>,
+    /// SQLite "STRICT" clause.
+    /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
+    /// then strict typing rules apply to that table.
+    pub strict: bool,
+}
 
 /// INSERT statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

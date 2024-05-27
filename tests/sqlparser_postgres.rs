@@ -317,7 +317,7 @@ fn parse_create_table_with_defaults() {
             active int NOT NULL
     ) WITH (fillfactor = 20, user_catalog_table = true, autovacuum_vacuum_threshold = 100)";
     match pg_and_generic().one_statement_parses_to(sql, "") {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
@@ -327,7 +327,7 @@ fn parse_create_table_with_defaults() {
             file_format: None,
             location: None,
             ..
-        } => {
+        }) => {
             use pretty_assertions::assert_eq;
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
@@ -537,12 +537,12 @@ fn parse_create_table_constraints_only() {
     let sql = "CREATE TABLE t (CONSTRAINT positive CHECK (2 > 1))";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
             ..
-        } => {
+        }) => {
             assert_eq!("t", name.to_string());
             assert!(columns.is_empty());
             assert_eq!(
@@ -718,11 +718,11 @@ fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             if_not_exists: true,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
         }
         _ => unreachable!(),
@@ -3570,7 +3570,7 @@ fn parse_create_table_with_alias() {
       bool_col BOOL,
     );";
     match pg_and_generic().one_statement_parses_to(sql, "") {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
@@ -3580,7 +3580,7 @@ fn parse_create_table_with_alias() {
             file_format: None,
             location: None,
             ..
-        } => {
+        }) => {
             assert_eq!("public.datatype_aliases", name.to_string());
             assert_eq!(
                 columns,

@@ -470,7 +470,7 @@ fn parse_set_variables() {
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -541,12 +541,12 @@ fn parse_create_table_primary_and_unique_key() {
 
     for (sql, index_type_display) in sqls.iter().zip(index_type_display) {
         match mysql().one_statement_parses_to(sql, "") {
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTable {
                 name,
                 columns,
                 constraints,
                 ..
-            } => {
+            }) => {
                 assert_eq!(name.to_string(), "foo");
 
                 let expected_constraint = table_constraint_unique_primary_ctor(
@@ -609,9 +609,9 @@ fn parse_create_table_primary_and_unique_key_with_index_options() {
 
     for (sql, index_type_display) in sqls.iter().zip(index_type_display) {
         match mysql_and_generic().one_statement_parses_to(sql, "") {
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTable {
                 name, constraints, ..
-            } => {
+            }) => {
                 assert_eq!(name.to_string(), "foo");
 
                 let expected_constraint = table_constraint_unique_primary_ctor(
@@ -647,9 +647,9 @@ fn parse_create_table_primary_and_unique_key_with_index_type() {
 
     for (sql, index_type_display) in sqls.iter().zip(index_type_display) {
         match mysql_and_generic().one_statement_parses_to(sql, "") {
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTable {
                 name, constraints, ..
-            } => {
+            }) => {
                 assert_eq!(name.to_string(), "foo");
 
                 let expected_constraint = table_constraint_unique_primary_ctor(
@@ -690,7 +690,7 @@ fn parse_create_table_comment() {
 
     for sql in [canonical, with_equal] {
         match mysql().one_statement_parses_to(sql, canonical) {
-            Statement::CreateTable { name, comment, .. } => {
+            Statement::CreateTable(CreateTable { name, comment, .. }) => {
                 assert_eq!(name.to_string(), "foo");
                 assert_eq!(comment.expect("Should exist").to_string(), "baz");
             }
@@ -708,11 +708,11 @@ fn parse_create_table_auto_increment_offset() {
 
     for sql in [canonical, with_equal] {
         match mysql().one_statement_parses_to(sql, canonical) {
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTable {
                 name,
                 auto_increment_offset,
                 ..
-            } => {
+            }) => {
                 assert_eq!(name.to_string(), "foo");
                 assert_eq!(
                     auto_increment_offset.expect("Should exist").to_string(),
@@ -728,7 +728,7 @@ fn parse_create_table_auto_increment_offset() {
 fn parse_create_table_set_enum() {
     let sql = "CREATE TABLE foo (bar SET('a', 'b'), baz ENUM('a', 'b'))";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![
@@ -756,13 +756,13 @@ fn parse_create_table_set_enum() {
 fn parse_create_table_engine_default_charset() {
     let sql = "CREATE TABLE foo (id INT(11)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             engine,
             default_charset,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -784,12 +784,12 @@ fn parse_create_table_engine_default_charset() {
 fn parse_create_table_collate() {
     let sql = "CREATE TABLE foo (id INT(11)) COLLATE=utf8mb4_0900_ai_ci";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             collation,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -810,7 +810,7 @@ fn parse_create_table_collate() {
 fn parse_create_table_comment_character_set() {
     let sql = "CREATE TABLE foo (s TEXT CHARACTER SET utf8mb4 COMMENT 'comment')";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -857,7 +857,7 @@ fn parse_create_table_gencol() {
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![ColumnDef {
@@ -1126,7 +1126,7 @@ fn check_roundtrip_of_escaped_string() {
 fn parse_create_table_with_minimum_display_width() {
     let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_mediumint MEDIUMINT(6), bar_int INT(11), bar_bigint BIGINT(20))";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![
@@ -1172,7 +1172,7 @@ fn parse_create_table_with_minimum_display_width() {
 fn parse_create_table_unsigned() {
     let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3) UNSIGNED, bar_smallint SMALLINT(5) UNSIGNED, bar_mediumint MEDIUMINT(13) UNSIGNED, bar_int INT(11) UNSIGNED, bar_bigint BIGINT(20) UNSIGNED)";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![
@@ -2321,7 +2321,7 @@ fn parse_kill() {
 fn parse_table_colum_option_on_update() {
     let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE CURRENT_TIMESTAMP())";
     match mysql().verified_stmt(sql1) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -2622,7 +2622,7 @@ fn parse_create_table_with_column_collate() {
     let sql = "CREATE TABLE tb (id TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci)";
     let canonical = "CREATE TABLE tb (id TEXT COLLATE utf8mb4_0900_ai_ci CHARACTER SET utf8mb4)";
     match mysql().one_statement_parses_to(sql, canonical) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "tb");
             assert_eq!(
                 vec![ColumnDef {

@@ -38,7 +38,7 @@ pub use self::ddl::{
     ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
 };
-pub use self::dml::{CreateTable, Delete, Insert};
+pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -1987,20 +1987,7 @@ pub enum Statement {
     /// ```sql
     /// `CREATE INDEX`
     /// ```
-    CreateIndex {
-        /// index name
-        name: Option<ObjectName>,
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        using: Option<Ident>,
-        columns: Vec<OrderByExpr>,
-        unique: bool,
-        concurrently: bool,
-        if_not_exists: bool,
-        include: Vec<Ident>,
-        nulls_distinct: Option<bool>,
-        predicate: Option<Expr>,
-    },
+    CreateIndex(CreateIndex),
     /// ```sql
     /// CREATE ROLE
     /// ```
@@ -3574,7 +3561,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateIndex {
+            Statement::CreateIndex(CreateIndex {
                 name,
                 table_name,
                 using,
@@ -3585,7 +3572,7 @@ impl fmt::Display for Statement {
                 include,
                 nulls_distinct,
                 predicate,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {unique}INDEX {concurrently}{if_not_exists}",

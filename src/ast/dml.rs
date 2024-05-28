@@ -26,6 +26,24 @@ use super::{
     SqliteOnConflict, TableWithJoins,
 };
 
+/// CREATE INDEX statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateIndex {
+    /// index name
+    pub name: Option<ObjectName>,
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub table_name: ObjectName,
+    pub using: Option<Ident>,
+    pub columns: Vec<OrderByExpr>,
+    pub unique: bool,
+    pub concurrently: bool,
+    pub if_not_exists: bool,
+    pub include: Vec<Ident>,
+    pub nulls_distinct: Option<bool>,
+    pub predicate: Option<Expr>,
+}
 /// CREATE TABLE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

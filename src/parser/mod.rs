@@ -7123,8 +7123,7 @@ impl<'a> Parser<'a> {
             None
         };
         let data_type = if dialect_of!(self is ClickHouseDialect) {
-            let (data_type, _) = self.parse_data_type_helper()?;
-            Some(data_type)
+            Some(self.parse_data_type()?)
         } else {
             None
         };

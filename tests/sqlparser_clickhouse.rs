@@ -222,10 +222,7 @@ fn parse_create_table() {
 
 #[test]
 fn parse_create_view_with_fields_data_types() {
-    match clickhouse().one_statement_parses_to(
-        r#"CREATE VIEW v (i "int", f String) AS SELECT * FROM t"#,
-        r#"CREATE VIEW v (i "int", f STRING) AS SELECT * FROM t"#,
-    ) {
+    match clickhouse().verified_stmt(r#"CREATE VIEW v (i "int", f "String") AS SELECT * FROM t"#) {
         Statement::CreateView { name, columns, .. } => {
             assert_eq!(name, ObjectName(vec!["v".into()]));
             assert_eq!(
@@ -244,7 +241,13 @@ fn parse_create_view_with_fields_data_types() {
                     },
                     ViewColumnDef {
                         name: "f".into(),
-                        data_type: Some(DataType::String(None)),
+                        data_type: Some(DataType::Custom(
+                            ObjectName(vec![Ident {
+                                value: "String".into(),
+                                quote_style: Some('"')
+                            }]),
+                            vec![]
+                        )),
                         options: None
                     },
                 ]
@@ -252,6 +255,10 @@ fn parse_create_view_with_fields_data_types() {
         }
         _ => unreachable!(),
     }
+
+    clickhouse()
+        .parse_sql_statements(r#"CREATE VIEW v (i, f) AS SELECT * FROM t"#)
+        .expect_err("CREATE VIEW with fields and without data types should be invalid");
 }
 
 #[test]

@@ -261,10 +261,12 @@ fn parse_create_view_with_options() {
                 vec![
                     ViewColumnDef {
                         name: Ident::new("name"),
+                        data_type: None,
                         options: None,
                     },
                     ViewColumnDef {
                         name: Ident::new("age"),
+                        data_type: None,
                         options: Some(vec![SqlOption {
                             name: Ident::new("description"),
                             value: Expr::Value(Value::DoubleQuotedString("field age".to_string())),

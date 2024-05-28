@@ -3244,7 +3244,7 @@ impl fmt::Display for Statement {
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
                 )?;
                 if let Some(comment) = comment {
-                    write!(f, " COMMENT = '{comment}'")?;
+                    write!(f, " COMMENT = '{}'", value::escape_single_quote_string(comment))?;
                 }
                 if matches!(options, CreateTableOptions::With(_)) {
                     write!(f, " {options}")?;

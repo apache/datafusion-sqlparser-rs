@@ -3902,7 +3902,25 @@ impl<'a> Parser<'a> {
                 }
             };
         }
-
+        println!("to qweqeqe");
+        let mut to = Option::None;
+        if dialect_of!(self is ClickHouseDialect) {
+            println!("to {:}", self.peek_token().token);
+            if let Token::Word(word) = self.peek_token().token {
+                if word.keyword == Keyword::TO {
+                    let _ = self.parse_keyword(Keyword::TO);
+                    let indet  = self.parse_object_name(false);
+                    if indet.is_ok(){
+                    //    println!("to {}",indet.unwrap());
+                       to = Some(indet.unwrap());
+                    }
+                    // let opts = self.parse_options(Keyword::OPTIONS)?;
+                    // if !opts.is_empty() {
+                    //     options = CreateTableOptions::Options(opts);
+                    // }
+                }
+            };
+        }
         self.expect_keyword(Keyword::AS)?;
         let query = self.parse_boxed_query()?;
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
@@ -3926,6 +3944,7 @@ impl<'a> Parser<'a> {
             with_no_schema_binding,
             if_not_exists,
             temporary,
+            to,
         })
     }
 
@@ -11283,5 +11302,25 @@ mod tests {
         let sql = r#"REPLACE"#;
 
         assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+    }
+
+    #[test]
+    fn test_create_matireal_view_test() {
+        // NOTE: This is actually valid MySQL syntax, REPLACE and INSERT,
+        // but the parser does not yet support it.
+        // https://dev.mysql.com/doc/refman/8.3/en/insert.html
+        let sql = "CREATE MATERIALIZED VIEW analytics.monthly_aggregated_data_mv 
+        TO analytics.monthly_aggregated_data 
+        AS 
+        SELECT 
+                toDate(toStartOfMonth(event_time)) AS month, 
+                domain_name, 
+                sumState(count_views) AS sumCountViews 
+        FROM analytics.hourly_data 
+        GROUP BY 
+                domain_name, 
+                month ";
+
+        assert!(Parser::parse_sql(&ClickHouseDialect {}, sql).is_ok());
     }
 }

@@ -1964,6 +1964,7 @@ pub enum Statement {
         if_not_exists: bool,
         /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
         temporary: bool,
+        to: Option<ObjectName>,
     },
     /// ```sql
     /// CREATE TABLE
@@ -3229,6 +3230,7 @@ impl fmt::Display for Statement {
                 with_no_schema_binding,
                 if_not_exists,
                 temporary,
+                ..
             } => {
                 write!(
                     f,

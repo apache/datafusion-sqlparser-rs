@@ -1959,6 +1959,9 @@ pub enum Statement {
         query: Box<Query>,
         options: CreateTableOptions,
         cluster_by: Vec<Ident>,
+        /// Snowflake: Views can have comments in Snowflake.
+        /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+        comment: Option<String>,
         /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
         with_no_schema_binding: bool,
         /// if true, has SQLite `IF NOT EXISTS` clause <https://www.sqlite.org/lang_createview.html>
@@ -3323,6 +3326,7 @@ impl fmt::Display for Statement {
                 materialized,
                 options,
                 cluster_by,
+                comment,
                 with_no_schema_binding,
                 if_not_exists,
                 temporary,
@@ -3336,6 +3340,13 @@ impl fmt::Display for Statement {
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
                 )?;
+                if let Some(comment) = comment {
+                    write!(
+                        f,
+                        " COMMENT = '{}'",
+                        value::escape_single_quote_string(comment)
+                    )?;
+                }
                 if matches!(options, CreateTableOptions::With(_)) {
                     write!(f, " {options}")?;
                 }

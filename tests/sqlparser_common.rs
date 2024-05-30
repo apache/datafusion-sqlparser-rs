@@ -6251,6 +6251,7 @@ fn parse_create_view() {
             materialized,
             options,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -6262,6 +6263,7 @@ fn parse_create_view() {
             assert!(!or_replace);
             assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
@@ -6305,6 +6307,7 @@ fn parse_create_view_with_columns() {
             query,
             materialized,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -6325,6 +6328,7 @@ fn parse_create_view_with_columns() {
             assert!(!materialized);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
@@ -6345,6 +6349,7 @@ fn parse_create_view_temporary() {
             materialized,
             options,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -6356,6 +6361,7 @@ fn parse_create_view_temporary() {
             assert!(!or_replace);
             assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(temporary);
@@ -6376,6 +6382,7 @@ fn parse_create_or_replace_view() {
             query,
             materialized,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -6387,6 +6394,7 @@ fn parse_create_or_replace_view() {
             assert!(!materialized);
             assert!(or_replace);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
@@ -6411,6 +6419,7 @@ fn parse_create_or_replace_materialized_view() {
             query,
             materialized,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -6422,6 +6431,7 @@ fn parse_create_or_replace_materialized_view() {
             assert!(materialized);
             assert!(or_replace);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
@@ -6442,6 +6452,7 @@ fn parse_create_materialized_view() {
             materialized,
             options,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -6453,6 +6464,7 @@ fn parse_create_materialized_view() {
             assert_eq!(options, CreateTableOptions::None);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
@@ -6473,6 +6485,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             materialized,
             options,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -6484,6 +6497,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert_eq!(options, CreateTableOptions::None);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![Ident::new("foo")]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);

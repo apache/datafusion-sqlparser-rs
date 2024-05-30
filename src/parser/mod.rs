@@ -4034,6 +4034,19 @@ impl<'a> Parser<'a> {
             };
         }
 
+        let comment = if dialect_of!(self is SnowflakeDialect | GenericDialect)
+            && self.parse_keyword(Keyword::COMMENT)
+        {
+            self.expect_token(&Token::Eq)?;
+            let next_token = self.next_token();
+            match next_token.token {
+                Token::SingleQuotedString(str) => Some(str),
+                _ => self.expected("string literal", next_token)?,
+            }
+        } else {
+            None
+        };
+
         self.expect_keyword(Keyword::AS)?;
         let query = self.parse_boxed_query()?;
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
@@ -4054,6 +4067,7 @@ impl<'a> Parser<'a> {
             or_replace,
             options,
             cluster_by,
+            comment,
             with_no_schema_binding,
             if_not_exists,
             temporary,

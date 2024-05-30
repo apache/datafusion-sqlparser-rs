@@ -3285,16 +3285,18 @@ fn parse_create_function() {
                 OperateFunctionArg::unnamed(DataType::Integer(None)),
             ]),
             return_type: Some(DataType::Integer(None)),
-            params: CreateFunctionBody {
-                language: Some("SQL".into()),
-                behavior: Some(FunctionBehavior::Immutable),
-                called_on_null: Some(FunctionCalledOnNull::Strict),
-                parallel: Some(FunctionParallel::Safe),
-                as_: Some(FunctionDefinition::SingleQuotedDef(
-                    "select $1 + $2;".into()
-                )),
-                ..Default::default()
-            },
+            language: Some("SQL".into()),
+            behavior: Some(FunctionBehavior::Immutable),
+            called_on_null: Some(FunctionCalledOnNull::Strict),
+            parallel: Some(FunctionParallel::Safe),
+            function_body: Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
+                Value::SingleQuotedString("select $1 + $2;".into())
+            ))),
+            if_not_exists: false,
+            using: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
         }
     );
 }

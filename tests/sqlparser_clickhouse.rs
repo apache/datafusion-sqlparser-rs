@@ -211,12 +211,9 @@ fn parse_delimited_identifiers() {
 #[test]
 fn parse_create_table() {
     clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY ("x")"#);
-    clickhouse().one_statement_parses_to(
-        r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x""#,
-        r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY ("x")"#,
-    );
+    clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x""#);
     clickhouse().verified_stmt(
-        r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY ("x") AS SELECT * FROM "t" WHERE true"#,
+        r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x" AS SELECT * FROM "t" WHERE true"#,
     );
 }
 
@@ -408,6 +405,96 @@ fn parse_create_table_with_nested_data_types() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_create_table_with_primary_key() {
+    match clickhouse_and_generic().one_statement_parses_to(
+        concat!(
+            r#"CREATE TABLE db.table (`i` Int, `k` Int)"#,
+            " ENGINE=SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')",
+            " PRIMARY KEY tuple(i)",
+            " ORDER BY tuple(i)",
+        ),
+        concat!(
+            r#"CREATE TABLE db.table (`i` INT, `k` INT)"#,
+            " ENGINE=SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')",
+            " PRIMARY KEY tuple(i)",
+            " ORDER BY tuple(i)",
+        ),
+    ) {
+        Statement::CreateTable {
+            name,
+            columns,
+            engine,
+            primary_key,
+            order_by,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "db.table");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::with_quote('`', "i"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('`', "k"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                ],
+                columns
+            );
+            assert_eq!(
+                engine,
+                Some(TableEngine {
+                    name: "SharedMergeTree".to_string(),
+                    parameters: Some(vec![
+                        Ident::with_quote('\'', "/clickhouse/tables/{uuid}/{shard}"),
+                        Ident::with_quote('\'', "{replica}"),
+                    ]),
+                })
+            );
+            fn assert_function(actual: &Function, name: &str, arg: &str) -> bool {
+                assert_eq!(actual.name, ObjectName(vec![Ident::new(name)]));
+                assert_eq!(
+                    actual.args,
+                    FunctionArguments::List(FunctionArgumentList {
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(
+                            Ident::new(arg)
+                        )),)],
+                        duplicate_treatment: None,
+                        clauses: vec![],
+                    })
+                );
+                true
+            }
+            match primary_key.unwrap().as_ref() {
+                Expr::Function(primary_key) => {
+                    assert!(assert_function(primary_key, "tuple", "i"));
+                }
+                _ => panic!("unexpected primary key type"),
+            }
+            match order_by {
+                Some(OneOrManyWithParens::One(Expr::Function(order_by))) => {
+                    assert!(assert_function(&order_by, "tuple", "i"));
+                }
+                _ => panic!("unexpected order by type"),
+            };
+        }
+        _ => unreachable!(),
+    }
+
+    clickhouse_and_generic()
+        .parse_sql_statements(concat!(
+            r#"CREATE TABLE db.table (`i` Int, `k` Int)"#,
+            " ORDER BY tuple(i), tuple(k)",
+        ))
+        .expect_err("ORDER BY supports one expression with tuple");
 }
 
 #[test]

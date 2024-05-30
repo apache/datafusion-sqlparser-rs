@@ -6315,6 +6315,29 @@ impl Display for MySQLColumnPosition {
     }
 }
 
+/// Engine of DB. Some warehouse has parameters of engine, e.g. [clickhouse]
+///
+/// [clickhouse]: https://clickhouse.com/docs/en/engines/table-engines
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableEngine {
+    pub name: String,
+    pub parameters: Option<Vec<Ident>>,
+}
+
+impl Display for TableEngine {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+
+        if let Some(parameters) = self.parameters.as_ref() {
+            write!(f, "({})", display_comma_separated(parameters))?;
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

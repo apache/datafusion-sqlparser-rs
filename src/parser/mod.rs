@@ -7282,7 +7282,16 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(ViewColumnDef { name, options })
+        let data_type = if dialect_of!(self is ClickHouseDialect) {
+            Some(self.parse_data_type()?)
+        } else {
+            None
+        };
+        Ok(ViewColumnDef {
+            name,
+            data_type,
+            options,
+        })
     }
 
     /// Parse a parenthesized comma-separated list of unqualified, possibly quoted identifiers

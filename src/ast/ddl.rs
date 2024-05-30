@@ -815,7 +815,7 @@ impl fmt::Display for ColumnDef {
 ///
 /// Syntax
 /// ```markdown
-/// <name> [OPTIONS(option, ...)]
+/// <name> [data_type][OPTIONS(option, ...)]
 ///
 /// option: <name> = <value>
 /// ```
@@ -824,18 +824,23 @@ impl fmt::Display for ColumnDef {
 /// ```sql
 /// name
 /// age OPTIONS(description = "age column", tag = "prod")
+/// created_at DateTime64
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ViewColumnDef {
     pub name: Ident,
+    pub data_type: Option<DataType>,
     pub options: Option<Vec<SqlOption>>,
 }
 
 impl fmt::Display for ViewColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)?;
+        if let Some(data_type) = self.data_type.as_ref() {
+            write!(f, " {}", data_type)?;
+        }
         if let Some(options) = self.options.as_ref() {
             write!(
                 f,

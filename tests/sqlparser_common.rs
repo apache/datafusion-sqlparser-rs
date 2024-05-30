@@ -6319,6 +6319,7 @@ fn parse_create_view_with_columns() {
                     .into_iter()
                     .map(|name| ViewColumnDef {
                         name,
+                        data_type: None,
                         options: None
                     })
                     .collect::<Vec<_>>()

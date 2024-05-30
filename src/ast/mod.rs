@@ -820,6 +820,14 @@ pub enum Subscript {
     /// {2,3,4,5}
     /// ```
     ///
+    /// Stride notation is also supported
+    ///
+    /// ```plaintext
+    /// => select (array[1,2,3,4,5,6])[1:6:2];
+    /// -----------
+    /// {1,3,5}
+    /// ```
+    ///
     /// The lower and/or upper bound can be omitted to slice from the start or
     /// end of the array respectively.
     ///
@@ -827,6 +835,7 @@ pub enum Subscript {
     Slice {
         lower_bound: Option<Expr>,
         upper_bound: Option<Expr>,
+        stride: Option<Expr>,
     },
 }
 
@@ -837,6 +846,7 @@ impl fmt::Display for Subscript {
             Subscript::Slice {
                 lower_bound,
                 upper_bound,
+                stride,
             } => {
                 if let Some(lower) = lower_bound {
                     write!(f, "{lower}")?;
@@ -844,6 +854,10 @@ impl fmt::Display for Subscript {
                 write!(f, ":")?;
                 if let Some(upper) = upper_bound {
                     write!(f, "{upper}")?;
+                }
+                if let Some(stride) = stride {
+                    write!(f, ":")?;
+                    write!(f, "{stride}")?;
                 }
                 Ok(())
             }

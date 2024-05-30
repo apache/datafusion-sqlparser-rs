@@ -2610,31 +2610,84 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_subscript(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let parse_upper_bound = |p: &mut Parser<'a>| {
-            if let Token::RBracket = p.peek_token().token {
-                Ok(None)
-            } else {
-                p.parse_expr().map(Some)
-            }
-        };
-        let subscript = if self.consume_token(&Token::Colon) {
-            Subscript::Slice {
-                lower_bound: None,
-                upper_bound: parse_upper_bound(self)?,
-            }
+    /// Parses an array subscript like
+    /// * `[:]`
+    /// * `[l]`
+    /// * `[l:]`
+    /// * `[:u]`
+    /// * `[l:u]`
+    /// * `[l:u:s]`
+    ///
+    /// Parser is right after `[`
+    fn parse_subscript_inner(&mut self) -> Result<Subscript, ParserError> {
+        // at either `<lower>:(rest)` or `:(rest)]`
+        let lower_bound = if self.consume_token(&Token::Colon) {
+            None
         } else {
-            let expr = self.parse_expr()?;
-            if self.consume_token(&Token::Colon) {
-                Subscript::Slice {
-                    lower_bound: Some(expr),
-                    upper_bound: parse_upper_bound(self)?,
-                }
-            } else {
-                Subscript::Index { index: expr }
-            }
+            Some(self.parse_expr()?)
         };
-        self.expect_token(&Token::RBracket)?;
+
+        // check for end
+        if self.consume_token(&Token::RBracket) {
+            if let Some(lower_bound) = lower_bound {
+                return Ok(Subscript::Index { index: lower_bound });
+            };
+            return Ok(Subscript::Slice {
+                lower_bound,
+                upper_bound: None,
+                stride: None,
+            });
+        }
+
+        // consume the `:`
+        if lower_bound.is_some() {
+            self.expect_token(&Token::Colon)?;
+        }
+
+        // we are now at either `]`, `<upper>(rest)]`
+        let upper_bound = if self.consume_token(&Token::RBracket) {
+            return Ok(Subscript::Slice {
+                lower_bound,
+                upper_bound: None,
+                stride: None,
+            });
+        } else {
+            Some(self.parse_expr()?)
+        };
+
+        // check for end
+        if self.consume_token(&Token::RBracket) {
+            return Ok(Subscript::Slice {
+                lower_bound,
+                upper_bound,
+                stride: None,
+            });
+        }
+
+        // we are now at `:]` or `:stride]`
+        self.expect_token(&Token::Colon)?;
+        let stride = if self.consume_token(&Token::RBracket) {
+            None
+        } else {
+            Some(self.parse_expr()?)
+        };
+
+        if stride.is_some() {
+            self.expect_token(&Token::RBracket)?;
+        }
+
+        Ok(Subscript::Slice {
+            lower_bound,
+            upper_bound,
+            stride,
+        })
+    }
+
+    /// Parses an array subscript like `[1:3]`
+    ///
+    /// Parser is right after `[`
+    pub fn parse_subscript(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let subscript = self.parse_subscript_inner()?;
         Ok(Expr::Subscript {
             expr: Box::new(expr),
             subscript: Box::new(subscript),

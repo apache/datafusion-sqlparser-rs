@@ -1992,6 +1992,15 @@ fn parse_array_subscript() {
             Subscript::Slice {
                 lower_bound: Some(Expr::Value(number("2"))),
                 upper_bound: Some(Expr::Value(number("5"))),
+                stride: None,
+            },
+        ),
+        (
+            "(ARRAY[1, 2, 3, 4, 5, 6])[2:5:3]",
+            Subscript::Slice {
+                lower_bound: Some(Expr::Value(number("2"))),
+                upper_bound: Some(Expr::Value(number("5"))),
+                stride: Some(Expr::Value(number("3"))),
             },
         ),
         (
@@ -2007,6 +2016,7 @@ fn parse_array_subscript() {
                     op: BinaryOperator::Minus,
                     right: Box::new(Expr::Value(number("1"))),
                 }),
+                stride: None,
             },
         ),
         (
@@ -2014,6 +2024,7 @@ fn parse_array_subscript() {
             Subscript::Slice {
                 lower_bound: None,
                 upper_bound: Some(Expr::Value(number("5"))),
+                stride: None,
             },
         ),
         (
@@ -2021,6 +2032,7 @@ fn parse_array_subscript() {
             Subscript::Slice {
                 lower_bound: Some(Expr::Value(number("2"))),
                 upper_bound: None,
+                stride: None,
             },
         ),
         (
@@ -2028,6 +2040,7 @@ fn parse_array_subscript() {
             Subscript::Slice {
                 lower_bound: None,
                 upper_bound: None,
+                stride: None,
             },
         ),
     ];

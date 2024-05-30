@@ -820,18 +820,19 @@ pub enum Subscript {
     /// {2,3,4,5}
     /// ```
     ///
-    /// Stride notation is also supported
+    /// The lower and/or upper bound can be omitted to slice from the start or
+    /// end of the array respectively.
+    ///
+    /// See <https://www.postgresql.org/docs/current/arrays.html#ARRAYS-ACCESSING>.
+    ///
+    /// Also supports an optional "stride" as the last element (this is not
+    /// supported by postgres), e.g.
     ///
     /// ```plaintext
     /// => select (array[1,2,3,4,5,6])[1:6:2];
     /// -----------
     /// {1,3,5}
     /// ```
-    ///
-    /// The lower and/or upper bound can be omitted to slice from the start or
-    /// end of the array respectively.
-    ///
-    /// See <https://www.postgresql.org/docs/current/arrays.html#ARRAYS-ACCESSING>.
     Slice {
         lower_bound: Option<Expr>,
         upper_bound: Option<Expr>,

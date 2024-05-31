@@ -394,6 +394,36 @@ fn parse_semi_structured_data_traversal() {
         })],
         select.projection
     );
+
+    // a json access used as a key to another json access
+    assert_eq!(
+        snowflake().verified_expr("a[b:c]"),
+        Expr::JsonAccess {
+            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            path: JsonPath {
+                path: vec![JsonPathElem::Bracket {
+                    key: Expr::JsonAccess {
+                        value: Box::new(Expr::Identifier(Ident::new("b"))),
+                        path: JsonPath {
+                            path: vec![JsonPathElem::Dot {
+                                key: "c".to_owned(),
+                                quoted: false
+                            }]
+                        }
+                    }
+                }]
+            }
+        }
+    );
+
+    // unquoted object keys cannot start with a digit
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT a:42")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected variant object key name, found: 42"
+    );
 }
 
 #[test]

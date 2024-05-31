@@ -2055,6 +2055,34 @@ fn parse_array_subscript() {
 }
 
 #[test]
+fn parse_array_multi_subscript() {
+    let expr = pg_and_generic().verified_expr("make_array(1, 2, 3)[1:2][2]");
+    assert_eq!(
+        Expr::Subscript {
+            expr: Box::new(Expr::Subscript {
+                expr: Box::new(call(
+                    "make_array",
+                    vec![
+                        Expr::Value(number("1")),
+                        Expr::Value(number("2")),
+                        Expr::Value(number("3"))
+                    ]
+                )),
+                subscript: Box::new(Subscript::Slice {
+                    lower_bound: Some(Expr::Value(number("1"))),
+                    upper_bound: Some(Expr::Value(number("2"))),
+                    stride: None,
+                }),
+            }),
+            subscript: Box::new(Subscript::Index {
+                index: Expr::Value(number("2")),
+            }),
+        },
+        expr,
+    );
+}
+
+#[test]
 fn parse_create_index() {
     let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2)";
     match pg().verified_stmt(sql) {

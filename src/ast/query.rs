@@ -1562,6 +1562,15 @@ impl fmt::Display for Join {
             ),
             JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation),
             JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation),
+            JoinOperator::AsOf {
+                match_condition,
+                constraint,
+            } => write!(
+                f,
+                " ASOF JOIN {} MATCH_CONDITION ({match_condition}){}",
+                self.relation,
+                suffix(constraint)
+            ),
         }
     }
 }
@@ -1587,6 +1596,14 @@ pub enum JoinOperator {
     CrossApply,
     /// OUTER APPLY (non-standard)
     OuterApply,
+    /// `ASOF` joins are used for joining tables containing time-series data
+    /// whose timestamp columns do not match exactly.
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/constructs/asof-join>.
+    AsOf {
+        match_condition: Expr,
+        constraint: JoinConstraint,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

@@ -240,6 +240,18 @@ pub enum BinaryOperator {
     /// See [CREATE OPERATOR](https://www.postgresql.org/docs/current/sql-createoperator.html)
     /// for more information.
     PGCustomBinaryOperator(Vec<String>),
+    /// PGroonga Full text search by a keyword operator, e.g. `a &@ b` (PGroonga-specific. See <https://pgroonga.github.io/reference/>)
+    PGroongaFullTextSearch,
+    /// PGroonga Full text search by easy to use query language operator, e.g. `a &@~ b` (PGroonga-specific. See <https://pgroonga.github.io/reference/>)
+    PGroongaEasyQuerySearch,
+    /// PGroonga Similar search operator, e.g. `a &@* b` (PGroonga-specific. See <https://pgroonga.github.io/reference/>)
+    PGroongaSimilarSearch,
+    /// PGroonga Advanced search by ECMAScript like query language operator, e.g. `a &` b` (PGroonga-specific. See <https://pgroonga.github.io/reference/>)
+    PGroongaAdvancedSearch,
+    /// PGroonga Full text search by an array of keywords operator, e.g. `a &@| b` (PGroonga-specific. See <https://pgroonga.github.io/reference/>)
+    PGroongaArrayKeywordSearch,
+    /// PGroonga Full text search by an array of queries in easy to use query language operator, e.g. `a &@~| b` (PGroonga-specific. See <https://pgroonga.github.io/reference/>)
+    PGroongaArrayQuerySearch,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -295,7 +307,13 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::QuestionPipe => f.write_str("?|"),
             BinaryOperator::PGCustomBinaryOperator(idents) => {
                 write!(f, "OPERATOR({})", display_separated(idents, "."))
-            }
+            },
+            BinaryOperator::PGroongaFullTextSearch => f.write_str("&@"),
+            BinaryOperator::PGroongaEasyQuerySearch => f.write_str("&@~"),
+            BinaryOperator::PGroongaSimilarSearch => f.write_str("&@*"),
+            BinaryOperator::PGroongaAdvancedSearch => f.write_str("&`"),
+            BinaryOperator::PGroongaArrayKeywordSearch => f.write_str("&@|"),
+            BinaryOperator::PGroongaArrayQuerySearch => f.write_str("&@~|"),
         }
     }
 }

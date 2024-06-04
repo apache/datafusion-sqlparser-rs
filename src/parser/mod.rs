@@ -2276,7 +2276,7 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/map
-    fn parse_click_house_map(&mut self) -> Result<(DataType, DataType), ParserError> {
+    fn parse_click_house_map_def(&mut self) -> Result<(DataType, DataType), ParserError> {
         self.expect_keyword(Keyword::MAP)?;
         self.expect_token(&Token::LParen)?;
         let key_data_type = self.parse_data_type()?;
@@ -2294,7 +2294,7 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
-    fn parse_click_house_tuple(&mut self) -> Result<Vec<StructField>, ParserError> {
+    fn parse_click_house_tuple_def(&mut self) -> Result<Vec<StructField>, ParserError> {
         self.expect_keyword(Keyword::TUPLE)?;
         self.expect_token(&Token::LParen)?;
         let mut field_defs = vec![];
@@ -6840,15 +6840,11 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::INT8 => {
-                    if dialect_of!(self is ClickHouseDialect) {
-                        Ok(DataType::Int8(None))
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedInt8(optional_precision?))
                     } else {
-                        let optional_precision = self.parse_optional_precision();
-                        if self.parse_keyword(Keyword::UNSIGNED) {
-                            Ok(DataType::UnsignedInt8(optional_precision?))
-                        } else {
-                            Ok(DataType::Int8(optional_precision?))
-                        }
+                        Ok(DataType::Int8(optional_precision?))
                     }
                 }
                 Keyword::INT16 => Ok(DataType::Int16),
@@ -7018,7 +7014,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::MAP if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
                     self.prev_token();
-                    let (key_data_type, value_data_type) = self.parse_click_house_map()?;
+                    let (key_data_type, value_data_type) = self.parse_click_house_map_def()?;
                     Ok(DataType::Map(
                         Box::new(key_data_type),
                         Box::new(value_data_type),
@@ -7032,7 +7028,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::TUPLE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
                     self.prev_token();
-                    let field_defs = self.parse_click_house_tuple()?;
+                    let field_defs = self.parse_click_house_tuple_def()?;
                     Ok(DataType::Tuple(field_defs))
                 }
                 _ => {

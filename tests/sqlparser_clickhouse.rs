@@ -409,20 +409,12 @@ fn parse_create_table_with_nested_data_types() {
 
 #[test]
 fn parse_create_table_with_primary_key() {
-    match clickhouse_and_generic().one_statement_parses_to(
-        concat!(
-            r#"CREATE TABLE db.table (`i` Int, `k` Int)"#,
-            " ENGINE=SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')",
-            " PRIMARY KEY tuple(i)",
-            " ORDER BY tuple(i)",
-        ),
-        concat!(
-            r#"CREATE TABLE db.table (`i` INT, `k` INT)"#,
-            " ENGINE=SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')",
-            " PRIMARY KEY tuple(i)",
-            " ORDER BY tuple(i)",
-        ),
-    ) {
+    match clickhouse_and_generic().verified_stmt(concat!(
+        r#"CREATE TABLE db.table (`i` INT, `k` INT)"#,
+        " ENGINE=SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')",
+        " PRIMARY KEY tuple(i)",
+        " ORDER BY tuple(i)",
+    )) {
         Statement::CreateTable {
             name,
             columns,

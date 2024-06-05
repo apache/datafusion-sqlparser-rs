@@ -290,9 +290,17 @@ impl Display for CreateTable {
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE={engine}")?;
         }
-        if let Some(comment) = &self.comment {
-            write!(f, " COMMENT '{comment}'")?;
+        if let Some(comment_def) = &self.comment {
+            match comment_def {
+                CommentDef::WithEq(comment) => {
+                    write!(f, " COMMENT = '{comment}'")?;
+                }
+                CommentDef::WithoutEq(comment) => {
+                    write!(f, " COMMENT '{comment}'")?;
+                }
+            }
         }
+
         if let Some(auto_increment_offset) = self.auto_increment_offset {
             write!(f, " AUTO_INCREMENT {auto_increment_offset}")?;
         }

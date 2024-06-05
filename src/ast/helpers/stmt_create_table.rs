@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+use super::super::dml::CreateTable;
 use crate::ast::{
     ColumnDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit,
     Query, SqlOption, Statement, TableConstraint,
@@ -263,7 +264,7 @@ impl CreateTableBuilder {
     }
 
     pub fn build(self) -> Statement {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             or_replace: self.or_replace,
             temporary: self.temporary,
             external: self.external,
@@ -295,7 +296,7 @@ impl CreateTableBuilder {
             cluster_by: self.cluster_by,
             options: self.options,
             strict: self.strict,
-        }
+        })
     }
 }
 
@@ -306,7 +307,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
     // ownership.
     fn try_from(stmt: Statement) -> Result<Self, Self::Error> {
         match stmt {
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTable {
                 or_replace,
                 temporary,
                 external,
@@ -338,7 +339,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 cluster_by,
                 options,
                 strict,
-            } => Ok(Self {
+            }) => Ok(Self {
                 or_replace,
                 temporary,
                 external,

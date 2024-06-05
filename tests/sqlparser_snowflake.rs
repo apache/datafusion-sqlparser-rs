@@ -33,7 +33,7 @@ use pretty_assertions::assert_eq;
 fn test_snowflake_create_table() {
     let sql = "CREATE TABLE _my_$table (am00unt number)";
     match snowflake_and_generic().verified_stmt(sql) {
-        Statement::CreateTable { name, .. } => {
+        Statement::CreateTable(CreateTable { name, .. }) => {
             assert_eq!("_my_$table", name.to_string());
         }
         _ => unreachable!(),
@@ -44,9 +44,9 @@ fn test_snowflake_create_table() {
 fn test_snowflake_create_transient_table() {
     let sql = "CREATE TRANSIENT TABLE CUSTOMER (id INT, name VARCHAR(255))";
     match snowflake_and_generic().verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name, transient, ..
-        } => {
+        }) => {
             assert_eq!("CUSTOMER", name.to_string());
             assert!(transient)
         }

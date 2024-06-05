@@ -354,7 +354,7 @@ fn parse_create_view_with_unquoted_hyphen() {
 fn parse_create_table_with_unquoted_hyphen() {
     let sql = "CREATE TABLE my-pro-ject.mydataset.mytable (x INT64)";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(
                 name,
                 ObjectName(vec![
@@ -388,14 +388,14 @@ fn parse_create_table_with_options() {
         r#"OPTIONS(partition_expiration_days = 1, description = "table option description")"#
     );
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             partition_by,
             cluster_by,
             options,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 name,
                 ObjectName(vec!["mydataset".into(), "newtable".into()])
@@ -477,7 +477,7 @@ fn parse_create_table_with_options() {
 fn parse_nested_data_types() {
     let sql = "CREATE TABLE table (x STRUCT<a ARRAY<INT64>, b BYTES(42)>, y ARRAY<STRUCT<INT64>>)";
     match bigquery_and_generic().one_statement_parses_to(sql, sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name, ObjectName(vec!["table".into()]));
             assert_eq!(
                 columns,

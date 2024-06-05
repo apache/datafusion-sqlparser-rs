@@ -4963,7 +4963,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::CreateIndex {
+        Ok(Statement::CreateIndex(CreateIndex {
             name: index_name,
             table_name,
             using,
@@ -4974,7 +4974,7 @@ impl<'a> Parser<'a> {
             include,
             nulls_distinct,
             predicate,
-        })
+        }))
     }
 
     pub fn parse_create_extension(&mut self) -> Result<Statement, ParserError> {

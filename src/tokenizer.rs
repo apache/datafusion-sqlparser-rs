@@ -1078,9 +1078,9 @@ impl<'a> Tokenizer<'a> {
                 '>' => {
                     chars.next(); // consume
                     match chars.peek() {
-                        Some('=') => self.consume_and_return(chars, Token::GtEq),
-                        Some('>') => self.consume_and_return(chars, Token::ShiftRight),
-                        _ => Ok(Some(Token::Gt)),
+                        Some('=') => self.consume_for_binop(chars, ">=", Token::GtEq),
+                        Some('>') => self.consume_for_binop(chars, ">>", Token::ShiftRight),
+                        _ => self.start_binop(chars, ">", Token::Gt),
                     }
                 }
                 ':' => {

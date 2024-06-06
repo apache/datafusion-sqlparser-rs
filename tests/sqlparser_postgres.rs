@@ -1827,6 +1827,27 @@ fn parse_pg_custom_binary_ops() {
         "#=", // Replace fields with matching values from hstore
         // ranges
         "-|-", // Is adjacent to
+        // pg_similarity
+        "~++", // L1 distance
+        "~##", // Cosine Distance
+        "~-~", // Dice Coefficient
+        "~!!", // Euclidean Distance
+        "~@~", // Hamming Distance
+        "~??", // Jaccard Coefficient
+        "~%%", // Jaro Distance
+        "~@@", // Jaro-Winkler Distance
+        "~==", // Levenshtein Distance
+        "~^^", // Matching Coefficient
+        "~||", // Monge-Elkan Coefficient
+        "~#~", // Needleman-Wunsch Coefficient
+        "~**", // Overlap Coefficient
+        "~~~", // Q-Gram Distance
+        "~=~", // Smith-Waterman Coefficient
+        "~!~", // Smith-Waterman-Gotoh Coefficient
+        "~*~", // Soundex Distance
+        // soundex_operator
+        ">@@<", // Soundex matches
+        "<@@>", // Soundex doesn't match
     ];
     for op in &operators {
         test_operator(op, &pg(), BinaryOperator::Custom(op.to_string()));

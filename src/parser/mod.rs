@@ -2365,7 +2365,7 @@ impl<'a> Parser<'a> {
             Token::Question => Some(BinaryOperator::Question),
             Token::QuestionAnd => Some(BinaryOperator::QuestionAnd),
             Token::QuestionPipe => Some(BinaryOperator::QuestionPipe),
-            Token::CustomBinaryOperator(s) => Some(BinaryOperator::Custom(std::mem::take(s))),
+            Token::CustomBinaryOperator(s) => Some(BinaryOperator::Custom(core::mem::take(s))),
 
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),

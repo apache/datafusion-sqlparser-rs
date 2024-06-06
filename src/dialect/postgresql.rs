@@ -40,7 +40,7 @@ impl Dialect for PostgreSqlDialect {
         ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'
     }
 
-    /// See https://www.postgresql.org/docs/current/sql-createoperator.html
+    /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>
     fn is_custom_operator_part(&self, ch: char) -> bool {
         matches!(
             ch,

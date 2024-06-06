@@ -1008,28 +1008,24 @@ impl<'a> Tokenizer<'a> {
                         Some(sch) if self.dialect.is_identifier_start('%') => {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
-                        _ => self.parse_custom_operator_or(chars, "%", Token::Mod),
+                        _ => self.start_binop(chars, "%", Token::Mod),
                     }
                 }
                 '|' => {
                     chars.next(); // consume the '|'
                     match chars.peek() {
-                        Some('/') => {
-                            chars.next(); // consume the '/'
-                            self.parse_custom_operator_or(chars, "|/", Token::PGSquareRoot)
-                        }
+                        Some('/') => self.consume_for_binop(chars, "|/", Token::PGSquareRoot),
                         Some('|') => {
                             chars.next(); // consume the second '|'
                             match chars.peek() {
                                 Some('/') => {
-                                    chars.next();
-                                    self.parse_custom_operator_or(chars, "|", Token::PGCubeRoot)
+                                    self.consume_for_binop(chars, "||/", Token::PGCubeRoot)
                                 }
-                                _ => self.parse_custom_operator_or(chars, "|", Token::StringConcat),
+                                _ => self.start_binop(chars, "||", Token::StringConcat),
                             }
                         }
                         // Bitshift '|' operator
-                        _ => self.parse_custom_operator_or(chars, "|", Token::Pipe),
+                        _ => self.start_binop(chars, "|", Token::Pipe),
                     }
                 }
                 '=' => {
@@ -1072,26 +1068,14 @@ impl<'a> Tokenizer<'a> {
                         Some('=') => {
                             chars.next();
                             match chars.peek() {
-                                Some('>') => {
-                                    chars.next();
-                                    self.parse_custom_operator_or(chars, "<=>", Token::Spaceship)
-                                }
-                                _ => self.parse_custom_operator_or(chars, "<=", Token::LtEq),
+                                Some('>') => self.consume_for_binop(chars, "<=>", Token::Spaceship),
+                                _ => self.start_binop(chars, "<=", Token::LtEq),
                             }
                         }
-                        Some('>') => {
-                            chars.next();
-                            self.parse_custom_operator_or(chars, "<>", Token::Neq)
-                        }
-                        Some('<') => {
-                            chars.next();
-                            self.parse_custom_operator_or(chars, "<<", Token::ShiftLeft)
-                        }
-                        Some('@') => {
-                            chars.next();
-                            self.parse_custom_operator_or(chars, "<@", Token::ArrowAt)
-                        }
-                        _ => self.parse_custom_operator_or(chars, "<", Token::Lt),
+                        Some('>') => self.consume_for_binop(chars, "<>", Token::Neq),
+                        Some('<') => self.consume_for_binop(chars, "<<", Token::ShiftLeft),
+                        Some('@') => self.consume_for_binop(chars, "<@", Token::ArrowAt),
+                        _ => self.start_binop(chars, "<", Token::Lt),
                     }
                 }
                 '>' => {
@@ -1119,10 +1103,10 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('&') => {
                             chars.next(); // consume the second '&'
-                            self.parse_custom_operator_or(chars, "&&", Token::Overlap)
+                            self.start_binop(chars, "&&", Token::Overlap)
                         }
                         // Bitshift '&' operator
-                        _ => self.parse_custom_operator_or(chars, "&", Token::Ampersand),
+                        _ => self.start_binop(chars, "&", Token::Ampersand),
                     }
                 }
                 '^' => {
@@ -1145,53 +1129,37 @@ impl<'a> Tokenizer<'a> {
                 '~' => {
                     chars.next(); // consume
                     match chars.peek() {
-                        Some('*') => {
-                            chars.next();
-                            self.parse_custom_operator_or(chars, "~*", Token::TildeAsterisk)
-                        }
+                        Some('*') => self.consume_for_binop(chars, "~*", Token::TildeAsterisk),
                         Some('~') => {
                             chars.next();
                             match chars.peek() {
                                 Some('*') => {
-                                    chars.next();
-                                    self.parse_custom_operator_or(
-                                        chars,
-                                        "~~*",
-                                        Token::DoubleTildeAsterisk,
-                                    )
+                                    self.consume_for_binop(chars, "~~*", Token::DoubleTildeAsterisk)
                                 }
-                                _ => self.parse_custom_operator_or(chars, "~~", Token::DoubleTilde),
+                                _ => self.start_binop(chars, "~~", Token::DoubleTilde),
                             }
                         }
-                        _ => self.parse_custom_operator_or(chars, "~", Token::Tilde),
+                        _ => self.start_binop(chars, "~", Token::Tilde),
                     }
                 }
                 '#' => {
                     chars.next();
                     match chars.peek() {
-                        Some('-') => {
-                            chars.next();
-                            self.parse_custom_operator_or(chars, "#-", Token::HashMinus)
-                        }
+                        Some('-') => self.consume_for_binop(chars, "#-", Token::HashMinus),
                         Some('>') => {
                             chars.next();
                             match chars.peek() {
                                 Some('>') => {
-                                    chars.next();
-                                    self.parse_custom_operator_or(
-                                        chars,
-                                        "#>>",
-                                        Token::HashLongArrow,
-                                    )
+                                    self.consume_for_binop(chars, "#>>", Token::HashLongArrow)
                                 }
-                                _ => self.parse_custom_operator_or(chars, "#>", Token::HashArrow),
+                                _ => self.start_binop(chars, "#>", Token::HashArrow),
                             }
                         }
                         Some(' ') => Ok(Some(Token::Sharp)),
                         Some(sch) if self.dialect.is_identifier_start('#') => {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
-                        _ => self.parse_custom_operator_or(chars, "#", Token::Sharp),
+                        _ => self.start_binop(chars, "#", Token::Sharp),
                     }
                 }
                 '@' => {
@@ -1247,13 +1215,25 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_custom_operator_or(
+    /// Consume the next character, then parse a custom binary operator. The next character should be included in the prefix
+    fn consume_for_binop(
         &self,
         chars: &mut State,
-        operator_start: &str,
+        prefix: &str,
         default: Token,
     ) -> Result<Option<Token>, TokenizerError> {
-        let mut s = operator_start.to_string();
+        chars.next(); // consume the first char
+        self.start_binop(chars, prefix, default)
+    }
+
+    /// parse a custom binary operator
+    fn start_binop(
+        &self,
+        chars: &mut State,
+        prefix: &str,
+        default: Token,
+    ) -> Result<Option<Token>, TokenizerError> {
+        let mut s = prefix.to_string();
         let mut is_custom_operator = false;
         while let Some(&ch) = chars.peek() {
             if !self.dialect.is_custom_operator_part(ch) {

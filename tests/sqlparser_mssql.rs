@@ -438,6 +438,12 @@ fn parse_for_json_expect_ast() {
 }
 
 #[test]
+fn parse_ampersand_arobase() {
+    // In SQL Server, a&@b means (a) & (@b), in PostgreSQL it means (a) &@ (b)
+    ms().expr_parses_to("a&@b", "a & @b");
+}
+
+#[test]
 fn parse_cast_varchar_max() {
     ms_and_generic().verified_expr("CAST('foo' AS VARCHAR(MAX))");
     ms_and_generic().verified_expr("CAST('foo' AS NVARCHAR(MAX))");

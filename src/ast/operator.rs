@@ -111,7 +111,7 @@ pub enum BinaryOperator {
     DuckIntegerDivide,
     /// MySQL [`DIV`](https://dev.mysql.com/doc/refman/8.0/en/arithmetic-functions.html) integer division
     MyIntegerDivide,
-    /// Support for custom operators (built by parsers outside this crate)
+    /// Support for custom operators (such as Postgres custom operators)
     Custom(String),
     /// Bitwise XOR, e.g. `a # b` (PostgreSQL-specific)
     PGBitwiseXor,

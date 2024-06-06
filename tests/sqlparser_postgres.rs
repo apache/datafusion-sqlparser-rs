@@ -1757,6 +1757,29 @@ fn parse_pg_returning() {
     };
 }
 
+fn test_operator(operator: &str, dialect: &TestedDialects, expected: BinaryOperator) {
+    let operator_tokens =
+        sqlparser::tokenizer::Tokenizer::new(&PostgreSqlDialect {}, &format!("a{operator}b"))
+            .tokenize()
+            .unwrap();
+    assert_eq!(
+        operator_tokens.len(),
+        3,
+        "binary op should be 3 tokens, not {operator_tokens:?}"
+    );
+    let expected_expr = Expr::BinaryOp {
+        left: Box::new(Expr::Identifier(Ident::new("a"))),
+        op: expected,
+        right: Box::new(Expr::Identifier(Ident::new("b"))),
+    };
+    let str_expr_canonical = format!("a {operator} b");
+    assert_eq!(expected_expr, dialect.verified_expr(&str_expr_canonical));
+    assert_eq!(
+        expected_expr,
+        dialect.expr_parses_to(&format!("a{operator}b"), &str_expr_canonical)
+    );
+}
+
 #[test]
 fn parse_pg_binary_ops() {
     let binary_ops = &[
@@ -1770,16 +1793,48 @@ fn parse_pg_binary_ops() {
     ];
 
     for (str_op, op, dialects) in binary_ops {
-        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
-        assert_eq!(
-            SelectItem::UnnamedExpr(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("a"))),
-                op: op.clone(),
-                right: Box::new(Expr::Identifier(Ident::new("b"))),
-            }),
-            select.projection[0]
-        );
+        test_operator(str_op, dialects, op.clone());
     }
+}
+
+#[test]
+fn parse_pg_custom_binary_ops() {
+    // Postgres supports declaring custom binary operators, using any character in the following set:
+    //  + - * / < > = ~ ! @ # % ^ & | ` ?
+
+    // Here, we test the ones used by common extensions
+    let operators = [
+        // PostGIS
+        "&&&",   // n-D bounding boxes intersect
+        "&<",    // (is strictly to the left of)
+        "&>",    // (is strictly to the right of)
+        "|=|",   //  distance between A and B trajectories at their closest point of approach
+        "<<#>>", // n-D distance between A and B bounding boxes
+        "|>>",   // A's bounding box is strictly above B's.
+        "~=",    // bounding box is the same
+        // PGroonga
+        "&@",   // Full text search by a keyword
+        "&@~",  // Full text search by easy to use query language
+        "&@*",  // Similar search
+        "&`",   // Advanced search by ECMAScript like query language
+        "&@|",  // Full text search by an array of keywords
+        "&@~|", //  Full text search by an array of queries in easy to use query language
+        // pgtrgm
+        "<<%", // second argument has a continuous extent of an ordered trigram set that matches word boundaries
+        "%>>", // commutator of <<%
+        "<<<->", // distance between arguments
+        // hstore
+        "#=", // Replace fields with matching values from hstore
+    ];
+    for op in &operators {
+        test_operator(op, &pg(), BinaryOperator::Custom(op.to_string()));
+    }
+}
+
+#[test]
+fn parse_ampersand_arobase() {
+    // In SQL Server, a&@b means (a) & (@b), in PostgreSQL it means (a) &@ (b)
+    pg().expr_parses_to("a&@b", "a &@ b");
 }
 
 #[test]

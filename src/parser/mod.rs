@@ -2300,9 +2300,8 @@ impl<'a> Parser<'a> {
             return infix;
         }
 
-        let tok = self.next_token();
-
-        let regular_binary_operator = match &tok.token {
+        let mut tok = self.next_token();
+        let regular_binary_operator = match &mut tok.token {
             Token::Spaceship => Some(BinaryOperator::Spaceship),
             Token::DoubleEq => Some(BinaryOperator::Eq),
             Token::Eq => Some(BinaryOperator::Eq),
@@ -2366,6 +2365,7 @@ impl<'a> Parser<'a> {
             Token::Question => Some(BinaryOperator::Question),
             Token::QuestionAnd => Some(BinaryOperator::QuestionAnd),
             Token::QuestionPipe => Some(BinaryOperator::QuestionPipe),
+            Token::CustomBinaryOperator(s) => Some(BinaryOperator::Custom(std::mem::take(s))),
 
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
@@ -2920,7 +2920,8 @@ impl<'a> Parser<'a> {
             | Token::AtAt
             | Token::Question
             | Token::QuestionAnd
-            | Token::QuestionPipe => Ok(Self::PG_OTHER_PREC),
+            | Token::QuestionPipe
+            | Token::CustomBinaryOperator(_) => Ok(Self::PG_OTHER_PREC),
             _ => Ok(0),
         }
     }

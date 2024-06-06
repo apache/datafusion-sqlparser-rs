@@ -1825,6 +1825,8 @@ fn parse_pg_custom_binary_ops() {
         "<<<->", // distance between arguments
         // hstore
         "#=", // Replace fields with matching values from hstore
+        // ranges
+        "-|-", // Is adjacent to
     ];
     for op in &operators {
         test_operator(op, &pg(), BinaryOperator::Custom(op.to_string()));

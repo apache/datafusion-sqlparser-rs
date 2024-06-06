@@ -966,15 +966,12 @@ impl<'a> Tokenizer<'a> {
                         Some('>') => {
                             chars.next();
                             match chars.peek() {
-                                Some('>') => {
-                                    chars.next();
-                                    Ok(Some(Token::LongArrow))
-                                }
-                                _ => Ok(Some(Token::Arrow)),
+                                Some('>') => self.consume_for_binop(chars, "->>", Token::LongArrow),
+                                _ => self.start_binop(chars, "->", Token::Arrow),
                             }
                         }
                         // a regular '-' operator
-                        _ => Ok(Some(Token::Minus)),
+                        _ => self.start_binop(chars, "-", Token::Minus),
                     }
                 }
                 '/' => {

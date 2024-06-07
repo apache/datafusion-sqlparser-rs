@@ -1240,7 +1240,9 @@ impl<'a> Tokenizer<'a> {
             chars.next();
         }
 
-        Ok(Some(custom.map(Token::CustomBinaryOperator).unwrap_or(default)))
+        Ok(Some(
+            custom.map(Token::CustomBinaryOperator).unwrap_or(default),
+        ))
     }
 
     /// Tokenize dollar preceded value (i.e: a string/placeholder)

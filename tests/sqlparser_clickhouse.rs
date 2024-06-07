@@ -245,7 +245,7 @@ fn parse_clickhouse_data_types() {
         .replace(" Float64", " FLOAT64");
 
     match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name, ObjectName(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -286,7 +286,7 @@ fn parse_create_table_with_nullable() {
     let canonical_sql = sql.replace("String", "STRING");
 
     match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name, ObjectName(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -335,7 +335,7 @@ fn parse_create_table_with_nested_data_types() {
     );
 
     match clickhouse().one_statement_parses_to(sql, "") {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name, ObjectName(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -415,14 +415,14 @@ fn parse_create_table_with_primary_key() {
         " PRIMARY KEY tuple(i)",
         " ORDER BY tuple(i)",
     )) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             engine,
             primary_key,
             order_by,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "db.table");
             assert_eq!(
                 vec![

@@ -1230,21 +1230,17 @@ impl<'a> Tokenizer<'a> {
         prefix: &str,
         default: Token,
     ) -> Result<Option<Token>, TokenizerError> {
-        let mut s = prefix.to_string();
-        let mut is_custom_operator = false;
+        let mut custom = None;
         while let Some(&ch) = chars.peek() {
             if !self.dialect.is_custom_operator_part(ch) {
                 break;
             }
-            s.push(ch);
-            is_custom_operator = true;
+
+            custom.get_or_insert_with(|| prefix.to_string()).push(ch);
             chars.next();
         }
-        if is_custom_operator {
-            Ok(Some(Token::CustomBinaryOperator(s)))
-        } else {
-            Ok(Some(default))
-        }
+
+        Ok(Some(custom.map(Token::CustomBinaryOperator).unwrap_or(default)))
     }
 
     /// Tokenize dollar preceded value (i.e: a string/placeholder)

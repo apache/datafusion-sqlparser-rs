@@ -5262,7 +5262,15 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::Eq)?;
             let next_token = self.next_token();
             match next_token.token {
-                Token::Word(w) => Some(w.value),
+                Token::Word(w) => {
+                    let name = w.value;
+                    let parameters = if self.peek_token() == Token::LParen {
+                        Some(self.parse_parenthesized_identifiers()?)
+                    } else {
+                        None
+                    };
+                    Some(TableEngine { name, parameters })
+                }
                 _ => self.expected("identifier", next_token)?,
             }
         } else {
@@ -5280,17 +5288,27 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // ClickHouse supports `PRIMARY KEY`, before `ORDER BY`
+        // https://clickhouse.com/docs/en/sql-reference/statements/create/table#primary-key
+        let primary_key = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY])
+        {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             if self.consume_token(&Token::LParen) {
                 let columns = if self.peek_token() != Token::RParen {
-                    self.parse_comma_separated(|p| p.parse_identifier(false))?
+                    self.parse_comma_separated(|p| p.parse_expr())?
                 } else {
                     vec![]
                 };
                 self.expect_token(&Token::RParen)?;
-                Some(columns)
+                Some(OneOrManyWithParens::Many(columns))
             } else {
-                Some(vec![self.parse_identifier(false)?])
+                Some(OneOrManyWithParens::One(self.parse_expr()?))
             }
         } else {
             None
@@ -5388,6 +5406,7 @@ impl<'a> Parser<'a> {
             .partition_by(big_query_config.partition_by)
             .cluster_by(big_query_config.cluster_by)
             .options(big_query_config.options)
+            .primary_key(primary_key)
             .strict(strict)
             .build())
     }
@@ -9041,7 +9060,7 @@ impl<'a> Parser<'a> {
             let partitions: Vec<Ident> = if dialect_of!(self is MySqlDialect | GenericDialect)
                 && self.parse_keyword(Keyword::PARTITION)
             {
-                self.parse_partitions()?
+                self.parse_parenthesized_identifiers()?
             } else {
                 vec![]
             };
@@ -10969,7 +10988,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_partitions(&mut self) -> Result<Vec<Ident>, ParserError> {
+    fn parse_parenthesized_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         self.expect_token(&Token::LParen)?;
         let partitions = self.parse_comma_separated(|p| p.parse_identifier(false))?;
         self.expect_token(&Token::RParen)?;

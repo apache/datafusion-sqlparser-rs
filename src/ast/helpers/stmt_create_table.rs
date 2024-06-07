@@ -10,7 +10,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use super::super::dml::CreateTable;
 use crate::ast::{
     ColumnDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit,
-    Query, SqlOption, Statement, TableConstraint,
+    OneOrManyWithParens, Query, SqlOption, Statement, TableConstraint, TableEngine,
 };
 use crate::parser::ParserError;
 
@@ -65,14 +65,15 @@ pub struct CreateTableBuilder {
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub engine: Option<String>,
+    pub engine: Option<TableEngine>,
     pub comment: Option<String>,
     pub auto_increment_offset: Option<u32>,
     pub default_charset: Option<String>,
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<String>,
-    pub order_by: Option<Vec<Ident>>,
+    pub primary_key: Option<Box<Expr>>,
+    pub order_by: Option<OneOrManyWithParens<Expr>>,
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<Vec<Ident>>,
     pub options: Option<Vec<SqlOption>>,
@@ -108,6 +109,7 @@ impl CreateTableBuilder {
             collation: None,
             on_commit: None,
             on_cluster: None,
+            primary_key: None,
             order_by: None,
             partition_by: None,
             cluster_by: None,
@@ -203,7 +205,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn engine(mut self, engine: Option<String>) -> Self {
+    pub fn engine(mut self, engine: Option<TableEngine>) -> Self {
         self.engine = engine;
         self
     }
@@ -238,7 +240,12 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn order_by(mut self, order_by: Option<Vec<Ident>>) -> Self {
+    pub fn primary_key(mut self, primary_key: Option<Box<Expr>>) -> Self {
+        self.primary_key = primary_key;
+        self
+    }
+
+    pub fn order_by(mut self, order_by: Option<OneOrManyWithParens<Expr>>) -> Self {
         self.order_by = order_by;
         self
     }
@@ -291,6 +298,7 @@ impl CreateTableBuilder {
             collation: self.collation,
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
+            primary_key: self.primary_key,
             order_by: self.order_by,
             partition_by: self.partition_by,
             cluster_by: self.cluster_by,
@@ -334,6 +342,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 collation,
                 on_commit,
                 on_cluster,
+                primary_key,
                 order_by,
                 partition_by,
                 cluster_by,
@@ -366,6 +375,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 collation,
                 on_commit,
                 on_cluster,
+                primary_key,
                 order_by,
                 partition_by,
                 cluster_by,

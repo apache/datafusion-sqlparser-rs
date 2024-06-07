@@ -24,8 +24,8 @@ pub use super::ddl::{ColumnDef, TableConstraint};
 use super::{
     display_comma_separated, display_separated, Expr, FileFormat, FromTable, HiveDistributionStyle,
     HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName,
-    OnCommit, OnInsert, OrderByExpr, Query, SelectItem, SqlOption, SqliteOnConflict,
-    TableWithJoins,
+    OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, SelectItem, SqlOption,
+    SqliteOnConflict, TableEngine, TableWithJoins,
 };
 
 /// CREATE INDEX statement.
@@ -73,7 +73,7 @@ pub struct CreateTable {
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub engine: Option<String>,
+    pub engine: Option<TableEngine>,
     pub comment: Option<String>,
     pub auto_increment_offset: Option<u32>,
     pub default_charset: Option<String>,
@@ -82,10 +82,13 @@ pub struct CreateTable {
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
     pub on_cluster: Option<String>,
+    /// ClickHouse "PRIMARY KEY " clause.
+    /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
+    pub primary_key: Option<Box<Expr>>,
     /// ClickHouse "ORDER BY " clause. Note that omitted ORDER BY is different
     /// than empty (represented as ()), the latter meaning "no sorting".
     /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
-    pub order_by: Option<Vec<Ident>>,
+    pub order_by: Option<OneOrManyWithParens<Expr>>,
     /// BigQuery: A partition expression for the table.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#partition_expression>
     pub partition_by: Option<Box<Expr>>,
@@ -263,8 +266,11 @@ impl Display for CreateTable {
         if let Some(auto_increment_offset) = self.auto_increment_offset {
             write!(f, " AUTO_INCREMENT {auto_increment_offset}")?;
         }
+        if let Some(primary_key) = &self.primary_key {
+            write!(f, " PRIMARY KEY {}", primary_key)?;
+        }
         if let Some(order_by) = &self.order_by {
-            write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
+            write!(f, " ORDER BY {}", order_by)?;
         }
         if let Some(partition_by) = self.partition_by.as_ref() {
             write!(f, " PARTITION BY {partition_by}")?;

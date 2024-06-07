@@ -6411,7 +6411,7 @@ impl Display for CommentDef {
 
 /// Helper to indicate if a collection should be wrapped by a symbol in the display form
 ///
-/// [`Display`] is implemented for every [Vec<T>] where `T: Display`.
+/// [`Display`] is implemented for every [`Vec<T>`] where `T: Display`.
 /// The string output is a comma separated list for the vec items
 ///
 /// # Examples

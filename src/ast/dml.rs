@@ -333,7 +333,7 @@ impl Display for CreateTable {
             write!(
                 f,
                 " ENABLE_SCHEMA_EVOLUTION={}",
-                is_enabled.to_string().to_uppercase()
+                if is_enabled { "TRUE" } else { "FALSE" }
             )?;
         }
 
@@ -341,7 +341,7 @@ impl Display for CreateTable {
             write!(
                 f,
                 " CHANGE_TRACKING={}",
-                is_enabled.to_string().to_uppercase()
+                if is_enabled { "TRUE" } else { "FALSE" }
             )?;
         }
 

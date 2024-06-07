@@ -305,7 +305,7 @@ impl<'a> Parser<'a> {
             state: ParserState::Normal,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
-            options: ParserOptions::default(),
+            options: ParserOptions::new().with_trailing_commas(dialect.supports_trailing_commas()),
         }
     }
 
@@ -3225,7 +3225,7 @@ impl<'a> Parser<'a> {
         // This pattern could be captured better with RAII type semantics, but it's quite a bit of
         // code to add for just one case, so we'll just do it manually here.
         let old_value = self.options.trailing_commas;
-        self.options.trailing_commas |= dialect_of!(self is BigQueryDialect | SnowflakeDialect);
+        self.options.trailing_commas |= self.dialect.supports_projection_trailing_commas();
 
         let ret = self.parse_comma_separated(|p| p.parse_select_item());
         self.options.trailing_commas = old_value;
@@ -5413,12 +5413,17 @@ impl<'a> Parser<'a> {
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
             }
+
             let comma = self.consume_token(&Token::Comma);
-            if self.consume_token(&Token::RParen) {
-                // allow a trailing comma, even though it's not in standard
-                break;
-            } else if !comma {
+            let rparen = self.peek_token().token == Token::RParen;
+
+            if !comma && !rparen {
                 return self.expected("',' or ')' after column definition", self.peek_token());
+            };
+
+            if rparen && (!comma || self.options.trailing_commas) {
+                let _ = self.consume_token(&Token::RParen);
+                break;
             }
         }
 
@@ -9411,6 +9416,9 @@ impl<'a> Parser<'a> {
                 with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
             }
         } else {
+            let old_value = self.options.trailing_commas;
+            self.options.trailing_commas = false;
+
             let (actions, err): (Vec<_>, Vec<_>) = self
                 .parse_comma_separated(Parser::parse_grant_permission)?
                 .into_iter()
@@ -9433,6 +9441,8 @@ impl<'a> Parser<'a> {
                     _ => Err(kw),
                 })
                 .partition(Result::is_ok);
+
+            self.options.trailing_commas = old_value;
 
             if !err.is_empty() {
                 let errors: Vec<Keyword> = err.into_iter().filter_map(|x| x.err()).collect();
@@ -9939,6 +9949,12 @@ impl<'a> Parser<'a> {
             Expr::Wildcard => Ok(SelectItem::Wildcard(
                 self.parse_wildcard_additional_options()?,
             )),
+            Expr::Identifier(v) if v.value.to_lowercase() == "from" => {
+                parser_err!(
+                    format!("Expected an expression, found: {}", v),
+                    self.peek_token().location
+                )
+            }
             expr => self
                 .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
                 .map(|alias| match alias {

@@ -3552,8 +3552,13 @@ fn parse_create_table_clone() {
 
 #[test]
 fn parse_create_table_trailing_comma() {
-    let sql = "CREATE TABLE foo (bar int,)";
-    all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar INT)");
+    let dialect = TestedDialects {
+        dialects: vec![Box::new(DuckDbDialect {})],
+        options: None,
+    };
+
+    let sql = "CREATE TABLE foo (bar int,);";
+    dialect.one_statement_parses_to(sql, "CREATE TABLE foo (bar INT)");
 }
 
 #[test]
@@ -4418,7 +4423,7 @@ fn parse_window_clause() {
     ORDER BY C3";
     verified_only_select(sql);
 
-    let sql = "SELECT from mytable WINDOW window1 AS window2";
+    let sql = "SELECT * from mytable WINDOW window1 AS window2";
     let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
     let res = dialects.parse_sql_statements(sql);
     assert_eq!(
@@ -8846,9 +8851,11 @@ fn parse_non_latin_identifiers() {
 
 #[test]
 fn parse_trailing_comma() {
+    // At the moment, Duck DB is the only dialect that allows
+    // trailing commas anywhere in the query
     let trailing_commas = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
-        options: Some(ParserOptions::new().with_trailing_commas(true)),
+        dialects: vec![Box::new(DuckDbDialect {})],
+        options: None,
     };
 
     trailing_commas.one_statement_parses_to(
@@ -8866,11 +8873,74 @@ fn parse_trailing_comma() {
         "SELECT DISTINCT ON (album_id) name FROM track",
     );
 
+    trailing_commas.one_statement_parses_to(
+        "CREATE TABLE employees (name text, age int,)",
+        "CREATE TABLE employees (name TEXT, age INT)",
+    );
+
     trailing_commas.verified_stmt("SELECT album_id, name FROM track");
 
     trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
 
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
+
+    // doesn't allow any trailing commas
+    let trailing_commas = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: None,
+    };
+
+    assert_eq!(
+        trailing_commas
+            .parse_sql_statements("SELECT name, age, from employees;")
+            .unwrap_err(),
+        ParserError::ParserError("Expected an expression, found: from".to_string())
+    );
+
+    assert_eq!(
+        trailing_commas
+            .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected column name or constraint definition, found: )".to_string()
+        )
+    );
+}
+
+#[test]
+fn parse_projection_trailing_comma() {
+    // Some dialects allow trailing commas only in the projection
+    let trailing_commas = TestedDialects {
+        dialects: vec![Box::new(SnowflakeDialect {}), Box::new(BigQueryDialect {})],
+        options: None,
+    };
+
+    trailing_commas.one_statement_parses_to(
+        "SELECT album_id, name, FROM track",
+        "SELECT album_id, name FROM track",
+    );
+
+    trailing_commas.verified_stmt("SELECT album_id, name FROM track");
+
+    trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
+
+    trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
+
+    assert_eq!(
+        trailing_commas
+            .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
+            .unwrap_err(),
+        ParserError::ParserError("Expected an expression:, found: EOF".to_string())
+    );
+
+    assert_eq!(
+        trailing_commas
+            .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected column name or constraint definition, found: )".to_string()
+        ),
+    );
 }
 
 #[test]

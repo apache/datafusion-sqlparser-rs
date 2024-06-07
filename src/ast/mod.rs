@@ -273,7 +273,7 @@ impl fmt::Display for Interval {
     }
 }
 
-/// A field definition within a struct.
+/// A field definition within a struct
 ///
 /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

@@ -508,6 +508,7 @@ define_keywords!(
     OVERLAY,
     OVERWRITE,
     OWNED,
+    OWNER,
     PARALLEL,
     PARAMETER,
     PARQUET,

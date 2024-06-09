@@ -157,6 +157,11 @@ pub enum AlterTableOperation {
     SwapWith { table_name: ObjectName },
     /// 'SET TBLPROPERTIES ( { property_key [ = ] property_val } [, ...] )'
     SetTblProperties { table_properties: Vec<SqlOption> },
+
+    /// `OWNER TO <new_role>`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    OwnerTo { new_role:  Ident },
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -321,6 +326,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::SwapWith { table_name } => {
                 write!(f, "SWAP WITH {table_name}")
+            }
+            AlterTableOperation::OwnerTo { new_role } => {
+                write!(f, "OWNER TO {new_role}")
             }
             AlterTableOperation::SetTblProperties { table_properties } => {
                 write!(

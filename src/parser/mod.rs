@@ -6274,6 +6274,9 @@ impl<'a> Parser<'a> {
             self.expect_keyword(Keyword::WITH)?;
             let table_name = self.parse_object_name(false)?;
             AlterTableOperation::SwapWith { table_name }
+        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+                let new_role = self.parse_identifier(false)?;
+                AlterTableOperation::OwnerTo { new_role: new_role }
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

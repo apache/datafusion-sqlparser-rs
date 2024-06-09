@@ -6274,7 +6274,7 @@ impl<'a> Parser<'a> {
             self.expect_keyword(Keyword::WITH)?;
             let table_name = self.parse_object_name(false)?;
             AlterTableOperation::SwapWith { table_name }
-        } else if self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
+        } else if dialect_of!(self is PostgreSqlDialect) && self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
                 let new_role = self.parse_identifier(false)?;
                 AlterTableOperation::OwnerTo { new_role: new_role }
         } else {

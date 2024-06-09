@@ -714,6 +714,33 @@ fn parse_alter_table_add_columns() {
 }
 
 #[test]
+fn parse_alter_table_owner_to() {
+    match pg().verified_stmt("ALTER TABLE tab OWNER TO new_owner") {
+        Statement::AlterTable {
+            name,
+            if_exists: _,
+            only: _,
+            operations,
+            location: _,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::OwnerTo {
+                        new_role: Ident {
+                            value: "new_owner".to_string(),
+                            quote_style: None,
+                        }
+                    },
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);

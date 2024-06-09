@@ -6338,6 +6338,117 @@ impl Display for TableEngine {
     }
 }
 
+/// Snowflake `WITH ROW ACCESS POLICY policy_name ON (identifier, ...)`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+/// <https://docs.snowflake.com/en/user-guide/security-row-intro>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RowAccessPolicy {
+    pub policy: ObjectName,
+    pub on: Vec<Ident>,
+}
+
+impl RowAccessPolicy {
+    pub fn new(policy: ObjectName, on: Vec<Ident>) -> Self {
+        Self { policy, on }
+    }
+}
+
+impl Display for RowAccessPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WITH ROW ACCESS POLICY {} ON ({})",
+            self.policy,
+            display_comma_separated(self.on.as_slice())
+        )
+    }
+}
+
+/// Snowflake `WITH TAG ( tag_name = '<tag_value>', ...)`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Tag {
+    pub key: Ident,
+    pub value: String,
+}
+
+impl Tag {
+    pub fn new(key: Ident, value: String) -> Self {
+        Self { key, value }
+    }
+}
+
+impl Display for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}='{}'", self.key, self.value)
+    }
+}
+
+/// Helper to indicate if a comment includes the `=` in the display form
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CommentDef {
+    /// Includes `=` when printing the comment, as `COMMENT = 'comment'`
+    /// Does not include `=` when printing the comment, as `COMMENT 'comment'`
+    WithEq(String),
+    WithoutEq(String),
+}
+
+impl Display for CommentDef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CommentDef::WithEq(comment) | CommentDef::WithoutEq(comment) => write!(f, "{comment}"),
+        }
+    }
+}
+
+/// Helper to indicate if a collection should be wrapped by a symbol in the display form
+///
+/// [`Display`] is implemented for every [`Vec<T>`] where `T: Display`.
+/// The string output is a comma separated list for the vec items
+///
+/// # Examples
+/// ```
+/// # use sqlparser::ast::WrappedCollection;
+/// let items = WrappedCollection::Parentheses(vec!["one", "two", "three"]);
+/// assert_eq!("(one, two, three)", items.to_string());
+///
+/// let items = WrappedCollection::NoWrapping(vec!["one", "two", "three"]);
+/// assert_eq!("one, two, three", items.to_string());
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WrappedCollection<T> {
+    /// Print the collection without wrapping symbols, as `item, item, item`
+    NoWrapping(T),
+    /// Wraps the collection in Parentheses, as `(item, item, item)`
+    Parentheses(T),
+}
+
+impl<T> Display for WrappedCollection<Vec<T>>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WrappedCollection::NoWrapping(inner) => {
+                write!(f, "{}", display_comma_separated(inner.as_slice()))
+            }
+            WrappedCollection::Parentheses(inner) => {
+                write!(f, "({})", display_comma_separated(inner.as_slice()))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

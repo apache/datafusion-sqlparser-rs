@@ -41,6 +41,279 @@ fn test_snowflake_create_table() {
 }
 
 #[test]
+fn test_snowflake_create_or_replace_table() {
+    let sql = "CREATE OR REPLACE TABLE my_table (a number)";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name, or_replace, ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert!(or_replace);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_or_replace_table_copy_grants() {
+    let sql = "CREATE OR REPLACE TABLE my_table (a number) COPY GRANTS";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            or_replace,
+            copy_grants,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert!(or_replace);
+            assert!(copy_grants);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_or_replace_table_copy_grants_at_end() {
+    let sql = "CREATE OR REPLACE TABLE my_table COPY GRANTS (a number) ";
+    let parsed = "CREATE OR REPLACE TABLE my_table (a number) COPY GRANTS";
+    match snowflake().one_statement_parses_to(sql, parsed) {
+        Statement::CreateTable(CreateTable {
+            name,
+            or_replace,
+            copy_grants,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert!(or_replace);
+            assert!(copy_grants);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_or_replace_table_copy_grants_cta() {
+    let sql = "CREATE OR REPLACE TABLE my_table COPY GRANTS AS SELECT 1 AS a";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            or_replace,
+            copy_grants,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert!(or_replace);
+            assert!(copy_grants);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_enable_schema_evolution() {
+    let sql = "CREATE TABLE my_table (a number) ENABLE_SCHEMA_EVOLUTION=TRUE";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            enable_schema_evolution,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some(true), enable_schema_evolution);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_change_tracking() {
+    let sql = "CREATE TABLE my_table (a number) CHANGE_TRACKING=TRUE";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            change_tracking,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some(true), change_tracking);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_data_retention_time_in_days() {
+    let sql = "CREATE TABLE my_table (a number) DATA_RETENTION_TIME_IN_DAYS=5";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            data_retention_time_in_days,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some(5), data_retention_time_in_days);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_max_data_extension_time_in_days() {
+    let sql = "CREATE TABLE my_table (a number) MAX_DATA_EXTENSION_TIME_IN_DAYS=5";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            max_data_extension_time_in_days,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some(5), max_data_extension_time_in_days);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_with_aggregation_policy() {
+    match snowflake()
+        .verified_stmt("CREATE TABLE my_table (a number) WITH AGGREGATION POLICY policy_name")
+    {
+        Statement::CreateTable(CreateTable {
+            name,
+            with_aggregation_policy,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some("policy_name".to_string()),
+                with_aggregation_policy.map(|name| name.to_string())
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake()
+        .parse_sql_statements("CREATE TABLE my_table (a number)  AGGREGATION POLICY policy_name")
+        .unwrap()
+        .pop()
+        .unwrap()
+    {
+        Statement::CreateTable(CreateTable {
+            name,
+            with_aggregation_policy,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some("policy_name".to_string()),
+                with_aggregation_policy.map(|name| name.to_string())
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_with_row_access_policy() {
+    match snowflake().verified_stmt(
+        "CREATE TABLE my_table (a number, b number) WITH ROW ACCESS POLICY policy_name ON (a)",
+    ) {
+        Statement::CreateTable(CreateTable {
+            name,
+            with_row_access_policy,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some("WITH ROW ACCESS POLICY policy_name ON (a)".to_string()),
+                with_row_access_policy.map(|policy| policy.to_string())
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake()
+        .parse_sql_statements(
+            "CREATE TABLE my_table (a number, b number) ROW ACCESS POLICY policy_name ON (a)",
+        )
+        .unwrap()
+        .pop()
+        .unwrap()
+    {
+        Statement::CreateTable(CreateTable {
+            name,
+            with_row_access_policy,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some("WITH ROW ACCESS POLICY policy_name ON (a)".to_string()),
+                with_row_access_policy.map(|policy| policy.to_string())
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_with_tag() {
+    match snowflake()
+        .verified_stmt("CREATE TABLE my_table (a number) WITH TAG (A='TAG A', B='TAG B')")
+    {
+        Statement::CreateTable(CreateTable {
+            name, with_tags, ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some(vec![
+                    Tag::new("A".into(), "TAG A".to_string()),
+                    Tag::new("B".into(), "TAG B".to_string())
+                ]),
+                with_tags
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake()
+        .parse_sql_statements("CREATE TABLE my_table (a number) TAG (A='TAG A', B='TAG B')")
+        .unwrap()
+        .pop()
+        .unwrap()
+    {
+        Statement::CreateTable(CreateTable {
+            name, with_tags, ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some(vec![
+                    Tag::new("A".into(), "TAG A".to_string()),
+                    Tag::new("B".into(), "TAG B".to_string())
+                ]),
+                with_tags
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_default_ddl_collation() {
+    let sql = "CREATE TABLE my_table (a number) DEFAULT_DDL_COLLATION='de'";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            default_ddl_collation,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some("de".to_string()), default_ddl_collation);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_snowflake_create_transient_table() {
     let sql = "CREATE TRANSIENT TABLE CUSTOMER (id INT, name VARCHAR(255))";
     match snowflake_and_generic().verified_stmt(sql) {
@@ -52,6 +325,162 @@ fn test_snowflake_create_transient_table() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_snowflake_create_table_column_comment() {
+    let sql = "CREATE TABLE my_table (a STRING COMMENT 'some comment')";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                vec![ColumnDef {
+                    name: "a".into(),
+                    data_type: DataType::String(None),
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Comment("some comment".to_string())
+                    }],
+                    collation: None
+                }],
+                columns
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_local_table() {
+    match snowflake().verified_stmt("CREATE TABLE my_table (a INT)") {
+        Statement::CreateTable(CreateTable { name, global, .. }) => {
+            assert_eq!("my_table", name.to_string());
+            assert!(global.is_none())
+        }
+        _ => unreachable!(),
+    }
+
+    match snowflake().verified_stmt("CREATE LOCAL TABLE my_table (a INT)") {
+        Statement::CreateTable(CreateTable { name, global, .. }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some(false), global)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_global_table() {
+    match snowflake().verified_stmt("CREATE GLOBAL TABLE my_table (a INT)") {
+        Statement::CreateTable(CreateTable { name, global, .. }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(Some(true), global)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_invalid_local_global_table() {
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE LOCAL GLOBAL TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an SQL statement, found: LOCAL".to_string()
+        ))
+    );
+
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE GLOBAL LOCAL TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an SQL statement, found: GLOBAL".to_string()
+        ))
+    );
+}
+
+#[test]
+fn test_snowflake_create_invalid_temporal_table() {
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TEMP TEMPORARY TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an object type after CREATE, found: TEMPORARY".to_string()
+        ))
+    );
+
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TEMP VOLATILE TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an object type after CREATE, found: VOLATILE".to_string()
+        ))
+    );
+
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TEMP TRANSIENT TABLE my_table (a INT)"),
+        Err(ParserError::ParserError(
+            "Expected an object type after CREATE, found: TRANSIENT".to_string()
+        ))
+    );
+}
+
+#[test]
+fn test_snowflake_create_table_if_not_exists() {
+    match snowflake().verified_stmt("CREATE TABLE IF NOT EXISTS my_table (a INT)") {
+        Statement::CreateTable(CreateTable {
+            name,
+            if_not_exists,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert!(if_not_exists)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_cluster_by() {
+    match snowflake().verified_stmt("CREATE TABLE my_table (a INT) CLUSTER BY (a, b)") {
+        Statement::CreateTable(CreateTable {
+            name, cluster_by, ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some(WrappedCollection::Parentheses(vec![
+                    Ident::new("a"),
+                    Ident::new("b"),
+                ])),
+                cluster_by
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_comment() {
+    match snowflake().verified_stmt("CREATE TABLE my_table (a INT) COMMENT = 'some comment'") {
+        Statement::CreateTable(CreateTable { name, comment, .. }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!("some comment", comment.unwrap().to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_incomplete_statement() {
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TABLE my_table"),
+        Err(ParserError::ParserError(
+            "unexpected end of input".to_string()
+        ))
+    );
+
+    assert_eq!(
+        snowflake().parse_sql_statements("CREATE TABLE my_table; (c int)"),
+        Err(ParserError::ParserError(
+            "unexpected end of input".to_string()
+        ))
+    );
 }
 
 #[test]

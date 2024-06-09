@@ -3453,9 +3453,14 @@ fn parse_create_table_as_table() {
 
 #[test]
 fn parse_create_table_on_cluster() {
+    let generic = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: None,
+    };
+
     // Using single-quote literal to define current cluster
     let sql = "CREATE TABLE t ON CLUSTER '{cluster}' (a INT, b INT)";
-    match verified_stmt(sql) {
+    match generic.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { on_cluster, .. }) => {
             assert_eq!(on_cluster.unwrap(), "{cluster}".to_string());
         }
@@ -3464,7 +3469,7 @@ fn parse_create_table_on_cluster() {
 
     // Using explicitly declared cluster name
     let sql = "CREATE TABLE t ON CLUSTER my_cluster (a INT, b INT)";
-    match verified_stmt(sql) {
+    match generic.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { on_cluster, .. }) => {
             assert_eq!(on_cluster.unwrap(), "my_cluster".to_string());
         }
@@ -3517,8 +3522,13 @@ fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), Par
 
 #[test]
 fn parse_create_table_with_options() {
+    let generic = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: None,
+    };
+
     let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
-    match verified_stmt(sql) {
+    match generic.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { with_options, .. }) => {
             assert_eq!(
                 vec![

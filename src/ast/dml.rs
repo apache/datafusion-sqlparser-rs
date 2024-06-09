@@ -22,10 +22,11 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, Expr, FileFormat, FromTable, HiveDistributionStyle,
-    HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName,
-    OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, SelectItem, SqlOption,
-    SqliteOnConflict, TableEngine, TableWithJoins,
+    display_comma_separated, display_separated, CommentDef, Expr, FileFormat, FromTable,
+    HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InsertAliases,
+    MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query,
+    RowAccessPolicy, SelectItem, SqlOption, SqliteOnConflict, TableEngine, TableWithJoins, Tag,
+    WrappedCollection,
 };
 
 /// CREATE INDEX statement.
@@ -57,6 +58,7 @@ pub struct CreateTable {
     pub global: Option<bool>,
     pub if_not_exists: bool,
     pub transient: bool,
+    pub volatile: bool,
     /// Table name
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
@@ -74,7 +76,7 @@ pub struct CreateTable {
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
     pub engine: Option<TableEngine>,
-    pub comment: Option<String>,
+    pub comment: Option<CommentDef>,
     pub auto_increment_offset: Option<u32>,
     pub default_charset: Option<String>,
     pub collation: Option<String>,
@@ -94,7 +96,7 @@ pub struct CreateTable {
     pub partition_by: Option<Box<Expr>>,
     /// BigQuery: Table clustering column list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-    pub cluster_by: Option<Vec<Ident>>,
+    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     /// BigQuery: Table options list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     pub options: Option<Vec<SqlOption>>,
@@ -102,6 +104,33 @@ pub struct CreateTable {
     /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
     /// then strict typing rules apply to that table.
     pub strict: bool,
+    /// Snowflake "COPY GRANTS" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub copy_grants: bool,
+    /// Snowflake "ENABLE_SCHEMA_EVOLUTION" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub enable_schema_evolution: Option<bool>,
+    /// Snowflake "CHANGE_TRACKING" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub change_tracking: Option<bool>,
+    /// Snowflake "DATA_RETENTION_TIME_IN_DAYS" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub data_retention_time_in_days: Option<u64>,
+    /// Snowflake "MAX_DATA_EXTENSION_TIME_IN_DAYS" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub max_data_extension_time_in_days: Option<u64>,
+    /// Snowflake "DEFAULT_DDL_COLLATION" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub default_ddl_collation: Option<String>,
+    /// Snowflake "WITH AGGREGATION POLICY" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub with_aggregation_policy: Option<ObjectName>,
+    /// Snowflake "WITH ROW ACCESS POLICY" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub with_row_access_policy: Option<RowAccessPolicy>,
+    /// Snowflake "WITH TAG" clause
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+    pub with_tags: Option<Vec<Tag>>,
 }
 
 impl Display for CreateTable {
@@ -115,7 +144,7 @@ impl Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             global = self.global
@@ -130,6 +159,7 @@ impl Display for CreateTable {
             if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
             temporary = if self.temporary { "TEMPORARY " } else { "" },
             transient = if self.transient { "TRANSIENT " } else { "" },
+            volatile = if self.volatile { "VOLATILE " } else { "" },
             name = self.name,
         )?;
         if let Some(on_cluster) = &self.on_cluster {
@@ -260,9 +290,17 @@ impl Display for CreateTable {
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE={engine}")?;
         }
-        if let Some(comment) = &self.comment {
-            write!(f, " COMMENT '{comment}'")?;
+        if let Some(comment_def) = &self.comment {
+            match comment_def {
+                CommentDef::WithEq(comment) => {
+                    write!(f, " COMMENT = '{comment}'")?;
+                }
+                CommentDef::WithoutEq(comment) => {
+                    write!(f, " COMMENT '{comment}'")?;
+                }
+            }
         }
+
         if let Some(auto_increment_offset) = self.auto_increment_offset {
             write!(f, " AUTO_INCREMENT {auto_increment_offset}")?;
         }
@@ -276,12 +314,9 @@ impl Display for CreateTable {
             write!(f, " PARTITION BY {partition_by}")?;
         }
         if let Some(cluster_by) = self.cluster_by.as_ref() {
-            write!(
-                f,
-                " CLUSTER BY {}",
-                display_comma_separated(cluster_by.as_slice())
-            )?;
+            write!(f, " CLUSTER BY {cluster_by}")?;
         }
+
         if let Some(options) = self.options.as_ref() {
             write!(
                 f,
@@ -289,6 +324,57 @@ impl Display for CreateTable {
                 display_comma_separated(options.as_slice())
             )?;
         }
+
+        if self.copy_grants {
+            write!(f, " COPY GRANTS")?;
+        }
+
+        if let Some(is_enabled) = self.enable_schema_evolution {
+            write!(
+                f,
+                " ENABLE_SCHEMA_EVOLUTION={}",
+                if is_enabled { "TRUE" } else { "FALSE" }
+            )?;
+        }
+
+        if let Some(is_enabled) = self.change_tracking {
+            write!(
+                f,
+                " CHANGE_TRACKING={}",
+                if is_enabled { "TRUE" } else { "FALSE" }
+            )?;
+        }
+
+        if let Some(data_retention_time_in_days) = self.data_retention_time_in_days {
+            write!(
+                f,
+                " DATA_RETENTION_TIME_IN_DAYS={data_retention_time_in_days}",
+            )?;
+        }
+
+        if let Some(max_data_extension_time_in_days) = self.max_data_extension_time_in_days {
+            write!(
+                f,
+                " MAX_DATA_EXTENSION_TIME_IN_DAYS={max_data_extension_time_in_days}",
+            )?;
+        }
+
+        if let Some(default_ddl_collation) = &self.default_ddl_collation {
+            write!(f, " DEFAULT_DDL_COLLATION='{default_ddl_collation}'",)?;
+        }
+
+        if let Some(with_aggregation_policy) = &self.with_aggregation_policy {
+            write!(f, " WITH AGGREGATION POLICY {with_aggregation_policy}",)?;
+        }
+
+        if let Some(row_access_policy) = &self.with_row_access_policy {
+            write!(f, " {row_access_policy}",)?;
+        }
+
+        if let Some(tag) = &self.with_tags {
+            write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
+        }
+
         if let Some(query) = &self.query {
             write!(f, " AS {query}")?;
         }

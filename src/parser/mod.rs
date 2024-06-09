@@ -5372,7 +5372,7 @@ impl<'a> Parser<'a> {
             let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
-                Token::SingleQuotedString(str) => Some(str),
+                Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
                 _ => self.expected("comment", next_token)?,
             }
         } else {
@@ -5423,7 +5423,9 @@ impl<'a> Parser<'a> {
 
         let mut cluster_by = None;
         if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
-            cluster_by = Some(self.parse_comma_separated(|p| p.parse_identifier(false))?);
+            cluster_by = Some(WrappedCollection::NoWrapping(
+                self.parse_comma_separated(|p| p.parse_identifier(false))?,
+            ));
         };
 
         let mut options = None;
@@ -7783,7 +7785,7 @@ impl<'a> Parser<'a> {
     /// This function can be used to reduce the stack size required in debug
     /// builds. Instead of `sizeof(Query)` only a pointer (`Box<Query>`)
     /// is used.
-    fn parse_boxed_query(&mut self) -> Result<Box<Query>, ParserError> {
+    pub fn parse_boxed_query(&mut self) -> Result<Box<Query>, ParserError> {
         self.parse_query().map(Box::new)
     }
 

@@ -9,8 +9,9 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use super::super::dml::CreateTable;
 use crate::ast::{
-    ColumnDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit,
-    OneOrManyWithParens, Query, SqlOption, Statement, TableConstraint, TableEngine,
+    ColumnDef, CommentDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName,
+    OnCommit, OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement, TableConstraint,
+    TableEngine, Tag, WrappedCollection,
 };
 use crate::parser::ParserError;
 
@@ -52,6 +53,7 @@ pub struct CreateTableBuilder {
     pub global: Option<bool>,
     pub if_not_exists: bool,
     pub transient: bool,
+    pub volatile: bool,
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub constraints: Vec<TableConstraint>,
@@ -66,7 +68,7 @@ pub struct CreateTableBuilder {
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
     pub engine: Option<TableEngine>,
-    pub comment: Option<String>,
+    pub comment: Option<CommentDef>,
     pub auto_increment_offset: Option<u32>,
     pub default_charset: Option<String>,
     pub collation: Option<String>,
@@ -75,9 +77,18 @@ pub struct CreateTableBuilder {
     pub primary_key: Option<Box<Expr>>,
     pub order_by: Option<OneOrManyWithParens<Expr>>,
     pub partition_by: Option<Box<Expr>>,
-    pub cluster_by: Option<Vec<Ident>>,
+    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub options: Option<Vec<SqlOption>>,
     pub strict: bool,
+    pub copy_grants: bool,
+    pub enable_schema_evolution: Option<bool>,
+    pub change_tracking: Option<bool>,
+    pub data_retention_time_in_days: Option<u64>,
+    pub max_data_extension_time_in_days: Option<u64>,
+    pub default_ddl_collation: Option<String>,
+    pub with_aggregation_policy: Option<ObjectName>,
+    pub with_row_access_policy: Option<RowAccessPolicy>,
+    pub with_tags: Option<Vec<Tag>>,
 }
 
 impl CreateTableBuilder {
@@ -89,6 +100,7 @@ impl CreateTableBuilder {
             global: None,
             if_not_exists: false,
             transient: false,
+            volatile: false,
             name,
             columns: vec![],
             constraints: vec![],
@@ -115,6 +127,15 @@ impl CreateTableBuilder {
             cluster_by: None,
             options: None,
             strict: false,
+            copy_grants: false,
+            enable_schema_evolution: None,
+            change_tracking: None,
+            data_retention_time_in_days: None,
+            max_data_extension_time_in_days: None,
+            default_ddl_collation: None,
+            with_aggregation_policy: None,
+            with_row_access_policy: None,
+            with_tags: None,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -144,6 +165,11 @@ impl CreateTableBuilder {
 
     pub fn transient(mut self, transient: bool) -> Self {
         self.transient = transient;
+        self
+    }
+
+    pub fn volatile(mut self, volatile: bool) -> Self {
+        self.volatile = volatile;
         self
     }
 
@@ -210,7 +236,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn comment(mut self, comment: Option<String>) -> Self {
+    pub fn comment(mut self, comment: Option<CommentDef>) -> Self {
         self.comment = comment;
         self
     }
@@ -255,7 +281,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn cluster_by(mut self, cluster_by: Option<Vec<Ident>>) -> Self {
+    pub fn cluster_by(mut self, cluster_by: Option<WrappedCollection<Vec<Ident>>>) -> Self {
         self.cluster_by = cluster_by;
         self
     }
@@ -270,6 +296,57 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn copy_grants(mut self, copy_grants: bool) -> Self {
+        self.copy_grants = copy_grants;
+        self
+    }
+
+    pub fn enable_schema_evolution(mut self, enable_schema_evolution: Option<bool>) -> Self {
+        self.enable_schema_evolution = enable_schema_evolution;
+        self
+    }
+
+    pub fn change_tracking(mut self, change_tracking: Option<bool>) -> Self {
+        self.change_tracking = change_tracking;
+        self
+    }
+
+    pub fn data_retention_time_in_days(mut self, data_retention_time_in_days: Option<u64>) -> Self {
+        self.data_retention_time_in_days = data_retention_time_in_days;
+        self
+    }
+
+    pub fn max_data_extension_time_in_days(
+        mut self,
+        max_data_extension_time_in_days: Option<u64>,
+    ) -> Self {
+        self.max_data_extension_time_in_days = max_data_extension_time_in_days;
+        self
+    }
+
+    pub fn default_ddl_collation(mut self, default_ddl_collation: Option<String>) -> Self {
+        self.default_ddl_collation = default_ddl_collation;
+        self
+    }
+
+    pub fn with_aggregation_policy(mut self, with_aggregation_policy: Option<ObjectName>) -> Self {
+        self.with_aggregation_policy = with_aggregation_policy;
+        self
+    }
+
+    pub fn with_row_access_policy(
+        mut self,
+        with_row_access_policy: Option<RowAccessPolicy>,
+    ) -> Self {
+        self.with_row_access_policy = with_row_access_policy;
+        self
+    }
+
+    pub fn with_tags(mut self, with_tags: Option<Vec<Tag>>) -> Self {
+        self.with_tags = with_tags;
+        self
+    }
+
     pub fn build(self) -> Statement {
         Statement::CreateTable(CreateTable {
             or_replace: self.or_replace,
@@ -278,6 +355,7 @@ impl CreateTableBuilder {
             global: self.global,
             if_not_exists: self.if_not_exists,
             transient: self.transient,
+            volatile: self.volatile,
             name: self.name,
             columns: self.columns,
             constraints: self.constraints,
@@ -304,6 +382,15 @@ impl CreateTableBuilder {
             cluster_by: self.cluster_by,
             options: self.options,
             strict: self.strict,
+            copy_grants: self.copy_grants,
+            enable_schema_evolution: self.enable_schema_evolution,
+            change_tracking: self.change_tracking,
+            data_retention_time_in_days: self.data_retention_time_in_days,
+            max_data_extension_time_in_days: self.max_data_extension_time_in_days,
+            default_ddl_collation: self.default_ddl_collation,
+            with_aggregation_policy: self.with_aggregation_policy,
+            with_row_access_policy: self.with_row_access_policy,
+            with_tags: self.with_tags,
         })
     }
 }
@@ -322,6 +409,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 global,
                 if_not_exists,
                 transient,
+                volatile,
                 name,
                 columns,
                 constraints,
@@ -348,6 +436,15 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 cluster_by,
                 options,
                 strict,
+                copy_grants,
+                enable_schema_evolution,
+                change_tracking,
+                data_retention_time_in_days,
+                max_data_extension_time_in_days,
+                default_ddl_collation,
+                with_aggregation_policy,
+                with_row_access_policy,
+                with_tags,
             }) => Ok(Self {
                 or_replace,
                 temporary,
@@ -381,6 +478,16 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 cluster_by,
                 options,
                 strict,
+                copy_grants,
+                enable_schema_evolution,
+                change_tracking,
+                data_retention_time_in_days,
+                max_data_extension_time_in_days,
+                default_ddl_collation,
+                with_aggregation_policy,
+                with_row_access_policy,
+                with_tags,
+                volatile,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"
@@ -393,7 +500,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
 #[derive(Default)]
 pub(crate) struct BigQueryTableConfiguration {
     pub partition_by: Option<Box<Expr>>,
-    pub cluster_by: Option<Vec<Ident>>,
+    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub options: Option<Vec<SqlOption>>,
 }
 

@@ -442,7 +442,10 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 (
                     Some(Box::new(Expr::Identifier(Ident::new("_PARTITIONDATE")))),
-                    Some(vec![Ident::new("userid"), Ident::new("age"),]),
+                    Some(WrappedCollection::NoWrapping(vec![
+                        Ident::new("userid"),
+                        Ident::new("age"),
+                    ])),
                     Some(vec![
                         SqlOption {
                             name: Ident::new("partition_expiration_days"),

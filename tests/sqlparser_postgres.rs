@@ -4136,3 +4136,26 @@ fn parse_at_time_zone() {
         expr
     );
 }
+
+#[test]
+fn parse_create_table_with_options() {
+    let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { with_options, .. }) => {
+            assert_eq!(
+                vec![
+                    SqlOption {
+                        name: "foo".into(),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
+                    },
+                    SqlOption {
+                        name: "a".into(),
+                        value: Expr::Value(number("123")),
+                    },
+                ],
+                with_options
+            );
+        }
+        _ => unreachable!(),
+    }
+}

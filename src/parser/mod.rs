@@ -20,7 +20,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::fmt;
+use core::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use log::debug;
 
@@ -3260,6 +3263,18 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse<T: FromStr>(s: String, loc: Location) -> Result<T, ParserError>
+    where
+        <T as FromStr>::Err: Display,
+    {
+        s.parse::<T>().map_err(|e| {
+            ParserError::ParserError(format!(
+                "Could not parse '{s}' as {}: {e}{loc}",
+                std::any::type_name::<T>()
+            ))
+        })
+    }
+
     /// Parse a comma-separated list of 1+ SelectItem
     pub fn parse_projection(&mut self) -> Result<Vec<SelectItem>, ParserError> {
         // BigQuery and Snowflake allow trailing commas, but only in project lists
@@ -5281,12 +5296,7 @@ impl<'a> Parser<'a> {
             let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
-                Token::Number(s, _) => Some(s.parse::<u32>().map_err(|e| {
-                    ParserError::ParserError(format!(
-                        "Could not parse '{s}' as u32: {e}{}",
-                        next_token.location
-                    ))
-                })?),
+                Token::Number(s, _) => Some(Self::parse::<u32>(s, next_token.location)?),
                 _ => self.expected("literal int", next_token)?,
             }
         } else {
@@ -6730,10 +6740,7 @@ impl<'a> Parser<'a> {
             // The call to n.parse() returns a bigdecimal when the
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
-            Token::Number(ref n, l) => match n.parse() {
-                Ok(n) => Ok(Value::Number(n, l)),
-                Err(e) => parser_err!(format!("Could not parse '{n}' as number: {e}"), location),
-            },
+            Token::Number(n, l) => Ok(Value::Number(Self::parse(n, location)?, l)),
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
             Token::TripleSingleQuotedString(ref s) => {
@@ -6825,9 +6832,7 @@ impl<'a> Parser<'a> {
     pub fn parse_literal_uint(&mut self) -> Result<u64, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            Token::Number(s, _) => s.parse::<u64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{s}' as u64: {e}"))
-            }),
+            Token::Number(s, _) => Self::parse::<u64>(s, next_token.location),
             _ => self.expected("literal int", next_token),
         }
     }
@@ -10331,7 +10336,7 @@ impl<'a> Parser<'a> {
         } else {
             let next_token = self.next_token();
             let quantity = match next_token.token {
-                Token::Number(s, _) => s.parse::<u64>().expect("literal int"),
+                Token::Number(s, _) => Self::parse::<u64>(s, next_token.location)?,
                 _ => self.expected("literal int", next_token)?,
             };
             Some(TopQuantity::Constant(quantity))

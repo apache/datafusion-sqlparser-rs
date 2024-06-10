@@ -9292,7 +9292,7 @@ impl<'a> Parser<'a> {
                                 return self.expected("literal number", next_token);
                             };
                             self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::AtMost(n.parse().expect("literal int"))
+                            RepetitionQuantifier::AtMost(Self::parse(n, token.location)?)
                         }
                         Token::Number(n, _) if self.consume_token(&Token::Comma) => {
                             let next_token = self.next_token();
@@ -9300,12 +9300,12 @@ impl<'a> Parser<'a> {
                                 Token::Number(m, _) => {
                                     self.expect_token(&Token::RBrace)?;
                                     RepetitionQuantifier::Range(
-                                        n.parse().expect("literal int"),
-                                        m.parse().expect("literal int"),
+                                        Self::parse(n, token.location)?,
+                                        Self::parse(m, token.location)?,
                                     )
                                 }
                                 Token::RBrace => {
-                                    RepetitionQuantifier::AtLeast(n.parse().expect("literal int"))
+                                    RepetitionQuantifier::AtLeast(Self::parse(n, token.location)?)
                                 }
                                 _ => {
                                     return self.expected("} or upper bound", next_token);
@@ -9314,7 +9314,7 @@ impl<'a> Parser<'a> {
                         }
                         Token::Number(n, _) => {
                             self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::Exactly(n.parse().expect("literal int"))
+                            RepetitionQuantifier::Exactly(Self::parse(n, token.location)?)
                         }
                         _ => return self.expected("quantifier range", token),
                     }

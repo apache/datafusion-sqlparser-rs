@@ -5281,7 +5281,12 @@ impl<'a> Parser<'a> {
             let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
-                Token::Number(s, _) => Some(s.parse::<u32>().expect("literal int")),
+                Token::Number(s, _) => Some(s.parse::<u32>().map_err(|e| {
+                    ParserError::ParserError(format!(
+                        "Could not parse '{s}' as u32: {e}{}",
+                        next_token.location
+                    ))
+                })?),
                 _ => self.expected("literal int", next_token)?,
             }
         } else {

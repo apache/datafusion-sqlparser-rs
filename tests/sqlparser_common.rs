@@ -9991,3 +9991,18 @@ fn parse_select_wildcard_with_except() {
         "sql parser error: Expected identifier, found: )"
     );
 }
+
+#[test]
+fn parse_auto_increment_too_large() {
+    let dialect = GenericDialect {};
+    let u64_max = u64::MAX;
+    let sql =
+        format!("CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) AUTO_INCREMENT=1{u64_max}");
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert!(res.is_err(), "{res:?}");
+}

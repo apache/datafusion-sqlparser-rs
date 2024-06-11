@@ -148,6 +148,7 @@ define_keywords!(
     CHARACTER_LENGTH,
     CHARSET,
     CHAR_LENGTH,
+    CHAT,
     CHECK,
     CLOB,
     CLONE,

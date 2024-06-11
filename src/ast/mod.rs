@@ -984,7 +984,7 @@ impl fmt::Display for Expr {
                 low,
                 high
             ),
-            Expr::BinaryOp { left, op, right } => write!(f, "{left} {op} {right}"),
+            Expr::BinaryOp { left, op, right } => write!(f, "({left} {op} {right})"),
             Expr::Like {
                 negated,
                 expr,

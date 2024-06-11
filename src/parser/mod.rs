@@ -3902,22 +3902,15 @@ impl<'a> Parser<'a> {
                 }
             };
         }
-        println!("to qweqeqe");
         let mut to = Option::None;
         if dialect_of!(self is ClickHouseDialect) {
-            println!("to {:}", self.peek_token().token);
             if let Token::Word(word) = self.peek_token().token {
                 if word.keyword == Keyword::TO {
                     let _ = self.parse_keyword(Keyword::TO);
                     let indet  = self.parse_object_name(false);
                     if indet.is_ok(){
-                    //    println!("to {}",indet.unwrap());
                        to = Some(indet.unwrap());
                     }
-                    // let opts = self.parse_options(Keyword::OPTIONS)?;
-                    // if !opts.is_empty() {
-                    //     options = CreateTableOptions::Options(opts);
-                    // }
                 }
             };
         }

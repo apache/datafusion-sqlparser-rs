@@ -3230,16 +3230,17 @@ impl fmt::Display for Statement {
                 with_no_schema_binding,
                 if_not_exists,
                 temporary,
-                ..
+                to,
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{materialized}{temporary}VIEW {if_not_exists}{name}",
+                    "CREATE {or_replace}{materialized}{temporary}VIEW {if_not_exists}{name} {to}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
                     name = name,
                     temporary = if *temporary { "TEMPORARY " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    to = if to.is_some() { format!("TO {to:?} ") } else { "".to_string() }
                 )?;
                 if matches!(options, CreateTableOptions::With(_)) {
                     write!(f, " {options}")?;

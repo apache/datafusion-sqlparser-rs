@@ -654,7 +654,7 @@ impl<'a> Tokenizer<'a> {
         Ok(())
     }
 
-    // Tokenize the identifer or keywords in `ch`
+    // Tokenize the identifier or keywords in `ch`
     fn tokenize_identifier_or_keyword(
         &self,
         ch: impl IntoIterator<Item = char>,

@@ -168,7 +168,7 @@ pub enum DataType {
     UnsignedInt(Option<u64>),
     /// Unsigned int4 with optional display width e.g. INT4 UNSIGNED or INT4(11) UNSIGNED
     UnsignedInt4(Option<u64>),
-    /// Unsigned integer with optional display width e.g. INTGER UNSIGNED or INTEGER(11) UNSIGNED
+    /// Unsigned integer with optional display width e.g. INTEGER UNSIGNED or INTEGER(11) UNSIGNED
     UnsignedInteger(Option<u64>),
     /// Unsigned integer type in [clickhouse]
     /// Note: UInt8 mean 8 bits in [clickhouse]
@@ -699,7 +699,7 @@ pub enum CharacterLength {
         /// Optional unit. If not informed, the ANSI handles it as CHARACTERS implicitly
         unit: Option<CharLengthUnits>,
     },
-    /// VARCHAR(MAX) or NVARCHAR(MAX), used in T-SQL (Miscrosoft SQL Server)
+    /// VARCHAR(MAX) or NVARCHAR(MAX), used in T-SQL (Microsoft SQL Server)
     Max,
 }
 

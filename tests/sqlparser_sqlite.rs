@@ -170,6 +170,7 @@ fn parse_create_view_temporary_if_not_exists() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            ..
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);

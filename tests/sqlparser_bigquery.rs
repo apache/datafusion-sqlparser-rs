@@ -312,6 +312,7 @@ fn parse_create_view_if_not_exists() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            ..
         } => {
             assert_eq!("mydataset.newview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);

@@ -8138,7 +8138,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_set_quantifier(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
         match op {
-            Some(SetOperator::Except) | Some(SetOperator::Intersect | SetOperator::Union) => {
+            Some(SetOperator::Except | SetOperator::Intersect | SetOperator::Union) => {
                 if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
                     SetQuantifier::DistinctByName
                 } else if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {

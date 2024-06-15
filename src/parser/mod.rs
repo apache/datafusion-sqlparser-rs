@@ -11299,9 +11299,8 @@ mod tests {
 
     #[test]
     fn test_create_matireal_view_test() {
-        // NOTE: This is actually valid MySQL syntax, REPLACE and INSERT,
-        // but the parser does not yet support it.
-        // https://dev.mysql.com/doc/refman/8.3/en/insert.html
+        // example sql
+        // https://clickhouse.com/docs/en/guides/developer/cascading-materialized-views
         let sql = "CREATE MATERIALIZED VIEW analytics.monthly_aggregated_data_mv 
         TO analytics.monthly_aggregated_data 
         AS 

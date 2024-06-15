@@ -6290,7 +6290,7 @@ impl<'a> Parser<'a> {
                         }))
                     },
                     Keyword::NoKeyword => Owner::Ident(w.to_ident()),
-                    _ => self.expected("CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier expected after OWNER TO clause", next_token)?,
+                    _ => self.expected("CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO clause", next_token)?,
                 },
                 _ => self.expected("Token::Word", next_token)?
             };

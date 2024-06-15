@@ -34,8 +34,8 @@ pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue}
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, ConstraintCharacteristics, DeferrableInitial, GeneratedAs,
-    GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner, Partition, ProcedureParam,
-    ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
+    GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner, Partition,
+    ProcedureParam, ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{Delete, Insert};

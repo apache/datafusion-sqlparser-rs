@@ -774,7 +774,12 @@ fn parse_alter_table_owner_to() {
                 location: _,
             } => {
                 assert_eq!(name.to_string(), "tab");
-                assert_eq!(operations, vec![AlterTableOperation::OwnerTo { new_owner: case.expected_owner.clone() }]);
+                assert_eq!(
+                    operations,
+                    vec![AlterTableOperation::OwnerTo {
+                        new_owner: case.expected_owner.clone()
+                    }]
+                );
             }
             _ => unreachable!("Expected an AlterTable statement"),
         }

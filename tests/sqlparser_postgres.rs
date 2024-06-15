@@ -715,29 +715,76 @@ fn parse_alter_table_add_columns() {
 
 #[test]
 fn parse_alter_table_owner_to() {
-    match pg().verified_stmt("ALTER TABLE tab OWNER TO new_owner") {
-        Statement::AlterTable {
-            name,
-            if_exists: _,
-            only: _,
-            operations,
-            location: _,
-        } => {
-            assert_eq!(name.to_string(), "tab");
-            assert_eq!(
-                operations,
-                vec![
-                    AlterTableOperation::OwnerTo {
-                        new_role: Ident {
-                            value: "new_owner".to_string(),
-                            quote_style: None,
-                        }
-                    },
-                ]
-            );
-        }
-        _ => unreachable!(),
+    struct TestCase {
+        sql: &'static str,
+        expected_owner: Owner,
     }
+
+    let test_cases = vec![
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO new_owner",
+            expected_owner: Owner::Ident(Ident::new("new_owner".to_string())),
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO \"new_owner\"",
+            expected_owner: Owner::Ident(Ident::with_quote('\"', "new_owner".to_string())),
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO CURRENT_USER",
+            expected_owner: Owner::Expr(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("CURRENT_USER")]),
+                args: FunctionArguments::None,
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![],
+            })),
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO CURRENT_ROLE",
+            expected_owner: Owner::Expr(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("CURRENT_ROLE")]),
+                args: FunctionArguments::None,
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![],
+            })),
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO SESSION_USER",
+            expected_owner: Owner::Expr(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("SESSION_USER")]),
+                args: FunctionArguments::None,
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![],
+            })),
+        },
+    ];
+
+    for case in test_cases {
+        match pg().verified_stmt(case.sql) {
+            Statement::AlterTable {
+                name,
+                if_exists: _,
+                only: _,
+                operations,
+                location: _,
+            } => {
+                assert_eq!(name.to_string(), "tab");
+                assert_eq!(operations, vec![AlterTableOperation::OwnerTo { new_owner: case.expected_owner.clone() }]);
+            }
+            _ => unreachable!("Expected an AlterTable statement"),
+        }
+    }
+
+    let res = pg().parse_sql_statements("ALTER TABLE tab OWNER TO CREATE");
+    assert_eq!(
+        ParserError::ParserError("Expected CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO clause, found: CREATE".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

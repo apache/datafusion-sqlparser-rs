@@ -122,11 +122,11 @@ fn pragma_eq_placeholder_style() {
 fn parse_create_table_without_rowid() {
     let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             without_rowid: true,
             ..
-        } => {
+        }) => {
             assert_eq!("t", name.to_string());
         }
         _ => unreachable!(),
@@ -167,6 +167,7 @@ fn parse_create_view_temporary_if_not_exists() {
             materialized,
             options,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -179,6 +180,7 @@ fn parse_create_view_temporary_if_not_exists() {
             assert!(!or_replace);
             assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(if_not_exists);
             assert!(temporary);
@@ -199,7 +201,7 @@ fn double_equality_operator() {
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -233,7 +235,7 @@ fn parse_create_table_auto_increment() {
 fn parse_create_sqlite_quote() {
     let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INT, [INDEX] INT)";
     match sqlite().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![
@@ -294,7 +296,7 @@ fn test_placeholder() {
 #[test]
 fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
-    if let Statement::CreateTable { name, strict, .. } = sqlite().verified_stmt(sql) {
+    if let Statement::CreateTable(CreateTable { name, strict, .. }) = sqlite().verified_stmt(sql) {
         assert_eq!(name.to_string(), "Fruits");
         assert!(strict);
     }

@@ -25,6 +25,10 @@ impl Dialect for PostgreSqlDialect {
         Some('"')
     }
 
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        ch == '"' // Postgres does not support backticks to quote identifiers
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://www.postgresql.org/docs/11/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
         // We don't yet support identifiers beginning with "letters with
@@ -34,6 +38,29 @@ impl Dialect for PostgreSqlDialect {
 
     fn is_identifier_part(&self, ch: char) -> bool {
         ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>
+    fn is_custom_operator_part(&self, ch: char) -> bool {
+        matches!(
+            ch,
+            '+' | '-'
+                | '*'
+                | '/'
+                | '<'
+                | '>'
+                | '='
+                | '~'
+                | '!'
+                | '@'
+                | '#'
+                | '%'
+                | '^'
+                | '&'
+                | '|'
+                | '`'
+                | '?'
+        )
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

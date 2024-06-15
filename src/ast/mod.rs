@@ -38,7 +38,7 @@ pub use self::ddl::{
     ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
 };
-pub use self::dml::{Delete, Insert};
+pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -46,10 +46,11 @@ pub use self::query::{
     GroupByExpr, IdentWithAlias, IlikeSelectItem, Join, JoinConstraint, JoinOperator,
     JsonTableColumn, JsonTableColumnErrorHandling, LateralView, LockClause, LockType,
     MatchRecognizePattern, MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr,
-    NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem, RepetitionQuantifier,
-    ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select, SelectInto, SelectItem, SetExpr,
-    SetOperator, SetQuantifier, SymbolDefinition, Table, TableAlias, TableFactor, TableVersion,
-    TableWithJoins, Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With,
+    NonBlock, Offset, OffsetRows, OrderByExpr, PivotValueSource, Query, RenameSelectItem,
+    RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, SymbolDefinition, Table,
+    TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode,
+    Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
@@ -74,7 +75,7 @@ mod value;
 #[cfg(feature = "visitor")]
 mod visitor;
 
-struct DisplaySeparated<'a, T>
+pub struct DisplaySeparated<'a, T>
 where
     T: fmt::Display,
 {
@@ -97,14 +98,14 @@ where
     }
 }
 
-fn display_separated<'a, T>(slice: &'a [T], sep: &'static str) -> DisplaySeparated<'a, T>
+pub fn display_separated<'a, T>(slice: &'a [T], sep: &'static str) -> DisplaySeparated<'a, T>
 where
     T: fmt::Display,
 {
     DisplaySeparated { slice, sep }
 }
 
-fn display_comma_separated<T>(slice: &[T]) -> DisplaySeparated<'_, T>
+pub fn display_comma_separated<T>(slice: &[T]) -> DisplaySeparated<'_, T>
 where
     T: fmt::Display,
 {
@@ -272,7 +273,7 @@ impl fmt::Display for Interval {
     }
 }
 
-/// A field definition within a struct.
+/// A field definition within a struct
 ///
 /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -678,7 +679,7 @@ pub enum Expr {
     },
     /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
     /// Note that depending on the dialect, struct like accesses may be
-    /// parsed as [`ArrayIndex`](Self::ArrayIndex) or [`MapAccess`](Self::MapAccess)
+    /// parsed as [`Subscript`](Self::Subscript) or [`MapAccess`](Self::MapAccess)
     /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
     MapAccess {
         column: Box<Expr>,
@@ -745,10 +746,10 @@ pub enum Expr {
     /// ```
     /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     Dictionary(Vec<DictionaryField>),
-    /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
-    ArrayIndex {
-        obj: Box<Expr>,
-        indexes: Vec<Expr>,
+    /// An access of nested data using subscript syntax, for example `array[2]`.
+    Subscript {
+        expr: Box<Expr>,
+        subscript: Box<Subscript>,
     },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
@@ -802,6 +803,68 @@ pub enum Expr {
     ///
     /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html>.
     Lambda(LambdaFunction),
+}
+
+/// The contents inside the `[` and `]` in a subscript expression.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Subscript {
+    /// Accesses the element of the array at the given index.
+    Index { index: Expr },
+
+    /// Accesses a slice of an array on PostgreSQL, e.g.
+    ///
+    /// ```plaintext
+    /// => select (array[1,2,3,4,5,6])[2:5];
+    /// -----------
+    /// {2,3,4,5}
+    /// ```
+    ///
+    /// The lower and/or upper bound can be omitted to slice from the start or
+    /// end of the array respectively.
+    ///
+    /// See <https://www.postgresql.org/docs/current/arrays.html#ARRAYS-ACCESSING>.
+    ///
+    /// Also supports an optional "stride" as the last element (this is not
+    /// supported by postgres), e.g.
+    ///
+    /// ```plaintext
+    /// => select (array[1,2,3,4,5,6])[1:6:2];
+    /// -----------
+    /// {1,3,5}
+    /// ```
+    Slice {
+        lower_bound: Option<Expr>,
+        upper_bound: Option<Expr>,
+        stride: Option<Expr>,
+    },
+}
+
+impl fmt::Display for Subscript {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Subscript::Index { index } => write!(f, "{index}"),
+            Subscript::Slice {
+                lower_bound,
+                upper_bound,
+                stride,
+            } => {
+                if let Some(lower) = lower_bound {
+                    write!(f, "{lower}")?;
+                }
+                write!(f, ":")?;
+                if let Some(upper) = upper_bound {
+                    write!(f, "{upper}")?;
+                }
+                if let Some(stride) = stride {
+                    write!(f, ":")?;
+                    write!(f, "{stride}")?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 /// A lambda function.
@@ -1250,12 +1313,11 @@ impl fmt::Display for Expr {
             Expr::Dictionary(fields) => {
                 write!(f, "{{{}}}", display_comma_separated(fields))
             }
-            Expr::ArrayIndex { obj, indexes } => {
-                write!(f, "{obj}")?;
-                for i in indexes {
-                    write!(f, "[{i}]")?;
-                }
-                Ok(())
+            Expr::Subscript {
+                expr,
+                subscript: key,
+            } => {
+                write!(f, "{expr}[{key}]")
             }
             Expr::Array(set) => {
                 write!(f, "{set}")
@@ -1958,6 +2020,9 @@ pub enum Statement {
         query: Box<Query>,
         options: CreateTableOptions,
         cluster_by: Vec<Ident>,
+        /// Snowflake: Views can have comments in Snowflake.
+        /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
+        comment: Option<String>,
         /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
         with_no_schema_binding: bool,
         /// if true, has SQLite `IF NOT EXISTS` clause <https://www.sqlite.org/lang_createview.html>
@@ -1969,56 +2034,7 @@ pub enum Statement {
     /// ```sql
     /// CREATE TABLE
     /// ```
-    CreateTable {
-        or_replace: bool,
-        temporary: bool,
-        external: bool,
-        global: Option<bool>,
-        if_not_exists: bool,
-        transient: bool,
-        /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        name: ObjectName,
-        /// Optional schema
-        columns: Vec<ColumnDef>,
-        constraints: Vec<TableConstraint>,
-        hive_distribution: HiveDistributionStyle,
-        hive_formats: Option<HiveFormat>,
-        table_properties: Vec<SqlOption>,
-        with_options: Vec<SqlOption>,
-        file_format: Option<FileFormat>,
-        location: Option<String>,
-        query: Option<Box<Query>>,
-        without_rowid: bool,
-        like: Option<ObjectName>,
-        clone: Option<ObjectName>,
-        engine: Option<String>,
-        comment: Option<String>,
-        auto_increment_offset: Option<u32>,
-        default_charset: Option<String>,
-        collation: Option<String>,
-        on_commit: Option<OnCommit>,
-        /// ClickHouse "ON CLUSTER" clause:
-        /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
-        on_cluster: Option<String>,
-        /// ClickHouse "ORDER BY " clause. Note that omitted ORDER BY is different
-        /// than empty (represented as ()), the latter meaning "no sorting".
-        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
-        order_by: Option<Vec<Ident>>,
-        /// BigQuery: A partition expression for the table.
-        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#partition_expression>
-        partition_by: Option<Box<Expr>>,
-        /// BigQuery: Table clustering column list.
-        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-        cluster_by: Option<Vec<Ident>>,
-        /// BigQuery: Table options list.
-        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-        options: Option<Vec<SqlOption>>,
-        /// SQLite "STRICT" clause.
-        /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
-        /// then strict typing rules apply to that table.
-        strict: bool,
-    },
+    CreateTable(CreateTable),
     /// ```sql
     /// CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     /// ```
@@ -2033,20 +2049,7 @@ pub enum Statement {
     /// ```sql
     /// `CREATE INDEX`
     /// ```
-    CreateIndex {
-        /// index name
-        name: Option<ObjectName>,
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        using: Option<Ident>,
-        columns: Vec<OrderByExpr>,
-        unique: bool,
-        concurrently: bool,
-        if_not_exists: bool,
-        include: Vec<Ident>,
-        nulls_distinct: Option<bool>,
-        predicate: Option<Expr>,
-    },
+    CreateIndex(CreateIndex),
     /// ```sql
     /// CREATE ROLE
     /// ```
@@ -2455,14 +2458,64 @@ pub enum Statement {
     /// Supported variants:
     /// 1. [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction)
     /// 2. [Postgres](https://www.postgresql.org/docs/15/sql-createfunction.html)
+    /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
     CreateFunction {
         or_replace: bool,
         temporary: bool,
+        if_not_exists: bool,
         name: ObjectName,
         args: Option<Vec<OperateFunctionArg>>,
         return_type: Option<DataType>,
-        /// Optional parameters.
-        params: CreateFunctionBody,
+        /// The expression that defines the function.
+        ///
+        /// Examples:
+        /// ```sql
+        /// AS ((SELECT 1))
+        /// AS "console.log();"
+        /// ```
+        function_body: Option<CreateFunctionBody>,
+        /// Behavior attribute for the function
+        ///
+        /// IMMUTABLE | STABLE | VOLATILE
+        ///
+        /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+        behavior: Option<FunctionBehavior>,
+        /// CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
+        ///
+        /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+        called_on_null: Option<FunctionCalledOnNull>,
+        /// PARALLEL { UNSAFE | RESTRICTED | SAFE }
+        ///
+        /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+        parallel: Option<FunctionParallel>,
+        /// USING ... (Hive only)
+        using: Option<CreateFunctionUsing>,
+        /// Language used in a UDF definition.
+        ///
+        /// Example:
+        /// ```sql
+        /// CREATE FUNCTION foo() LANGUAGE js AS "console.log();"
+        /// ```
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_javascript_udf)
+        language: Option<Ident>,
+        /// Determinism keyword used for non-sql UDF definitions.
+        ///
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11)
+        determinism_specifier: Option<FunctionDeterminismSpecifier>,
+        /// List of options for creating the function.
+        ///
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11)
+        options: Option<Vec<SqlOption>>,
+        /// Connection resource for a remote function.
+        ///
+        /// Example:
+        /// ```sql
+        /// CREATE FUNCTION foo()
+        /// RETURNS FLOAT64
+        /// REMOTE WITH CONNECTION us.myconnection
+        /// ```
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_remote_function)
+        remote_connection: Option<ObjectName>,
     },
     /// ```sql
     /// CREATE PROCEDURE
@@ -3153,16 +3206,26 @@ impl fmt::Display for Statement {
             Statement::CreateFunction {
                 or_replace,
                 temporary,
+                if_not_exists,
                 name,
                 args,
                 return_type,
-                params,
+                function_body,
+                language,
+                behavior,
+                called_on_null,
+                parallel,
+                using,
+                determinism_specifier,
+                options,
+                remote_connection,
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{temp}FUNCTION {name}",
+                    "CREATE {or_replace}{temp}FUNCTION {if_not_exists}{name}",
                     temp = if *temporary { "TEMPORARY " } else { "" },
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 )?;
                 if let Some(args) = args {
                     write!(f, "({})", display_comma_separated(args))?;
@@ -3170,7 +3233,43 @@ impl fmt::Display for Statement {
                 if let Some(return_type) = return_type {
                     write!(f, " RETURNS {return_type}")?;
                 }
-                write!(f, "{params}")?;
+                if let Some(determinism_specifier) = determinism_specifier {
+                    write!(f, " {determinism_specifier}")?;
+                }
+                if let Some(language) = language {
+                    write!(f, " LANGUAGE {language}")?;
+                }
+                if let Some(behavior) = behavior {
+                    write!(f, " {behavior}")?;
+                }
+                if let Some(called_on_null) = called_on_null {
+                    write!(f, " {called_on_null}")?;
+                }
+                if let Some(parallel) = parallel {
+                    write!(f, " {parallel}")?;
+                }
+                if let Some(remote_connection) = remote_connection {
+                    write!(f, " REMOTE WITH CONNECTION {remote_connection}")?;
+                }
+                if let Some(CreateFunctionBody::AsBeforeOptions(function_body)) = function_body {
+                    write!(f, " AS {function_body}")?;
+                }
+                if let Some(CreateFunctionBody::Return(function_body)) = function_body {
+                    write!(f, " RETURN {function_body}")?;
+                }
+                if let Some(using) = using {
+                    write!(f, " {using}")?;
+                }
+                if let Some(options) = options {
+                    write!(
+                        f,
+                        " OPTIONS({})",
+                        display_comma_separated(options.as_slice())
+                    )?;
+                }
+                if let Some(CreateFunctionBody::AsAfterOptions(function_body)) = function_body {
+                    write!(f, " AS {function_body}")?;
+                }
                 Ok(())
             }
             Statement::CreateProcedure {
@@ -3227,6 +3326,7 @@ impl fmt::Display for Statement {
                 materialized,
                 options,
                 cluster_by,
+                comment,
                 with_no_schema_binding,
                 if_not_exists,
                 temporary,
@@ -3245,6 +3345,13 @@ impl fmt::Display for Statement {
                         format!(" TO {some}")
                      } else { "".to_string() }
                 )?;
+                if let Some(comment) = comment {
+                    write!(
+                        f,
+                        " COMMENT = '{}'",
+                        value::escape_single_quote_string(comment)
+                    )?;
+                }
                 if matches!(options, CreateTableOptions::With(_)) {
                     write!(f, " {options}")?;
                 }
@@ -3263,245 +3370,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateTable {
-                name,
-                columns,
-                constraints,
-                table_properties,
-                with_options,
-                or_replace,
-                if_not_exists,
-                transient,
-                hive_distribution,
-                hive_formats,
-                external,
-                global,
-                temporary,
-                file_format,
-                location,
-                query,
-                without_rowid,
-                like,
-                clone,
-                default_charset,
-                engine,
-                comment,
-                auto_increment_offset,
-                collation,
-                on_commit,
-                on_cluster,
-                order_by,
-                partition_by,
-                cluster_by,
-                options,
-                strict,
-            } => {
-                // We want to allow the following options
-                // Empty column list, allowed by PostgreSQL:
-                //   `CREATE TABLE t ()`
-                // No columns provided for CREATE TABLE AS:
-                //   `CREATE TABLE t AS SELECT a from t2`
-                // Columns provided for CREATE TABLE AS:
-                //   `CREATE TABLE t (a INT) AS SELECT a from t2`
-                write!(
-                    f,
-                    "CREATE {or_replace}{external}{global}{temporary}{transient}TABLE {if_not_exists}{name}",
-                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                    external = if *external { "EXTERNAL " } else { "" },
-                    global = global
-                        .map(|global| {
-                            if global {
-                                "GLOBAL "
-                            } else {
-                                "LOCAL "
-                            }
-                        })
-                        .unwrap_or(""),
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    temporary = if *temporary { "TEMPORARY " } else { "" },
-                    transient = if *transient { "TRANSIENT " } else { "" },
-                    name = name,
-                )?;
-                if let Some(on_cluster) = on_cluster {
-                    write!(
-                        f,
-                        " ON CLUSTER {}",
-                        on_cluster.replace('{', "'{").replace('}', "}'")
-                    )?;
-                }
-                if !columns.is_empty() || !constraints.is_empty() {
-                    write!(f, " ({}", display_comma_separated(columns))?;
-                    if !columns.is_empty() && !constraints.is_empty() {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{})", display_comma_separated(constraints))?;
-                } else if query.is_none() && like.is_none() && clone.is_none() {
-                    // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
-                    write!(f, " ()")?;
-                }
-                // Only for SQLite
-                if *without_rowid {
-                    write!(f, " WITHOUT ROWID")?;
-                }
-
-                // Only for Hive
-                if let Some(l) = like {
-                    write!(f, " LIKE {l}")?;
-                }
-
-                if let Some(c) = clone {
-                    write!(f, " CLONE {c}")?;
-                }
-
-                match hive_distribution {
-                    HiveDistributionStyle::PARTITIONED { columns } => {
-                        write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
-                    }
-                    HiveDistributionStyle::CLUSTERED {
-                        columns,
-                        sorted_by,
-                        num_buckets,
-                    } => {
-                        write!(f, " CLUSTERED BY ({})", display_comma_separated(columns))?;
-                        if !sorted_by.is_empty() {
-                            write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
-                        }
-                        if *num_buckets > 0 {
-                            write!(f, " INTO {num_buckets} BUCKETS")?;
-                        }
-                    }
-                    HiveDistributionStyle::SKEWED {
-                        columns,
-                        on,
-                        stored_as_directories,
-                    } => {
-                        write!(
-                            f,
-                            " SKEWED BY ({})) ON ({})",
-                            display_comma_separated(columns),
-                            display_comma_separated(on)
-                        )?;
-                        if *stored_as_directories {
-                            write!(f, " STORED AS DIRECTORIES")?;
-                        }
-                    }
-                    _ => (),
-                }
-
-                if let Some(HiveFormat {
-                    row_format,
-                    serde_properties,
-                    storage,
-                    location,
-                }) = hive_formats
-                {
-                    match row_format {
-                        Some(HiveRowFormat::SERDE { class }) => {
-                            write!(f, " ROW FORMAT SERDE '{class}'")?
-                        }
-                        Some(HiveRowFormat::DELIMITED { delimiters }) => {
-                            write!(f, " ROW FORMAT DELIMITED")?;
-                            if !delimiters.is_empty() {
-                                write!(f, " {}", display_separated(delimiters, " "))?;
-                            }
-                        }
-                        None => (),
-                    }
-                    match storage {
-                        Some(HiveIOFormat::IOF {
-                            input_format,
-                            output_format,
-                        }) => write!(
-                            f,
-                            " STORED AS INPUTFORMAT {input_format} OUTPUTFORMAT {output_format}"
-                        )?,
-                        Some(HiveIOFormat::FileFormat { format }) if !*external => {
-                            write!(f, " STORED AS {format}")?
-                        }
-                        _ => (),
-                    }
-                    if let Some(serde_properties) = serde_properties.as_ref() {
-                        write!(
-                            f,
-                            " WITH SERDEPROPERTIES ({})",
-                            display_comma_separated(serde_properties)
-                        )?;
-                    }
-                    if !*external {
-                        if let Some(loc) = location {
-                            write!(f, " LOCATION '{loc}'")?;
-                        }
-                    }
-                }
-                if *external {
-                    if let Some(file_format) = &file_format {
-                        write!(f, " STORED AS {file_format}")?;
-                    }
-                    write!(f, " LOCATION '{}'", location.as_ref().unwrap())?;
-                }
-                if !table_properties.is_empty() {
-                    write!(
-                        f,
-                        " TBLPROPERTIES ({})",
-                        display_comma_separated(table_properties)
-                    )?;
-                }
-                if !with_options.is_empty() {
-                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
-                }
-                if let Some(engine) = engine {
-                    write!(f, " ENGINE={engine}")?;
-                }
-                if let Some(comment) = comment {
-                    write!(f, " COMMENT '{comment}'")?;
-                }
-                if let Some(auto_increment_offset) = auto_increment_offset {
-                    write!(f, " AUTO_INCREMENT {auto_increment_offset}")?;
-                }
-                if let Some(order_by) = order_by {
-                    write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
-                }
-                if let Some(partition_by) = partition_by.as_ref() {
-                    write!(f, " PARTITION BY {partition_by}")?;
-                }
-                if let Some(cluster_by) = cluster_by.as_ref() {
-                    write!(
-                        f,
-                        " CLUSTER BY {}",
-                        display_comma_separated(cluster_by.as_slice())
-                    )?;
-                }
-                if let Some(options) = options.as_ref() {
-                    write!(
-                        f,
-                        " OPTIONS({})",
-                        display_comma_separated(options.as_slice())
-                    )?;
-                }
-                if let Some(query) = query {
-                    write!(f, " AS {query}")?;
-                }
-                if let Some(default_charset) = default_charset {
-                    write!(f, " DEFAULT CHARSET={default_charset}")?;
-                }
-                if let Some(collation) = collation {
-                    write!(f, " COLLATE={collation}")?;
-                }
-
-                if on_commit.is_some() {
-                    let on_commit = match on_commit {
-                        Some(OnCommit::DeleteRows) => "ON COMMIT DELETE ROWS",
-                        Some(OnCommit::PreserveRows) => "ON COMMIT PRESERVE ROWS",
-                        Some(OnCommit::Drop) => "ON COMMIT DROP",
-                        None => "",
-                    };
-                    write!(f, " {on_commit}")?;
-                }
-                if *strict {
-                    write!(f, " STRICT")?;
-                }
-                Ok(())
-            }
+            Statement::CreateTable(create_table) => create_table.fmt(f),
             Statement::CreateVirtualTable {
                 name,
                 if_not_exists,
@@ -3520,7 +3389,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateIndex {
+            Statement::CreateIndex(CreateIndex {
                 name,
                 table_name,
                 using,
@@ -3531,7 +3400,7 @@ impl fmt::Display for Statement {
                 include,
                 nulls_distinct,
                 predicate,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {unique}INDEX {concurrently}{if_not_exists}",
@@ -6149,75 +6018,74 @@ impl fmt::Display for FunctionParallel {
     }
 }
 
+/// [BigQuery] Determinism specifier used in a UDF definition.
+///
+/// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum FunctionDefinition {
-    SingleQuotedDef(String),
-    DoubleDollarDef(String),
+pub enum FunctionDeterminismSpecifier {
+    Deterministic,
+    NotDeterministic,
 }
 
-impl fmt::Display for FunctionDefinition {
+impl fmt::Display for FunctionDeterminismSpecifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FunctionDefinition::SingleQuotedDef(s) => write!(f, "'{s}'")?,
-            FunctionDefinition::DoubleDollarDef(s) => write!(f, "$${s}$$")?,
+            FunctionDeterminismSpecifier::Deterministic => {
+                write!(f, "DETERMINISTIC")
+            }
+            FunctionDeterminismSpecifier::NotDeterministic => {
+                write!(f, "NOT DETERMINISTIC")
+            }
         }
-        Ok(())
     }
 }
 
-/// Postgres specific feature.
+/// Represent the expression body of a `CREATE FUNCTION` statement as well as
+/// where within the statement, the body shows up.
 ///
-/// See [Postgres docs](https://www.postgresql.org/docs/15/sql-createfunction.html)
-/// for more details
-#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+/// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
+/// [Postgres]: https://www.postgresql.org/docs/15/sql-createfunction.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CreateFunctionBody {
-    /// LANGUAGE lang_name
-    pub language: Option<Ident>,
-    /// IMMUTABLE | STABLE | VOLATILE
-    pub behavior: Option<FunctionBehavior>,
-    /// CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
-    pub called_on_null: Option<FunctionCalledOnNull>,
-    /// PARALLEL { UNSAFE | RESTRICTED | SAFE }
-    pub parallel: Option<FunctionParallel>,
-    /// AS 'definition'
+pub enum CreateFunctionBody {
+    /// A function body expression using the 'AS' keyword and shows up
+    /// before any `OPTIONS` clause.
     ///
-    /// Note that Hive's `AS class_name` is also parsed here.
-    pub as_: Option<FunctionDefinition>,
-    /// RETURN expression
-    pub return_: Option<Expr>,
-    /// USING ... (Hive only)
-    pub using: Option<CreateFunctionUsing>,
-}
-
-impl fmt::Display for CreateFunctionBody {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(language) = &self.language {
-            write!(f, " LANGUAGE {language}")?;
-        }
-        if let Some(behavior) = &self.behavior {
-            write!(f, " {behavior}")?;
-        }
-        if let Some(called_on_null) = &self.called_on_null {
-            write!(f, " {called_on_null}")?;
-        }
-        if let Some(parallel) = &self.parallel {
-            write!(f, " {parallel}")?;
-        }
-        if let Some(definition) = &self.as_ {
-            write!(f, " AS {definition}")?;
-        }
-        if let Some(expr) = &self.return_ {
-            write!(f, " RETURN {expr}")?;
-        }
-        if let Some(using) = &self.using {
-            write!(f, " {using}")?;
-        }
-        Ok(())
-    }
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION myfunc(x FLOAT64, y FLOAT64) RETURNS FLOAT64
+    /// AS (x * y)
+    /// OPTIONS(description="desc");
+    /// ```
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
+    AsBeforeOptions(Expr),
+    /// A function body expression using the 'AS' keyword and shows up
+    /// after any `OPTIONS` clause.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION myfunc(x FLOAT64, y FLOAT64) RETURNS FLOAT64
+    /// OPTIONS(description="desc")
+    /// AS (x * y);
+    /// ```
+    ///
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
+    AsAfterOptions(Expr),
+    /// Function body expression using the 'RETURN' keyword.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION myfunc(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER
+    /// LANGUAGE SQL
+    /// RETURN a + b;
+    /// ```
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    Return(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -6448,6 +6316,140 @@ impl Display for MySQLColumnPosition {
             MySQLColumnPosition::After(ident) => {
                 let column_name = &ident.value;
                 Ok(write!(f, "AFTER {column_name}")?)
+            }
+        }
+    }
+}
+
+/// Engine of DB. Some warehouse has parameters of engine, e.g. [clickhouse]
+///
+/// [clickhouse]: https://clickhouse.com/docs/en/engines/table-engines
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableEngine {
+    pub name: String,
+    pub parameters: Option<Vec<Ident>>,
+}
+
+impl Display for TableEngine {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+
+        if let Some(parameters) = self.parameters.as_ref() {
+            write!(f, "({})", display_comma_separated(parameters))?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Snowflake `WITH ROW ACCESS POLICY policy_name ON (identifier, ...)`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+/// <https://docs.snowflake.com/en/user-guide/security-row-intro>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RowAccessPolicy {
+    pub policy: ObjectName,
+    pub on: Vec<Ident>,
+}
+
+impl RowAccessPolicy {
+    pub fn new(policy: ObjectName, on: Vec<Ident>) -> Self {
+        Self { policy, on }
+    }
+}
+
+impl Display for RowAccessPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WITH ROW ACCESS POLICY {} ON ({})",
+            self.policy,
+            display_comma_separated(self.on.as_slice())
+        )
+    }
+}
+
+/// Snowflake `WITH TAG ( tag_name = '<tag_value>', ...)`
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Tag {
+    pub key: Ident,
+    pub value: String,
+}
+
+impl Tag {
+    pub fn new(key: Ident, value: String) -> Self {
+        Self { key, value }
+    }
+}
+
+impl Display for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}='{}'", self.key, self.value)
+    }
+}
+
+/// Helper to indicate if a comment includes the `=` in the display form
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CommentDef {
+    /// Includes `=` when printing the comment, as `COMMENT = 'comment'`
+    /// Does not include `=` when printing the comment, as `COMMENT 'comment'`
+    WithEq(String),
+    WithoutEq(String),
+}
+
+impl Display for CommentDef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CommentDef::WithEq(comment) | CommentDef::WithoutEq(comment) => write!(f, "{comment}"),
+        }
+    }
+}
+
+/// Helper to indicate if a collection should be wrapped by a symbol in the display form
+///
+/// [`Display`] is implemented for every [`Vec<T>`] where `T: Display`.
+/// The string output is a comma separated list for the vec items
+///
+/// # Examples
+/// ```
+/// # use sqlparser::ast::WrappedCollection;
+/// let items = WrappedCollection::Parentheses(vec!["one", "two", "three"]);
+/// assert_eq!("(one, two, three)", items.to_string());
+///
+/// let items = WrappedCollection::NoWrapping(vec!["one", "two", "three"]);
+/// assert_eq!("one, two, three", items.to_string());
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WrappedCollection<T> {
+    /// Print the collection without wrapping symbols, as `item, item, item`
+    NoWrapping(T),
+    /// Wraps the collection in Parentheses, as `(item, item, item)`
+    Parentheses(T),
+}
+
+impl<T> Display for WrappedCollection<Vec<T>>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WrappedCollection::NoWrapping(inner) => {
+                write!(f, "{}", display_comma_separated(inner.as_slice()))
+            }
+            WrappedCollection::Parentheses(inner) => {
+                write!(f, "({})", display_comma_separated(inner.as_slice()))
             }
         }
     }

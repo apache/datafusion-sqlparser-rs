@@ -261,10 +261,12 @@ fn parse_create_view_with_options() {
                 vec![
                     ViewColumnDef {
                         name: Ident::new("name"),
+                        data_type: None,
                         options: None,
                     },
                     ViewColumnDef {
                         name: Ident::new("age"),
+                        data_type: None,
                         options: Some(vec![SqlOption {
                             name: Ident::new("description"),
                             value: Expr::Value(Value::DoubleQuotedString("field age".to_string())),
@@ -309,6 +311,7 @@ fn parse_create_view_if_not_exists() {
             materialized,
             options,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
@@ -321,6 +324,7 @@ fn parse_create_view_if_not_exists() {
             assert!(!or_replace);
             assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(if_not_exists);
             assert!(!temporary);
@@ -351,7 +355,7 @@ fn parse_create_view_with_unquoted_hyphen() {
 fn parse_create_table_with_unquoted_hyphen() {
     let sql = "CREATE TABLE my-pro-ject.mydataset.mytable (x INT64)";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(
                 name,
                 ObjectName(vec![
@@ -385,14 +389,14 @@ fn parse_create_table_with_options() {
         r#"OPTIONS(partition_expiration_days = 1, description = "table option description")"#
     );
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             partition_by,
             cluster_by,
             options,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 name,
                 ObjectName(vec!["mydataset".into(), "newtable".into()])
@@ -439,7 +443,10 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 (
                     Some(Box::new(Expr::Identifier(Ident::new("_PARTITIONDATE")))),
-                    Some(vec![Ident::new("userid"), Ident::new("age"),]),
+                    Some(WrappedCollection::NoWrapping(vec![
+                        Ident::new("userid"),
+                        Ident::new("age"),
+                    ])),
                     Some(vec![
                         SqlOption {
                             name: Ident::new("partition_expiration_days"),
@@ -474,7 +481,7 @@ fn parse_create_table_with_options() {
 fn parse_nested_data_types() {
     let sql = "CREATE TABLE table (x STRUCT<a ARRAY<INT64>, b BYTES(42)>, y ARRAY<STRUCT<INT64>>)";
     match bigquery_and_generic().one_statement_parses_to(sql, sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name, ObjectName(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -1949,6 +1956,145 @@ fn parse_map_access_expr() {
 
     let sql = "SELECT myfunc()[-1].a[SAFE_OFFSET(2)].b";
     bigquery().verified_only_select(sql);
+}
+
+#[test]
+fn test_bigquery_create_function() {
+    let sql = concat!(
+        "CREATE OR REPLACE TEMPORARY FUNCTION ",
+        "project1.mydataset.myfunction(x FLOAT64) ",
+        "RETURNS FLOAT64 ",
+        "OPTIONS(x = 'y') ",
+        "AS 42"
+    );
+
+    let stmt = bigquery().verified_stmt(sql);
+    assert_eq!(
+        stmt,
+        Statement::CreateFunction {
+            or_replace: true,
+            temporary: true,
+            if_not_exists: false,
+            name: ObjectName(vec![
+                Ident::new("project1"),
+                Ident::new("mydataset"),
+                Ident::new("myfunction"),
+            ]),
+            args: Some(vec![OperateFunctionArg::with_name("x", DataType::Float64),]),
+            return_type: Some(DataType::Float64),
+            function_body: Some(CreateFunctionBody::AsAfterOptions(Expr::Value(number(
+                "42"
+            )))),
+            options: Some(vec![SqlOption {
+                name: Ident::new("x"),
+                value: Expr::Value(Value::SingleQuotedString("y".into())),
+            }]),
+            behavior: None,
+            using: None,
+            language: None,
+            determinism_specifier: None,
+            remote_connection: None,
+            called_on_null: None,
+            parallel: None,
+        }
+    );
+
+    let sqls = [
+        // Arbitrary Options expressions.
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "RETURNS ARRAY<FLOAT64> ",
+            "OPTIONS(a = [1, 2], b = 'two', c = [('k1', 'v1'), ('k2', 'v2')]) ",
+            "AS ((SELECT 1 FROM mytable))"
+        ),
+        // Options after body.
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "RETURNS ARRAY<FLOAT64> ",
+            "AS ((SELECT 1 FROM mytable)) ",
+            "OPTIONS(a = [1, 2], b = 'two', c = [('k1', 'v1'), ('k2', 'v2')])",
+        ),
+        // IF NOT EXISTS
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION IF NOT EXISTS ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "RETURNS ARRAY<FLOAT64> ",
+            "OPTIONS(a = [1, 2]) ",
+            "AS ((SELECT 1 FROM mytable))"
+        ),
+        // No return type.
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "OPTIONS(a = [1, 2]) ",
+            "AS ((SELECT 1 FROM mytable))"
+        ),
+        // With language - body after options
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "DETERMINISTIC ",
+            "LANGUAGE js ",
+            "OPTIONS(a = [1, 2]) ",
+            "AS \"console.log('hello');\""
+        ),
+        // With language - body before options
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "NOT DETERMINISTIC ",
+            "LANGUAGE js ",
+            "AS \"console.log('hello');\" ",
+            "OPTIONS(a = [1, 2])",
+        ),
+        // Remote
+        concat!(
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "myfunction(a FLOAT64, b INT64, c STRING) ",
+            "RETURNS INT64 ",
+            "REMOTE WITH CONNECTION us.myconnection ",
+            "OPTIONS(a = [1, 2])",
+        ),
+    ];
+    for sql in sqls {
+        bigquery().verified_stmt(sql);
+    }
+
+    let error_sqls = [
+        (
+            concat!(
+                "CREATE TEMPORARY FUNCTION myfunction() ",
+                "OPTIONS(a = [1, 2]) ",
+                "AS ((SELECT 1 FROM mytable)) ",
+                "OPTIONS(a = [1, 2])",
+            ),
+            "Expected end of statement, found: OPTIONS",
+        ),
+        (
+            concat!(
+                "CREATE TEMPORARY FUNCTION myfunction() ",
+                "IMMUTABLE ",
+                "AS ((SELECT 1 FROM mytable)) ",
+            ),
+            "Expected AS, found: IMMUTABLE",
+        ),
+        (
+            concat!(
+                "CREATE TEMPORARY FUNCTION myfunction() ",
+                "AS \"console.log('hello');\" ",
+                "LANGUAGE js ",
+            ),
+            "Expected end of statement, found: LANGUAGE",
+        ),
+    ];
+    for (sql, error) in error_sqls {
+        assert_eq!(
+            ParserError::ParserError(error.to_owned()),
+            bigquery().parse_sql_statements(sql).unwrap_err()
+        );
+    }
 }
 
 #[test]

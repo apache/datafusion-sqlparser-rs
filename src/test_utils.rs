@@ -312,6 +312,20 @@ pub fn table(name: impl Into<String>) -> TableFactor {
     }
 }
 
+pub fn table_with_alias(name: impl Into<String>, alias: impl Into<String>) -> TableFactor {
+    TableFactor::Table {
+        name: ObjectName(vec![Ident::new(name)]),
+        alias: Some(TableAlias {
+            name: Ident::new(alias),
+            columns: vec![],
+        }),
+        args: None,
+        with_hints: vec![],
+        version: None,
+        partitions: vec![],
+    }
+}
+
 pub fn join(relation: TableFactor) -> Join {
     Join {
         relation,

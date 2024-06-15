@@ -528,8 +528,8 @@ fn test_array_index() {
         _ => panic!("Expected an expression with alias"),
     };
     assert_eq!(
-        &Expr::ArrayIndex {
-            obj: Box::new(Expr::Array(Array {
+        &Expr::Subscript {
+            expr: Box::new(Expr::Array(Array {
                 elem: vec![
                     Expr::Value(Value::SingleQuotedString("a".to_owned())),
                     Expr::Value(Value::SingleQuotedString("b".to_owned())),
@@ -537,7 +537,9 @@ fn test_array_index() {
                 ],
                 named: false
             })),
-            indexes: vec![Expr::Value(number("3"))]
+            subscript: Box::new(Subscript::Index {
+                index: Expr::Value(number("3"))
+            })
         },
         expr
     );

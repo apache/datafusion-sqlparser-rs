@@ -22,6 +22,10 @@ impl Dialect for BigQueryDialect {
         ch == '`'
     }
 
+    fn supports_projection_trailing_commas(&self) -> bool {
+        true
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }

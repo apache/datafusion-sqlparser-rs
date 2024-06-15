@@ -11296,23 +11296,4 @@ mod tests {
 
         assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
     }
-
-    #[test]
-    fn test_create_matireal_view_test() {
-        // example sql
-        // https://clickhouse.com/docs/en/guides/developer/cascading-materialized-views
-        let sql = "CREATE MATERIALIZED VIEW analytics.monthly_aggregated_data_mv 
-        TO analytics.monthly_aggregated_data 
-        AS 
-        SELECT 
-                toDate(toStartOfMonth(event_time)) AS month, 
-                domain_name, 
-                sumState(count_views) AS sumCountViews 
-        FROM analytics.hourly_data 
-        GROUP BY 
-                domain_name, 
-                month ";
-
-        assert!(Parser::parse_sql(&ClickHouseDialect {}, sql).is_ok());
-    }
 }

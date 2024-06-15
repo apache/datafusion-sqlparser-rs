@@ -3240,7 +3240,10 @@ impl fmt::Display for Statement {
                     name = name,
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    to = if to.is_some() { format!("TO {to:?} ") } else { "".to_string() }
+                    to = if to.is_some() { 
+                        let some = to.as_ref().unwrap();
+                        format!(" TO {some}")
+                     } else { "".to_string() }
                 )?;
                 if matches!(options, CreateTableOptions::With(_)) {
                     write!(f, " {options}")?;

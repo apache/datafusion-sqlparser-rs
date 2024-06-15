@@ -552,6 +552,7 @@ fn parse_sf_create_or_replace_with_comment_for_snowflake() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            ..
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);

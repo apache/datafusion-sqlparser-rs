@@ -6275,8 +6275,27 @@ impl<'a> Parser<'a> {
             let table_name = self.parse_object_name(false)?;
             AlterTableOperation::SwapWith { table_name }
         } else if dialect_of!(self is PostgreSqlDialect) && self.parse_keywords(&[Keyword::OWNER, Keyword::TO]) {
-                let new_role = self.parse_identifier(false)?;
-                AlterTableOperation::OwnerTo { new_role: new_role }
+            let next_token = self.next_token();
+            let new_owner = match next_token.token {
+                Token::DoubleQuotedString(ref s) => Owner::Ident(Ident::new(s.to_string())),
+                Token::Word(ref w) => match w.keyword {
+                    Keyword::CURRENT_USER | Keyword::CURRENT_ROLE | Keyword::SESSION_USER => {
+                        Owner::Expr(Expr::Function(Function {
+                                    name: ObjectName(vec![w.to_ident()]),
+                                    args: FunctionArguments::None,
+                                    null_treatment: None,
+                                    filter: None,
+                                    over: None,
+                                    within_group: vec![],
+                        }))
+                    },
+                    Keyword::NoKeyword => Owner::Ident(w.to_ident()),
+                    _ => self.expected("CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier expected after OWNER TO clause", next_token)?,
+                },
+                _ => self.expected("Token::Word", next_token)?
+            };
+
+            AlterTableOperation::OwnerTo { new_owner }
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

@@ -562,7 +562,7 @@ fn parse_select_star_except_no_parens() {
 }
 
 #[test]
-fn test_create_matireal_view_test() {
+fn parse_create_materialized_view() {
     // example sql
     // https://clickhouse.com/docs/en/guides/developer/cascading-materialized-views
     let sql = r#"CREATE MATERIALIZED VIEW analytics.monthly_aggregated_data_mv TO analytics.monthly_aggregated_data AS SELECT toDate(toStartOfMonth(event_time)) AS month, domain_name, sumState(count_views) AS sumCountViews FROM analytics.hourly_data GROUP BY domain_name, month"#;

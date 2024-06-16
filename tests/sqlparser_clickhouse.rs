@@ -566,7 +566,7 @@ fn parse_create_materialized_view() {
     // example sql
     // https://clickhouse.com/docs/en/guides/developer/cascading-materialized-views
     let sql = r#"CREATE MATERIALIZED VIEW analytics.monthly_aggregated_data_mv TO analytics.monthly_aggregated_data AS SELECT toDate(toStartOfMonth(event_time)) AS month, domain_name, sumState(count_views) AS sumCountViews FROM analytics.hourly_data GROUP BY domain_name, month"#;
-    clickhouse().verified_stmt(sql);
+    clickhouse_and_generic().verified_stmt(sql);
 }
 
 fn clickhouse() -> TestedDialects {

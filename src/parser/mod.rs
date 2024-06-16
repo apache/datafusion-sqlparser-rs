@@ -4157,17 +4157,9 @@ impl<'a> Parser<'a> {
             };
         }
       
-        let mut to = Option::None;
-        if dialect_of!(self is ClickHouseDialect) {
-            if let Token::Word(word) = self.peek_token().token {
-                if word.keyword == Keyword::TO {
-                    let _ = self.parse_keyword(Keyword::TO);
-                    let indet  = self.parse_object_name(false);
-                    if indet.is_ok(){
-                       to = Some(indet.unwrap());
-                    }
-                }
-            };
+        let to = if dialect_of!(self is ClickHouseDialect | GenericDialect) && self.parse_keyword(Keyword::TO) {
+           Some(self.parse_object_name(false)?)
+            } else { None };
         }
 
         let comment = if dialect_of!(self is SnowflakeDialect | GenericDialect)

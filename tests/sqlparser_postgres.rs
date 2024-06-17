@@ -1557,7 +1557,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        id: vec!["dname".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
                     },],
                     selection: None
@@ -1588,14 +1588,14 @@ fn parse_pg_on_conflict() {
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
                         Assignment {
-                            id: vec!["dname".into()],
+                            target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                             value: Expr::CompoundIdentifier(vec![
                                 "EXCLUDED".into(),
                                 "dname".into()
                             ])
                         },
                         Assignment {
-                            id: vec!["area".into()],
+                            target: AssignmentTarget::ColumnName(ObjectName(vec!["area".into()])),
                             value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
                         },
                     ],
@@ -1645,7 +1645,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        id: vec!["dname".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -1682,7 +1682,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        id: vec!["dname".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {

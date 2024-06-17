@@ -374,6 +374,40 @@ fn parse_attach_database() {
 }
 
 #[test]
+fn parse_update_tuple_row_values() {
+    // See https://github.com/sqlparser-rs/sqlparser-rs/issues/1311
+    assert_eq!(
+        sqlite().verified_stmt("UPDATE x SET (a, b) = (1, 2)"),
+        Statement::Update {
+            assignments: vec![Assignment {
+                target: AssignmentTarget::Tuple(vec![
+                    ObjectName(vec![Ident::new("a"),]),
+                    ObjectName(vec![Ident::new("b"),]),
+                ]),
+                value: Expr::Tuple(vec![
+                    Expr::Value(Value::Number("1".parse().unwrap(), false)),
+                    Expr::Value(Value::Number("2".parse().unwrap(), false))
+                ])
+            }],
+            selection: None,
+            table: TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("x")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                    version: None,
+                    partitions: vec![]
+                },
+                joins: vec![],
+            },
+            from: None,
+            returning: None
+        }
+    );
+}
+
+#[test]
 fn parse_where_in_empty_list() {
     let sql = "SELECT * FROM t1 WHERE a IN ()";
     let select = sqlite().verified_only_select(sql);

@@ -296,15 +296,15 @@ fn parse_update() {
                 assignments,
                 vec![
                     Assignment {
-                        id: vec!["a".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["a".into()])),
                         value: Expr::Value(number("1")),
                     },
                     Assignment {
-                        id: vec!["b".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["b".into()])),
                         value: Expr::Value(number("2")),
                     },
                     Assignment {
-                        id: vec!["c".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["c".into()])),
                         value: Expr::Value(number("3")),
                     },
                 ]
@@ -363,7 +363,7 @@ fn parse_update_set_from() {
                 joins: vec![],
             },
             assignments: vec![Assignment {
-                id: vec![Ident::new("name")],
+                target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("name")])),
                 value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
             }],
             from: Some(TableWithJoins {
@@ -466,7 +466,10 @@ fn parse_update_with_table_alias() {
             );
             assert_eq!(
                 vec![Assignment {
-                    id: vec![Ident::new("u"), Ident::new("username")],
+                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                        Ident::new("u"),
+                        Ident::new("username")
+                    ])),
                     value: Expr::Value(Value::SingleQuotedString("new_user".to_string())),
                 }],
                 assignments
@@ -7696,14 +7699,20 @@ fn parse_merge() {
                         action: MergeAction::Update {
                             assignments: vec![
                                 Assignment {
-                                    id: vec![Ident::new("dest"), Ident::new("F")],
+                                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                                        Ident::new("dest"),
+                                        Ident::new("F")
+                                    ])),
                                     value: Expr::CompoundIdentifier(vec![
                                         Ident::new("stg"),
                                         Ident::new("F"),
                                     ]),
                                 },
                                 Assignment {
-                                    id: vec![Ident::new("dest"), Ident::new("G")],
+                                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                                        Ident::new("dest"),
+                                        Ident::new("G")
+                                    ])),
                                     value: Expr::CompoundIdentifier(vec![
                                         Ident::new("stg"),
                                         Ident::new("G"),

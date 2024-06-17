@@ -1639,23 +1639,33 @@ fn parse_insert_with_on_duplicate_update() {
             assert_eq!(
                 Some(OnInsert::DuplicateKeyUpdate(vec![
                     Assignment {
-                        id: vec![Ident::new("description".to_string())],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                            "description".to_string()
+                        )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("description"))]),
                     },
                     Assignment {
-                        id: vec![Ident::new("perm_create".to_string())],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                            "perm_create".to_string()
+                        )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_create"))]),
                     },
                     Assignment {
-                        id: vec![Ident::new("perm_read".to_string())],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                            "perm_read".to_string()
+                        )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_read"))]),
                     },
                     Assignment {
-                        id: vec![Ident::new("perm_update".to_string())],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                            "perm_update".to_string()
+                        )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_update"))]),
                     },
                     Assignment {
-                        id: vec![Ident::new("perm_delete".to_string())],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                            "perm_delete".to_string()
+                        )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_delete"))]),
                     },
                 ])),
@@ -1835,7 +1845,10 @@ fn parse_update_with_joins() {
             );
             assert_eq!(
                 vec![Assignment {
-                    id: vec![Ident::new("o"), Ident::new("completed")],
+                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                        Ident::new("o"),
+                        Ident::new("completed")
+                    ])),
                     value: Expr::Value(Value::Boolean(true))
                 }],
                 assignments

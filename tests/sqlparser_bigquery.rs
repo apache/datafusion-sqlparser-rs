@@ -1590,11 +1590,11 @@ fn parse_merge() {
     let update_action = MergeAction::Update {
         assignments: vec![
             Assignment {
-                id: vec![Ident::new("a")],
+                target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("a")])),
                 value: Expr::Value(number("1")),
             },
             Assignment {
-                id: vec![Ident::new("b")],
+                target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("b")])),
                 value: Expr::Value(number("2")),
             },
         ],

@@ -3383,48 +3383,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateIndex(CreateIndex {
-                name,
-                table_name,
-                using,
-                columns,
-                unique,
-                concurrently,
-                if_not_exists,
-                include,
-                nulls_distinct,
-                predicate,
-            }) => {
-                write!(
-                    f,
-                    "CREATE {unique}INDEX {concurrently}{if_not_exists}",
-                    unique = if *unique { "UNIQUE " } else { "" },
-                    concurrently = if *concurrently { "CONCURRENTLY " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                )?;
-                if let Some(value) = name {
-                    write!(f, "{value} ")?;
-                }
-                write!(f, "ON {table_name}")?;
-                if let Some(value) = using {
-                    write!(f, " USING {value} ")?;
-                }
-                write!(f, "({})", display_separated(columns, ","))?;
-                if !include.is_empty() {
-                    write!(f, " INCLUDE ({})", display_separated(include, ","))?;
-                }
-                if let Some(value) = nulls_distinct {
-                    if *value {
-                        write!(f, " NULLS DISTINCT")?;
-                    } else {
-                        write!(f, " NULLS NOT DISTINCT")?;
-                    }
-                }
-                if let Some(predicate) = predicate {
-                    write!(f, " WHERE {predicate}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension {
                 name,
                 if_not_exists,

@@ -8895,7 +8895,7 @@ fn parse_trailing_comma() {
     );
 
     trailing_commas.one_statement_parses_to(
-        "GRANT USAGE, SELECT, INSERT ON p TO u",
+        "GRANT USAGE, SELECT, INSERT, ON p TO u",
         "GRANT USAGE, SELECT, INSERT ON p TO u",
     );
 

@@ -183,6 +183,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -551,6 +552,11 @@ fn parse_limit_by() {
 #[test]
 fn parse_select_star_except() {
     clickhouse().verified_stmt("SELECT * EXCEPT (prev_status) FROM anomalies");
+}
+
+#[test]
+fn parse_select_parametric_function() {
+    clickhouse().verified_stmt("SELECT quantile(0.5)(x) FROM t");
 }
 
 #[test]

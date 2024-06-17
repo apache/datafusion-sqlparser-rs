@@ -999,6 +999,7 @@ impl<'a> Parser<'a> {
                 {
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
+                        parameters: FunctionArguments::None,
                         args: FunctionArguments::None,
                         null_treatment: None,
                         filter: None,
@@ -1055,6 +1056,7 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
+                        parameters: FunctionArguments::None,
                         args: FunctionArguments::Subquery(query),
                         filter: None,
                         null_treatment: None,
@@ -1290,6 +1292,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::Function(Function {
                 name,
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::Subquery(subquery),
                 filter: None,
                 null_treatment: None,
@@ -1298,7 +1301,14 @@ impl<'a> Parser<'a> {
             }));
         }
 
-        let args = self.parse_function_argument_list()?;
+        let mut args = self.parse_function_argument_list()?;
+        let mut parameters = FunctionArguments::None;
+        // ClickHouse aggregation support parametric functions like `quantile(0.5)(x)`
+        // which (0.5) is a parameter to the function.
+        if dialect_of!(self is ClickHouseDialect) && self.consume_token(&Token::LParen) {
+            parameters = FunctionArguments::List(args);
+            args = self.parse_function_argument_list()?;
+        }
 
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
             self.expect_token(&Token::LParen)?;
@@ -1347,6 +1357,7 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Function(Function {
             name,
+            parameters,
             args: FunctionArguments::List(args),
             null_treatment,
             filter,
@@ -1379,6 +1390,7 @@ impl<'a> Parser<'a> {
         };
         Ok(Expr::Function(Function {
             name,
+            parameters: FunctionArguments::None,
             args,
             filter: None,
             over: None,
@@ -6454,6 +6466,7 @@ impl<'a> Parser<'a> {
         } else {
             Ok(Statement::Call(Function {
                 name: object_name,
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::None,
                 over: None,
                 filter: None,

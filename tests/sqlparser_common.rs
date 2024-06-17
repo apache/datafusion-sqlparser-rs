@@ -1042,6 +1042,7 @@ fn parse_select_count_wildcard() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
@@ -1063,6 +1064,7 @@ fn parse_select_count_distinct() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: Some(DuplicateTreatment::Distinct),
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
@@ -2148,6 +2150,7 @@ fn parse_select_having() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("COUNT")]),
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
@@ -2177,6 +2180,7 @@ fn parse_select_qualify() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![],
@@ -2520,6 +2524,7 @@ fn parse_listagg() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("LISTAGG")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: Some(DuplicateTreatment::Distinct),
                 args: vec![
@@ -4224,6 +4229,7 @@ fn parse_named_argument_function() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![
@@ -4262,6 +4268,7 @@ fn parse_named_argument_function_with_eq_operator() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![
@@ -4334,6 +4341,7 @@ fn parse_window_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -4462,6 +4470,7 @@ fn test_parse_named_window() {
                         value: "MIN".to_string(),
                         quote_style: None,
                     }]),
+                    parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
@@ -4491,6 +4500,7 @@ fn test_parse_named_window() {
                         value: "MAX".to_string(),
                         quote_style: None,
                     }]),
+                    parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
@@ -8060,6 +8070,7 @@ fn parse_time_functions() {
         let select = verified_only_select(&sql);
         let select_localtime_func_call_ast = Function {
             name: ObjectName(vec![Ident::new(func_name)]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -8988,6 +8999,7 @@ fn parse_call() {
     assert_eq!(
         verified_stmt("CALL my_procedure('a')"),
         Statement::Call(Function {
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
@@ -9389,6 +9401,7 @@ fn test_selective_aggregation() {
         vec![
             SelectItem::UnnamedExpr(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("ARRAY_AGG")]),
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
@@ -9406,6 +9419,7 @@ fn test_selective_aggregation() {
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
                     name: ObjectName(vec![Ident::new("ARRAY_AGG")]),
+                    parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(

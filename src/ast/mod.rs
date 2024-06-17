@@ -4706,6 +4706,9 @@ impl fmt::Display for CloseCursor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Function {
     pub name: ObjectName,
+    /// The parameters to the function, including any options specified within the
+    /// delimiting parentheses.
+    pub parameters: FunctionArguments,
     /// The arguments to the function, including any options specified within the
     /// delimiting parentheses.
     pub args: FunctionArguments,
@@ -4734,7 +4737,7 @@ pub struct Function {
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.name, self.args)?;
+        write!(f, "{}{}{}", self.name, self.parameters, self.args)?;
 
         if !self.within_group.is_empty() {
             write!(

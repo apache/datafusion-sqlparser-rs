@@ -334,6 +334,7 @@ fn parse_window_function_with_filter() {
             select.projection,
             vec![SelectItem::UnnamedExpr(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new(func_name)]),
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(

@@ -488,6 +488,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![

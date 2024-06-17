@@ -8138,7 +8138,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_set_quantifier(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
         match op {
-            Some(SetOperator::Union) => {
+            Some(SetOperator::Except | SetOperator::Intersect | SetOperator::Union) => {
                 if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
                     SetQuantifier::DistinctByName
                 } else if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
@@ -8149,15 +8149,6 @@ impl<'a> Parser<'a> {
                     } else {
                         SetQuantifier::All
                     }
-                } else if self.parse_keyword(Keyword::DISTINCT) {
-                    SetQuantifier::Distinct
-                } else {
-                    SetQuantifier::None
-                }
-            }
-            Some(SetOperator::Except) | Some(SetOperator::Intersect) => {
-                if self.parse_keyword(Keyword::ALL) {
-                    SetQuantifier::All
                 } else if self.parse_keyword(Keyword::DISTINCT) {
                     SetQuantifier::Distinct
                 } else {
@@ -8547,10 +8538,10 @@ impl<'a> Parser<'a> {
             })
         } else if variable.to_string() == "TRANSACTION" && modifier.is_none() {
             if self.parse_keyword(Keyword::SNAPSHOT) {
-                let snaphot_id = self.parse_value()?;
+                let snapshot_id = self.parse_value()?;
                 return Ok(Statement::SetTransaction {
                     modes: vec![],
-                    snapshot: Some(snaphot_id),
+                    snapshot: Some(snapshot_id),
                     session: false,
                 });
             }

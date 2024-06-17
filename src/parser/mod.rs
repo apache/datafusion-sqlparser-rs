@@ -3288,9 +3288,7 @@ impl<'a> Parser<'a> {
                 break;
             } else if self.options.trailing_commas {
                 match self.peek_token().token {
-                    Token::Word(kw)
-                        if keywords::RESERVED_FOR_GRANT_PERMISSIONS.contains(&kw.keyword) =>
-                    {
+                    Token::Word(kw) if kw.keyword == Keyword::ON => {
                         break;
                     }
                     Token::RParen

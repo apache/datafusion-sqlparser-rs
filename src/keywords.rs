@@ -886,34 +886,3 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::INTO,
     Keyword::END,
 ];
-
-/// Can't be used as a column alias, so that `SELECT <expr> alias`
-/// can be parsed unambiguously without looking ahead.
-pub const RESERVED_FOR_GRANT_PERMISSIONS: &[Keyword] = &[
-    // Reserved as both a table and a column alias:
-    Keyword::ON,
-    Keyword::WITH,
-    Keyword::EXPLAIN,
-    Keyword::ANALYZE,
-    Keyword::WHERE,
-    Keyword::GROUP,
-    Keyword::SORT,
-    Keyword::HAVING,
-    Keyword::ORDER,
-    Keyword::TOP,
-    Keyword::LATERAL,
-    Keyword::VIEW,
-    Keyword::LIMIT,
-    Keyword::OFFSET,
-    Keyword::FETCH,
-    Keyword::UNION,
-    Keyword::EXCEPT,
-    Keyword::INTERSECT,
-    Keyword::CLUSTER,
-    Keyword::DISTRIBUTE,
-    Keyword::RETURNING,
-    // Reserved only as a column alias in the `SELECT` clause
-    Keyword::FROM,
-    Keyword::INTO,
-    Keyword::END,
-];

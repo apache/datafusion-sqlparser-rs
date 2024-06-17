@@ -3278,6 +3278,7 @@ impl<'a> Parser<'a> {
         ret
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn parse_actions_list(
         &mut self,
     ) -> Result<Vec<(Keyword, Option<Vec<Ident>>)>, ParserError> {

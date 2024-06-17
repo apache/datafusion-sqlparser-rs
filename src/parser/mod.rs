@@ -42,6 +42,9 @@ pub enum ParserError {
     RecursionLimitExceeded,
 }
 
+// avoid clippy type_complexity warnings
+type ParsedAction = (Keyword, Option<Vec<Ident>>);
+
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr, $loc:expr) => {
@@ -3278,10 +3281,7 @@ impl<'a> Parser<'a> {
         ret
     }
 
-    #[allow(clippy::type_complexity)]
-    pub fn parse_actions_list(
-        &mut self,
-    ) -> Result<Vec<(Keyword, Option<Vec<Ident>>)>, ParserError> {
+    pub fn parse_actions_list(&mut self) -> Result<Vec<ParsedAction>, ParserError> {
         let mut values = vec![];
         loop {
             values.push(self.parse_grant_permission()?);
@@ -9648,7 +9648,7 @@ impl<'a> Parser<'a> {
         Ok((privileges, objects))
     }
 
-    pub fn parse_grant_permission(&mut self) -> Result<(Keyword, Option<Vec<Ident>>), ParserError> {
+    pub fn parse_grant_permission(&mut self) -> Result<ParsedAction, ParserError> {
         if let Some(kw) = self.parse_one_of_keywords(&[
             Keyword::CONNECT,
             Keyword::CREATE,

@@ -4553,13 +4553,35 @@ impl fmt::Display for GrantObjects {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Assignment {
-    pub id: Vec<Ident>,
+    pub target: AssignmentTarget,
     pub value: Expr,
 }
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", display_separated(&self.id, "."), self.value)
+        write!(f, "{} = {}", self.target, self.value)
+    }
+}
+
+/// Left-hand side of an assignment in an UPDATE statement,
+/// e.g. `foo` in `foo = 5` (ColumnName assignment) or
+/// `(a, b)` in `(a, b) = (1, 2)` (Tuple assignment).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AssignmentTarget {
+    /// A single column
+    ColumnName(ObjectName),
+    /// A tuple of columns
+    Tuple(Vec<ObjectName>),
+}
+
+impl fmt::Display for AssignmentTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AssignmentTarget::ColumnName(column) => write!(f, "{}", column),
+            AssignmentTarget::Tuple(columns) => write!(f, "({})", display_comma_separated(columns)),
+        }
     }
 }
 

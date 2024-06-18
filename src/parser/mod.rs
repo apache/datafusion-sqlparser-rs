@@ -3270,7 +3270,7 @@ impl<'a> Parser<'a> {
         s.parse::<T>().map_err(|e| {
             ParserError::ParserError(format!(
                 "Could not parse '{s}' as {}: {e}{loc}",
-                std::any::type_name::<T>()
+                core::any::type_name::<T>()
             ))
         })
     }

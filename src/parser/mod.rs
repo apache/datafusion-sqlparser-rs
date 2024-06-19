@@ -3116,7 +3116,7 @@ impl<'a> Parser<'a> {
     /// Report `found` was encountered instead of `expected`
     pub fn expected<T>(&self, expected: &str, found: TokenWithLocation) -> Result<T, ParserError> {
         parser_err!(
-            format!("Expected {expected}, found: {found}"),
+            format!("Expected: {expected}, found: {found}"),
             found.location
         )
     }

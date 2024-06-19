@@ -429,7 +429,7 @@ impl fmt::Display for Location {
         write!(
             f,
             // TODO: use standard compiler location syntax (<path>:<line>:<col>)
-            " at Line: {}, Column {}",
+            " at Line: {}, Column: {}",
             self.line, self.column,
         )
     }

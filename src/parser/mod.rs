@@ -11581,7 +11581,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::TokenizerError(
-                "Unterminated string literal at Line: 1, Column 5".to_string()
+                "Unterminated string literal at Line: 1, Column: 5".to_string()
             ))
         );
     }
@@ -11593,7 +11593,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
-                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column 16"
+                "Expected: [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column: 16"
                     .to_string()
             ))
         );

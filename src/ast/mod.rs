@@ -2029,6 +2029,8 @@ pub enum Statement {
         if_not_exists: bool,
         /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
         temporary: bool,
+        /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
+        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
         to: Option<ObjectName>,
     },
     /// ```sql

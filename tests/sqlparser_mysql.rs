@@ -2518,7 +2518,7 @@ fn parse_fulltext_expression() {
 }
 
 #[test]
-#[should_panic = "Expected FULLTEXT or SPATIAL option without constraint name, found: cons"]
+#[should_panic = "Expected: FULLTEXT or SPATIAL option without constraint name, found: cons"]
 fn parse_create_table_with_fulltext_definition_should_not_accept_constraint_name() {
     mysql_and_generic().verified_stmt("CREATE TABLE tb (c1 INT, CONSTRAINT cons FULLTEXT (c1))");
 }

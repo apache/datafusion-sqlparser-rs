@@ -428,7 +428,7 @@ fn invalid_empty_list() {
     let sql = "SELECT * FROM t1 WHERE a IN (,,)";
     let sqlite = sqlite_with_options(ParserOptions::new().with_trailing_commas(true));
     assert_eq!(
-        "sql parser error: Expected an expression:, found: ,",
+        "sql parser error: Expected: an expression:, found: ,",
         sqlite.parse_sql_statements(sql).unwrap_err().to_string()
     );
 }
@@ -452,17 +452,17 @@ fn parse_start_transaction_with_modifier() {
     };
     let res = unsupported_dialects.parse_sql_statements("BEGIN DEFERRED");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: DEFERRED".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: DEFERRED".to_string()),
         res.unwrap_err(),
     );
     let res = unsupported_dialects.parse_sql_statements("BEGIN IMMEDIATE");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: IMMEDIATE".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: IMMEDIATE".to_string()),
         res.unwrap_err(),
     );
     let res = unsupported_dialects.parse_sql_statements("BEGIN EXCLUSIVE");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: EXCLUSIVE".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: EXCLUSIVE".to_string()),
         res.unwrap_err(),
     );
 }

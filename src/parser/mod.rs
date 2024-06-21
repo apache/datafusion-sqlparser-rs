@@ -3116,7 +3116,7 @@ impl<'a> Parser<'a> {
     /// Report `found` was encountered instead of `expected`
     pub fn expected<T>(&self, expected: &str, found: TokenWithLocation) -> Result<T, ParserError> {
         parser_err!(
-            format!("Expected {expected}, found: {found}"),
+            format!("Expected: {expected}, found: {found}"),
             found.location
         )
     }
@@ -11581,7 +11581,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::TokenizerError(
-                "Unterminated string literal at Line: 1, Column 5".to_string()
+                "Unterminated string literal at Line: 1, Column: 5".to_string()
             ))
         );
     }
@@ -11593,7 +11593,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
-                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column 16"
+                "Expected: [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column: 16"
                     .to_string()
             ))
         );

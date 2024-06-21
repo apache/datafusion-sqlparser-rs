@@ -4708,6 +4708,13 @@ pub struct Function {
     pub name: ObjectName,
     /// The parameters to the function, including any options specified within the
     /// delimiting parentheses.
+    ///
+    /// Example:
+    /// ```plaintext
+    /// HISTOGRAM(0.5, 0.6)(x, y)
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/parametric-functions)
     pub parameters: FunctionArguments,
     /// The arguments to the function, including any options specified within the
     /// delimiting parentheses.

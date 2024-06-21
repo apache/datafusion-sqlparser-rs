@@ -1303,9 +1303,11 @@ impl<'a> Parser<'a> {
 
         let mut args = self.parse_function_argument_list()?;
         let mut parameters = FunctionArguments::None;
-        // ClickHouse aggregation support parametric functions like `quantile(0.5)(x)`
-        // which (0.5) is a parameter to the function.
-        if dialect_of!(self is ClickHouseDialect) && self.consume_token(&Token::LParen) {
+        // ClickHouse aggregations support parametric functions like `HISTOGRAM(0.5, 0.6)(x, y)`
+        // which (0.5, 0.6) is a parameter to the function.
+        if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.consume_token(&Token::LParen)
+        {
             parameters = FunctionArguments::List(args);
             args = self.parse_function_argument_list()?;
         }

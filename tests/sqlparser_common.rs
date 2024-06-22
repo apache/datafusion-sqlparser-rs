@@ -8451,19 +8451,31 @@ fn parse_uncache_table() {
 
     let res = parse_sql_statements("UNCACHE TABLE 'table_name' foo");
     assert_eq!(
+<<<<<<< HEAD
         ParserError::ParserError("Expected: an `EOF`, found: foo".to_string()),
+=======
+        ParserError::ParserError("Expected: end of statement, found: foo".to_string()),
+>>>>>>> c2fb339 (change tests)
         res.unwrap_err()
     );
 
     let res = parse_sql_statements("UNCACHE 'table_name' foo");
     assert_eq!(
+<<<<<<< HEAD
         ParserError::ParserError("Expected: a `TABLE` keyword, found: 'table_name'".to_string()),
+=======
+        ParserError::ParserError("Expected: TABLE, found: 'table_name'".to_string()),
+>>>>>>> c2fb339 (change tests)
         res.unwrap_err()
     );
 
     let res = parse_sql_statements("UNCACHE IF EXISTS 'table_name' foo");
     assert_eq!(
+<<<<<<< HEAD
         ParserError::ParserError("Expected: a `TABLE` keyword, found: IF".to_string()),
+=======
+        ParserError::ParserError("Expected: TABLE, found: IF".to_string()),
+>>>>>>> c2fb339 (change tests)
         res.unwrap_err()
     );
 }

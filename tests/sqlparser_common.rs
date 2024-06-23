@@ -6270,7 +6270,7 @@ fn parse_create_view() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
-            to
+            to,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -6373,7 +6373,7 @@ fn parse_create_view_temporary() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
-            to
+            to,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);

@@ -561,6 +561,21 @@ fn parse_select_star_except_no_parens() {
     );
 }
 
+#[test]
+fn parse_create_materialized_view() {
+    // example sql
+    // https://clickhouse.com/docs/en/guides/developer/cascading-materialized-views
+    let sql = concat!(
+        "CREATE MATERIALIZED VIEW analytics.monthly_aggregated_data_mv ",
+        "TO analytics.monthly_aggregated_data ",
+        "AS SELECT toDate(toStartOfMonth(event_time)) ",
+        "AS month, domain_name, sumState(count_views) ",
+        "AS sumCountViews FROM analytics.hourly_data ",
+        "GROUP BY domain_name, month"
+    );
+    clickhouse_and_generic().verified_stmt(sql);
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

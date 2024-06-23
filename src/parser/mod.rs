@@ -4172,6 +4172,14 @@ impl<'a> Parser<'a> {
             };
         }
 
+        let to = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keyword(Keyword::TO)
+        {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
         let comment = if dialect_of!(self is SnowflakeDialect | GenericDialect)
             && self.parse_keyword(Keyword::COMMENT)
         {
@@ -4209,6 +4217,7 @@ impl<'a> Parser<'a> {
             with_no_schema_binding,
             if_not_exists,
             temporary,
+            to,
         })
     }
 

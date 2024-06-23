@@ -2029,6 +2029,9 @@ pub enum Statement {
         if_not_exists: bool,
         /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
         temporary: bool,
+        /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
+        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
+        to: Option<ObjectName>,
     },
     /// ```sql
     /// CREATE TABLE
@@ -3329,15 +3332,20 @@ impl fmt::Display for Statement {
                 with_no_schema_binding,
                 if_not_exists,
                 temporary,
+                to,
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{materialized}{temporary}VIEW {if_not_exists}{name}",
+                    "CREATE {or_replace}{materialized}{temporary}VIEW {if_not_exists}{name}{to}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
                     name = name,
                     temporary = if *temporary { "TEMPORARY " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    to = to
+                        .as_ref()
+                        .map(|to| format!(" TO {to}"))
+                        .unwrap_or_default()
                 )?;
                 if let Some(comment) = comment {
                     write!(

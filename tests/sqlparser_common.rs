@@ -6279,6 +6279,7 @@ fn parse_create_view() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            to,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -6291,6 +6292,7 @@ fn parse_create_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
+            assert!(to.is_none())
         }
         _ => unreachable!(),
     }
@@ -6335,6 +6337,7 @@ fn parse_create_view_with_columns() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            to,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(
@@ -6357,6 +6360,7 @@ fn parse_create_view_with_columns() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
+            assert!(to.is_none())
         }
         _ => unreachable!(),
     }
@@ -6378,6 +6382,7 @@ fn parse_create_view_temporary() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            to,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -6390,6 +6395,7 @@ fn parse_create_view_temporary() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(temporary);
+            assert!(to.is_none())
         }
         _ => unreachable!(),
     }
@@ -6411,6 +6417,7 @@ fn parse_create_or_replace_view() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            to,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -6423,6 +6430,7 @@ fn parse_create_or_replace_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
+            assert!(to.is_none())
         }
         _ => unreachable!(),
     }
@@ -6448,6 +6456,7 @@ fn parse_create_or_replace_materialized_view() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            to,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -6460,6 +6469,7 @@ fn parse_create_or_replace_materialized_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
+            assert!(to.is_none())
         }
         _ => unreachable!(),
     }
@@ -6481,6 +6491,7 @@ fn parse_create_materialized_view() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            to,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -6493,6 +6504,7 @@ fn parse_create_materialized_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
+            assert!(to.is_none())
         }
         _ => unreachable!(),
     }
@@ -6514,6 +6526,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            to,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -6526,6 +6539,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
+            assert!(to.is_none())
         }
         _ => unreachable!(),
     }

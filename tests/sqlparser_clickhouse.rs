@@ -183,6 +183,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -551,6 +552,55 @@ fn parse_limit_by() {
 #[test]
 fn parse_select_star_except() {
     clickhouse().verified_stmt("SELECT * EXCEPT (prev_status) FROM anomalies");
+}
+
+#[test]
+fn parse_select_parametric_function() {
+    match clickhouse_and_generic().verified_stmt("SELECT HISTOGRAM(0.5, 0.6)(x, y) FROM t") {
+        Statement::Query(query) => {
+            let projection: &Vec<SelectItem> = query.body.as_select().unwrap().projection.as_ref();
+            assert_eq!(projection.len(), 1);
+            match &projection[0] {
+                UnnamedExpr(Expr::Function(f)) => {
+                    let args = match &f.args {
+                        FunctionArguments::List(ref args) => args,
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(args.args.len(), 2);
+                    assert_eq!(
+                        args.args[0],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("x"))))
+                    );
+                    assert_eq!(
+                        args.args[1],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("y"))))
+                    );
+
+                    let parameters = match f.parameters {
+                        FunctionArguments::List(ref args) => args,
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(parameters.args.len(), 2);
+                    assert_eq!(
+                        parameters.args[0],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
+                            "0.5".parse().unwrap(),
+                            false
+                        ))))
+                    );
+                    assert_eq!(
+                        parameters.args[1],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
+                            "0.6".parse().unwrap(),
+                            false
+                        ))))
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

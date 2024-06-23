@@ -2369,6 +2369,7 @@ fn parse_array_subquery_expr() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("ARRAY")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::Subquery(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::SetOperation {
@@ -2729,6 +2730,7 @@ fn test_composite_value() {
                     Ident::new("information_schema"),
                     Ident::new("_pg_expandarray")
                 ]),
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
@@ -2955,6 +2957,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_CATALOG")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -2966,6 +2969,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_USER")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -2977,6 +2981,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("SESSION_USER")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -2988,6 +2993,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("USER")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -3438,6 +3444,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],

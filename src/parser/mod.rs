@@ -27,6 +27,7 @@ use core::{
 
 use log::debug;
 
+use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
@@ -145,8 +146,6 @@ mod recursion {
 
     pub struct DepthGuard {}
 }
-
-use recursion::RecursionCounter;
 
 #[derive(PartialEq, Eq)]
 pub enum IsOptional {
@@ -1002,6 +1001,7 @@ impl<'a> Parser<'a> {
                 {
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
+                        parameters: FunctionArguments::None,
                         args: FunctionArguments::None,
                         null_treatment: None,
                         filter: None,
@@ -1058,6 +1058,7 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
+                        parameters: FunctionArguments::None,
                         args: FunctionArguments::Subquery(query),
                         filter: None,
                         null_treatment: None,
@@ -1293,6 +1294,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::Function(Function {
                 name,
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::Subquery(subquery),
                 filter: None,
                 null_treatment: None,
@@ -1301,7 +1303,16 @@ impl<'a> Parser<'a> {
             }));
         }
 
-        let args = self.parse_function_argument_list()?;
+        let mut args = self.parse_function_argument_list()?;
+        let mut parameters = FunctionArguments::None;
+        // ClickHouse aggregations support parametric functions like `HISTOGRAM(0.5, 0.6)(x, y)`
+        // which (0.5, 0.6) is a parameter to the function.
+        if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.consume_token(&Token::LParen)
+        {
+            parameters = FunctionArguments::List(args);
+            args = self.parse_function_argument_list()?;
+        }
 
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
             self.expect_token(&Token::LParen)?;
@@ -1350,6 +1361,7 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Function(Function {
             name,
+            parameters,
             args: FunctionArguments::List(args),
             null_treatment,
             filter,
@@ -1382,6 +1394,7 @@ impl<'a> Parser<'a> {
         };
         Ok(Expr::Function(Function {
             name,
+            parameters: FunctionArguments::None,
             args,
             filter: None,
             over: None,
@@ -6470,6 +6483,7 @@ impl<'a> Parser<'a> {
         } else {
             Ok(Statement::Call(Function {
                 name: object_name,
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::None,
                 over: None,
                 filter: None,
@@ -8092,7 +8106,7 @@ impl<'a> Parser<'a> {
     pub fn parse_query_body(&mut self, precedence: u8) -> Result<SetExpr, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
-        let mut expr = if self.parse_keyword(Keyword::SELECT) {
+        let expr = if self.parse_keyword(Keyword::SELECT) {
             SetExpr::Select(self.parse_select().map(Box::new)?)
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
@@ -8111,6 +8125,17 @@ impl<'a> Parser<'a> {
             );
         };
 
+        self.parse_remaining_set_exprs(expr, precedence)
+    }
+
+    /// Parse any extra set expressions that may be present in a query body
+    ///
+    /// (this is its own function to reduce required stack size in debug builds)
+    fn parse_remaining_set_exprs(
+        &mut self,
+        mut expr: SetExpr,
+        precedence: u8,
+    ) -> Result<SetExpr, ParserError> {
         loop {
             // The query can be optionally followed by a set operator:
             let op = self.parse_set_operator(&self.peek_token().token);

@@ -8096,7 +8096,7 @@ impl<'a> Parser<'a> {
     pub fn parse_query_body(&mut self, precedence: u8) -> Result<SetExpr, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
-        let mut expr = if self.parse_keyword(Keyword::SELECT) {
+        let expr = if self.parse_keyword(Keyword::SELECT) {
             SetExpr::Select(self.parse_select().map(Box::new)?)
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
@@ -8115,6 +8115,17 @@ impl<'a> Parser<'a> {
             );
         };
 
+        self.parse_remaining_set_exprs(expr, precedence)
+    }
+
+    /// Parse any extra set expressions that may be present in a query body
+    ///
+    /// (this is its own function to reduce required stack size in debug builds)
+    fn parse_remaining_set_exprs(
+        &mut self,
+        mut expr: SetExpr,
+        precedence: u8,
+    ) -> Result<SetExpr, ParserError> {
         loop {
             // The query can be optionally followed by a set operator:
             let op = self.parse_set_operator(&self.peek_token().token);

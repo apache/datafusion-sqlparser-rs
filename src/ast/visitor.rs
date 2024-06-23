@@ -533,6 +533,7 @@ where
 ///           null_treatment: None,
 ///           filter: None,
 ///           over: None,
+///           parameters: FunctionArguments::None,
 ///           within_group: vec![],
 ///      });
 ///   }

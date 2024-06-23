@@ -24,6 +24,7 @@ use core::fmt;
 
 use log::debug;
 
+use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
@@ -142,8 +143,6 @@ mod recursion {
 
     pub struct DepthGuard {}
 }
-
-use recursion::RecursionCounter;
 
 #[derive(PartialEq, Eq)]
 pub enum IsOptional {

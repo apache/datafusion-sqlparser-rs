@@ -3611,21 +3611,13 @@ impl<'a> Parser<'a> {
 
     /// Parse a UNCACHE TABLE statement
     pub fn parse_uncache_table(&mut self) -> Result<Statement, ParserError> {
-        let has_table = self.parse_keyword(Keyword::TABLE);
-        if has_table {
-            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-            let table_name = self.parse_object_name(false)?;
-            if self.peek_token().token == Token::EOF {
-                Ok(Statement::UNCache {
-                    table_name,
-                    if_exists,
-                })
-            } else {
-                self.expected("an `EOF`", self.peek_token())
-            }
-        } else {
-            self.expected("a `TABLE` keyword", self.peek_token())
-        }
+        self.expect_keyword(Keyword::TABLE)?;
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let table_name = self.parse_object_name(false)?;
+        Ok(Statement::UNCache {
+            table_name,
+            if_exists,
+        })
     }
 
     /// SQLite-specific `CREATE VIRTUAL TABLE`

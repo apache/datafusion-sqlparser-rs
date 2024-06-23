@@ -20,7 +20,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::fmt;
+use core::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use log::debug;
 
@@ -3113,7 +3116,7 @@ impl<'a> Parser<'a> {
     /// Report `found` was encountered instead of `expected`
     pub fn expected<T>(&self, expected: &str, found: TokenWithLocation) -> Result<T, ParserError> {
         parser_err!(
-            format!("Expected {expected}, found: {found}"),
+            format!("Expected: {expected}, found: {found}"),
             found.location
         )
     }
@@ -3258,6 +3261,18 @@ impl<'a> Parser<'a> {
         } else {
             self.expected(&expected.to_string(), self.peek_token())
         }
+    }
+
+    fn parse<T: FromStr>(s: String, loc: Location) -> Result<T, ParserError>
+    where
+        <T as FromStr>::Err: Display,
+    {
+        s.parse::<T>().map_err(|e| {
+            ParserError::ParserError(format!(
+                "Could not parse '{s}' as {}: {e}{loc}",
+                core::any::type_name::<T>()
+            ))
+        })
     }
 
     /// Parse a comma-separated list of 1+ SelectItem
@@ -5290,7 +5305,7 @@ impl<'a> Parser<'a> {
             let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
-                Token::Number(s, _) => Some(s.parse::<u32>().expect("literal int")),
+                Token::Number(s, _) => Some(Self::parse::<u32>(s, next_token.location)?),
                 _ => self.expected("literal int", next_token)?,
             }
         } else {
@@ -6734,10 +6749,7 @@ impl<'a> Parser<'a> {
             // The call to n.parse() returns a bigdecimal when the
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
-            Token::Number(ref n, l) => match n.parse() {
-                Ok(n) => Ok(Value::Number(n, l)),
-                Err(e) => parser_err!(format!("Could not parse '{n}' as number: {e}"), location),
-            },
+            Token::Number(n, l) => Ok(Value::Number(Self::parse(n, location)?, l)),
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
             Token::TripleSingleQuotedString(ref s) => {
@@ -6829,9 +6841,7 @@ impl<'a> Parser<'a> {
     pub fn parse_literal_uint(&mut self) -> Result<u64, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            Token::Number(s, _) => s.parse::<u64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{s}' as u64: {e}"))
-            }),
+            Token::Number(s, _) => Self::parse::<u64>(s, next_token.location),
             _ => self.expected("literal int", next_token),
         }
     }
@@ -8147,7 +8157,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_set_quantifier(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
         match op {
-            Some(SetOperator::Union) => {
+            Some(SetOperator::Except | SetOperator::Intersect | SetOperator::Union) => {
                 if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
                     SetQuantifier::DistinctByName
                 } else if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
@@ -8158,15 +8168,6 @@ impl<'a> Parser<'a> {
                     } else {
                         SetQuantifier::All
                     }
-                } else if self.parse_keyword(Keyword::DISTINCT) {
-                    SetQuantifier::Distinct
-                } else {
-                    SetQuantifier::None
-                }
-            }
-            Some(SetOperator::Except) | Some(SetOperator::Intersect) => {
-                if self.parse_keyword(Keyword::ALL) {
-                    SetQuantifier::All
                 } else if self.parse_keyword(Keyword::DISTINCT) {
                     SetQuantifier::Distinct
                 } else {
@@ -8556,10 +8557,10 @@ impl<'a> Parser<'a> {
             })
         } else if variable.to_string() == "TRANSACTION" && modifier.is_none() {
             if self.parse_keyword(Keyword::SNAPSHOT) {
-                let snaphot_id = self.parse_value()?;
+                let snapshot_id = self.parse_value()?;
                 return Ok(Statement::SetTransaction {
                     modes: vec![],
-                    snapshot: Some(snaphot_id),
+                    snapshot: Some(snapshot_id),
                     session: false,
                 });
             }
@@ -9291,7 +9292,7 @@ impl<'a> Parser<'a> {
                                 return self.expected("literal number", next_token);
                             };
                             self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::AtMost(n.parse().expect("literal int"))
+                            RepetitionQuantifier::AtMost(Self::parse(n, token.location)?)
                         }
                         Token::Number(n, _) if self.consume_token(&Token::Comma) => {
                             let next_token = self.next_token();
@@ -9299,12 +9300,12 @@ impl<'a> Parser<'a> {
                                 Token::Number(m, _) => {
                                     self.expect_token(&Token::RBrace)?;
                                     RepetitionQuantifier::Range(
-                                        n.parse().expect("literal int"),
-                                        m.parse().expect("literal int"),
+                                        Self::parse(n, token.location)?,
+                                        Self::parse(m, token.location)?,
                                     )
                                 }
                                 Token::RBrace => {
-                                    RepetitionQuantifier::AtLeast(n.parse().expect("literal int"))
+                                    RepetitionQuantifier::AtLeast(Self::parse(n, token.location)?)
                                 }
                                 _ => {
                                     return self.expected("} or upper bound", next_token);
@@ -9313,7 +9314,7 @@ impl<'a> Parser<'a> {
                         }
                         Token::Number(n, _) => {
                             self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::Exactly(n.parse().expect("literal int"))
+                            RepetitionQuantifier::Exactly(Self::parse(n, token.location)?)
                         }
                         _ => return self.expected("quantifier range", token),
                     }
@@ -9955,10 +9956,22 @@ impl<'a> Parser<'a> {
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement
     pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
-        let id = self.parse_identifiers()?;
+        let target = self.parse_assignment_target()?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_expr()?;
-        Ok(Assignment { id, value })
+        Ok(Assignment { target, value })
+    }
+
+    /// Parse the left-hand side of an assignment, used in an UPDATE statement
+    pub fn parse_assignment_target(&mut self) -> Result<AssignmentTarget, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let columns = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+            self.expect_token(&Token::RParen)?;
+            Ok(AssignmentTarget::Tuple(columns))
+        } else {
+            let column = self.parse_object_name(false)?;
+            Ok(AssignmentTarget::ColumnName(column))
+        }
     }
 
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
@@ -10335,7 +10348,7 @@ impl<'a> Parser<'a> {
         } else {
             let next_token = self.next_token();
             let quantity = match next_token.token {
-                Token::Number(s, _) => s.parse::<u64>().expect("literal int"),
+                Token::Number(s, _) => Self::parse::<u64>(s, next_token.location)?,
                 _ => self.expected("literal int", next_token)?,
             };
             Some(TopQuantity::Constant(quantity))
@@ -11577,7 +11590,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::TokenizerError(
-                "Unterminated string literal at Line: 1, Column 5".to_string()
+                "Unterminated string literal at Line: 1, Column: 5".to_string()
             ))
         );
     }
@@ -11589,7 +11602,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
-                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column 16"
+                "Expected: [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column: 16"
                     .to_string()
             ))
         );

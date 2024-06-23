@@ -2268,7 +2268,7 @@ pub enum Statement {
     /// SET [ SESSION | LOCAL ] ROLE role_name
     /// ```
     ///
-    /// Sets sesssion state. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4]
+    /// Sets session state. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4]
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#set-role-statement
     /// [2]: https://www.postgresql.org/docs/14/sql-set-role.html
@@ -2286,7 +2286,7 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is not a standard SQL statement, but it is supported by at
-    /// least MySQL and PostgreSQL. Not all MySQL-specific syntatic forms are
+    /// least MySQL and PostgreSQL. Not all MySQL-specific syntactic forms are
     /// supported yet.
     SetVariable {
         local: bool,
@@ -3391,48 +3391,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateIndex(CreateIndex {
-                name,
-                table_name,
-                using,
-                columns,
-                unique,
-                concurrently,
-                if_not_exists,
-                include,
-                nulls_distinct,
-                predicate,
-            }) => {
-                write!(
-                    f,
-                    "CREATE {unique}INDEX {concurrently}{if_not_exists}",
-                    unique = if *unique { "UNIQUE " } else { "" },
-                    concurrently = if *concurrently { "CONCURRENTLY " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                )?;
-                if let Some(value) = name {
-                    write!(f, "{value} ")?;
-                }
-                write!(f, "ON {table_name}")?;
-                if let Some(value) = using {
-                    write!(f, " USING {value} ")?;
-                }
-                write!(f, "({})", display_separated(columns, ","))?;
-                if !include.is_empty() {
-                    write!(f, " INCLUDE ({})", display_separated(include, ","))?;
-                }
-                if let Some(value) = nulls_distinct {
-                    if *value {
-                        write!(f, " NULLS DISTINCT")?;
-                    } else {
-                        write!(f, " NULLS NOT DISTINCT")?;
-                    }
-                }
-                if let Some(predicate) = predicate {
-                    write!(f, " WHERE {predicate}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension {
                 name,
                 if_not_exists,
@@ -4602,13 +4561,35 @@ impl fmt::Display for GrantObjects {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Assignment {
-    pub id: Vec<Ident>,
+    pub target: AssignmentTarget,
     pub value: Expr,
 }
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", display_separated(&self.id, "."), self.value)
+        write!(f, "{} = {}", self.target, self.value)
+    }
+}
+
+/// Left-hand side of an assignment in an UPDATE statement,
+/// e.g. `foo` in `foo = 5` (ColumnName assignment) or
+/// `(a, b)` in `(a, b) = (1, 2)` (Tuple assignment).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AssignmentTarget {
+    /// A single column
+    ColumnName(ObjectName),
+    /// A tuple of columns
+    Tuple(Vec<ObjectName>),
+}
+
+impl fmt::Display for AssignmentTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AssignmentTarget::ColumnName(column) => write!(f, "{}", column),
+            AssignmentTarget::Tuple(columns) => write!(f, "({})", display_comma_separated(columns)),
+        }
     }
 }
 
@@ -4799,7 +4780,7 @@ impl fmt::Display for FunctionArguments {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FunctionArgumentList {
-    /// `[ ALL | DISTINCT ]
+    /// `[ ALL | DISTINCT ]`
     pub duplicate_treatment: Option<DuplicateTreatment>,
     /// The function arguments.
     pub args: Vec<FunctionArg>,

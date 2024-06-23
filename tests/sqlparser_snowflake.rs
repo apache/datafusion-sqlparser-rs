@@ -385,14 +385,14 @@ fn test_snowflake_create_invalid_local_global_table() {
     assert_eq!(
         snowflake().parse_sql_statements("CREATE LOCAL GLOBAL TABLE my_table (a INT)"),
         Err(ParserError::ParserError(
-            "Expected an SQL statement, found: LOCAL".to_string()
+            "Expected: an SQL statement, found: LOCAL".to_string()
         ))
     );
 
     assert_eq!(
         snowflake().parse_sql_statements("CREATE GLOBAL LOCAL TABLE my_table (a INT)"),
         Err(ParserError::ParserError(
-            "Expected an SQL statement, found: GLOBAL".to_string()
+            "Expected: an SQL statement, found: GLOBAL".to_string()
         ))
     );
 }
@@ -402,21 +402,21 @@ fn test_snowflake_create_invalid_temporal_table() {
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP TEMPORARY TABLE my_table (a INT)"),
         Err(ParserError::ParserError(
-            "Expected an object type after CREATE, found: TEMPORARY".to_string()
+            "Expected: an object type after CREATE, found: TEMPORARY".to_string()
         ))
     );
 
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP VOLATILE TABLE my_table (a INT)"),
         Err(ParserError::ParserError(
-            "Expected an object type after CREATE, found: VOLATILE".to_string()
+            "Expected: an object type after CREATE, found: VOLATILE".to_string()
         ))
     );
 
     assert_eq!(
         snowflake().parse_sql_statements("CREATE TEMP TRANSIENT TABLE my_table (a INT)"),
         Err(ParserError::ParserError(
-            "Expected an object type after CREATE, found: TRANSIENT".to_string()
+            "Expected: an object type after CREATE, found: TRANSIENT".to_string()
         ))
     );
 }
@@ -852,7 +852,7 @@ fn parse_semi_structured_data_traversal() {
             .parse_sql_statements("SELECT a:42")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected variant object key name, found: 42"
+        "sql parser error: Expected: variant object key name, found: 42"
     );
 }
 
@@ -909,7 +909,7 @@ fn parse_delimited_identifiers() {
             assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
-        _ => panic!("Expected ExprWithAlias"),
+        _ => panic!("Expected: ExprWithAlias"),
     }
 
     snowflake().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
@@ -1035,7 +1035,7 @@ fn test_select_wildcard_with_exclude_and_rename() {
             .parse_sql_statements("SELECT * RENAME col_a AS col_b EXCLUDE col_z FROM data")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected end of statement, found: EXCLUDE"
+        "sql parser error: Expected: end of statement, found: EXCLUDE"
     );
 }
 
@@ -1135,13 +1135,13 @@ fn parse_snowflake_declare_cursor() {
 
     let error_sql = "DECLARE c1 CURSOR SELECT id FROM invoices";
     assert_eq!(
-        ParserError::ParserError("Expected FOR, found: SELECT".to_owned()),
+        ParserError::ParserError("Expected: FOR, found: SELECT".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE c1 CURSOR res";
     assert_eq!(
-        ParserError::ParserError("Expected FOR, found: res".to_owned()),
+        ParserError::ParserError("Expected: FOR, found: res".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1189,13 +1189,13 @@ fn parse_snowflake_declare_result_set() {
 
     let error_sql = "DECLARE res RESULTSET DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected an expression:, found: EOF".to_owned()),
+        ParserError::ParserError("Expected: an expression:, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE res RESULTSET :=";
     assert_eq!(
-        ParserError::ParserError("Expected an expression:, found: EOF".to_owned()),
+        ParserError::ParserError("Expected: an expression:, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1281,19 +1281,19 @@ fn parse_snowflake_declare_variable() {
 
     let error_sql = "DECLARE profit INT 2";
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: 2".to_owned()),
+        ParserError::ParserError("Expected: end of statement, found: 2".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE profit INT DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected an expression:, found: EOF".to_owned()),
+        ParserError::ParserError("Expected: an expression:, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE profit DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected an expression:, found: EOF".to_owned()),
+        ParserError::ParserError("Expected: an expression:, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1328,7 +1328,7 @@ fn parse_snowflake_declare_multi_statements() {
 
     let error_sql = "DECLARE profit DEFAULT 42 c1 CURSOR FOR res;";
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: c1".to_owned()),
+        ParserError::ParserError("Expected: end of statement, found: c1".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1903,7 +1903,7 @@ fn test_snowflake_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected ), found: 'a'".to_owned()),
+        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -2065,7 +2065,7 @@ fn test_select_wildcard_with_ilike_double_quote() {
     let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE "%id" FROM tbl"#);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "sql parser error: Expected ilike pattern, found: \"%id\""
+        "sql parser error: Expected: ilike pattern, found: \"%id\""
     );
 }
 
@@ -2074,7 +2074,7 @@ fn test_select_wildcard_with_ilike_number() {
     let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE 42 FROM tbl"#);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "sql parser error: Expected ilike pattern, found: 42"
+        "sql parser error: Expected: ilike pattern, found: 42"
     );
 }
 
@@ -2083,7 +2083,7 @@ fn test_select_wildcard_with_ilike_replace() {
     let res = snowflake().parse_sql_statements(r#"SELECT * ILIKE '%id%' EXCLUDE col FROM tbl"#);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "sql parser error: Expected end of statement, found: EXCLUDE"
+        "sql parser error: Expected: end of statement, found: EXCLUDE"
     );
 }
 

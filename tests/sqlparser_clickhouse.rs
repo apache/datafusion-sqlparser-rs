@@ -584,14 +584,14 @@ fn parse_select_parametric_function() {
                     assert_eq!(
                         parameters.args[0],
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
-                            "0.5".to_string(),
+                            "0.5".parse().unwrap(),
                             false
                         ))))
                     );
                     assert_eq!(
                         parameters.args[1],
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
-                            "0.6".to_string(),
+                            "0.6".parse().unwrap(),
                             false
                         ))))
                     );

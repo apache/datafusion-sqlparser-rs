@@ -50,7 +50,7 @@ pub use self::query::{
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
     SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, SymbolDefinition, Table,
     TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode,
-    Values, WildcardAdditionalOptions, With,
+    Values, WildcardAdditionalOptions, With, WithModifier,
 };
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,

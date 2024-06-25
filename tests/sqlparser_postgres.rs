@@ -1075,7 +1075,7 @@ fn parse_copy_to() {
                     from: vec![],
                     lateral_views: vec![],
                     selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
                     having: None,
                     named_window: vec![],
                     window_before_qualify: false,
@@ -2383,7 +2383,7 @@ fn parse_array_subquery_expr() {
                         from: vec![],
                         lateral_views: vec![],
                         selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -2402,7 +2402,7 @@ fn parse_array_subquery_expr() {
                         from: vec![],
                         lateral_views: vec![],
                         selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -3711,14 +3711,17 @@ fn parse_select_group_by_grouping_sets() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())"
     );
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::GroupingSets(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-                vec![],
-            ]),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("size")),
+                Expr::GroupingSets(vec![
+                    vec![Expr::Identifier(Ident::new("brand"))],
+                    vec![Expr::Identifier(Ident::new("size"))],
+                    vec![],
+                ]),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 }
@@ -3729,13 +3732,16 @@ fn parse_select_group_by_rollup() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)",
     );
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::Rollup(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-            ]),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("size")),
+                Expr::Rollup(vec![
+                    vec![Expr::Identifier(Ident::new("brand"))],
+                    vec![Expr::Identifier(Ident::new("size"))],
+                ]),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 }
@@ -3746,13 +3752,16 @@ fn parse_select_group_by_cube() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)",
     );
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::Cube(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-            ]),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("size")),
+                Expr::Cube(vec![
+                    vec![Expr::Identifier(Ident::new("brand"))],
+                    vec![Expr::Identifier(Ident::new("size"))],
+                ]),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 }

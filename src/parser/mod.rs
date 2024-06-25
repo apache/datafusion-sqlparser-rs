@@ -8287,13 +8287,36 @@ impl<'a> Parser<'a> {
         };
 
         let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
-            if self.parse_keyword(Keyword::ALL) {
-                GroupByExpr::All
+            let expressions = if self.parse_keyword(Keyword::ALL) {
+                None
             } else {
-                GroupByExpr::Expressions(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+                Some(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+            };
+
+            let mut modifiers = vec![];
+            loop {
+                if dialect_of!(self is ClickHouseDialect | GenericDialect)
+                    && self.parse_keyword(Keyword::WITH)
+                {
+                    if self.parse_keyword(Keyword::ROLLUP) {
+                        modifiers.push(WithModifier::Rollup);
+                    } else if self.parse_keyword(Keyword::CUBE) {
+                        modifiers.push(WithModifier::Cube);
+                    } else if self.parse_keyword(Keyword::TOTALS) {
+                        modifiers.push(WithModifier::Totals);
+                    } else {
+                        self.expected("ROLLUP, CUBE, or TOTALS", self.peek_token())?;
+                    }
+                } else {
+                    break;
+                }
+            }
+            match expressions {
+                None => GroupByExpr::All(modifiers),
+                Some(exprs) => GroupByExpr::Expressions(exprs, modifiers),
             }
         } else {
-            GroupByExpr::Expressions(vec![])
+            GroupByExpr::Expressions(vec![], vec![])
         };
 
         let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {

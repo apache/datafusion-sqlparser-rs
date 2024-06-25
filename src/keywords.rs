@@ -721,6 +721,7 @@ define_keywords!(
     TINYINT,
     TO,
     TOP,
+    TOTALS,
     TRAILING,
     TRANSACTION,
     TRANSIENT,

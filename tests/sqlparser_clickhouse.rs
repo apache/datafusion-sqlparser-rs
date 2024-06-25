@@ -88,7 +88,7 @@ fn parse_map_access_expr() {
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),
                 }),
             }),
-            group_by: GroupByExpr::Expressions(vec![]),
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],
@@ -624,6 +624,24 @@ fn parse_create_materialized_view() {
         "GROUP BY domain_name, month"
     );
     clickhouse_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_group_by_with_modifier() {
+    match clickhouse_and_generic().verified_stmt("SELECT * FROM t GROUP BY x WITH ROLLUP WITH CUBE")
+    {
+        Statement::Query(query) => {
+            let group_by = &query.body.as_select().unwrap().group_by;
+            assert_eq!(
+                group_by,
+                &GroupByExpr::Expressions(
+                    vec![Identifier(Ident::new("x"))],
+                    vec![WithModifier::Rollup, WithModifier::Cube]
+                )
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn clickhouse() -> TestedDialects {

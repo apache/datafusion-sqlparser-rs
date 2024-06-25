@@ -1869,10 +1869,11 @@ impl fmt::Display for SelectInto {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GroupByExpr {
-    /// ALL syntax of [Snowflake], and [DuckDB]
+    /// ALL syntax of [Snowflake], [DuckDB] and [ClickHouse].
     ///
     /// [Snowflake]: <https://docs.snowflake.com/en/sql-reference/constructs/group-by#label-group-by-all-columns>
     /// [DuckDB]:  <https://duckdb.org/docs/sql/query_syntax/groupby.html>
+    /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#group-by-all>
     All,
 
     /// Expressions

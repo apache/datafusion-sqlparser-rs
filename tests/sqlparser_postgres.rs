@@ -3541,7 +3541,7 @@ fn parse_drop_function() {
         pg().verified_stmt(sql),
         Statement::DropFunction {
             if_exists: true,
-            func_desc: vec![DropFunctionDesc {
+            func_desc: vec![DropFuncDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_func".to_string(),
                     quote_style: None
@@ -3557,7 +3557,7 @@ fn parse_drop_function() {
         pg().verified_stmt(sql),
         Statement::DropFunction {
             if_exists: true,
-            func_desc: vec![DropFunctionDesc {
+            func_desc: vec![DropFuncDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_func".to_string(),
                     quote_style: None
@@ -3582,7 +3582,7 @@ fn parse_drop_function() {
         Statement::DropFunction {
             if_exists: true,
             func_desc: vec![
-                DropFunctionDesc {
+                DropFuncDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_func1".to_string(),
                         quote_style: None
@@ -3600,9 +3600,99 @@ fn parse_drop_function() {
                         }
                     ]),
                 },
-                DropFunctionDesc {
+                DropFuncDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_func2".to_string(),
+                        quote_style: None
+                    }]),
+                    args: Some(vec![
+                        OperateFunctionArg::with_name("a", DataType::Varchar(None)),
+                        OperateFunctionArg {
+                            mode: Some(ArgMode::In),
+                            name: Some("b".into()),
+                            data_type: DataType::Integer(None),
+                            default_expr: Some(Expr::Value(Value::Number(
+                                "1".parse().unwrap(),
+                                false
+                            ))),
+                        }
+                    ]),
+                }
+            ],
+            option: None
+        }
+    );
+}
+
+#[test]
+fn parse_drop_procedure() {
+    let sql = "DROP PROCEDURE IF EXISTS test_proc";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropProcedure {
+            if_exists: true,
+            proc_desc: vec![DropFuncDesc {
+                name: ObjectName(vec![Ident {
+                    value: "test_proc".to_string(),
+                    quote_style: None
+                }]),
+                args: None
+            }],
+            option: None
+        }
+    );
+
+    let sql = "DROP PROCEDURE IF EXISTS test_proc(a INTEGER, IN b INTEGER = 1)";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropProcedure {
+            if_exists: true,
+            proc_desc: vec![DropFuncDesc {
+                name: ObjectName(vec![Ident {
+                    value: "test_proc".to_string(),
+                    quote_style: None
+                }]),
+                args: Some(vec![
+                    OperateFunctionArg::with_name("a", DataType::Integer(None)),
+                    OperateFunctionArg {
+                        mode: Some(ArgMode::In),
+                        name: Some("b".into()),
+                        data_type: DataType::Integer(None),
+                        default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    }
+                ]),
+            }],
+            option: None
+        }
+    );
+
+    let sql = "DROP PROCEDURE IF EXISTS test_proc1(a INTEGER, IN b INTEGER = 1), test_proc2(a VARCHAR, IN b INTEGER = 1)";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropProcedure {
+            if_exists: true,
+            proc_desc: vec![
+                DropFuncDesc {
+                    name: ObjectName(vec![Ident {
+                        value: "test_proc1".to_string(),
+                        quote_style: None
+                    }]),
+                    args: Some(vec![
+                        OperateFunctionArg::with_name("a", DataType::Integer(None)),
+                        OperateFunctionArg {
+                            mode: Some(ArgMode::In),
+                            name: Some("b".into()),
+                            data_type: DataType::Integer(None),
+                            default_expr: Some(Expr::Value(Value::Number(
+                                "1".parse().unwrap(),
+                                false
+                            ))),
+                        }
+                    ]),
+                },
+                DropFuncDesc {
+                    name: ObjectName(vec![Ident {
+                        value: "test_proc2".to_string(),
                         quote_style: None
                     }]),
                     args: Some(vec![

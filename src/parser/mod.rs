@@ -2260,7 +2260,7 @@ impl<'a> Parser<'a> {
 
         self.expect_token(&Token::LParen)?;
 
-        let fields = self.parse_comma_separated0(|p| {
+        let fields = self.parse_comma_separated(|p| {
             Ok(UnionField {
                 field_name: p.parse_identifier(false)?,
                 field_type: p.parse_data_type()?,

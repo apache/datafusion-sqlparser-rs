@@ -548,7 +548,7 @@ fn test_array_index() {
 
 #[test]
 fn test_duckdb_union_datatype() {
-    let sql = "CREATE TABLE tbl1 (empty UNION(), one UNION(a INT), two UNION(a INT, b INT), nested UNION(a UNION(b INT)))";
+    let sql = "CREATE TABLE tbl1 (one UNION(a INT), two UNION(a INT, b INT), nested UNION(a UNION(b INT)))";
     let stmt = duckdb_and_generic().verified_stmt(sql);
     assert_eq!(
         Statement::CreateTable(CreateTable {
@@ -561,12 +561,6 @@ fn test_duckdb_union_datatype() {
             volatile: Default::default(),
             name: ObjectName(vec!["tbl1".into()]),
             columns: vec![
-                ColumnDef {
-                    name: "empty".into(),
-                    data_type: DataType::Union(vec![]),
-                    collation: Default::default(),
-                    options: Default::default()
-                },
                 ColumnDef {
                     name: "one".into(),
                     data_type: DataType::Union(vec![UnionField {

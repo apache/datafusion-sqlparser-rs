@@ -2246,6 +2246,32 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    /// DuckDB specific: Parse a Union type definition as a sequence of field-value pairs.
+    ///
+    /// Syntax:
+    ///
+    /// ```sql
+    /// UNION(field_name field_type[,...])
+    /// ```
+    ///
+    /// [1]: https://duckdb.org/docs/sql/data_types/union.html
+    fn parse_union_type_def(&mut self) -> Result<Vec<UnionField>, ParserError> {
+        self.expect_keyword(Keyword::UNION)?;
+
+        self.expect_token(&Token::LParen)?;
+
+        let fields = self.parse_comma_separated(|p| {
+            Ok(UnionField {
+                field_name: p.parse_identifier(false)?,
+                field_type: p.parse_data_type()?,
+            })
+        })?;
+
+        self.expect_token(&Token::RParen)?;
+
+        Ok(fields)
+    }
+
     /// DuckDB specific: Parse a duckdb dictionary [1]
     ///
     /// Syntax:
@@ -7135,6 +7161,11 @@ impl<'a> Parser<'a> {
                         self.parse_struct_type_def(Self::parse_struct_field_def)?;
                     trailing_bracket = _trailing_bracket;
                     Ok(DataType::Struct(field_defs))
+                }
+                Keyword::UNION if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                    self.prev_token();
+                    let fields = self.parse_union_type_def()?;
+                    Ok(DataType::Union(fields))
                 }
                 Keyword::NULLABLE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
                     Ok(self.parse_sub_type(DataType::Nullable)?)

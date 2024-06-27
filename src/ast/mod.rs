@@ -294,6 +294,23 @@ impl fmt::Display for StructField {
     }
 }
 
+/// A field definition within a union
+///
+/// [duckdb]: https://duckdb.org/docs/sql/data_types/union.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct UnionField {
+    pub field_name: Ident,
+    pub field_type: DataType,
+}
+
+impl fmt::Display for UnionField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.field_name, self.field_type)
+    }
+}
+
 /// A dictionary field within a dictionary.
 ///
 /// [duckdb]: https://duckdb.org/docs/sql/data_types/struct#creating-structs

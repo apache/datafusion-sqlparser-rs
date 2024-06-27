@@ -10175,15 +10175,14 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_rename = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
-            self.parse_optional_select_item_rename()?
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect | DuckDbDialect | SnowflakeDialect)
+        {
+            self.parse_optional_select_item_replace()?
         } else {
             None
         };
-
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect |  DuckDbDialect | SnowflakeDialect)
-        {
-            self.parse_optional_select_item_replace()?
+        let opt_rename = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+            self.parse_optional_select_item_rename()?
         } else {
             None
         };

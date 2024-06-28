@@ -8294,21 +8294,22 @@ impl<'a> Parser<'a> {
             };
 
             let mut modifiers = vec![];
-            loop {
-                if dialect_of!(self is ClickHouseDialect | GenericDialect)
-                    && self.parse_keyword(Keyword::WITH)
-                {
-                    if self.parse_keyword(Keyword::ROLLUP) {
-                        modifiers.push(WithModifier::Rollup);
-                    } else if self.parse_keyword(Keyword::CUBE) {
-                        modifiers.push(WithModifier::Cube);
-                    } else if self.parse_keyword(Keyword::TOTALS) {
-                        modifiers.push(WithModifier::Totals);
-                    } else {
-                        self.expected("ROLLUP, CUBE, or TOTALS", self.peek_token())?;
+            if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                loop {
+                    if !self.parse_keyword(Keyword::WITH) {
+                        break;
                     }
-                } else {
-                    break;
+                    let keyword = self.expect_one_of_keywords(&[
+                        Keyword::ROLLUP,
+                        Keyword::CUBE,
+                        Keyword::TOTALS,
+                    ])?;
+                    modifiers.push(match keyword {
+                        Keyword::ROLLUP => GroupByWithModifier::Rollup,
+                        Keyword::CUBE => GroupByWithModifier::Cube,
+                        Keyword::TOTALS => GroupByWithModifier::Totals,
+                        _ => unreachable!(),
+                    });
                 }
             }
             match expressions {

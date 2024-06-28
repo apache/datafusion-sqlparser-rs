@@ -122,11 +122,11 @@ fn pragma_eq_placeholder_style() {
 fn parse_create_table_without_rowid() {
     let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             without_rowid: true,
             ..
-        } => {
+        }) => {
             assert_eq!("t", name.to_string());
         }
         _ => unreachable!(),
@@ -167,9 +167,11 @@ fn parse_create_view_temporary_if_not_exists() {
             materialized,
             options,
             cluster_by,
+            comment,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            ..
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -178,6 +180,7 @@ fn parse_create_view_temporary_if_not_exists() {
             assert!(!or_replace);
             assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
+            assert!(comment.is_none());
             assert!(!late_binding);
             assert!(if_not_exists);
             assert!(temporary);
@@ -198,7 +201,7 @@ fn double_equality_operator() {
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -232,7 +235,7 @@ fn parse_create_table_auto_increment() {
 fn parse_create_sqlite_quote() {
     let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INT, [INDEX] INT)";
     match sqlite().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![
@@ -293,7 +296,7 @@ fn test_placeholder() {
 #[test]
 fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
-    if let Statement::CreateTable { name, strict, .. } = sqlite().verified_stmt(sql) {
+    if let Statement::CreateTable(CreateTable { name, strict, .. }) = sqlite().verified_stmt(sql) {
         assert_eq!(name.to_string(), "Fruits");
         assert!(strict);
     }
@@ -332,6 +335,7 @@ fn parse_window_function_with_filter() {
             select.projection,
             vec![SelectItem::UnnamedExpr(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new(func_name)]),
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
@@ -372,6 +376,40 @@ fn parse_attach_database() {
 }
 
 #[test]
+fn parse_update_tuple_row_values() {
+    // See https://github.com/sqlparser-rs/sqlparser-rs/issues/1311
+    assert_eq!(
+        sqlite().verified_stmt("UPDATE x SET (a, b) = (1, 2)"),
+        Statement::Update {
+            assignments: vec![Assignment {
+                target: AssignmentTarget::Tuple(vec![
+                    ObjectName(vec![Ident::new("a"),]),
+                    ObjectName(vec![Ident::new("b"),]),
+                ]),
+                value: Expr::Tuple(vec![
+                    Expr::Value(Value::Number("1".parse().unwrap(), None)),
+                    Expr::Value(Value::Number("2".parse().unwrap(), None))
+                ])
+            }],
+            selection: None,
+            table: TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("x")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                    version: None,
+                    partitions: vec![]
+                },
+                joins: vec![],
+            },
+            from: None,
+            returning: None
+        }
+    );
+}
+
+#[test]
 fn parse_where_in_empty_list() {
     let sql = "SELECT * FROM t1 WHERE a IN ()";
     let select = sqlite().verified_only_select(sql);
@@ -392,7 +430,7 @@ fn invalid_empty_list() {
     let sql = "SELECT * FROM t1 WHERE a IN (,,)";
     let sqlite = sqlite_with_options(ParserOptions::new().with_trailing_commas(true));
     assert_eq!(
-        "sql parser error: Expected an expression:, found: ,",
+        "sql parser error: Expected: an expression:, found: ,",
         sqlite.parse_sql_statements(sql).unwrap_err().to_string()
     );
 }
@@ -416,17 +454,17 @@ fn parse_start_transaction_with_modifier() {
     };
     let res = unsupported_dialects.parse_sql_statements("BEGIN DEFERRED");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: DEFERRED".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: DEFERRED".to_string()),
         res.unwrap_err(),
     );
     let res = unsupported_dialects.parse_sql_statements("BEGIN IMMEDIATE");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: IMMEDIATE".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: IMMEDIATE".to_string()),
         res.unwrap_err(),
     );
     let res = unsupported_dialects.parse_sql_statements("BEGIN EXCLUSIVE");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: EXCLUSIVE".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: EXCLUSIVE".to_string()),
         res.unwrap_err(),
     );
 }

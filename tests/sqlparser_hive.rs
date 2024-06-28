@@ -17,8 +17,8 @@
 
 use sqlparser::ast::{
     CreateFunctionBody, CreateFunctionUsing, Expr, Function, FunctionArgumentList,
-    FunctionArguments, FunctionDefinition, Ident, ObjectName, OneOrManyWithParens, SelectItem,
-    Statement, TableFactor, UnaryOperator,
+    FunctionArguments, Ident, ObjectName, OneOrManyWithParens, SelectItem, Statement, TableFactor,
+    UnaryOperator, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
@@ -284,7 +284,7 @@ fn set_statement_with_minus() {
     assert_eq!(
         hive().parse_sql_statements("SET hive.tez.java.opts = -"),
         Err(ParserError::ParserError(
-            "Expected variable value, found: EOF".to_string()
+            "Expected: variable value, found: EOF".to_string()
         ))
     )
 }
@@ -296,22 +296,23 @@ fn parse_create_function() {
         Statement::CreateFunction {
             temporary,
             name,
-            params,
+            function_body,
+            using,
             ..
         } => {
             assert!(temporary);
             assert_eq!(name.to_string(), "mydb.myfunc");
             assert_eq!(
-                params,
-                CreateFunctionBody {
-                    as_: Some(FunctionDefinition::SingleQuotedDef(
-                        "org.random.class.Name".to_string()
-                    )),
-                    using: Some(CreateFunctionUsing::Jar(
-                        "hdfs://somewhere.com:8020/very/far".to_string()
-                    )),
-                    ..Default::default()
-                }
+                function_body,
+                Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
+                    Value::SingleQuotedString("org.random.class.Name".to_string())
+                )))
+            );
+            assert_eq!(
+                using,
+                Some(CreateFunctionUsing::Jar(
+                    "hdfs://somewhere.com:8020/very/far".to_string()
+                )),
             )
         }
         _ => unreachable!(),
@@ -326,14 +327,14 @@ fn parse_create_function() {
     assert_eq!(
         unsupported_dialects.parse_sql_statements(sql).unwrap_err(),
         ParserError::ParserError(
-            "Expected an object type after CREATE, found: FUNCTION".to_string()
+            "Expected: an object type after CREATE, found: FUNCTION".to_string()
         )
     );
 
     let sql = "CREATE TEMPORARY FUNCTION mydb.myfunc AS 'org.random.class.Name' USING JAR";
     assert_eq!(
         hive().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected literal string, found: EOF".to_string()),
+        ParserError::ParserError("Expected: literal string, found: EOF".to_string()),
     );
 }
 
@@ -380,6 +381,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -397,7 +399,7 @@ fn parse_delimited_identifiers() {
             assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
-        _ => panic!("Expected ExprWithAlias"),
+        _ => panic!("Expected: ExprWithAlias"),
     }
 
     hive().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);

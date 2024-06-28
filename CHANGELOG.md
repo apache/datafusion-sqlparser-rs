@@ -10,6 +10,33 @@ changes that break via addition as "Added".
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+
+## [0.47.0] 2024-06-01
+
+### Fixed
+* Re-support Postgres array slice syntax (#1290) - Thanks @jmhain
+* Fix DoubleColon cast skipping AT TIME ZONE #1266 (#1267) - Thanks @dmitrybugakov
+* Fix for values as table name in Databricks and generic (#1278) - Thanks @jmhain
+
+### Added
+* Support `ASOF` joins in Snowflake  (#1288) - Thanks @jmhain
+* Support `CREATE VIEW` with fields and data types ClickHouse  (#1292) - Thanks @7phs
+* Support view comments for Snowflake (#1287) - Thanks @bombsimon
+* Support dynamic pivot in Snowflake (#1280) - Thanks @jmhain
+* Support `CREATE FUNCTION` for BigQuery, generalize AST (#1253) - Thanks @iffyio
+* Support expression in `AT TIME ZONE` and fix precedence (#1272) - Thanks @jmhain
+* Support `IGNORE/RESPECT NULLS` inside function argument list  for Databricks (#1263) - Thanks @jmhain
+* Support `SELECT * EXCEPT` Databricks (#1261) - Thanks @jmhain
+* Support triple quoted strings (#1262) - Thanks @iffyio
+* Support array indexing for duckdb (#1265) - Thanks @JichaoS
+* Support multiple SET variables (#1252) - Thanks @iffyio
+* Support `ANY_VALUE` `HAVING` clause (#1258) in BigQuery - Thanks @jmhain
+* Support keywords as field names in BigQuery struct syntax (#1254) - Thanks @iffyio
+* Support `GROUP_CONCAT()` in MySQL  (#1256) - Thanks @jmhain
+* Support lambda functions in Databricks (#1257) - Thanks @jmhain
+* Add const generic peek_tokens method to parser (#1255) - Thanks @jmhain
+
+    
 ## [0.46.0] 2024-05-03
 
 ### Changed

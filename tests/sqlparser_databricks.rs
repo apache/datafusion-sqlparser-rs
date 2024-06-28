@@ -1,5 +1,5 @@
 use sqlparser::ast::*;
-use sqlparser::dialect::DatabricksDialect;
+use sqlparser::dialect::{DatabricksDialect, GenericDialect};
 use sqlparser::parser::ParserError;
 use test_utils::*;
 
@@ -9,6 +9,13 @@ mod test_utils;
 fn databricks() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(DatabricksDialect {})],
+        options: None,
+    }
+}
+
+fn databricks_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(DatabricksDialect {}), Box::new(GenericDialect {})],
         options: None,
     }
 }
@@ -57,7 +64,7 @@ fn test_databricks_exists() {
     let res = databricks().parse_sql_statements("SELECT EXISTS (");
     assert_eq!(
         // TODO: improve this error message...
-        ParserError::ParserError("Expected an expression:, found: EOF".to_string()),
+        ParserError::ParserError("Expected: an expression:, found: EOF".to_string()),
         res.unwrap_err(),
     );
 }
@@ -123,4 +130,61 @@ fn test_databricks_lambdas() {
         "map_zip_with(map(1, 'a', 2, 'b'), map(1, 'x', 2, 'y'), (k, v1, v2) -> concat(v1, v2))",
     );
     databricks().verified_expr("transform(array(1, 2, 3), x -> x + 1)");
+}
+
+#[test]
+fn test_values_clause() {
+    let values = Values {
+        explicit_row: false,
+        rows: vec![
+            vec![
+                Expr::Value(Value::DoubleQuotedString("one".to_owned())),
+                Expr::Value(number("1")),
+            ],
+            vec![
+                Expr::Value(Value::SingleQuotedString("two".to_owned())),
+                Expr::Value(number("2")),
+            ],
+        ],
+    };
+
+    let query = databricks().verified_query(r#"VALUES ("one", 1), ('two', 2)"#);
+    assert_eq!(SetExpr::Values(values.clone()), *query.body);
+
+    // VALUES is permitted in a FROM clause without a subquery
+    let query = databricks().verified_query_with_canonical(
+        r#"SELECT * FROM VALUES ("one", 1), ('two', 2)"#,
+        r#"SELECT * FROM (VALUES ("one", 1), ('two', 2))"#,
+    );
+    let Some(TableFactor::Derived { subquery, .. }) = query
+        .body
+        .as_select()
+        .map(|select| &select.from[0].relation)
+    else {
+        panic!("expected subquery");
+    };
+    assert_eq!(SetExpr::Values(values), *subquery.body);
+
+    // values is also a valid table name
+    let query = databricks_and_generic().verified_query(concat!(
+        "WITH values AS (SELECT 42) ",
+        "SELECT * FROM values",
+    ));
+    assert_eq!(
+        Some(&TableFactor::Table {
+            name: ObjectName(vec![Ident::new("values")]),
+            alias: None,
+            args: None,
+            with_hints: vec![],
+            version: None,
+            partitions: vec![]
+        }),
+        query
+            .body
+            .as_select()
+            .map(|select| &select.from[0].relation)
+    );
+
+    // TODO: support this example from https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-values.html#examples
+    // databricks().verified_query("VALUES 1, 2, 3");
 }

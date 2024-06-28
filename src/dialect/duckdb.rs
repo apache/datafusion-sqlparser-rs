@@ -18,6 +18,10 @@ pub struct DuckDbDialect;
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
 impl Dialect for DuckDbDialect {
+    fn supports_trailing_commas(&self) -> bool {
+        true
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         ch.is_alphabetic() || ch == '_'
     }

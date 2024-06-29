@@ -298,7 +298,14 @@ impl fmt::Display for Select {
         if let Some(ref selection) = self.selection {
             write!(f, " WHERE {selection}")?;
         }
-        write!(f, "{}", self.group_by)?;
+        match &self.group_by {
+            GroupByExpr::All(_) => write!(f, " {}", self.group_by)?,
+            GroupByExpr::Expressions(exprs, _) => {
+                if !exprs.is_empty() {
+                    write!(f, " {}", self.group_by)?
+                }
+            }
+        }
         if !self.cluster_by.is_empty() {
             write!(
                 f,
@@ -1904,18 +1911,15 @@ impl fmt::Display for GroupByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             GroupByExpr::All(modifiers) => {
-                write!(f, " GROUP BY ALL")?;
+                write!(f, "GROUP BY ALL")?;
                 if !modifiers.is_empty() {
                     write!(f, " {}", display_separated(modifiers, " "))?;
                 }
                 Ok(())
             }
             GroupByExpr::Expressions(col_names, modifiers) => {
-                if col_names.is_empty() {
-                    return Ok(());
-                }
                 let col_names = display_comma_separated(col_names);
-                write!(f, " GROUP BY {col_names}")?;
+                write!(f, "GROUP BY {col_names}")?;
                 if !modifiers.is_empty() {
                     write!(f, " {}", display_separated(modifiers, " "))?;
                 }

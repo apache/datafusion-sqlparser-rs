@@ -1858,14 +1858,14 @@ impl fmt::Display for SelectInto {
     }
 }
 
+/// ClickHouse supports GROUP BY WITH modifiers(includes ROLLUP|CUBE|TOTALS).
+/// e.g. GROUP BY year WITH ROLLUP WITH TOTALS
+///
+/// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#rollup-modifier>
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GroupByWithModifier {
-    /// ClickHouse supports GROUP BY WITH modifiers(includes ROLLUP|CUBE|TOTALS).
-    /// e.g. GROUP BY year WITH ROLLUP WITH TOTALS
-    ///
-    /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#rollup-modifier>
     Rollup,
     Cube,
     Totals,

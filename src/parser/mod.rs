@@ -8308,7 +8308,7 @@ impl<'a> Parser<'a> {
                         Keyword::ROLLUP => GroupByWithModifier::Rollup,
                         Keyword::CUBE => GroupByWithModifier::Cube,
                         Keyword::TOTALS => GroupByWithModifier::Totals,
-                        _ => unreachable!(),
+                        _ => return parser_err!("BUG: expected to match GroupBy modifier keyword", self.peek_token().location),
                     });
                 }
             }

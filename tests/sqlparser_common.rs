@@ -392,9 +392,10 @@ fn parse_update_set_from() {
                             }],
                             lateral_views: vec![],
                             selection: None,
-                            group_by: GroupByExpr::Expressions(vec![Expr::Identifier(Ident::new(
-                                "id"
-                            ))]),
+                            group_by: GroupByExpr::Expressions(
+                                vec![Expr::Identifier(Ident::new("id"))],
+                                vec![]
+                            ),
                             cluster_by: vec![],
                             distribute_by: vec![],
                             sort_by: vec![],
@@ -2119,10 +2120,13 @@ fn parse_select_group_by() {
     let sql = "SELECT id, fname, lname FROM customer GROUP BY lname, fname";
     let select = verified_only_select(sql);
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("lname")),
-            Expr::Identifier(Ident::new("fname")),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("lname")),
+                Expr::Identifier(Ident::new("fname")),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 
@@ -2137,7 +2141,7 @@ fn parse_select_group_by() {
 fn parse_select_group_by_all() {
     let sql = "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL";
     let select = verified_only_select(sql);
-    assert_eq!(GroupByExpr::All, select.group_by);
+    assert_eq!(GroupByExpr::All(vec![]), select.group_by);
 
     one_statement_parses_to(
         "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL",
@@ -4545,7 +4549,7 @@ fn test_parse_named_window() {
         }],
         lateral_views: vec![],
         selection: None,
-        group_by: GroupByExpr::Expressions(vec![]),
+        group_by: GroupByExpr::Expressions(vec![], vec![]),
         cluster_by: vec![],
         distribute_by: vec![],
         sort_by: vec![],
@@ -4974,7 +4978,7 @@ fn parse_interval_and_or_xor() {
                     }),
                 }),
             }),
-            group_by: GroupByExpr::Expressions(vec![]),
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],
@@ -6908,7 +6912,7 @@ fn lateral_function() {
         }],
         lateral_views: vec![],
         selection: None,
-        group_by: GroupByExpr::Expressions(vec![]),
+        group_by: GroupByExpr::Expressions(vec![], vec![]),
         cluster_by: vec![],
         distribute_by: vec![],
         sort_by: vec![],
@@ -7627,7 +7631,7 @@ fn parse_merge() {
                             }],
                             lateral_views: vec![],
                             selection: None,
-                            group_by: GroupByExpr::Expressions(vec![]),
+                            group_by: GroupByExpr::Expressions(vec![], vec![]),
                             cluster_by: vec![],
                             distribute_by: vec![],
                             sort_by: vec![],
@@ -9133,7 +9137,7 @@ fn parse_unload() {
                     }],
                     lateral_views: vec![],
                     selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -9276,7 +9280,7 @@ fn parse_connect_by() {
         into: None,
         lateral_views: vec![],
         selection: None,
-        group_by: GroupByExpr::Expressions(vec![]),
+        group_by: GroupByExpr::Expressions(vec![], vec![]),
         cluster_by: vec![],
         distribute_by: vec![],
         sort_by: vec![],
@@ -9364,7 +9368,7 @@ fn parse_connect_by() {
                 op: BinaryOperator::NotEq,
                 right: Box::new(Expr::Value(number("42"))),
             }),
-            group_by: GroupByExpr::Expressions(vec![]),
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],
@@ -9484,15 +9488,18 @@ fn test_group_by_grouping_sets() {
         all_dialects_where(|d| d.supports_group_by_expr())
             .verified_only_select(sql)
             .group_by,
-        GroupByExpr::Expressions(vec![Expr::GroupingSets(vec![
-            vec![
-                Expr::Identifier(Ident::new("city")),
-                Expr::Identifier(Ident::new("car_model"))
-            ],
-            vec![Expr::Identifier(Ident::new("city")),],
-            vec![Expr::Identifier(Ident::new("car_model"))],
+        GroupByExpr::Expressions(
+            vec![Expr::GroupingSets(vec![
+                vec![
+                    Expr::Identifier(Ident::new("city")),
+                    Expr::Identifier(Ident::new("car_model"))
+                ],
+                vec![Expr::Identifier(Ident::new("city")),],
+                vec![Expr::Identifier(Ident::new("car_model"))],
+                vec![]
+            ])],
             vec![]
-        ])])
+        )
     );
 }
 

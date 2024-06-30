@@ -299,10 +299,10 @@ impl fmt::Display for Select {
             write!(f, " WHERE {selection}")?;
         }
         match &self.group_by {
-            GroupByExpr::All => write!(f, " GROUP BY ALL")?,
-            GroupByExpr::Expressions(exprs) => {
+            GroupByExpr::All(_) => write!(f, " {}", self.group_by)?,
+            GroupByExpr::Expressions(exprs, _) => {
                 if !exprs.is_empty() {
-                    write!(f, " GROUP BY {}", display_comma_separated(exprs))?;
+                    write!(f, " {}", self.group_by)?
                 }
             }
         }
@@ -1866,27 +1866,65 @@ impl fmt::Display for SelectInto {
     }
 }
 
+/// ClickHouse supports GROUP BY WITH modifiers(includes ROLLUP|CUBE|TOTALS).
+/// e.g. GROUP BY year WITH ROLLUP WITH TOTALS
+///
+/// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#rollup-modifier>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum GroupByWithModifier {
+    Rollup,
+    Cube,
+    Totals,
+}
+
+impl fmt::Display for GroupByWithModifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GroupByWithModifier::Rollup => write!(f, "WITH ROLLUP"),
+            GroupByWithModifier::Cube => write!(f, "WITH CUBE"),
+            GroupByWithModifier::Totals => write!(f, "WITH TOTALS"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GroupByExpr {
-    /// ALL syntax of [Snowflake], and [DuckDB]
+    /// ALL syntax of [Snowflake], [DuckDB] and [ClickHouse].
     ///
     /// [Snowflake]: <https://docs.snowflake.com/en/sql-reference/constructs/group-by#label-group-by-all-columns>
     /// [DuckDB]:  <https://duckdb.org/docs/sql/query_syntax/groupby.html>
-    All,
+    /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#group-by-all>
+    ///
+    /// ClickHouse also supports WITH modifiers after GROUP BY ALL and expressions.
+    ///
+    /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#rollup-modifier>
+    All(Vec<GroupByWithModifier>),
 
     /// Expressions
-    Expressions(Vec<Expr>),
+    Expressions(Vec<Expr>, Vec<GroupByWithModifier>),
 }
 
 impl fmt::Display for GroupByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            GroupByExpr::All => write!(f, "GROUP BY ALL"),
-            GroupByExpr::Expressions(col_names) => {
+            GroupByExpr::All(modifiers) => {
+                write!(f, "GROUP BY ALL")?;
+                if !modifiers.is_empty() {
+                    write!(f, " {}", display_separated(modifiers, " "))?;
+                }
+                Ok(())
+            }
+            GroupByExpr::Expressions(col_names, modifiers) => {
                 let col_names = display_comma_separated(col_names);
-                write!(f, "GROUP BY ({col_names})")
+                write!(f, "GROUP BY {col_names}")?;
+                if !modifiers.is_empty() {
+                    write!(f, " {}", display_separated(modifiers, " "))?;
+                }
+                Ok(())
             }
         }
     }

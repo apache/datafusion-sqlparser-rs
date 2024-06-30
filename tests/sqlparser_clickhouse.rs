@@ -88,7 +88,7 @@ fn parse_map_access_expr() {
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),
                 }),
             }),
-            group_by: GroupByExpr::Expressions(vec![]),
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],
@@ -624,6 +624,61 @@ fn parse_create_materialized_view() {
         "GROUP BY domain_name, month"
     );
     clickhouse_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_group_by_with_modifier() {
+    let clauses = ["x", "a, b", "ALL"];
+    let modifiers = [
+        "WITH ROLLUP",
+        "WITH CUBE",
+        "WITH TOTALS",
+        "WITH ROLLUP WITH CUBE",
+    ];
+    let expected_modifiers = [
+        vec![GroupByWithModifier::Rollup],
+        vec![GroupByWithModifier::Cube],
+        vec![GroupByWithModifier::Totals],
+        vec![GroupByWithModifier::Rollup, GroupByWithModifier::Cube],
+    ];
+    for clause in &clauses {
+        for (modifier, expected_modifier) in modifiers.iter().zip(expected_modifiers.iter()) {
+            let sql = format!("SELECT * FROM t GROUP BY {clause} {modifier}");
+            match clickhouse_and_generic().verified_stmt(&sql) {
+                Statement::Query(query) => {
+                    let group_by = &query.body.as_select().unwrap().group_by;
+                    if clause == &"ALL" {
+                        assert_eq!(group_by, &GroupByExpr::All(expected_modifier.to_vec()));
+                    } else {
+                        assert_eq!(
+                            group_by,
+                            &GroupByExpr::Expressions(
+                                clause
+                                    .split(", ")
+                                    .map(|c| Identifier(Ident::new(c)))
+                                    .collect(),
+                                expected_modifier.to_vec()
+                            )
+                        );
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    // invalid cases
+    let invalid_cases = [
+        "SELECT * FROM t GROUP BY x WITH",
+        "SELECT * FROM t GROUP BY x WITH ROLLUP CUBE",
+        "SELECT * FROM t GROUP BY x WITH WITH ROLLUP",
+        "SELECT * FROM t GROUP BY WITH ROLLUP",
+    ];
+    for sql in invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: one of ROLLUP or CUBE or TOTALS, found: WITH");
+    }
 }
 
 fn clickhouse() -> TestedDialects {

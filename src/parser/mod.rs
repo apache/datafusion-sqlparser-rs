@@ -8319,13 +8319,42 @@ impl<'a> Parser<'a> {
         };
 
         let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
-            if self.parse_keyword(Keyword::ALL) {
-                GroupByExpr::All
+            let expressions = if self.parse_keyword(Keyword::ALL) {
+                None
             } else {
-                GroupByExpr::Expressions(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+                Some(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+            };
+
+            let mut modifiers = vec![];
+            if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                loop {
+                    if !self.parse_keyword(Keyword::WITH) {
+                        break;
+                    }
+                    let keyword = self.expect_one_of_keywords(&[
+                        Keyword::ROLLUP,
+                        Keyword::CUBE,
+                        Keyword::TOTALS,
+                    ])?;
+                    modifiers.push(match keyword {
+                        Keyword::ROLLUP => GroupByWithModifier::Rollup,
+                        Keyword::CUBE => GroupByWithModifier::Cube,
+                        Keyword::TOTALS => GroupByWithModifier::Totals,
+                        _ => {
+                            return parser_err!(
+                                "BUG: expected to match GroupBy modifier keyword",
+                                self.peek_token().location
+                            )
+                        }
+                    });
+                }
+            }
+            match expressions {
+                None => GroupByExpr::All(modifiers),
+                Some(exprs) => GroupByExpr::Expressions(exprs, modifiers),
             }
         } else {
-            GroupByExpr::Expressions(vec![])
+            GroupByExpr::Expressions(vec![], vec![])
         };
 
         let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {

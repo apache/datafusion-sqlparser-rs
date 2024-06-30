@@ -558,6 +558,7 @@ define_keywords!(
     PRECISION,
     PREPARE,
     PRESERVE,
+    PREWHERE,
     PRIMARY,
     PRIOR,
     PRIVILEGES,
@@ -850,6 +851,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::FOR,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for Clickhouse PREWHERE
+    Keyword::PREWHERE,
     // for Snowflake START WITH .. CONNECT BY
     Keyword::START,
     Keyword::CONNECT,

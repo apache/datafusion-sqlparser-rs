@@ -63,6 +63,7 @@ fn parse_map_access_expr() {
                 joins: vec![],
             }],
             lateral_views: vec![],
+            prewhere: None,
             selection: Some(BinaryOp {
                 left: Box::new(BinaryOp {
                     left: Box::new(Identifier(Ident::new("id"))),
@@ -678,6 +679,56 @@ fn parse_group_by_with_modifier() {
         clickhouse_and_generic()
             .parse_sql_statements(sql)
             .expect_err("Expected: one of ROLLUP or CUBE or TOTALS, found: WITH");
+    }
+}
+
+#[test]
+fn test_prewhere() {
+    match clickhouse().verified_stmt("SELECT * FROM t PREWHERE x = 1 WHERE y = 2") {
+        Statement::Query(query) => {
+            let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
+            assert_eq!(
+                prewhere,
+                Some(&BinaryOp {
+                    left: Box::new(Identifier(Ident::new("x"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                })
+            );
+            let selection = query.as_ref().body.as_select().unwrap().selection.as_ref();
+            assert_eq!(
+                selection,
+                Some(&BinaryOp {
+                    left: Box::new(Identifier(Ident::new("y"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match clickhouse().verified_stmt("SELECT * FROM t PREWHERE x = 1 AND y = 2") {
+        Statement::Query(query) => {
+            let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
+            assert_eq!(
+                prewhere,
+                Some(&BinaryOp {
+                    left: Box::new(BinaryOp {
+                        left: Box::new(Identifier(Ident::new("x"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    }),
+                    op: BinaryOperator::And,
+                    right: Box::new(BinaryOp {
+                        left: Box::new(Identifier(Ident::new("y"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
+                    }),
+                })
+            );
+        }
+        _ => unreachable!(),
     }
 }
 

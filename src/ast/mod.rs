@@ -48,7 +48,7 @@ pub use self::query::{
     MatchRecognizePattern, MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr,
     NonBlock, Offset, OffsetRows, OrderByExpr, PivotValueSource, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
-    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, SymbolDefinition, Table,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
     TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode,
     Values, WildcardAdditionalOptions, With,
 };

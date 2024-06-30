@@ -108,7 +108,7 @@ mod recursion {
         }
     }
 
-    /// Guard that increass the remaining depth by 1 on drop
+    /// Guard that increases the remaining depth by 1 on drop
     pub struct DepthGuard {
         remaining_depth: Rc<Cell<usize>>,
     }
@@ -194,7 +194,7 @@ const DEFAULT_REMAINING_DEPTH: usize = 50;
 /// nested such that the following declaration is possible:
 ///      `ARRAY<ARRAY<INT>>`
 /// But the tokenizer recognizes the `>>` as a ShiftRight token.
-/// We work-around that limitation when parsing a data type by accepting
+/// We work around that limitation when parsing a data type by accepting
 /// either a `>` or `>>` token in such cases, remembering which variant we
 /// matched.
 /// In the latter case having matched a `>>`, the parent type will not look to
@@ -1075,7 +1075,7 @@ impl<'a> Parser<'a> {
                     let expr = self.parse_subexpr(Self::PLUS_MINUS_PREC)?;
                     Ok(Expr::Prior(Box::new(expr)))
                 }
-                // Here `w` is a word, check if it's a part of a multi-part
+                // Here `w` is a word, check if it's a part of a multipart
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token().token {
                     Token::LParen | Token::Period => {
@@ -2009,7 +2009,7 @@ impl<'a> Parser<'a> {
     ///   4. INTERVAL '1:1:1.1' HOUR (5) TO SECOND (5)
     ///   5. INTERVAL '1.1' SECOND (2, 2)
     ///   6. INTERVAL '1:1' HOUR (5) TO MINUTE (5)
-    ///   7. (MySql & BigQuey only): INTERVAL 1 DAY
+    ///   7. (MySql & BigQuery only): INTERVAL 1 DAY
     /// ```
     ///
     /// Note that we do not currently attempt to parse the quoted value.
@@ -2749,7 +2749,7 @@ impl<'a> Parser<'a> {
         match token.token {
             Token::Word(Word {
                 value,
-                // path segments in SF dot notation can be unquoted or double quoted
+                // path segments in SF dot notation can be unquoted or double-quoted
                 quote_style: quote_style @ (Some('"') | None),
                 // some experimentation suggests that snowflake permits
                 // any keyword here unquoted.
@@ -2948,7 +2948,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1).token {
                 // The precedence of NOT varies depending on keyword that
                 // follows it. If it is followed by IN, BETWEEN, or LIKE,
-                // it takes on the precedence of those tokens. Otherwise it
+                // it takes on the precedence of those tokens. Otherwise, it
                 // is not an infix operator, and therefore has zero
                 // precedence.
                 Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
@@ -3251,7 +3251,7 @@ impl<'a> Parser<'a> {
     }
 
     /// If the current token is the `expected` keyword, consume the token.
-    /// Otherwise return an error.
+    /// Otherwise, return an error.
     pub fn expect_keyword(&mut self, expected: Keyword) -> Result<(), ParserError> {
         if self.parse_keyword(expected) {
             Ok(())
@@ -4508,7 +4508,7 @@ impl<'a> Parser<'a> {
                 self.peek_token(),
             );
         };
-        // Many dialects support the non standard `IF EXISTS` clause and allow
+        // Many dialects support the non-standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
@@ -4822,7 +4822,7 @@ impl<'a> Parser<'a> {
                         continue;
                     }
                     _ => {
-                        // Put back the semi-colon, this is the end of the DECLARE statement.
+                        // Put back the semicolon, this is the end of the DECLARE statement.
                         self.prev_token();
                     }
                 }
@@ -7278,7 +7278,7 @@ impl<'a> Parser<'a> {
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
             Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
-            // Support for MySql dialect double quoted string, `AS "HOUR"` for example
+            // Support for MySql dialect double-quoted string, `AS "HOUR"` for example
             Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
             _ => {
                 if after_as {

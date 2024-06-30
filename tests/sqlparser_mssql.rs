@@ -354,6 +354,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -481,7 +482,7 @@ fn parse_convert() {
 
     let error_sql = "SELECT CONVERT(INT, 'foo',) FROM T";
     assert_eq!(
-        ParserError::ParserError("Expected an expression:, found: )".to_owned()),
+        ParserError::ParserError("Expected: an expression:, found: )".to_owned()),
         ms().parse_sql_statements(error_sql).unwrap_err()
     );
 }

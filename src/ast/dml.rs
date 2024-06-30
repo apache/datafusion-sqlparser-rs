@@ -47,6 +47,49 @@ pub struct CreateIndex {
     pub nulls_distinct: Option<bool>,
     pub predicate: Option<Expr>,
 }
+
+impl Display for CreateIndex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {unique}INDEX {concurrently}{if_not_exists}",
+            unique = if self.unique { "UNIQUE " } else { "" },
+            concurrently = if self.concurrently {
+                "CONCURRENTLY "
+            } else {
+                ""
+            },
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+        )?;
+        if let Some(value) = &self.name {
+            write!(f, "{value} ")?;
+        }
+        write!(f, "ON {}", self.table_name)?;
+        if let Some(value) = &self.using {
+            write!(f, " USING {value} ")?;
+        }
+        write!(f, "({})", display_separated(&self.columns, ","))?;
+        if !self.include.is_empty() {
+            write!(f, " INCLUDE ({})", display_separated(&self.include, ","))?;
+        }
+        if let Some(value) = self.nulls_distinct {
+            if value {
+                write!(f, " NULLS DISTINCT")?;
+            } else {
+                write!(f, " NULLS NOT DISTINCT")?;
+            }
+        }
+        if let Some(predicate) = &self.predicate {
+            write!(f, " WHERE {predicate}")?;
+        }
+        Ok(())
+    }
+}
+
 /// CREATE TABLE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

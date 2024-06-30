@@ -648,7 +648,7 @@ fn parse_alter_table_alter_column_add_generated() {
         "ALTER TABLE t ALTER COLUMN id ADD GENERATED ( INCREMENT 1 MINVALUE 1 )",
     );
     assert_eq!(
-        ParserError::ParserError("Expected AS, found: (".to_string()),
+        ParserError::ParserError("Expected: AS, found: (".to_string()),
         res.unwrap_err()
     );
 
@@ -656,14 +656,14 @@ fn parse_alter_table_alter_column_add_generated() {
         "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( INCREMENT )",
     );
     assert_eq!(
-        ParserError::ParserError("Expected a value, found: )".to_string()),
+        ParserError::ParserError("Expected: a value, found: )".to_string()),
         res.unwrap_err()
     );
 
     let res =
         pg().parse_sql_statements("ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY (");
     assert_eq!(
-        ParserError::ParserError("Expected ), found: EOF".to_string()),
+        ParserError::ParserError("Expected: ), found: EOF".to_string()),
         res.unwrap_err()
     );
 }
@@ -733,25 +733,25 @@ fn parse_create_table_if_not_exists() {
 fn parse_bad_if_not_exists() {
     let res = pg().parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: EXISTS".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: EXISTS".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: uk_cities".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: uk_cities".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: NOT".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: NOT".to_string()),
         res.unwrap_err()
     );
 }
@@ -1300,21 +1300,21 @@ fn parse_set() {
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET"),
         Err(ParserError::ParserError(
-            "Expected identifier, found: EOF".to_string()
+            "Expected: identifier, found: EOF".to_string()
         )),
     );
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET a b"),
         Err(ParserError::ParserError(
-            "Expected equals sign or TO, found: b".to_string()
+            "Expected: equals sign or TO, found: b".to_string()
         )),
     );
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET a ="),
         Err(ParserError::ParserError(
-            "Expected variable value, found: EOF".to_string()
+            "Expected: variable value, found: EOF".to_string()
         )),
     );
 }
@@ -1557,7 +1557,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        id: vec!["dname".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
                     },],
                     selection: None
@@ -1588,14 +1588,14 @@ fn parse_pg_on_conflict() {
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
                         Assignment {
-                            id: vec!["dname".into()],
+                            target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                             value: Expr::CompoundIdentifier(vec![
                                 "EXCLUDED".into(),
                                 "dname".into()
                             ])
                         },
                         Assignment {
-                            id: vec!["area".into()],
+                            target: AssignmentTarget::ColumnName(ObjectName(vec!["area".into()])),
                             value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
                         },
                     ],
@@ -1645,7 +1645,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        id: vec!["dname".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -1682,7 +1682,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        id: vec!["dname".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -2369,6 +2369,7 @@ fn parse_array_subquery_expr() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("ARRAY")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::Subquery(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::SetOperation {
@@ -2685,7 +2686,7 @@ fn parse_json_table_is_not_reserved() {
             name: ObjectName(name),
             ..
         } => assert_eq!("JSON_TABLE", name[0].value),
-        other => panic!("Expected JSON_TABLE to be parsed as a table name, but got {other:?}"),
+        other => panic!("Expected: JSON_TABLE to be parsed as a table name, but got {other:?}"),
     }
 }
 
@@ -2729,6 +2730,7 @@ fn test_composite_value() {
                     Ident::new("information_schema"),
                     Ident::new("_pg_expandarray")
                 ]),
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
@@ -2874,7 +2876,7 @@ fn parse_escaped_literal_string() {
             .parse_sql_statements(sql)
             .unwrap_err()
             .to_string(),
-        "sql parser error: Unterminated encoded string literal at Line: 1, Column 8"
+        "sql parser error: Unterminated encoded string literal at Line: 1, Column: 8"
     );
 
     let sql = r"SELECT E'\u0001', E'\U0010FFFF', E'\xC', E'\x25', E'\2', E'\45', E'\445'";
@@ -2917,7 +2919,7 @@ fn parse_escaped_literal_string() {
                     .parse_sql_statements(sql)
                     .unwrap_err()
                     .to_string(),
-                "sql parser error: Unterminated encoded string literal at Line: 1, Column 8"
+                "sql parser error: Unterminated encoded string literal at Line: 1, Column: 8"
             );
         }
     }
@@ -2955,6 +2957,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_CATALOG")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -2966,6 +2969,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_USER")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -2977,6 +2981,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("SESSION_USER")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -2988,6 +2993,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("USER")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -3438,6 +3444,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -3455,7 +3462,7 @@ fn parse_delimited_identifiers() {
             assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
-        _ => panic!("Expected ExprWithAlias"),
+        _ => panic!("Expected: ExprWithAlias"),
     }
 
     pg().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);

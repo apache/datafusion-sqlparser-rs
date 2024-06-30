@@ -136,6 +136,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],

@@ -183,6 +183,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -554,11 +555,75 @@ fn parse_select_star_except() {
 }
 
 #[test]
+fn parse_select_parametric_function() {
+    match clickhouse_and_generic().verified_stmt("SELECT HISTOGRAM(0.5, 0.6)(x, y) FROM t") {
+        Statement::Query(query) => {
+            let projection: &Vec<SelectItem> = query.body.as_select().unwrap().projection.as_ref();
+            assert_eq!(projection.len(), 1);
+            match &projection[0] {
+                UnnamedExpr(Expr::Function(f)) => {
+                    let args = match &f.args {
+                        FunctionArguments::List(ref args) => args,
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(args.args.len(), 2);
+                    assert_eq!(
+                        args.args[0],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("x"))))
+                    );
+                    assert_eq!(
+                        args.args[1],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("y"))))
+                    );
+
+                    let parameters = match f.parameters {
+                        FunctionArguments::List(ref args) => args,
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(parameters.args.len(), 2);
+                    assert_eq!(
+                        parameters.args[0],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
+                            "0.5".parse().unwrap(),
+                            false
+                        ))))
+                    );
+                    assert_eq!(
+                        parameters.args[1],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
+                            "0.6".parse().unwrap(),
+                            false
+                        ))))
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_select_star_except_no_parens() {
     clickhouse().one_statement_parses_to(
         "SELECT * EXCEPT prev_status FROM anomalies",
         "SELECT * EXCEPT (prev_status) FROM anomalies",
     );
+}
+
+#[test]
+fn parse_create_materialized_view() {
+    // example sql
+    // https://clickhouse.com/docs/en/guides/developer/cascading-materialized-views
+    let sql = concat!(
+        "CREATE MATERIALIZED VIEW analytics.monthly_aggregated_data_mv ",
+        "TO analytics.monthly_aggregated_data ",
+        "AS SELECT toDate(toStartOfMonth(event_time)) ",
+        "AS month, domain_name, sumState(count_views) ",
+        "AS sumCountViews FROM analytics.hourly_data ",
+        "GROUP BY domain_name, month"
+    );
+    clickhouse_and_generic().verified_stmt(sql);
 }
 
 fn clickhouse() -> TestedDialects {

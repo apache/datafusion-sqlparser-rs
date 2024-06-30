@@ -20,10 +20,14 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::fmt;
+use core::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use log::debug;
 
+use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
@@ -67,11 +71,11 @@ mod recursion {
     use super::ParserError;
 
     /// Tracks remaining recursion depth. This value is decremented on
-    /// each call to `try_decrease()`, when it reaches 0 an error will
+    /// each call to [`RecursionCounter::try_decrease()`], when it reaches 0 an error will
     /// be returned.
     ///
-    /// Note: Uses an Rc and Cell in order to satisfy the Rust
-    /// borrow checker so the automatic DepthGuard decrement a
+    /// Note: Uses an [`std::rc::Rc`] and [`std::cell::Cell`] in order to satisfy the Rust
+    /// borrow checker so the automatic [`DepthGuard`] decrement a
     /// reference to the counter.
     pub(crate) struct RecursionCounter {
         remaining_depth: Rc<Cell<usize>>,
@@ -88,7 +92,7 @@ mod recursion {
 
         /// Decreases the remaining depth by 1.
         ///
-        /// Returns `Err` if the remaining depth falls to 0.
+        /// Returns [`Err`] if the remaining depth falls to 0.
         ///
         /// Returns a [`DepthGuard`] which will adds 1 to the
         /// remaining depth upon drop;
@@ -127,7 +131,7 @@ mod recursion {
     /// Implementation [`RecursionCounter`] if std is NOT available (and does not
     /// guard against stack overflow).
     ///
-    /// Has the same API as the std RecursionCounter implementation
+    /// Has the same API as the std [`RecursionCounter`] implementation
     /// but does not actually limit stack depth.
     pub(crate) struct RecursionCounter {}
 
@@ -142,8 +146,6 @@ mod recursion {
 
     pub struct DepthGuard {}
 }
-
-use recursion::RecursionCounter;
 
 #[derive(PartialEq, Eq)]
 pub enum IsOptional {
@@ -268,17 +270,17 @@ enum ParserState {
 
 pub struct Parser<'a> {
     tokens: Vec<TokenWithLocation>,
-    /// The index of the first unprocessed token in `self.tokens`
+    /// The index of the first unprocessed token in [`Parser::tokens`].
     index: usize,
     /// The current state of the parser.
     state: ParserState,
-    /// The current dialect to use
+    /// The current dialect to use.
     dialect: &'a dyn Dialect,
     /// Additional options that allow you to mix & match behavior
     /// otherwise constrained to certain dialects (e.g. trailing
-    /// commas) and/or format of parse (e.g. unescaping)
+    /// commas) and/or format of parse (e.g. unescaping).
     options: ParserOptions,
-    /// ensure the stack does not overflow by limiting recursion depth
+    /// Ensure the stack does not overflow by limiting recursion depth.
     recursion_counter: RecursionCounter,
 }
 
@@ -311,7 +313,6 @@ impl<'a> Parser<'a> {
 
     /// Specify the maximum recursion limit while parsing.
     ///
-    ///
     /// [`Parser`] prevents stack overflows by returning
     /// [`ParserError::RecursionLimitExceeded`] if the parser exceeds
     /// this depth while processing the query.
@@ -335,7 +336,6 @@ impl<'a> Parser<'a> {
     }
 
     /// Specify additional parser options
-    ///
     ///
     /// [`Parser`] supports additional options ([`ParserOptions`])
     /// that allow you to mix & match behavior otherwise constrained
@@ -822,7 +822,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a new expression including wildcard & qualified wildcard
+    /// Parse a new expression including wildcard & qualified wildcard.
     pub fn parse_wildcard_expr(&mut self) -> Result<Expr, ParserError> {
         let index = self.index;
 
@@ -865,13 +865,13 @@ impl<'a> Parser<'a> {
         self.parse_expr()
     }
 
-    /// Parse a new expression
+    /// Parse a new expression.
     pub fn parse_expr(&mut self) -> Result<Expr, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         self.parse_subexpr(0)
     }
 
-    /// Parse tokens until the precedence changes
+    /// Parse tokens until the precedence changes.
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
@@ -906,8 +906,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Get the precedence of the next token
-    /// With AND, OR, and XOR
+    /// Get the precedence of the next token, with AND, OR, and XOR.
     pub fn get_next_interval_precedence(&self) -> Result<u8, ParserError> {
         let token = self.peek_token();
 
@@ -942,7 +941,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::ReleaseSavepoint { name })
     }
 
-    /// Parse an expression prefix
+    /// Parse an expression prefix.
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
         if let Some(prefix) = self.dialect.parse_prefix(self) {
@@ -999,6 +998,7 @@ impl<'a> Parser<'a> {
                 {
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
+                        parameters: FunctionArguments::None,
                         args: FunctionArguments::None,
                         null_treatment: None,
                         filter: None,
@@ -1055,6 +1055,7 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
+                        parameters: FunctionArguments::None,
                         args: FunctionArguments::Subquery(query),
                         filter: None,
                         null_treatment: None,
@@ -1290,6 +1291,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::Function(Function {
                 name,
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::Subquery(subquery),
                 filter: None,
                 null_treatment: None,
@@ -1298,7 +1300,16 @@ impl<'a> Parser<'a> {
             }));
         }
 
-        let args = self.parse_function_argument_list()?;
+        let mut args = self.parse_function_argument_list()?;
+        let mut parameters = FunctionArguments::None;
+        // ClickHouse aggregations support parametric functions like `HISTOGRAM(0.5, 0.6)(x, y)`
+        // which (0.5, 0.6) is a parameter to the function.
+        if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.consume_token(&Token::LParen)
+        {
+            parameters = FunctionArguments::List(args);
+            args = self.parse_function_argument_list()?;
+        }
 
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
             self.expect_token(&Token::LParen)?;
@@ -1347,6 +1358,7 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Function(Function {
             name,
+            parameters,
             args: FunctionArguments::List(args),
             null_treatment,
             filter,
@@ -1379,6 +1391,7 @@ impl<'a> Parser<'a> {
         };
         Ok(Expr::Function(Function {
             name,
+            parameters: FunctionArguments::None,
             args,
             filter: None,
             over: None,
@@ -1440,8 +1453,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
-    /// expr.
+    /// Parse a group by expr. Group by expr can be one of group sets, roll up, cube, or simple expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
         if self.dialect.supports_group_by_expr() {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
@@ -1468,7 +1480,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// parse a tuple with `(` and `)`.
+    /// Parse a tuple with `(` and `)`.
     /// If `lift_singleton` is true, then a singleton tuple is lifted to a tuple of length 1, otherwise it will fail.
     /// If `allow_empty` is true, then an empty tuple is allowed.
     fn parse_tuple(
@@ -1937,13 +1949,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parses fulltext expressions [(1)]
+    /// Parses fulltext expressions [`sqlparser::ast::Expr::MatchAgainst`]
     ///
     /// # Errors
     /// This method will raise an error if the column list is empty or with invalid identifiers,
     /// the match expression is not a literal string, or if the search modifier is not valid.
-    ///
-    /// [(1)]: Expr::MatchAgainst
     pub fn parse_match_against(&mut self) -> Result<Expr, ParserError> {
         let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
 
@@ -1988,17 +1998,19 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse an INTERVAL expression.
+    /// Parse an `INTERVAL` expression.
     ///
     /// Some syntactically valid intervals:
     ///
-    ///   1. `INTERVAL '1' DAY`
-    ///   2. `INTERVAL '1-1' YEAR TO MONTH`
-    ///   3. `INTERVAL '1' SECOND`
-    ///   4. `INTERVAL '1:1:1.1' HOUR (5) TO SECOND (5)`
-    ///   5. `INTERVAL '1.1' SECOND (2, 2)`
-    ///   6. `INTERVAL '1:1' HOUR (5) TO MINUTE (5)`
-    ///   7. (MySql and BigQuery only):`INTERVAL 1 DAY`
+    /// ```sql
+    ///   1. INTERVAL '1' DAY
+    ///   2. INTERVAL '1-1' YEAR TO MONTH
+    ///   3. INTERVAL '1' SECOND
+    ///   4. INTERVAL '1:1:1.1' HOUR (5) TO SECOND (5)
+    ///   5. INTERVAL '1.1' SECOND (2, 2)
+    ///   6. INTERVAL '1:1' HOUR (5) TO MINUTE (5)
+    ///   7. (MySql & BigQuery only): INTERVAL 1 DAY
+    /// ```
     ///
     /// Note that we do not currently attempt to parse the quoted value.
     pub fn parse_interval(&mut self) -> Result<Expr, ParserError> {
@@ -2194,15 +2206,15 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    /// Parse a field definition in a struct [1] or tuple [2].
+    /// Parse a field definition in a [struct] or [tuple].
     /// Syntax:
     ///
     /// ```sql
     /// [field_name] field_type
     /// ```
     ///
-    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#declaring_a_struct_type
-    /// [2]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
+    /// [struct]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#declaring_a_struct_type
+    /// [tuple]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
     fn parse_struct_field_def(
         &mut self,
     ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
@@ -2230,7 +2242,33 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    /// DuckDB specific: Parse a duckdb dictionary [1]
+    /// DuckDB specific: Parse a Union type definition as a sequence of field-value pairs.
+    ///
+    /// Syntax:
+    ///
+    /// ```sql
+    /// UNION(field_name field_type[,...])
+    /// ```
+    ///
+    /// [1]: https://duckdb.org/docs/sql/data_types/union.html
+    fn parse_union_type_def(&mut self) -> Result<Vec<UnionField>, ParserError> {
+        self.expect_keyword(Keyword::UNION)?;
+
+        self.expect_token(&Token::LParen)?;
+
+        let fields = self.parse_comma_separated(|p| {
+            Ok(UnionField {
+                field_name: p.parse_identifier(false)?,
+                field_type: p.parse_data_type()?,
+            })
+        })?;
+
+        self.expect_token(&Token::RParen)?;
+
+        Ok(fields)
+    }
+
+    /// DuckDB specific: Parse a duckdb [dictionary]
     ///
     /// Syntax:
     ///
@@ -2238,7 +2276,7 @@ impl<'a> Parser<'a> {
     /// {'field_name': expr1[, ... ]}
     /// ```
     ///
-    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    /// [dictionary]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     fn parse_duckdb_struct_literal(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LBrace)?;
 
@@ -2249,13 +2287,15 @@ impl<'a> Parser<'a> {
         Ok(Expr::Dictionary(fields))
     }
 
-    /// Parse a field for a duckdb dictionary [1]
+    /// Parse a field for a duckdb [dictionary]
+    ///
     /// Syntax
+    ///
     /// ```sql
     /// 'name': expr
     /// ```
     ///
-    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    /// [dictionary]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     fn parse_duckdb_dictionary_field(&mut self) -> Result<DictionaryField, ParserError> {
         let key = self.parse_identifier(false)?;
 
@@ -2269,13 +2309,15 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse clickhouse map [1]
+    /// Parse clickhouse [map]
+    ///
     /// Syntax
+    ///
     /// ```sql
     /// Map(key_data_type, value_data_type)
     /// ```
     ///
-    /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/map
+    /// [map]: https://clickhouse.com/docs/en/sql-reference/data-types/map
     fn parse_click_house_map_def(&mut self) -> Result<(DataType, DataType), ParserError> {
         self.expect_keyword(Keyword::MAP)?;
         self.expect_token(&Token::LParen)?;
@@ -2287,13 +2329,15 @@ impl<'a> Parser<'a> {
         Ok((key_data_type, value_data_type))
     }
 
-    /// Parse clickhouse tuple [1]
+    /// Parse clickhouse [tuple]
+    ///
     /// Syntax
+    ///
     /// ```sql
     /// Tuple([field_name] field_type, ...)
     /// ```
     ///
-    /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
+    /// [tuple]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
     fn parse_click_house_tuple_def(&mut self) -> Result<Vec<StructField>, ParserError> {
         self.expect_keyword(Keyword::TUPLE)?;
         self.expect_token(&Token::LParen)?;
@@ -2607,7 +2651,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// parse the ESCAPE CHAR portion of LIKE, ILIKE, and SIMILAR TO
+    /// Parse the `ESCAPE CHAR` portion of `LIKE`, `ILIKE`, and `SIMILAR TO`
     pub fn parse_escape_char(&mut self) -> Result<Option<String>, ParserError> {
         if self.parse_keyword(Keyword::ESCAPE) {
             Ok(Some(self.parse_literal_string()?))
@@ -2794,7 +2838,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parses the parens following the `[ NOT ] IN` operator
+    /// Parses the parens following the `[ NOT ] IN` operator.
     pub fn parse_in(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         // BigQuery allows `IN UNNEST(array_expression)`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
@@ -2831,7 +2875,7 @@ impl<'a> Parser<'a> {
         Ok(in_op)
     }
 
-    /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed
+    /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed.
     pub fn parse_between(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         // Stop parsing subexpressions for <low> and <high> on tokens with
         // precedence lower than that of `BETWEEN`, such as `AND`, `IS`, etc.
@@ -2846,7 +2890,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a postgresql casting style which is in the form of `expr::datatype`
+    /// Parse a postgresql casting style which is in the form of `expr::datatype`.
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         Ok(Expr::Cast {
             kind: CastKind::DoubleColon,
@@ -2856,7 +2900,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    // use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
+    // Use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
     // higher number = higher precedence
     //
     // NOTE: The pg documentation is incomplete, e.g. the AT TIME ZONE operator
@@ -3113,7 +3157,7 @@ impl<'a> Parser<'a> {
     /// Report `found` was encountered instead of `expected`
     pub fn expected<T>(&self, expected: &str, found: TokenWithLocation) -> Result<T, ParserError> {
         parser_err!(
-            format!("Expected {expected}, found: {found}"),
+            format!("Expected: {expected}, found: {found}"),
             found.location
         )
     }
@@ -3175,7 +3219,7 @@ impl<'a> Parser<'a> {
 
     /// If the current token is one of the given `keywords`, consume the token
     /// and return the keyword that matches. Otherwise, no tokens are consumed
-    /// and returns `None`.
+    /// and returns [`None`].
     #[must_use]
     pub fn parse_one_of_keywords(&mut self, keywords: &[Keyword]) -> Option<Keyword> {
         match self.peek_token().token {
@@ -3260,6 +3304,18 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse<T: FromStr>(s: String, loc: Location) -> Result<T, ParserError>
+    where
+        <T as FromStr>::Err: Display,
+    {
+        s.parse::<T>().map_err(|e| {
+            ParserError::ParserError(format!(
+                "Could not parse '{s}' as {}: {e}{loc}",
+                core::any::type_name::<T>()
+            ))
+        })
+    }
+
     /// Parse a comma-separated list of 1+ SelectItem
     pub fn parse_projection(&mut self) -> Result<Vec<SelectItem>, ParserError> {
         // BigQuery and Snowflake allow trailing commas, but only in project lists
@@ -3339,8 +3395,7 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated(f)
     }
 
-    /// Run a parser method `f`, reverting back to the current position
-    /// if unsuccessful.
+    /// Run a parser method `f`, reverting back to the current position if unsuccessful.
     #[must_use]
     fn maybe_parse<T, F>(&mut self, mut f: F) -> Option<T>
     where
@@ -3355,8 +3410,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse either `ALL`, `DISTINCT` or `DISTINCT ON (...)`. Returns `None` if `ALL` is parsed
-    /// and results in a `ParserError` if both `ALL` and `DISTINCT` are found.
+    /// Parse either `ALL`, `DISTINCT` or `DISTINCT ON (...)`. Returns [`None`] if `ALL` is parsed
+    /// and results in a [`ParserError`] if both `ALL` and `DISTINCT` are found.
     pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
         let loc = self.peek_token().location;
         let all = self.parse_keyword(Keyword::ALL);
@@ -3596,21 +3651,13 @@ impl<'a> Parser<'a> {
 
     /// Parse a UNCACHE TABLE statement
     pub fn parse_uncache_table(&mut self) -> Result<Statement, ParserError> {
-        let has_table = self.parse_keyword(Keyword::TABLE);
-        if has_table {
-            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-            let table_name = self.parse_object_name(false)?;
-            if self.peek_token().token == Token::EOF {
-                Ok(Statement::UNCache {
-                    table_name,
-                    if_exists,
-                })
-            } else {
-                self.expected("an `EOF`", self.peek_token())
-            }
-        } else {
-            self.expected("a `TABLE` keyword", self.peek_token())
-        }
+        self.expect_keyword(Keyword::TABLE)?;
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let table_name = self.parse_object_name(false)?;
+        Ok(Statement::UNCache {
+            table_name,
+            if_exists,
+        })
     }
 
     /// SQLite-specific `CREATE VIRTUAL TABLE`
@@ -4157,6 +4204,14 @@ impl<'a> Parser<'a> {
             };
         }
 
+        let to = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keyword(Keyword::TO)
+        {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
         let comment = if dialect_of!(self is SnowflakeDialect | GenericDialect)
             && self.parse_keyword(Keyword::COMMENT)
         {
@@ -4194,6 +4249,7 @@ impl<'a> Parser<'a> {
             with_no_schema_binding,
             if_not_exists,
             temporary,
+            to,
         })
     }
 
@@ -5281,7 +5337,7 @@ impl<'a> Parser<'a> {
             let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
-                Token::Number(s, _) => Some(s.parse::<u32>().expect("literal int")),
+                Token::Number(s, _) => Some(Self::parse::<u32>(s, next_token.location)?),
                 _ => self.expected("literal int", next_token)?,
             }
         } else {
@@ -6454,6 +6510,7 @@ impl<'a> Parser<'a> {
         } else {
             Ok(Statement::Call(Function {
                 name: object_name,
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::None,
                 over: None,
                 filter: None,
@@ -6725,10 +6782,7 @@ impl<'a> Parser<'a> {
             // The call to n.parse() returns a bigdecimal when the
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
-            Token::Number(ref n, l) => match n.parse() {
-                Ok(n) => Ok(Value::Number(n, l)),
-                Err(e) => parser_err!(format!("Could not parse '{n}' as number: {e}"), location),
-            },
+            Token::Number(n, l) => Ok(Value::Number(Self::parse(n, location)?, l)),
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
             Token::TripleSingleQuotedString(ref s) => {
@@ -6820,9 +6874,7 @@ impl<'a> Parser<'a> {
     pub fn parse_literal_uint(&mut self) -> Result<u64, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            Token::Number(s, _) => s.parse::<u64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{s}' as u64: {e}"))
-            }),
+            Token::Number(s, _) => Self::parse::<u64>(s, next_token.location),
             _ => self.expected("literal int", next_token),
         }
     }
@@ -7110,6 +7162,11 @@ impl<'a> Parser<'a> {
                         self.parse_struct_type_def(Self::parse_struct_field_def)?;
                     trailing_bracket = _trailing_bracket;
                     Ok(DataType::Struct(field_defs))
+                }
+                Keyword::UNION if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                    self.prev_token();
+                    let fields = self.parse_union_type_def()?;
+                    Ok(DataType::Union(fields))
                 }
                 Keyword::NULLABLE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
                     Ok(self.parse_sub_type(DataType::Nullable)?)
@@ -8081,7 +8138,7 @@ impl<'a> Parser<'a> {
     pub fn parse_query_body(&mut self, precedence: u8) -> Result<SetExpr, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
-        let mut expr = if self.parse_keyword(Keyword::SELECT) {
+        let expr = if self.parse_keyword(Keyword::SELECT) {
             SetExpr::Select(self.parse_select().map(Box::new)?)
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
@@ -8100,6 +8157,17 @@ impl<'a> Parser<'a> {
             );
         };
 
+        self.parse_remaining_set_exprs(expr, precedence)
+    }
+
+    /// Parse any extra set expressions that may be present in a query body
+    ///
+    /// (this is its own function to reduce required stack size in debug builds)
+    fn parse_remaining_set_exprs(
+        &mut self,
+        mut expr: SetExpr,
+        precedence: u8,
+    ) -> Result<SetExpr, ParserError> {
         loop {
             // The query can be optionally followed by a set operator:
             let op = self.parse_set_operator(&self.peek_token().token);
@@ -8138,7 +8206,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_set_quantifier(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
         match op {
-            Some(SetOperator::Union) => {
+            Some(SetOperator::Except | SetOperator::Intersect | SetOperator::Union) => {
                 if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
                     SetQuantifier::DistinctByName
                 } else if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
@@ -8149,15 +8217,6 @@ impl<'a> Parser<'a> {
                     } else {
                         SetQuantifier::All
                     }
-                } else if self.parse_keyword(Keyword::DISTINCT) {
-                    SetQuantifier::Distinct
-                } else {
-                    SetQuantifier::None
-                }
-            }
-            Some(SetOperator::Except) | Some(SetOperator::Intersect) => {
-                if self.parse_keyword(Keyword::ALL) {
-                    SetQuantifier::All
                 } else if self.parse_keyword(Keyword::DISTINCT) {
                     SetQuantifier::Distinct
                 } else {
@@ -8547,10 +8606,10 @@ impl<'a> Parser<'a> {
             })
         } else if variable.to_string() == "TRANSACTION" && modifier.is_none() {
             if self.parse_keyword(Keyword::SNAPSHOT) {
-                let snaphot_id = self.parse_value()?;
+                let snapshot_id = self.parse_value()?;
                 return Ok(Statement::SetTransaction {
                     modes: vec![],
-                    snapshot: Some(snaphot_id),
+                    snapshot: Some(snapshot_id),
                     session: false,
                 });
             }
@@ -9282,7 +9341,7 @@ impl<'a> Parser<'a> {
                                 return self.expected("literal number", next_token);
                             };
                             self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::AtMost(n.parse().expect("literal int"))
+                            RepetitionQuantifier::AtMost(Self::parse(n, token.location)?)
                         }
                         Token::Number(n, _) if self.consume_token(&Token::Comma) => {
                             let next_token = self.next_token();
@@ -9290,12 +9349,12 @@ impl<'a> Parser<'a> {
                                 Token::Number(m, _) => {
                                     self.expect_token(&Token::RBrace)?;
                                     RepetitionQuantifier::Range(
-                                        n.parse().expect("literal int"),
-                                        m.parse().expect("literal int"),
+                                        Self::parse(n, token.location)?,
+                                        Self::parse(m, token.location)?,
                                     )
                                 }
                                 Token::RBrace => {
-                                    RepetitionQuantifier::AtLeast(n.parse().expect("literal int"))
+                                    RepetitionQuantifier::AtLeast(Self::parse(n, token.location)?)
                                 }
                                 _ => {
                                     return self.expected("} or upper bound", next_token);
@@ -9304,7 +9363,7 @@ impl<'a> Parser<'a> {
                         }
                         Token::Number(n, _) => {
                             self.expect_token(&Token::RBrace)?;
-                            RepetitionQuantifier::Exactly(n.parse().expect("literal int"))
+                            RepetitionQuantifier::Exactly(Self::parse(n, token.location)?)
                         }
                         _ => return self.expected("quantifier range", token),
                     }
@@ -9946,10 +10005,22 @@ impl<'a> Parser<'a> {
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement
     pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
-        let id = self.parse_identifiers()?;
+        let target = self.parse_assignment_target()?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_expr()?;
-        Ok(Assignment { id, value })
+        Ok(Assignment { target, value })
+    }
+
+    /// Parse the left-hand side of an assignment, used in an UPDATE statement
+    pub fn parse_assignment_target(&mut self) -> Result<AssignmentTarget, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let columns = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+            self.expect_token(&Token::RParen)?;
+            Ok(AssignmentTarget::Tuple(columns))
+        } else {
+            let column = self.parse_object_name(false)?;
+            Ok(AssignmentTarget::ColumnName(column))
+        }
     }
 
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
@@ -10136,15 +10207,14 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_rename = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
-            self.parse_optional_select_item_rename()?
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect | DuckDbDialect | SnowflakeDialect)
+        {
+            self.parse_optional_select_item_replace()?
         } else {
             None
         };
-
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect |  DuckDbDialect | SnowflakeDialect)
-        {
-            self.parse_optional_select_item_replace()?
+        let opt_rename = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+            self.parse_optional_select_item_rename()?
         } else {
             None
         };
@@ -10326,7 +10396,7 @@ impl<'a> Parser<'a> {
         } else {
             let next_token = self.next_token();
             let quantity = match next_token.token {
-                Token::Number(s, _) => s.parse::<u64>().expect("literal int"),
+                Token::Number(s, _) => Self::parse::<u64>(s, next_token.location)?,
                 _ => self.expected("literal int", next_token)?,
             };
             Some(TopQuantity::Constant(quantity))
@@ -11568,7 +11638,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::TokenizerError(
-                "Unterminated string literal at Line: 1, Column 5".to_string()
+                "Unterminated string literal at Line: 1, Column: 5".to_string()
             ))
         );
     }
@@ -11580,7 +11650,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
-                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column 16"
+                "Expected: [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column: 16"
                     .to_string()
             ))
         );

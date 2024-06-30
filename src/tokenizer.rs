@@ -429,7 +429,7 @@ impl fmt::Display for Location {
         write!(
             f,
             // TODO: use standard compiler location syntax (<path>:<line>:<col>)
-            " at Line: {}, Column {}",
+            " at Line: {}, Column: {}",
             self.line, self.column,
         )
     }
@@ -654,7 +654,7 @@ impl<'a> Tokenizer<'a> {
         Ok(())
     }
 
-    // Tokenize the identifer or keywords in `ch`
+    // Tokenize the identifier or keywords in `ch`
     fn tokenize_identifier_or_keyword(
         &self,
         ch: impl IntoIterator<Item = char>,
@@ -1816,7 +1816,7 @@ mod tests {
             use std::error::Error;
             assert!(err.source().is_none());
         }
-        assert_eq!(err.to_string(), "test at Line: 1, Column 1");
+        assert_eq!(err.to_string(), "test at Line: 1, Column: 1");
     }
 
     #[test]

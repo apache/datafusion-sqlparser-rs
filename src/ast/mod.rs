@@ -294,6 +294,23 @@ impl fmt::Display for StructField {
     }
 }
 
+/// A field definition within a union
+///
+/// [duckdb]: https://duckdb.org/docs/sql/data_types/union.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct UnionField {
+    pub field_name: Ident,
+    pub field_type: DataType,
+}
+
+impl fmt::Display for UnionField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.field_name, self.field_type)
+    }
+}
+
 /// A dictionary field within a dictionary.
 ///
 /// [duckdb]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
@@ -2029,6 +2046,9 @@ pub enum Statement {
         if_not_exists: bool,
         /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
         temporary: bool,
+        /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
+        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
+        to: Option<ObjectName>,
     },
     /// ```sql
     /// CREATE TABLE
@@ -2265,7 +2285,7 @@ pub enum Statement {
     /// SET [ SESSION | LOCAL ] ROLE role_name
     /// ```
     ///
-    /// Sets sesssion state. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4]
+    /// Sets session state. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4]
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#set-role-statement
     /// [2]: https://www.postgresql.org/docs/14/sql-set-role.html
@@ -2283,7 +2303,7 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is not a standard SQL statement, but it is supported by at
-    /// least MySQL and PostgreSQL. Not all MySQL-specific syntatic forms are
+    /// least MySQL and PostgreSQL. Not all MySQL-specific syntactic forms are
     /// supported yet.
     SetVariable {
         local: bool,
@@ -3329,15 +3349,20 @@ impl fmt::Display for Statement {
                 with_no_schema_binding,
                 if_not_exists,
                 temporary,
+                to,
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{materialized}{temporary}VIEW {if_not_exists}{name}",
+                    "CREATE {or_replace}{materialized}{temporary}VIEW {if_not_exists}{name}{to}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
                     name = name,
                     temporary = if *temporary { "TEMPORARY " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    to = to
+                        .as_ref()
+                        .map(|to| format!(" TO {to}"))
+                        .unwrap_or_default()
                 )?;
                 if let Some(comment) = comment {
                     write!(
@@ -3383,48 +3408,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateIndex(CreateIndex {
-                name,
-                table_name,
-                using,
-                columns,
-                unique,
-                concurrently,
-                if_not_exists,
-                include,
-                nulls_distinct,
-                predicate,
-            }) => {
-                write!(
-                    f,
-                    "CREATE {unique}INDEX {concurrently}{if_not_exists}",
-                    unique = if *unique { "UNIQUE " } else { "" },
-                    concurrently = if *concurrently { "CONCURRENTLY " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                )?;
-                if let Some(value) = name {
-                    write!(f, "{value} ")?;
-                }
-                write!(f, "ON {table_name}")?;
-                if let Some(value) = using {
-                    write!(f, " USING {value} ")?;
-                }
-                write!(f, "({})", display_separated(columns, ","))?;
-                if !include.is_empty() {
-                    write!(f, " INCLUDE ({})", display_separated(include, ","))?;
-                }
-                if let Some(value) = nulls_distinct {
-                    if *value {
-                        write!(f, " NULLS DISTINCT")?;
-                    } else {
-                        write!(f, " NULLS NOT DISTINCT")?;
-                    }
-                }
-                if let Some(predicate) = predicate {
-                    write!(f, " WHERE {predicate}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateIndex(create_index) => create_index.fmt(f),
             Statement::CreateExtension {
                 name,
                 if_not_exists,
@@ -4594,13 +4578,35 @@ impl fmt::Display for GrantObjects {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Assignment {
-    pub id: Vec<Ident>,
+    pub target: AssignmentTarget,
     pub value: Expr,
 }
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", display_separated(&self.id, "."), self.value)
+        write!(f, "{} = {}", self.target, self.value)
+    }
+}
+
+/// Left-hand side of an assignment in an UPDATE statement,
+/// e.g. `foo` in `foo = 5` (ColumnName assignment) or
+/// `(a, b)` in `(a, b) = (1, 2)` (Tuple assignment).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AssignmentTarget {
+    /// A single column
+    ColumnName(ObjectName),
+    /// A tuple of columns
+    Tuple(Vec<ObjectName>),
+}
+
+impl fmt::Display for AssignmentTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AssignmentTarget::ColumnName(column) => write!(f, "{}", column),
+            AssignmentTarget::Tuple(columns) => write!(f, "({})", display_comma_separated(columns)),
+        }
     }
 }
 
@@ -4706,6 +4712,16 @@ impl fmt::Display for CloseCursor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Function {
     pub name: ObjectName,
+    /// The parameters to the function, including any options specified within the
+    /// delimiting parentheses.
+    ///
+    /// Example:
+    /// ```plaintext
+    /// HISTOGRAM(0.5, 0.6)(x, y)
+    /// ```
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/parametric-functions)
+    pub parameters: FunctionArguments,
     /// The arguments to the function, including any options specified within the
     /// delimiting parentheses.
     pub args: FunctionArguments,
@@ -4734,7 +4750,7 @@ pub struct Function {
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.name, self.args)?;
+        write!(f, "{}{}{}", self.name, self.parameters, self.args)?;
 
         if !self.within_group.is_empty() {
             write!(
@@ -4791,7 +4807,7 @@ impl fmt::Display for FunctionArguments {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FunctionArgumentList {
-    /// `[ ALL | DISTINCT ]
+    /// `[ ALL | DISTINCT ]`
     pub duplicate_treatment: Option<DuplicateTreatment>,
     /// The function arguments.
     pub args: Vec<FunctionArg>,

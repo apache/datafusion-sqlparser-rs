@@ -547,19 +547,20 @@ impl fmt::Display for IdentWithAlias {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WildcardAdditionalOptions {
     /// `[ILIKE...]`.
-    /// Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select>
+    ///  Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
     pub opt_ilike: Option<IlikeSelectItem>,
     /// `[EXCLUDE...]`.
     pub opt_exclude: Option<ExcludeSelectItem>,
     /// `[EXCEPT...]`.
     ///  Clickhouse syntax: <https://clickhouse.com/docs/en/sql-reference/statements/select#except>
     pub opt_except: Option<ExceptSelectItem>,
-    /// `[RENAME ...]`.
-    pub opt_rename: Option<RenameSelectItem>,
     /// `[REPLACE]`
     ///  BigQuery syntax: <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_replace>
     ///  Clickhouse syntax: <https://clickhouse.com/docs/en/sql-reference/statements/select#replace>
+    ///  Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
     pub opt_replace: Option<ReplaceSelectItem>,
+    /// `[RENAME ...]`.
+    pub opt_rename: Option<RenameSelectItem>,
 }
 
 impl fmt::Display for WildcardAdditionalOptions {
@@ -573,11 +574,11 @@ impl fmt::Display for WildcardAdditionalOptions {
         if let Some(except) = &self.opt_except {
             write!(f, " {except}")?;
         }
-        if let Some(rename) = &self.opt_rename {
-            write!(f, " {rename}")?;
-        }
         if let Some(replace) = &self.opt_replace {
             write!(f, " {replace}")?;
+        }
+        if let Some(rename) = &self.opt_rename {
+            write!(f, " {rename}")?;
         }
         Ok(())
     }

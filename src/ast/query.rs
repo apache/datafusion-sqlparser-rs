@@ -1627,6 +1627,9 @@ pub struct OrderByExpr {
     pub asc: Option<bool>,
     /// Optional `NULLS FIRST` or `NULLS LAST`
     pub nulls_first: Option<bool>,
+    /// Optional: `WITH FILL`
+    /// Supported by [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    pub with_fill: Option<WithFill>,
 }
 
 impl fmt::Display for OrderByExpr {
@@ -1641,6 +1644,62 @@ impl fmt::Display for OrderByExpr {
             Some(true) => write!(f, " NULLS FIRST")?,
             Some(false) => write!(f, " NULLS LAST")?,
             None => (),
+        }
+        if let Some(ref with_fill) = self.with_fill {
+            write!(f, " {}", with_fill)?
+        }
+        Ok(())
+    }
+}
+
+/// ClickHouse `WITH FILL` modifier for `ORDER BY` clause.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct WithFill {
+    pub from: Option<Expr>,
+    pub to: Option<Expr>,
+    pub step: Option<Expr>,
+    pub interpolate: Vec<Interpolation>,
+}
+
+impl fmt::Display for WithFill {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "WITH FILL")?;
+        if let Some(ref from) = self.from {
+            write!(f, " FROM {}", from)?;
+        }
+        if let Some(ref to) = self.to {
+            write!(f, " TO {}", to)?;
+        }
+        if let Some(ref step) = self.step {
+            write!(f, " STEP {}", step)?;
+        }
+        if !self.interpolate.is_empty() {
+            write!(
+                f,
+                " INTERPOLATE ({})",
+                display_comma_separated(&self.interpolate)
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// ClickHouse `INTERPOLATE` clause for use in `WITH FILL` modifier.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Interpolation {
+    pub column: Expr,
+    pub formula: Option<Expr>,
+}
+
+impl fmt::Display for Interpolation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.column)?;
+        if let Some(ref formula) = self.formula {
+            write!(f, " AS {}", formula)?;
         }
         Ok(())
     }

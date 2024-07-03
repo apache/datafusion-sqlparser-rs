@@ -10408,11 +10408,73 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let with_fill = if self.parse_keywords(&[Keyword::WITH, Keyword::FILL]) {
+            Some(self.parse_with_fill()?)
+        } else {
+            None
+        };
+
         Ok(OrderByExpr {
             expr,
             asc,
             nulls_first,
+            with_fill,
         })
+    }
+
+    // Parse a WITH FILL clause (ClickHouse dialect)
+    // that follow the WITH FILL keywords in a ORDER BY clause
+    pub fn parse_with_fill(&mut self) -> Result<WithFill, ParserError> {
+        let from = if self.parse_keyword(Keyword::FROM) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let to = if self.parse_keyword(Keyword::TO) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let step = if self.parse_keyword(Keyword::STEP) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let interpolate =
+            if self.parse_keyword(Keyword::INTERPOLATE) && self.consume_token(&Token::LParen) {
+                let interpolations = self.parse_interpolations()?;
+                self.expect_token(&Token::RParen)?;
+                interpolations
+            } else {
+                vec![]
+            };
+
+        Ok(WithFill {
+            from,
+            to,
+            step,
+            interpolate,
+        })
+    }
+
+    // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)
+    // that follow the INTERPOLATE keyword in a WITH FILL clause
+    pub fn parse_interpolations(&mut self) -> Result<Vec<Interpolation>, ParserError> {
+        self.parse_comma_separated(|p| p.parse_interpolation())
+    }
+
+    // Parse a INTERPOLATE expression (ClickHouse dialect)
+    pub fn parse_interpolation(&mut self) -> Result<Interpolation, ParserError> {
+        let column = self.parse_expr()?;
+        let formula = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(Interpolation { column, formula })
     }
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,

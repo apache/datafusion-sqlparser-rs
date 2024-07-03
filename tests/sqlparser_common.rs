@@ -2048,16 +2048,19 @@ fn parse_select_order_by() {
                     expr: Expr::Identifier(Ident::new("lname")),
                     asc: Some(true),
                     nulls_first: None,
+                    with_fill: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
                     asc: Some(false),
                     nulls_first: None,
+                    with_fill: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("id")),
                     asc: None,
                     nulls_first: None,
+                    with_fill: None,
                 },
             ],
             select.order_by
@@ -2080,11 +2083,13 @@ fn parse_select_order_by_limit() {
                 expr: Expr::Identifier(Ident::new("lname")),
                 asc: Some(true),
                 nulls_first: None,
+                with_fill: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 asc: Some(false),
                 nulls_first: None,
+                with_fill: None,
             },
         ],
         select.order_by
@@ -2103,16 +2108,112 @@ fn parse_select_order_by_nulls_order() {
                 expr: Expr::Identifier(Ident::new("lname")),
                 asc: Some(true),
                 nulls_first: Some(true),
+                with_fill: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 asc: Some(false),
                 nulls_first: Some(false),
+                with_fill: None,
             },
         ],
         select.order_by
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
+}
+
+#[test]
+fn parse_select_order_by_with_fill() {
+    let sql = "SELECT id, fname, lname FROM customer WHERE id < 5 \
+        ORDER BY lname ASC WITH FILL, \
+            fname DESC NULLS LAST WITH FILL FROM 10 TO 20 STEP 2 INTERPOLATE (col1 AS col1 + 1) LIMIT 2";
+    let select = verified_query(sql);
+    assert_eq!(
+        vec![
+            OrderByExpr {
+                expr: Expr::Identifier(Ident::new("lname")),
+                asc: Some(true),
+                nulls_first: None,
+                with_fill: Some(WithFill {
+                    from: None,
+                    to: None,
+                    step: None,
+                    interpolate: vec![],
+                }),
+            },
+            OrderByExpr {
+                expr: Expr::Identifier(Ident::new("fname")),
+                asc: Some(false),
+                nulls_first: Some(false),
+                with_fill: Some(WithFill {
+                    from: Some(Expr::Value(number("10"))),
+                    to: Some(Expr::Value(number("20"))),
+                    step: Some(Expr::Value(number("2"))),
+                    interpolate: vec![Interpolation {
+                        column: Expr::Identifier(Ident::new("col1")),
+                        formula: Some(Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                            op: BinaryOperator::Plus,
+                            right: Box::new(Expr::Value(number("1"))),
+                        }),
+                    }]
+                }),
+            },
+        ],
+        select.order_by
+    );
+    assert_eq!(Some(Expr::Value(number("2"))), select.limit);
+}
+
+#[test]
+fn parse_with_fill() {
+    let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL FROM 10 TO 20 STEP 2 INTERPOLATE (col1 AS col1 + 1, col2 AS col3)";
+    let select = verified_query(sql);
+    assert_eq!(
+        Some(WithFill {
+            from: Some(Expr::Value(number("10"))),
+            to: Some(Expr::Value(number("20"))),
+            step: Some(Expr::Value(number("2"))),
+            interpolate: vec![
+                Interpolation {
+                    column: Expr::Identifier(Ident::new("col1")),
+                    formula: Some(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("1"))),
+                    }),
+                },
+                Interpolation {
+                    column: Expr::Identifier(Ident::new("col2")),
+                    formula: Some(Expr::Identifier(Ident::new("col3"))),
+                },
+            ]
+        }),
+        select.order_by[0].with_fill
+    );
+}
+
+#[test]
+fn parse_interpolation() {
+    let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE (col1 AS col1 + 1, col2 AS col3)";
+    let select = verified_query(sql);
+    assert_eq!(
+        vec![
+            Interpolation {
+                column: Expr::Identifier(Ident::new("col1")),
+                formula: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                    op: BinaryOperator::Plus,
+                    right: Box::new(Expr::Value(number("1"))),
+                }),
+            },
+            Interpolation {
+                column: Expr::Identifier(Ident::new("col2")),
+                formula: Some(Expr::Identifier(Ident::new("col3"))),
+            },
+        ],
+        select.order_by[0].with_fill.as_ref().unwrap().interpolate
+    );
 }
 
 #[test]
@@ -2202,6 +2303,7 @@ fn parse_select_qualify() {
                         expr: Expr::Identifier(Ident::new("o")),
                         asc: None,
                         nulls_first: None,
+                        with_fill: None,
                     }],
                     window_frame: None,
                 })),
@@ -2562,6 +2664,7 @@ fn parse_listagg() {
                     }),
                     asc: None,
                     nulls_first: None,
+                    with_fill: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident {
@@ -2570,6 +2673,7 @@ fn parse_listagg() {
                     }),
                     asc: None,
                     nulls_first: None,
+                    with_fill: None,
                 },
             ]
         }),
@@ -4363,6 +4467,7 @@ fn parse_window_functions() {
                     expr: Expr::Identifier(Ident::new("dt")),
                     asc: Some(false),
                     nulls_first: None,
+                    with_fill: None,
                 }],
                 window_frame: None,
             })),
@@ -4570,6 +4675,7 @@ fn test_parse_named_window() {
                         }),
                         asc: None,
                         nulls_first: None,
+                        with_fill: None,
                     }],
                     window_frame: None,
                 }),
@@ -7254,11 +7360,13 @@ fn parse_create_index() {
             expr: Expr::Identifier(Ident::new("name")),
             asc: None,
             nulls_first: None,
+            with_fill: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
+            with_fill: None,
         },
     ];
     match verified_stmt(sql) {
@@ -7288,11 +7396,13 @@ fn test_create_index_with_using_function() {
             expr: Expr::Identifier(Ident::new("name")),
             asc: None,
             nulls_first: None,
+            with_fill: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
+            with_fill: None,
         },
     ];
     match verified_stmt(sql) {
@@ -9547,6 +9657,7 @@ fn test_match_recognize() {
                 expr: Expr::Identifier(Ident::new("price_date")),
                 asc: None,
                 nulls_first: None,
+                with_fill: None,
             }],
             measures: vec![
                 Measure {

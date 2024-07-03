@@ -1883,6 +1883,7 @@ fn parse_delete_with_order_by() {
                     }),
                     asc: Some(false),
                     nulls_first: None,
+                    with_fill: None,
                 }],
                 order_by
             );

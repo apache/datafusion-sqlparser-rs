@@ -7933,13 +7933,11 @@ impl<'a> Parser<'a> {
             let settings = if dialect_of!(self is ClickHouseDialect|GenericDialect)
                 && self.parse_keyword(Keyword::SETTINGS)
             {
-                let mut key_values: Vec<Setting> = vec![];
-                self.parse_comma_separated(|p| {
+                let key_values = self.parse_comma_separated(|p| {
                     let key = p.parse_identifier(false)?;
                     p.expect_token(&Token::Eq)?;
                     let value = p.parse_value()?;
-                    key_values.push(Setting { key, value });
-                    Ok(())
+                    Ok(Setting { key, value })
                 })?;
                 Some(key_values)
             } else {

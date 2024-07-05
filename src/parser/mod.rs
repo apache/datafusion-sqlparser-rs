@@ -7934,15 +7934,13 @@ impl<'a> Parser<'a> {
                 && self.parse_keyword(Keyword::SETTINGS)
             {
                 let mut key_values: Vec<Setting> = vec![];
-                loop {
-                    let key = self.parse_identifier(false)?;
-                    self.expect_token(&Token::Eq)?;
-                    let value = self.parse_value()?;
+                self.parse_comma_separated(|p| {
+                    let key = p.parse_identifier(false)?;
+                    p.expect_token(&Token::Eq)?;
+                    let value = p.parse_value()?;
                     key_values.push(Setting { key, value });
-                    if !self.consume_token(&Token::Comma) {
-                        break;
-                    }
-                }
+                    Ok(())
+                })?;
                 Some(key_values)
             } else {
                 None

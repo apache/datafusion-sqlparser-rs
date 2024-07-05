@@ -10420,19 +10420,13 @@ impl<'a> Parser<'a> {
             && self.parse_keyword(Keyword::INTERPOLATE)
         {
             if self.consume_token(&Token::LParen) {
-                if self.peek_token().token == Token::RParen {
-                    // INTERPOLATE ()
-                    self.next_token();
-                    Some(InterpolationArg::EmptyBody)
-                } else {
-                    // INTERPOLATE ( ... )
-                    let interpolations = self.parse_interpolations()?;
-                    self.expect_token(&Token::RParen)?;
-                    Some(InterpolationArg::Columns(interpolations))
-                }
+                let interpolations = self.parse_interpolations()?;
+                self.expect_token(&Token::RParen)?;
+                // INTERPOLATE () and INTERPOLATE ( ... ) variants
+                Some(InterpolateArg::Columns(interpolations))
             } else {
                 // INTERPOLATE
-                Some(InterpolationArg::NoBody)
+                Some(InterpolateArg::NoBody)
             }
         } else {
             None
@@ -10473,19 +10467,19 @@ impl<'a> Parser<'a> {
 
     // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)
     // that follow the INTERPOLATE keyword in an ORDER BY clause with the WITH FILL modifier
-    pub fn parse_interpolations(&mut self) -> Result<Vec<Interpolation>, ParserError> {
-        self.parse_comma_separated(|p| p.parse_interpolation())
+    pub fn parse_interpolations(&mut self) -> Result<Vec<Interpolate>, ParserError> {
+        self.parse_comma_separated0(|p| p.parse_interpolation())
     }
 
     // Parse a INTERPOLATE expression (ClickHouse dialect)
-    pub fn parse_interpolation(&mut self) -> Result<Interpolation, ParserError> {
-        let column = self.parse_expr()?;
+    pub fn parse_interpolation(&mut self) -> Result<Interpolate, ParserError> {
+        let column = self.parse_identifier(false)?;
         let formula = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_expr()?)
         } else {
             None
         };
-        Ok(Interpolation { column, formula })
+        Ok(Interpolate { column, formula })
     }
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,

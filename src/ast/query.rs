@@ -1634,7 +1634,7 @@ pub struct OrderByExpr {
     /// Supported by [ClickHouse syntax]
     ///
     /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
-    pub interpolate: Option<InterpolationArg>,
+    pub interpolate: Option<InterpolateArg>,
 }
 
 impl fmt::Display for OrderByExpr {
@@ -1655,10 +1655,13 @@ impl fmt::Display for OrderByExpr {
         }
         if let Some(ref interpolate) = self.interpolate {
             match interpolate {
-                InterpolationArg::NoBody => write!(f, " INTERPOLATE")?,
-                InterpolationArg::EmptyBody => write!(f, " INTERPOLATE ()")?,
-                InterpolationArg::Columns(columns) => {
-                    write!(f, " INTERPOLATE ({})", display_comma_separated(columns))?;
+                InterpolateArg::NoBody => write!(f, " INTERPOLATE")?,
+                InterpolateArg::Columns(columns) => {
+                    if columns.is_empty() {
+                        write!(f, " INTERPOLATE ()")?;
+                    } else {
+                        write!(f, " INTERPOLATE ({})", display_comma_separated(columns))?;
+                    }
                 }
             }
         }
@@ -1702,21 +1705,20 @@ impl fmt::Display for WithFill {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct Interpolation {
-    pub column: Expr,
+pub struct Interpolate {
+    pub column: Ident,
     pub formula: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum InterpolationArg {
+pub enum InterpolateArg {
     NoBody,
-    EmptyBody,
-    Columns(Vec<Interpolation>),
+    Columns(Vec<Interpolate>),
 }
 
-impl fmt::Display for Interpolation {
+impl fmt::Display for Interpolate {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.column)?;
         if let Some(ref formula) = self.formula {

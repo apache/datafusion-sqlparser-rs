@@ -712,8 +712,8 @@ fn parse_select_order_by_with_fill_interpolate() {
                     to: Some(Expr::Value(number("40"))),
                     step: Some(Expr::Value(number("3"))),
                 }),
-                interpolate: Some(InterpolationArg::Columns(vec![Interpolation {
-                    column: Expr::Identifier(Ident::new("col1")),
+                interpolate: Some(InterpolateArg::Columns(vec![Interpolate {
+                    column: Ident::new("col1"),
                     formula: Some(Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("col1"))),
                         op: BinaryOperator::Plus,
@@ -743,26 +743,26 @@ fn parse_with_fill() {
 }
 
 #[test]
-fn parse_interpolation_body_with_columns() {
+fn parse_interpolate_body_with_columns() {
     let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL \
         INTERPOLATE (col1 AS col1 + 1, col2 AS col3, col4 AS col4 + 4)";
     let select = clickhouse().verified_query(sql);
     assert_eq!(
-        Some(InterpolationArg::Columns(vec![
-            Interpolation {
-                column: Expr::Identifier(Ident::new("col1")),
+        Some(InterpolateArg::Columns(vec![
+            Interpolate {
+                column: Ident::new("col1"),
                 formula: Some(Expr::BinaryOp {
                     left: Box::new(Expr::Identifier(Ident::new("col1"))),
                     op: BinaryOperator::Plus,
                     right: Box::new(Expr::Value(number("1"))),
                 }),
             },
-            Interpolation {
-                column: Expr::Identifier(Ident::new("col2")),
+            Interpolate {
+                column: Ident::new("col2"),
                 formula: Some(Expr::Identifier(Ident::new("col3"))),
             },
-            Interpolation {
-                column: Expr::Identifier(Ident::new("col4")),
+            Interpolate {
+                column: Ident::new("col4"),
                 formula: Some(Expr::BinaryOp {
                     left: Box::new(Expr::Identifier(Ident::new("col4"))),
                     op: BinaryOperator::Plus,
@@ -775,21 +775,18 @@ fn parse_interpolation_body_with_columns() {
 }
 
 #[test]
-fn parse_interpolation_without_body() {
+fn parse_interpolate_without_body() {
     let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE";
     let select = clickhouse().verified_query(sql);
-    assert_eq!(
-        Some(InterpolationArg::NoBody),
-        select.order_by[0].interpolate
-    );
+    assert_eq!(Some(InterpolateArg::NoBody), select.order_by[0].interpolate);
 }
 
 #[test]
-fn parse_interpolation_with_empty_body() {
+fn parse_interpolate_with_empty_body() {
     let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE ()";
     let select = clickhouse().verified_query(sql);
     assert_eq!(
-        Some(InterpolationArg::EmptyBody),
+        Some(InterpolateArg::Columns(vec![])),
         select.order_by[0].interpolate
     );
 }

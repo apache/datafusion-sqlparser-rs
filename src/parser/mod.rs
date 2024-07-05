@@ -10408,8 +10408,32 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let with_fill = if self.parse_keywords(&[Keyword::WITH, Keyword::FILL]) {
+        let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
+        {
             Some(self.parse_with_fill()?)
+        } else {
+            None
+        };
+
+        let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keyword(Keyword::INTERPOLATE)
+        {
+            if self.consume_token(&Token::LParen) {
+                if self.peek_token().token == Token::RParen {
+                    // INTERPOLATE ()
+                    self.next_token();
+                    Some(InterpolationArg::EmptyBody)
+                } else {
+                    // INTERPOLATE ( ... )
+                    let interpolations = self.parse_interpolations()?;
+                    self.expect_token(&Token::RParen)?;
+                    Some(InterpolationArg::Columns(interpolations))
+                }
+            } else {
+                // INTERPOLATE
+                Some(InterpolationArg::NoBody)
+            }
         } else {
             None
         };
@@ -10419,6 +10443,7 @@ impl<'a> Parser<'a> {
             asc,
             nulls_first,
             with_fill,
+            interpolate,
         })
     }
 
@@ -10443,25 +10468,11 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let interpolate =
-            if self.parse_keyword(Keyword::INTERPOLATE) && self.consume_token(&Token::LParen) {
-                let interpolations = self.parse_interpolations()?;
-                self.expect_token(&Token::RParen)?;
-                interpolations
-            } else {
-                vec![]
-            };
-
-        Ok(WithFill {
-            from,
-            to,
-            step,
-            interpolate,
-        })
+        Ok(WithFill { from, to, step })
     }
 
     // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)
-    // that follow the INTERPOLATE keyword in a WITH FILL clause
+    // that follow the INTERPOLATE keyword in an ORDER BY clause with the WITH FILL modifier
     pub fn parse_interpolations(&mut self) -> Result<Vec<Interpolation>, ParserError> {
         self.parse_comma_separated(|p| p.parse_interpolation())
     }

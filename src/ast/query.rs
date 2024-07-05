@@ -1630,6 +1630,11 @@ pub struct OrderByExpr {
     /// Optional: `WITH FILL`
     /// Supported by [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
     pub with_fill: Option<WithFill>,
+    /// Optional: `INTERPOLATE`
+    /// Supported by [ClickHouse syntax]
+    ///
+    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    pub interpolate: Option<InterpolationArg>,
 }
 
 impl fmt::Display for OrderByExpr {
@@ -1648,11 +1653,23 @@ impl fmt::Display for OrderByExpr {
         if let Some(ref with_fill) = self.with_fill {
             write!(f, " {}", with_fill)?
         }
+        if let Some(ref interpolate) = self.interpolate {
+            match interpolate {
+                InterpolationArg::NoBody => write!(f, " INTERPOLATE")?,
+                InterpolationArg::EmptyBody => write!(f, " INTERPOLATE ()")?,
+                InterpolationArg::Columns(columns) => {
+                    write!(f, " INTERPOLATE ({})", display_comma_separated(columns))?;
+                }
+            }
+        }
         Ok(())
     }
 }
 
 /// ClickHouse `WITH FILL` modifier for `ORDER BY` clause.
+/// Supported by [ClickHouse syntax]
+///
+/// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -1660,7 +1677,6 @@ pub struct WithFill {
     pub from: Option<Expr>,
     pub to: Option<Expr>,
     pub step: Option<Expr>,
-    pub interpolate: Vec<Interpolation>,
 }
 
 impl fmt::Display for WithFill {
@@ -1675,24 +1691,29 @@ impl fmt::Display for WithFill {
         if let Some(ref step) = self.step {
             write!(f, " STEP {}", step)?;
         }
-        if !self.interpolate.is_empty() {
-            write!(
-                f,
-                " INTERPOLATE ({})",
-                display_comma_separated(&self.interpolate)
-            )?;
-        }
         Ok(())
     }
 }
 
-/// ClickHouse `INTERPOLATE` clause for use in `WITH FILL` modifier.
+/// ClickHouse `INTERPOLATE` clause for use in `ORDER BY` clause when using `WITH FILL` modifier.
+/// Supported by [ClickHouse syntax]
+///
+/// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Interpolation {
     pub column: Expr,
     pub formula: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum InterpolationArg {
+    NoBody,
+    EmptyBody,
+    Columns(Vec<Interpolation>),
 }
 
 impl fmt::Display for Interpolation {

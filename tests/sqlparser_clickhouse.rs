@@ -728,9 +728,50 @@ fn parse_select_order_by_with_fill_interpolate() {
 }
 
 #[test]
+fn parse_select_order_by_with_fill_interpolate_multi_interpolates() {
+    let sql = "SELECT id, fname, lname FROM customer ORDER BY fname WITH FILL \
+        INTERPOLATE (col1 AS col1 + 1) INTERPOLATE (col2 AS col2 + 2)";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("ORDER BY only accepts a single INTERPOLATE clause");
+}
+
+#[test]
+fn parse_select_order_by_with_fill_interpolate_multi_with_fill_interpolates() {
+    let sql = "SELECT id, fname, lname FROM customer \
+        ORDER BY \
+            fname WITH FILL INTERPOLATE (col1 AS col1 + 1), \
+            lname WITH FILL INTERPOLATE (col2 AS col2 + 2)";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("ORDER BY only accepts a single INTERPOLATE clause");
+}
+
+#[test]
+fn parse_select_order_by_interpolate_missing_with_fill() {
+    let sql = "SELECT id, fname, lname FROM customer \
+        ORDER BY fname, lname \
+            INTERPOLATE (col2 AS col2 + 2)";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("ORDER BY INTERPOLATE must have at least one WITH FILL");
+}
+
+#[test]
+fn parse_select_order_by_interpolate_not_last() {
+    let sql = "SELECT id, fname, lname FROM customer \
+        ORDER BY \
+            fname INTERPOLATE (col2 AS col2 + 2),
+            lname";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("ORDER BY INTERPOLATE must be in the last position");
+}
+
+#[test]
 fn parse_with_fill() {
-    let sql = "SELECT fname FROM customer \
-        ORDER BY fname WITH FILL FROM 10 TO 20 STEP 2";
+    let sql = "SELECT fname FROM customer ORDER BY fname \
+        WITH FILL FROM 10 TO 20 STEP 2";
     let select = clickhouse().verified_query(sql);
     assert_eq!(
         Some(WithFill {
@@ -740,6 +781,24 @@ fn parse_with_fill() {
         }),
         select.order_by[0].with_fill
     );
+}
+
+#[test]
+fn parse_with_fill_missing_single_argument() {
+    let sql = "SELECT id, fname, lname FROM customer ORDER BY \
+            fname WITH FILL FROM TO 20";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("WITH FILL requires expressions for all arguments");
+}
+
+#[test]
+fn parse_with_fill_multiple_incomplete_arguments() {
+    let sql = "SELECT id, fname, lname FROM customer ORDER BY \
+            fname WITH FILL FROM TO 20, lname WITH FILL FROM TO STEP 1";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("WITH FILL requires expressions for all arguments");
 }
 
 #[test]

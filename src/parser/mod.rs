@@ -7888,7 +7888,9 @@ impl<'a> Parser<'a> {
             let body = self.parse_boxed_query_body(0)?;
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                self.parse_comma_separated(Parser::parse_order_by_expr)?
+                let order_by_exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+                self.validate_order_by_exprs_for_interpolate_and_with_fill(&order_by_exprs)?;
+                order_by_exprs
             } else {
                 vec![]
             };
@@ -10463,6 +10465,35 @@ impl<'a> Parser<'a> {
         };
 
         Ok(WithFill { from, to, step })
+    }
+
+    pub fn validate_order_by_exprs_for_interpolate_and_with_fill(
+        &mut self,
+        order_by_exprs: &Vec<OrderByExpr>,
+    ) -> Result<(), ParserError> {
+        if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+            let mut has_with_fill = false;
+            let mut has_interpolate = false;
+            for order_by_expr in order_by_exprs {
+                if order_by_expr.with_fill.is_some() {
+                    has_with_fill = true;
+                }
+                if order_by_expr.interpolate.is_some() {
+                    if has_interpolate {
+                        return Err(ParserError::ParserError(
+                            "Only the last ORDER BY expression can contain interpolate".to_string(),
+                        ));
+                    }
+                    if !has_with_fill {
+                        return Err(ParserError::ParserError(
+                            "INTERPOLATE requires WITH FILL".to_string(),
+                        ));
+                    }
+                    has_interpolate = true;
+                }
+            }
+        }
+        Ok(())
     }
 
     // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)

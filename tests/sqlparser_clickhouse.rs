@@ -684,7 +684,7 @@ fn parse_group_by_with_modifier() {
 
 #[test]
 fn test_prewhere() {
-    match clickhouse().verified_stmt("SELECT * FROM t PREWHERE x = 1 WHERE y = 2") {
+    match clickhouse_and_generic().verified_stmt("SELECT * FROM t PREWHERE x = 1 WHERE y = 2") {
         Statement::Query(query) => {
             let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
             assert_eq!(
@@ -708,7 +708,7 @@ fn test_prewhere() {
         _ => unreachable!(),
     }
 
-    match clickhouse().verified_stmt("SELECT * FROM t PREWHERE x = 1 AND y = 2") {
+    match clickhouse_and_generic().verified_stmt("SELECT * FROM t PREWHERE x = 1 AND y = 2") {
         Statement::Query(query) => {
             let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
             assert_eq!(

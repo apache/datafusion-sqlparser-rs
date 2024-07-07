@@ -103,6 +103,7 @@ fn parse_create_procedure() {
                 locks: vec![],
                 for_clause: None,
                 order_by: vec![],
+                settings: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
@@ -548,6 +549,7 @@ fn parse_substring_in_select() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 }),
                 query
             );

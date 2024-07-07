@@ -1094,6 +1094,7 @@ fn parse_copy_to() {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })),
             to: true,
             target: CopyTarget::File {
@@ -2424,6 +2425,7 @@ fn parse_array_subquery_expr() {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })),
             filter: None,
             null_treatment: None,
@@ -3944,7 +3946,8 @@ fn test_simple_postgres_insert_with_alias() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
-                for_clause: None
+                for_clause: None,
+                settings: None,
             })),
             partitioned: None,
             after_columns: vec![],
@@ -4011,7 +4014,8 @@ fn test_simple_postgres_insert_with_alias() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
-                for_clause: None
+                for_clause: None,
+                settings: None,
             })),
             partitioned: None,
             after_columns: vec![],
@@ -4074,7 +4078,8 @@ fn test_simple_insert_with_quoted_alias() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
-                for_clause: None
+                for_clause: None,
+                settings: None,
             })),
             partitioned: None,
             after_columns: vec![],

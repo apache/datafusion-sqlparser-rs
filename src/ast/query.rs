@@ -50,6 +50,10 @@ pub struct Query {
     /// `FOR JSON { AUTO | PATH } [ , INCLUDE_NULL_VALUES ]`
     /// (MSSQL-specific)
     pub for_clause: Option<ForClause>,
+    /// ClickHouse syntax: `SELECT * FROM t SETTINGS key1 = value1, key2 = value2`
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select#settings-in-select-query)
+    pub settings: Option<Vec<Setting>>,
 }
 
 impl fmt::Display for Query {
@@ -69,6 +73,9 @@ impl fmt::Display for Query {
         }
         if !self.limit_by.is_empty() {
             write!(f, " BY {}", display_separated(&self.limit_by, ", "))?;
+        }
+        if let Some(ref settings) = self.settings {
+            write!(f, " SETTINGS {}", display_comma_separated(settings))?;
         }
         if let Some(ref fetch) = self.fetch {
             write!(f, " {fetch}")?;
@@ -833,6 +840,20 @@ impl fmt::Display for ConnectBy {
             condition = self.condition,
             relationships = display_comma_separated(&self.relationships)
         )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Setting {
+    pub key: Ident,
+    pub value: Value,
+}
+
+impl fmt::Display for Setting {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} = {}", self.key, self.value)
     }
 }
 

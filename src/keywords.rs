@@ -650,6 +650,7 @@ define_keywords!(
     SESSION_USER,
     SET,
     SETS,
+    SETTINGS,
     SHARE,
     SHOW,
     SIMILAR,
@@ -850,6 +851,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::FOR,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for ClickHouse SELECT * FROM t SETTINGS ...
+    Keyword::SETTINGS,
     // for Snowflake START WITH .. CONNECT BY
     Keyword::START,
     Keyword::CONNECT,

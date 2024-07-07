@@ -21,8 +21,8 @@ use test_utils::*;
 use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Table;
+use sqlparser::ast::Value::Number;
 use sqlparser::ast::*;
-
 use sqlparser::dialect::ClickHouseDialect;
 use sqlparser::dialect::GenericDialect;
 
@@ -549,6 +549,42 @@ fn parse_limit_by() {
     );
 }
 
+#[test]
+fn parse_settings_in_query() {
+    match clickhouse_and_generic()
+        .verified_stmt(r#"SELECT * FROM t SETTINGS max_threads = 1, max_block_size = 10000"#)
+    {
+        Statement::Query(query) => {
+            assert_eq!(
+                query.settings,
+                Some(vec![
+                    Setting {
+                        key: Ident::new("max_threads"),
+                        value: Number("1".parse().unwrap(), false)
+                    },
+                    Setting {
+                        key: Ident::new("max_block_size"),
+                        value: Number("10000".parse().unwrap(), false)
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let invalid_cases = vec![
+        "SELECT * FROM t SETTINGS a",
+        "SELECT * FROM t SETTINGS a=",
+        "SELECT * FROM t SETTINGS a=1, b",
+        "SELECT * FROM t SETTINGS a=1, b=",
+        "SELECT * FROM t SETTINGS a=1, b=c",
+    ];
+    for sql in invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: SETTINGS key = value, found: ");
+    }
+}
 #[test]
 fn parse_select_star_except() {
     clickhouse().verified_stmt("SELECT * EXCEPT (prev_status) FROM anomalies");

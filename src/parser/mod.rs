@@ -7871,6 +7871,7 @@ impl<'a> Parser<'a> {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })
         } else if self.parse_keyword(Keyword::UPDATE) {
             Ok(Query {
@@ -7883,6 +7884,7 @@ impl<'a> Parser<'a> {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })
         } else {
             let body = self.parse_boxed_query_body(0)?;
@@ -7928,6 +7930,20 @@ impl<'a> Parser<'a> {
                 vec![]
             };
 
+            let settings = if dialect_of!(self is ClickHouseDialect|GenericDialect)
+                && self.parse_keyword(Keyword::SETTINGS)
+            {
+                let key_values = self.parse_comma_separated(|p| {
+                    let key = p.parse_identifier(false)?;
+                    p.expect_token(&Token::Eq)?;
+                    let value = p.parse_value()?;
+                    Ok(Setting { key, value })
+                })?;
+                Some(key_values)
+            } else {
+                None
+            };
+
             let fetch = if self.parse_keyword(Keyword::FETCH) {
                 Some(self.parse_fetch()?)
             } else {
@@ -7955,6 +7971,7 @@ impl<'a> Parser<'a> {
                 fetch,
                 locks,
                 for_clause,
+                settings,
             })
         }
     }
@@ -9091,6 +9108,7 @@ impl<'a> Parser<'a> {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 }),
                 alias,
             })

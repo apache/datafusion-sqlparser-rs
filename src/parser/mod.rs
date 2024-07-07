@@ -8329,6 +8329,14 @@ impl<'a> Parser<'a> {
             }
         }
 
+        let prewhere = if dialect_of!(self is ClickHouseDialect|GenericDialect)
+            && self.parse_keyword(Keyword::PREWHERE)
+        {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         let selection = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -8440,6 +8448,7 @@ impl<'a> Parser<'a> {
             into,
             from,
             lateral_views,
+            prewhere,
             selection,
             group_by,
             cluster_by,

@@ -391,6 +391,7 @@ fn parse_update_set_from() {
                                 joins: vec![],
                             }],
                             lateral_views: vec![],
+                            prewhere: None,
                             selection: None,
                             group_by: GroupByExpr::Expressions(
                                 vec![Expr::Identifier(Ident::new("id"))],
@@ -4551,6 +4552,7 @@ fn test_parse_named_window() {
             joins: vec![],
         }],
         lateral_views: vec![],
+        prewhere: None,
         selection: None,
         group_by: GroupByExpr::Expressions(vec![], vec![]),
         cluster_by: vec![],
@@ -4932,6 +4934,7 @@ fn parse_interval_and_or_xor() {
                 joins: vec![],
             }],
             lateral_views: vec![],
+            prewhere: None,
             selection: Some(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::Identifier(Ident {
@@ -6915,6 +6918,7 @@ fn lateral_function() {
             }],
         }],
         lateral_views: vec![],
+        prewhere: None,
         selection: None,
         group_by: GroupByExpr::Expressions(vec![], vec![]),
         cluster_by: vec![],
@@ -7634,6 +7638,7 @@ fn parse_merge() {
                                 joins: vec![],
                             }],
                             lateral_views: vec![],
+                            prewhere: None,
                             selection: None,
                             group_by: GroupByExpr::Expressions(vec![], vec![]),
                             cluster_by: vec![],
@@ -9141,6 +9146,7 @@ fn parse_unload() {
                         joins: vec![],
                     }],
                     lateral_views: vec![],
+                    prewhere: None,
                     selection: None,
                     group_by: GroupByExpr::Expressions(vec![], vec![]),
                     cluster_by: vec![],
@@ -9285,6 +9291,7 @@ fn parse_connect_by() {
         }],
         into: None,
         lateral_views: vec![],
+        prewhere: None,
         selection: None,
         group_by: GroupByExpr::Expressions(vec![], vec![]),
         cluster_by: vec![],
@@ -9369,6 +9376,7 @@ fn parse_connect_by() {
             }],
             into: None,
             lateral_views: vec![],
+            prewhere: None,
             selection: Some(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("employee_id"))),
                 op: BinaryOperator::NotEq,

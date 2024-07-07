@@ -247,6 +247,11 @@ pub struct Select {
     pub from: Vec<TableWithJoins>,
     /// LATERAL VIEWs
     pub lateral_views: Vec<LateralView>,
+    /// ClickHouse syntax: `PREWHERE a = 1 WHERE b = 2`,
+    /// and it can be used together with WHERE selection.
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/prewhere)
+    pub prewhere: Option<Expr>,
     /// WHERE
     pub selection: Option<Expr>,
     /// GROUP BY
@@ -301,6 +306,9 @@ impl fmt::Display for Select {
             for lv in &self.lateral_views {
                 write!(f, "{lv}")?;
             }
+        }
+        if let Some(ref prewhere) = self.prewhere {
+            write!(f, " PREWHERE {prewhere}")?;
         }
         if let Some(ref selection) = self.selection {
             write!(f, " WHERE {selection}")?;

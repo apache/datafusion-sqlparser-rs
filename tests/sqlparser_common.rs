@@ -8942,6 +8942,11 @@ fn parse_trailing_comma() {
         "CREATE TABLE employees (name TEXT, age INT)",
     );
 
+    trailing_commas.one_statement_parses_to(
+        "GRANT USAGE, SELECT, INSERT, ON p TO u",
+        "GRANT USAGE, SELECT, INSERT ON p TO u",
+    );
+
     trailing_commas.verified_stmt("SELECT album_id, name FROM track");
 
     trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
@@ -8959,6 +8964,13 @@ fn parse_trailing_comma() {
             .parse_sql_statements("SELECT name, age, from employees;")
             .unwrap_err(),
         ParserError::ParserError("Expected an expression, found: from".to_string())
+    );
+
+    assert_eq!(
+        trailing_commas
+            .parse_sql_statements("REVOKE USAGE, SELECT, ON p TO u")
+            .unwrap_err(),
+        ParserError::ParserError("Expected a privilege keyword, found: ON".to_string())
     );
 
     assert_eq!(

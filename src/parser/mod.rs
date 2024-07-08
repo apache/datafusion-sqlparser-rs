@@ -46,6 +46,9 @@ pub enum ParserError {
     RecursionLimitExceeded,
 }
 
+// avoid clippy type_complexity warnings
+type ParsedAction = (Keyword, Option<Vec<Ident>>);
+
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr, $loc:expr) => {
@@ -3334,6 +3337,29 @@ impl<'a> Parser<'a> {
         ret
     }
 
+    pub fn parse_actions_list(&mut self) -> Result<Vec<ParsedAction>, ParserError> {
+        let mut values = vec![];
+        loop {
+            values.push(self.parse_grant_permission()?);
+            if !self.consume_token(&Token::Comma) {
+                break;
+            } else if self.options.trailing_commas {
+                match self.peek_token().token {
+                    Token::Word(kw) if kw.keyword == Keyword::ON => {
+                        break;
+                    }
+                    Token::RParen
+                    | Token::SemiColon
+                    | Token::EOF
+                    | Token::RBracket
+                    | Token::RBrace => break,
+                    _ => continue,
+                }
+            }
+        }
+        Ok(values)
+    }
+
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
@@ -3347,9 +3373,7 @@ impl<'a> Parser<'a> {
             } else if self.options.trailing_commas {
                 match self.peek_token().token {
                     Token::Word(kw)
-                        if keywords::RESERVED_FOR_COLUMN_ALIAS
-                            .iter()
-                            .any(|d| kw.keyword == *d) =>
+                        if keywords::RESERVED_FOR_COLUMN_ALIAS.contains(&kw.keyword) =>
                     {
                         break;
                     }
@@ -9680,11 +9704,8 @@ impl<'a> Parser<'a> {
                 with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
             }
         } else {
-            let old_value = self.options.trailing_commas;
-            self.options.trailing_commas = false;
-
             let (actions, err): (Vec<_>, Vec<_>) = self
-                .parse_comma_separated(Parser::parse_grant_permission)?
+                .parse_actions_list()?
                 .into_iter()
                 .map(|(kw, columns)| match kw {
                     Keyword::DELETE => Ok(Action::Delete),
@@ -9705,8 +9726,6 @@ impl<'a> Parser<'a> {
                     _ => Err(kw),
                 })
                 .partition(Result::is_ok);
-
-            self.options.trailing_commas = old_value;
 
             if !err.is_empty() {
                 let errors: Vec<Keyword> = err.into_iter().filter_map(|x| x.err()).collect();
@@ -9753,7 +9772,7 @@ impl<'a> Parser<'a> {
         Ok((privileges, objects))
     }
 
-    pub fn parse_grant_permission(&mut self) -> Result<(Keyword, Option<Vec<Ident>>), ParserError> {
+    pub fn parse_grant_permission(&mut self) -> Result<ParsedAction, ParserError> {
         if let Some(kw) = self.parse_one_of_keywords(&[
             Keyword::CONNECT,
             Keyword::CREATE,

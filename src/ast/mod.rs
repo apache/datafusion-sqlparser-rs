@@ -49,9 +49,9 @@ pub use self::query::{
     MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset,
     OffsetRows, OrderByExpr, PivotValueSource, Query, RenameSelectItem, RepetitionQuantifier,
     ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select, SelectInto, SelectItem, SetExpr,
-    SetOperator, SetQuantifier, SymbolDefinition, Table, TableAlias, TableFactor, TableVersion,
-    TableWithJoins, Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With,
-    WithFill,
+    SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableFactor,
+    TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode, Values,
+    WildcardAdditionalOptions, With, WithFill,
 };
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,

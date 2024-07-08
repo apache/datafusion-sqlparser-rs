@@ -21,8 +21,8 @@ use test_utils::*;
 use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Table;
+use sqlparser::ast::Value::Number;
 use sqlparser::ast::*;
-
 use sqlparser::dialect::ClickHouseDialect;
 use sqlparser::dialect::GenericDialect;
 
@@ -63,6 +63,7 @@ fn parse_map_access_expr() {
                 joins: vec![],
             }],
             lateral_views: vec![],
+            prewhere: None,
             selection: Some(BinaryOp {
                 left: Box::new(BinaryOp {
                     left: Box::new(Identifier(Ident::new("id"))),
@@ -550,6 +551,42 @@ fn parse_limit_by() {
 }
 
 #[test]
+fn parse_settings_in_query() {
+    match clickhouse_and_generic()
+        .verified_stmt(r#"SELECT * FROM t SETTINGS max_threads = 1, max_block_size = 10000"#)
+    {
+        Statement::Query(query) => {
+            assert_eq!(
+                query.settings,
+                Some(vec![
+                    Setting {
+                        key: Ident::new("max_threads"),
+                        value: Number("1".parse().unwrap(), false)
+                    },
+                    Setting {
+                        key: Ident::new("max_block_size"),
+                        value: Number("10000".parse().unwrap(), false)
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let invalid_cases = vec![
+        "SELECT * FROM t SETTINGS a",
+        "SELECT * FROM t SETTINGS a=",
+        "SELECT * FROM t SETTINGS a=1, b",
+        "SELECT * FROM t SETTINGS a=1, b=",
+        "SELECT * FROM t SETTINGS a=1, b=c",
+    ];
+    for sql in invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: SETTINGS key = value, found: ");
+    }
+}
+#[test]
 fn parse_select_star_except() {
     clickhouse().verified_stmt("SELECT * EXCEPT (prev_status) FROM anomalies");
 }
@@ -855,6 +892,56 @@ fn parse_interpolate_with_empty_body() {
         Some(Interpolate { expr: Some(vec![]) }),
         select.order_by[0].interpolate
     );
+}
+
+#[test]
+fn test_prewhere() {
+    match clickhouse_and_generic().verified_stmt("SELECT * FROM t PREWHERE x = 1 WHERE y = 2") {
+        Statement::Query(query) => {
+            let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
+            assert_eq!(
+                prewhere,
+                Some(&BinaryOp {
+                    left: Box::new(Identifier(Ident::new("x"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                })
+            );
+            let selection = query.as_ref().body.as_select().unwrap().selection.as_ref();
+            assert_eq!(
+                selection,
+                Some(&BinaryOp {
+                    left: Box::new(Identifier(Ident::new("y"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match clickhouse_and_generic().verified_stmt("SELECT * FROM t PREWHERE x = 1 AND y = 2") {
+        Statement::Query(query) => {
+            let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
+            assert_eq!(
+                prewhere,
+                Some(&BinaryOp {
+                    left: Box::new(BinaryOp {
+                        left: Box::new(Identifier(Ident::new("x"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    }),
+                    op: BinaryOperator::And,
+                    right: Box::new(BinaryOp {
+                        left: Box::new(Identifier(Ident::new("y"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
+                    }),
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn clickhouse() -> TestedDialects {

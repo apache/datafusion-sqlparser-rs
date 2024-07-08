@@ -7872,6 +7872,7 @@ impl<'a> Parser<'a> {
                 locks: vec![],
                 for_clause: None,
                 settings: None,
+                format_clause: None,
             })
         } else if self.parse_keyword(Keyword::UPDATE) {
             Ok(Query {
@@ -7885,6 +7886,7 @@ impl<'a> Parser<'a> {
                 locks: vec![],
                 for_clause: None,
                 settings: None,
+                format_clause: None,
             })
         } else {
             let body = self.parse_boxed_query_body(0)?;
@@ -7960,6 +7962,18 @@ impl<'a> Parser<'a> {
                     locks.push(self.parse_lock()?);
                 }
             }
+            let format_clause = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+                && self.parse_keyword(Keyword::FORMAT)
+            {
+                if self.parse_keyword(Keyword::NULL) {
+                    Some(FormatClause::Null)
+                } else {
+                    let ident = self.parse_identifier(false)?;
+                    Some(FormatClause::Identifier(ident))
+                }
+            } else {
+                None
+            };
 
             Ok(Query {
                 with,
@@ -7972,6 +7986,7 @@ impl<'a> Parser<'a> {
                 locks,
                 for_clause,
                 settings,
+                format_clause,
             })
         }
     }
@@ -9118,6 +9133,7 @@ impl<'a> Parser<'a> {
                     locks: vec![],
                     for_clause: None,
                     settings: None,
+                    format_clause: None,
                 }),
                 alias,
             })

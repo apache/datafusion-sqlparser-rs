@@ -3717,6 +3717,18 @@ fn parse_drop_procedure() {
             option: None
         }
     );
+
+    let res = pg().parse_sql_statements("DROP PROCEDURE testproc DROP");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: DROP".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("DROP PROCEDURE testproc SET NULL");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: SET".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

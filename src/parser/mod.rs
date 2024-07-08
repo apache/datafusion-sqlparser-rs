@@ -4592,7 +4592,8 @@ impl<'a> Parser<'a> {
         let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
             Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
             Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
-            _ => None,
+            Some(_) => unreachable!(), // parse_one_of_keywords does not return other keywords
+            None => None,
         };
         Ok(Statement::DropProcedure {
             if_exists,

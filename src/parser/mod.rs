@@ -4601,7 +4601,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_drop_function_desc(&mut self) -> Result<DropFuncDesc, ParserError> {
+    fn parse_drop_function_desc(&mut self) -> Result<DropFunctionDesc, ParserError> {
         let name = self.parse_object_name(false)?;
 
         let args = if self.consume_token(&Token::LParen) {
@@ -4616,7 +4616,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(DropFuncDesc { name, args })
+        Ok(DropFunctionDesc { name, args })
     }
 
     /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.

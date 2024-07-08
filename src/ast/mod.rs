@@ -2210,7 +2210,7 @@ pub enum Statement {
     DropFunction {
         if_exists: bool,
         /// One or more function to drop
-        func_desc: Vec<DropFuncDesc>,
+        func_desc: Vec<DropFunctionDesc>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
@@ -2220,7 +2220,7 @@ pub enum Statement {
     DropProcedure {
         if_exists: bool,
         /// One or more function to drop
-        proc_desc: Vec<DropFuncDesc>,
+        proc_desc: Vec<DropFunctionDesc>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
@@ -5910,12 +5910,12 @@ impl fmt::Display for DropFunctionOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct DropFuncDesc {
+pub struct DropFunctionDesc {
     pub name: ObjectName,
     pub args: Option<Vec<OperateFunctionArg>>,
 }
 
-impl fmt::Display for DropFuncDesc {
+impl fmt::Display for DropFunctionDesc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)?;
         if let Some(args) = &self.args {

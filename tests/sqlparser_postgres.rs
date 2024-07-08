@@ -3546,7 +3546,7 @@ fn parse_drop_function() {
         pg().verified_stmt(sql),
         Statement::DropFunction {
             if_exists: true,
-            func_desc: vec![DropFuncDesc {
+            func_desc: vec![DropFunctionDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_func".to_string(),
                     quote_style: None
@@ -3562,7 +3562,7 @@ fn parse_drop_function() {
         pg().verified_stmt(sql),
         Statement::DropFunction {
             if_exists: true,
-            func_desc: vec![DropFuncDesc {
+            func_desc: vec![DropFunctionDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_func".to_string(),
                     quote_style: None
@@ -3587,7 +3587,7 @@ fn parse_drop_function() {
         Statement::DropFunction {
             if_exists: true,
             func_desc: vec![
-                DropFuncDesc {
+                DropFunctionDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_func1".to_string(),
                         quote_style: None
@@ -3605,7 +3605,7 @@ fn parse_drop_function() {
                         }
                     ]),
                 },
-                DropFuncDesc {
+                DropFunctionDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_func2".to_string(),
                         quote_style: None
@@ -3636,7 +3636,7 @@ fn parse_drop_procedure() {
         pg().verified_stmt(sql),
         Statement::DropProcedure {
             if_exists: true,
-            proc_desc: vec![DropFuncDesc {
+            proc_desc: vec![DropFunctionDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_proc".to_string(),
                     quote_style: None
@@ -3652,7 +3652,7 @@ fn parse_drop_procedure() {
         pg().verified_stmt(sql),
         Statement::DropProcedure {
             if_exists: true,
-            proc_desc: vec![DropFuncDesc {
+            proc_desc: vec![DropFunctionDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_proc".to_string(),
                     quote_style: None
@@ -3677,7 +3677,7 @@ fn parse_drop_procedure() {
         Statement::DropProcedure {
             if_exists: true,
             proc_desc: vec![
-                DropFuncDesc {
+                DropFunctionDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_proc1".to_string(),
                         quote_style: None
@@ -3695,7 +3695,7 @@ fn parse_drop_procedure() {
                         }
                     ]),
                 },
-                DropFuncDesc {
+                DropFunctionDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_proc2".to_string(),
                         quote_style: None

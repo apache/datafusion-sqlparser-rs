@@ -10,6 +10,39 @@ changes that break via addition as "Added".
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.48.0] 2024-07-09
+
+Huge shout out for @iffyio @jmhain and @lovasoa for their help reviewing and merging PRs!
+
+### Fixed
+* Fix CI error message in CI (#1333) - Thanks @alamb
+* Fix typo in sqlparser-derive README (#1310) - Thanks @leoyvens
+* Re-enable trailing commas in DCL (#1318) - Thanks @MohamedAbdeen21
+* Fix a few typos in comment lines (#1316) - Thanks @git-hulk
+* Fix Snowflake `SELECT * wildcard REPLACE ... RENAME` order (#1321) - Thanks @alexander-beedie
+* Allow semi-colon at the end of UNCACHE statement (#1320) - Thanks @LorrensP-2158466
+* Return errors, not panic, when integers fail to parse in `AUTO_INCREMENT` and `TOP` (#1305) - Thanks @eejbyfeldt
+
+### Added
+* Support `PREWHERE` condition for ClickHouse dialect (#1328) - Thanks @git-hulk
+* Support `SETTINGS` pairs for ClickHouse dialect (#1327) - Thanks @git-hulk
+* Support `GROUP BY WITH MODIFIER` for ClickHouse dialect (#1323) - Thanks @git-hulk
+* Support DuckDB Union datatype (#1322) - Thanks @gstvg
+* Support parametric arguments to `FUNCTION` for ClickHouse dialect (#1315) - Thanks @git-hulk
+* Support `TO` in `CREATE VIEW` clause for Clickhouse (#1313) - Thanks @Bidaya0
+* Support `UPDATE` statements that contain tuple assignments (#1317) - Thanks @lovasoa
+* Support `BY NAME quantifier across all set ops (#1309) - Thanks @alexander-beedie
+* Support SnowFlake exclusive `CREATE TABLE` options (#1233) - Thanks @balliegojr
+* Support ClickHouse `CREATE TABLE` with primary key and parametrised table engine (#1289) - Thanks @7phs
+* Support custom operators in Postgres (#1302) - Thanks @lovasoa
+* Support ClickHouse data types (#1285) - Thanks @7phs
+
+### Changed
+* Refine docs (#1326) - Thanks @emilsivervik
+* Improve error messages with additional colons (#1319) - Thanks @LorrensP-2158466
+* Move Display fmt to struct for `CreateIndex` (#1307) - Thanks @philipcristiano
+* Enhancing Trailing Comma Option (#1212) - Thanks @MohamedAbdeen21
+* Encapsulate `CreateTable`, `CreateIndex` into specific structs (#1291) - Thanks @philipcristiano
 
 ## [0.47.0] 2024-06-01
 

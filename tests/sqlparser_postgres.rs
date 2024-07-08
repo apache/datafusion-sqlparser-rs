@@ -317,7 +317,7 @@ fn parse_create_table_with_defaults() {
             active int NOT NULL
     ) WITH (fillfactor = 20, user_catalog_table = true, autovacuum_vacuum_threshold = 100)";
     match pg_and_generic().one_statement_parses_to(sql, "") {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
@@ -327,7 +327,7 @@ fn parse_create_table_with_defaults() {
             file_format: None,
             location: None,
             ..
-        } => {
+        }) => {
             use pretty_assertions::assert_eq;
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
@@ -537,12 +537,12 @@ fn parse_create_table_constraints_only() {
     let sql = "CREATE TABLE t (CONSTRAINT positive CHECK (2 > 1))";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
             ..
-        } => {
+        }) => {
             assert_eq!("t", name.to_string());
             assert!(columns.is_empty());
             assert_eq!(
@@ -648,7 +648,7 @@ fn parse_alter_table_alter_column_add_generated() {
         "ALTER TABLE t ALTER COLUMN id ADD GENERATED ( INCREMENT 1 MINVALUE 1 )",
     );
     assert_eq!(
-        ParserError::ParserError("Expected AS, found: (".to_string()),
+        ParserError::ParserError("Expected: AS, found: (".to_string()),
         res.unwrap_err()
     );
 
@@ -656,14 +656,14 @@ fn parse_alter_table_alter_column_add_generated() {
         "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( INCREMENT )",
     );
     assert_eq!(
-        ParserError::ParserError("Expected a value, found: )".to_string()),
+        ParserError::ParserError("Expected: a value, found: )".to_string()),
         res.unwrap_err()
     );
 
     let res =
         pg().parse_sql_statements("ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY (");
     assert_eq!(
-        ParserError::ParserError("Expected ), found: EOF".to_string()),
+        ParserError::ParserError("Expected: ), found: EOF".to_string()),
         res.unwrap_err()
     );
 }
@@ -786,11 +786,11 @@ fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             if_not_exists: true,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
         }
         _ => unreachable!(),
@@ -801,25 +801,25 @@ fn parse_create_table_if_not_exists() {
 fn parse_bad_if_not_exists() {
     let res = pg().parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: EXISTS".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: EXISTS".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: uk_cities".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: uk_cities".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: NOT".to_string()),
+        ParserError::ParserError("Expected: end of statement, found: NOT".to_string()),
         res.unwrap_err()
     );
 }
@@ -1142,8 +1142,9 @@ fn parse_copy_to() {
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
+                    prewhere: None,
                     selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
                     having: None,
                     named_window: vec![],
                     window_before_qualify: false,
@@ -1161,6 +1162,7 @@ fn parse_copy_to() {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })),
             to: true,
             target: CopyTarget::File {
@@ -1368,21 +1370,21 @@ fn parse_set() {
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET"),
         Err(ParserError::ParserError(
-            "Expected identifier, found: EOF".to_string()
+            "Expected: identifier, found: EOF".to_string()
         )),
     );
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET a b"),
         Err(ParserError::ParserError(
-            "Expected equals sign or TO, found: b".to_string()
+            "Expected: equals sign or TO, found: b".to_string()
         )),
     );
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET a ="),
         Err(ParserError::ParserError(
-            "Expected variable value, found: EOF".to_string()
+            "Expected: variable value, found: EOF".to_string()
         )),
     );
 }
@@ -1625,7 +1627,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        id: vec!["dname".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
                     },],
                     selection: None
@@ -1656,14 +1658,14 @@ fn parse_pg_on_conflict() {
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
                         Assignment {
-                            id: vec!["dname".into()],
+                            target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                             value: Expr::CompoundIdentifier(vec![
                                 "EXCLUDED".into(),
                                 "dname".into()
                             ])
                         },
                         Assignment {
-                            id: vec!["area".into()],
+                            target: AssignmentTarget::ColumnName(ObjectName(vec!["area".into()])),
                             value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
                         },
                     ],
@@ -1713,7 +1715,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        id: vec!["dname".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -1750,7 +1752,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        id: vec!["dname".into()],
+                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -1825,6 +1827,29 @@ fn parse_pg_returning() {
     };
 }
 
+fn test_operator(operator: &str, dialect: &TestedDialects, expected: BinaryOperator) {
+    let operator_tokens =
+        sqlparser::tokenizer::Tokenizer::new(&PostgreSqlDialect {}, &format!("a{operator}b"))
+            .tokenize()
+            .unwrap();
+    assert_eq!(
+        operator_tokens.len(),
+        3,
+        "binary op should be 3 tokens, not {operator_tokens:?}"
+    );
+    let expected_expr = Expr::BinaryOp {
+        left: Box::new(Expr::Identifier(Ident::new("a"))),
+        op: expected,
+        right: Box::new(Expr::Identifier(Ident::new("b"))),
+    };
+    let str_expr_canonical = format!("a {operator} b");
+    assert_eq!(expected_expr, dialect.verified_expr(&str_expr_canonical));
+    assert_eq!(
+        expected_expr,
+        dialect.expr_parses_to(&format!("a{operator}b"), &str_expr_canonical)
+    );
+}
+
 #[test]
 fn parse_pg_binary_ops() {
     let binary_ops = &[
@@ -1838,16 +1863,71 @@ fn parse_pg_binary_ops() {
     ];
 
     for (str_op, op, dialects) in binary_ops {
-        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
-        assert_eq!(
-            SelectItem::UnnamedExpr(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("a"))),
-                op: op.clone(),
-                right: Box::new(Expr::Identifier(Ident::new("b"))),
-            }),
-            select.projection[0]
-        );
+        test_operator(str_op, dialects, op.clone());
     }
+}
+
+#[test]
+fn parse_pg_custom_binary_ops() {
+    // Postgres supports declaring custom binary operators, using any character in the following set:
+    //  + - * / < > = ~ ! @ # % ^ & | ` ?
+
+    // Here, we test the ones used by common extensions
+    let operators = [
+        // PostGIS
+        "&&&",   // n-D bounding boxes intersect
+        "&<",    // (is strictly to the left of)
+        "&>",    // (is strictly to the right of)
+        "|=|",   //  distance between A and B trajectories at their closest point of approach
+        "<<#>>", // n-D distance between A and B bounding boxes
+        "|>>",   // A's bounding box is strictly above B's.
+        "~=",    // bounding box is the same
+        // PGroonga
+        "&@",   // Full text search by a keyword
+        "&@~",  // Full text search by easy to use query language
+        "&@*",  // Similar search
+        "&`",   // Advanced search by ECMAScript like query language
+        "&@|",  // Full text search by an array of keywords
+        "&@~|", //  Full text search by an array of queries in easy to use query language
+        // pgtrgm
+        "<<%", // second argument has a continuous extent of an ordered trigram set that matches word boundaries
+        "%>>", // commutator of <<%
+        "<<<->", // distance between arguments
+        // hstore
+        "#=", // Replace fields with matching values from hstore
+        // ranges
+        "-|-", // Is adjacent to
+        // pg_similarity
+        "~++", // L1 distance
+        "~##", // Cosine Distance
+        "~-~", // Dice Coefficient
+        "~!!", // Euclidean Distance
+        "~@~", // Hamming Distance
+        "~??", // Jaccard Coefficient
+        "~%%", // Jaro Distance
+        "~@@", // Jaro-Winkler Distance
+        "~==", // Levenshtein Distance
+        "~^^", // Matching Coefficient
+        "~||", // Monge-Elkan Coefficient
+        "~#~", // Needleman-Wunsch Coefficient
+        "~**", // Overlap Coefficient
+        "~~~", // Q-Gram Distance
+        "~=~", // Smith-Waterman Coefficient
+        "~!~", // Smith-Waterman-Gotoh Coefficient
+        "~*~", // Soundex Distance
+        // soundex_operator
+        ">@@<", // Soundex matches
+        "<@@>", // Soundex doesn't match
+    ];
+    for op in &operators {
+        test_operator(op, &pg(), BinaryOperator::Custom(op.to_string()));
+    }
+}
+
+#[test]
+fn parse_ampersand_arobase() {
+    // In SQL Server, a&@b means (a) & (@b), in PostgreSQL it means (a) &@ (b)
+    pg().expr_parses_to("a&@b", "a &@ b");
 }
 
 #[test]
@@ -2154,7 +2234,7 @@ fn parse_array_multi_subscript() {
 fn parse_create_index() {
     let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2)";
     match pg().verified_stmt(sql) {
-        Statement::CreateIndex {
+        Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
             table_name: ObjectName(table_name),
             using,
@@ -2165,7 +2245,7 @@ fn parse_create_index() {
             nulls_distinct: None,
             include,
             predicate: None,
-        } => {
+        }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
             assert_eq!(None, using);
@@ -2183,7 +2263,7 @@ fn parse_create_index() {
 fn parse_create_anonymous_index() {
     let sql = "CREATE INDEX ON my_table(col1,col2)";
     match pg().verified_stmt(sql) {
-        Statement::CreateIndex {
+        Statement::CreateIndex(CreateIndex {
             name,
             table_name: ObjectName(table_name),
             using,
@@ -2194,7 +2274,7 @@ fn parse_create_anonymous_index() {
             include,
             nulls_distinct: None,
             predicate: None,
-        } => {
+        }) => {
             assert_eq!(None, name);
             assert_eq_vec(&["my_table"], &table_name);
             assert_eq!(None, using);
@@ -2212,7 +2292,7 @@ fn parse_create_anonymous_index() {
 fn parse_create_index_concurrently() {
     let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
     match pg().verified_stmt(sql) {
-        Statement::CreateIndex {
+        Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
             table_name: ObjectName(table_name),
             using,
@@ -2223,7 +2303,7 @@ fn parse_create_index_concurrently() {
             include,
             nulls_distinct: None,
             predicate: None,
-        } => {
+        }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
             assert_eq!(None, using);
@@ -2241,7 +2321,7 @@ fn parse_create_index_concurrently() {
 fn parse_create_index_with_predicate() {
     let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) WHERE col3 IS NULL";
     match pg().verified_stmt(sql) {
-        Statement::CreateIndex {
+        Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
             table_name: ObjectName(table_name),
             using,
@@ -2252,7 +2332,7 @@ fn parse_create_index_with_predicate() {
             include,
             nulls_distinct: None,
             predicate: Some(_),
-        } => {
+        }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
             assert_eq!(None, using);
@@ -2270,7 +2350,7 @@ fn parse_create_index_with_predicate() {
 fn parse_create_index_with_include() {
     let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) INCLUDE (col3)";
     match pg().verified_stmt(sql) {
-        Statement::CreateIndex {
+        Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
             table_name: ObjectName(table_name),
             using,
@@ -2281,7 +2361,7 @@ fn parse_create_index_with_include() {
             include,
             nulls_distinct: None,
             predicate: None,
-        } => {
+        }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
             assert_eq!(None, using);
@@ -2299,7 +2379,7 @@ fn parse_create_index_with_include() {
 fn parse_create_index_with_nulls_distinct() {
     let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS NOT DISTINCT";
     match pg().verified_stmt(sql) {
-        Statement::CreateIndex {
+        Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
             table_name: ObjectName(table_name),
             using,
@@ -2310,7 +2390,7 @@ fn parse_create_index_with_nulls_distinct() {
             include,
             nulls_distinct: Some(nulls_distinct),
             predicate: None,
-        } => {
+        }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
             assert_eq!(None, using);
@@ -2326,7 +2406,7 @@ fn parse_create_index_with_nulls_distinct() {
 
     let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS DISTINCT";
     match pg().verified_stmt(sql) {
-        Statement::CreateIndex {
+        Statement::CreateIndex(CreateIndex {
             name: Some(ObjectName(name)),
             table_name: ObjectName(table_name),
             using,
@@ -2337,7 +2417,7 @@ fn parse_create_index_with_nulls_distinct() {
             include,
             nulls_distinct: Some(nulls_distinct),
             predicate: None,
-        } => {
+        }) => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
             assert_eq!(None, using);
@@ -2359,6 +2439,7 @@ fn parse_array_subquery_expr() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("ARRAY")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::Subquery(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::SetOperation {
@@ -2371,8 +2452,9 @@ fn parse_array_subquery_expr() {
                         into: None,
                         from: vec![],
                         lateral_views: vec![],
+                        prewhere: None,
                         selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -2390,8 +2472,9 @@ fn parse_array_subquery_expr() {
                         into: None,
                         from: vec![],
                         lateral_views: vec![],
+                        prewhere: None,
                         selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -2410,6 +2493,7 @@ fn parse_array_subquery_expr() {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })),
             filter: None,
             null_treatment: None,
@@ -2675,7 +2759,7 @@ fn parse_json_table_is_not_reserved() {
             name: ObjectName(name),
             ..
         } => assert_eq!("JSON_TABLE", name[0].value),
-        other => panic!("Expected JSON_TABLE to be parsed as a table name, but got {other:?}"),
+        other => panic!("Expected: JSON_TABLE to be parsed as a table name, but got {other:?}"),
     }
 }
 
@@ -2719,6 +2803,7 @@ fn test_composite_value() {
                     Ident::new("information_schema"),
                     Ident::new("_pg_expandarray")
                 ]),
+                parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
@@ -2864,7 +2949,7 @@ fn parse_escaped_literal_string() {
             .parse_sql_statements(sql)
             .unwrap_err()
             .to_string(),
-        "sql parser error: Unterminated encoded string literal at Line: 1, Column 8"
+        "sql parser error: Unterminated encoded string literal at Line: 1, Column: 8"
     );
 
     let sql = r"SELECT E'\u0001', E'\U0010FFFF', E'\xC', E'\x25', E'\2', E'\45', E'\445'";
@@ -2907,7 +2992,7 @@ fn parse_escaped_literal_string() {
                     .parse_sql_statements(sql)
                     .unwrap_err()
                     .to_string(),
-                "sql parser error: Unterminated encoded string literal at Line: 1, Column 8"
+                "sql parser error: Unterminated encoded string literal at Line: 1, Column: 8"
             );
         }
     }
@@ -2945,6 +3030,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_CATALOG")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -2956,6 +3042,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_USER")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -2967,6 +3054,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("SESSION_USER")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -2978,6 +3066,7 @@ fn parse_current_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("USER")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
             filter: None,
@@ -3428,6 +3517,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -3445,7 +3535,7 @@ fn parse_delimited_identifiers() {
             assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
-        _ => panic!("Expected ExprWithAlias"),
+        _ => panic!("Expected: ExprWithAlias"),
     }
 
     pg().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
@@ -3694,14 +3784,17 @@ fn parse_select_group_by_grouping_sets() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())"
     );
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::GroupingSets(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-                vec![],
-            ]),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("size")),
+                Expr::GroupingSets(vec![
+                    vec![Expr::Identifier(Ident::new("brand"))],
+                    vec![Expr::Identifier(Ident::new("size"))],
+                    vec![],
+                ]),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 }
@@ -3712,13 +3805,16 @@ fn parse_select_group_by_rollup() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)",
     );
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::Rollup(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-            ]),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("size")),
+                Expr::Rollup(vec![
+                    vec![Expr::Identifier(Ident::new("brand"))],
+                    vec![Expr::Identifier(Ident::new("size"))],
+                ]),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 }
@@ -3729,13 +3825,16 @@ fn parse_select_group_by_cube() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)",
     );
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::Cube(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-            ]),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("size")),
+                Expr::Cube(vec![
+                    vec![Expr::Identifier(Ident::new("brand"))],
+                    vec![Expr::Identifier(Ident::new("size"))],
+                ]),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 }
@@ -3769,10 +3868,10 @@ fn parse_create_table_with_alias() {
       int2_col INT2,
       float8_col FLOAT8,
       float4_col FLOAT4,
-      bool_col BOOL,
+      bool_col BOOL
     );";
     match pg_and_generic().one_statement_parses_to(sql, "") {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
@@ -3782,7 +3881,7 @@ fn parse_create_table_with_alias() {
             file_format: None,
             location: None,
             ..
-        } => {
+        }) => {
             assert_eq!("public.datatype_aliases", name.to_string());
             assert_eq!(
                 columns,
@@ -3915,7 +4014,8 @@ fn test_simple_postgres_insert_with_alias() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
-                for_clause: None
+                for_clause: None,
+                settings: None,
             })),
             partitioned: None,
             after_columns: vec![],
@@ -3982,7 +4082,8 @@ fn test_simple_postgres_insert_with_alias() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
-                for_clause: None
+                for_clause: None,
+                settings: None,
             })),
             partitioned: None,
             after_columns: vec![],
@@ -4045,7 +4146,8 @@ fn test_simple_insert_with_quoted_alias() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
-                for_clause: None
+                for_clause: None,
+                settings: None,
             })),
             partitioned: None,
             after_columns: vec![],
@@ -4125,4 +4227,27 @@ fn parse_at_time_zone() {
         ),
         expr
     );
+}
+
+#[test]
+fn parse_create_table_with_options() {
+    let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { with_options, .. }) => {
+            assert_eq!(
+                vec![
+                    SqlOption {
+                        name: "foo".into(),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
+                    },
+                    SqlOption {
+                        name: "a".into(),
+                        value: Expr::Value(number("123")),
+                    },
+                ],
+                with_options
+            );
+        }
+        _ => unreachable!(),
+    }
 }

@@ -97,7 +97,7 @@ impl Visit for TableFactor {
         match self {
             Self::Table { name, alias } => {
                 visitor.pre_visit_relation(name)?;
-                alias.visit(name)?;
+                name.visit(visitor)?;
                 visitor.post_visit_relation(name)?;
                 alias.visit(visitor)?;
             }

@@ -122,6 +122,12 @@ pub trait Dialect: Debug + Any {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
+
+    /// Most dialects do not have custom operators. Override this method to provide custom operators.
+    fn is_custom_operator_part(&self, _ch: char) -> bool {
+        false
+    }
+
     /// Determine if the dialect supports escaping characters via '\' in string literals.
     ///
     /// Some dialects like BigQuery and Snowflake support this while others like
@@ -250,6 +256,14 @@ pub trait Dialect: Debug + Any {
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior
         None
+    }
+    /// Does the dialect support trailing commas around the query?
+    fn supports_trailing_commas(&self) -> bool {
+        false
+    }
+    /// Does the dialect support trailing commas in the projection list?
+    fn supports_projection_trailing_commas(&self) -> bool {
+        self.supports_trailing_commas()
     }
     /// Dialect-specific infix parser override
     fn parse_infix(

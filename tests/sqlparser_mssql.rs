@@ -103,6 +103,7 @@ fn parse_create_procedure() {
                 locks: vec![],
                 for_clause: None,
                 order_by: vec![],
+                settings: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
@@ -110,8 +111,9 @@ fn parse_create_procedure() {
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
+                    prewhere: None,
                     selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -354,6 +356,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -438,6 +441,12 @@ fn parse_for_json_expect_ast() {
 }
 
 #[test]
+fn parse_ampersand_arobase() {
+    // In SQL Server, a&@b means (a) & (@b), in PostgreSQL it means (a) &@ (b)
+    ms().expr_parses_to("a&@b", "a & @b");
+}
+
+#[test]
 fn parse_cast_varchar_max() {
     ms_and_generic().verified_expr("CAST('foo' AS VARCHAR(MAX))");
     ms_and_generic().verified_expr("CAST('foo' AS NVARCHAR(MAX))");
@@ -475,7 +484,7 @@ fn parse_convert() {
 
     let error_sql = "SELECT CONVERT(INT, 'foo',) FROM T";
     assert_eq!(
-        ParserError::ParserError("Expected an expression:, found: )".to_owned()),
+        ParserError::ParserError("Expected: an expression:, found: )".to_owned()),
         ms().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -520,8 +529,9 @@ fn parse_substring_in_select() {
                             joins: vec![]
                         }],
                         lateral_views: vec![],
+                        prewhere: None,
                         selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -539,6 +549,7 @@ fn parse_substring_in_select() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 }),
                 query
             );

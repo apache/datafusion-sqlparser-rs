@@ -21,8 +21,8 @@ use test_utils::*;
 use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Table;
+use sqlparser::ast::Value::Number;
 use sqlparser::ast::*;
-
 use sqlparser::dialect::ClickHouseDialect;
 use sqlparser::dialect::GenericDialect;
 
@@ -63,6 +63,7 @@ fn parse_map_access_expr() {
                 joins: vec![],
             }],
             lateral_views: vec![],
+            prewhere: None,
             selection: Some(BinaryOp {
                 left: Box::new(BinaryOp {
                     left: Box::new(Identifier(Ident::new("id"))),
@@ -88,7 +89,7 @@ fn parse_map_access_expr() {
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),
                 }),
             }),
-            group_by: GroupByExpr::Expressions(vec![]),
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],
@@ -183,6 +184,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
@@ -211,13 +213,282 @@ fn parse_delimited_identifiers() {
 #[test]
 fn parse_create_table() {
     clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY ("x")"#);
-    clickhouse().one_statement_parses_to(
-        r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x""#,
-        r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY ("x")"#,
-    );
+    clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x""#);
     clickhouse().verified_stmt(
-        r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY ("x") AS SELECT * FROM "t" WHERE true"#,
+        r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x" AS SELECT * FROM "t" WHERE true"#,
     );
+}
+
+fn column_def(name: Ident, data_type: DataType) -> ColumnDef {
+    ColumnDef {
+        name,
+        data_type,
+        collation: None,
+        options: vec![],
+    }
+}
+
+#[test]
+fn parse_clickhouse_data_types() {
+    let sql = concat!(
+        "CREATE TABLE table (",
+        "a1 UInt8, a2 UInt16, a3 UInt32, a4 UInt64, a5 UInt128, a6 UInt256,",
+        " b1 Int8, b2 Int16, b3 Int32, b4 Int64, b5 Int128, b6 Int256,",
+        " c1 Float32, c2 Float64,",
+        " d1 Date32, d2 DateTime64(3), d3 DateTime64(3, 'UTC'),",
+        " e1 FixedString(255),",
+        " f1 LowCardinality(Int32)",
+        ") ORDER BY (a1)",
+    );
+    // ClickHouse has a case-sensitive definition of data type, but canonical representation is not
+    let canonical_sql = sql
+        .replace(" Int8", " INT8")
+        .replace(" Int64", " INT64")
+        .replace(" Float64", " FLOAT64");
+
+    match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(
+                columns,
+                vec![
+                    column_def("a1".into(), DataType::UInt8),
+                    column_def("a2".into(), DataType::UInt16),
+                    column_def("a3".into(), DataType::UInt32),
+                    column_def("a4".into(), DataType::UInt64),
+                    column_def("a5".into(), DataType::UInt128),
+                    column_def("a6".into(), DataType::UInt256),
+                    column_def("b1".into(), DataType::Int8(None)),
+                    column_def("b2".into(), DataType::Int16),
+                    column_def("b3".into(), DataType::Int32),
+                    column_def("b4".into(), DataType::Int64),
+                    column_def("b5".into(), DataType::Int128),
+                    column_def("b6".into(), DataType::Int256),
+                    column_def("c1".into(), DataType::Float32),
+                    column_def("c2".into(), DataType::Float64),
+                    column_def("d1".into(), DataType::Date32),
+                    column_def("d2".into(), DataType::Datetime64(3, None)),
+                    column_def("d3".into(), DataType::Datetime64(3, Some("UTC".into()))),
+                    column_def("e1".into(), DataType::FixedString(255)),
+                    column_def(
+                        "f1".into(),
+                        DataType::LowCardinality(Box::new(DataType::Int32))
+                    ),
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_nullable() {
+    let sql = r#"CREATE TABLE table (k UInt8, `a` Nullable(String), `b` Nullable(DateTime64(9, 'UTC')), c Nullable(DateTime64(9)), d Date32 NULL) ENGINE=MergeTree ORDER BY (`k`)"#;
+    // ClickHouse has a case-sensitive definition of data type, but canonical representation is not
+    let canonical_sql = sql.replace("String", "STRING");
+
+    match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(
+                columns,
+                vec![
+                    column_def("k".into(), DataType::UInt8),
+                    column_def(
+                        Ident::with_quote('`', "a"),
+                        DataType::Nullable(Box::new(DataType::String(None)))
+                    ),
+                    column_def(
+                        Ident::with_quote('`', "b"),
+                        DataType::Nullable(Box::new(DataType::Datetime64(
+                            9,
+                            Some("UTC".to_string())
+                        )))
+                    ),
+                    column_def(
+                        "c".into(),
+                        DataType::Nullable(Box::new(DataType::Datetime64(9, None)))
+                    ),
+                    ColumnDef {
+                        name: "d".into(),
+                        data_type: DataType::Date32,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Null
+                        }],
+                    }
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_nested_data_types() {
+    let sql = concat!(
+        "CREATE TABLE table (",
+        " i Nested(a Array(Int16), b LowCardinality(String)),",
+        " k Array(Tuple(FixedString(128), Int128)),",
+        " l Tuple(a DateTime64(9), b Array(UUID)),",
+        " m Map(String, UInt16)",
+        ") ENGINE=MergeTree ORDER BY (k)"
+    );
+
+    match clickhouse().one_statement_parses_to(sql, "") {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: Ident::new("i"),
+                        data_type: DataType::Nested(vec![
+                            column_def(
+                                "a".into(),
+                                DataType::Array(ArrayElemTypeDef::Parenthesis(Box::new(
+                                    DataType::Int16
+                                ),))
+                            ),
+                            column_def(
+                                "b".into(),
+                                DataType::LowCardinality(Box::new(DataType::String(None)))
+                            )
+                        ]),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("k"),
+                        data_type: DataType::Array(ArrayElemTypeDef::Parenthesis(Box::new(
+                            DataType::Tuple(vec![
+                                StructField {
+                                    field_name: None,
+                                    field_type: DataType::FixedString(128)
+                                },
+                                StructField {
+                                    field_name: None,
+                                    field_type: DataType::Int128
+                                }
+                            ])
+                        ))),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("l"),
+                        data_type: DataType::Tuple(vec![
+                            StructField {
+                                field_name: Some("a".into()),
+                                field_type: DataType::Datetime64(9, None),
+                            },
+                            StructField {
+                                field_name: Some("b".into()),
+                                field_type: DataType::Array(ArrayElemTypeDef::Parenthesis(
+                                    Box::new(DataType::Uuid)
+                                ))
+                            },
+                        ]),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("m"),
+                        data_type: DataType::Map(
+                            Box::new(DataType::String(None)),
+                            Box::new(DataType::UInt16)
+                        ),
+                        collation: None,
+                        options: vec![],
+                    },
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_primary_key() {
+    match clickhouse_and_generic().verified_stmt(concat!(
+        r#"CREATE TABLE db.table (`i` INT, `k` INT)"#,
+        " ENGINE=SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')",
+        " PRIMARY KEY tuple(i)",
+        " ORDER BY tuple(i)",
+    )) {
+        Statement::CreateTable(CreateTable {
+            name,
+            columns,
+            engine,
+            primary_key,
+            order_by,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "db.table");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::with_quote('`', "i"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('`', "k"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                ],
+                columns
+            );
+            assert_eq!(
+                engine,
+                Some(TableEngine {
+                    name: "SharedMergeTree".to_string(),
+                    parameters: Some(vec![
+                        Ident::with_quote('\'', "/clickhouse/tables/{uuid}/{shard}"),
+                        Ident::with_quote('\'', "{replica}"),
+                    ]),
+                })
+            );
+            fn assert_function(actual: &Function, name: &str, arg: &str) -> bool {
+                assert_eq!(actual.name, ObjectName(vec![Ident::new(name)]));
+                assert_eq!(
+                    actual.args,
+                    FunctionArguments::List(FunctionArgumentList {
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(
+                            Ident::new(arg)
+                        )),)],
+                        duplicate_treatment: None,
+                        clauses: vec![],
+                    })
+                );
+                true
+            }
+            match primary_key.unwrap().as_ref() {
+                Expr::Function(primary_key) => {
+                    assert!(assert_function(primary_key, "tuple", "i"));
+                }
+                _ => panic!("unexpected primary key type"),
+            }
+            match order_by {
+                Some(OneOrManyWithParens::One(Expr::Function(order_by))) => {
+                    assert!(assert_function(&order_by, "tuple", "i"));
+                }
+                _ => panic!("unexpected order by type"),
+            };
+        }
+        _ => unreachable!(),
+    }
+
+    clickhouse_and_generic()
+        .parse_sql_statements(concat!(
+            r#"CREATE TABLE db.table (`i` Int, `k` Int)"#,
+            " ORDER BY tuple(i), tuple(k)",
+        ))
+        .expect_err("ORDER BY supports one expression with tuple");
 }
 
 #[test]
@@ -280,8 +551,93 @@ fn parse_limit_by() {
 }
 
 #[test]
+fn parse_settings_in_query() {
+    match clickhouse_and_generic()
+        .verified_stmt(r#"SELECT * FROM t SETTINGS max_threads = 1, max_block_size = 10000"#)
+    {
+        Statement::Query(query) => {
+            assert_eq!(
+                query.settings,
+                Some(vec![
+                    Setting {
+                        key: Ident::new("max_threads"),
+                        value: Number("1".parse().unwrap(), false)
+                    },
+                    Setting {
+                        key: Ident::new("max_block_size"),
+                        value: Number("10000".parse().unwrap(), false)
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let invalid_cases = vec![
+        "SELECT * FROM t SETTINGS a",
+        "SELECT * FROM t SETTINGS a=",
+        "SELECT * FROM t SETTINGS a=1, b",
+        "SELECT * FROM t SETTINGS a=1, b=",
+        "SELECT * FROM t SETTINGS a=1, b=c",
+    ];
+    for sql in invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: SETTINGS key = value, found: ");
+    }
+}
+#[test]
 fn parse_select_star_except() {
     clickhouse().verified_stmt("SELECT * EXCEPT (prev_status) FROM anomalies");
+}
+
+#[test]
+fn parse_select_parametric_function() {
+    match clickhouse_and_generic().verified_stmt("SELECT HISTOGRAM(0.5, 0.6)(x, y) FROM t") {
+        Statement::Query(query) => {
+            let projection: &Vec<SelectItem> = query.body.as_select().unwrap().projection.as_ref();
+            assert_eq!(projection.len(), 1);
+            match &projection[0] {
+                UnnamedExpr(Expr::Function(f)) => {
+                    let args = match &f.args {
+                        FunctionArguments::List(ref args) => args,
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(args.args.len(), 2);
+                    assert_eq!(
+                        args.args[0],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("x"))))
+                    );
+                    assert_eq!(
+                        args.args[1],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("y"))))
+                    );
+
+                    let parameters = match f.parameters {
+                        FunctionArguments::List(ref args) => args,
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(parameters.args.len(), 2);
+                    assert_eq!(
+                        parameters.args[0],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
+                            "0.5".parse().unwrap(),
+                            false
+                        ))))
+                    );
+                    assert_eq!(
+                        parameters.args[1],
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
+                            "0.6".parse().unwrap(),
+                            false
+                        ))))
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -290,6 +646,126 @@ fn parse_select_star_except_no_parens() {
         "SELECT * EXCEPT prev_status FROM anomalies",
         "SELECT * EXCEPT (prev_status) FROM anomalies",
     );
+}
+
+#[test]
+fn parse_create_materialized_view() {
+    // example sql
+    // https://clickhouse.com/docs/en/guides/developer/cascading-materialized-views
+    let sql = concat!(
+        "CREATE MATERIALIZED VIEW analytics.monthly_aggregated_data_mv ",
+        "TO analytics.monthly_aggregated_data ",
+        "AS SELECT toDate(toStartOfMonth(event_time)) ",
+        "AS month, domain_name, sumState(count_views) ",
+        "AS sumCountViews FROM analytics.hourly_data ",
+        "GROUP BY domain_name, month"
+    );
+    clickhouse_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_group_by_with_modifier() {
+    let clauses = ["x", "a, b", "ALL"];
+    let modifiers = [
+        "WITH ROLLUP",
+        "WITH CUBE",
+        "WITH TOTALS",
+        "WITH ROLLUP WITH CUBE",
+    ];
+    let expected_modifiers = [
+        vec![GroupByWithModifier::Rollup],
+        vec![GroupByWithModifier::Cube],
+        vec![GroupByWithModifier::Totals],
+        vec![GroupByWithModifier::Rollup, GroupByWithModifier::Cube],
+    ];
+    for clause in &clauses {
+        for (modifier, expected_modifier) in modifiers.iter().zip(expected_modifiers.iter()) {
+            let sql = format!("SELECT * FROM t GROUP BY {clause} {modifier}");
+            match clickhouse_and_generic().verified_stmt(&sql) {
+                Statement::Query(query) => {
+                    let group_by = &query.body.as_select().unwrap().group_by;
+                    if clause == &"ALL" {
+                        assert_eq!(group_by, &GroupByExpr::All(expected_modifier.to_vec()));
+                    } else {
+                        assert_eq!(
+                            group_by,
+                            &GroupByExpr::Expressions(
+                                clause
+                                    .split(", ")
+                                    .map(|c| Identifier(Ident::new(c)))
+                                    .collect(),
+                                expected_modifier.to_vec()
+                            )
+                        );
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    // invalid cases
+    let invalid_cases = [
+        "SELECT * FROM t GROUP BY x WITH",
+        "SELECT * FROM t GROUP BY x WITH ROLLUP CUBE",
+        "SELECT * FROM t GROUP BY x WITH WITH ROLLUP",
+        "SELECT * FROM t GROUP BY WITH ROLLUP",
+    ];
+    for sql in invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: one of ROLLUP or CUBE or TOTALS, found: WITH");
+    }
+}
+
+#[test]
+fn test_prewhere() {
+    match clickhouse_and_generic().verified_stmt("SELECT * FROM t PREWHERE x = 1 WHERE y = 2") {
+        Statement::Query(query) => {
+            let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
+            assert_eq!(
+                prewhere,
+                Some(&BinaryOp {
+                    left: Box::new(Identifier(Ident::new("x"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                })
+            );
+            let selection = query.as_ref().body.as_select().unwrap().selection.as_ref();
+            assert_eq!(
+                selection,
+                Some(&BinaryOp {
+                    left: Box::new(Identifier(Ident::new("y"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match clickhouse_and_generic().verified_stmt("SELECT * FROM t PREWHERE x = 1 AND y = 2") {
+        Statement::Query(query) => {
+            let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
+            assert_eq!(
+                prewhere,
+                Some(&BinaryOp {
+                    left: Box::new(BinaryOp {
+                        left: Box::new(Identifier(Ident::new("x"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    }),
+                    op: BinaryOperator::And,
+                    right: Box::new(BinaryOp {
+                        left: Box::new(Identifier(Ident::new("y"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
+                    }),
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn clickhouse() -> TestedDialects {

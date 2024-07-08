@@ -315,6 +315,7 @@ fn parse_create_view_if_not_exists() {
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
+            ..
         } => {
             assert_eq!("mydataset.newview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -354,7 +355,7 @@ fn parse_create_view_with_unquoted_hyphen() {
 fn parse_create_table_with_unquoted_hyphen() {
     let sql = "CREATE TABLE my-pro-ject.mydataset.mytable (x INT64)";
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(
                 name,
                 ObjectName(vec![
@@ -388,14 +389,14 @@ fn parse_create_table_with_options() {
         r#"OPTIONS(partition_expiration_days = 1, description = "table option description")"#
     );
     match bigquery().verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             partition_by,
             cluster_by,
             options,
             ..
-        } => {
+        }) => {
             assert_eq!(
                 name,
                 ObjectName(vec!["mydataset".into(), "newtable".into()])
@@ -442,7 +443,10 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 (
                     Some(Box::new(Expr::Identifier(Ident::new("_PARTITIONDATE")))),
-                    Some(vec![Ident::new("userid"), Ident::new("age"),]),
+                    Some(WrappedCollection::NoWrapping(vec![
+                        Ident::new("userid"),
+                        Ident::new("age"),
+                    ])),
                     Some(vec![
                         SqlOption {
                             name: Ident::new("partition_expiration_days"),
@@ -477,7 +481,7 @@ fn parse_create_table_with_options() {
 fn parse_nested_data_types() {
     let sql = "CREATE TABLE table (x STRUCT<a ARRAY<INT64>, b BYTES(42)>, y ARRAY<STRUCT<INT64>>)";
     match bigquery_and_generic().one_statement_parses_to(sql, sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name, ObjectName(vec!["table".into()]));
             assert_eq!(
                 columns,
@@ -532,7 +536,7 @@ fn parse_invalid_brackets() {
         bigquery_and_generic()
             .parse_sql_statements(sql)
             .unwrap_err(),
-        ParserError::ParserError("Expected (, found: >".to_string())
+        ParserError::ParserError("Expected: (, found: >".to_string())
     );
 
     let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
@@ -541,7 +545,7 @@ fn parse_invalid_brackets() {
             .parse_sql_statements(sql)
             .unwrap_err(),
         ParserError::ParserError(
-            "Expected ',' or ')' after column definition, found: >".to_string()
+            "Expected: ',' or ')' after column definition, found: >".to_string()
         )
     );
 }
@@ -1587,11 +1591,11 @@ fn parse_merge() {
     let update_action = MergeAction::Update {
         assignments: vec![
             Assignment {
-                id: vec![Ident::new("a")],
+                target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("a")])),
                 value: Expr::Value(number("1")),
             },
             Assignment {
-                id: vec![Ident::new("b")],
+                target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("b")])),
                 value: Expr::Value(number("2")),
             },
         ],
@@ -1750,11 +1754,11 @@ fn parse_merge_invalid_statements() {
     for (sql, err_msg) in [
         (
             "MERGE T USING U ON TRUE WHEN MATCHED BY TARGET AND 1 THEN DELETE",
-            "Expected THEN, found: BY",
+            "Expected: THEN, found: BY",
         ),
         (
             "MERGE T USING U ON TRUE WHEN MATCHED BY SOURCE AND 1 THEN DELETE",
-            "Expected THEN, found: BY",
+            "Expected: THEN, found: BY",
         ),
         (
             "MERGE T USING U ON TRUE WHEN NOT MATCHED BY SOURCE THEN INSERT(a) VALUES (b)",
@@ -1895,13 +1899,13 @@ fn parse_big_query_declare() {
 
     let error_sql = "DECLARE x";
     assert_eq!(
-        ParserError::ParserError("Expected a data type name, found: EOF".to_owned()),
+        ParserError::ParserError("Expected: a data type name, found: EOF".to_owned()),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE x 42";
     assert_eq!(
-        ParserError::ParserError("Expected a data type name, found: 42".to_owned()),
+        ParserError::ParserError("Expected: a data type name, found: 42".to_owned()),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -2066,7 +2070,7 @@ fn test_bigquery_create_function() {
                 "AS ((SELECT 1 FROM mytable)) ",
                 "OPTIONS(a = [1, 2])",
             ),
-            "Expected end of statement, found: OPTIONS",
+            "Expected: end of statement, found: OPTIONS",
         ),
         (
             concat!(
@@ -2074,7 +2078,7 @@ fn test_bigquery_create_function() {
                 "IMMUTABLE ",
                 "AS ((SELECT 1 FROM mytable)) ",
             ),
-            "Expected AS, found: IMMUTABLE",
+            "Expected: AS, found: IMMUTABLE",
         ),
         (
             concat!(
@@ -2082,7 +2086,7 @@ fn test_bigquery_create_function() {
                 "AS \"console.log('hello');\" ",
                 "LANGUAGE js ",
             ),
-            "Expected end of statement, found: LANGUAGE",
+            "Expected: end of statement, found: LANGUAGE",
         ),
     ];
     for (sql, error) in error_sqls {
@@ -2113,7 +2117,7 @@ fn test_bigquery_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected ), found: 'a'".to_owned()),
+        ParserError::ParserError("Expected: ), found: 'a'".to_owned()),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 }

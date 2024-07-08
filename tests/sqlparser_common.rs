@@ -8970,7 +8970,7 @@ fn parse_trailing_comma() {
         trailing_commas
             .parse_sql_statements("REVOKE USAGE, SELECT, ON p TO u")
             .unwrap_err(),
-        ParserError::ParserError("Expected a privilege keyword, found: ON".to_string())
+        ParserError::ParserError("Expected: a privilege keyword, found: ON".to_string())
     );
 
     assert_eq!(

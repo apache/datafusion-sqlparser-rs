@@ -46,6 +46,9 @@ pub enum ParserError {
     RecursionLimitExceeded,
 }
 
+// avoid clippy type_complexity warnings
+type ParsedAction = (Keyword, Option<Vec<Ident>>);
+
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr, $loc:expr) => {
@@ -71,11 +74,11 @@ mod recursion {
     use super::ParserError;
 
     /// Tracks remaining recursion depth. This value is decremented on
-    /// each call to `try_decrease()`, when it reaches 0 an error will
+    /// each call to [`RecursionCounter::try_decrease()`], when it reaches 0 an error will
     /// be returned.
     ///
-    /// Note: Uses an Rc and Cell in order to satisfy the Rust
-    /// borrow checker so the automatic DepthGuard decrement a
+    /// Note: Uses an [`std::rc::Rc`] and [`std::cell::Cell`] in order to satisfy the Rust
+    /// borrow checker so the automatic [`DepthGuard`] decrement a
     /// reference to the counter.
     pub(crate) struct RecursionCounter {
         remaining_depth: Rc<Cell<usize>>,
@@ -92,7 +95,7 @@ mod recursion {
 
         /// Decreases the remaining depth by 1.
         ///
-        /// Returns `Err` if the remaining depth falls to 0.
+        /// Returns [`Err`] if the remaining depth falls to 0.
         ///
         /// Returns a [`DepthGuard`] which will adds 1 to the
         /// remaining depth upon drop;
@@ -108,7 +111,7 @@ mod recursion {
         }
     }
 
-    /// Guard that increass the remaining depth by 1 on drop
+    /// Guard that increases the remaining depth by 1 on drop
     pub struct DepthGuard {
         remaining_depth: Rc<Cell<usize>>,
     }
@@ -131,7 +134,7 @@ mod recursion {
     /// Implementation [`RecursionCounter`] if std is NOT available (and does not
     /// guard against stack overflow).
     ///
-    /// Has the same API as the std RecursionCounter implementation
+    /// Has the same API as the std [`RecursionCounter`] implementation
     /// but does not actually limit stack depth.
     pub(crate) struct RecursionCounter {}
 
@@ -194,7 +197,7 @@ const DEFAULT_REMAINING_DEPTH: usize = 50;
 /// nested such that the following declaration is possible:
 ///      `ARRAY<ARRAY<INT>>`
 /// But the tokenizer recognizes the `>>` as a ShiftRight token.
-/// We work-around that limitation when parsing a data type by accepting
+/// We work around that limitation when parsing a data type by accepting
 /// either a `>` or `>>` token in such cases, remembering which variant we
 /// matched.
 /// In the latter case having matched a `>>`, the parent type will not look to
@@ -270,17 +273,17 @@ enum ParserState {
 
 pub struct Parser<'a> {
     tokens: Vec<TokenWithLocation>,
-    /// The index of the first unprocessed token in `self.tokens`
+    /// The index of the first unprocessed token in [`Parser::tokens`].
     index: usize,
     /// The current state of the parser.
     state: ParserState,
-    /// The current dialect to use
+    /// The current dialect to use.
     dialect: &'a dyn Dialect,
     /// Additional options that allow you to mix & match behavior
     /// otherwise constrained to certain dialects (e.g. trailing
-    /// commas) and/or format of parse (e.g. unescaping)
+    /// commas) and/or format of parse (e.g. unescaping).
     options: ParserOptions,
-    /// ensure the stack does not overflow by limiting recursion depth
+    /// Ensure the stack does not overflow by limiting recursion depth.
     recursion_counter: RecursionCounter,
 }
 
@@ -313,7 +316,6 @@ impl<'a> Parser<'a> {
 
     /// Specify the maximum recursion limit while parsing.
     ///
-    ///
     /// [`Parser`] prevents stack overflows by returning
     /// [`ParserError::RecursionLimitExceeded`] if the parser exceeds
     /// this depth while processing the query.
@@ -337,7 +339,6 @@ impl<'a> Parser<'a> {
     }
 
     /// Specify additional parser options
-    ///
     ///
     /// [`Parser`] supports additional options ([`ParserOptions`])
     /// that allow you to mix & match behavior otherwise constrained
@@ -824,7 +825,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a new expression including wildcard & qualified wildcard
+    /// Parse a new expression including wildcard & qualified wildcard.
     pub fn parse_wildcard_expr(&mut self) -> Result<Expr, ParserError> {
         let index = self.index;
 
@@ -867,13 +868,13 @@ impl<'a> Parser<'a> {
         self.parse_expr()
     }
 
-    /// Parse a new expression
+    /// Parse a new expression.
     pub fn parse_expr(&mut self) -> Result<Expr, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         self.parse_subexpr(0)
     }
 
-    /// Parse tokens until the precedence changes
+    /// Parse tokens until the precedence changes.
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
@@ -908,8 +909,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Get the precedence of the next token
-    /// With AND, OR, and XOR
+    /// Get the precedence of the next token, with AND, OR, and XOR.
     pub fn get_next_interval_precedence(&self) -> Result<u8, ParserError> {
         let token = self.peek_token();
 
@@ -944,7 +944,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::ReleaseSavepoint { name })
     }
 
-    /// Parse an expression prefix
+    /// Parse an expression prefix.
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
         if let Some(prefix) = self.dialect.parse_prefix(self) {
@@ -1078,7 +1078,7 @@ impl<'a> Parser<'a> {
                     let expr = self.parse_subexpr(Self::PLUS_MINUS_PREC)?;
                     Ok(Expr::Prior(Box::new(expr)))
                 }
-                // Here `w` is a word, check if it's a part of a multi-part
+                // Here `w` is a word, check if it's a part of a multipart
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token().token {
                     Token::LParen | Token::Period => {
@@ -1456,8 +1456,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
-    /// expr.
+    /// Parse a group by expr. Group by expr can be one of group sets, roll up, cube, or simple expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
         if self.dialect.supports_group_by_expr() {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
@@ -1484,7 +1483,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// parse a tuple with `(` and `)`.
+    /// Parse a tuple with `(` and `)`.
     /// If `lift_singleton` is true, then a singleton tuple is lifted to a tuple of length 1, otherwise it will fail.
     /// If `allow_empty` is true, then an empty tuple is allowed.
     fn parse_tuple(
@@ -1953,13 +1952,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parses fulltext expressions [(1)]
+    /// Parses fulltext expressions [`sqlparser::ast::Expr::MatchAgainst`]
     ///
     /// # Errors
     /// This method will raise an error if the column list is empty or with invalid identifiers,
     /// the match expression is not a literal string, or if the search modifier is not valid.
-    ///
-    /// [(1)]: Expr::MatchAgainst
     pub fn parse_match_against(&mut self) -> Result<Expr, ParserError> {
         let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
 
@@ -2004,17 +2001,19 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse an INTERVAL expression.
+    /// Parse an `INTERVAL` expression.
     ///
     /// Some syntactically valid intervals:
     ///
-    ///   1. `INTERVAL '1' DAY`
-    ///   2. `INTERVAL '1-1' YEAR TO MONTH`
-    ///   3. `INTERVAL '1' SECOND`
-    ///   4. `INTERVAL '1:1:1.1' HOUR (5) TO SECOND (5)`
-    ///   5. `INTERVAL '1.1' SECOND (2, 2)`
-    ///   6. `INTERVAL '1:1' HOUR (5) TO MINUTE (5)`
-    ///   7. (MySql and BigQuey only):`INTERVAL 1 DAY`
+    /// ```sql
+    ///   1. INTERVAL '1' DAY
+    ///   2. INTERVAL '1-1' YEAR TO MONTH
+    ///   3. INTERVAL '1' SECOND
+    ///   4. INTERVAL '1:1:1.1' HOUR (5) TO SECOND (5)
+    ///   5. INTERVAL '1.1' SECOND (2, 2)
+    ///   6. INTERVAL '1:1' HOUR (5) TO MINUTE (5)
+    ///   7. (MySql & BigQuery only): INTERVAL 1 DAY
+    /// ```
     ///
     /// Note that we do not currently attempt to parse the quoted value.
     pub fn parse_interval(&mut self) -> Result<Expr, ParserError> {
@@ -2210,15 +2209,15 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    /// Parse a field definition in a struct [1] or tuple [2].
+    /// Parse a field definition in a [struct] or [tuple].
     /// Syntax:
     ///
     /// ```sql
     /// [field_name] field_type
     /// ```
     ///
-    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#declaring_a_struct_type
-    /// [2]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
+    /// [struct]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#declaring_a_struct_type
+    /// [tuple]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
     fn parse_struct_field_def(
         &mut self,
     ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
@@ -2246,7 +2245,33 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    /// DuckDB specific: Parse a duckdb dictionary [1]
+    /// DuckDB specific: Parse a Union type definition as a sequence of field-value pairs.
+    ///
+    /// Syntax:
+    ///
+    /// ```sql
+    /// UNION(field_name field_type[,...])
+    /// ```
+    ///
+    /// [1]: https://duckdb.org/docs/sql/data_types/union.html
+    fn parse_union_type_def(&mut self) -> Result<Vec<UnionField>, ParserError> {
+        self.expect_keyword(Keyword::UNION)?;
+
+        self.expect_token(&Token::LParen)?;
+
+        let fields = self.parse_comma_separated(|p| {
+            Ok(UnionField {
+                field_name: p.parse_identifier(false)?,
+                field_type: p.parse_data_type()?,
+            })
+        })?;
+
+        self.expect_token(&Token::RParen)?;
+
+        Ok(fields)
+    }
+
+    /// DuckDB specific: Parse a duckdb [dictionary]
     ///
     /// Syntax:
     ///
@@ -2254,7 +2279,7 @@ impl<'a> Parser<'a> {
     /// {'field_name': expr1[, ... ]}
     /// ```
     ///
-    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    /// [dictionary]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     fn parse_duckdb_struct_literal(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LBrace)?;
 
@@ -2265,13 +2290,15 @@ impl<'a> Parser<'a> {
         Ok(Expr::Dictionary(fields))
     }
 
-    /// Parse a field for a duckdb dictionary [1]
+    /// Parse a field for a duckdb [dictionary]
+    ///
     /// Syntax
+    ///
     /// ```sql
     /// 'name': expr
     /// ```
     ///
-    /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+    /// [dictionary]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     fn parse_duckdb_dictionary_field(&mut self) -> Result<DictionaryField, ParserError> {
         let key = self.parse_identifier(false)?;
 
@@ -2285,13 +2312,15 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse clickhouse map [1]
+    /// Parse clickhouse [map]
+    ///
     /// Syntax
+    ///
     /// ```sql
     /// Map(key_data_type, value_data_type)
     /// ```
     ///
-    /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/map
+    /// [map]: https://clickhouse.com/docs/en/sql-reference/data-types/map
     fn parse_click_house_map_def(&mut self) -> Result<(DataType, DataType), ParserError> {
         self.expect_keyword(Keyword::MAP)?;
         self.expect_token(&Token::LParen)?;
@@ -2303,13 +2332,15 @@ impl<'a> Parser<'a> {
         Ok((key_data_type, value_data_type))
     }
 
-    /// Parse clickhouse tuple [1]
+    /// Parse clickhouse [tuple]
+    ///
     /// Syntax
+    ///
     /// ```sql
     /// Tuple([field_name] field_type, ...)
     /// ```
     ///
-    /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
+    /// [tuple]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
     fn parse_click_house_tuple_def(&mut self) -> Result<Vec<StructField>, ParserError> {
         self.expect_keyword(Keyword::TUPLE)?;
         self.expect_token(&Token::LParen)?;
@@ -2623,7 +2654,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// parse the ESCAPE CHAR portion of LIKE, ILIKE, and SIMILAR TO
+    /// Parse the `ESCAPE CHAR` portion of `LIKE`, `ILIKE`, and `SIMILAR TO`
     pub fn parse_escape_char(&mut self) -> Result<Option<String>, ParserError> {
         if self.parse_keyword(Keyword::ESCAPE) {
             Ok(Some(self.parse_literal_string()?))
@@ -2721,7 +2752,7 @@ impl<'a> Parser<'a> {
         match token.token {
             Token::Word(Word {
                 value,
-                // path segments in SF dot notation can be unquoted or double quoted
+                // path segments in SF dot notation can be unquoted or double-quoted
                 quote_style: quote_style @ (Some('"') | None),
                 // some experimentation suggests that snowflake permits
                 // any keyword here unquoted.
@@ -2810,7 +2841,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parses the parens following the `[ NOT ] IN` operator
+    /// Parses the parens following the `[ NOT ] IN` operator.
     pub fn parse_in(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         // BigQuery allows `IN UNNEST(array_expression)`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
@@ -2847,7 +2878,7 @@ impl<'a> Parser<'a> {
         Ok(in_op)
     }
 
-    /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed
+    /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed.
     pub fn parse_between(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         // Stop parsing subexpressions for <low> and <high> on tokens with
         // precedence lower than that of `BETWEEN`, such as `AND`, `IS`, etc.
@@ -2862,7 +2893,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a postgresql casting style which is in the form of `expr::datatype`
+    /// Parse a postgresql casting style which is in the form of `expr::datatype`.
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         Ok(Expr::Cast {
             kind: CastKind::DoubleColon,
@@ -2872,7 +2903,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    // use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
+    // Use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
     // higher number = higher precedence
     //
     // NOTE: The pg documentation is incomplete, e.g. the AT TIME ZONE operator
@@ -2920,7 +2951,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1).token {
                 // The precedence of NOT varies depending on keyword that
                 // follows it. If it is followed by IN, BETWEEN, or LIKE,
-                // it takes on the precedence of those tokens. Otherwise it
+                // it takes on the precedence of those tokens. Otherwise, it
                 // is not an infix operator, and therefore has zero
                 // precedence.
                 Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
@@ -3191,7 +3222,7 @@ impl<'a> Parser<'a> {
 
     /// If the current token is one of the given `keywords`, consume the token
     /// and return the keyword that matches. Otherwise, no tokens are consumed
-    /// and returns `None`.
+    /// and returns [`None`].
     #[must_use]
     pub fn parse_one_of_keywords(&mut self, keywords: &[Keyword]) -> Option<Keyword> {
         match self.peek_token().token {
@@ -3223,7 +3254,7 @@ impl<'a> Parser<'a> {
     }
 
     /// If the current token is the `expected` keyword, consume the token.
-    /// Otherwise return an error.
+    /// Otherwise, return an error.
     pub fn expect_keyword(&mut self, expected: Keyword) -> Result<(), ParserError> {
         if self.parse_keyword(expected) {
             Ok(())
@@ -3306,6 +3337,29 @@ impl<'a> Parser<'a> {
         ret
     }
 
+    pub fn parse_actions_list(&mut self) -> Result<Vec<ParsedAction>, ParserError> {
+        let mut values = vec![];
+        loop {
+            values.push(self.parse_grant_permission()?);
+            if !self.consume_token(&Token::Comma) {
+                break;
+            } else if self.options.trailing_commas {
+                match self.peek_token().token {
+                    Token::Word(kw) if kw.keyword == Keyword::ON => {
+                        break;
+                    }
+                    Token::RParen
+                    | Token::SemiColon
+                    | Token::EOF
+                    | Token::RBracket
+                    | Token::RBrace => break,
+                    _ => continue,
+                }
+            }
+        }
+        Ok(values)
+    }
+
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
@@ -3319,9 +3373,7 @@ impl<'a> Parser<'a> {
             } else if self.options.trailing_commas {
                 match self.peek_token().token {
                     Token::Word(kw)
-                        if keywords::RESERVED_FOR_COLUMN_ALIAS
-                            .iter()
-                            .any(|d| kw.keyword == *d) =>
+                        if keywords::RESERVED_FOR_COLUMN_ALIAS.contains(&kw.keyword) =>
                     {
                         break;
                     }
@@ -3367,8 +3419,7 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated(f)
     }
 
-    /// Run a parser method `f`, reverting back to the current position
-    /// if unsuccessful.
+    /// Run a parser method `f`, reverting back to the current position if unsuccessful.
     #[must_use]
     fn maybe_parse<T, F>(&mut self, mut f: F) -> Option<T>
     where
@@ -3383,8 +3434,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse either `ALL`, `DISTINCT` or `DISTINCT ON (...)`. Returns `None` if `ALL` is parsed
-    /// and results in a `ParserError` if both `ALL` and `DISTINCT` are found.
+    /// Parse either `ALL`, `DISTINCT` or `DISTINCT ON (...)`. Returns [`None`] if `ALL` is parsed
+    /// and results in a [`ParserError`] if both `ALL` and `DISTINCT` are found.
     pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
         let loc = self.peek_token().location;
         let all = self.parse_keyword(Keyword::ALL);
@@ -4483,7 +4534,7 @@ impl<'a> Parser<'a> {
                 self.peek_token(),
             );
         };
-        // Many dialects support the non standard `IF EXISTS` clause and allow
+        // Many dialects support the non-standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
@@ -4816,7 +4867,7 @@ impl<'a> Parser<'a> {
                         continue;
                     }
                     _ => {
-                        // Put back the semi-colon, this is the end of the DECLARE statement.
+                        // Put back the semicolon, this is the end of the DECLARE statement.
                         self.prev_token();
                     }
                 }
@@ -7157,6 +7208,11 @@ impl<'a> Parser<'a> {
                     trailing_bracket = _trailing_bracket;
                     Ok(DataType::Struct(field_defs))
                 }
+                Keyword::UNION if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                    self.prev_token();
+                    let fields = self.parse_union_type_def()?;
+                    Ok(DataType::Union(fields))
+                }
                 Keyword::NULLABLE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
                     Ok(self.parse_sub_type(DataType::Nullable)?)
                 }
@@ -7267,7 +7323,7 @@ impl<'a> Parser<'a> {
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
             Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
-            // Support for MySql dialect double quoted string, `AS "HOUR"` for example
+            // Support for MySql dialect double-quoted string, `AS "HOUR"` for example
             Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
             _ => {
                 if after_as {
@@ -7860,6 +7916,7 @@ impl<'a> Parser<'a> {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })
         } else if self.parse_keyword(Keyword::UPDATE) {
             Ok(Query {
@@ -7872,6 +7929,7 @@ impl<'a> Parser<'a> {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })
         } else {
             let body = self.parse_boxed_query_body(0)?;
@@ -7917,6 +7975,20 @@ impl<'a> Parser<'a> {
                 vec![]
             };
 
+            let settings = if dialect_of!(self is ClickHouseDialect|GenericDialect)
+                && self.parse_keyword(Keyword::SETTINGS)
+            {
+                let key_values = self.parse_comma_separated(|p| {
+                    let key = p.parse_identifier(false)?;
+                    p.expect_token(&Token::Eq)?;
+                    let value = p.parse_value()?;
+                    Ok(Setting { key, value })
+                })?;
+                Some(key_values)
+            } else {
+                None
+            };
+
             let fetch = if self.parse_keyword(Keyword::FETCH) {
                 Some(self.parse_fetch()?)
             } else {
@@ -7944,6 +8016,7 @@ impl<'a> Parser<'a> {
                 fetch,
                 locks,
                 for_clause,
+                settings,
             })
         }
     }
@@ -8301,6 +8374,14 @@ impl<'a> Parser<'a> {
             }
         }
 
+        let prewhere = if dialect_of!(self is ClickHouseDialect|GenericDialect)
+            && self.parse_keyword(Keyword::PREWHERE)
+        {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         let selection = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -8308,13 +8389,42 @@ impl<'a> Parser<'a> {
         };
 
         let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
-            if self.parse_keyword(Keyword::ALL) {
-                GroupByExpr::All
+            let expressions = if self.parse_keyword(Keyword::ALL) {
+                None
             } else {
-                GroupByExpr::Expressions(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+                Some(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+            };
+
+            let mut modifiers = vec![];
+            if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                loop {
+                    if !self.parse_keyword(Keyword::WITH) {
+                        break;
+                    }
+                    let keyword = self.expect_one_of_keywords(&[
+                        Keyword::ROLLUP,
+                        Keyword::CUBE,
+                        Keyword::TOTALS,
+                    ])?;
+                    modifiers.push(match keyword {
+                        Keyword::ROLLUP => GroupByWithModifier::Rollup,
+                        Keyword::CUBE => GroupByWithModifier::Cube,
+                        Keyword::TOTALS => GroupByWithModifier::Totals,
+                        _ => {
+                            return parser_err!(
+                                "BUG: expected to match GroupBy modifier keyword",
+                                self.peek_token().location
+                            )
+                        }
+                    });
+                }
+            }
+            match expressions {
+                None => GroupByExpr::All(modifiers),
+                Some(exprs) => GroupByExpr::Expressions(exprs, modifiers),
             }
         } else {
-            GroupByExpr::Expressions(vec![])
+            GroupByExpr::Expressions(vec![], vec![])
         };
 
         let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
@@ -8383,6 +8493,7 @@ impl<'a> Parser<'a> {
             into,
             from,
             lateral_views,
+            prewhere,
             selection,
             group_by,
             cluster_by,
@@ -9051,6 +9162,7 @@ impl<'a> Parser<'a> {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 }),
                 alias,
             })
@@ -9613,11 +9725,8 @@ impl<'a> Parser<'a> {
                 with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
             }
         } else {
-            let old_value = self.options.trailing_commas;
-            self.options.trailing_commas = false;
-
             let (actions, err): (Vec<_>, Vec<_>) = self
-                .parse_comma_separated(Parser::parse_grant_permission)?
+                .parse_actions_list()?
                 .into_iter()
                 .map(|(kw, columns)| match kw {
                     Keyword::DELETE => Ok(Action::Delete),
@@ -9638,8 +9747,6 @@ impl<'a> Parser<'a> {
                     _ => Err(kw),
                 })
                 .partition(Result::is_ok);
-
-            self.options.trailing_commas = old_value;
 
             if !err.is_empty() {
                 let errors: Vec<Keyword> = err.into_iter().filter_map(|x| x.err()).collect();
@@ -9686,7 +9793,7 @@ impl<'a> Parser<'a> {
         Ok((privileges, objects))
     }
 
-    pub fn parse_grant_permission(&mut self) -> Result<(Keyword, Option<Vec<Ident>>), ParserError> {
+    pub fn parse_grant_permission(&mut self) -> Result<ParsedAction, ParserError> {
         if let Some(kw) = self.parse_one_of_keywords(&[
             Keyword::CONNECT,
             Keyword::CREATE,
@@ -10196,15 +10303,14 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_rename = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
-            self.parse_optional_select_item_rename()?
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect | DuckDbDialect | SnowflakeDialect)
+        {
+            self.parse_optional_select_item_replace()?
         } else {
             None
         };
-
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect |  DuckDbDialect | SnowflakeDialect)
-        {
-            self.parse_optional_select_item_replace()?
+        let opt_rename = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+            self.parse_optional_select_item_rename()?
         } else {
             None
         };

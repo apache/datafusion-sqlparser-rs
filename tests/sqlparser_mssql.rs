@@ -103,6 +103,7 @@ fn parse_create_procedure() {
                 locks: vec![],
                 for_clause: None,
                 order_by: vec![],
+                settings: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
@@ -110,8 +111,9 @@ fn parse_create_procedure() {
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
+                    prewhere: None,
                     selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -527,8 +529,9 @@ fn parse_substring_in_select() {
                             joins: vec![]
                         }],
                         lateral_views: vec![],
+                        prewhere: None,
                         selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -546,6 +549,7 @@ fn parse_substring_in_select() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 }),
                 query
             );

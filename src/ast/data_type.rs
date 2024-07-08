@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{display_comma_separated, ObjectName, StructField};
+use crate::ast::{display_comma_separated, ObjectName, StructField, UnionField};
 
 use super::{value::escape_single_quote_string, ColumnDef};
 
@@ -303,6 +303,10 @@ pub enum DataType {
     /// [hive]: https://docs.cloudera.com/cdw-runtime/cloud/impala-sql-reference/topics/impala-struct.html
     /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct(Vec<StructField>),
+    /// Union
+    ///
+    /// [duckdb]: https://duckdb.org/docs/sql/data_types/union.html
+    Union(Vec<UnionField>),
     /// Nullable - special marker NULL represents in ClickHouse as a data type.
     ///
     /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nullable
@@ -515,6 +519,9 @@ impl fmt::Display for DataType {
                 } else {
                     write!(f, "STRUCT")
                 }
+            }
+            DataType::Union(fields) => {
+                write!(f, "UNION({})", display_comma_separated(fields))
             }
             // ClickHouse
             DataType::Nullable(data_type) => {

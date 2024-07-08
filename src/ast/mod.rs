@@ -43,12 +43,12 @@ pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
     ExceptSelectItem, ExcludeSelectItem, ExprWithAlias, Fetch, ForClause, ForJson, ForXml,
-    GroupByExpr, IdentWithAlias, IlikeSelectItem, Join, JoinConstraint, JoinOperator,
-    JsonTableColumn, JsonTableColumnErrorHandling, LateralView, LockClause, LockType,
+    GroupByExpr, GroupByWithModifier, IdentWithAlias, IlikeSelectItem, Join, JoinConstraint,
+    JoinOperator, JsonTableColumn, JsonTableColumnErrorHandling, LateralView, LockClause, LockType,
     MatchRecognizePattern, MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr,
     NonBlock, Offset, OffsetRows, OrderByExpr, PivotValueSource, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
-    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, SymbolDefinition, Table,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
     TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode,
     Values, WildcardAdditionalOptions, With,
 };
@@ -291,6 +291,23 @@ impl fmt::Display for StructField {
         } else {
             write!(f, "{}", self.field_type)
         }
+    }
+}
+
+/// A field definition within a union
+///
+/// [duckdb]: https://duckdb.org/docs/sql/data_types/union.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct UnionField {
+    pub field_name: Ident,
+    pub field_type: DataType,
+}
+
+impl fmt::Display for UnionField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.field_name, self.field_type)
     }
 }
 

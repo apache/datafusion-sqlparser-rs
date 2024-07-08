@@ -21,8 +21,8 @@ use test_utils::*;
 use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Table;
+use sqlparser::ast::Value::Number;
 use sqlparser::ast::*;
-
 use sqlparser::dialect::ClickHouseDialect;
 use sqlparser::dialect::GenericDialect;
 
@@ -63,6 +63,7 @@ fn parse_map_access_expr() {
                 joins: vec![],
             }],
             lateral_views: vec![],
+            prewhere: None,
             selection: Some(BinaryOp {
                 left: Box::new(BinaryOp {
                     left: Box::new(Identifier(Ident::new("id"))),
@@ -88,7 +89,7 @@ fn parse_map_access_expr() {
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),
                 }),
             }),
-            group_by: GroupByExpr::Expressions(vec![]),
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],
@@ -550,6 +551,42 @@ fn parse_limit_by() {
 }
 
 #[test]
+fn parse_settings_in_query() {
+    match clickhouse_and_generic()
+        .verified_stmt(r#"SELECT * FROM t SETTINGS max_threads = 1, max_block_size = 10000"#)
+    {
+        Statement::Query(query) => {
+            assert_eq!(
+                query.settings,
+                Some(vec![
+                    Setting {
+                        key: Ident::new("max_threads"),
+                        value: Number("1".parse().unwrap(), false)
+                    },
+                    Setting {
+                        key: Ident::new("max_block_size"),
+                        value: Number("10000".parse().unwrap(), false)
+                    },
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let invalid_cases = vec![
+        "SELECT * FROM t SETTINGS a",
+        "SELECT * FROM t SETTINGS a=",
+        "SELECT * FROM t SETTINGS a=1, b",
+        "SELECT * FROM t SETTINGS a=1, b=",
+        "SELECT * FROM t SETTINGS a=1, b=c",
+    ];
+    for sql in invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: SETTINGS key = value, found: ");
+    }
+}
+#[test]
 fn parse_select_star_except() {
     clickhouse().verified_stmt("SELECT * EXCEPT (prev_status) FROM anomalies");
 }
@@ -624,6 +661,111 @@ fn parse_create_materialized_view() {
         "GROUP BY domain_name, month"
     );
     clickhouse_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_group_by_with_modifier() {
+    let clauses = ["x", "a, b", "ALL"];
+    let modifiers = [
+        "WITH ROLLUP",
+        "WITH CUBE",
+        "WITH TOTALS",
+        "WITH ROLLUP WITH CUBE",
+    ];
+    let expected_modifiers = [
+        vec![GroupByWithModifier::Rollup],
+        vec![GroupByWithModifier::Cube],
+        vec![GroupByWithModifier::Totals],
+        vec![GroupByWithModifier::Rollup, GroupByWithModifier::Cube],
+    ];
+    for clause in &clauses {
+        for (modifier, expected_modifier) in modifiers.iter().zip(expected_modifiers.iter()) {
+            let sql = format!("SELECT * FROM t GROUP BY {clause} {modifier}");
+            match clickhouse_and_generic().verified_stmt(&sql) {
+                Statement::Query(query) => {
+                    let group_by = &query.body.as_select().unwrap().group_by;
+                    if clause == &"ALL" {
+                        assert_eq!(group_by, &GroupByExpr::All(expected_modifier.to_vec()));
+                    } else {
+                        assert_eq!(
+                            group_by,
+                            &GroupByExpr::Expressions(
+                                clause
+                                    .split(", ")
+                                    .map(|c| Identifier(Ident::new(c)))
+                                    .collect(),
+                                expected_modifier.to_vec()
+                            )
+                        );
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    // invalid cases
+    let invalid_cases = [
+        "SELECT * FROM t GROUP BY x WITH",
+        "SELECT * FROM t GROUP BY x WITH ROLLUP CUBE",
+        "SELECT * FROM t GROUP BY x WITH WITH ROLLUP",
+        "SELECT * FROM t GROUP BY WITH ROLLUP",
+    ];
+    for sql in invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: one of ROLLUP or CUBE or TOTALS, found: WITH");
+    }
+}
+
+#[test]
+fn test_prewhere() {
+    match clickhouse_and_generic().verified_stmt("SELECT * FROM t PREWHERE x = 1 WHERE y = 2") {
+        Statement::Query(query) => {
+            let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
+            assert_eq!(
+                prewhere,
+                Some(&BinaryOp {
+                    left: Box::new(Identifier(Ident::new("x"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                })
+            );
+            let selection = query.as_ref().body.as_select().unwrap().selection.as_ref();
+            assert_eq!(
+                selection,
+                Some(&BinaryOp {
+                    left: Box::new(Identifier(Ident::new("y"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match clickhouse_and_generic().verified_stmt("SELECT * FROM t PREWHERE x = 1 AND y = 2") {
+        Statement::Query(query) => {
+            let prewhere = query.body.as_select().unwrap().prewhere.as_ref();
+            assert_eq!(
+                prewhere,
+                Some(&BinaryOp {
+                    left: Box::new(BinaryOp {
+                        left: Box::new(Identifier(Ident::new("x"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    }),
+                    op: BinaryOperator::And,
+                    right: Box::new(BinaryOp {
+                        left: Box::new(Identifier(Ident::new("y"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
+                    }),
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn clickhouse() -> TestedDialects {

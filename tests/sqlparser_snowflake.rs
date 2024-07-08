@@ -1017,6 +1017,44 @@ fn test_select_wildcard_with_rename() {
 }
 
 #[test]
+fn test_select_wildcard_with_replace_and_rename() {
+    let select = snowflake_and_generic().verified_only_select(
+        "SELECT * REPLACE (col_z || col_z AS col_z) RENAME (col_z AS col_zz) FROM data",
+    );
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![Box::new(ReplaceSelectElement {
+                expr: Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("col_z"))),
+                    op: BinaryOperator::StringConcat,
+                    right: Box::new(Expr::Identifier(Ident::new("col_z"))),
+                },
+                column_name: Ident::new("col_z"),
+                as_keyword: true,
+            })],
+        }),
+        opt_rename: Some(RenameSelectItem::Multiple(vec![IdentWithAlias {
+            ident: Ident::new("col_z"),
+            alias: Ident::new("col_zz"),
+        }])),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    // rename cannot precede replace
+    // https://docs.snowflake.com/en/sql-reference/sql/select#parameters
+    assert_eq!(
+        snowflake_and_generic()
+            .parse_sql_statements(
+                "SELECT * RENAME (col_z AS col_zz) REPLACE (col_z || col_z AS col_z) FROM data"
+            )
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: REPLACE"
+    );
+}
+
+#[test]
 fn test_select_wildcard_with_exclude_and_rename() {
     let select = snowflake_and_generic()
         .verified_only_select("SELECT * EXCLUDE col_z RENAME col_a AS col_b FROM data");
@@ -1031,6 +1069,7 @@ fn test_select_wildcard_with_exclude_and_rename() {
     assert_eq!(expected, select.projection[0]);
 
     // rename cannot precede exclude
+    // https://docs.snowflake.com/en/sql-reference/sql/select#parameters
     assert_eq!(
         snowflake_and_generic()
             .parse_sql_statements("SELECT * RENAME col_a AS col_b EXCLUDE col_z FROM data")

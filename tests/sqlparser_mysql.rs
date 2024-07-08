@@ -906,8 +906,9 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
+                prewhere: None,
                 selection: None,
-                group_by: GroupByExpr::Expressions(vec![]),
+                group_by: GroupByExpr::Expressions(vec![], vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],
@@ -925,6 +926,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             fetch: None,
             locks: vec![],
             for_clause: None,
+            settings: None,
         }))
     );
 }
@@ -953,8 +955,9 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
+                prewhere: None,
                 selection: None,
-                group_by: GroupByExpr::Expressions(vec![]),
+                group_by: GroupByExpr::Expressions(vec![], vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],
@@ -972,6 +975,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             fetch: None,
             locks: vec![],
             for_clause: None,
+            settings: None,
         }))
     );
 }
@@ -997,8 +1001,9 @@ fn parse_escaped_backticks_with_escape() {
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
+                prewhere: None,
                 selection: None,
-                group_by: GroupByExpr::Expressions(vec![]),
+                group_by: GroupByExpr::Expressions(vec![], vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],
@@ -1016,6 +1021,7 @@ fn parse_escaped_backticks_with_escape() {
             fetch: None,
             locks: vec![],
             for_clause: None,
+            settings: None,
         }))
     );
 }
@@ -1041,8 +1047,9 @@ fn parse_escaped_backticks_with_no_escape() {
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
+                prewhere: None,
                 selection: None,
-                group_by: GroupByExpr::Expressions(vec![]),
+                group_by: GroupByExpr::Expressions(vec![], vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],
@@ -1060,6 +1067,7 @@ fn parse_escaped_backticks_with_no_escape() {
             fetch: None,
             locks: vec![],
             for_clause: None,
+            settings: None,
         }))
     );
 }
@@ -1264,6 +1272,7 @@ fn parse_simple_insert() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 })),
                 source
             );
@@ -1306,6 +1315,7 @@ fn parse_ignore_insert() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 })),
                 source
             );
@@ -1348,6 +1358,7 @@ fn parse_priority_insert() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 })),
                 source
             );
@@ -1387,6 +1398,7 @@ fn parse_priority_insert() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 })),
                 source
             );
@@ -1434,6 +1446,7 @@ fn parse_insert_as() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 })),
                 source
             );
@@ -1493,6 +1506,7 @@ fn parse_insert_as() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 })),
                 source
             );
@@ -1536,6 +1550,7 @@ fn parse_replace_insert() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 })),
                 source
             );
@@ -1573,6 +1588,7 @@ fn parse_empty_row_insert() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 })),
                 source
             );
@@ -1633,6 +1649,7 @@ fn parse_insert_with_on_duplicate_update() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 })),
                 source
             );
@@ -1702,8 +1719,9 @@ fn parse_select_with_numeric_prefix_column_name() {
                         joins: vec![]
                     }],
                     lateral_views: vec![],
+                    prewhere: None,
                     selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -1755,8 +1773,9 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                         joins: vec![]
                     }],
                     lateral_views: vec![],
+                    prewhere: None,
                     selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -2254,8 +2273,9 @@ fn parse_substring_in_select() {
                             joins: vec![]
                         }],
                         lateral_views: vec![],
+                        prewhere: None,
                         selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -2273,6 +2293,7 @@ fn parse_substring_in_select() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
+                    settings: None,
                 }),
                 query
             );
@@ -2558,8 +2579,9 @@ fn parse_hex_string_introducer() {
                 })],
                 from: vec![],
                 lateral_views: vec![],
+                prewhere: None,
                 selection: None,
-                group_by: GroupByExpr::Expressions(vec![]),
+                group_by: GroupByExpr::Expressions(vec![], vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],
@@ -2578,6 +2600,7 @@ fn parse_hex_string_introducer() {
             fetch: None,
             locks: vec![],
             for_clause: None,
+            settings: None,
         }))
     )
 }

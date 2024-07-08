@@ -558,6 +558,7 @@ define_keywords!(
     PRECISION,
     PREPARE,
     PRESERVE,
+    PREWHERE,
     PRIMARY,
     PRIOR,
     PRIVILEGES,
@@ -650,6 +651,7 @@ define_keywords!(
     SESSION_USER,
     SET,
     SETS,
+    SETTINGS,
     SHARE,
     SHOW,
     SIMILAR,
@@ -721,6 +723,7 @@ define_keywords!(
     TINYINT,
     TO,
     TOP,
+    TOTALS,
     TRAILING,
     TRANSACTION,
     TRANSIENT,
@@ -849,6 +852,10 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::FOR,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for Clickhouse PREWHERE
+    Keyword::PREWHERE,
+    // for ClickHouse SELECT * FROM t SETTINGS ...
+    Keyword::SETTINGS,
     // for Snowflake START WITH .. CONNECT BY
     Keyword::START,
     Keyword::CONNECT,

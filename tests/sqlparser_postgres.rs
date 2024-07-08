@@ -1074,8 +1074,9 @@ fn parse_copy_to() {
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
+                    prewhere: None,
                     selection: None,
-                    group_by: GroupByExpr::Expressions(vec![]),
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
                     having: None,
                     named_window: vec![],
                     window_before_qualify: false,
@@ -1093,6 +1094,7 @@ fn parse_copy_to() {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })),
             to: true,
             target: CopyTarget::File {
@@ -2382,8 +2384,9 @@ fn parse_array_subquery_expr() {
                         into: None,
                         from: vec![],
                         lateral_views: vec![],
+                        prewhere: None,
                         selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -2401,8 +2404,9 @@ fn parse_array_subquery_expr() {
                         into: None,
                         from: vec![],
                         lateral_views: vec![],
+                        prewhere: None,
                         selection: None,
-                        group_by: GroupByExpr::Expressions(vec![]),
+                        group_by: GroupByExpr::Expressions(vec![], vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -2421,6 +2425,7 @@ fn parse_array_subquery_expr() {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
+                settings: None,
             })),
             filter: None,
             null_treatment: None,
@@ -3801,14 +3806,17 @@ fn parse_select_group_by_grouping_sets() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())"
     );
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::GroupingSets(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-                vec![],
-            ]),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("size")),
+                Expr::GroupingSets(vec![
+                    vec![Expr::Identifier(Ident::new("brand"))],
+                    vec![Expr::Identifier(Ident::new("size"))],
+                    vec![],
+                ]),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 }
@@ -3819,13 +3827,16 @@ fn parse_select_group_by_rollup() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)",
     );
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::Rollup(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-            ]),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("size")),
+                Expr::Rollup(vec![
+                    vec![Expr::Identifier(Ident::new("brand"))],
+                    vec![Expr::Identifier(Ident::new("size"))],
+                ]),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 }
@@ -3836,13 +3847,16 @@ fn parse_select_group_by_cube() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)",
     );
     assert_eq!(
-        GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::Cube(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-            ]),
-        ]),
+        GroupByExpr::Expressions(
+            vec![
+                Expr::Identifier(Ident::new("size")),
+                Expr::Cube(vec![
+                    vec![Expr::Identifier(Ident::new("brand"))],
+                    vec![Expr::Identifier(Ident::new("size"))],
+                ]),
+            ],
+            vec![]
+        ),
         select.group_by
     );
 }
@@ -4022,7 +4036,8 @@ fn test_simple_postgres_insert_with_alias() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
-                for_clause: None
+                for_clause: None,
+                settings: None,
             })),
             partitioned: None,
             after_columns: vec![],
@@ -4089,7 +4104,8 @@ fn test_simple_postgres_insert_with_alias() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
-                for_clause: None
+                for_clause: None,
+                settings: None,
             })),
             partitioned: None,
             after_columns: vec![],
@@ -4152,7 +4168,8 @@ fn test_simple_insert_with_quoted_alias() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
-                for_clause: None
+                for_clause: None,
+                settings: None,
             })),
             partitioned: None,
             after_columns: vec![],

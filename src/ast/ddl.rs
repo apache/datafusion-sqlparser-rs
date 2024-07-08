@@ -160,7 +160,7 @@ pub enum AlterTableOperation {
 
     /// `OWNER TO { <new_owner> | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
     ///
-    /// Note: this is a PostgreSQL-specific operation.
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
     OwnerTo { new_owner: Owner },
 }
 

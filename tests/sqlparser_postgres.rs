@@ -726,41 +726,24 @@ fn parse_alter_table_owner_to() {
             expected_owner: Owner::Ident(Ident::new("new_owner".to_string())),
         },
         TestCase {
+            sql: "ALTER TABLE tab OWNER TO postgres",
+            expected_owner: Owner::Ident(Ident::new("postgres".to_string())),
+        },
+        TestCase {
             sql: "ALTER TABLE tab OWNER TO \"new_owner\"",
             expected_owner: Owner::Ident(Ident::with_quote('\"', "new_owner".to_string())),
         },
         TestCase {
             sql: "ALTER TABLE tab OWNER TO CURRENT_USER",
-            expected_owner: Owner::Expr(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("CURRENT_USER")]),
-                args: FunctionArguments::None,
-                null_treatment: None,
-                filter: None,
-                over: None,
-                within_group: vec![],
-            })),
+            expected_owner: Owner::CurrentUser,
         },
         TestCase {
             sql: "ALTER TABLE tab OWNER TO CURRENT_ROLE",
-            expected_owner: Owner::Expr(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("CURRENT_ROLE")]),
-                args: FunctionArguments::None,
-                null_treatment: None,
-                filter: None,
-                over: None,
-                within_group: vec![],
-            })),
+            expected_owner: Owner::CurrentRole,
         },
         TestCase {
             sql: "ALTER TABLE tab OWNER TO SESSION_USER",
-            expected_owner: Owner::Expr(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("SESSION_USER")]),
-                args: FunctionArguments::None,
-                null_treatment: None,
-                filter: None,
-                over: None,
-                within_group: vec![],
-            })),
+            expected_owner: Owner::SessionUser,
         },
     ];
 
@@ -785,9 +768,15 @@ fn parse_alter_table_owner_to() {
         }
     }
 
-    let res = pg().parse_sql_statements("ALTER TABLE tab OWNER TO CREATE");
+    let res = pg().parse_sql_statements("ALTER TABLE tab OWNER TO CREATE FOO");
     assert_eq!(
-        ParserError::ParserError("Expected CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO clause, found: CREATE".to_string()),
+        ParserError::ParserError("Expected end of statement, found: FOO".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("ALTER TABLE tab OWNER TO 4");
+    assert_eq!(
+        ParserError::ParserError("Expected CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected identifier, found: 4".to_string()),
         res.unwrap_err()
     );
 }

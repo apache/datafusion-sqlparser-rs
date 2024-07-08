@@ -169,14 +169,18 @@ pub enum AlterTableOperation {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Owner {
     Ident(Ident),
-    Expr(Expr),
+    CurrentRole,
+    CurrentUser,
+    SessionUser,
 }
 
 impl fmt::Display for Owner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Owner::Ident(ident) => write!(f, "{}", ident),
-            Owner::Expr(expr) => write!(f, "{}", expr),
+            Owner::CurrentRole => write!(f, "CURRENT_ROLE"),
+            Owner::CurrentUser => write!(f, "CURRENT_USER"),
+            Owner::SessionUser => write!(f, "SESSION_USER"),
         }
     }
 }

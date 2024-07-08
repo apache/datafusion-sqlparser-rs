@@ -1684,15 +1684,7 @@ impl fmt::Display for OrderByExpr {
         }
         if let Some(ref interpolate) = self.interpolate {
             match &interpolate.expr {
-                Some(exprs) => write!(
-                    f,
-                    " INTERPOLATE ({})",
-                    exprs
-                        .iter()
-                        .map(std::string::ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )?,
+                Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
                 None => write!(f, " INTERPOLATE")?,
             }
         }

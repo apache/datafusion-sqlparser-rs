@@ -6437,7 +6437,7 @@ impl<'a> Parser<'a> {
                     match self.parse_identifier(false) {
                         Ok(ident) => Owner::Ident(ident),
                         Err(e) => {
-                            return Err(ParserError::ParserError(format!("Expected CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. {e}")))
+                            return Err(ParserError::ParserError(format!("Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. {e}")))
                         }
                     }
                 },

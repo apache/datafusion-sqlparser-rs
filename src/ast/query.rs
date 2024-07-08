@@ -1634,7 +1634,7 @@ pub struct OrderByExpr {
     /// Supported by [ClickHouse syntax]
     ///
     /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
-    pub interpolate: Option<InterpolateArg>,
+    pub interpolate: Option<Interpolate>,
 }
 
 impl fmt::Display for OrderByExpr {
@@ -1654,15 +1654,17 @@ impl fmt::Display for OrderByExpr {
             write!(f, " {}", with_fill)?
         }
         if let Some(ref interpolate) = self.interpolate {
-            match interpolate {
-                InterpolateArg::NoBody => write!(f, " INTERPOLATE")?,
-                InterpolateArg::Columns(columns) => {
-                    if columns.is_empty() {
-                        write!(f, " INTERPOLATE ()")?;
-                    } else {
-                        write!(f, " INTERPOLATE ({})", display_comma_separated(columns))?;
-                    }
-                }
+            match &interpolate.expr {
+                Some(exprs) => write!(
+                    f,
+                    " INTERPOLATE ({})",
+                    exprs
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )?,
+                None => write!(f, " INTERPOLATE")?,
             }
         }
         Ok(())
@@ -1705,24 +1707,23 @@ impl fmt::Display for WithFill {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct Interpolate {
+pub struct InterpolateExpr {
     pub column: Ident,
-    pub formula: Option<Expr>,
+    pub expr: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum InterpolateArg {
-    NoBody,
-    Columns(Vec<Interpolate>),
+pub struct Interpolate {
+    pub expr: Option<Vec<InterpolateExpr>>,
 }
 
-impl fmt::Display for Interpolate {
+impl fmt::Display for InterpolateExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.column)?;
-        if let Some(ref formula) = self.formula {
-            write!(f, " AS {}", formula)?;
+        if let Some(ref expr) = self.expr {
+            write!(f, " AS {}", expr)?;
         }
         Ok(())
     }

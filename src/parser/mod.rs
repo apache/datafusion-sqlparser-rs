@@ -10425,10 +10425,12 @@ impl<'a> Parser<'a> {
                 let interpolations = self.parse_interpolations()?;
                 self.expect_token(&Token::RParen)?;
                 // INTERPOLATE () and INTERPOLATE ( ... ) variants
-                Some(InterpolateArg::Columns(interpolations))
+                Some(Interpolate {
+                    expr: Some(interpolations),
+                })
             } else {
                 // INTERPOLATE
-                Some(InterpolateArg::NoBody)
+                Some(Interpolate { expr: None })
             }
         } else {
             None
@@ -10498,19 +10500,19 @@ impl<'a> Parser<'a> {
 
     // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)
     // that follow the INTERPOLATE keyword in an ORDER BY clause with the WITH FILL modifier
-    pub fn parse_interpolations(&mut self) -> Result<Vec<Interpolate>, ParserError> {
+    pub fn parse_interpolations(&mut self) -> Result<Vec<InterpolateExpr>, ParserError> {
         self.parse_comma_separated0(|p| p.parse_interpolation())
     }
 
     // Parse a INTERPOLATE expression (ClickHouse dialect)
-    pub fn parse_interpolation(&mut self) -> Result<Interpolate, ParserError> {
+    pub fn parse_interpolation(&mut self) -> Result<InterpolateExpr, ParserError> {
         let column = self.parse_identifier(false)?;
-        let formula = if self.parse_keyword(Keyword::AS) {
+        let expr = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_expr()?)
         } else {
             None
         };
-        Ok(Interpolate { column, formula })
+        Ok(InterpolateExpr { column, expr })
     }
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,

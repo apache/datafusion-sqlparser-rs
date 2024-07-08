@@ -712,14 +712,16 @@ fn parse_select_order_by_with_fill_interpolate() {
                     to: Some(Expr::Value(number("40"))),
                     step: Some(Expr::Value(number("3"))),
                 }),
-                interpolate: Some(InterpolateArg::Columns(vec![Interpolate {
-                    column: Ident::new("col1"),
-                    formula: Some(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("col1"))),
-                        op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Value(number("1"))),
-                    }),
-                }]))
+                interpolate: Some(Interpolate {
+                    expr: Some(vec![InterpolateExpr {
+                        column: Ident::new("col1"),
+                        expr: Some(Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                            op: BinaryOperator::Plus,
+                            right: Box::new(Expr::Value(number("1"))),
+                        }),
+                    }])
+                })
             },
         ],
         select.order_by
@@ -807,28 +809,30 @@ fn parse_interpolate_body_with_columns() {
         INTERPOLATE (col1 AS col1 + 1, col2 AS col3, col4 AS col4 + 4)";
     let select = clickhouse().verified_query(sql);
     assert_eq!(
-        Some(InterpolateArg::Columns(vec![
-            Interpolate {
-                column: Ident::new("col1"),
-                formula: Some(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("col1"))),
-                    op: BinaryOperator::Plus,
-                    right: Box::new(Expr::Value(number("1"))),
-                }),
-            },
-            Interpolate {
-                column: Ident::new("col2"),
-                formula: Some(Expr::Identifier(Ident::new("col3"))),
-            },
-            Interpolate {
-                column: Ident::new("col4"),
-                formula: Some(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("col4"))),
-                    op: BinaryOperator::Plus,
-                    right: Box::new(Expr::Value(number("4"))),
-                }),
-            },
-        ])),
+        Some(Interpolate {
+            expr: Some(vec![
+                InterpolateExpr {
+                    column: Ident::new("col1"),
+                    expr: Some(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("1"))),
+                    }),
+                },
+                InterpolateExpr {
+                    column: Ident::new("col2"),
+                    expr: Some(Expr::Identifier(Ident::new("col3"))),
+                },
+                InterpolateExpr {
+                    column: Ident::new("col4"),
+                    expr: Some(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col4"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("4"))),
+                    }),
+                },
+            ])
+        }),
         select.order_by[0].interpolate
     );
 }
@@ -837,7 +841,10 @@ fn parse_interpolate_body_with_columns() {
 fn parse_interpolate_without_body() {
     let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE";
     let select = clickhouse().verified_query(sql);
-    assert_eq!(Some(InterpolateArg::NoBody), select.order_by[0].interpolate);
+    assert_eq!(
+        Some(Interpolate { expr: None }),
+        select.order_by[0].interpolate
+    );
 }
 
 #[test]
@@ -845,7 +852,7 @@ fn parse_interpolate_with_empty_body() {
     let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE ()";
     let select = clickhouse().verified_query(sql);
     assert_eq!(
-        Some(InterpolateArg::Columns(vec![])),
+        Some(Interpolate { expr: Some(vec![]) }),
         select.order_by[0].interpolate
     );
 }

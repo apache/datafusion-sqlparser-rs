@@ -18,8 +18,6 @@
 mod test_utils;
 use test_utils::*;
 
-use sqlparser::ast::FunctionArg::Unnamed;
-use sqlparser::ast::Value::Number;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -3881,7 +3879,8 @@ fn parse_join_constraint_unnest_alias() {
                     Ident::new("a")
                 ])],
                 with_offset: false,
-                with_offset_alias: None
+                with_offset_alias: None,
+                with_ordinality: false,
             },
             join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
@@ -4189,37 +4188,33 @@ fn parse_create_table_with_options() {
 
 #[test]
 fn test_table_function_with_ordinality() {
-    let sql = "SELECT * FROM generate_series(1, 10) WITH ORDINALITY AS t";
-    match pg_and_generic().verified_stmt(sql) {
-        Statement::Query(query) => {
-            assert_eq!(
-                query.body.as_select().unwrap().from,
-                vec![TableWithJoins {
-                    relation: TableFactor::Table {
-                        name: ObjectName(vec![Ident::new("generate_series")]),
-                        args: Some(vec![
-                            Unnamed(FunctionArgExpr::Expr(Expr::Value(Number(
-                                "1".parse().unwrap(),
-                                false
-                            )))),
-                            Unnamed(FunctionArgExpr::Expr(Expr::Value(Number(
-                                "10".parse().unwrap(),
-                                false
-                            )))),
-                        ]),
-                        alias: Some(TableAlias {
-                            name: Ident::new("t"),
-                            columns: vec![],
-                        }),
-                        with_hints: vec![],
-                        version: None,
-                        partitions: vec![],
-                        with_ordinality: true,
-                    },
-                    joins: vec![],
-                }]
-            );
+    let from = pg_and_generic()
+        .verified_only_select("SELECT * FROM generate_series(1, 10) WITH ORDINALITY AS t")
+        .from;
+    assert_eq!(1, from.len());
+    match from[0].relation {
+        TableFactor::Table {
+            ref name,
+            with_ordinality: true,
+            ..
+        } => {
+            assert_eq!("generate_series", name.to_string().as_str());
         }
-        _ => unreachable!(),
+        _ => panic!("Expecting TableFactor::Table with ordinality"),
+    }
+}
+
+#[test]
+fn test_table_unnest_with_ordinality() {
+    let from = pg_and_generic()
+        .verified_only_select("SELECT * FROM UNNEST([10, 20, 30]) WITH ORDINALITY AS t")
+        .from;
+    assert_eq!(1, from.len());
+    match from[0].relation {
+        TableFactor::UNNEST {
+            with_ordinality: true,
+            ..
+        } => {}
+        _ => panic!("Expecting TableFactor::UNNEST with ordinality"),
     }
 }

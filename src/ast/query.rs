@@ -944,6 +944,7 @@ pub enum TableFactor {
         array_exprs: Vec<Expr>,
         with_offset: bool,
         with_offset_alias: Option<Ident>,
+        with_ordinality: bool,
     },
     /// The `JSON_TABLE` table-valued function.
     /// Part of the SQL standard, but implemented only by MySQL, Oracle, and DB2.
@@ -1354,8 +1355,13 @@ impl fmt::Display for TableFactor {
                 array_exprs,
                 with_offset,
                 with_offset_alias,
+                with_ordinality,
             } => {
                 write!(f, "UNNEST({})", display_comma_separated(array_exprs))?;
+
+                if *with_ordinality {
+                    write!(f, " WITH ORDINALITY")?;
+                }
 
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;

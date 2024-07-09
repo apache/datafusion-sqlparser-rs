@@ -768,6 +768,38 @@ fn test_prewhere() {
     }
 }
 
+#[test]
+fn test_query_with_format_clause() {
+    let format_options = vec!["TabSeparated", "JSONCompact", "NULL"];
+    for format in &format_options {
+        let sql = format!("SELECT * FROM t FORMAT {}", format);
+        match clickhouse_and_generic().verified_stmt(&sql) {
+            Statement::Query(query) => {
+                if *format == "NULL" {
+                    assert_eq!(query.format_clause, Some(FormatClause::Null));
+                } else {
+                    assert_eq!(
+                        query.format_clause,
+                        Some(FormatClause::Identifier(Ident::new(*format)))
+                    );
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    let invalid_cases = [
+        "SELECT * FROM t FORMAT",
+        "SELECT * FROM t FORMAT TabSeparated JSONCompact",
+        "SELECT * FROM t FORMAT TabSeparated TabSeparated",
+    ];
+    for sql in &invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: FORMAT {identifier}, found: ");
+    }
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

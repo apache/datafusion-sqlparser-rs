@@ -728,39 +728,40 @@ fn parse_select_order_by_with_fill_interpolate() {
         LIMIT 2";
     let select = clickhouse().verified_query(sql);
     assert_eq!(
-        vec![
-            OrderByExpr {
-                expr: Expr::Identifier(Ident::new("fname")),
-                asc: Some(true),
-                nulls_first: Some(true),
-                with_fill: Some(WithFill {
-                    from: Some(Expr::Value(number("10"))),
-                    to: Some(Expr::Value(number("20"))),
-                    step: Some(Expr::Value(number("2"))),
-                }),
-                interpolate: None,
-            },
-            OrderByExpr {
-                expr: Expr::Identifier(Ident::new("lname")),
-                asc: Some(false),
-                nulls_first: Some(false),
-                with_fill: Some(WithFill {
-                    from: Some(Expr::Value(number("30"))),
-                    to: Some(Expr::Value(number("40"))),
-                    step: Some(Expr::Value(number("3"))),
-                }),
-                interpolate: Some(Interpolate {
-                    expr: Some(vec![InterpolateExpr {
-                        column: Ident::new("col1"),
-                        expr: Some(Expr::BinaryOp {
-                            left: Box::new(Expr::Identifier(Ident::new("col1"))),
-                            op: BinaryOperator::Plus,
-                            right: Box::new(Expr::Value(number("1"))),
-                        }),
-                    }])
-                })
-            },
-        ],
+        OrderBy {
+            exprs: vec![
+                OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("fname")),
+                    asc: Some(true),
+                    nulls_first: Some(true),
+                    with_fill: Some(WithFill {
+                        from: Some(Expr::Value(number("10"))),
+                        to: Some(Expr::Value(number("20"))),
+                        step: Some(Expr::Value(number("2"))),
+                    }),
+                },
+                OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("lname")),
+                    asc: Some(false),
+                    nulls_first: Some(false),
+                    with_fill: Some(WithFill {
+                        from: Some(Expr::Value(number("30"))),
+                        to: Some(Expr::Value(number("40"))),
+                        step: Some(Expr::Value(number("3"))),
+                    }),
+                },
+            ],
+            interpolate: Some(Interpolate {
+                exprs: Some(vec![InterpolateExpr {
+                    column: Ident::new("col1"),
+                    expr: Some(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("1"))),
+                    }),
+                }])
+            })
+        },
         select.order_by
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
@@ -787,16 +788,6 @@ fn parse_select_order_by_with_fill_interpolate_multi_with_fill_interpolates() {
 }
 
 #[test]
-fn parse_select_order_by_interpolate_missing_with_fill() {
-    let sql = "SELECT id, fname, lname FROM customer \
-        ORDER BY fname, lname \
-            INTERPOLATE (col2 AS col2 + 2)";
-    clickhouse_and_generic()
-        .parse_sql_statements(sql)
-        .expect_err("ORDER BY INTERPOLATE must have at least one WITH FILL");
-}
-
-#[test]
 fn parse_select_order_by_interpolate_not_last() {
     let sql = "SELECT id, fname, lname FROM customer \
         ORDER BY \
@@ -818,7 +809,7 @@ fn parse_with_fill() {
             to: Some(Expr::Value(number("20"))),
             step: Some(Expr::Value(number("2"))),
         }),
-        select.order_by[0].with_fill
+        select.order_by.exprs[0].with_fill
     );
 }
 
@@ -847,7 +838,7 @@ fn parse_interpolate_body_with_columns() {
     let select = clickhouse().verified_query(sql);
     assert_eq!(
         Some(Interpolate {
-            expr: Some(vec![
+            exprs: Some(vec![
                 InterpolateExpr {
                     column: Ident::new("col1"),
                     expr: Some(Expr::BinaryOp {
@@ -870,7 +861,7 @@ fn parse_interpolate_body_with_columns() {
                 },
             ])
         }),
-        select.order_by[0].interpolate
+        select.order_by.interpolate
     );
 }
 
@@ -879,8 +870,8 @@ fn parse_interpolate_without_body() {
     let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE";
     let select = clickhouse().verified_query(sql);
     assert_eq!(
-        Some(Interpolate { expr: None }),
-        select.order_by[0].interpolate
+        Some(Interpolate { exprs: None }),
+        select.order_by.interpolate
     );
 }
 
@@ -889,8 +880,10 @@ fn parse_interpolate_with_empty_body() {
     let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE ()";
     let select = clickhouse().verified_query(sql);
     assert_eq!(
-        Some(Interpolate { expr: Some(vec![]) }),
-        select.order_by[0].interpolate
+        Some(Interpolate {
+            exprs: Some(vec![])
+        }),
+        select.order_by.interpolate
     );
 }
 

@@ -47,11 +47,11 @@ pub use self::query::{
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonTableColumn,
     JsonTableColumnErrorHandling, LateralView, LockClause, LockType, MatchRecognizePattern,
     MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset,
-    OffsetRows, OrderByExpr, PivotValueSource, Query, RenameSelectItem, RepetitionQuantifier,
-    ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select, SelectInto, SelectItem, SetExpr,
-    SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableFactor,
-    TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode, Values,
-    WildcardAdditionalOptions, With, WithFill,
+    OffsetRows, OrderBy, OrderByExpr, PivotValueSource, Query, RenameSelectItem,
+    RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
+    TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode,
+    Values, WildcardAdditionalOptions, With, WithFill,
 };
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,

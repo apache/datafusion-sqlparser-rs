@@ -1087,7 +1087,10 @@ fn parse_copy_to() {
                     value_table_mode: None,
                     connect_by: None,
                 }))),
-                order_by: vec![],
+                order_by: OrderBy {
+                    exprs: vec![],
+                    interpolate: None
+                },
                 limit: None,
                 limit_by: vec![],
                 offset: None,
@@ -2418,7 +2421,10 @@ fn parse_array_subquery_expr() {
                         connect_by: None,
                     }))),
                 }),
-                order_by: vec![],
+                order_by: OrderBy {
+                    exprs: vec![],
+                    interpolate: None
+                },
                 limit: None,
                 limit_by: vec![],
                 offset: None,
@@ -3940,7 +3946,10 @@ fn test_simple_postgres_insert_with_alias() {
                         Expr::Value(Value::Number("123".to_string(), false))
                     ]]
                 })),
-                order_by: vec![],
+                order_by: OrderBy {
+                    exprs: vec![],
+                    interpolate: None
+                },
                 limit: None,
                 limit_by: vec![],
                 offset: None,
@@ -4008,7 +4017,10 @@ fn test_simple_postgres_insert_with_alias() {
                         ))
                     ]]
                 })),
-                order_by: vec![],
+                order_by: OrderBy {
+                    exprs: vec![],
+                    interpolate: None
+                },
                 limit: None,
                 limit_by: vec![],
                 offset: None,
@@ -4072,7 +4084,10 @@ fn test_simple_insert_with_quoted_alias() {
                         Expr::Value(Value::SingleQuotedString("0123".to_string()))
                     ]]
                 })),
-                order_by: vec![],
+                order_by: OrderBy {
+                    exprs: vec![],
+                    interpolate: None
+                },
                 limit: None,
                 limit_by: vec![],
                 offset: None,

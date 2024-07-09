@@ -407,7 +407,10 @@ fn parse_update_set_from() {
                             value_table_mode: None,
                             connect_by: None,
                         }))),
-                        order_by: vec![],
+                        order_by: OrderBy {
+                            exprs: vec![],
+                            interpolate: None
+                        },
                         limit: None,
                         limit_by: vec![],
                         offset: None,
@@ -2051,24 +2054,21 @@ fn parse_select_order_by() {
                     asc: Some(true),
                     nulls_first: None,
                     with_fill: None,
-                    interpolate: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
                     asc: Some(false),
                     nulls_first: None,
                     with_fill: None,
-                    interpolate: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("id")),
                     asc: None,
                     nulls_first: None,
                     with_fill: None,
-                    interpolate: None,
                 },
             ],
-            select.order_by
+            select.order_by.exprs
         );
     }
     chk("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id");
@@ -2089,17 +2089,15 @@ fn parse_select_order_by_limit() {
                 asc: Some(true),
                 nulls_first: None,
                 with_fill: None,
-                interpolate: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 asc: Some(false),
                 nulls_first: None,
                 with_fill: None,
-                interpolate: None,
             },
         ],
-        select.order_by
+        select.order_by.exprs
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
 }
@@ -2116,17 +2114,15 @@ fn parse_select_order_by_nulls_order() {
                 asc: Some(true),
                 nulls_first: Some(true),
                 with_fill: None,
-                interpolate: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 asc: Some(false),
                 nulls_first: Some(false),
                 with_fill: None,
-                interpolate: None,
             },
         ],
-        select.order_by
+        select.order_by.exprs
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
 }
@@ -2219,7 +2215,6 @@ fn parse_select_qualify() {
                         asc: None,
                         nulls_first: None,
                         with_fill: None,
-                        interpolate: None,
                     }],
                     window_frame: None,
                 })),
@@ -2581,7 +2576,6 @@ fn parse_listagg() {
                     asc: None,
                     nulls_first: None,
                     with_fill: None,
-                    interpolate: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident {
@@ -2591,7 +2585,6 @@ fn parse_listagg() {
                     asc: None,
                     nulls_first: None,
                     with_fill: None,
-                    interpolate: None,
                 },
             ]
         }),
@@ -3442,7 +3435,10 @@ fn parse_create_table_as_table() {
             table_name: Some("old_table".to_string()),
             schema_name: None,
         }))),
-        order_by: vec![],
+        order_by: OrderBy {
+            exprs: vec![],
+            interpolate: None,
+        },
         limit: None,
         limit_by: vec![],
         offset: None,
@@ -3468,7 +3464,10 @@ fn parse_create_table_as_table() {
             table_name: Some("old_table".to_string()),
             schema_name: Some("schema_name".to_string()),
         }))),
-        order_by: vec![],
+        order_by: OrderBy {
+            exprs: vec![],
+            interpolate: None,
+        },
         limit: None,
         limit_by: vec![],
         offset: None,
@@ -4388,7 +4387,6 @@ fn parse_window_functions() {
                     asc: Some(false),
                     nulls_first: None,
                     with_fill: None,
-                    interpolate: None,
                 }],
                 window_frame: None,
             })),
@@ -4598,7 +4596,6 @@ fn test_parse_named_window() {
                         asc: None,
                         nulls_first: None,
                         with_fill: None,
-                        interpolate: None,
                     }],
                     window_frame: None,
                 }),
@@ -5019,7 +5016,10 @@ fn parse_interval_and_or_xor() {
             value_table_mode: None,
             connect_by: None,
         }))),
-        order_by: vec![],
+        order_by: OrderBy {
+            exprs: vec![],
+            interpolate: None,
+        },
         limit: None,
         limit_by: vec![],
         offset: None,
@@ -7287,14 +7287,12 @@ fn parse_create_index() {
             asc: None,
             nulls_first: None,
             with_fill: None,
-            interpolate: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
             with_fill: None,
-            interpolate: None,
         },
     ];
     match verified_stmt(sql) {
@@ -7325,14 +7323,12 @@ fn test_create_index_with_using_function() {
             asc: None,
             nulls_first: None,
             with_fill: None,
-            interpolate: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
             with_fill: None,
-            interpolate: None,
         },
     ];
     match verified_stmt(sql) {
@@ -7683,7 +7679,10 @@ fn parse_merge() {
                             value_table_mode: None,
                             connect_by: None,
                         }))),
-                        order_by: vec![],
+                        order_by: OrderBy {
+                            exprs: vec![],
+                            interpolate: None
+                        },
                         limit: None,
                         limit_by: vec![],
                         offset: None,
@@ -9210,7 +9209,10 @@ fn parse_unload() {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
-                order_by: vec![],
+                order_by: OrderBy {
+                    exprs: vec![],
+                    interpolate: None
+                },
                 settings: None,
             }),
             to: Ident {
@@ -9606,7 +9608,6 @@ fn test_match_recognize() {
                 asc: None,
                 nulls_first: None,
                 with_fill: None,
-                interpolate: None,
             }],
             measures: vec![
                 Measure {

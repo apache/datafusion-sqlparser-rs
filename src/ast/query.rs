@@ -33,7 +33,7 @@ pub struct Query {
     /// SELECT or UNION / EXCEPT / INTERSECT
     pub body: Box<SetExpr>,
     /// ORDER BY
-    pub order_by: Vec<OrderByExpr>,
+    pub order_by: OrderBy,
     /// `LIMIT { <N> | ALL }`
     pub limit: Option<Expr>,
 
@@ -62,8 +62,18 @@ impl fmt::Display for Query {
             write!(f, "{with} ")?;
         }
         write!(f, "{}", self.body)?;
-        if !self.order_by.is_empty() {
-            write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
+        if !self.order_by.exprs.is_empty() {
+            write!(
+                f,
+                " ORDER BY {}",
+                display_comma_separated(&self.order_by.exprs)
+            )?;
+            if let Some(ref interpolate) = self.order_by.interpolate {
+                match &interpolate.exprs {
+                    Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
+                    None => write!(f, " INTERPOLATE")?,
+                }
+            }
         }
         if let Some(ref limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
@@ -1646,6 +1656,18 @@ pub enum JoinConstraint {
     None,
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OrderBy {
+    pub exprs: Vec<OrderByExpr>,
+    /// Optional: `INTERPOLATE`
+    /// Supported by [ClickHouse syntax]
+    ///
+    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    pub interpolate: Option<Interpolate>,
+}
+
 /// An `ORDER BY` expression
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1659,11 +1681,6 @@ pub struct OrderByExpr {
     /// Optional: `WITH FILL`
     /// Supported by [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
     pub with_fill: Option<WithFill>,
-    /// Optional: `INTERPOLATE`
-    /// Supported by [ClickHouse syntax]
-    ///
-    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
-    pub interpolate: Option<Interpolate>,
 }
 
 impl fmt::Display for OrderByExpr {
@@ -1681,12 +1698,6 @@ impl fmt::Display for OrderByExpr {
         }
         if let Some(ref with_fill) = self.with_fill {
             write!(f, " {}", with_fill)?
-        }
-        if let Some(ref interpolate) = self.interpolate {
-            match &interpolate.expr {
-                Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
-                None => write!(f, " INTERPOLATE")?,
-            }
         }
         Ok(())
     }
@@ -1737,7 +1748,7 @@ pub struct InterpolateExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Interpolate {
-    pub expr: Option<Vec<InterpolateExpr>>,
+    pub exprs: Option<Vec<InterpolateExpr>>,
 }
 
 impl fmt::Display for InterpolateExpr {

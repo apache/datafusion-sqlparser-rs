@@ -18,6 +18,8 @@
 mod test_utils;
 use test_utils::*;
 
+use sqlparser::ast::FunctionArg::Unnamed;
+use sqlparser::ast::Value::Number;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -3427,6 +3429,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
+            with_ordinality: _,
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
@@ -4178,6 +4181,43 @@ fn parse_create_table_with_options() {
                     },
                 ],
                 with_options
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_table_function_with_ordinality() {
+    let sql = "SELECT * FROM generate_series(1, 10) WITH ORDINALITY AS t";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::Query(query) => {
+            assert_eq!(
+                query.body.as_select().unwrap().from,
+                vec![TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![Ident::new("generate_series")]),
+                        args: Some(vec![
+                            Unnamed(FunctionArgExpr::Expr(Expr::Value(Number(
+                                "1".parse().unwrap(),
+                                false
+                            )))),
+                            Unnamed(FunctionArgExpr::Expr(Expr::Value(Number(
+                                "10".parse().unwrap(),
+                                false
+                            )))),
+                        ]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("t"),
+                            columns: vec![],
+                        }),
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: true,
+                    },
+                    joins: vec![],
+                }]
             );
         }
         _ => unreachable!(),

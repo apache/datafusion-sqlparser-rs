@@ -9216,6 +9216,18 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let mut with_ordinality = false;
+            if dialect_of!(self is PostgreSqlDialect|GenericDialect)
+                && self.parse_keyword(Keyword::WITH)
+            {
+                if self.parse_keyword(Keyword::ORDINALITY) {
+                    with_ordinality = true;
+                } else {
+                    // rewind, as WITH may belong to the next statement's CTE or hints
+                    self.prev_token();
+                }
+            }
+
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
 
             // MSSQL-specific table hints:
@@ -9237,6 +9249,7 @@ impl<'a> Parser<'a> {
                 with_hints,
                 version,
                 partitions,
+                with_ordinality,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {

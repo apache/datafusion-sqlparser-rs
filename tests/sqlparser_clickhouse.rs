@@ -59,6 +59,7 @@ fn parse_map_access_expr() {
                     with_hints: vec![],
                     version: None,
                     partitions: vec![],
+                    with_ordinality: false,
                 },
                 joins: vec![],
             }],
@@ -162,6 +163,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
+            with_ordinality: _,
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);

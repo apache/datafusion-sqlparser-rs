@@ -399,7 +399,8 @@ fn parse_update_tuple_row_values() {
                     args: None,
                     with_hints: vec![],
                     version: None,
-                    partitions: vec![]
+                    partitions: vec![],
+                    with_ordinality: false,
                 },
                 joins: vec![],
             },

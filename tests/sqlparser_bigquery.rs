@@ -224,6 +224,7 @@ fn parse_delete_statement() {
                     with_hints: vec![],
                     version: None,
                     partitions: vec![],
+                    with_ordinality: false,
                 },
                 from[0].relation
             );
@@ -1353,6 +1354,7 @@ fn parse_table_identifiers() {
                     with_hints: vec![],
                     version: None,
                     partitions: vec![],
+                    with_ordinality: false,
                 },
                 joins: vec![]
             },]
@@ -1525,6 +1527,7 @@ fn parse_table_time_travel() {
                     Value::SingleQuotedString(version)
                 ))),
                 partitions: vec![],
+                with_ordinality: false,
             },
             joins: vec![]
         },]
@@ -1620,6 +1623,7 @@ fn parse_merge() {
                     with_hints: Default::default(),
                     version: Default::default(),
                     partitions: Default::default(),
+                    with_ordinality: false,
                 },
                 table
             );
@@ -1634,6 +1638,7 @@ fn parse_merge() {
                     with_hints: Default::default(),
                     version: Default::default(),
                     partitions: Default::default(),
+                    with_ordinality: false,
                 },
                 source
             );

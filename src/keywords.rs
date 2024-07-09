@@ -518,6 +518,7 @@ define_keywords!(
     OR,
     ORC,
     ORDER,
+    ORDINALITY,
     OUT,
     OUTER,
     OUTPUTFORMAT,

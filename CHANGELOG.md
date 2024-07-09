@@ -12,7 +12,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 
 ## [0.48.0] 2024-07-09
 
-Huge shout out for @iffyio @jmhain and @lovasoa for their help reviewing and merging PRs!
+Huge shout out to @iffyio @jmhain and @lovasoa for their help reviewing and merging PRs!
 
 ### Fixed
 * Fix CI error message in CI (#1333) - Thanks @alamb
@@ -24,6 +24,9 @@ Huge shout out for @iffyio @jmhain and @lovasoa for their help reviewing and mer
 * Return errors, not panic, when integers fail to parse in `AUTO_INCREMENT` and `TOP` (#1305) - Thanks @eejbyfeldt
 
 ### Added
+* Support `OWNER TO` clause in Postgres (#1314) - Thanks @gainings
+* Support `FORMAT` clause for ClickHouse (#1335) - Thanks @git-hulk
+* Support `DROP PROCEDURE` statement (#1324) - Thanks @LorrensP-2158466
 * Support `PREWHERE` condition for ClickHouse dialect (#1328) - Thanks @git-hulk
 * Support `SETTINGS` pairs for ClickHouse dialect (#1327) - Thanks @git-hulk
 * Support `GROUP BY WITH MODIFIER` for ClickHouse dialect (#1323) - Thanks @git-hulk
@@ -38,6 +41,7 @@ Huge shout out for @iffyio @jmhain and @lovasoa for their help reviewing and mer
 * Support ClickHouse data types (#1285) - Thanks @7phs
 
 ### Changed
+* Add stale PR github workflow (#1331) - Thanks @alamb
 * Refine docs (#1326) - Thanks @emilsivervik
 * Improve error messages with additional colons (#1319) - Thanks @LorrensP-2158466
 * Move Display fmt to struct for `CreateIndex` (#1307) - Thanks @philipcristiano

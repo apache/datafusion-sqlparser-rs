@@ -3630,6 +3630,108 @@ fn parse_drop_function() {
 }
 
 #[test]
+fn parse_drop_procedure() {
+    let sql = "DROP PROCEDURE IF EXISTS test_proc";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropProcedure {
+            if_exists: true,
+            proc_desc: vec![DropFunctionDesc {
+                name: ObjectName(vec![Ident {
+                    value: "test_proc".to_string(),
+                    quote_style: None
+                }]),
+                args: None
+            }],
+            option: None
+        }
+    );
+
+    let sql = "DROP PROCEDURE IF EXISTS test_proc(a INTEGER, IN b INTEGER = 1)";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropProcedure {
+            if_exists: true,
+            proc_desc: vec![DropFunctionDesc {
+                name: ObjectName(vec![Ident {
+                    value: "test_proc".to_string(),
+                    quote_style: None
+                }]),
+                args: Some(vec![
+                    OperateFunctionArg::with_name("a", DataType::Integer(None)),
+                    OperateFunctionArg {
+                        mode: Some(ArgMode::In),
+                        name: Some("b".into()),
+                        data_type: DataType::Integer(None),
+                        default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    }
+                ]),
+            }],
+            option: None
+        }
+    );
+
+    let sql = "DROP PROCEDURE IF EXISTS test_proc1(a INTEGER, IN b INTEGER = 1), test_proc2(a VARCHAR, IN b INTEGER = 1)";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropProcedure {
+            if_exists: true,
+            proc_desc: vec![
+                DropFunctionDesc {
+                    name: ObjectName(vec![Ident {
+                        value: "test_proc1".to_string(),
+                        quote_style: None
+                    }]),
+                    args: Some(vec![
+                        OperateFunctionArg::with_name("a", DataType::Integer(None)),
+                        OperateFunctionArg {
+                            mode: Some(ArgMode::In),
+                            name: Some("b".into()),
+                            data_type: DataType::Integer(None),
+                            default_expr: Some(Expr::Value(Value::Number(
+                                "1".parse().unwrap(),
+                                false
+                            ))),
+                        }
+                    ]),
+                },
+                DropFunctionDesc {
+                    name: ObjectName(vec![Ident {
+                        value: "test_proc2".to_string(),
+                        quote_style: None
+                    }]),
+                    args: Some(vec![
+                        OperateFunctionArg::with_name("a", DataType::Varchar(None)),
+                        OperateFunctionArg {
+                            mode: Some(ArgMode::In),
+                            name: Some("b".into()),
+                            data_type: DataType::Integer(None),
+                            default_expr: Some(Expr::Value(Value::Number(
+                                "1".parse().unwrap(),
+                                false
+                            ))),
+                        }
+                    ]),
+                }
+            ],
+            option: None
+        }
+    );
+
+    let res = pg().parse_sql_statements("DROP PROCEDURE testproc DROP");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: DROP".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("DROP PROCEDURE testproc SET NULL");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: SET".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_dollar_quoted_string() {
     let sql = "SELECT $$hello$$, $tag_name$world$tag_name$, $$Foo$Bar$$, $$Foo$Bar$$col_name, $$$$, $tag_name$$tag_name$";
 

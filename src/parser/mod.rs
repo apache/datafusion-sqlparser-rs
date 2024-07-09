@@ -4524,11 +4524,13 @@ impl<'a> Parser<'a> {
             ObjectType::Stage
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
+        } else if self.parse_keyword(Keyword::PROCEDURE) {
+            return self.parse_drop_procedure();
         } else if self.parse_keyword(Keyword::SECRET) {
             return self.parse_drop_secret(temporary, persistent);
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, STAGE or SEQUENCE after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, PROCEDURE, STAGE or SEQUENCE after DROP",
                 self.peek_token(),
             );
         };
@@ -4576,6 +4578,26 @@ impl<'a> Parser<'a> {
         Ok(Statement::DropFunction {
             if_exists,
             func_desc,
+            option,
+        })
+    }
+
+    /// ```sql
+    /// DROP PROCEDURE [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
+    /// [ CASCADE | RESTRICT ]
+    /// ```
+    fn parse_drop_procedure(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let proc_desc = self.parse_comma_separated(Parser::parse_drop_function_desc)?;
+        let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
+            Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
+            Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
+            Some(_) => unreachable!(), // parse_one_of_keywords does not return other keywords
+            None => None,
+        };
+        Ok(Statement::DropProcedure {
+            if_exists,
+            proc_desc,
             option,
         })
     }

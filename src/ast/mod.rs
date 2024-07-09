@@ -2215,6 +2215,16 @@ pub enum Statement {
         option: Option<ReferentialAction>,
     },
     /// ```sql
+    /// DROP PROCEDURE
+    /// ```
+    DropProcedure {
+        if_exists: bool,
+        /// One or more function to drop
+        proc_desc: Vec<DropFunctionDesc>,
+        /// `CASCADE` or `RESTRICT`
+        option: Option<ReferentialAction>,
+    },
+    /// ```sql
     /// DROP SECRET
     /// ```
     DropSecret {
@@ -3638,6 +3648,22 @@ impl fmt::Display for Statement {
                     "DROP FUNCTION{} {}",
                     if *if_exists { " IF EXISTS" } else { "" },
                     display_comma_separated(func_desc),
+                )?;
+                if let Some(op) = option {
+                    write!(f, " {op}")?;
+                }
+                Ok(())
+            }
+            Statement::DropProcedure {
+                if_exists,
+                proc_desc,
+                option,
+            } => {
+                write!(
+                    f,
+                    "DROP PROCEDURE{} {}",
+                    if *if_exists { " IF EXISTS" } else { "" },
+                    display_comma_separated(proc_desc),
                 )?;
                 if let Some(op) = option {
                     write!(f, " {op}")?;

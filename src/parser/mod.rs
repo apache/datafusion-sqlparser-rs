@@ -9209,6 +9209,7 @@ impl<'a> Parser<'a> {
             let array_exprs = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
 
+            let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
             let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
                 Ok(Some(alias)) => Some(alias),
                 Ok(None) => None,
@@ -9235,6 +9236,7 @@ impl<'a> Parser<'a> {
                 array_exprs,
                 with_offset,
                 with_offset_alias,
+                with_ordinality,
             })
         } else if self.parse_keyword_with_tokens(Keyword::JSON_TABLE, &[Token::LParen]) {
             let json_expr = self.parse_expr()?;
@@ -9273,6 +9275,8 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
+
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
 
             // MSSQL-specific table hints:
@@ -9294,6 +9298,7 @@ impl<'a> Parser<'a> {
                 with_hints,
                 version,
                 partitions,
+                with_ordinality,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {

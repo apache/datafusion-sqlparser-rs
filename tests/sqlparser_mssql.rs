@@ -64,6 +64,7 @@ fn parse_table_time_travel() {
                     Value::SingleQuotedString(version)
                 ))),
                 partitions: vec![],
+                with_ordinality: false,
             },
             joins: vec![]
         },]
@@ -335,6 +336,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
+            with_ordinality: _,
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
@@ -526,6 +528,7 @@ fn parse_substring_in_select() {
                                 with_hints: vec![],
                                 version: None,
                                 partitions: vec![],
+                                with_ordinality: false,
                             },
                             joins: vec![]
                         }],

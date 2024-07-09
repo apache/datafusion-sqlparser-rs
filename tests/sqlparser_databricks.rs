@@ -177,7 +177,8 @@ fn test_values_clause() {
             args: None,
             with_hints: vec![],
             version: None,
-            partitions: vec![]
+            partitions: vec![],
+            with_ordinality: false,
         }),
         query
             .body

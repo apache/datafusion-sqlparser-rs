@@ -48,6 +48,7 @@ fn test_square_brackets_over_db_schema_table_name() {
                 with_hints: vec![],
                 version: None,
                 partitions: vec![],
+                with_ordinality: false,
             },
             joins: vec![],
         }
@@ -94,6 +95,7 @@ fn test_double_quotes_over_db_schema_table_name() {
                 with_hints: vec![],
                 version: None,
                 partitions: vec![],
+                with_ordinality: false,
             },
             joins: vec![],
         }
@@ -114,6 +116,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
+            with_ordinality: _,
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);

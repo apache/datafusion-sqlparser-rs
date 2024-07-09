@@ -157,6 +157,32 @@ pub enum AlterTableOperation {
     SwapWith { table_name: ObjectName },
     /// 'SET TBLPROPERTIES ( { property_key [ = ] property_val } [, ...] )'
     SetTblProperties { table_properties: Vec<SqlOption> },
+
+    /// `OWNER TO { <new_owner> | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
+    ///
+    /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
+    OwnerTo { new_owner: Owner },
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Owner {
+    Ident(Ident),
+    CurrentRole,
+    CurrentUser,
+    SessionUser,
+}
+
+impl fmt::Display for Owner {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Owner::Ident(ident) => write!(f, "{}", ident),
+            Owner::CurrentRole => write!(f, "CURRENT_ROLE"),
+            Owner::CurrentUser => write!(f, "CURRENT_USER"),
+            Owner::SessionUser => write!(f, "SESSION_USER"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -321,6 +347,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::SwapWith { table_name } => {
                 write!(f, "SWAP WITH {table_name}")
+            }
+            AlterTableOperation::OwnerTo { new_owner } => {
+                write!(f, "OWNER TO {new_owner}")
             }
             AlterTableOperation::SetTblProperties { table_properties } => {
                 write!(

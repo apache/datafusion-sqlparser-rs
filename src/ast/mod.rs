@@ -34,8 +34,8 @@ pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue}
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, ConstraintCharacteristics, DeferrableInitial, GeneratedAs,
-    GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Partition, ProcedureParam,
-    ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
+    GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner, Partition,
+    ProcedureParam, ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
@@ -43,7 +43,7 @@ pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
     ExceptSelectItem, ExcludeSelectItem, ExprWithAlias, Fetch, ForClause, ForJson, ForXml,
-    GroupByExpr, GroupByWithModifier, IdentWithAlias, IlikeSelectItem, Interpolate,
+    FormatClause, GroupByExpr, GroupByWithModifier, IdentWithAlias, IlikeSelectItem, Interpolate,
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonTableColumn,
     JsonTableColumnErrorHandling, LateralView, LockClause, LockType, MatchRecognizePattern,
     MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset,
@@ -2216,6 +2216,16 @@ pub enum Statement {
         option: Option<ReferentialAction>,
     },
     /// ```sql
+    /// DROP PROCEDURE
+    /// ```
+    DropProcedure {
+        if_exists: bool,
+        /// One or more function to drop
+        proc_desc: Vec<DropFunctionDesc>,
+        /// `CASCADE` or `RESTRICT`
+        option: Option<ReferentialAction>,
+    },
+    /// ```sql
     /// DROP SECRET
     /// ```
     DropSecret {
@@ -3639,6 +3649,22 @@ impl fmt::Display for Statement {
                     "DROP FUNCTION{} {}",
                     if *if_exists { " IF EXISTS" } else { "" },
                     display_comma_separated(func_desc),
+                )?;
+                if let Some(op) = option {
+                    write!(f, " {op}")?;
+                }
+                Ok(())
+            }
+            Statement::DropProcedure {
+                if_exists,
+                proc_desc,
+                option,
+            } => {
+                write!(
+                    f,
+                    "DROP PROCEDURE{} {}",
+                    if *if_exists { " IF EXISTS" } else { "" },
+                    display_comma_separated(proc_desc),
                 )?;
                 if let Some(op) = option {
                     write!(f, " {op}")?;

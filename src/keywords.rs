@@ -529,6 +529,7 @@ define_keywords!(
     OVERLAY,
     OVERWRITE,
     OWNED,
+    OWNER,
     PARALLEL,
     PARAMETER,
     PARQUET,
@@ -859,6 +860,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::PREWHERE,
     // for ClickHouse SELECT * FROM t SETTINGS ...
     Keyword::SETTINGS,
+    // for ClickHouse SELECT * FROM t FORMAT...
+    Keyword::FORMAT,
     // for Snowflake START WITH .. CONNECT BY
     Keyword::START,
     Keyword::CONNECT,

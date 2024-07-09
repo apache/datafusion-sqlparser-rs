@@ -4524,11 +4524,13 @@ impl<'a> Parser<'a> {
             ObjectType::Stage
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
+        } else if self.parse_keyword(Keyword::PROCEDURE) {
+            return self.parse_drop_procedure();
         } else if self.parse_keyword(Keyword::SECRET) {
             return self.parse_drop_secret(temporary, persistent);
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, STAGE or SEQUENCE after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, PROCEDURE, STAGE or SEQUENCE after DROP",
                 self.peek_token(),
             );
         };
@@ -4576,6 +4578,26 @@ impl<'a> Parser<'a> {
         Ok(Statement::DropFunction {
             if_exists,
             func_desc,
+            option,
+        })
+    }
+
+    /// ```sql
+    /// DROP PROCEDURE [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
+    /// [ CASCADE | RESTRICT ]
+    /// ```
+    fn parse_drop_procedure(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let proc_desc = self.parse_comma_separated(Parser::parse_drop_function_desc)?;
+        let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
+            Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
+            Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
+            Some(_) => unreachable!(), // parse_one_of_keywords does not return other keywords
+            None => None,
+        };
+        Ok(Statement::DropProcedure {
+            if_exists,
+            proc_desc,
             option,
         })
     }
@@ -6425,6 +6447,25 @@ impl<'a> Parser<'a> {
             self.expect_keyword(Keyword::WITH)?;
             let table_name = self.parse_object_name(false)?;
             AlterTableOperation::SwapWith { table_name }
+        } else if dialect_of!(self is PostgreSqlDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::OWNER, Keyword::TO])
+        {
+            let new_owner = match self.parse_one_of_keywords( &[Keyword::CURRENT_USER, Keyword::CURRENT_ROLE, Keyword::SESSION_USER]) {
+                Some(Keyword::CURRENT_USER) => Owner::CurrentUser,
+                Some(Keyword::CURRENT_ROLE) => Owner::CurrentRole,
+                Some(Keyword::SESSION_USER) => Owner::SessionUser,
+                Some(_) => unreachable!(),
+                None => {
+                    match self.parse_identifier(false) {
+                        Ok(ident) => Owner::Ident(ident),
+                        Err(e) => {
+                            return Err(ParserError::ParserError(format!("Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. {e}")))
+                        }
+                    }
+                },
+            };
+
+            AlterTableOperation::OwnerTo { new_owner }
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;
@@ -7899,6 +7940,7 @@ impl<'a> Parser<'a> {
                 locks: vec![],
                 for_clause: None,
                 settings: None,
+                format_clause: None,
             })
         } else if self.parse_keyword(Keyword::UPDATE) {
             Ok(Query {
@@ -7915,6 +7957,7 @@ impl<'a> Parser<'a> {
                 locks: vec![],
                 for_clause: None,
                 settings: None,
+                format_clause: None,
             })
         } else {
             let body = self.parse_boxed_query_body(0)?;
@@ -8015,6 +8058,18 @@ impl<'a> Parser<'a> {
                     locks.push(self.parse_lock()?);
                 }
             }
+            let format_clause = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+                && self.parse_keyword(Keyword::FORMAT)
+            {
+                if self.parse_keyword(Keyword::NULL) {
+                    Some(FormatClause::Null)
+                } else {
+                    let ident = self.parse_identifier(false)?;
+                    Some(FormatClause::Identifier(ident))
+                }
+            } else {
+                None
+            };
 
             Ok(Query {
                 with,
@@ -8027,6 +8082,7 @@ impl<'a> Parser<'a> {
                 locks,
                 for_clause,
                 settings,
+                format_clause,
             })
         }
     }
@@ -9176,6 +9232,7 @@ impl<'a> Parser<'a> {
                     locks: vec![],
                     for_clause: None,
                     settings: None,
+                    format_clause: None,
                 }),
                 alias,
             })

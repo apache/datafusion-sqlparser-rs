@@ -714,6 +714,78 @@ fn parse_alter_table_add_columns() {
 }
 
 #[test]
+fn parse_alter_table_owner_to() {
+    struct TestCase {
+        sql: &'static str,
+        expected_owner: Owner,
+    }
+
+    let test_cases = vec![
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO new_owner",
+            expected_owner: Owner::Ident(Ident::new("new_owner".to_string())),
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO postgres",
+            expected_owner: Owner::Ident(Ident::new("postgres".to_string())),
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO CREATE", // treats CREATE as an identifier
+            expected_owner: Owner::Ident(Ident::new("CREATE".to_string())),
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO \"new_owner\"",
+            expected_owner: Owner::Ident(Ident::with_quote('\"', "new_owner".to_string())),
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO CURRENT_USER",
+            expected_owner: Owner::CurrentUser,
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO CURRENT_ROLE",
+            expected_owner: Owner::CurrentRole,
+        },
+        TestCase {
+            sql: "ALTER TABLE tab OWNER TO SESSION_USER",
+            expected_owner: Owner::SessionUser,
+        },
+    ];
+
+    for case in test_cases {
+        match pg_and_generic().verified_stmt(case.sql) {
+            Statement::AlterTable {
+                name,
+                if_exists: _,
+                only: _,
+                operations,
+                location: _,
+            } => {
+                assert_eq!(name.to_string(), "tab");
+                assert_eq!(
+                    operations,
+                    vec![AlterTableOperation::OwnerTo {
+                        new_owner: case.expected_owner.clone()
+                    }]
+                );
+            }
+            _ => unreachable!("Expected an AlterTable statement"),
+        }
+    }
+
+    let res = pg().parse_sql_statements("ALTER TABLE tab OWNER TO CREATE FOO");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: FOO".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("ALTER TABLE tab OWNER TO 4");
+    assert_eq!(
+        ParserError::ParserError("Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: 4".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);
@@ -1098,6 +1170,7 @@ fn parse_copy_to() {
                 locks: vec![],
                 for_clause: None,
                 settings: None,
+                format_clause: None,
             })),
             to: true,
             target: CopyTarget::File {
@@ -2432,6 +2505,7 @@ fn parse_array_subquery_expr() {
                 locks: vec![],
                 for_clause: None,
                 settings: None,
+                format_clause: None,
             })),
             filter: None,
             null_treatment: None,
@@ -3636,6 +3710,108 @@ fn parse_drop_function() {
 }
 
 #[test]
+fn parse_drop_procedure() {
+    let sql = "DROP PROCEDURE IF EXISTS test_proc";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropProcedure {
+            if_exists: true,
+            proc_desc: vec![DropFunctionDesc {
+                name: ObjectName(vec![Ident {
+                    value: "test_proc".to_string(),
+                    quote_style: None
+                }]),
+                args: None
+            }],
+            option: None
+        }
+    );
+
+    let sql = "DROP PROCEDURE IF EXISTS test_proc(a INTEGER, IN b INTEGER = 1)";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropProcedure {
+            if_exists: true,
+            proc_desc: vec![DropFunctionDesc {
+                name: ObjectName(vec![Ident {
+                    value: "test_proc".to_string(),
+                    quote_style: None
+                }]),
+                args: Some(vec![
+                    OperateFunctionArg::with_name("a", DataType::Integer(None)),
+                    OperateFunctionArg {
+                        mode: Some(ArgMode::In),
+                        name: Some("b".into()),
+                        data_type: DataType::Integer(None),
+                        default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    }
+                ]),
+            }],
+            option: None
+        }
+    );
+
+    let sql = "DROP PROCEDURE IF EXISTS test_proc1(a INTEGER, IN b INTEGER = 1), test_proc2(a VARCHAR, IN b INTEGER = 1)";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::DropProcedure {
+            if_exists: true,
+            proc_desc: vec![
+                DropFunctionDesc {
+                    name: ObjectName(vec![Ident {
+                        value: "test_proc1".to_string(),
+                        quote_style: None
+                    }]),
+                    args: Some(vec![
+                        OperateFunctionArg::with_name("a", DataType::Integer(None)),
+                        OperateFunctionArg {
+                            mode: Some(ArgMode::In),
+                            name: Some("b".into()),
+                            data_type: DataType::Integer(None),
+                            default_expr: Some(Expr::Value(Value::Number(
+                                "1".parse().unwrap(),
+                                false
+                            ))),
+                        }
+                    ]),
+                },
+                DropFunctionDesc {
+                    name: ObjectName(vec![Ident {
+                        value: "test_proc2".to_string(),
+                        quote_style: None
+                    }]),
+                    args: Some(vec![
+                        OperateFunctionArg::with_name("a", DataType::Varchar(None)),
+                        OperateFunctionArg {
+                            mode: Some(ArgMode::In),
+                            name: Some("b".into()),
+                            data_type: DataType::Integer(None),
+                            default_expr: Some(Expr::Value(Value::Number(
+                                "1".parse().unwrap(),
+                                false
+                            ))),
+                        }
+                    ]),
+                }
+            ],
+            option: None
+        }
+    );
+
+    let res = pg().parse_sql_statements("DROP PROCEDURE testproc DROP");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: DROP".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("DROP PROCEDURE testproc SET NULL");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: SET".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_dollar_quoted_string() {
     let sql = "SELECT $$hello$$, $tag_name$world$tag_name$, $$Foo$Bar$$, $$Foo$Bar$$col_name, $$$$, $tag_name$$tag_name$";
 
@@ -3957,6 +4133,7 @@ fn test_simple_postgres_insert_with_alias() {
                 locks: vec![],
                 for_clause: None,
                 settings: None,
+                format_clause: None,
             })),
             partitioned: None,
             after_columns: vec![],
@@ -4028,6 +4205,7 @@ fn test_simple_postgres_insert_with_alias() {
                 locks: vec![],
                 for_clause: None,
                 settings: None,
+                format_clause: None,
             })),
             partitioned: None,
             after_columns: vec![],
@@ -4095,6 +4273,7 @@ fn test_simple_insert_with_quoted_alias() {
                 locks: vec![],
                 for_clause: None,
                 settings: None,
+                format_clause: None,
             })),
             partitioned: None,
             after_columns: vec![],

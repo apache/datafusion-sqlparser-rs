@@ -5416,7 +5416,8 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let big_query_config = if dialect_of!(self is BigQueryDialect | GenericDialect) {
+        let big_query_config = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
+        {
             self.parse_optional_big_query_create_table_config()?
         } else {
             Default::default()

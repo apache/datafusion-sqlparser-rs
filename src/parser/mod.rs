@@ -7958,7 +7958,11 @@ impl<'a> Parser<'a> {
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 let order_by_exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
-                let interpolate = self.parse_interpolations()?;
+                let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                    self.parse_interpolations()?
+                } else {
+                    None
+                };
 
                 Some(OrderBy {
                     exprs: order_by_exprs,
@@ -10560,23 +10564,21 @@ impl<'a> Parser<'a> {
     // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)
     // that follow the INTERPOLATE keyword in an ORDER BY clause with the WITH FILL modifier
     pub fn parse_interpolations(&mut self) -> Result<Option<Interpolate>, ParserError> {
-        if dialect_of!(self is ClickHouseDialect | GenericDialect)
-            && self.parse_keyword(Keyword::INTERPOLATE)
-        {
-            if self.consume_token(&Token::LParen) {
-                let interpolations = self.parse_comma_separated0(|p| p.parse_interpolation())?;
-                self.expect_token(&Token::RParen)?;
-                // INTERPOLATE () and INTERPOLATE ( ... ) variants
-                Ok(Some(Interpolate {
-                    exprs: Some(interpolations),
-                }))
-            } else {
-                // INTERPOLATE
-                Ok(Some(Interpolate { exprs: None }))
-            }
-        } else {
-            Ok(None)
+        if !self.parse_keyword(Keyword::INTERPOLATE) {
+            return Ok(None);
         }
+
+        if self.consume_token(&Token::LParen) {
+            let interpolations = self.parse_comma_separated0(|p| p.parse_interpolation())?;
+            self.expect_token(&Token::RParen)?;
+            // INTERPOLATE () and INTERPOLATE ( ... ) variants
+            return Ok(Some(Interpolate {
+                exprs: Some(interpolations),
+            }));
+        }
+
+        // INTERPOLATE
+        Ok(Some(Interpolate { exprs: None }))
     }
 
     // Parse a INTERPOLATE expression (ClickHouse dialect)

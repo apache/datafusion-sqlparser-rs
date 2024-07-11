@@ -102,10 +102,7 @@ fn parse_create_procedure() {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
-                order_by: OrderBy {
-                    exprs: vec![],
-                    interpolate: None
-                },
+                order_by: None,
                 settings: None,
                 format_clause: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
@@ -546,10 +543,7 @@ fn parse_substring_in_select() {
                         value_table_mode: None,
                         connect_by: None,
                     }))),
-                    order_by: OrderBy {
-                        exprs: vec![],
-                        interpolate: None
-                    },
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,

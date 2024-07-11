@@ -7931,10 +7931,7 @@ impl<'a> Parser<'a> {
                 body: self.parse_insert_setexpr_boxed()?,
                 limit: None,
                 limit_by: vec![],
-                order_by: OrderBy {
-                    exprs: vec![],
-                    interpolate: None,
-                },
+                order_by: None,
                 offset: None,
                 fetch: None,
                 locks: vec![],
@@ -7948,10 +7945,7 @@ impl<'a> Parser<'a> {
                 body: self.parse_update_setexpr_boxed()?,
                 limit: None,
                 limit_by: vec![],
-                order_by: OrderBy {
-                    exprs: vec![],
-                    interpolate: None,
-                },
+                order_by: None,
                 offset: None,
                 fetch: None,
                 locks: vec![],
@@ -7964,33 +7958,14 @@ impl<'a> Parser<'a> {
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 let order_by_exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
-                let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect)
-                    && self.parse_keyword(Keyword::INTERPOLATE)
-                {
-                    if self.consume_token(&Token::LParen) {
-                        let interpolations = self.parse_interpolations()?;
-                        self.expect_token(&Token::RParen)?;
-                        // INTERPOLATE () and INTERPOLATE ( ... ) variants
-                        Some(Interpolate {
-                            exprs: Some(interpolations),
-                        })
-                    } else {
-                        // INTERPOLATE
-                        Some(Interpolate { exprs: None })
-                    }
-                } else {
-                    None
-                };
+                let interpolate = self.parse_interpolations()?;
 
-                OrderBy {
+                Some(OrderBy {
                     exprs: order_by_exprs,
                     interpolate,
-                }
+                })
             } else {
-                OrderBy {
-                    exprs: vec![],
-                    interpolate: None,
-                }
+                None
             };
 
             let mut limit = None;
@@ -9221,10 +9196,7 @@ impl<'a> Parser<'a> {
                 subquery: Box::new(Query {
                     with: None,
                     body: Box::new(values),
-                    order_by: OrderBy {
-                        exprs: vec![],
-                        interpolate: None,
-                    },
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -10587,8 +10559,24 @@ impl<'a> Parser<'a> {
 
     // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)
     // that follow the INTERPOLATE keyword in an ORDER BY clause with the WITH FILL modifier
-    pub fn parse_interpolations(&mut self) -> Result<Vec<InterpolateExpr>, ParserError> {
-        self.parse_comma_separated0(|p| p.parse_interpolation())
+    pub fn parse_interpolations(&mut self) -> Result<Option<Interpolate>, ParserError> {
+        if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keyword(Keyword::INTERPOLATE)
+        {
+            if self.consume_token(&Token::LParen) {
+                let interpolations = self.parse_comma_separated0(|p| p.parse_interpolation())?;
+                self.expect_token(&Token::RParen)?;
+                // INTERPOLATE () and INTERPOLATE ( ... ) variants
+                Ok(Some(Interpolate {
+                    exprs: Some(interpolations),
+                }))
+            } else {
+                // INTERPOLATE
+                Ok(Some(Interpolate { exprs: None }))
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     // Parse a INTERPOLATE expression (ClickHouse dialect)

@@ -33,7 +33,7 @@ pub struct Query {
     /// SELECT or UNION / EXCEPT / INTERSECT
     pub body: Box<SetExpr>,
     /// ORDER BY
-    pub order_by: OrderBy,
+    pub order_by: Option<OrderBy>,
     /// `LIMIT { <N> | ALL }`
     pub limit: Option<Expr>,
 
@@ -67,13 +67,12 @@ impl fmt::Display for Query {
             write!(f, "{with} ")?;
         }
         write!(f, "{}", self.body)?;
-        if !self.order_by.exprs.is_empty() {
-            write!(
-                f,
-                " ORDER BY {}",
-                display_comma_separated(&self.order_by.exprs)
-            )?;
-            if let Some(ref interpolate) = self.order_by.interpolate {
+        if let Some(ref order_by) = self.order_by {
+            write!(f, " ORDER BY")?;
+            if !order_by.exprs.is_empty() {
+                write!(f, " {}", display_comma_separated(&order_by.exprs))?;
+            }
+            if let Some(ref interpolate) = order_by.interpolate {
                 match &interpolate.exprs {
                     Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
                     None => write!(f, " INTERPOLATE")?,

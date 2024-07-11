@@ -762,7 +762,7 @@ fn parse_select_order_by_with_fill_interpolate() {
                 }])
             })
         },
-        select.order_by
+        select.order_by.expect("ORDER BY expected")
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
 }
@@ -809,7 +809,7 @@ fn parse_with_fill() {
             to: Some(Expr::Value(number("20"))),
             step: Some(Expr::Value(number("2"))),
         }),
-        select.order_by.exprs[0].with_fill
+        select.order_by.expect("ORDER BY expected").exprs[0].with_fill
     );
 }
 
@@ -861,7 +861,7 @@ fn parse_interpolate_body_with_columns() {
                 },
             ])
         }),
-        select.order_by.interpolate
+        select.order_by.expect("ORDER BY expected").interpolate
     );
 }
 
@@ -871,7 +871,7 @@ fn parse_interpolate_without_body() {
     let select = clickhouse().verified_query(sql);
     assert_eq!(
         Some(Interpolate { exprs: None }),
-        select.order_by.interpolate
+        select.order_by.expect("ORDER BY expected").interpolate
     );
 }
 
@@ -883,7 +883,7 @@ fn parse_interpolate_with_empty_body() {
         Some(Interpolate {
             exprs: Some(vec![])
         }),
-        select.order_by.interpolate
+        select.order_by.expect("ORDER BY expected").interpolate
     );
 }
 

@@ -407,10 +407,7 @@ fn parse_update_set_from() {
                             value_table_mode: None,
                             connect_by: None,
                         }))),
-                        order_by: OrderBy {
-                            exprs: vec![],
-                            interpolate: None
-                        },
+                        order_by: None,
                         limit: None,
                         limit_by: vec![],
                         offset: None,
@@ -2069,7 +2066,7 @@ fn parse_select_order_by() {
                     with_fill: None,
                 },
             ],
-            select.order_by.exprs
+            select.order_by.expect("ORDER BY expected").exprs
         );
     }
     chk("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id");
@@ -2098,7 +2095,7 @@ fn parse_select_order_by_limit() {
                 with_fill: None,
             },
         ],
-        select.order_by.exprs
+        select.order_by.expect("ORDER BY expected").exprs
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
 }
@@ -2123,7 +2120,7 @@ fn parse_select_order_by_nulls_order() {
                 with_fill: None,
             },
         ],
-        select.order_by.exprs
+        select.order_by.expect("ORDER BY expeccted").exprs
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
 }
@@ -3436,10 +3433,7 @@ fn parse_create_table_as_table() {
             table_name: Some("old_table".to_string()),
             schema_name: None,
         }))),
-        order_by: OrderBy {
-            exprs: vec![],
-            interpolate: None,
-        },
+        order_by: None,
         limit: None,
         limit_by: vec![],
         offset: None,
@@ -3466,10 +3460,7 @@ fn parse_create_table_as_table() {
             table_name: Some("old_table".to_string()),
             schema_name: Some("schema_name".to_string()),
         }))),
-        order_by: OrderBy {
-            exprs: vec![],
-            interpolate: None,
-        },
+        order_by: None,
         limit: None,
         limit_by: vec![],
         offset: None,
@@ -5019,10 +5010,7 @@ fn parse_interval_and_or_xor() {
             value_table_mode: None,
             connect_by: None,
         }))),
-        order_by: OrderBy {
-            exprs: vec![],
-            interpolate: None,
-        },
+        order_by: None,
         limit: None,
         limit_by: vec![],
         offset: None,
@@ -7683,10 +7671,7 @@ fn parse_merge() {
                             value_table_mode: None,
                             connect_by: None,
                         }))),
-                        order_by: OrderBy {
-                            exprs: vec![],
-                            interpolate: None
-                        },
+                        order_by: None,
                         limit: None,
                         limit_by: vec![],
                         offset: None,
@@ -9214,10 +9199,7 @@ fn parse_unload() {
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
-                order_by: OrderBy {
-                    exprs: vec![],
-                    interpolate: None
-                },
+                order_by: None,
                 settings: None,
                 format_clause: None,
             }),

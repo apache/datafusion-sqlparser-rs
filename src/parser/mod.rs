@@ -31,7 +31,7 @@ use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::helpers::stmt_create_table::{BigQueryTableConfiguration, CreateTableBuilder};
+use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
@@ -5416,12 +5416,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let big_query_config = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
-        {
-            self.parse_optional_big_query_create_table_config()?
-        } else {
-            Default::default()
-        };
+        let create_table_config = self.parse_optional_create_table_config()?;
 
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
@@ -5506,39 +5501,46 @@ impl<'a> Parser<'a> {
             .collation(collation)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
-            .partition_by(big_query_config.partition_by)
-            .cluster_by(big_query_config.cluster_by)
-            .options(big_query_config.options)
+            .partition_by(create_table_config.partition_by)
+            .cluster_by(create_table_config.cluster_by)
+            .options(create_table_config.options)
             .primary_key(primary_key)
             .strict(strict)
             .build())
     }
 
-    /// Parse configuration like partitioning, clustering information during big-query table creation.
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_2>
-    fn parse_optional_big_query_create_table_config(
+    /// Parse configuration like partitioning, clustering information during the table creation.
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_2)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/ddl-partitioning.html)
+    fn parse_optional_create_table_config(
         &mut self,
-    ) -> Result<BigQueryTableConfiguration, ParserError> {
-        let mut partition_by = None;
-        if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
-            partition_by = Some(Box::new(self.parse_expr()?));
+    ) -> Result<CreateTableConfiguration, ParserError> {
+        let partition_by = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
+        {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
         };
 
         let mut cluster_by = None;
-        if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
-            cluster_by = Some(WrappedCollection::NoWrapping(
-                self.parse_comma_separated(|p| p.parse_identifier(false))?,
-            ));
-        };
-
         let mut options = None;
-        if let Token::Word(word) = self.peek_token().token {
-            if word.keyword == Keyword::OPTIONS {
-                options = Some(self.parse_options(Keyword::OPTIONS)?);
-            }
-        };
+        if dialect_of!(self is BigQueryDialect | GenericDialect) {
+            if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
+                cluster_by = Some(WrappedCollection::NoWrapping(
+                    self.parse_comma_separated(|p| p.parse_identifier(false))?,
+                ));
+            };
 
-        Ok(BigQueryTableConfiguration {
+            if let Token::Word(word) = self.peek_token().token {
+                if word.keyword == Keyword::OPTIONS {
+                    options = Some(self.parse_options(Keyword::OPTIONS)?);
+                }
+            };
+        }
+
+        Ok(CreateTableConfiguration {
             partition_by,
             cluster_by,
             options,

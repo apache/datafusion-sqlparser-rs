@@ -4040,6 +4040,50 @@ fn parse_create_table_with_alias() {
 }
 
 #[test]
+fn parse_create_table_with_partition_by() {
+    let sql = "CREATE TABLE t1 (a INT, b TEXT) PARTITION BY RANGE(a)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("t1", create_table.name.to_string());
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: "a".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![]
+                    },
+                    ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Text,
+                        collation: None,
+                        options: vec![]
+                    }
+                ],
+                create_table.columns
+            );
+            match *create_table.partition_by.unwrap() {
+                Expr::Function(f) => {
+                    assert_eq!("RANGE", f.name.to_string());
+                    assert_eq!(
+                        FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            clauses: vec![],
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("a"))
+                            ))],
+                        }),
+                        f.args
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_join_constraint_unnest_alias() {
     assert_eq!(
         only(

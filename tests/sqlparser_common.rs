@@ -4151,7 +4151,7 @@ fn parse_scalar_function_in_projection() {
 
     for function_name in names {
         // like SELECT sqrt(id) FROM foo
-        let sql = dbg!(format!("SELECT {function_name}(id) FROM foo"));
+        let sql = format!("SELECT {function_name}(id) FROM foo");
         let select = verified_only_select(&sql);
         assert_eq!(
             &call(function_name, [Expr::Identifier(Ident::new("id"))]),
@@ -8249,17 +8249,10 @@ fn parse_position() {
 
 #[test]
 fn parse_position_negative() {
-    let sql = "SELECT POSITION(foo) from bar";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError("Position function must include IN keyword".to_string()),
-        res.unwrap_err()
-    );
-
     let sql = "SELECT POSITION(foo IN) from bar";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError("Expected: an expression:, found: )".to_string()),
+        ParserError::ParserError("Expected: (, found: )".to_string()),
         res.unwrap_err()
     );
 }

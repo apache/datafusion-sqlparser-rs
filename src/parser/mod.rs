@@ -5463,13 +5463,6 @@ impl<'a> Parser<'a> {
 
         let strict = self.parse_keyword(Keyword::STRICT);
 
-        // Parse optional `AS ( query )`
-        let query = if self.parse_keyword(Keyword::AS) {
-            Some(self.parse_boxed_query()?)
-        } else {
-            None
-        };
-
         let comment = if self.parse_keyword(Keyword::COMMENT) {
             let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
@@ -5477,6 +5470,13 @@ impl<'a> Parser<'a> {
                 Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
                 _ => self.expected("comment", next_token)?,
             }
+        } else {
+            None
+        };
+
+        // Parse optional `AS ( query )`
+        let query = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_boxed_query()?)
         } else {
             None
         };

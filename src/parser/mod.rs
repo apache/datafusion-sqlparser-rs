@@ -1708,7 +1708,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_position_expr(&mut self, ident: Ident) -> Result<Expr, ParserError> {
-        match self.maybe_parse(|p| {
+        let position_expr = self.maybe_parse(|p| {
             // PARSE SELECT POSITION('@' in field)
             p.expect_token(&Token::LParen)?;
 
@@ -1721,7 +1721,8 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 r#in: Box::new(from),
             })
-        }) {
+        });
+        match position_expr {
             Some(expr) => Ok(expr),
             // Snowflake supports `position` as an ordinary function call
             // without the special `IN` syntax.

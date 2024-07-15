@@ -802,6 +802,30 @@ fn test_query_with_format_clause() {
     }
 }
 
+#[test]
+fn parse_create_table_on_commit_and_as_query() {
+    let sql = r#"CREATE LOCAL TEMPORARY TABLE test ON COMMIT PRESERVE ROWS AS SELECT 1"#;
+    match clickhouse_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            on_commit,
+            query,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "test");
+            assert_eq!(on_commit, Some(OnCommit::PreserveRows));
+            assert_eq!(
+                query.unwrap().body.as_select().unwrap().projection,
+                vec![UnnamedExpr(Expr::Value(Value::Number(
+                    "1".parse().unwrap(),
+                    false
+                )))]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

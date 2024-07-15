@@ -418,9 +418,6 @@ impl Display for CreateTable {
             write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
         }
 
-        if let Some(query) = &self.query {
-            write!(f, " AS {query}")?;
-        }
         if let Some(default_charset) = &self.default_charset {
             write!(f, " DEFAULT CHARSET={default_charset}")?;
         }
@@ -439,6 +436,9 @@ impl Display for CreateTable {
         }
         if self.strict {
             write!(f, " STRICT")?;
+        }
+        if let Some(query) = &self.query {
+            write!(f, " AS {query}")?;
         }
         Ok(())
     }

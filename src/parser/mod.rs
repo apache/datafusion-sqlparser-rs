@@ -5418,13 +5418,6 @@ impl<'a> Parser<'a> {
 
         let create_table_config = self.parse_optional_create_table_config()?;
 
-        // Parse optional `AS ( query )`
-        let query = if self.parse_keyword(Keyword::AS) {
-            Some(self.parse_boxed_query()?)
-        } else {
-            None
-        };
-
         let default_charset = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
             self.expect_token(&Token::Eq)?;
             let next_token = self.next_token();
@@ -5473,6 +5466,13 @@ impl<'a> Parser<'a> {
                 Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
                 _ => self.expected("comment", next_token)?,
             }
+        } else {
+            None
+        };
+
+        // Parse optional `AS ( query )`
+        let query = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_boxed_query()?)
         } else {
             None
         };

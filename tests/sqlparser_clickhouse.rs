@@ -25,6 +25,7 @@ use sqlparser::ast::Value::Number;
 use sqlparser::ast::*;
 use sqlparser::dialect::ClickHouseDialect;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::ParserError::ParserError;
 
 #[test]
 fn parse_map_access_expr() {
@@ -1089,6 +1090,27 @@ fn parse_create_table_on_commit_and_as_query() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_alter_table_with_on_cluster() {
+    let sql = "ALTER TABLE t ON CLUSTER 'cluster' ADD CONSTRAINT bar PRIMARY KEY (baz)";
+    match clickhouse_and_generic().verified_stmt(sql) {
+        Statement::AlterTable {
+            name, on_cluster, ..
+        } => {
+            assert_eq!(name.to_string(), "t");
+            assert_eq!(on_cluster, Some("'cluster'".to_string()));
+        }
+        _ => unreachable!(),
+    }
+
+    let res = clickhouse_and_generic()
+        .parse_sql_statements("ALTER TABLE t ON CLUSTER 123 ADD CONSTRAINT bar PRIMARY KEY (baz)");
+    assert_eq!(
+        res.unwrap_err(),
+        ParserError("Expected: identifier or cluster literal, found: 123".to_string())
+    )
 }
 
 fn clickhouse() -> TestedDialects {

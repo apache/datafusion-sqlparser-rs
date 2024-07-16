@@ -3506,7 +3506,7 @@ fn parse_create_table_on_cluster() {
     let sql = "CREATE TABLE t ON CLUSTER '{cluster}' (a INT, b INT)";
     match generic.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { on_cluster, .. }) => {
-            assert_eq!(on_cluster.unwrap(), "{cluster}".to_string());
+            assert_eq!(on_cluster.unwrap(), "'{cluster}'".to_string());
         }
         _ => unreachable!(),
     }

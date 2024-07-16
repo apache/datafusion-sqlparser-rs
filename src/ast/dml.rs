@@ -206,11 +206,7 @@ impl Display for CreateTable {
             name = self.name,
         )?;
         if let Some(on_cluster) = &self.on_cluster {
-            write!(
-                f,
-                " ON CLUSTER {}",
-                on_cluster.replace('{', "'{").replace('}', "}'")
-            )?;
+            write!(f, " ON CLUSTER {}", on_cluster)?;
         }
         if !self.columns.is_empty() || !self.constraints.is_empty() {
             write!(f, " ({}", display_comma_separated(&self.columns))?;

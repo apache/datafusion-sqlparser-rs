@@ -2162,6 +2162,10 @@ pub enum Statement {
         only: bool,
         operations: Vec<AlterTableOperation>,
         location: Option<HiveSetLocation>,
+        /// ClickHouse dialect supports `ON CLUSTER` clause for ALTER TABLE
+        /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter)
+        on_cluster: Option<String>,
     },
     /// ```sql
     /// ALTER INDEX
@@ -3623,6 +3627,7 @@ impl fmt::Display for Statement {
                 only,
                 operations,
                 location,
+                on_cluster,
             } => {
                 write!(f, "ALTER TABLE ")?;
                 if *if_exists {
@@ -3631,9 +3636,13 @@ impl fmt::Display for Statement {
                 if *only {
                     write!(f, "ONLY ")?;
                 }
+                write!(f, "{name} ", name = name)?;
+                if let Some(cluster) = on_cluster {
+                    write!(f, "ON CLUSTER {cluster} ")?;
+                }
                 write!(
                     f,
-                    "{name} {operations}",
+                    "{operations}",
                     operations = display_comma_separated(operations)
                 )?;
                 if let Some(loc) = location {

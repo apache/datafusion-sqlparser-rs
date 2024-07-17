@@ -48,4 +48,11 @@ impl Dialect for DuckDbDialect {
     fn supports_dictionary_syntax(&self) -> bool {
         true
     }
+
+    // DuckDB uses this syntax for `MAP`s.
+    //
+    // https://duckdb.org/docs/sql/data_types/map.html#creating-maps
+    fn support_map_literal_syntax(&self) -> bool {
+        true
+    }
 }

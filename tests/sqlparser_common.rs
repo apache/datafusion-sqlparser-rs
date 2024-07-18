@@ -8959,7 +8959,7 @@ fn parse_non_latin_identifiers() {
 
 #[test]
 fn parse_trailing_comma() {
-    // At the moment, Duck DB is the only dialect that allows
+    // At the moment, DuckDB is the only dialect that allows
     // trailing commas anywhere in the query
     let trailing_commas = TestedDialects {
         dialects: vec![Box::new(DuckDbDialect {})],
@@ -8992,10 +8992,15 @@ fn parse_trailing_comma() {
     );
 
     trailing_commas.verified_stmt("SELECT album_id, name FROM track");
-
     trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
-
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
+
+    // check quoted "from" identifier edge-case
+    trailing_commas.one_statement_parses_to(
+        r#"SELECT "from", FROM "from""#,
+        r#"SELECT "from" FROM "from""#,
+    );
+    trailing_commas.verified_stmt(r#"SELECT "from" FROM "from""#);
 
     // doesn't allow any trailing commas
     let trailing_commas = TestedDialects {

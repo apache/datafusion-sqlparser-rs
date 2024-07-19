@@ -1474,6 +1474,11 @@ impl<'a> Parser<'a> {
                 let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
                 self.expect_token(&Token::RParen)?;
                 Ok(Expr::Rollup(result))
+            } else if self.consume_tokens(&[Token::LParen, Token::RParen]) {
+                // PostgreSQL allow to use empty tuple as a group by expression,
+                // e.g. `GROUP BY (), name`. Please refer to GROUP BY Clause section in
+                // [PostgreSQL](https://www.postgresql.org/docs/16/sql-select.html)
+                Ok(Expr::Tuple(vec![]))
             } else {
                 self.parse_expr()
             }

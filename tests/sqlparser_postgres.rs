@@ -18,6 +18,7 @@
 mod test_utils;
 use test_utils::*;
 
+use sqlparser::ast::Expr::Identifier;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -4439,5 +4440,32 @@ fn test_table_unnest_with_ordinality() {
             ..
         } => {}
         _ => panic!("Expecting TableFactor::UNNEST with ordinality"),
+    }
+}
+
+#[test]
+fn test_group_by_nothing() {
+    let Select { group_by, .. } =
+        pg_and_generic().verified_only_select("SELECT count(1) FROM t GROUP BY ()");
+    {
+        assert_eq!(
+            GroupByExpr::Expressions(vec![Expr::Tuple(vec![])], vec![]),
+            group_by
+        );
+    }
+
+    let Select { group_by, .. } =
+        pg_and_generic().verified_only_select("SELECT name, count(1) FROM t GROUP BY name, ()");
+    {
+        assert_eq!(
+            GroupByExpr::Expressions(
+                vec![
+                    Identifier(Ident::new("name".to_string())),
+                    Expr::Tuple(vec![])
+                ],
+                vec![]
+            ),
+            group_by
+        );
     }
 }

@@ -7934,7 +7934,7 @@ impl<'a> Parser<'a> {
                 body: self.parse_insert_setexpr_boxed()?,
                 limit: None,
                 limit_by: vec![],
-                order_by: vec![],
+                order_by: None,
                 offset: None,
                 fetch: None,
                 locks: vec![],
@@ -7948,7 +7948,7 @@ impl<'a> Parser<'a> {
                 body: self.parse_update_setexpr_boxed()?,
                 limit: None,
                 limit_by: vec![],
-                order_by: vec![],
+                order_by: None,
                 offset: None,
                 fetch: None,
                 locks: vec![],
@@ -7960,9 +7960,19 @@ impl<'a> Parser<'a> {
             let body = self.parse_boxed_query_body(0)?;
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                self.parse_comma_separated(Parser::parse_order_by_expr)?
+                let order_by_exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+                let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                    self.parse_interpolations()?
+                } else {
+                    None
+                };
+
+                Some(OrderBy {
+                    exprs: order_by_exprs,
+                    interpolate,
+                })
             } else {
-                vec![]
+                None
             };
 
             let mut limit = None;
@@ -9193,7 +9203,7 @@ impl<'a> Parser<'a> {
                 subquery: Box::new(Query {
                     with: None,
                     body: Box::new(values),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -10519,11 +10529,75 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
+        {
+            Some(self.parse_with_fill()?)
+        } else {
+            None
+        };
+
         Ok(OrderByExpr {
             expr,
             asc,
             nulls_first,
+            with_fill,
         })
+    }
+
+    // Parse a WITH FILL clause (ClickHouse dialect)
+    // that follow the WITH FILL keywords in a ORDER BY clause
+    pub fn parse_with_fill(&mut self) -> Result<WithFill, ParserError> {
+        let from = if self.parse_keyword(Keyword::FROM) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let to = if self.parse_keyword(Keyword::TO) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let step = if self.parse_keyword(Keyword::STEP) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        Ok(WithFill { from, to, step })
+    }
+
+    // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)
+    // that follow the INTERPOLATE keyword in an ORDER BY clause with the WITH FILL modifier
+    pub fn parse_interpolations(&mut self) -> Result<Option<Interpolate>, ParserError> {
+        if !self.parse_keyword(Keyword::INTERPOLATE) {
+            return Ok(None);
+        }
+
+        if self.consume_token(&Token::LParen) {
+            let interpolations = self.parse_comma_separated0(|p| p.parse_interpolation())?;
+            self.expect_token(&Token::RParen)?;
+            // INTERPOLATE () and INTERPOLATE ( ... ) variants
+            return Ok(Some(Interpolate {
+                exprs: Some(interpolations),
+            }));
+        }
+
+        // INTERPOLATE
+        Ok(Some(Interpolate { exprs: None }))
+    }
+
+    // Parse a INTERPOLATE expression (ClickHouse dialect)
+    pub fn parse_interpolation(&mut self) -> Result<InterpolateExpr, ParserError> {
+        let column = self.parse_identifier(false)?;
+        let expr = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(InterpolateExpr { column, expr })
     }
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,

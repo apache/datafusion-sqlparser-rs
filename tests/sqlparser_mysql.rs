@@ -946,7 +946,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 value_table_mode: None,
                 connect_by: None,
             }))),
-            order_by: vec![],
+            order_by: None,
             limit: None,
             limit_by: vec![],
             offset: None,
@@ -996,7 +996,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 value_table_mode: None,
                 connect_by: None,
             }))),
-            order_by: vec![],
+            order_by: None,
             limit: None,
             limit_by: vec![],
             offset: None,
@@ -1043,7 +1043,7 @@ fn parse_escaped_backticks_with_escape() {
                 value_table_mode: None,
                 connect_by: None,
             }))),
-            order_by: vec![],
+            order_by: None,
             limit: None,
             limit_by: vec![],
             offset: None,
@@ -1090,7 +1090,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 value_table_mode: None,
                 connect_by: None,
             }))),
-            order_by: vec![],
+            order_by: None,
             limit: None,
             limit_by: vec![],
             offset: None,
@@ -1296,7 +1296,7 @@ fn parse_simple_insert() {
                             ]
                         ]
                     })),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -1340,7 +1340,7 @@ fn parse_ignore_insert() {
                             Expr::Value(number("1"))
                         ]]
                     })),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -1384,7 +1384,7 @@ fn parse_priority_insert() {
                             Expr::Value(number("1"))
                         ]]
                     })),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -1425,7 +1425,7 @@ fn parse_priority_insert() {
                             Expr::Value(number("1"))
                         ]]
                     })),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -1474,7 +1474,7 @@ fn parse_insert_as() {
                             "2024-01-01".to_string()
                         ))]]
                     })),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -1535,7 +1535,7 @@ fn parse_insert_as() {
                             Expr::Value(Value::SingleQuotedString("2024-01-01".to_string()))
                         ]]
                     })),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -1580,7 +1580,7 @@ fn parse_replace_insert() {
                             Expr::Value(number("1"))
                         ]]
                     })),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -1619,7 +1619,7 @@ fn parse_empty_row_insert() {
                         explicit_row: false,
                         rows: vec![vec![], vec![]]
                     })),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -1681,7 +1681,7 @@ fn parse_insert_with_on_duplicate_update() {
                             Expr::Value(Value::Boolean(true)),
                         ]]
                     })),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -1946,6 +1946,7 @@ fn parse_delete_with_order_by() {
                     }),
                     asc: Some(false),
                     nulls_first: None,
+                    with_fill: None,
                 }],
                 order_by
             );
@@ -2331,7 +2332,7 @@ fn parse_substring_in_select() {
                         value_table_mode: None,
                         connect_by: None,
                     }))),
-                    order_by: vec![],
+                    order_by: None,
                     limit: None,
                     limit_by: vec![],
                     offset: None,
@@ -2639,7 +2640,7 @@ fn parse_hex_string_introducer() {
                 into: None,
                 connect_by: None,
             }))),
-            order_by: vec![],
+            order_by: None,
             limit: None,
             limit_by: vec![],
             offset: None,

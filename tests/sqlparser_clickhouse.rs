@@ -721,6 +721,175 @@ fn parse_group_by_with_modifier() {
 }
 
 #[test]
+fn parse_select_order_by_with_fill_interpolate() {
+    let sql = "SELECT id, fname, lname FROM customer WHERE id < 5 \
+        ORDER BY \
+            fname ASC NULLS FIRST WITH FILL FROM 10 TO 20 STEP 2, \
+            lname DESC NULLS LAST WITH FILL FROM 30 TO 40 STEP 3 \
+            INTERPOLATE (col1 AS col1 + 1) \
+        LIMIT 2";
+    let select = clickhouse().verified_query(sql);
+    assert_eq!(
+        OrderBy {
+            exprs: vec![
+                OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("fname")),
+                    asc: Some(true),
+                    nulls_first: Some(true),
+                    with_fill: Some(WithFill {
+                        from: Some(Expr::Value(number("10"))),
+                        to: Some(Expr::Value(number("20"))),
+                        step: Some(Expr::Value(number("2"))),
+                    }),
+                },
+                OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("lname")),
+                    asc: Some(false),
+                    nulls_first: Some(false),
+                    with_fill: Some(WithFill {
+                        from: Some(Expr::Value(number("30"))),
+                        to: Some(Expr::Value(number("40"))),
+                        step: Some(Expr::Value(number("3"))),
+                    }),
+                },
+            ],
+            interpolate: Some(Interpolate {
+                exprs: Some(vec![InterpolateExpr {
+                    column: Ident::new("col1"),
+                    expr: Some(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("1"))),
+                    }),
+                }])
+            })
+        },
+        select.order_by.expect("ORDER BY expected")
+    );
+    assert_eq!(Some(Expr::Value(number("2"))), select.limit);
+}
+
+#[test]
+fn parse_select_order_by_with_fill_interpolate_multi_interpolates() {
+    let sql = "SELECT id, fname, lname FROM customer ORDER BY fname WITH FILL \
+        INTERPOLATE (col1 AS col1 + 1) INTERPOLATE (col2 AS col2 + 2)";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("ORDER BY only accepts a single INTERPOLATE clause");
+}
+
+#[test]
+fn parse_select_order_by_with_fill_interpolate_multi_with_fill_interpolates() {
+    let sql = "SELECT id, fname, lname FROM customer \
+        ORDER BY \
+            fname WITH FILL INTERPOLATE (col1 AS col1 + 1), \
+            lname WITH FILL INTERPOLATE (col2 AS col2 + 2)";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("ORDER BY only accepts a single INTERPOLATE clause");
+}
+
+#[test]
+fn parse_select_order_by_interpolate_not_last() {
+    let sql = "SELECT id, fname, lname FROM customer \
+        ORDER BY \
+            fname INTERPOLATE (col2 AS col2 + 2),
+            lname";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("ORDER BY INTERPOLATE must be in the last position");
+}
+
+#[test]
+fn parse_with_fill() {
+    let sql = "SELECT fname FROM customer ORDER BY fname \
+        WITH FILL FROM 10 TO 20 STEP 2";
+    let select = clickhouse().verified_query(sql);
+    assert_eq!(
+        Some(WithFill {
+            from: Some(Expr::Value(number("10"))),
+            to: Some(Expr::Value(number("20"))),
+            step: Some(Expr::Value(number("2"))),
+        }),
+        select.order_by.expect("ORDER BY expected").exprs[0].with_fill
+    );
+}
+
+#[test]
+fn parse_with_fill_missing_single_argument() {
+    let sql = "SELECT id, fname, lname FROM customer ORDER BY \
+            fname WITH FILL FROM TO 20";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("WITH FILL requires expressions for all arguments");
+}
+
+#[test]
+fn parse_with_fill_multiple_incomplete_arguments() {
+    let sql = "SELECT id, fname, lname FROM customer ORDER BY \
+            fname WITH FILL FROM TO 20, lname WITH FILL FROM TO STEP 1";
+    clickhouse_and_generic()
+        .parse_sql_statements(sql)
+        .expect_err("WITH FILL requires expressions for all arguments");
+}
+
+#[test]
+fn parse_interpolate_body_with_columns() {
+    let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL \
+        INTERPOLATE (col1 AS col1 + 1, col2 AS col3, col4 AS col4 + 4)";
+    let select = clickhouse().verified_query(sql);
+    assert_eq!(
+        Some(Interpolate {
+            exprs: Some(vec![
+                InterpolateExpr {
+                    column: Ident::new("col1"),
+                    expr: Some(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("1"))),
+                    }),
+                },
+                InterpolateExpr {
+                    column: Ident::new("col2"),
+                    expr: Some(Expr::Identifier(Ident::new("col3"))),
+                },
+                InterpolateExpr {
+                    column: Ident::new("col4"),
+                    expr: Some(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col4"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("4"))),
+                    }),
+                },
+            ])
+        }),
+        select.order_by.expect("ORDER BY expected").interpolate
+    );
+}
+
+#[test]
+fn parse_interpolate_without_body() {
+    let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE";
+    let select = clickhouse().verified_query(sql);
+    assert_eq!(
+        Some(Interpolate { exprs: None }),
+        select.order_by.expect("ORDER BY expected").interpolate
+    );
+}
+
+#[test]
+fn parse_interpolate_with_empty_body() {
+    let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE ()";
+    let select = clickhouse().verified_query(sql);
+    assert_eq!(
+        Some(Interpolate {
+            exprs: Some(vec![])
+        }),
+        select.order_by.expect("ORDER BY expected").interpolate
+    );
+}
+
+#[test]
 fn test_prewhere() {
     match clickhouse_and_generic().verified_stmt("SELECT * FROM t PREWHERE x = 1 WHERE y = 2") {
         Statement::Query(query) => {

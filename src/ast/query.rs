@@ -33,7 +33,7 @@ pub struct Query {
     /// SELECT or UNION / EXCEPT / INTERSECT
     pub body: Box<SetExpr>,
     /// ORDER BY
-    pub order_by: Vec<OrderByExpr>,
+    pub order_by: Option<OrderBy>,
     /// `LIMIT { <N> | ALL }`
     pub limit: Option<Expr>,
 
@@ -67,8 +67,17 @@ impl fmt::Display for Query {
             write!(f, "{with} ")?;
         }
         write!(f, "{}", self.body)?;
-        if !self.order_by.is_empty() {
-            write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
+        if let Some(ref order_by) = self.order_by {
+            write!(f, " ORDER BY")?;
+            if !order_by.exprs.is_empty() {
+                write!(f, " {}", display_comma_separated(&order_by.exprs))?;
+            }
+            if let Some(ref interpolate) = order_by.interpolate {
+                match &interpolate.exprs {
+                    Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
+                    None => write!(f, " INTERPOLATE")?,
+                }
+            }
         }
         if let Some(ref limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
@@ -1668,6 +1677,18 @@ pub enum JoinConstraint {
     None,
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OrderBy {
+    pub exprs: Vec<OrderByExpr>,
+    /// Optional: `INTERPOLATE`
+    /// Supported by [ClickHouse syntax]
+    ///
+    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    pub interpolate: Option<Interpolate>,
+}
+
 /// An `ORDER BY` expression
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1678,6 +1699,9 @@ pub struct OrderByExpr {
     pub asc: Option<bool>,
     /// Optional `NULLS FIRST` or `NULLS LAST`
     pub nulls_first: Option<bool>,
+    /// Optional: `WITH FILL`
+    /// Supported by [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    pub with_fill: Option<WithFill>,
 }
 
 impl fmt::Display for OrderByExpr {
@@ -1692,6 +1716,67 @@ impl fmt::Display for OrderByExpr {
             Some(true) => write!(f, " NULLS FIRST")?,
             Some(false) => write!(f, " NULLS LAST")?,
             None => (),
+        }
+        if let Some(ref with_fill) = self.with_fill {
+            write!(f, " {}", with_fill)?
+        }
+        Ok(())
+    }
+}
+
+/// ClickHouse `WITH FILL` modifier for `ORDER BY` clause.
+/// Supported by [ClickHouse syntax]
+///
+/// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct WithFill {
+    pub from: Option<Expr>,
+    pub to: Option<Expr>,
+    pub step: Option<Expr>,
+}
+
+impl fmt::Display for WithFill {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "WITH FILL")?;
+        if let Some(ref from) = self.from {
+            write!(f, " FROM {}", from)?;
+        }
+        if let Some(ref to) = self.to {
+            write!(f, " TO {}", to)?;
+        }
+        if let Some(ref step) = self.step {
+            write!(f, " STEP {}", step)?;
+        }
+        Ok(())
+    }
+}
+
+/// ClickHouse `INTERPOLATE` clause for use in `ORDER BY` clause when using `WITH FILL` modifier.
+/// Supported by [ClickHouse syntax]
+///
+/// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct InterpolateExpr {
+    pub column: Ident,
+    pub expr: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Interpolate {
+    pub exprs: Option<Vec<InterpolateExpr>>,
+}
+
+impl fmt::Display for InterpolateExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.column)?;
+        if let Some(ref expr) = self.expr {
+            write!(f, " AS {}", expr)?;
         }
         Ok(())
     }

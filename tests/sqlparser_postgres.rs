@@ -3501,6 +3501,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
+            with_ordinality: _,
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
@@ -4039,6 +4040,50 @@ fn parse_create_table_with_alias() {
 }
 
 #[test]
+fn parse_create_table_with_partition_by() {
+    let sql = "CREATE TABLE t1 (a INT, b TEXT) PARTITION BY RANGE(a)";
+    match pg_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(create_table) => {
+            assert_eq!("t1", create_table.name.to_string());
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: "a".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![]
+                    },
+                    ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Text,
+                        collation: None,
+                        options: vec![]
+                    }
+                ],
+                create_table.columns
+            );
+            match *create_table.partition_by.unwrap() {
+                Expr::Function(f) => {
+                    assert_eq!("RANGE", f.name.to_string());
+                    assert_eq!(
+                        FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            clauses: vec![],
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("a"))
+                            ))],
+                        }),
+                        f.args
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_join_constraint_unnest_alias() {
     assert_eq!(
         only(
@@ -4054,7 +4099,8 @@ fn parse_join_constraint_unnest_alias() {
                     Ident::new("a")
                 ])],
                 with_offset: false,
-                with_offset_alias: None
+                with_offset_alias: None,
+                with_ordinality: false,
             },
             join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
@@ -4363,5 +4409,38 @@ fn parse_create_table_with_options() {
             );
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_table_function_with_ordinality() {
+    let from = pg_and_generic()
+        .verified_only_select("SELECT * FROM generate_series(1, 10) WITH ORDINALITY AS t")
+        .from;
+    assert_eq!(1, from.len());
+    match from[0].relation {
+        TableFactor::Table {
+            ref name,
+            with_ordinality: true,
+            ..
+        } => {
+            assert_eq!("generate_series", name.to_string().as_str());
+        }
+        _ => panic!("Expecting TableFactor::Table with ordinality"),
+    }
+}
+
+#[test]
+fn test_table_unnest_with_ordinality() {
+    let from = pg_and_generic()
+        .verified_only_select("SELECT * FROM UNNEST([10, 20, 30]) WITH ORDINALITY AS t")
+        .from;
+    assert_eq!(1, from.len());
+    match from[0].relation {
+        TableFactor::UNNEST {
+            with_ordinality: true,
+            ..
+        } => {}
+        _ => panic!("Expecting TableFactor::UNNEST with ordinality"),
     }
 }

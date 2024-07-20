@@ -59,6 +59,7 @@ fn parse_map_access_expr() {
                     with_hints: vec![],
                     version: None,
                     partitions: vec![],
+                    with_ordinality: false,
                 },
                 joins: vec![],
             }],
@@ -162,6 +163,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
+            with_ordinality: _,
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
@@ -966,6 +968,30 @@ fn test_query_with_format_clause() {
         clickhouse_and_generic()
             .parse_sql_statements(sql)
             .expect_err("Expected: FORMAT {identifier}, found: ");
+    }
+}
+
+#[test]
+fn parse_create_table_on_commit_and_as_query() {
+    let sql = r#"CREATE LOCAL TEMPORARY TABLE test ON COMMIT PRESERVE ROWS AS SELECT 1"#;
+    match clickhouse_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            on_commit,
+            query,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "test");
+            assert_eq!(on_commit, Some(OnCommit::PreserveRows));
+            assert_eq!(
+                query.unwrap().body.as_select().unwrap().projection,
+                vec![UnnamedExpr(Expr::Value(Value::Number(
+                    "1".parse().unwrap(),
+                    false
+                )))]
+            );
+        }
+        _ => unreachable!(),
     }
 }
 

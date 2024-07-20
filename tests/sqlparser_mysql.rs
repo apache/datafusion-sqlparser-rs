@@ -813,6 +813,33 @@ fn parse_create_table_collate() {
 }
 
 #[test]
+fn parse_create_table_both_options_and_as_query() {
+    let sql = "CREATE TABLE foo (id INT(11)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb4_0900_ai_ci AS SELECT 1";
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            collation,
+            query,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
+            assert_eq!(
+                query.unwrap().body.as_select().unwrap().projection,
+                vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = r"CREATE TABLE foo (id INT(11)) ENGINE=InnoDB AS SELECT 1 DEFAULT CHARSET=utf8mb3";
+    assert!(matches!(
+        mysql_and_generic().parse_sql_statements(sql),
+        Err(ParserError::ParserError(_))
+    ));
+}
+
+#[test]
 fn parse_create_table_comment_character_set() {
     let sql = "CREATE TABLE foo (s TEXT CHARACTER SET utf8mb4 COMMENT 'comment')";
     match mysql().verified_stmt(sql) {
@@ -1728,6 +1755,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                             with_hints: vec![],
                             version: None,
                             partitions: vec![],
+                            with_ordinality: false,
                         },
                         joins: vec![]
                     }],
@@ -1782,6 +1810,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                             with_hints: vec![],
                             version: None,
                             partitions: vec![],
+                            with_ordinality: false,
                         },
                         joins: vec![]
                     }],
@@ -1847,6 +1876,7 @@ fn parse_update_with_joins() {
                         with_hints: vec![],
                         version: None,
                         partitions: vec![],
+                        with_ordinality: false,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -1859,6 +1889,7 @@ fn parse_update_with_joins() {
                             with_hints: vec![],
                             version: None,
                             partitions: vec![],
+                            with_ordinality: false,
                         },
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
@@ -2283,6 +2314,7 @@ fn parse_substring_in_select() {
                                 with_hints: vec![],
                                 version: None,
                                 partitions: vec![],
+                                with_ordinality: false,
                             },
                             joins: vec![]
                         }],

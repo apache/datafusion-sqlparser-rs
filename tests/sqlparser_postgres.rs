@@ -4231,10 +4231,7 @@ fn test_simple_postgres_insert_with_alias() {
                         ))
                     ]]
                 })),
-                order_by: OrderBy {
-                    exprs: vec![],
-                    interpolate: None
-                },
+                order_by: None,
                 limit: None,
                 limit_by: vec![],
                 offset: None,

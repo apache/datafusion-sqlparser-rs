@@ -1208,20 +1208,18 @@ impl<'a> Parser<'a> {
                 Ok(Expr::Value(self.parse_value()?))
             }
             Token::LParen => {
-                let expr =
-                    if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
-                        self.prev_token();
-                        Expr::Subquery(self.parse_boxed_query()?)
-                    } else if let Some(lambda) = self.try_parse_lambda() {
-                        return Ok(lambda);
-                    } else {
-                        let exprs = self.parse_comma_separated(Parser::parse_expr)?;
-                        match exprs.len() {
-                            0 => unreachable!(), // parse_comma_separated ensures 1 or more
-                            1 => Expr::Nested(Box::new(exprs.into_iter().next().unwrap())),
-                            _ => Expr::Tuple(exprs),
-                        }
-                    };
+                let expr = if let Some(expr) = self.try_parse_expr_sub_query()? {
+                    expr
+                } else if let Some(lambda) = self.try_parse_lambda() {
+                    return Ok(lambda);
+                } else {
+                    let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+                    match exprs.len() {
+                        0 => unreachable!(), // parse_comma_separated ensures 1 or more
+                        1 => Expr::Nested(Box::new(exprs.into_iter().next().unwrap())),
+                        _ => Expr::Tuple(exprs),
+                    }
+                };
                 self.expect_token(&Token::RParen)?;
                 if !self.consume_token(&Token::Period) {
                     Ok(expr)
@@ -1261,6 +1259,18 @@ impl<'a> Parser<'a> {
         } else {
             Ok(expr)
         }
+    }
+
+    fn try_parse_expr_sub_query(&mut self) -> Result<Option<Expr>, ParserError> {
+        if self
+            .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
+            .is_none()
+        {
+            return Ok(None);
+        }
+        self.prev_token();
+
+        Ok(Some(Expr::Subquery(self.parse_boxed_query()?)))
     }
 
     fn try_parse_lambda(&mut self) -> Option<Expr> {
@@ -8709,7 +8719,9 @@ impl<'a> Parser<'a> {
 
             let mut values = vec![];
             loop {
-                let value = if let Ok(expr) = self.parse_expr() {
+                let value = if let Some(expr) = self.try_parse_expr_sub_query()? {
+                    expr
+                } else if let Ok(expr) = self.parse_expr() {
                     expr
                 } else {
                     self.expected("variable value", self.peek_token())?

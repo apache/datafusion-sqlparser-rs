@@ -7135,9 +7135,39 @@ fn parse_set_variable() {
         _ => unreachable!(),
     }
 
+    // Subquery expression
+    for (sql, canonical) in [
+        (
+            "SET (a) = (SELECT 22 FROM tbl1)",
+            "SET (a) = ((SELECT 22 FROM tbl1))",
+        ),
+        (
+            "SET (a) = (SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2))",
+            "SET (a) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)))",
+        ),
+        (
+            "SET (a) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)))",
+            "SET (a) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)))",
+        ),
+        (
+            "SET (a, b) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)), SELECT 33 FROM tbl3)",
+            "SET (a, b) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)), (SELECT 33 FROM tbl3))",
+        ),
+    ] {
+        multi_variable_dialects.one_statement_parses_to(sql, canonical);
+    }
+
     let error_sqls = [
         ("SET (a, b, c) = (1, 2, 3", "Expected: ), found: EOF"),
         ("SET (a, b, c) = 1, 2, 3", "Expected: (, found: 1"),
+        (
+            "SET (a) = ((SELECT 22 FROM tbl1)",
+            "Expected: ), found: EOF",
+        ),
+        (
+            "SET (a) = ((SELECT 22 FROM tbl1) (SELECT 22 FROM tbl1))",
+            "Expected: ), found: (",
+        ),
     ];
     for (sql, error) in error_sqls {
         assert_eq!(

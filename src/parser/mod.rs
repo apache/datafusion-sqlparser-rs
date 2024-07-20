@@ -1078,7 +1078,7 @@ impl<'a> Parser<'a> {
                     let expr = self.parse_subexpr(Self::PLUS_MINUS_PREC)?;
                     Ok(Expr::Prior(Box::new(expr)))
                 }
-                Keyword::MAP if self.peek_token() == Token::LBrace => {
+                Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.supports_dictionary_syntax() => {
                     self.parse_duckdb_map_literal()
                 }
                 // Here `w` is a word, check if it's a part of a multipart

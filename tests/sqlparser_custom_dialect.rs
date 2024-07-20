@@ -125,6 +125,28 @@ fn custom_statement_parser() -> Result<(), ParserError> {
     Ok(())
 }
 
+#[test]
+fn test_map_syntax_not_support_default() -> Result<(), ParserError> {
+    #[derive(Debug)]
+    struct MyDialect {}
+
+    impl Dialect for MyDialect {
+        fn is_identifier_start(&self, ch: char) -> bool {
+            is_identifier_start(ch)
+        }
+
+        fn is_identifier_part(&self, ch: char) -> bool {
+            is_identifier_part(ch)
+        }
+    }
+
+    let dialect = MyDialect {};
+    let sql = "SELECT MAP {1: 2}";
+    let ast = Parser::parse_sql(&dialect, sql);
+    assert!(ast.is_err());
+    Ok(())
+}
+
 fn is_identifier_start(ch: char) -> bool {
     ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
 }

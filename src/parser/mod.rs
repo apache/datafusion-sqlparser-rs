@@ -2331,7 +2331,7 @@ impl<'a> Parser<'a> {
 
         self.expect_token(&Token::RBrace)?;
 
-        Ok(Expr::Map(Map { fields }))
+        Ok(Expr::Map(Map { entries: fields }))
     }
 
     /// Parse a field for a duckdb [map]
@@ -2343,14 +2343,14 @@ impl<'a> Parser<'a> {
     /// ```
     ///
     /// [map]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
-    fn parse_duckdb_map_field(&mut self) -> Result<MapField, ParserError> {
+    fn parse_duckdb_map_field(&mut self) -> Result<MapEntry, ParserError> {
         let key = self.parse_expr()?;
 
         self.expect_token(&Token::Colon)?;
 
         let value = self.parse_expr()?;
 
-        Ok(MapField {
+        Ok(MapEntry {
             key: Box::new(key),
             value: Box::new(value),
         })

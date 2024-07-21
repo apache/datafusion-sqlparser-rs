@@ -333,12 +333,12 @@ impl fmt::Display for DictionaryField {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Map {
-    pub fields: Vec<MapField>,
+    pub entries: Vec<MapEntry>,
 }
 
 impl Display for Map {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MAP {{{}}}", display_comma_separated(&self.fields))
+        write!(f, "MAP {{{}}}", display_comma_separated(&self.entries))
     }
 }
 
@@ -348,12 +348,12 @@ impl Display for Map {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct MapField {
+pub struct MapEntry {
     pub key: Box<Expr>,
     pub value: Box<Expr>,
 }
 
-impl fmt::Display for MapField {
+impl fmt::Display for MapEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.key, self.value)
     }

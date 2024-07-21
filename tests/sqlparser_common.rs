@@ -10037,14 +10037,14 @@ fn test_map_syntax() {
     check(
         "MAP {'Alberta': 'Edmonton', 'Manitoba': 'Winnipeg'}",
         Expr::Map(Map {
-            fields: vec![
-                MapField {
+            entries: vec![
+                MapEntry {
                     key: Box::new(Expr::Value(Value::SingleQuotedString("Alberta".to_owned()))),
                     value: Box::new(Expr::Value(Value::SingleQuotedString(
                         "Edmonton".to_owned(),
                     ))),
                 },
-                MapField {
+                MapEntry {
                     key: Box::new(Expr::Value(Value::SingleQuotedString(
                         "Manitoba".to_owned(),
                     ))),
@@ -10063,12 +10063,12 @@ fn test_map_syntax() {
     check(
         "MAP {1: 10.0, 2: 20.0}",
         Expr::Map(Map {
-            fields: vec![
-                MapField {
+            entries: vec![
+                MapEntry {
                     key: Box::new(number_expr("1")),
                     value: Box::new(number_expr("10.0")),
                 },
-                MapField {
+                MapEntry {
                     key: Box::new(number_expr("2")),
                     value: Box::new(number_expr("20.0")),
                 },
@@ -10079,15 +10079,15 @@ fn test_map_syntax() {
     check(
         "MAP {[1, 2, 3]: 10.0, [4, 5, 6]: 20.0}",
         Expr::Map(Map {
-            fields: vec![
-                MapField {
+            entries: vec![
+                MapEntry {
                     key: Box::new(Expr::Array(Array {
                         elem: vec![number_expr("1"), number_expr("2"), number_expr("3")],
                         named: false,
                     })),
                     value: Box::new(Expr::Value(number("10.0"))),
                 },
-                MapField {
+                MapEntry {
                     key: Box::new(Expr::Array(Array {
                         elem: vec![number_expr("4"), number_expr("5"), number_expr("6")],
                         named: false,
@@ -10102,12 +10102,12 @@ fn test_map_syntax() {
         "MAP {'a': 10, 'b': 20}['a']",
         Expr::Subscript {
             expr: Box::new(Expr::Map(Map {
-                fields: vec![
-                    MapField {
+                entries: vec![
+                    MapEntry {
                         key: Box::new(Expr::Value(Value::SingleQuotedString("a".to_owned()))),
                         value: Box::new(number_expr("10")),
                     },
-                    MapField {
+                    MapEntry {
                         key: Box::new(Expr::Value(Value::SingleQuotedString("b".to_owned()))),
                         value: Box::new(number_expr("20")),
                     },

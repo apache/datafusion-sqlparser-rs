@@ -1078,6 +1078,9 @@ impl<'a> Parser<'a> {
                     let expr = self.parse_subexpr(Self::PLUS_MINUS_PREC)?;
                     Ok(Expr::Prior(Box::new(expr)))
                 }
+                Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
+                    self.parse_duckdb_map_literal()
+                }
                 // Here `w` is a word, check if it's a part of a multipart
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token().token {
@@ -2319,6 +2322,47 @@ impl<'a> Parser<'a> {
         Ok(DictionaryField {
             key,
             value: Box::new(expr),
+        })
+    }
+
+    /// DuckDB specific: Parse a duckdb [map]
+    ///
+    /// Syntax:
+    ///
+    /// ```sql
+    /// Map {key1: value1[, ... ]}
+    /// ```
+    ///
+    /// [map]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
+    fn parse_duckdb_map_literal(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LBrace)?;
+
+        let fields = self.parse_comma_separated(Self::parse_duckdb_map_field)?;
+
+        self.expect_token(&Token::RBrace)?;
+
+        Ok(Expr::Map(Map { entries: fields }))
+    }
+
+    /// Parse a field for a duckdb [map]
+    ///
+    /// Syntax
+    ///
+    /// ```sql
+    /// key: value
+    /// ```
+    ///
+    /// [map]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
+    fn parse_duckdb_map_field(&mut self) -> Result<MapEntry, ParserError> {
+        let key = self.parse_expr()?;
+
+        self.expect_token(&Token::Colon)?;
+
+        let value = self.parse_expr()?;
+
+        Ok(MapEntry {
+            key: Box::new(key),
+            value: Box::new(value),
         })
     }
 

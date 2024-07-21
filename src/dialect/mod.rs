@@ -215,6 +215,11 @@ pub trait Dialect: Debug + Any {
     fn supports_dictionary_syntax(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports defining object using the
+    /// syntax like `Map {1: 10, 2: 20}`.
+    fn support_map_literal_syntax(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect supports lambda functions, for example:
     ///
     /// ```sql

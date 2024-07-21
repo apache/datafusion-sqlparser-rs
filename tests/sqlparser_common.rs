@@ -10078,6 +10078,101 @@ fn test_dictionary_syntax() {
 }
 
 #[test]
+fn test_map_syntax() {
+    fn check(sql: &str, expect: Expr) {
+        assert_eq!(
+            all_dialects_where(|d| d.support_map_literal_syntax()).verified_expr(sql),
+            expect
+        );
+    }
+
+    check(
+        "MAP {'Alberta': 'Edmonton', 'Manitoba': 'Winnipeg'}",
+        Expr::Map(Map {
+            entries: vec![
+                MapEntry {
+                    key: Box::new(Expr::Value(Value::SingleQuotedString("Alberta".to_owned()))),
+                    value: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "Edmonton".to_owned(),
+                    ))),
+                },
+                MapEntry {
+                    key: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "Manitoba".to_owned(),
+                    ))),
+                    value: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "Winnipeg".to_owned(),
+                    ))),
+                },
+            ],
+        }),
+    );
+
+    fn number_expr(s: &str) -> Expr {
+        Expr::Value(number(s))
+    }
+
+    check(
+        "MAP {1: 10.0, 2: 20.0}",
+        Expr::Map(Map {
+            entries: vec![
+                MapEntry {
+                    key: Box::new(number_expr("1")),
+                    value: Box::new(number_expr("10.0")),
+                },
+                MapEntry {
+                    key: Box::new(number_expr("2")),
+                    value: Box::new(number_expr("20.0")),
+                },
+            ],
+        }),
+    );
+
+    check(
+        "MAP {[1, 2, 3]: 10.0, [4, 5, 6]: 20.0}",
+        Expr::Map(Map {
+            entries: vec![
+                MapEntry {
+                    key: Box::new(Expr::Array(Array {
+                        elem: vec![number_expr("1"), number_expr("2"), number_expr("3")],
+                        named: false,
+                    })),
+                    value: Box::new(Expr::Value(number("10.0"))),
+                },
+                MapEntry {
+                    key: Box::new(Expr::Array(Array {
+                        elem: vec![number_expr("4"), number_expr("5"), number_expr("6")],
+                        named: false,
+                    })),
+                    value: Box::new(Expr::Value(number("20.0"))),
+                },
+            ],
+        }),
+    );
+
+    check(
+        "MAP {'a': 10, 'b': 20}['a']",
+        Expr::Subscript {
+            expr: Box::new(Expr::Map(Map {
+                entries: vec![
+                    MapEntry {
+                        key: Box::new(Expr::Value(Value::SingleQuotedString("a".to_owned()))),
+                        value: Box::new(number_expr("10")),
+                    },
+                    MapEntry {
+                        key: Box::new(Expr::Value(Value::SingleQuotedString("b".to_owned()))),
+                        value: Box::new(number_expr("20")),
+                    },
+                ],
+            })),
+            subscript: Box::new(Subscript::Index {
+                index: Expr::Value(Value::SingleQuotedString("a".to_owned())),
+            }),
+        },
+    );
+}
+
+#[test]
 fn parse_within_group() {
     verified_expr("PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sales_amount)");
     verified_expr(concat!(

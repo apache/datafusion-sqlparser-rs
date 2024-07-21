@@ -70,4 +70,8 @@ impl Dialect for GenericDialect {
     fn supports_select_wildcard_except(&self) -> bool {
         true
     }
+
+    fn support_map_literal_syntax(&self) -> bool {
+        true
+    }
 }

@@ -329,6 +329,37 @@ impl fmt::Display for DictionaryField {
     }
 }
 
+/// Represents a Map expression.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Map {
+    pub entries: Vec<MapEntry>,
+}
+
+impl Display for Map {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MAP {{{}}}", display_comma_separated(&self.entries))
+    }
+}
+
+/// A map field within a map.
+///
+/// [duckdb]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MapEntry {
+    pub key: Box<Expr>,
+    pub value: Box<Expr>,
+}
+
+impl fmt::Display for MapEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.key, self.value)
+    }
+}
+
 /// Options for `CAST` / `TRY_CAST`
 /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -764,6 +795,14 @@ pub enum Expr {
     /// ```
     /// [1]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
     Dictionary(Vec<DictionaryField>),
+    /// `DuckDB` specific `Map` literal expression [1]
+    ///
+    /// Syntax:
+    /// ```sql
+    /// syntax: Map {key1: value1[, ... ]}
+    /// ```
+    /// [1]: https://duckdb.org/docs/sql/data_types/map#creating-maps
+    Map(Map),
     /// An access of nested data using subscript syntax, for example `array[2]`.
     Subscript {
         expr: Box<Expr>,
@@ -1330,6 +1369,9 @@ impl fmt::Display for Expr {
             }
             Expr::Dictionary(fields) => {
                 write!(f, "{{{}}}", display_comma_separated(fields))
+            }
+            Expr::Map(map) => {
+                write!(f, "{map}")
             }
             Expr::Subscript {
                 expr,

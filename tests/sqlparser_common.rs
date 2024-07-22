@@ -42,6 +42,7 @@ mod test_utils;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
+use sqlparser::ast::Expr::Identifier;
 use sqlparser::test_utils::all_dialects_except;
 
 #[test]
@@ -10277,4 +10278,31 @@ fn parse_auto_increment_too_large() {
         .parse_statements();
 
     assert!(res.is_err(), "{res:?}");
+}
+
+#[test]
+fn test_group_by_nothing() {
+    let Select { group_by, .. } = all_dialects_where(|d| d.supports_group_by_expr())
+        .verified_only_select("SELECT count(1) FROM t GROUP BY ()");
+    {
+        std::assert_eq!(
+            GroupByExpr::Expressions(vec![Expr::Tuple(vec![])], vec![]),
+            group_by
+        );
+    }
+
+    let Select { group_by, .. } = all_dialects_where(|d| d.supports_group_by_expr())
+        .verified_only_select("SELECT name, count(1) FROM t GROUP BY name, ()");
+    {
+        std::assert_eq!(
+            GroupByExpr::Expressions(
+                vec![
+                    Identifier(Ident::new("name".to_string())),
+                    Expr::Tuple(vec![])
+                ],
+                vec![]
+            ),
+            group_by
+        );
+    }
 }

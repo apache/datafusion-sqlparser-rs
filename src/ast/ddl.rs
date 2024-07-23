@@ -923,6 +923,18 @@ pub enum ColumnOption {
     NotNull,
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
+
+    /// ClickHouse supports `MATERIALIZE`, `EPHEMERAL` and `ALIAS` expr to generate default values.
+    /// Syntax: `b INT MATERIALIZE (a + 1)`
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table#default_values)
+
+    /// `MATERIALIZE <expr>`
+    Materialized(Expr),
+    /// `EPHEMERAL [<expr>]`
+    Ephemeral(Option<Expr>),
+    /// `ALIAS <expr>`
+    Alias(Expr),
+
     /// `{ PRIMARY KEY | UNIQUE } [<constraint_characteristics>]`
     Unique {
         is_primary: bool,
@@ -978,6 +990,15 @@ impl fmt::Display for ColumnOption {
             Null => write!(f, "NULL"),
             NotNull => write!(f, "NOT NULL"),
             Default(expr) => write!(f, "DEFAULT {expr}"),
+            Materialized(expr) => write!(f, "MATERIALIZED {expr}"),
+            Ephemeral(expr) => {
+                if let Some(e) = expr {
+                    write!(f, "EPHEMERAL {e}")
+                } else {
+                    write!(f, "EPHEMERAL")
+                }
+            }
+            Alias(expr) => write!(f, "ALIAS {expr}"),
             Unique {
                 is_primary,
                 characteristics,

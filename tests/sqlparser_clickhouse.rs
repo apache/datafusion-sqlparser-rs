@@ -494,6 +494,102 @@ fn parse_create_table_with_primary_key() {
 }
 
 #[test]
+fn parse_create_table_with_variant_default_expressions() {
+    let sql = concat!(
+        "CREATE TABLE table (",
+        "a DATETIME MATERIALIZED now(),",
+        " b DATETIME EPHEMERAL now(),",
+        " c DATETIME EPHEMERAL,",
+        " d STRING ALIAS toString(c)",
+        ") ENGINE=MergeTree"
+    );
+    match clickhouse_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: Ident::new("a"),
+                        data_type: DataType::Datetime(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Materialized(Expr::Function(Function {
+                                name: ObjectName(vec![Ident::new("now")]),
+                                args: FunctionArguments::List(FunctionArgumentList {
+                                    args: vec![],
+                                    duplicate_treatment: None,
+                                    clauses: vec![],
+                                }),
+                                parameters: FunctionArguments::None,
+                                null_treatment: None,
+                                filter: None,
+                                over: None,
+                                within_group: vec![],
+                            }))
+                        }],
+                    },
+                    ColumnDef {
+                        name: Ident::new("b"),
+                        data_type: DataType::Datetime(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Ephemeral(Some(Expr::Function(Function {
+                                name: ObjectName(vec![Ident::new("now")]),
+                                args: FunctionArguments::List(FunctionArgumentList {
+                                    args: vec![],
+                                    duplicate_treatment: None,
+                                    clauses: vec![],
+                                }),
+                                parameters: FunctionArguments::None,
+                                null_treatment: None,
+                                filter: None,
+                                over: None,
+                                within_group: vec![],
+                            })))
+                        }],
+                    },
+                    ColumnDef {
+                        name: Ident::new("c"),
+                        data_type: DataType::Datetime(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Ephemeral(None)
+                        }],
+                    },
+                    ColumnDef {
+                        name: Ident::new("d"),
+                        data_type: DataType::String(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Alias(Expr::Function(Function {
+                                name: ObjectName(vec![Ident::new("toString")]),
+                                args: FunctionArguments::List(FunctionArgumentList {
+                                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                        Identifier(Ident::new("c"))
+                                    ))],
+                                    duplicate_treatment: None,
+                                    clauses: vec![],
+                                }),
+                                parameters: FunctionArguments::None,
+                                null_treatment: None,
+                                filter: None,
+                                over: None,
+                                within_group: vec![],
+                            }))
+                        }],
+                    }
+                ]
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_view_with_fields_data_types() {
     match clickhouse().verified_stmt(r#"CREATE VIEW v (i "int", f "String") AS SELECT * FROM t"#) {
         Statement::CreateView { name, columns, .. } => {

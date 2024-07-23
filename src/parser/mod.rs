@@ -5743,6 +5743,24 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
             Ok(Some(ColumnOption::Default(self.parse_expr()?)))
+        } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
+            && self.parse_keyword(Keyword::MATERIALIZED)
+        {
+            Ok(Some(ColumnOption::Materialized(self.parse_expr()?)))
+        } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
+            && self.parse_keyword(Keyword::ALIAS)
+        {
+            Ok(Some(ColumnOption::Alias(self.parse_expr()?)))
+        } else if dialect_of!(self is ClickHouseDialect| GenericDialect)
+            && self.parse_keyword(Keyword::EPHEMERAL)
+        {
+            // The expression is optional for the EPHEMERAL syntax, so we need to check
+            // if the column definition has remaining tokens before parsing the expression.
+            if matches!(self.peek_token().token, Token::Comma | Token::RParen) {
+                Ok(Some(ColumnOption::Ephemeral(None)))
+            } else {
+                Ok(Some(ColumnOption::Ephemeral(Some(self.parse_expr()?))))
+            }
         } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
             let characteristics = self.parse_constraint_characteristics()?;
             Ok(Some(ColumnOption::Unique {

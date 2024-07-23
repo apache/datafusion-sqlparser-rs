@@ -10,6 +10,27 @@ changes that break via addition as "Added".
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.49.0] 2024-07-23
+As always, huge props to @iffyio @jmhain and @lovasoa for their help reviewing and merging PRs!
+
+We are in the process of moving sqlparser to governed as part of the Apache
+DataFusion project: https://github.com/sqlparser-rs/sqlparser-rs/issues/1294
+
+### Fixed
+* Fix quoted identifier regression edge-case with "from" in SELECT (#1346) - Thanks @alexander-beedie
+* Fix `AS` query clause should be after the create table options (#1339) - Thanks @git-hulk
+
+### Added
+
+* Support `MATERIALIZED`/`ALIAS`/`EPHERMERAL` default column options for ClickHouse (#1348) - Thanks @git-hulk
+* Support `()` as the `GROUP BY` nothing (#1347) - Thanks @git-hulk
+* Support Map literal syntax for DuckDB and Generic (#1344) - Thanks @goldmedal
+* Support subquery expression in `SET` expressions (#1343) - Thanks @iffyio
+* Support `WITH FILL` for ClickHouse (#1330) - Thanks @nickpresta
+* Support `PARTITION BY` for PostgreSQL in `CREATE TABLE` statement (#1338) - Thanks @git-hulk
+* Support of table function `WITH ORDINALITY` modifier for Postgres  (#1337) - Thanks @git-hulk
+
+
 ## [0.48.0] 2024-07-09
 
 Huge shout out to @iffyio @jmhain and @lovasoa for their help reviewing and merging PRs!

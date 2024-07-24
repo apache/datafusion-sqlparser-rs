@@ -4186,31 +4186,49 @@ fn run_explain_analyze(
 #[test]
 fn parse_explain_table() {
     let validate_explain =
-        |query: &str, expected_describe_alias: DescribeAlias| match verified_stmt(query) {
-            Statement::ExplainTable {
-                describe_alias,
-                hive_format,
-                table_name,
-            } => {
-                assert_eq!(describe_alias, expected_describe_alias);
-                assert_eq!(hive_format, None);
-                assert_eq!("test_identifier", table_name.to_string());
+        |query: &str, expected_describe_alias: DescribeAlias, expected_table_keyword| {
+            match verified_stmt(query) {
+                Statement::ExplainTable {
+                    describe_alias,
+                    hive_format,
+                    has_table_keyword,
+                    table_name,
+                } => {
+                    assert_eq!(describe_alias, expected_describe_alias);
+                    assert_eq!(hive_format, None);
+                    assert_eq!(has_table_keyword, expected_table_keyword);
+                    assert_eq!("test_identifier", table_name.to_string());
+                }
+                _ => panic!("Unexpected Statement, must be ExplainTable"),
             }
-            _ => panic!("Unexpected Statement, must be ExplainTable"),
         };
 
-    validate_explain("EXPLAIN test_identifier", DescribeAlias::Explain);
-    validate_explain("DESCRIBE test_identifier", DescribeAlias::Describe);
+    validate_explain("EXPLAIN test_identifier", DescribeAlias::Explain, false);
+    validate_explain("DESCRIBE test_identifier", DescribeAlias::Describe, false);
+    validate_explain("DESC test_identifier", DescribeAlias::Desc, false);
+    validate_explain(
+        "EXPLAIN TABLE test_identifier",
+        DescribeAlias::Explain,
+        true,
+    );
+    validate_explain(
+        "DESCRIBE TABLE test_identifier",
+        DescribeAlias::Describe,
+        true,
+    );
+    validate_explain("DESC TABLE test_identifier", DescribeAlias::Desc, true);
 }
 
 #[test]
 fn explain_describe() {
     verified_stmt("DESCRIBE test.table");
+    verified_stmt("DESCRIBE TABLE test.table");
 }
 
 #[test]
 fn explain_desc() {
     verified_stmt("DESC test.table");
+    verified_stmt("DESC TABLE test.table");
 }
 
 #[test]

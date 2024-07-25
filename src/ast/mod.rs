@@ -53,6 +53,12 @@ pub use self::query::{
     TableAlias, TableFactor, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode,
     Values, WildcardAdditionalOptions, With, WithFill,
 };
+
+pub use self::trigger::{
+    TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod, TriggerReferencing,
+    TriggerReferencingType, ExecBodyType, FunctionDesc
+};
+
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
     TrimWhereField, Value,
@@ -71,6 +77,7 @@ mod dml;
 pub mod helpers;
 mod operator;
 mod query;
+mod trigger;
 mod value;
 
 #[cfg(feature = "visitor")]
@@ -2589,6 +2596,26 @@ pub enum Statement {
         /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_remote_function)
         remote_connection: Option<ObjectName>,
     },
+    /// CREATE TRIGGER
+    ///
+    /// Postgres: https://www.postgresql.org/docs/current/sql-createtrigger.html
+    CreateTrigger {
+        or_replace: bool,
+        name: ObjectName,
+        /// Determines whether the function is called before, after, or instead of the event.
+        period: TriggerPeriod,
+        /// Multiple events can be specified using OR
+        event: Vec<TriggerEvent>,
+        table_name: ObjectName,
+        /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement.
+        referencing: Vec<TriggerReferencing>,
+        /// This specifies whether the trigger function should be fired once for every row affected by the trigger event, or just once per SQL statement.
+        for_each: Option<TriggerObject>,
+        ///  Triggering conditions
+        condition: Option<String>,
+        /// Execute logic block
+        exec_body: TriggerExecBody,
+    },
     /// ```sql
     /// CREATE PROCEDURE
     /// ```
@@ -3343,6 +3370,37 @@ impl fmt::Display for Statement {
                     write!(f, " AS {function_body}")?;
                 }
                 Ok(())
+            }
+            Statement::CreateTrigger {
+                or_replace,
+                name,
+                period,
+                event,
+                table_name,
+                referencing,
+                for_each,
+                condition,
+                exec_body,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}TRIGGER {name} {period}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                )?;
+                if !event.is_empty() {
+                    write!(f, " {}", display_separated(event, "or"))?;
+                }
+                write!(f, " ON {table_name}")?;
+                if !referencing.is_empty() {
+                    write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
+                }
+                if let Some(trigger_object) = for_each {
+                    write!(f, " FOR EACH {trigger_object}")?;
+                }
+                if let Some(condition) = condition {
+                    write!(f, " WHEN ({condition})")?;
+                }
+                write!(f, " EXECUTE {exec_body}")
             }
             Statement::CreateProcedure {
                 name,

@@ -2612,7 +2612,7 @@ pub enum Statement {
         /// This specifies whether the trigger function should be fired once for every row affected by the trigger event, or just once per SQL statement.
         for_each: Option<TriggerObject>,
         ///  Triggering conditions
-        condition: Option<String>,
+        condition: Option<Expr>,
         /// Execute logic block
         exec_body: TriggerExecBody,
     },
@@ -3398,7 +3398,7 @@ impl fmt::Display for Statement {
                     write!(f, " FOR EACH {trigger_object}")?;
                 }
                 if let Some(condition) = condition {
-                    write!(f, " WHEN ({condition})")?;
+                    write!(f, " WHEN {condition}")?;
                 }
                 write!(f, " EXECUTE {exec_body}")
             }

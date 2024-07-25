@@ -4499,7 +4499,47 @@ fn parse_create_trigger() {
             table_name: ObjectName(vec![Ident::new("accounts")]),
             referencing: vec![],
             for_each: Some(TriggerObject::Row),
-            condition: Some("OLD.balance IS DISTINCT FROM NEW.balance".into()),
+            condition: Some(Expr::Nested(Box::new(Expr::IsDistinctFrom(
+                Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("OLD"),
+                    Ident::new("balance")
+                ])),
+                Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("NEW"),
+                    Ident::new("balance")
+                ])),
+            )))),
+            exec_body: TriggerExecBody {
+                exec_type: ExecBodyType::Function,
+                func_desc: FunctionDesc {
+                    name: ObjectName(vec![Ident::new("check_account_update")]),
+                    args: vec![]
+                }
+            }
+        }
+    );
+
+    let sql = "CREATE TRIGGER check_update BEFORE UPDATE ON accounts FOR EACH ROW WHEN (OLD.balance IS NOT DISTINCT FROM NEW.balance) EXECUTE FUNCTION check_account_update()";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::CreateTrigger {
+            or_replace: false,
+            name: ObjectName(vec![Ident::new("check_update")]),
+            period: TriggerPeriod::Before,
+            event: vec![TriggerEvent::Update(vec![])],
+            table_name: ObjectName(vec![Ident::new("accounts")]),
+            referencing: vec![],
+            for_each: Some(TriggerObject::Row),
+            condition: Some(Expr::Nested(Box::new(Expr::IsNotDistinctFrom(
+                Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("OLD"),
+                    Ident::new("balance")
+                ])),
+                Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("NEW"),
+                    Ident::new("balance")
+                ])),
+            )))),
             exec_body: TriggerExecBody {
                 exec_type: ExecBodyType::Function,
                 func_desc: FunctionDesc {

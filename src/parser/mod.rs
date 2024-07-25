@@ -4193,29 +4193,7 @@ impl<'a> Parser<'a> {
             };
 
             let condition = if self.parse_keyword(Keyword::WHEN) {
-                self.expect_token(&Token::LParen)?;
-                let mut lparen_count = 1;
-                let mut condition_str = String::new();
-                loop {
-                    if lparen_count == 0 {
-                        break;
-                    }
-                    if let Some(next_token) = self.next_token_no_skip() {
-                        match &next_token.token {
-                            Token::LParen => lparen_count += 1,
-                            Token::RParen => lparen_count -= 1,
-                            Token::EOF => {
-                                return self.expected(" `)` ", TokenWithLocation::wrap(Token::EOF));
-                            }
-                            _ => {}
-                        }
-                        if lparen_count == 0 {
-                            break;
-                        }
-                        condition_str.push_str(next_token.token.to_string().as_str());
-                    }
-                }
-                Some(condition_str)
+                Some(self.parse_expr()?)
             } else {
                 None
             };

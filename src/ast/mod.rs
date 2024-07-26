@@ -2658,6 +2658,8 @@ pub enum Statement {
         referencing: Vec<TriggerReferencing>,
         /// This specifies whether the trigger function should be fired once for every row affected by the trigger event, or just once per SQL statement.
         for_each: Option<TriggerObject>,
+        /// Whether to include the `EACH` term of the `FOR EACH`, as it is optional syntax.
+        include_each: bool,
         ///  Triggering conditions
         condition: Option<Expr>,
         /// Execute logic block
@@ -3427,6 +3429,7 @@ impl fmt::Display for Statement {
                 referencing,
                 for_each,
                 condition,
+                include_each,
                 exec_body,
             } => {
                 write!(
@@ -3435,14 +3438,18 @@ impl fmt::Display for Statement {
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                 )?;
                 if !event.is_empty() {
-                    write!(f, " {}", display_separated(event, "or"))?;
+                    write!(f, " {}", display_separated(event, "OR"))?;
                 }
                 write!(f, " ON {table_name}")?;
                 if !referencing.is_empty() {
                     write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
                 }
                 if let Some(trigger_object) = for_each {
-                    write!(f, " FOR EACH {trigger_object}")?;
+                    if *include_each {
+                        write!(f, " FOR EACH {trigger_object}")?;
+                    } else {
+                        write!(f, " FOR {trigger_object}")?;
+                    }
                 }
                 if let Some(condition) = condition {
                     write!(f, " WHEN {condition}")?;

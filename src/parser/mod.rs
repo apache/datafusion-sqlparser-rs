@@ -4179,17 +4179,20 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            let for_each = if self.parse_keywords(&[Keyword::FOR]) {
-                let _ = self.parse_keyword(Keyword::EACH);
-                match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT]) {
-                    Some(Keyword::ROW) => Some(TriggerObject::Row),
-                    Some(Keyword::STATEMENT) => Some(TriggerObject::Statement),
-                    _ => {
-                        return self.expected("an `ROW` OR `STATEMENT`", self.peek_token());
-                    }
-                }
+            let (for_each, include_each) = if self.parse_keywords(&[Keyword::FOR]) {
+                let include_each = self.parse_keyword(Keyword::EACH);
+                (
+                    match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT]) {
+                        Some(Keyword::ROW) => Some(TriggerObject::Row),
+                        Some(Keyword::STATEMENT) => Some(TriggerObject::Statement),
+                        _ => {
+                            return self.expected("an `ROW` OR `STATEMENT`", self.peek_token());
+                        }
+                    },
+                    include_each,
+                )
             } else {
-                None
+                (None, false)
             };
 
             let condition = if self.parse_keyword(Keyword::WHEN) {
@@ -4212,6 +4215,7 @@ impl<'a> Parser<'a> {
                 table_name,
                 referencing,
                 for_each,
+                include_each,
                 condition,
                 exec_body,
             })

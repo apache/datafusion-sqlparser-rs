@@ -4229,7 +4229,7 @@ impl<'a> Parser<'a> {
                 if self.parse_keyword(Keyword::OF) {
                     Ok(TriggerPeriod::InsteadOf)
                 } else {
-                    self.expected("an `OF` after `INSTEAD` ", self.peek_token())
+                    self.expected("an `OF` after `INSTEAD`", self.peek_token())
                 }
             }
             _ => self.expected("an `BEFORE`, `AFTER` OR `INSTEAD OF`", self.peek_token()),

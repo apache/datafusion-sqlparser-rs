@@ -2597,15 +2597,62 @@ pub enum Statement {
         remote_connection: Option<ObjectName>,
     },
     /// CREATE TRIGGER
+    /// 
+    /// Examples:
+    /// 
+    /// ```sql
+    /// CREATE TRIGGER trigger_name
+    /// BEFORE INSERT ON table_name
+    /// FOR EACH ROW
+    /// EXECUTE FUNCTION trigger_function();
+    /// ```
     ///
-    /// Postgres: https://www.postgresql.org/docs/current/sql-createtrigger.html
+    /// Postgres: <https://www.postgresql.org/docs/current/sql-createtrigger.html>
     CreateTrigger {
+        /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
+        /// 
+        /// Example:
+        /// ```sql
+        /// CREATE OR REPLACE TRIGGER trigger_name
+        /// AFTER INSERT ON table_name
+        /// FOR EACH ROW
+        /// EXECUTE FUNCTION trigger_function();
+        /// ```
         or_replace: bool,
+        /// The name of the trigger to be created.
         name: ObjectName,
         /// Determines whether the function is called before, after, or instead of the event.
+        /// 
+        /// Example of BEFORE:
+        /// 
+        /// ```sql
+        /// CREATE TRIGGER trigger_name
+        /// BEFORE INSERT ON table_name
+        /// FOR EACH ROW
+        /// EXECUTE FUNCTION trigger_function();
+        /// ```
+        /// 
+        /// Example of AFTER:
+        /// 
+        /// ```sql
+        /// CREATE TRIGGER trigger_name
+        /// AFTER INSERT ON table_name
+        /// FOR EACH ROW
+        /// EXECUTE FUNCTION trigger_function();
+        /// ```
+        /// 
+        /// Example of INSTEAD OF:
+        /// 
+        /// ```sql
+        /// CREATE TRIGGER trigger_name
+        /// INSTEAD OF INSERT ON table_name
+        /// FOR EACH ROW
+        /// EXECUTE FUNCTION trigger_function();
+        /// ```
         period: TriggerPeriod,
-        /// Multiple events can be specified using OR
+        /// Multiple events can be specified using OR, such as `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
         event: Vec<TriggerEvent>,
+        /// The table on which the trigger is to be created.
         table_name: ObjectName,
         /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement.
         referencing: Vec<TriggerReferencing>,

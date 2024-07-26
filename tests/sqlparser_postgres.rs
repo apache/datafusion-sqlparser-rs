@@ -4576,6 +4576,40 @@ fn parse_create_trigger() {
         }
     );
 
+    let sql = "CREATE TRIGGER instead_of_paired_items_update INSTEAD OF UPDATE ON paired_items REFERENCING NEW TABLE AS newtab OLD TABLE AS oldtab FOR EACH ROW EXECUTE FUNCTION check_matching_pairs()";
+
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::CreateTrigger {
+            or_replace: false,
+            name: ObjectName(vec![Ident::new("instead_of_paired_items_update")]),
+            period: TriggerPeriod::InsteadOf,
+            event: vec![TriggerEvent::Update(vec![])],
+            table_name: ObjectName(vec![Ident::new("paired_items")]),
+            referencing: vec![
+                TriggerReferencing {
+                    refer_type: TriggerReferencingType::NewTable,
+                    is_as: true,
+                    transition_relation_name: ObjectName(vec![Ident::new("newtab")])
+                },
+                TriggerReferencing {
+                    refer_type: TriggerReferencingType::OldTable,
+                    is_as: true,
+                    transition_relation_name: ObjectName(vec![Ident::new("oldtab")])
+                }
+            ],
+            for_each: Some(TriggerObject::Row),
+            condition: None,
+            exec_body: TriggerExecBody {
+                exec_type: ExecBodyType::Function,
+                func_desc: FunctionDesc {
+                    name: ObjectName(vec![Ident::new("check_matching_pairs")]),
+                    args: vec![]
+                }
+            }
+        }
+    );
+
     let sql = "CREATE TRIGGER paired_items_update AFTER UPDATE ON paired_items REFERENCING NEW TABLE AS newtab OLD TABLE AS oldtab FOR EACH ROW EXECUTE FUNCTION check_matching_pairs()";
     assert_eq!(
         pg().verified_stmt(sql),

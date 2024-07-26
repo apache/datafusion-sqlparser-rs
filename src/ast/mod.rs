@@ -2597,9 +2597,9 @@ pub enum Statement {
         remote_connection: Option<ObjectName>,
     },
     /// CREATE TRIGGER
-    /// 
+    ///
     /// Examples:
-    /// 
+    ///
     /// ```sql
     /// CREATE TRIGGER trigger_name
     /// BEFORE INSERT ON table_name
@@ -2610,7 +2610,7 @@ pub enum Statement {
     /// Postgres: <https://www.postgresql.org/docs/current/sql-createtrigger.html>
     CreateTrigger {
         /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
-        /// 
+        ///
         /// Example:
         /// ```sql
         /// CREATE OR REPLACE TRIGGER trigger_name
@@ -2622,27 +2622,27 @@ pub enum Statement {
         /// The name of the trigger to be created.
         name: ObjectName,
         /// Determines whether the function is called before, after, or instead of the event.
-        /// 
+        ///
         /// Example of BEFORE:
-        /// 
+        ///
         /// ```sql
         /// CREATE TRIGGER trigger_name
         /// BEFORE INSERT ON table_name
         /// FOR EACH ROW
         /// EXECUTE FUNCTION trigger_function();
         /// ```
-        /// 
+        ///
         /// Example of AFTER:
-        /// 
+        ///
         /// ```sql
         /// CREATE TRIGGER trigger_name
         /// AFTER INSERT ON table_name
         /// FOR EACH ROW
         /// EXECUTE FUNCTION trigger_function();
         /// ```
-        /// 
+        ///
         /// Example of INSTEAD OF:
-        /// 
+        ///
         /// ```sql
         /// CREATE TRIGGER trigger_name
         /// INSTEAD OF INSERT ON table_name

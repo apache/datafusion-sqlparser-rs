@@ -16,6 +16,7 @@ use super::*;
 /// Function describe in DROP FUNCTION.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FunctionDesc {
     pub name: ObjectName,
     pub args: Vec<OperateFunctionArg>,
@@ -30,6 +31,7 @@ impl fmt::Display for FunctionDesc {
 /// This specifies whether the trigger function should be fired once for every row affected by the trigger event, or just once per SQL statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerObject {
     Row,
     Statement,
@@ -47,6 +49,7 @@ impl fmt::Display for TriggerObject {
 /// This clause indicates whether the following relation name is for the before-image transition relation or the after-image transition relation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerReferencingType {
     OldTable,
     NewTable,
@@ -64,6 +67,7 @@ impl fmt::Display for TriggerReferencingType {
 /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TriggerReferencing {
     pub refer_type: TriggerReferencingType,
     pub is_as: bool,
@@ -85,6 +89,7 @@ impl fmt::Display for TriggerReferencing {
 /// Used to describe trigger events
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerEvent {
     Insert,
     Update(Vec<Ident>),
@@ -113,6 +118,7 @@ impl fmt::Display for TriggerEvent {
 /// Trigger period
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerPeriod {
     After,
     Before,
@@ -132,6 +138,7 @@ impl fmt::Display for TriggerPeriod {
 /// Execute function or stored procedure
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ExecBodyType {
     Function,
     Proceduer,
@@ -148,6 +155,7 @@ impl fmt::Display for ExecBodyType {
 /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TriggerExecBody {
     pub exec_type: ExecBodyType,
     pub func_desc: FunctionDesc,

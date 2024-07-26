@@ -111,10 +111,10 @@ impl TestedDialects {
     /// that:
     ///
     /// 1. parsing `sql` results in the same [`Statement`] as parsing
-    /// `canonical`.
+    ///    `canonical`.
     ///
     /// 2. re-serializing the result of parsing `sql` produces the same
-    /// `canonical` sql string
+    ///    `canonical` sql string
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
         let mut statements = self.parse_sql_statements(sql).expect(sql);
         assert_eq!(statements.len(), 1);
@@ -181,10 +181,10 @@ impl TestedDialects {
     /// Ensures that `sql` parses as a single [`Select`], and that additionally:
     ///
     /// 1. parsing `sql` results in the same [`Statement`] as parsing
-    /// `canonical`.
+    ///    `canonical`.
     ///
     /// 2. re-serializing the result of parsing `sql` produces the same
-    /// `canonical` sql string
+    ///    `canonical` sql string
     pub fn verified_only_select_with_canonical(&self, query: &str, canonical: &str) -> Select {
         let q = match self.one_statement_parses_to(query, canonical) {
             Statement::Query(query) => *query,

@@ -4518,7 +4518,7 @@ fn parse_create_trigger() {
                     "CREATE TRIGGER check_update {when} {event_string} ON accounts {for_each} ROW EXECUTE {exec_type} {func_desc}"
                 );
 
-                assert_eq!(
+                        assert_eq!(
                             pg().verified_stmt(sql),
                             Statement::CreateTrigger {
                                 or_replace: false,

@@ -3031,8 +3031,10 @@ fn parse_create_table_with_constraint_characteristics() {
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
                         characteristics: Some(ConstraintCharacteristics {
-                            deferrable: Some(true),
-                            initially: Some(DeferrableInitial::Deferred),
+                            deferrable: DeferrableCharacteristics {
+                                deferrable: Some(true),
+                                initially: Some(DeferrableInitial::Deferred)
+                            },
                             enforced: None
                         }),
                     },
@@ -3044,8 +3046,10 @@ fn parse_create_table_with_constraint_characteristics() {
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
                         characteristics: Some(ConstraintCharacteristics {
-                            deferrable: Some(true),
-                            initially: Some(DeferrableInitial::Immediate),
+                            deferrable: DeferrableCharacteristics {
+                                deferrable: Some(true),
+                                initially: Some(DeferrableInitial::Immediate)
+                            },
                             enforced: None,
                         }),
                     },
@@ -3057,8 +3061,10 @@ fn parse_create_table_with_constraint_characteristics() {
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
                         characteristics: Some(ConstraintCharacteristics {
-                            deferrable: Some(false),
-                            initially: Some(DeferrableInitial::Deferred),
+                            deferrable: DeferrableCharacteristics {
+                                deferrable: Some(false),
+                                initially: Some(DeferrableInitial::Deferred)
+                            },
                             enforced: Some(false),
                         }),
                     },
@@ -3070,8 +3076,10 @@ fn parse_create_table_with_constraint_characteristics() {
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
                         characteristics: Some(ConstraintCharacteristics {
-                            deferrable: Some(false),
-                            initially: Some(DeferrableInitial::Immediate),
+                            deferrable: DeferrableCharacteristics {
+                                deferrable: Some(false),
+                                initially: Some(DeferrableInitial::Immediate)
+                            },
                             enforced: Some(true),
                         }),
                     },
@@ -3135,8 +3143,10 @@ fn parse_create_table_column_constraint_characteristics() {
 
         let expected_value = if deferrable.is_some() || initially.is_some() || enforced.is_some() {
             Some(ConstraintCharacteristics {
-                deferrable,
-                initially,
+                deferrable: DeferrableCharacteristics {
+                    deferrable,
+                    initially,
+                },
                 enforced,
             })
         } else {

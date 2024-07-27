@@ -4444,156 +4444,194 @@ fn test_table_unnest_with_ordinality() {
 
 #[test]
 fn parse_create_trigger() {
-    for func_desc in [
-        FunctionDesc {
-            name: ObjectName(vec![Ident::new("check_account_update")]),
-            args: None,
-        },
-        FunctionDesc {
-            name: ObjectName(vec![Ident::new("check_account_update")]),
-            args: Some(vec![OperateFunctionArg::unnamed(DataType::Int(None))]),
-        },
-        FunctionDesc {
-            name: ObjectName(vec![Ident::new("check_account_update")]),
-            args: Some(vec![
-                OperateFunctionArg::with_name("a", DataType::Int(None)),
-                OperateFunctionArg {
-                    mode: Some(ArgMode::In),
-                    name: Some("b".into()),
-                    data_type: DataType::Int(None),
-                    default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
-                },
-            ]),
-        },
+    for (characteristics, characteristics_text) in [
+        (
+            None,
+            "",
+        ),
+        (
+            Some(DeferrableCharacteristics {
+                deferrable: Some(true),
+                initially: Some(DeferrableInitial::Deferred),
+            }),
+            "DEFERRABLE INITIALLY DEFERRED ",
+        ),
+        (
+            Some(DeferrableCharacteristics {
+                deferrable: Some(false),
+                initially: Some(DeferrableInitial::Immediate),
+            }),
+            "NOT DEFERRABLE INITIALLY IMMEDIATE ",
+        ),
+        (
+            Some(DeferrableCharacteristics {
+                deferrable: Some(true),
+                initially: Some(DeferrableInitial::Immediate),
+            }),
+            "DEFERRABLE INITIALLY IMMEDIATE ",
+        ),
+        (
+            Some(DeferrableCharacteristics {
+                deferrable: Some(true),
+                initially: Some(DeferrableInitial::Deferred),
+            }),
+            "DEFERRABLE INITIALLY DEFERRED ",
+        )
     ] {
-        for exec_type in [
-            TriggerExecBodyType::Function,
-            TriggerExecBodyType::Procedure,
+        for func_desc in [
+            FunctionDesc {
+                name: ObjectName(vec![Ident::new("check_account_update")]),
+                args: None,
+            },
+            FunctionDesc {
+                name: ObjectName(vec![Ident::new("check_account_update")]),
+                args: Some(vec![OperateFunctionArg::unnamed(DataType::Int(None))]),
+            },
+            FunctionDesc {
+                name: ObjectName(vec![Ident::new("check_account_update")]),
+                args: Some(vec![
+                    OperateFunctionArg::with_name("a", DataType::Int(None)),
+                    OperateFunctionArg {
+                        mode: Some(ArgMode::In),
+                        name: Some("b".into()),
+                        data_type: DataType::Int(None),
+                        default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    },
+                ]),
+            },
         ] {
-            for (event, event_string) in [
-                (vec![TriggerEvent::Update(vec![])], "UPDATE"),
-                (vec![TriggerEvent::Insert], "INSERT"),
-                (vec![TriggerEvent::Delete], "DELETE"),
-                (
-                    vec![TriggerEvent::Update(vec![]), TriggerEvent::Insert],
-                    "UPDATE OR INSERT",
-                ),
-                (
-                    vec![
-                        TriggerEvent::Update(vec![]),
-                        TriggerEvent::Insert,
-                        TriggerEvent::Delete,
-                    ],
-                    "UPDATE OR INSERT OR DELETE",
-                ),
-                (
-                    vec![TriggerEvent::Update(vec![Ident::new("balance")])],
-                    "UPDATE OF balance",
-                ),
-                (
-                    vec![
-                        TriggerEvent::Update(vec![Ident::new("balance")]),
-                        TriggerEvent::Insert,
-                    ],
-                    "UPDATE OF balance OR INSERT",
-                ),
-                (
-                    vec![
-                        TriggerEvent::Update(vec![Ident::new("balance")]),
-                        TriggerEvent::Insert,
-                        TriggerEvent::Delete,
-                    ],
-                    "UPDATE OF balance OR INSERT OR DELETE",
-                ),
+            for exec_type in [
+                TriggerExecBodyType::Function,
+                TriggerExecBodyType::Procedure,
             ] {
-                for when in [
-                    TriggerPeriod::Before,
-                    TriggerPeriod::After,
-                    TriggerPeriod::InsteadOf,
+                for (event, event_string) in [
+                    (vec![TriggerEvent::Update(vec![])], "UPDATE"),
+                    (vec![TriggerEvent::Insert], "INSERT"),
+                    (vec![TriggerEvent::Delete], "DELETE"),
+                    (
+                        vec![TriggerEvent::Update(vec![]), TriggerEvent::Insert],
+                        "UPDATE OR INSERT",
+                    ),
+                    (
+                        vec![
+                            TriggerEvent::Update(vec![]),
+                            TriggerEvent::Insert,
+                            TriggerEvent::Delete,
+                        ],
+                        "UPDATE OR INSERT OR DELETE",
+                    ),
+                    (
+                        vec![TriggerEvent::Update(vec![Ident::new("balance")])],
+                        "UPDATE OF balance",
+                    ),
+                    (
+                        vec![
+                            TriggerEvent::Update(vec![Ident::new("balance")]),
+                            TriggerEvent::Insert,
+                        ],
+                        "UPDATE OF balance OR INSERT",
+                    ),
+                    (
+                        vec![
+                            TriggerEvent::Update(vec![Ident::new("balance")]),
+                            TriggerEvent::Insert,
+                            TriggerEvent::Delete,
+                        ],
+                        "UPDATE OF balance OR INSERT OR DELETE",
+                    ),
                 ] {
-                    for include_each in [true, false] {
-                        let for_each = if include_each { "FOR EACH" } else { "FOR" };
+                    for when in [
+                        TriggerPeriod::Before,
+                        TriggerPeriod::After,
+                        TriggerPeriod::InsteadOf,
+                    ] {
+                        for include_each in [true, false] {
+                            let for_each = if include_each { "FOR EACH" } else { "FOR" };
 
-                        let sql = &format!(
-                    "CREATE TRIGGER check_update {when} {event_string} ON accounts {for_each} ROW EXECUTE {exec_type} {func_desc}"
-                );
+                            let sql = &format!(
+                        "CREATE TRIGGER check_update {when} {event_string} ON accounts {characteristics_text}{for_each} ROW EXECUTE {exec_type} {func_desc}"
+                    );
 
-                        assert_eq!(
-                            pg().verified_stmt(sql),
-                            Statement::CreateTrigger {
-                                or_replace: false,
-                                name: ObjectName(vec![Ident::new("check_update")]),
-                                period: when,
-                                event: event.clone(),
-                                table_name: ObjectName(vec![Ident::new("accounts")]),
-                                referencing: vec![],
-                                for_each: Some(TriggerObject::Row),
-                                include_each,
-                                condition: None,
-                                exec_body: TriggerExecBody {
-                                    exec_type,
-                                    func_desc: func_desc.clone()
+                            assert_eq!(
+                                pg().verified_stmt(sql),
+                                Statement::CreateTrigger {
+                                    or_replace: false,
+                                    name: ObjectName(vec![Ident::new("check_update")]),
+                                    period: when,
+                                    event: event.clone(),
+                                    table_name: ObjectName(vec![Ident::new("accounts")]),
+                                    referencing: vec![],
+                                    for_each: Some(TriggerObject::Row),
+                                    include_each,
+                                    condition: None,
+                                    exec_body: TriggerExecBody {
+                                        exec_type,
+                                        func_desc: func_desc.clone()
+                                    },
+                                    characteristics
                                 }
-                            }
-                        );
+                            );
 
-                        let sql = &format!("CREATE TRIGGER check_update {when} {event_string} ON accounts {for_each} ROW WHEN (OLD.balance IS DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
-                        assert_eq!(
-                            pg().verified_stmt(sql),
-                            Statement::CreateTrigger {
-                                or_replace: false,
-                                name: ObjectName(vec![Ident::new("check_update")]),
-                                period: when,
-                                event: event.clone(),
-                                table_name: ObjectName(vec![Ident::new("accounts")]),
-                                referencing: vec![],
-                                for_each: Some(TriggerObject::Row),
-                                include_each,
-                                condition: Some(Expr::Nested(Box::new(Expr::IsDistinctFrom(
-                                    Box::new(Expr::CompoundIdentifier(vec![
-                                        Ident::new("OLD"),
-                                        Ident::new("balance")
-                                    ])),
-                                    Box::new(Expr::CompoundIdentifier(vec![
-                                        Ident::new("NEW"),
-                                        Ident::new("balance")
-                                    ])),
-                                )))),
-                                exec_body: TriggerExecBody {
-                                    exec_type,
-                                    func_desc: func_desc.clone()
+                            let sql = &format!("CREATE TRIGGER check_update {when} {event_string} ON accounts {characteristics_text}{for_each} ROW WHEN (OLD.balance IS DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
+                            assert_eq!(
+                                pg().verified_stmt(sql),
+                                Statement::CreateTrigger {
+                                    or_replace: false,
+                                    name: ObjectName(vec![Ident::new("check_update")]),
+                                    period: when,
+                                    event: event.clone(),
+                                    table_name: ObjectName(vec![Ident::new("accounts")]),
+                                    referencing: vec![],
+                                    for_each: Some(TriggerObject::Row),
+                                    include_each,
+                                    condition: Some(Expr::Nested(Box::new(Expr::IsDistinctFrom(
+                                        Box::new(Expr::CompoundIdentifier(vec![
+                                            Ident::new("OLD"),
+                                            Ident::new("balance")
+                                        ])),
+                                        Box::new(Expr::CompoundIdentifier(vec![
+                                            Ident::new("NEW"),
+                                            Ident::new("balance")
+                                        ])),
+                                    )))),
+                                    exec_body: TriggerExecBody {
+                                        exec_type,
+                                        func_desc: func_desc.clone()
+                                    },
+                                    characteristics
                                 }
-                            }
-                        );
+                            );
 
-                        let sql = &format!("CREATE TRIGGER check_update {when} {event_string} ON accounts {for_each} ROW WHEN (OLD.balance IS NOT DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
-                        assert_eq!(
-                            pg().verified_stmt(sql),
-                            Statement::CreateTrigger {
-                                or_replace: false,
-                                name: ObjectName(vec![Ident::new("check_update")]),
-                                period: when,
-                                event: event.clone(),
-                                table_name: ObjectName(vec![Ident::new("accounts")]),
-                                referencing: vec![],
-                                for_each: Some(TriggerObject::Row),
-                                include_each,
-                                condition: Some(Expr::Nested(Box::new(Expr::IsNotDistinctFrom(
-                                    Box::new(Expr::CompoundIdentifier(vec![
-                                        Ident::new("OLD"),
-                                        Ident::new("balance")
-                                    ])),
-                                    Box::new(Expr::CompoundIdentifier(vec![
-                                        Ident::new("NEW"),
-                                        Ident::new("balance")
-                                    ])),
-                                )))),
-                                exec_body: TriggerExecBody {
-                                    exec_type,
-                                    func_desc: func_desc.clone()
+                            let sql = &format!("CREATE TRIGGER check_update {when} {event_string} ON accounts {characteristics_text}{for_each} ROW WHEN (OLD.balance IS NOT DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
+                            assert_eq!(
+                                pg().verified_stmt(sql),
+                                Statement::CreateTrigger {
+                                    or_replace: false,
+                                    name: ObjectName(vec![Ident::new("check_update")]),
+                                    period: when,
+                                    event: event.clone(),
+                                    table_name: ObjectName(vec![Ident::new("accounts")]),
+                                    referencing: vec![],
+                                    for_each: Some(TriggerObject::Row),
+                                    include_each,
+                                    condition: Some(Expr::Nested(Box::new(Expr::IsNotDistinctFrom(
+                                        Box::new(Expr::CompoundIdentifier(vec![
+                                            Ident::new("OLD"),
+                                            Ident::new("balance")
+                                        ])),
+                                        Box::new(Expr::CompoundIdentifier(vec![
+                                            Ident::new("NEW"),
+                                            Ident::new("balance")
+                                        ])),
+                                    )))),
+                                    exec_body: TriggerExecBody {
+                                        exec_type,
+                                        func_desc: func_desc.clone()
+                                    },
+                                    characteristics
                                 }
-                            }
-                        );
+                            );
+                        }
                     }
                 }
             }

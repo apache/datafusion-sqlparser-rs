@@ -4170,6 +4170,29 @@ impl<'a> Parser<'a> {
                 .expect_keyword(Keyword::ON)
                 .and_then(|_| self.parse_object_name(false))?;
 
+            // [ NOT DEFERRABLE | [ DEFERRABLE ] [ INITIALLY IMMEDIATE | INITIALLY DEFERRED ] ]
+            let mut deferrable: Option<bool> = None;
+
+            if self.parse_keyword(Keyword::NOT) {
+                self.expect_keyword(Keyword::DEFERRABLE)?;
+                deferrable = Some(false);
+            } else if self.parse_keyword(Keyword::DEFERRABLE) {
+                deferrable = Some(true);
+            };
+
+            let initially: Option<DeferrableInitial> = (deferrable.is_some()
+                && self.parse_keyword(Keyword::INITIALLY))
+            .then(|| {
+                Ok::<_, ParserError>(
+                    match self.expect_one_of_keywords(&[Keyword::IMMEDIATE, Keyword::DEFERRED])? {
+                        Keyword::IMMEDIATE => DeferrableInitial::Immediate,
+                        Keyword::DEFERRED => DeferrableInitial::Deferred,
+                        _ => unreachable!(),
+                    },
+                )
+            })
+            .transpose()?;
+
             let mut referencing = vec![];
             if self.parse_keyword(Keyword::REFERENCING) {
                 while let Some(refer) = self.parse_trigger_referencing()? {
@@ -4213,6 +4236,12 @@ impl<'a> Parser<'a> {
                 include_each,
                 condition,
                 exec_body,
+                characteristics: (deferrable.is_some() || initially.is_some()).then(|| {
+                    DeferrableCharacteristics {
+                        deferrable,
+                        initially,
+                    }
+                }),
             })
         } else {
             self.prev_token();
@@ -6120,23 +6149,19 @@ impl<'a> Parser<'a> {
     pub fn parse_constraint_characteristics(
         &mut self,
     ) -> Result<Option<ConstraintCharacteristics>, ParserError> {
-        let mut cc = ConstraintCharacteristics {
-            deferrable: None,
-            initially: None,
-            enforced: None,
-        };
+        let mut cc = ConstraintCharacteristics::default();
 
         loop {
-            if cc.deferrable.is_none() && self.parse_keywords(&[Keyword::NOT, Keyword::DEFERRABLE])
+            if cc.deferrable.deferrable.is_none() && self.parse_keywords(&[Keyword::NOT, Keyword::DEFERRABLE])
             {
-                cc.deferrable = Some(false);
-            } else if cc.deferrable.is_none() && self.parse_keyword(Keyword::DEFERRABLE) {
-                cc.deferrable = Some(true);
-            } else if cc.initially.is_none() && self.parse_keyword(Keyword::INITIALLY) {
+                cc.deferrable.deferrable = Some(false);
+            } else if cc.deferrable.deferrable.is_none() && self.parse_keyword(Keyword::DEFERRABLE) {
+                cc.deferrable.deferrable = Some(true);
+            } else if cc.deferrable.initially.is_none() && self.parse_keyword(Keyword::INITIALLY) {
                 if self.parse_keyword(Keyword::DEFERRED) {
-                    cc.initially = Some(DeferrableInitial::Deferred);
+                    cc.deferrable.initially = Some(DeferrableInitial::Deferred);
                 } else if self.parse_keyword(Keyword::IMMEDIATE) {
-                    cc.initially = Some(DeferrableInitial::Immediate);
+                    cc.deferrable.initially = Some(DeferrableInitial::Immediate);
                 } else {
                     self.expected("one of DEFERRED or IMMEDIATE", self.peek_token())?;
                 }
@@ -6151,7 +6176,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if cc.deferrable.is_some() || cc.initially.is_some() || cc.enforced.is_some() {
+        if cc.deferrable.deferrable.is_some() || cc.deferrable.initially.is_some() || cc.enforced.is_some() {
             Ok(Some(cc))
         } else {
             Ok(None)

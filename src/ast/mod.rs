@@ -33,7 +33,7 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConstraintCharacteristics, DeferrableInitial, GeneratedAs,
+    ColumnOptionDef, ConstraintCharacteristics, DeferrableCharacteristics, DeferrableInitial, GeneratedAs,
     GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner, Partition,
     ProcedureParam, ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
@@ -2664,6 +2664,8 @@ pub enum Statement {
         condition: Option<Expr>,
         /// Execute logic block
         exec_body: TriggerExecBody,
+        /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
+        characteristics: Option<DeferrableCharacteristics>,
     },
     /// ```sql
     /// CREATE PROCEDURE
@@ -3431,6 +3433,7 @@ impl fmt::Display for Statement {
                 condition,
                 include_each,
                 exec_body,
+                characteristics,
             } => {
                 write!(
                     f,
@@ -3444,6 +3447,11 @@ impl fmt::Display for Statement {
                 if !referencing.is_empty() {
                     write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
                 }
+
+                if let Some(characteristics) = characteristics {
+                    write!(f, " {characteristics}")?;
+                }
+
                 if let Some(trigger_object) = for_each {
                     if *include_each {
                         write!(f, " FOR EACH {trigger_object}")?;

@@ -4481,7 +4481,7 @@ fn parse_create_trigger() {
             },
         ],
     ] {
-        for for_each_subject in [TriggerObject::Row, TriggerObject::Statement] {
+        for trigger_object in [TriggerObject::Row, TriggerObject::Statement] {
             for (characteristics, characteristics_text) in [
                 (None, ""),
                 (
@@ -4607,7 +4607,7 @@ fn parse_create_trigger() {
                                     let for_each = if include_each { "FOR EACH" } else { "FOR" };
 
                                     let sql = &format!(
-                        "CREATE TRIGGER check_update {when} {event_string} ON accounts {characteristics_text}{referencing_text}{for_each} {for_each_subject} EXECUTE {exec_type} {func_desc}"
+                        "CREATE TRIGGER check_update {when} {event_string} ON accounts {characteristics_text}{referencing_text}{for_each} {trigger_object} EXECUTE {exec_type} {func_desc}"
                     );
 
                                     assert_eq!(
@@ -4619,7 +4619,7 @@ fn parse_create_trigger() {
                                             event: event.clone(),
                                             table_name: ObjectName(vec![Ident::new("accounts")]),
                                             referencing: referencing.clone(),
-                                            for_each: Some(for_each_subject),
+                                            trigger_object,
                                             include_each,
                                             condition: None,
                                             exec_body: TriggerExecBody {
@@ -4630,7 +4630,7 @@ fn parse_create_trigger() {
                                         }
                                     );
 
-                                    let sql = &format!("CREATE TRIGGER check_update {when} {event_string} ON accounts {characteristics_text}{referencing_text}{for_each} {for_each_subject} WHEN (OLD.balance IS DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
+                                    let sql = &format!("CREATE TRIGGER check_update {when} {event_string} ON accounts {characteristics_text}{referencing_text}{for_each} {trigger_object} WHEN (OLD.balance IS DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
                                     assert_eq!(
                                         pg().verified_stmt(sql),
                                         Statement::CreateTrigger {
@@ -4640,7 +4640,7 @@ fn parse_create_trigger() {
                                             event: event.clone(),
                                             table_name: ObjectName(vec![Ident::new("accounts")]),
                                             referencing: referencing.clone(),
-                                            for_each: Some(for_each_subject),
+                                            trigger_object,
                                             include_each,
                                             condition: Some(Expr::Nested(Box::new(
                                                 Expr::IsDistinctFrom(
@@ -4662,7 +4662,7 @@ fn parse_create_trigger() {
                                         }
                                     );
 
-                                    let sql = &format!("CREATE TRIGGER check_update {when} {event_string} ON accounts {characteristics_text}{referencing_text}{for_each} {for_each_subject} WHEN (OLD.balance IS NOT DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
+                                    let sql = &format!("CREATE TRIGGER check_update {when} {event_string} ON accounts {characteristics_text}{referencing_text}{for_each} {trigger_object} WHEN (OLD.balance IS NOT DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
                                     assert_eq!(
                                         pg().verified_stmt(sql),
                                         Statement::CreateTrigger {
@@ -4672,7 +4672,7 @@ fn parse_create_trigger() {
                                             event: event.clone(),
                                             table_name: ObjectName(vec![Ident::new("accounts")]),
                                             referencing: referencing.clone(),
-                                            for_each: Some(for_each_subject),
+                                            trigger_object,
                                             include_each,
                                             condition: Some(Expr::Nested(Box::new(
                                                 Expr::IsNotDistinctFrom(
@@ -4712,7 +4712,7 @@ fn parse_create_trigger_invalid_cases() {
     let invalid_cases = vec![
         (
             "CREATE TRIGGER check_update BEFORE UPDATE ON accounts FUNCTION check_account_update",
-            "Expected: EXECUTE, found: FUNCTION"
+            "Expected: FOR, found: FUNCTION"
         ),
         (
             "CREATE TRIGGER check_update TOMORROW UPDATE ON accounts EXECUTE FUNCTION check_account_update",

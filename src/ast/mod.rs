@@ -2656,8 +2656,9 @@ pub enum Statement {
         table_name: ObjectName,
         /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement.
         referencing: Vec<TriggerReferencing>,
-        /// This specifies whether the trigger function should be fired once for every row affected by the trigger event, or just once per SQL statement.
-        for_each: Option<TriggerObject>,
+        /// This specifies whether the trigger function should be fired once for
+        /// every row affected by the trigger event, or just once per SQL statement.
+        trigger_object: TriggerObject,
         /// Whether to include the `EACH` term of the `FOR EACH`, as it is optional syntax.
         include_each: bool,
         ///  Triggering conditions
@@ -3442,7 +3443,7 @@ impl fmt::Display for Statement {
                 event,
                 table_name,
                 referencing,
-                for_each,
+                trigger_object,
                 condition,
                 include_each,
                 exec_body,
@@ -3466,12 +3467,10 @@ impl fmt::Display for Statement {
                     write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
                 }
 
-                if let Some(trigger_object) = for_each {
-                    if *include_each {
-                        write!(f, " FOR EACH {trigger_object}")?;
-                    } else {
-                        write!(f, " FOR {trigger_object}")?;
-                    }
+                if *include_each {
+                    write!(f, " FOR EACH {trigger_object}")?;
+                } else {
+                    write!(f, " FOR {trigger_object}")?;
                 }
                 if let Some(condition) = condition {
                     write!(f, " WHEN {condition}")?;

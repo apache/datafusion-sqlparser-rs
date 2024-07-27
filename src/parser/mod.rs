@@ -4230,21 +4230,15 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            let (for_each, include_each) = if self.parse_keyword(Keyword::FOR) {
+            let (trigger_object, include_each) = self.expect_keyword(Keyword::FOR).and_then(|_| {
                 let include_each = self.parse_keyword(Keyword::EACH);
-                (
-                    Some(
-                        match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
-                            Keyword::ROW => TriggerObject::Row,
-                            Keyword::STATEMENT => TriggerObject::Statement,
-                            _ => unreachable!(),
-                        },
-                    ),
-                    include_each,
-                )
-            } else {
-                (None, false)
-            };
+                let trigger_object = match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
+                    Keyword::ROW => TriggerObject::Row,
+                    Keyword::STATEMENT => TriggerObject::Statement,
+                    _ => unreachable!(),
+                };
+                Ok((trigger_object, include_each))
+            })?;
 
             let condition = self
                 .parse_keyword(Keyword::WHEN)
@@ -4262,7 +4256,7 @@ impl<'a> Parser<'a> {
                 event,
                 table_name,
                 referencing,
-                for_each,
+                trigger_object,
                 include_each,
                 condition,
                 exec_body,

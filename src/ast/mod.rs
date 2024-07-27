@@ -55,8 +55,8 @@ pub use self::query::{
 };
 
 pub use self::trigger::{
-    TriggerEvent, TriggerExecBody, TriggerExecBodyType, TriggerFunctionDesc, TriggerObject,
-    TriggerPeriod, TriggerReferencing, TriggerReferencingType,
+    TriggerEvent, TriggerExecBody, TriggerExecBodyType, TriggerObject, TriggerPeriod,
+    TriggerReferencing, TriggerReferencingType,
 };
 
 pub use self::value::{
@@ -2260,7 +2260,7 @@ pub enum Statement {
     DropFunction {
         if_exists: bool,
         /// One or more function to drop
-        func_desc: Vec<DropFunctionDesc>,
+        func_desc: Vec<FunctionDesc>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
@@ -2270,7 +2270,7 @@ pub enum Statement {
     DropProcedure {
         if_exists: bool,
         /// One or more function to drop
-        proc_desc: Vec<DropFunctionDesc>,
+        proc_desc: Vec<FunctionDesc>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
@@ -6065,12 +6065,12 @@ impl fmt::Display for DropFunctionOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct DropFunctionDesc {
+pub struct FunctionDesc {
     pub name: ObjectName,
     pub args: Option<Vec<OperateFunctionArg>>,
 }
 
-impl fmt::Display for DropFunctionDesc {
+impl fmt::Display for FunctionDesc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)?;
         if let Some(args) = &self.args {

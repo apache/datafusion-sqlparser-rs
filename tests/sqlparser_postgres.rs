@@ -3621,7 +3621,7 @@ fn parse_drop_function() {
         pg().verified_stmt(sql),
         Statement::DropFunction {
             if_exists: true,
-            func_desc: vec![DropFunctionDesc {
+            func_desc: vec![FunctionDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_func".to_string(),
                     quote_style: None
@@ -3637,7 +3637,7 @@ fn parse_drop_function() {
         pg().verified_stmt(sql),
         Statement::DropFunction {
             if_exists: true,
-            func_desc: vec![DropFunctionDesc {
+            func_desc: vec![FunctionDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_func".to_string(),
                     quote_style: None
@@ -3662,7 +3662,7 @@ fn parse_drop_function() {
         Statement::DropFunction {
             if_exists: true,
             func_desc: vec![
-                DropFunctionDesc {
+                FunctionDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_func1".to_string(),
                         quote_style: None
@@ -3680,7 +3680,7 @@ fn parse_drop_function() {
                         }
                     ]),
                 },
-                DropFunctionDesc {
+                FunctionDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_func2".to_string(),
                         quote_style: None
@@ -3711,7 +3711,7 @@ fn parse_drop_procedure() {
         pg().verified_stmt(sql),
         Statement::DropProcedure {
             if_exists: true,
-            proc_desc: vec![DropFunctionDesc {
+            proc_desc: vec![FunctionDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_proc".to_string(),
                     quote_style: None
@@ -3727,7 +3727,7 @@ fn parse_drop_procedure() {
         pg().verified_stmt(sql),
         Statement::DropProcedure {
             if_exists: true,
-            proc_desc: vec![DropFunctionDesc {
+            proc_desc: vec![FunctionDesc {
                 name: ObjectName(vec![Ident {
                     value: "test_proc".to_string(),
                     quote_style: None
@@ -3752,7 +3752,7 @@ fn parse_drop_procedure() {
         Statement::DropProcedure {
             if_exists: true,
             proc_desc: vec![
-                DropFunctionDesc {
+                FunctionDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_proc1".to_string(),
                         quote_style: None
@@ -3770,7 +3770,7 @@ fn parse_drop_procedure() {
                         }
                     ]),
                 },
-                DropFunctionDesc {
+                FunctionDesc {
                     name: ObjectName(vec![Ident {
                         value: "test_proc2".to_string(),
                         quote_style: None
@@ -4448,7 +4448,7 @@ fn parse_create_trigger() {
         let for_each = if include_each { "FOR EACH" } else { "FOR" };
 
         let sql = &format!(
-            "CREATE TRIGGER check_update BEFORE UPDATE ON accounts {for_each} ROW EXECUTE FUNCTION check_account_update()"
+            "CREATE TRIGGER check_update BEFORE UPDATE ON accounts {for_each} ROW EXECUTE FUNCTION check_account_update"
         );
         assert_eq!(
             pg().verified_stmt(sql),
@@ -4464,15 +4464,15 @@ fn parse_create_trigger() {
                 condition: None,
                 exec_body: TriggerExecBody {
                     exec_type: TriggerExecBodyType::Function,
-                    func_desc: TriggerFunctionDesc {
+                    func_desc: FunctionDesc {
                         name: ObjectName(vec![Ident::new("check_account_update")]),
-                        args: vec![]
+                        args: None
                     }
                 }
             }
         );
 
-        let sql = &format!("CREATE OR REPLACE TRIGGER check_update BEFORE UPDATE OF balance ON accounts {for_each} ROW EXECUTE FUNCTION check_account_update()");
+        let sql = &format!("CREATE OR REPLACE TRIGGER check_update BEFORE UPDATE OF balance ON accounts {for_each} ROW EXECUTE FUNCTION check_account_update");
         assert_eq!(
             pg().verified_stmt(sql),
             Statement::CreateTrigger {
@@ -4487,15 +4487,15 @@ fn parse_create_trigger() {
                 condition: None,
                 exec_body: TriggerExecBody {
                     exec_type: TriggerExecBodyType::Function,
-                    func_desc: TriggerFunctionDesc {
+                    func_desc: FunctionDesc {
                         name: ObjectName(vec![Ident::new("check_account_update")]),
-                        args: vec![]
+                        args: None
                     }
                 }
             }
         );
 
-        let sql = &format!("CREATE TRIGGER check_update BEFORE UPDATE ON accounts {for_each} ROW WHEN (OLD.balance IS DISTINCT FROM NEW.balance) EXECUTE FUNCTION check_account_update()");
+        let sql = &format!("CREATE TRIGGER check_update BEFORE UPDATE ON accounts {for_each} ROW WHEN (OLD.balance IS DISTINCT FROM NEW.balance) EXECUTE FUNCTION check_account_update");
         assert_eq!(
             pg().verified_stmt(sql),
             Statement::CreateTrigger {
@@ -4519,15 +4519,15 @@ fn parse_create_trigger() {
                 )))),
                 exec_body: TriggerExecBody {
                     exec_type: TriggerExecBodyType::Function,
-                    func_desc: TriggerFunctionDesc {
+                    func_desc: FunctionDesc {
                         name: ObjectName(vec![Ident::new("check_account_update")]),
-                        args: vec![]
+                        args: None
                     }
                 }
             }
         );
 
-        let sql = &format!("CREATE TRIGGER check_update BEFORE UPDATE ON accounts {for_each} ROW WHEN (OLD.balance IS NOT DISTINCT FROM NEW.balance) EXECUTE FUNCTION check_account_update()");
+        let sql = &format!("CREATE TRIGGER check_update BEFORE UPDATE ON accounts {for_each} ROW WHEN (OLD.balance IS NOT DISTINCT FROM NEW.balance) EXECUTE FUNCTION check_account_update");
         assert_eq!(
             pg().verified_stmt(sql),
             Statement::CreateTrigger {
@@ -4551,15 +4551,15 @@ fn parse_create_trigger() {
                 )))),
                 exec_body: TriggerExecBody {
                     exec_type: TriggerExecBodyType::Function,
-                    func_desc: TriggerFunctionDesc {
+                    func_desc: FunctionDesc {
                         name: ObjectName(vec![Ident::new("check_account_update")]),
-                        args: vec![]
+                        args: None
                     }
                 }
             }
         );
 
-        let sql = &format!("CREATE TRIGGER transfer_insert AFTER INSERT ON transfer REFERENCING NEW TABLE AS inserted {for_each} STATEMENT EXECUTE FUNCTION check_transfer_balances_to_zero()");
+        let sql = &format!("CREATE TRIGGER transfer_insert AFTER INSERT ON transfer REFERENCING NEW TABLE AS inserted {for_each} STATEMENT EXECUTE FUNCTION check_transfer_balances_to_zero");
         assert_eq!(
             pg().verified_stmt(sql),
             Statement::CreateTrigger {
@@ -4578,15 +4578,15 @@ fn parse_create_trigger() {
                 condition: None,
                 exec_body: TriggerExecBody {
                     exec_type: TriggerExecBodyType::Function,
-                    func_desc: TriggerFunctionDesc {
+                    func_desc: FunctionDesc {
                         name: ObjectName(vec![Ident::new("check_transfer_balances_to_zero")]),
-                        args: vec![]
+                        args: None
                     }
                 }
             }
         );
 
-        let sql = &format!("CREATE TRIGGER instead_of_paired_items_update INSTEAD OF UPDATE ON paired_items REFERENCING NEW TABLE AS newtab OLD TABLE AS oldtab {for_each} ROW EXECUTE FUNCTION check_matching_pairs()");
+        let sql = &format!("CREATE TRIGGER instead_of_paired_items_update INSTEAD OF UPDATE ON paired_items REFERENCING NEW TABLE AS newtab OLD TABLE AS oldtab {for_each} ROW EXECUTE FUNCTION check_matching_pairs");
 
         assert_eq!(
             pg().verified_stmt(sql),
@@ -4613,15 +4613,15 @@ fn parse_create_trigger() {
                 condition: None,
                 exec_body: TriggerExecBody {
                     exec_type: TriggerExecBodyType::Function,
-                    func_desc: TriggerFunctionDesc {
+                    func_desc: FunctionDesc {
                         name: ObjectName(vec![Ident::new("check_matching_pairs")]),
-                        args: vec![]
+                        args: None
                     }
                 }
             }
         );
 
-        let sql = &format!("CREATE TRIGGER paired_items_update AFTER UPDATE ON paired_items REFERENCING NEW TABLE AS newtab OLD TABLE AS oldtab {for_each} ROW EXECUTE FUNCTION check_matching_pairs()");
+        let sql = &format!("CREATE TRIGGER paired_items_update AFTER UPDATE ON paired_items REFERENCING NEW TABLE AS newtab OLD TABLE AS oldtab {for_each} ROW EXECUTE FUNCTION check_matching_pairs");
         assert_eq!(
             pg().verified_stmt(sql),
             Statement::CreateTrigger {
@@ -4647,9 +4647,9 @@ fn parse_create_trigger() {
                 condition: None,
                 exec_body: TriggerExecBody {
                     exec_type: TriggerExecBodyType::Function,
-                    func_desc: TriggerFunctionDesc {
+                    func_desc: FunctionDesc {
                         name: ObjectName(vec![Ident::new("check_matching_pairs")]),
-                        args: vec![]
+                        args: None
                     }
                 }
             }

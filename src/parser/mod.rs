@@ -4304,23 +4304,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_function_desc(&mut self) -> Result<TriggerFunctionDesc, ParserError> {
-        let name = self.parse_object_name(false)?;
-        let args = if self.consume_token(&Token::LParen) {
-            if self.consume_token(&Token::RParen) {
-                vec![]
-            } else {
-                let args = self.parse_comma_separated(Parser::parse_function_arg)?;
-                self.expect_token(&Token::RParen)?;
-                args
-            }
-        } else {
-            vec![]
-        };
-
-        Ok(TriggerFunctionDesc { name, args })
-    }
-
     pub fn parse_create_macro(
         &mut self,
         or_replace: bool,
@@ -4810,7 +4793,7 @@ impl<'a> Parser<'a> {
     /// ```
     fn parse_drop_function(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let func_desc = self.parse_comma_separated(Parser::parse_drop_function_desc)?;
+        let func_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
         let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
             Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
             Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
@@ -4829,7 +4812,7 @@ impl<'a> Parser<'a> {
     /// ```
     fn parse_drop_procedure(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let proc_desc = self.parse_comma_separated(Parser::parse_drop_function_desc)?;
+        let proc_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
         let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
             Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
             Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
@@ -4843,7 +4826,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_drop_function_desc(&mut self) -> Result<DropFunctionDesc, ParserError> {
+    fn parse_function_desc(&mut self) -> Result<FunctionDesc, ParserError> {
         let name = self.parse_object_name(false)?;
 
         let args = if self.consume_token(&Token::LParen) {
@@ -4858,7 +4841,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(DropFunctionDesc { name, args })
+        Ok(FunctionDesc { name, args })
     }
 
     /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.

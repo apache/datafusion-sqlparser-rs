@@ -13,21 +13,6 @@
 //! SQL Abstract Syntax Tree (AST) for triggers.
 use super::*;
 
-/// Function argument description for trigger function.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct TriggerFunctionDesc {
-    pub name: ObjectName,
-    pub args: Vec<OperateFunctionArg>,
-}
-
-impl fmt::Display for TriggerFunctionDesc {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", self.name, display_comma_separated(&self.args))
-    }
-}
-
 /// This specifies whether the trigger function should be fired once for every row affected by the trigger event, or just once per SQL statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -158,7 +143,7 @@ impl fmt::Display for TriggerExecBodyType {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TriggerExecBody {
     pub exec_type: TriggerExecBodyType,
-    pub func_desc: TriggerFunctionDesc,
+    pub func_desc: FunctionDesc,
 }
 
 impl fmt::Display for TriggerExecBody {

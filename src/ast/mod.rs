@@ -3438,7 +3438,7 @@ impl fmt::Display for Statement {
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                 )?;
                 if !event.is_empty() {
-                    write!(f, " {}", display_separated(event, "OR"))?;
+                    write!(f, " {}", display_separated(event, " OR "))?;
                 }
                 write!(f, " ON {table_name}")?;
                 if !referencing.is_empty() {

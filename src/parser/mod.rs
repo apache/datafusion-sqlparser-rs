@@ -4177,7 +4177,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            let (for_each, include_each) = if self.parse_keywords(&[Keyword::FOR]) {
+            let (for_each, include_each) = if self.parse_keyword(Keyword::FOR) {
                 let include_each = self.parse_keyword(Keyword::EACH);
                 (
                     Some(
@@ -4195,7 +4195,7 @@ impl<'a> Parser<'a> {
 
             let condition = self
                 .parse_keyword(Keyword::WHEN)
-                .then_some(self.parse_expr())
+                .then(|| self.parse_expr())
                 .transpose()?;
 
             let exec_body = self

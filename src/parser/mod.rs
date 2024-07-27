@@ -4195,7 +4195,7 @@ impl<'a> Parser<'a> {
             let name = self.parse_object_name(false)?;
             let period = self.parse_trigger_period()?;
 
-            let event = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
+            let events = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
             let table_name = self
                 .expect_keyword(Keyword::ON)
                 .and_then(|_| self.parse_object_name(false))?;
@@ -4255,7 +4255,7 @@ impl<'a> Parser<'a> {
                 or_replace,
                 name,
                 period,
-                event,
+                events,
                 table_name,
                 referencing,
                 trigger_object,

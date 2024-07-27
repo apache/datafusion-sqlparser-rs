@@ -2651,7 +2651,7 @@ pub enum Statement {
         /// ```
         period: TriggerPeriod,
         /// Multiple events can be specified using OR, such as `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
-        event: Vec<TriggerEvent>,
+        events: Vec<TriggerEvent>,
         /// The table on which the trigger is to be created.
         table_name: ObjectName,
         /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement.
@@ -3440,7 +3440,7 @@ impl fmt::Display for Statement {
                 or_replace,
                 name,
                 period,
-                event,
+                events,
                 table_name,
                 referencing,
                 trigger_object,
@@ -3454,8 +3454,8 @@ impl fmt::Display for Statement {
                     "CREATE {or_replace}TRIGGER {name} {period}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                 )?;
-                if !event.is_empty() {
-                    write!(f, " {}", display_separated(event, " OR "))?;
+                if !events.is_empty() {
+                    write!(f, " {}", display_separated(events, " OR "))?;
                 }
                 write!(f, " ON {table_name}")?;
 

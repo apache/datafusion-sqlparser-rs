@@ -4542,7 +4542,7 @@ fn parse_create_trigger() {
                         TriggerExecBodyType::Function,
                         TriggerExecBodyType::Procedure,
                     ] {
-                        for (event, event_string) in [
+                        for (events, event_string) in [
                             (vec![TriggerEvent::Update(vec![])], "UPDATE"),
                             (vec![TriggerEvent::Insert], "INSERT"),
                             (vec![TriggerEvent::Delete], "DELETE"),
@@ -4616,7 +4616,7 @@ fn parse_create_trigger() {
                                             or_replace: false,
                                             name: ObjectName(vec![Ident::new("check_update")]),
                                             period: when,
-                                            event: event.clone(),
+                                            events: events.clone(),
                                             table_name: ObjectName(vec![Ident::new("accounts")]),
                                             referencing: referencing.clone(),
                                             trigger_object,
@@ -4637,7 +4637,7 @@ fn parse_create_trigger() {
                                             or_replace: false,
                                             name: ObjectName(vec![Ident::new("check_update")]),
                                             period: when,
-                                            event: event.clone(),
+                                            events: events.clone(),
                                             table_name: ObjectName(vec![Ident::new("accounts")]),
                                             referencing: referencing.clone(),
                                             trigger_object,
@@ -4669,7 +4669,7 @@ fn parse_create_trigger() {
                                             or_replace: false,
                                             name: ObjectName(vec![Ident::new("check_update")]),
                                             period: when,
-                                            event: event.clone(),
+                                            events: events.clone(),
                                             table_name: ObjectName(vec![Ident::new("accounts")]),
                                             referencing: referencing.clone(),
                                             trigger_object,

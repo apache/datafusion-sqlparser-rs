@@ -4702,3 +4702,33 @@ fn parse_create_trigger() {
         }
     }
 }
+
+#[test]
+/// While in the parse_create_trigger test we test the full syntax of the CREATE TRIGGER statement,
+/// here we test the invalid cases of the CREATE TRIGGER statement which should cause an appropriate
+/// error to be returned.
+fn parse_create_trigger_invalid_cases() {
+    // Test invalid cases for the CREATE TRIGGER statement
+    let invalid_cases = vec![
+        (
+            "CREATE TRIGGER check_update BEFORE UPDATE ON accounts FUNCTION check_account_update",
+            "Expected: EXECUTE, found: FUNCTION"
+        ),
+        (
+            "CREATE TRIGGER check_update TOMORROW UPDATE ON accounts EXECUTE FUNCTION check_account_update",
+            "Expected: one of BEFORE or AFTER or INSTEAD, found: TOMORROW"
+        ),
+        (
+            "CREATE TRIGGER check_update BEFORE SAVE ON accounts EXECUTE FUNCTION check_account_update",
+            "Expected: one of INSERT or UPDATE or DELETE or TRUNCATE, found: SAVE"
+        )
+    ];
+
+    for (sql, expected_error) in invalid_cases {
+        let res = pg().parse_sql_statements(sql);
+        assert_eq!(
+            format!("sql parser error: {expected_error}"),
+            res.unwrap_err().to_string()
+        );
+    }
+}

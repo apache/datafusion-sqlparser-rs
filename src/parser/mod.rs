@@ -4166,11 +4166,9 @@ impl<'a> Parser<'a> {
             let period = self.parse_trigger_period()?;
 
             let event = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
-            let table_name = if self.parse_keyword(Keyword::ON) {
-                self.parse_object_name(false)?
-            } else {
-                return self.expected("keyword `ON`", self.peek_token());
-            };
+            let table_name = self
+                .expect_keyword(Keyword::ON)
+                .and_then(|_| self.parse_object_name(false))?;
 
             let mut referencing = vec![];
             if self.parse_keyword(Keyword::REFERENCING) {
@@ -4182,30 +4180,27 @@ impl<'a> Parser<'a> {
             let (for_each, include_each) = if self.parse_keywords(&[Keyword::FOR]) {
                 let include_each = self.parse_keyword(Keyword::EACH);
                 (
-                    match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT]) {
-                        Some(Keyword::ROW) => Some(TriggerObject::Row),
-                        Some(Keyword::STATEMENT) => Some(TriggerObject::Statement),
-                        _ => {
-                            return self.expected("an `ROW` OR `STATEMENT`", self.peek_token());
-                        }
-                    },
+                    Some(
+                        match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
+                            Keyword::ROW => TriggerObject::Row,
+                            Keyword::STATEMENT => TriggerObject::Statement,
+                            _ => unreachable!(),
+                        },
+                    ),
                     include_each,
                 )
             } else {
                 (None, false)
             };
 
-            let condition = if self.parse_keyword(Keyword::WHEN) {
-                Some(self.parse_expr()?)
-            } else {
-                None
-            };
+            let condition = self
+                .parse_keyword(Keyword::WHEN)
+                .then_some(self.parse_expr())
+                .transpose()?;
 
-            let exec_body = if self.parse_keyword(Keyword::EXECUTE) {
-                self.parse_trigger_exec_body()?
-            } else {
-                return self.expected("an `EXECUTE`", self.peek_token());
-            };
+            let exec_body = self
+                .expect_keyword(Keyword::EXECUTE)
+                .and_then(|_| self.parse_trigger_exec_body())?;
 
             Ok(Statement::CreateTrigger {
                 or_replace,
@@ -4226,44 +4221,44 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {
-        match self.parse_one_of_keywords(&[Keyword::BEFORE, Keyword::AFTER, Keyword::INSTEAD]) {
-            Some(Keyword::BEFORE) => Ok(TriggerPeriod::Before),
-            Some(Keyword::AFTER) => Ok(TriggerPeriod::After),
-            Some(Keyword::INSTEAD) => {
-                if self.parse_keyword(Keyword::OF) {
-                    Ok(TriggerPeriod::InsteadOf)
-                } else {
-                    self.expected("an `OF` after `INSTEAD`", self.peek_token())
-                }
-            }
-            _ => self.expected("an `BEFORE`, `AFTER` OR `INSTEAD OF`", self.peek_token()),
-        }
+        self.expect_one_of_keywords(&[Keyword::BEFORE, Keyword::AFTER, Keyword::INSTEAD])
+            .and_then(|keyword| {
+                Ok(match keyword {
+                    Keyword::BEFORE => TriggerPeriod::Before,
+                    Keyword::AFTER => TriggerPeriod::After,
+                    Keyword::INSTEAD => self
+                        .expect_keyword(Keyword::OF)
+                        .map(|_| TriggerPeriod::InsteadOf)?,
+                    _ => unreachable!(),
+                })
+            })
     }
 
     pub fn parse_trigger_event(&mut self) -> Result<TriggerEvent, ParserError> {
-        match self.parse_one_of_keywords(&[
+        self.expect_one_of_keywords(&[
             Keyword::INSERT,
             Keyword::UPDATE,
             Keyword::DELETE,
             Keyword::TRUNCATE,
-        ]) {
-            Some(Keyword::INSERT) => Ok(TriggerEvent::Insert),
-            Some(Keyword::UPDATE) => {
-                if self.parse_keyword(Keyword::OF) {
-                    let cols =
-                        self.parse_comma_separated(|ident| Parser::parse_identifier(ident, false))?;
-                    Ok(TriggerEvent::Update(cols))
-                } else {
-                    Ok(TriggerEvent::Update(vec![]))
+        ])
+        .and_then(|keyword| {
+            Ok(match keyword {
+                Keyword::INSERT => TriggerEvent::Insert,
+                Keyword::UPDATE => {
+                    if self.parse_keyword(Keyword::OF) {
+                        let cols = self.parse_comma_separated(|ident| {
+                            Parser::parse_identifier(ident, false)
+                        })?;
+                        TriggerEvent::Update(cols)
+                    } else {
+                        TriggerEvent::Update(vec![])
+                    }
                 }
-            }
-            Some(Keyword::DELETE) => Ok(TriggerEvent::Delete),
-            Some(Keyword::TRUNCATE) => Ok(TriggerEvent::Truncate),
-            _ => self.expected(
-                "an `INSERT`, `UPDATE`, `DELETE` OR `TRUNCATE`",
-                self.peek_token(),
-            ),
-        }
+                Keyword::DELETE => TriggerEvent::Delete,
+                Keyword::TRUNCATE => TriggerEvent::Truncate,
+                _ => unreachable!(),
+            })
+        })
     }
 
     pub fn parse_trigger_referencing(&mut self) -> Result<Option<TriggerReferencing>, ParserError> {
@@ -4289,18 +4284,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_trigger_exec_body(&mut self) -> Result<TriggerExecBody, ParserError> {
-        let exec_type = match self.parse_one_of_keywords(&[Keyword::FUNCTION, Keyword::PROCEDURE]) {
-            Some(Keyword::FUNCTION) => TriggerExecBodyType::Function,
-            Some(Keyword::PROCEDURE) => TriggerExecBodyType::Procedure,
-            _ => {
-                return self.expected("an `FUNCTION` OR `PROCEDURE`", self.peek_token());
-            }
-        };
+        let exec_type = self
+            .expect_one_of_keywords(&[Keyword::FUNCTION, Keyword::PROCEDURE])
+            .map(|keyword| match keyword {
+                Keyword::FUNCTION => TriggerExecBodyType::Function,
+                Keyword::PROCEDURE => TriggerExecBodyType::Procedure,
+                _ => unreachable!(),
+            })?;
 
-        let func_desc = self.parse_function_desc()?;
         Ok(TriggerExecBody {
             exec_type,
-            func_desc,
+            func_desc: self.parse_function_desc()?,
         })
     }
 

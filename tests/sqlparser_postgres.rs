@@ -4574,8 +4574,38 @@ fn parse_create_trigger() {
                                     TriggerEvent::Update(vec![Ident::new("balance")]),
                                     TriggerEvent::Insert,
                                     TriggerEvent::Delete,
+                                    TriggerEvent::Update(vec![Ident::new("name")]),
                                 ],
-                                "UPDATE OF balance OR INSERT OR DELETE",
+                                "UPDATE OF balance OR INSERT OR DELETE OR UPDATE OF name",
+                            ),
+                            (
+                                vec![
+                                    TriggerEvent::Update(vec![Ident::new("balance"), Ident::new("name"), Ident::new("name2"), Ident::new("name3")]),
+                                    TriggerEvent::Update(vec![Ident::new("name")]),
+                                ],
+                                "UPDATE OF balance, name, name2, name3 OR UPDATE OF name",
+                            ),
+                            (
+                                vec![
+                                    TriggerEvent::Update(vec![Ident::new("balance"), Ident::new("name")]),
+                                    TriggerEvent::Insert,
+                                ],
+                                "UPDATE OF balance, name OR INSERT",
+                            ),
+                            (
+                                vec![
+                                    TriggerEvent::Update(vec![Ident::new("balance"), Ident::new("name")]),
+                                    TriggerEvent::Delete,
+                                ],
+                                "UPDATE OF balance, name OR DELETE",
+                            ),
+                            (
+                                vec![
+                                    TriggerEvent::Update(vec![Ident::new("balance"), Ident::new("name")]),
+                                    TriggerEvent::Insert,
+                                    TriggerEvent::Delete,
+                                ],
+                                "UPDATE OF balance, name OR INSERT OR DELETE",
                             ),
                         ] {
                             for when in [

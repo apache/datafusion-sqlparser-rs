@@ -145,6 +145,21 @@ pub trait Dialect: Debug + Any {
     fn supports_string_literal_backslash_escape(&self) -> bool {
         false
     }
+
+    /// Determine if the dialect supports string literals with `U&` prefix.
+    /// This is used to specify Unicode code points in string literals.
+    /// For example, in PostgreSQL, the following is a valid string literal:
+    /// ```sql
+    /// SELECT U&'\0061\0062\0063';
+    /// ```
+    /// This is equivalent to the string literal `'abc'`.
+    /// See
+    ///  - https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE
+    ///  - http://www.h2database.com/html/grammar.html#string
+    fn supports_unicode_string_literal(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support `FILTER (WHERE expr)` for aggregate queries?
     fn supports_filter_during_aggregation(&self) -> bool {
         false

@@ -94,6 +94,8 @@ pub enum Token {
     NationalStringLiteral(String),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
     EscapedStringLiteral(String),
+    /// Unicode string literal: i.e: U&'first \000A second'
+    UnicodeStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
     HexStringLiteral(String),
     /// Comma
@@ -251,6 +253,7 @@ impl fmt::Display for Token {
             Token::DollarQuotedString(ref s) => write!(f, "{s}"),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
+            Token::UnicodeStringLiteral(ref s) => write!(f, "U&'{s}'"),
             Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
             Token::SingleQuotedByteStringLiteral(ref s) => write!(f, "B'{s}'"),
             Token::TripleSingleQuotedByteStringLiteral(ref s) => write!(f, "B'''{s}'''"),
@@ -793,6 +796,23 @@ impl<'a> Tokenizer<'a> {
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
+                }
+                // Unicode string literals like U&'first \000A second' are supported in some dialects, including PostgreSQL
+                x @ 'u' | x @ 'U' if self.dialect.supports_unicode_string_literal() => {
+                    chars.next(); // consume, to check the next char
+                    if chars.peek() == Some(&'&') {
+                        // we cannot advance the iterator here, as we need to consume the '&' later if the 'u' was an identifier
+                        let mut chars_clone = chars.peekable.clone();
+                        chars_clone.next(); // consume the '&' in the clone
+                        if chars_clone.peek() == Some(&'\'') {
+                            chars.next(); // consume the '&' in the original iterator
+                            let s = unescape_unicode_single_quoted_string(chars)?;
+                            return Ok(Some(Token::UnicodeStringLiteral(s)));
+                        }
+                    }
+                    // regular identifier starting with an "U" or "u"
+                    let s = self.tokenize_word(x, chars);
+                    Ok(Some(Token::make_word(&s, None)))
                 }
                 // The spec only allows an uppercase 'X' to introduce a hex
                 // string, but PostgreSQL, at least, allows a lowercase 'x' too.
@@ -1795,6 +1815,64 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
             Ok(n) => char::from_u32(n),
         }
     }
+}
+
+fn unescape_unicode_single_quoted_string(chars: &mut State<'_>) -> Result<String, TokenizerError> {
+    let mut unescaped = String::new();
+    chars.next(); // consume the opening quote
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' => {
+                if chars.peek() == Some(&'\'') {
+                    chars.next();
+                    unescaped.push('\'');
+                } else {
+                    return Ok(unescaped);
+                }
+            }
+            '\\' => match chars.peek() {
+                Some('\\') => {
+                    chars.next();
+                    unescaped.push('\\');
+                }
+                Some('+') => {
+                    chars.next();
+                    unescaped.push(take_char_from_hex_digits(chars, 6)?);
+                }
+                _ => unescaped.push(take_char_from_hex_digits(chars, 4)?),
+            },
+            _ => {
+                unescaped.push(c);
+            }
+        }
+    }
+    Err(TokenizerError {
+        message: "Unterminated unicode encoded string literal".to_string(),
+        location: chars.location(),
+    })
+}
+
+fn take_char_from_hex_digits(
+    chars: &mut State<'_>,
+    max_digits: usize,
+) -> Result<char, TokenizerError> {
+    let mut result = 0u32;
+    for _ in 0..max_digits {
+        let next_char = chars.next().ok_or_else(|| TokenizerError {
+            message: "Unexpected EOF while parsing hex digit in escaped unicode string."
+                .to_string(),
+            location: chars.location(),
+        })?;
+        let digit = next_char.to_digit(16).ok_or_else(|| TokenizerError {
+            message: format!("Invalid hex digit in escaped unicode string: {}", next_char),
+            location: chars.location(),
+        })?;
+        result = result * 16 + digit;
+    }
+    char::from_u32(result).ok_or_else(|| TokenizerError {
+        message: format!("Invalid unicode character: {:x}", result),
+        location: chars.location(),
+    })
 }
 
 #[cfg(test)]

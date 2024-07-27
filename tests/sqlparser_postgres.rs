@@ -4463,8 +4463,8 @@ fn parse_create_trigger() {
                 include_each,
                 condition: None,
                 exec_body: TriggerExecBody {
-                    exec_type: ExecBodyType::Function,
-                    func_desc: FunctionDesc {
+                    exec_type: TriggerExecBodyType::Function,
+                    func_desc: TriggerFunctionDesc {
                         name: ObjectName(vec![Ident::new("check_account_update")]),
                         args: vec![]
                     }
@@ -4486,8 +4486,8 @@ fn parse_create_trigger() {
                 include_each,
                 condition: None,
                 exec_body: TriggerExecBody {
-                    exec_type: ExecBodyType::Function,
-                    func_desc: FunctionDesc {
+                    exec_type: TriggerExecBodyType::Function,
+                    func_desc: TriggerFunctionDesc {
                         name: ObjectName(vec![Ident::new("check_account_update")]),
                         args: vec![]
                     }
@@ -4518,8 +4518,8 @@ fn parse_create_trigger() {
                     ])),
                 )))),
                 exec_body: TriggerExecBody {
-                    exec_type: ExecBodyType::Function,
-                    func_desc: FunctionDesc {
+                    exec_type: TriggerExecBodyType::Function,
+                    func_desc: TriggerFunctionDesc {
                         name: ObjectName(vec![Ident::new("check_account_update")]),
                         args: vec![]
                     }
@@ -4550,8 +4550,8 @@ fn parse_create_trigger() {
                     ])),
                 )))),
                 exec_body: TriggerExecBody {
-                    exec_type: ExecBodyType::Function,
-                    func_desc: FunctionDesc {
+                    exec_type: TriggerExecBodyType::Function,
+                    func_desc: TriggerFunctionDesc {
                         name: ObjectName(vec![Ident::new("check_account_update")]),
                         args: vec![]
                     }
@@ -4577,8 +4577,8 @@ fn parse_create_trigger() {
                 include_each,
                 condition: None,
                 exec_body: TriggerExecBody {
-                    exec_type: ExecBodyType::Function,
-                    func_desc: FunctionDesc {
+                    exec_type: TriggerExecBodyType::Function,
+                    func_desc: TriggerFunctionDesc {
                         name: ObjectName(vec![Ident::new("check_transfer_balances_to_zero")]),
                         args: vec![]
                     }
@@ -4612,8 +4612,8 @@ fn parse_create_trigger() {
                 include_each,
                 condition: None,
                 exec_body: TriggerExecBody {
-                    exec_type: ExecBodyType::Function,
-                    func_desc: FunctionDesc {
+                    exec_type: TriggerExecBodyType::Function,
+                    func_desc: TriggerFunctionDesc {
                         name: ObjectName(vec![Ident::new("check_matching_pairs")]),
                         args: vec![]
                     }
@@ -4646,8 +4646,8 @@ fn parse_create_trigger() {
                 include_each,
                 condition: None,
                 exec_body: TriggerExecBody {
-                    exec_type: ExecBodyType::Function,
-                    func_desc: FunctionDesc {
+                    exec_type: TriggerExecBodyType::Function,
+                    func_desc: TriggerFunctionDesc {
                         name: ObjectName(vec![Ident::new("check_matching_pairs")]),
                         args: vec![]
                     }

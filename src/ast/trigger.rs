@@ -13,16 +13,16 @@
 //! SQL Abstract Syntax Tree (AST) for triggers.
 use super::*;
 
-/// Function describe in DROP FUNCTION.
+/// Function argument description for trigger function.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct FunctionDesc {
+pub struct TriggerFunctionDesc {
     pub name: ObjectName,
     pub args: Vec<OperateFunctionArg>,
 }
 
-impl fmt::Display for FunctionDesc {
+impl fmt::Display for TriggerFunctionDesc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}({})", self.name, display_comma_separated(&self.args))
     }
@@ -135,20 +135,20 @@ impl fmt::Display for TriggerPeriod {
     }
 }
 
-/// Execute function or stored procedure
+/// Types of trigger body execution body.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum ExecBodyType {
+pub enum TriggerExecBodyType {
     Function,
-    Proceduer,
+    Procedure,
 }
 
-impl fmt::Display for ExecBodyType {
+impl fmt::Display for TriggerExecBodyType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ExecBodyType::Function => write!(f, "FUNCTION"),
-            ExecBodyType::Proceduer => write!(f, "PROCEDURE"),
+            TriggerExecBodyType::Function => write!(f, "FUNCTION"),
+            TriggerExecBodyType::Procedure => write!(f, "PROCEDURE"),
         }
     }
 }
@@ -157,8 +157,8 @@ impl fmt::Display for ExecBodyType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TriggerExecBody {
-    pub exec_type: ExecBodyType,
-    pub func_desc: FunctionDesc,
+    pub exec_type: TriggerExecBodyType,
+    pub func_desc: TriggerFunctionDesc,
 }
 
 impl fmt::Display for TriggerExecBody {

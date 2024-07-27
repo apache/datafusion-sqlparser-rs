@@ -4290,8 +4290,8 @@ impl<'a> Parser<'a> {
 
     pub fn parse_trigger_exec_body(&mut self) -> Result<TriggerExecBody, ParserError> {
         let exec_type = match self.parse_one_of_keywords(&[Keyword::FUNCTION, Keyword::PROCEDURE]) {
-            Some(Keyword::FUNCTION) => ExecBodyType::Function,
-            Some(Keyword::PROCEDURE) => ExecBodyType::Proceduer,
+            Some(Keyword::FUNCTION) => TriggerExecBodyType::Function,
+            Some(Keyword::PROCEDURE) => TriggerExecBodyType::Procedure,
             _ => {
                 return self.expected("an `FUNCTION` OR `PROCEDURE`", self.peek_token());
             }
@@ -4304,7 +4304,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_function_desc(&mut self) -> Result<FunctionDesc, ParserError> {
+    fn parse_function_desc(&mut self) -> Result<TriggerFunctionDesc, ParserError> {
         let name = self.parse_object_name(false)?;
         let args = if self.consume_token(&Token::LParen) {
             if self.consume_token(&Token::RParen) {
@@ -4318,7 +4318,7 @@ impl<'a> Parser<'a> {
             vec![]
         };
 
-        Ok(FunctionDesc { name, args })
+        Ok(TriggerFunctionDesc { name, args })
     }
 
     pub fn parse_create_macro(

@@ -55,7 +55,7 @@ pub use self::query::{
 };
 
 pub use self::trigger::{
-    ExecBodyType, FunctionDesc, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod,
+    TriggerExecBodyType, TriggerFunctionDesc, TriggerEvent, TriggerExecBody, TriggerObject, TriggerPeriod,
     TriggerReferencing, TriggerReferencingType,
 };
 

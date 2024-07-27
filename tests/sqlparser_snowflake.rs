@@ -2206,6 +2206,7 @@ fn asof_joins() {
             relation: table_with_alias("trades_unixtime", "tu"),
             joins: vec![Join {
                 relation: table_with_alias("quotes_unixtime", "qu"),
+                global: false,
                 join_operator: JoinOperator::AsOf {
                     match_condition: Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(vec![

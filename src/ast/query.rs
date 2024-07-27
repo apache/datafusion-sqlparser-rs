@@ -1537,6 +1537,9 @@ impl Display for TableVersion {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Join {
     pub relation: TableFactor,
+    /// ClickHouse supports the optional `GLOBAL` keyword before the join operator.
+    /// See [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/join)
+    pub global: bool,
     pub join_operator: JoinOperator,
 }
 
@@ -1563,6 +1566,10 @@ impl fmt::Display for Join {
             }
             Suffix(constraint)
         }
+        if self.global {
+            write!(f, " GLOBAL")?;
+        }
+
         match &self.join_operator {
             JoinOperator::Inner(constraint) => write!(
                 f,

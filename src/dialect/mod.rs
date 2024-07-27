@@ -154,8 +154,8 @@ pub trait Dialect: Debug + Any {
     /// ```
     /// This is equivalent to the string literal `'abc'`.
     /// See
-    ///  - https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE
-    ///  - http://www.h2database.com/html/grammar.html#string
+    ///  - [Postgres docs](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE)
+    ///  - [H2 docs](http://www.h2database.com/html/grammar.html#string)
     fn supports_unicode_string_literal(&self) -> bool {
         false
     }

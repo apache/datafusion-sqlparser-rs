@@ -33,10 +33,10 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConstraintCharacteristics, DeferrableCharacteristics, DeferrableInitial, GeneratedAs,
-    GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner, Partition,
-    ProcedureParam, ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation, ViewColumnDef,
+    ColumnOptionDef, ConstraintCharacteristics, DeferrableCharacteristics, DeferrableInitial,
+    GeneratedAs, GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner,
+    Partition, ProcedureParam, ReferentialAction, TableConstraint,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -3444,12 +3444,13 @@ impl fmt::Display for Statement {
                     write!(f, " {}", display_separated(event, " OR "))?;
                 }
                 write!(f, " ON {table_name}")?;
-                if !referencing.is_empty() {
-                    write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
-                }
 
                 if let Some(characteristics) = characteristics {
                     write!(f, " {characteristics}")?;
+                }
+
+                if !referencing.is_empty() {
+                    write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
                 }
 
                 if let Some(trigger_object) = for_each {

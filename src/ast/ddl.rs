@@ -1236,7 +1236,12 @@ impl ConstraintCharacteristics {
 impl fmt::Display for ConstraintCharacteristics {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.deferrable.deferrable.is_some() || self.deferrable.initially.is_some() {
-            write!(f, "{}{}", self.deferrable, display_option_spaced(&self.enforced_text()))?;
+            write!(
+                f,
+                "{}{}",
+                self.deferrable,
+                display_option_spaced(&self.enforced_text())
+            )?;
         } else if let Some(enforced) = self.enforced_text() {
             write!(f, "{}", enforced)?;
         }

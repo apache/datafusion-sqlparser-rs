@@ -4236,12 +4236,12 @@ impl<'a> Parser<'a> {
                 include_each,
                 condition,
                 exec_body,
-                characteristics: (deferrable.is_some() || initially.is_some()).then(|| {
+                characteristics: (deferrable.is_some() || initially.is_some()).then_some(
                     DeferrableCharacteristics {
                         deferrable,
                         initially,
-                    }
-                }),
+                    },
+                ),
             })
         } else {
             self.prev_token();
@@ -6152,10 +6152,12 @@ impl<'a> Parser<'a> {
         let mut cc = ConstraintCharacteristics::default();
 
         loop {
-            if cc.deferrable.deferrable.is_none() && self.parse_keywords(&[Keyword::NOT, Keyword::DEFERRABLE])
+            if cc.deferrable.deferrable.is_none()
+                && self.parse_keywords(&[Keyword::NOT, Keyword::DEFERRABLE])
             {
                 cc.deferrable.deferrable = Some(false);
-            } else if cc.deferrable.deferrable.is_none() && self.parse_keyword(Keyword::DEFERRABLE) {
+            } else if cc.deferrable.deferrable.is_none() && self.parse_keyword(Keyword::DEFERRABLE)
+            {
                 cc.deferrable.deferrable = Some(true);
             } else if cc.deferrable.initially.is_none() && self.parse_keyword(Keyword::INITIALLY) {
                 if self.parse_keyword(Keyword::DEFERRED) {
@@ -6176,7 +6178,10 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if cc.deferrable.deferrable.is_some() || cc.deferrable.initially.is_some() || cc.enforced.is_some() {
+        if cc.deferrable.deferrable.is_some()
+            || cc.deferrable.initially.is_some()
+            || cc.enforced.is_some()
+        {
             Ok(Some(cc))
         } else {
             Ok(None)

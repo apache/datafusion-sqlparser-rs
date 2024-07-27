@@ -32,7 +32,7 @@ impl fmt::Display for TriggerObject {
 }
 
 /// This clause indicates whether the following relation name is for the before-image transition relation or the after-image transition relation
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerReferencingType {

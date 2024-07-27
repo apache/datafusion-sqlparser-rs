@@ -4732,3 +4732,58 @@ fn parse_create_trigger_invalid_cases() {
         );
     }
 }
+
+#[test]
+fn parse_drop_trigger() {
+    for if_exists in [true, false] {
+        for option in [
+            None,
+            Some(ReferentialAction::Cascade),
+            Some(ReferentialAction::Restrict),
+        ] {
+            let sql = &format!(
+                "DROP TRIGGER{} check_update ON table_name{}",
+                if if_exists { " IF EXISTS" } else { "" },
+                option
+                    .map(|o| format!(" {}", o))
+                    .unwrap_or_else(|| "".to_string())
+            );
+            assert_eq!(
+                pg().verified_stmt(sql),
+                Statement::DropTrigger {
+                    if_exists,
+                    trigger_name: ObjectName(vec![Ident::new("check_update")]),
+                    table_name: ObjectName(vec![Ident::new("table_name")]),
+                    option
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn parse_drop_trigger_invalid_cases() {
+    // Test invalid cases for the DROP TRIGGER statement
+    let invalid_cases = vec![
+        (
+            "DROP TRIGGER check_update ON table_name CASCADE RESTRICT",
+            "Expected: end of statement, found: RESTRICT",
+        ),
+        (
+            "DROP TRIGGER check_update ON table_name CASCADE CASCADE",
+            "Expected: end of statement, found: CASCADE",
+        ),
+        (
+            "DROP TRIGGER check_update ON table_name CASCADE CASCADE CASCADE",
+            "Expected: end of statement, found: CASCADE",
+        ),
+    ];
+
+    for (sql, expected_error) in invalid_cases {
+        let res = pg().parse_sql_statements(sql);
+        assert_eq!(
+            format!("sql parser error: {expected_error}"),
+            res.unwrap_err().to_string()
+        );
+    }
+}

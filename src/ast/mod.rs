@@ -2667,6 +2667,19 @@ pub enum Statement {
         /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
         characteristics: Option<DeferrableCharacteristics>,
     },
+    /// DROP TRIGGER
+    ///
+    /// ```sql
+    /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
+    /// ```
+    ///
+    DropTrigger {
+        if_exists: bool,
+        trigger_name: ObjectName,
+        table_name: ObjectName,
+        /// `CASCADE` or `RESTRICT`
+        option: Option<ReferentialAction>,
+    },
     /// ```sql
     /// CREATE PROCEDURE
     /// ```
@@ -3464,6 +3477,22 @@ impl fmt::Display for Statement {
                     write!(f, " WHEN {condition}")?;
                 }
                 write!(f, " EXECUTE {exec_body}")
+            }
+            Statement::DropTrigger {
+                if_exists,
+                trigger_name,
+                table_name,
+                option,
+            } => {
+                write!(f, "DROP TRIGGER")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {trigger_name} ON {table_name}")?;
+                if let Some(option) = option {
+                    write!(f, " {option}")?;
+                }
+                Ok(())
             }
             Statement::CreateProcedure {
                 name,

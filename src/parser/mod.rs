@@ -4160,6 +4160,36 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse statements of the DropTrigger type such as:
+    ///
+    /// ```sql
+    /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
+    /// ```
+    pub fn parse_drop_trigger(&mut self) -> Result<Statement, ParserError> {
+        if dialect_of!(self is PostgreSqlDialect) {
+            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+            let trigger_name = self.parse_object_name(false)?;
+            self.expect_keyword(Keyword::ON)?;
+            let table_name = self.parse_object_name(false)?;
+            let option = self
+                .parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT])
+                .map(|keyword| match keyword {
+                    Keyword::CASCADE => ReferentialAction::Cascade,
+                    Keyword::RESTRICT => ReferentialAction::Restrict,
+                    _ => unreachable!(),
+                });
+            Ok(Statement::DropTrigger {
+                if_exists,
+                trigger_name,
+                table_name,
+                option,
+            })
+        } else {
+            self.prev_token();
+            self.expected("an object type after CREATE", self.peek_token())
+        }
+    }
+
     pub fn parse_create_trigger(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         if dialect_of!(self is PostgreSqlDialect) {
             let name = self.parse_object_name(false)?;
@@ -4775,9 +4805,11 @@ impl<'a> Parser<'a> {
             return self.parse_drop_procedure();
         } else if self.parse_keyword(Keyword::SECRET) {
             return self.parse_drop_secret(temporary, persistent);
+        } else if self.parse_keyword(Keyword::TRIGGER) {
+            return self.parse_drop_trigger();
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, PROCEDURE, STAGE or SEQUENCE after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, PROCEDURE, STAGE, TRIGGER, SECRET or SEQUENCE after DROP",
                 self.peek_token(),
             );
         };

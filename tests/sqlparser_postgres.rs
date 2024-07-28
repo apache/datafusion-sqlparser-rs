@@ -4580,28 +4580,42 @@ fn parse_create_trigger() {
                             ),
                             (
                                 vec![
-                                    TriggerEvent::Update(vec![Ident::new("balance"), Ident::new("name"), Ident::new("name2"), Ident::new("name3")]),
+                                    TriggerEvent::Update(vec![
+                                        Ident::new("balance"),
+                                        Ident::new("name"),
+                                        Ident::new("name2"),
+                                        Ident::new("name3"),
+                                    ]),
                                     TriggerEvent::Update(vec![Ident::new("name")]),
                                 ],
                                 "UPDATE OF balance, name, name2, name3 OR UPDATE OF name",
                             ),
                             (
                                 vec![
-                                    TriggerEvent::Update(vec![Ident::new("balance"), Ident::new("name")]),
+                                    TriggerEvent::Update(vec![
+                                        Ident::new("balance"),
+                                        Ident::new("name"),
+                                    ]),
                                     TriggerEvent::Insert,
                                 ],
                                 "UPDATE OF balance, name OR INSERT",
                             ),
                             (
                                 vec![
-                                    TriggerEvent::Update(vec![Ident::new("balance"), Ident::new("name")]),
+                                    TriggerEvent::Update(vec![
+                                        Ident::new("balance"),
+                                        Ident::new("name"),
+                                    ]),
                                     TriggerEvent::Delete,
                                 ],
                                 "UPDATE OF balance, name OR DELETE",
                             ),
                             (
                                 vec![
-                                    TriggerEvent::Update(vec![Ident::new("balance"), Ident::new("name")]),
+                                    TriggerEvent::Update(vec![
+                                        Ident::new("balance"),
+                                        Ident::new("name"),
+                                    ]),
                                     TriggerEvent::Insert,
                                     TriggerEvent::Delete,
                                 ],
@@ -4816,4 +4830,225 @@ fn parse_drop_trigger_invalid_cases() {
             res.unwrap_err().to_string()
         );
     }
+}
+
+#[test]
+fn parse_trigger_related_functions() {
+    // First we define all parts of the trigger definition,
+    // including the table creation, the function creation, the trigger creation and the trigger drop.
+    // The following example is taken from the PostgreSQL documentation <https://www.postgresql.org/docs/current/plpgsql-trigger.html>
+
+    let sql_table_creation = r#"
+    CREATE TABLE emp (
+        empname           text,
+        salary            integer,
+        last_date         timestamp,
+        last_user         text
+    );
+    "#;
+
+    let sql_create_function = r#"
+    CREATE FUNCTION emp_stamp() RETURNS trigger AS $emp_stamp$
+        BEGIN
+            -- Check that empname and salary are given
+            IF NEW.empname IS NULL THEN
+                RAISE EXCEPTION 'empname cannot be null';
+            END IF;
+            IF NEW.salary IS NULL THEN
+                RAISE EXCEPTION '% cannot have null salary', NEW.empname;
+            END IF;
+    
+            -- Who works for us when they must pay for it?
+            IF NEW.salary < 0 THEN
+                RAISE EXCEPTION '% cannot have a negative salary', NEW.empname;
+            END IF;
+    
+            -- Remember who changed the payroll when
+            NEW.last_date := current_timestamp;
+            NEW.last_user := current_user;
+            RETURN NEW;
+        END;
+    $emp_stamp$ LANGUAGE plpgsql;
+    "#;
+
+    let sql_create_trigger = r#"
+    CREATE TRIGGER emp_stamp BEFORE INSERT OR UPDATE ON emp
+        FOR EACH ROW EXECUTE FUNCTION emp_stamp();
+    "#;
+
+    let sql_drop_trigger = r#"
+    DROP TRIGGER emp_stamp ON emp;
+    "#;
+
+    // Now we parse the statements and check if they are parsed correctly.
+    let mut statements = pg()
+        .parse_sql_statements(&format!(
+            "{}{}{}{}",
+            sql_table_creation, sql_create_function, sql_create_trigger, sql_drop_trigger
+        ))
+        .unwrap();
+
+    assert_eq!(statements.len(), 4);
+    let drop_trigger = statements.pop().unwrap();
+    let create_trigger = statements.pop().unwrap();
+    let create_function = statements.pop().unwrap();
+    let create_table = statements.pop().unwrap();
+
+    // Check the first statement
+    let create_table = match create_table {
+        Statement::CreateTable(create_table) => create_table,
+        _ => panic!("Expected CreateTable statement"),
+    };
+
+    assert_eq!(
+        create_table,
+        CreateTable {
+            or_replace: false,
+            temporary: false,
+            external: false,
+            global: None,
+            if_not_exists: false,
+            transient: false,
+            volatile: false,
+            name: ObjectName(vec![Ident::new("emp")]),
+            columns: vec![
+                ColumnDef {
+                    name: "empname".into(),
+                    data_type: DataType::Text,
+                    collation: None,
+                    options: vec![],
+                },
+                ColumnDef {
+                    name: "salary".into(),
+                    data_type: DataType::Integer(None),
+                    collation: None,
+                    options: vec![],
+                },
+                ColumnDef {
+                    name: "last_date".into(),
+                    data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                    collation: None,
+                    options: vec![],
+                },
+                ColumnDef {
+                    name: "last_user".into(),
+                    data_type: DataType::Text,
+                    collation: None,
+                    options: vec![],
+                },
+            ],
+            constraints: vec![],
+            hive_distribution: HiveDistributionStyle::NONE,
+            hive_formats: Some(HiveFormat {
+                row_format: None,
+                serde_properties: None,
+                storage: None,
+                location: None
+            }),
+            table_properties: vec![],
+            with_options: vec![],
+            file_format: None,
+            location: None,
+            query: None,
+            without_rowid: false,
+            like: None,
+            clone: None,
+            engine: None,
+            comment: None,
+            auto_increment_offset: None,
+            default_charset: None,
+            collation: None,
+            on_commit: None,
+            on_cluster: None,
+            primary_key: None,
+            order_by: None,
+            partition_by: None,
+            cluster_by: None,
+            options: None,
+            strict: false,
+            copy_grants: false,
+            enable_schema_evolution: None,
+            change_tracking: None,
+            data_retention_time_in_days: None,
+            max_data_extension_time_in_days: None,
+            default_ddl_collation: None,
+            with_aggregation_policy: None,
+            with_row_access_policy: None,
+            with_tags: None,
+        }
+    );
+
+    // Check the second statement
+
+    dbg!(&create_function);
+
+    assert_eq!(
+        create_function,
+        Statement::CreateFunction {
+            or_replace: false,
+            temporary: false,
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("emp_stamp")]),
+            args: None,
+            return_type: Some(DataType::Trigger),
+            function_body: Some(
+                CreateFunctionBody::AsBeforeOptions(
+                    Expr::Value(
+                        Value::DollarQuotedString(
+                            DollarQuotedString {
+                                value: "\n        BEGIN\n            -- Check that empname and salary are given\n            IF NEW.empname IS NULL THEN\n                RAISE EXCEPTION 'empname cannot be null';\n            END IF;\n            IF NEW.salary IS NULL THEN\n                RAISE EXCEPTION '% cannot have null salary', NEW.empname;\n            END IF;\n    \n            -- Who works for us when they must pay for it?\n            IF NEW.salary < 0 THEN\n                RAISE EXCEPTION '% cannot have a negative salary', NEW.empname;\n            END IF;\n    \n            -- Remember who changed the payroll when\n            NEW.last_date := current_timestamp;\n            NEW.last_user := current_user;\n            RETURN NEW;\n        END;\n    ".to_owned(),
+                                tag: Some(
+                                    "emp_stamp".to_owned(),
+                                ),
+                            },
+                        ),
+                    ),
+                ),
+            ),
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            using: None,
+            language: Some(Ident::new("plpgsql")),
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None
+        }
+    );
+
+    // Check the third statement
+
+    assert_eq!(
+        create_trigger,
+        Statement::CreateTrigger {
+            or_replace: false,
+            name: ObjectName(vec![Ident::new("emp_stamp")]),
+            period: TriggerPeriod::Before,
+            events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![])],
+            table_name: ObjectName(vec![Ident::new("emp")]),
+            referencing: vec![],
+            trigger_object: TriggerObject::Row,
+            include_each: true,
+            condition: None,
+            exec_body: TriggerExecBody {
+                exec_type: TriggerExecBodyType::Function,
+                func_desc: FunctionDesc {
+                    name: ObjectName(vec![Ident::new("emp_stamp")]),
+                    args: None,
+                }
+            },
+            characteristics: None
+        }
+    );
+
+    // Check the fourth statement
+    assert_eq!(
+        drop_trigger,
+        Statement::DropTrigger {
+            if_exists: false,
+            trigger_name: ObjectName(vec![Ident::new("emp_stamp")]),
+            table_name: ObjectName(vec![Ident::new("emp")]),
+            option: None
+        }
+    );
 }

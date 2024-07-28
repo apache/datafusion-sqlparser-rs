@@ -4199,9 +4199,8 @@ impl<'a> Parser<'a> {
         let period = self.parse_trigger_period()?;
 
         let events = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
-        let table_name = self
-            .expect_keyword(Keyword::ON)
-            .and_then(|_| self.parse_object_name(false))?;
+        self.expect_keyword(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
 
         // [ NOT DEFERRABLE | [ DEFERRABLE ] [ INITIALLY IMMEDIATE | INITIALLY DEFERRED ] ]
         let mut deferrable: Option<bool> = None;
@@ -4233,25 +4232,24 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let (trigger_object, include_each) = self.expect_keyword(Keyword::FOR).and_then(|_| {
-            let include_each = self.parse_keyword(Keyword::EACH);
-            let trigger_object =
-                match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
-                    Keyword::ROW => TriggerObject::Row,
-                    Keyword::STATEMENT => TriggerObject::Statement,
-                    _ => unreachable!(),
-                };
-            Ok((trigger_object, include_each))
-        })?;
+        self.expect_keyword(Keyword::FOR)?;
+        let include_each = self.parse_keyword(Keyword::EACH);
+        let trigger_object =
+            match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
+                Keyword::ROW => TriggerObject::Row,
+                Keyword::STATEMENT => TriggerObject::Statement,
+                _ => unreachable!(),
+            };
 
         let condition = self
             .parse_keyword(Keyword::WHEN)
             .then(|| self.parse_expr())
             .transpose()?;
 
-        let exec_body = self
-            .expect_keyword(Keyword::EXECUTE)
-            .and_then(|_| self.parse_trigger_exec_body())?;
+        self
+            .expect_keyword(Keyword::EXECUTE)?;
+
+        let exec_body =self.parse_trigger_exec_body()?;
 
         Ok(Statement::CreateTrigger {
             or_replace,

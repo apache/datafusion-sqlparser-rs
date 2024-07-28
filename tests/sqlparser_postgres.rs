@@ -4622,7 +4622,7 @@ fn parse_create_trigger() {
                                 "UPDATE OF balance, name OR INSERT OR DELETE",
                             ),
                         ] {
-                            for when in [
+                            for period in [
                                 TriggerPeriod::Before,
                                 TriggerPeriod::After,
                                 TriggerPeriod::InsteadOf,

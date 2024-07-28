@@ -33,10 +33,10 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConstraintCharacteristics, DeferrableCharacteristics, DeferrableInitial,
-    GeneratedAs, GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner,
-    Partition, ProcedureParam, ReferentialAction, TableConstraint,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    ColumnOptionDef, ConstraintCharacteristics, DeferrableInitial, GeneratedAs,
+    GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner, Partition,
+    ProcedureParam, ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2666,7 +2666,7 @@ pub enum Statement {
         /// Execute logic block
         exec_body: TriggerExecBody,
         /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
-        characteristics: Option<DeferrableCharacteristics>,
+        characteristics: Option<ConstraintCharacteristics>,
     },
     /// DROP TRIGGER
     ///

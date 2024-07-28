@@ -4202,28 +4202,7 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
 
-        // [ NOT DEFERRABLE | [ DEFERRABLE ] [ INITIALLY IMMEDIATE | INITIALLY DEFERRED ] ]
-        let mut deferrable: Option<bool> = None;
-
-        if self.parse_keyword(Keyword::NOT) {
-            self.expect_keyword(Keyword::DEFERRABLE)?;
-            deferrable = Some(false);
-        } else if self.parse_keyword(Keyword::DEFERRABLE) {
-            deferrable = Some(true);
-        };
-
-        let initially: Option<DeferrableInitial> =
-            if deferrable.is_some() && self.parse_keyword(Keyword::INITIALLY) {
-                Some(
-                    match self.expect_one_of_keywords(&[Keyword::IMMEDIATE, Keyword::DEFERRED])? {
-                        Keyword::IMMEDIATE => DeferrableInitial::Immediate,
-                        Keyword::DEFERRED => DeferrableInitial::Deferred,
-                        _ => unreachable!(),
-                    },
-                )
-            } else {
-                None
-            };
+        let characteristics = self.parse_constraint_characteristics()?;
 
         let mut referencing = vec![];
         if self.parse_keyword(Keyword::REFERENCING) {
@@ -4261,12 +4240,7 @@ impl<'a> Parser<'a> {
             include_each,
             condition,
             exec_body,
-            characteristics: (deferrable.is_some() || initially.is_some()).then_some(
-                DeferrableCharacteristics {
-                    deferrable,
-                    initially,
-                },
-            ),
+            characteristics,
         })
     }
 
@@ -6175,18 +6149,16 @@ impl<'a> Parser<'a> {
         let mut cc = ConstraintCharacteristics::default();
 
         loop {
-            if cc.deferrable.deferrable.is_none()
-                && self.parse_keywords(&[Keyword::NOT, Keyword::DEFERRABLE])
+            if cc.deferrable.is_none() && self.parse_keywords(&[Keyword::NOT, Keyword::DEFERRABLE])
             {
-                cc.deferrable.deferrable = Some(false);
-            } else if cc.deferrable.deferrable.is_none() && self.parse_keyword(Keyword::DEFERRABLE)
-            {
-                cc.deferrable.deferrable = Some(true);
-            } else if cc.deferrable.initially.is_none() && self.parse_keyword(Keyword::INITIALLY) {
+                cc.deferrable = Some(false);
+            } else if cc.deferrable.is_none() && self.parse_keyword(Keyword::DEFERRABLE) {
+                cc.deferrable = Some(true);
+            } else if cc.initially.is_none() && self.parse_keyword(Keyword::INITIALLY) {
                 if self.parse_keyword(Keyword::DEFERRED) {
-                    cc.deferrable.initially = Some(DeferrableInitial::Deferred);
+                    cc.initially = Some(DeferrableInitial::Deferred);
                 } else if self.parse_keyword(Keyword::IMMEDIATE) {
-                    cc.deferrable.initially = Some(DeferrableInitial::Immediate);
+                    cc.initially = Some(DeferrableInitial::Immediate);
                 } else {
                     self.expected("one of DEFERRED or IMMEDIATE", self.peek_token())?;
                 }
@@ -6201,10 +6173,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if cc.deferrable.deferrable.is_some()
-            || cc.deferrable.initially.is_some()
-            || cc.enforced.is_some()
-        {
+        if cc.deferrable.is_some() || cc.initially.is_some() || cc.enforced.is_some() {
             Ok(Some(cc))
         } else {
             Ok(None)

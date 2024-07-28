@@ -4485,29 +4485,33 @@ fn parse_create_trigger() {
             for (characteristics, characteristics_text) in [
                 (None, ""),
                 (
-                    Some(DeferrableCharacteristics {
+                    Some(ConstraintCharacteristics {
                         deferrable: Some(true),
+                        enforced: None,
                         initially: Some(DeferrableInitial::Deferred),
                     }),
                     "DEFERRABLE INITIALLY DEFERRED ",
                 ),
                 (
-                    Some(DeferrableCharacteristics {
+                    Some(ConstraintCharacteristics {
                         deferrable: Some(false),
+                        enforced: None,
                         initially: Some(DeferrableInitial::Immediate),
                     }),
                     "NOT DEFERRABLE INITIALLY IMMEDIATE ",
                 ),
                 (
-                    Some(DeferrableCharacteristics {
+                    Some(ConstraintCharacteristics {
                         deferrable: Some(true),
+                        enforced: None,
                         initially: Some(DeferrableInitial::Immediate),
                     }),
                     "DEFERRABLE INITIALLY IMMEDIATE ",
                 ),
                 (
-                    Some(DeferrableCharacteristics {
+                    Some(ConstraintCharacteristics {
                         deferrable: Some(true),
+                        enforced: None,
                         initially: Some(DeferrableInitial::Deferred),
                     }),
                     "DEFERRABLE INITIALLY DEFERRED ",

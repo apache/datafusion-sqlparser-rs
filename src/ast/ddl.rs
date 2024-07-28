@@ -1158,46 +1158,12 @@ fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl fmt::Displ
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ConstraintCharacteristics {
-    /// `[ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
-    pub deferrable: DeferrableCharacteristics,
-    /// `[ ENFORCED | NOT ENFORCED ]`
-    pub enforced: Option<bool>,
-}
-
-/// `<constraint_characteristics> = [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
-///
-/// Used in TRIGGER, UNIQUE and foreign key constraints. The individual settings may occur in any order.
-#[derive(Debug, Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct DeferrableCharacteristics {
     /// `[ DEFERRABLE | NOT DEFERRABLE ]`
     pub deferrable: Option<bool>,
     /// `[ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]`
     pub initially: Option<DeferrableInitial>,
-}
-
-impl fmt::Display for DeferrableCharacteristics {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(deferrable) = self.deferrable {
-            write!(
-                f,
-                "{}",
-                if deferrable {
-                    "DEFERRABLE"
-                } else {
-                    "NOT DEFERRABLE"
-                }
-            )?;
-        }
-        if let Some(initially) = self.initially {
-            if self.deferrable.is_some() {
-                f.write_str(" ")?;
-            }
-            write!(f, "{}", initially)?;
-        }
-        Ok(())
-    }
+    /// `[ ENFORCED | NOT ENFORCED ]`
+    pub enforced: Option<bool>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1235,17 +1201,24 @@ impl ConstraintCharacteristics {
 
 impl fmt::Display for ConstraintCharacteristics {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.deferrable.deferrable.is_some() || self.deferrable.initially.is_some() {
-            write!(
-                f,
-                "{}{}",
-                self.deferrable,
-                display_option_spaced(&self.enforced_text())
-            )?;
-        } else if let Some(enforced) = self.enforced_text() {
-            write!(f, "{}", enforced)?;
+        let mut parts = vec![];
+        if let Some(deferrable) = self.deferrable {
+            parts.push(
+                if deferrable {
+                    "DEFERRABLE"
+                } else {
+                    "NOT DEFERRABLE"
+                }
+                .to_string(),
+            );
         }
-        Ok(())
+        if let Some(initially) = self.initially {
+            parts.push(initially.to_string());
+        }
+        if let Some(enforced) = self.enforced_text() {
+            parts.push(enforced.to_string());
+        }
+        write!(f, "{}", display_separated(&parts, " "))
     }
 }
 

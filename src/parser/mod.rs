@@ -4166,7 +4166,10 @@ impl<'a> Parser<'a> {
     /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
     /// ```
     pub fn parse_drop_trigger(&mut self) -> Result<Statement, ParserError> {
-        if dialect_of!(self is PostgreSqlDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+              return self.expected(...)
+        }
+        ...
             let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
             let trigger_name = self.parse_object_name(false)?;
             self.expect_keyword(Keyword::ON)?;

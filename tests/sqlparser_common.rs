@@ -3823,6 +3823,27 @@ fn parse_alter_table() {
 }
 
 #[test]
+fn test_alter_table_with_on_cluster() {
+    let sql = "ALTER TABLE t ON CLUSTER 'cluster' ADD CONSTRAINT bar PRIMARY KEY (baz)";
+    match all_dialects().verified_stmt(sql) {
+        Statement::AlterTable {
+            name, on_cluster, ..
+        } => {
+            std::assert_eq!(name.to_string(), "t");
+            std::assert_eq!(on_cluster, Some("'cluster'".to_string()));
+        }
+        _ => unreachable!(),
+    }
+
+    let res = all_dialects()
+        .parse_sql_statements("ALTER TABLE t ON CLUSTER 123 ADD CONSTRAINT bar PRIMARY KEY (baz)");
+    std::assert_eq!(
+        res.unwrap_err(),
+        ParserError::ParserError("Expected: identifier or cluster literal, found: 123".to_string())
+    )
+}
+
+#[test]
 fn parse_alter_index() {
     let rename_index = "ALTER INDEX idx RENAME TO new_idx";
     match verified_stmt(rename_index) {

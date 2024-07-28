@@ -4233,17 +4233,16 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let (trigger_object, include_each) =
-            self.expect_keyword(Keyword::FOR).and_then(|_| {
-                let include_each = self.parse_keyword(Keyword::EACH);
-                let trigger_object =
-                    match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
-                        Keyword::ROW => TriggerObject::Row,
-                        Keyword::STATEMENT => TriggerObject::Statement,
-                        _ => unreachable!(),
-                    };
-                Ok((trigger_object, include_each))
-            })?;
+        let (trigger_object, include_each) = self.expect_keyword(Keyword::FOR).and_then(|_| {
+            let include_each = self.parse_keyword(Keyword::EACH);
+            let trigger_object =
+                match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
+                    Keyword::ROW => TriggerObject::Row,
+                    Keyword::STATEMENT => TriggerObject::Statement,
+                    _ => unreachable!(),
+                };
+            Ok((trigger_object, include_each))
+        })?;
 
         let condition = self
             .parse_keyword(Keyword::WHEN)

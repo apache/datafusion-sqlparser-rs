@@ -2258,7 +2258,7 @@ fn asof_joins() {
 }
 
 #[test]
-fn test() {
+fn test_parse_position() {
     snowflake().verified_query("SELECT position('an', 'banana', 1)");
     snowflake().verified_query("SELECT n, h, POSITION(n IN h) FROM pos");
 }

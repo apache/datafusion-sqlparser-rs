@@ -4246,10 +4246,9 @@ impl<'a> Parser<'a> {
             .then(|| self.parse_expr())
             .transpose()?;
 
-        self
-            .expect_keyword(Keyword::EXECUTE)?;
+        self.expect_keyword(Keyword::EXECUTE)?;
 
-        let exec_body =self.parse_trigger_exec_body()?;
+        let exec_body = self.parse_trigger_exec_body()?;
 
         Ok(Statement::CreateTrigger {
             or_replace,

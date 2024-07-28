@@ -4167,115 +4167,111 @@ impl<'a> Parser<'a> {
     /// ```
     pub fn parse_drop_trigger(&mut self) -> Result<Statement, ParserError> {
         if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
-              return self.expected(...)
-        }
-        ...
-            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-            let trigger_name = self.parse_object_name(false)?;
-            self.expect_keyword(Keyword::ON)?;
-            let table_name = self.parse_object_name(false)?;
-            let option = self
-                .parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT])
-                .map(|keyword| match keyword {
-                    Keyword::CASCADE => ReferentialAction::Cascade,
-                    Keyword::RESTRICT => ReferentialAction::Restrict,
-                    _ => unreachable!(),
-                });
-            Ok(Statement::DropTrigger {
-                if_exists,
-                trigger_name,
-                table_name,
-                option,
-            })
-        } else {
             self.prev_token();
-            self.expected("an object type after CREATE", self.peek_token())
+            return self.expected("an object type after DROP", self.peek_token());
         }
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let trigger_name = self.parse_object_name(false)?;
+        self.expect_keyword(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
+        let option = self
+            .parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT])
+            .map(|keyword| match keyword {
+                Keyword::CASCADE => ReferentialAction::Cascade,
+                Keyword::RESTRICT => ReferentialAction::Restrict,
+                _ => unreachable!(),
+            });
+        Ok(Statement::DropTrigger {
+            if_exists,
+            trigger_name,
+            table_name,
+            option,
+        })
     }
 
     pub fn parse_create_trigger(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
-        if dialect_of!(self is PostgreSqlDialect) {
-            let name = self.parse_object_name(false)?;
-            let period = self.parse_trigger_period()?;
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+            self.prev_token();
+            return self.expected("an object type after CREATE", self.peek_token());
+        }
 
-            let events = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
-            let table_name = self
-                .expect_keyword(Keyword::ON)
-                .and_then(|_| self.parse_object_name(false))?;
+        let name = self.parse_object_name(false)?;
+        let period = self.parse_trigger_period()?;
 
-            // [ NOT DEFERRABLE | [ DEFERRABLE ] [ INITIALLY IMMEDIATE | INITIALLY DEFERRED ] ]
-            let mut deferrable: Option<bool> = None;
+        let events = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
+        let table_name = self
+            .expect_keyword(Keyword::ON)
+            .and_then(|_| self.parse_object_name(false))?;
 
-            if self.parse_keyword(Keyword::NOT) {
-                self.expect_keyword(Keyword::DEFERRABLE)?;
-                deferrable = Some(false);
-            } else if self.parse_keyword(Keyword::DEFERRABLE) {
-                deferrable = Some(true);
-            };
+        // [ NOT DEFERRABLE | [ DEFERRABLE ] [ INITIALLY IMMEDIATE | INITIALLY DEFERRED ] ]
+        let mut deferrable: Option<bool> = None;
 
-            let initially: Option<DeferrableInitial> = (deferrable.is_some()
-                && self.parse_keyword(Keyword::INITIALLY))
-            .then(|| {
-                Ok::<_, ParserError>(
-                    match self.expect_one_of_keywords(&[Keyword::IMMEDIATE, Keyword::DEFERRED])? {
-                        Keyword::IMMEDIATE => DeferrableInitial::Immediate,
-                        Keyword::DEFERRED => DeferrableInitial::Deferred,
+        if self.parse_keyword(Keyword::NOT) {
+            self.expect_keyword(Keyword::DEFERRABLE)?;
+            deferrable = Some(false);
+        } else if self.parse_keyword(Keyword::DEFERRABLE) {
+            deferrable = Some(true);
+        };
+
+        let initially: Option<DeferrableInitial> = (deferrable.is_some()
+            && self.parse_keyword(Keyword::INITIALLY))
+        .then(|| {
+            Ok::<_, ParserError>(
+                match self.expect_one_of_keywords(&[Keyword::IMMEDIATE, Keyword::DEFERRED])? {
+                    Keyword::IMMEDIATE => DeferrableInitial::Immediate,
+                    Keyword::DEFERRED => DeferrableInitial::Deferred,
+                    _ => unreachable!(),
+                },
+            )
+        })
+        .transpose()?;
+
+        let mut referencing = vec![];
+        if self.parse_keyword(Keyword::REFERENCING) {
+            while let Some(refer) = self.parse_trigger_referencing()? {
+                referencing.push(refer);
+            }
+        }
+
+        let (trigger_object, include_each) =
+            self.expect_keyword(Keyword::FOR).and_then(|_| {
+                let include_each = self.parse_keyword(Keyword::EACH);
+                let trigger_object =
+                    match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
+                        Keyword::ROW => TriggerObject::Row,
+                        Keyword::STATEMENT => TriggerObject::Statement,
                         _ => unreachable!(),
-                    },
-                )
-            })
+                    };
+                Ok((trigger_object, include_each))
+            })?;
+
+        let condition = self
+            .parse_keyword(Keyword::WHEN)
+            .then(|| self.parse_expr())
             .transpose()?;
 
-            let mut referencing = vec![];
-            if self.parse_keyword(Keyword::REFERENCING) {
-                while let Some(refer) = self.parse_trigger_referencing()? {
-                    referencing.push(refer);
-                }
-            }
+        let exec_body = self
+            .expect_keyword(Keyword::EXECUTE)
+            .and_then(|_| self.parse_trigger_exec_body())?;
 
-            let (trigger_object, include_each) =
-                self.expect_keyword(Keyword::FOR).and_then(|_| {
-                    let include_each = self.parse_keyword(Keyword::EACH);
-                    let trigger_object =
-                        match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
-                            Keyword::ROW => TriggerObject::Row,
-                            Keyword::STATEMENT => TriggerObject::Statement,
-                            _ => unreachable!(),
-                        };
-                    Ok((trigger_object, include_each))
-                })?;
-
-            let condition = self
-                .parse_keyword(Keyword::WHEN)
-                .then(|| self.parse_expr())
-                .transpose()?;
-
-            let exec_body = self
-                .expect_keyword(Keyword::EXECUTE)
-                .and_then(|_| self.parse_trigger_exec_body())?;
-
-            Ok(Statement::CreateTrigger {
-                or_replace,
-                name,
-                period,
-                events,
-                table_name,
-                referencing,
-                trigger_object,
-                include_each,
-                condition,
-                exec_body,
-                characteristics: (deferrable.is_some() || initially.is_some()).then_some(
-                    DeferrableCharacteristics {
-                        deferrable,
-                        initially,
-                    },
-                ),
-            })
-        } else {
-            self.prev_token();
-            self.expected("an object type after CREATE", self.peek_token())
-        }
+        Ok(Statement::CreateTrigger {
+            or_replace,
+            name,
+            period,
+            events,
+            table_name,
+            referencing,
+            trigger_object,
+            include_each,
+            condition,
+            exec_body,
+            characteristics: (deferrable.is_some() || initially.is_some()).then_some(
+                DeferrableCharacteristics {
+                    deferrable,
+                    initially,
+                },
+            ),
+        })
     }
 
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {

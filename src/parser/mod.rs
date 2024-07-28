@@ -4212,18 +4212,18 @@ impl<'a> Parser<'a> {
             deferrable = Some(true);
         };
 
-        let initially: Option<DeferrableInitial> = (deferrable.is_some()
-            && self.parse_keyword(Keyword::INITIALLY))
-        .then(|| {
-            Ok::<_, ParserError>(
-                match self.expect_one_of_keywords(&[Keyword::IMMEDIATE, Keyword::DEFERRED])? {
-                    Keyword::IMMEDIATE => DeferrableInitial::Immediate,
-                    Keyword::DEFERRED => DeferrableInitial::Deferred,
-                    _ => unreachable!(),
-                },
-            )
-        })
-        .transpose()?;
+        let initially: Option<DeferrableInitial> =
+            if deferrable.is_some() && self.parse_keyword(Keyword::INITIALLY) {
+                Some(
+                    match self.expect_one_of_keywords(&[Keyword::IMMEDIATE, Keyword::DEFERRED])? {
+                        Keyword::IMMEDIATE => DeferrableInitial::Immediate,
+                        Keyword::DEFERRED => DeferrableInitial::Deferred,
+                        _ => unreachable!(),
+                    },
+                )
+            } else {
+                None
+            };
 
         let mut referencing = vec![];
         if self.parse_keyword(Keyword::REFERENCING) {
@@ -4271,28 +4271,30 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {
-        self.expect_one_of_keywords(&[Keyword::BEFORE, Keyword::AFTER, Keyword::INSTEAD])
-            .and_then(|keyword| {
-                Ok(match keyword {
-                    Keyword::BEFORE => TriggerPeriod::Before,
-                    Keyword::AFTER => TriggerPeriod::After,
-                    Keyword::INSTEAD => self
-                        .expect_keyword(Keyword::OF)
-                        .map(|_| TriggerPeriod::InsteadOf)?,
-                    _ => unreachable!(),
-                })
-            })
+        Ok(
+            match self.expect_one_of_keywords(&[
+                Keyword::BEFORE,
+                Keyword::AFTER,
+                Keyword::INSTEAD,
+            ])? {
+                Keyword::BEFORE => TriggerPeriod::Before,
+                Keyword::AFTER => TriggerPeriod::After,
+                Keyword::INSTEAD => self
+                    .expect_keyword(Keyword::OF)
+                    .map(|_| TriggerPeriod::InsteadOf)?,
+                _ => unreachable!(),
+            },
+        )
     }
 
     pub fn parse_trigger_event(&mut self) -> Result<TriggerEvent, ParserError> {
-        self.expect_one_of_keywords(&[
-            Keyword::INSERT,
-            Keyword::UPDATE,
-            Keyword::DELETE,
-            Keyword::TRUNCATE,
-        ])
-        .and_then(|keyword| {
-            Ok(match keyword {
+        Ok(
+            match self.expect_one_of_keywords(&[
+                Keyword::INSERT,
+                Keyword::UPDATE,
+                Keyword::DELETE,
+                Keyword::TRUNCATE,
+            ])? {
                 Keyword::INSERT => TriggerEvent::Insert,
                 Keyword::UPDATE => {
                     if self.parse_keyword(Keyword::OF) {
@@ -4307,8 +4309,8 @@ impl<'a> Parser<'a> {
                 Keyword::DELETE => TriggerEvent::Delete,
                 Keyword::TRUNCATE => TriggerEvent::Truncate,
                 _ => unreachable!(),
-            })
-        })
+            },
+        )
     }
 
     pub fn parse_trigger_referencing(&mut self) -> Result<Option<TriggerReferencing>, ParserError> {
@@ -4334,16 +4336,14 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_trigger_exec_body(&mut self) -> Result<TriggerExecBody, ParserError> {
-        let exec_type = self
-            .expect_one_of_keywords(&[Keyword::FUNCTION, Keyword::PROCEDURE])
-            .map(|keyword| match keyword {
+        Ok(TriggerExecBody {
+            exec_type: match self
+                .expect_one_of_keywords(&[Keyword::FUNCTION, Keyword::PROCEDURE])?
+            {
                 Keyword::FUNCTION => TriggerExecBodyType::Function,
                 Keyword::PROCEDURE => TriggerExecBodyType::Procedure,
                 _ => unreachable!(),
-            })?;
-
-        Ok(TriggerExecBody {
-            exec_type,
+            },
             func_desc: self.parse_function_desc()?,
         })
     }

@@ -7972,10 +7972,13 @@ impl<'a> Parser<'a> {
                     _ => {}
                 }
 
+                // only allow to use TABLE keyword for DESC|DESCRIBE statement
+                let has_table_keyword = self.parse_keyword(Keyword::TABLE);
                 let table_name = self.parse_object_name(false)?;
                 Ok(Statement::ExplainTable {
                     describe_alias,
                     hive_format,
+                    has_table_keyword,
                     table_name,
                 })
             }

@@ -35,6 +35,10 @@ impl Dialect for GenericDialect {
             || ch == '_'
     }
 
+    fn supports_unicode_string_literal(&self) -> bool {
+        true
+    }
+
     fn supports_group_by_expr(&self) -> bool {
         true
     }

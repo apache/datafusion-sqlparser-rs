@@ -4151,7 +4151,7 @@ fn parse_scalar_function_in_projection() {
 
     for function_name in names {
         // like SELECT sqrt(id) FROM foo
-        let sql = dbg!(format!("SELECT {function_name}(id) FROM foo"));
+        let sql = format!("SELECT {function_name}(id) FROM foo");
         let select = verified_only_select(&sql);
         assert_eq!(
             &call(function_name, [Expr::Identifier(Ident::new("id"))]),
@@ -8254,30 +8254,34 @@ fn parse_time_functions() {
 
 #[test]
 fn parse_position() {
-    let sql = "SELECT POSITION('@' IN field)";
-    let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Position {
+        Expr::Position {
             expr: Box::new(Expr::Value(Value::SingleQuotedString("@".to_string()))),
             r#in: Box::new(Expr::Identifier(Ident::new("field"))),
         },
-        expr_from_projection(only(&select.projection))
+        verified_expr("POSITION('@' IN field)"),
+    );
+
+    // some dialects (e.g. snowflake) support position as a function call (i.e. without IN)
+    assert_eq!(
+        call(
+            "position",
+            [
+                Expr::Value(Value::SingleQuotedString("an".to_owned())),
+                Expr::Value(Value::SingleQuotedString("banana".to_owned())),
+                Expr::Value(number("1")),
+            ]
+        ),
+        verified_expr("position('an', 'banana', 1)")
     );
 }
 
 #[test]
 fn parse_position_negative() {
-    let sql = "SELECT POSITION(foo) from bar";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError("Position function must include IN keyword".to_string()),
-        res.unwrap_err()
-    );
-
     let sql = "SELECT POSITION(foo IN) from bar";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError("Expected: an expression:, found: )".to_string()),
+        ParserError::ParserError("Expected: (, found: )".to_string()),
         res.unwrap_err()
     );
 }

@@ -1091,6 +1091,38 @@ fn parse_create_table_on_commit_and_as_query() {
     }
 }
 
+#[test]
+fn parse_select_table_function_settings() {
+    let sql = r#"SELECT * FROM table_function(arg, SETTINGS setting = 3)"#;
+    match clickhouse_and_generic().verified_stmt(sql) {
+        Statement::Query(q) => {
+            let from = &q.body.as_select().unwrap().from;
+            assert_eq!(from.len(), 1);
+            assert_eq!(from[0].joins, vec![]);
+            match &from[0].relation {
+                Table { args, .. } => {
+                    let args = args.as_ref().unwrap();
+                    assert_eq!(
+                        args.args,
+                        vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::Identifier("arg".into())
+                        ))]
+                    );
+                    assert_eq!(
+                        args.settings,
+                        Some(vec![Setting {
+                            key: "setting".into(),
+                            value: Value::Number("3".into(), false)
+                        }])
+                    )
+                }
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

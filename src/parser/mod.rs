@@ -5372,14 +5372,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_optional_on_cluster(&mut self) -> Result<Option<String>, ParserError> {
+    fn parse_optional_on_cluster(&mut self) -> Result<Option<Ident>, ParserError> {
         if self.parse_keywords(&[Keyword::ON, Keyword::CLUSTER]) {
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(s) => Ok(Some(format!("'{}'", s))),
-                Token::Word(s) => Ok(Some(s.to_string())),
-                _ => self.expected("identifier or cluster literal", next_token)?,
-            }
+            Ok(Some(self.parse_identifier(false)?))
         } else {
             Ok(None)
         }

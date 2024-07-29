@@ -126,7 +126,7 @@ pub struct CreateTable {
     pub on_commit: Option<OnCommit>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
-    pub on_cluster: Option<String>,
+    pub on_cluster: Option<Ident>,
     /// ClickHouse "PRIMARY KEY " clause.
     /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
     pub primary_key: Option<Box<Expr>>,

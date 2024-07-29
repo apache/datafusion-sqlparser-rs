@@ -2165,7 +2165,7 @@ pub enum Statement {
         /// ClickHouse dialect supports `ON CLUSTER` clause for ALTER TABLE
         /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
         /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
-        on_cluster: Option<String>,
+        on_cluster: Option<Ident>,
     },
     /// ```sql
     /// ALTER INDEX

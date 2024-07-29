@@ -73,7 +73,7 @@ pub struct CreateTableBuilder {
     pub default_charset: Option<String>,
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
-    pub on_cluster: Option<String>,
+    pub on_cluster: Option<Ident>,
     pub primary_key: Option<Box<Expr>>,
     pub order_by: Option<OneOrManyWithParens<Expr>>,
     pub partition_by: Option<Box<Expr>>,
@@ -261,7 +261,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn on_cluster(mut self, on_cluster: Option<String>) -> Self {
+    pub fn on_cluster(mut self, on_cluster: Option<Ident>) -> Self {
         self.on_cluster = on_cluster;
         self
     }

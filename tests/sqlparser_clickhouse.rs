@@ -1113,7 +1113,7 @@ fn parse_select_table_function_settings() {
                         Some(vec![
                             Setting {
                                 key: "s0".into(),
-                                value: Value::Number("3".into(), false)
+                                value: Value::Number("3".parse().unwrap(), false)
                             },
                             Setting {
                                 key: "s1".into(),

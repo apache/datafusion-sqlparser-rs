@@ -2619,6 +2619,8 @@ pub enum Statement {
         /// EXECUTE FUNCTION trigger_function();
         /// ```
         or_replace: bool,
+        /// The `CONSTRAINT` keyword is used to create a trigger as a constraint.
+        is_constraint: bool,
         /// The name of the trigger to be created.
         name: ObjectName,
         /// Determines whether the function is called before, after, or instead of the event.
@@ -3447,6 +3449,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateTrigger {
                 or_replace,
+                is_constraint,
                 name,
                 period,
                 events,
@@ -3460,8 +3463,9 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}TRIGGER {name} {period}",
+                    "CREATE {or_replace}{is_constraint}TRIGGER {name} {period}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
                 )?;
                 if !events.is_empty() {
                     write!(f, " {}", display_separated(events, " OR "))?;

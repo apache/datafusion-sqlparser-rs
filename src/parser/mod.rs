@@ -4202,6 +4202,7 @@ impl<'a> Parser<'a> {
             return self.expected("an object type after CREATE", self.peek_token());
         }
 
+        let is_constraint = self.parse_keyword(Keyword::CONSTRAINT);
         let name = self.parse_object_name(false)?;
         let period = self.parse_trigger_period()?;
 
@@ -4238,6 +4239,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::CreateTrigger {
             or_replace,
+            is_constraint,
             name,
             period,
             events,

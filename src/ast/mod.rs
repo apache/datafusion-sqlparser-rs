@@ -2791,6 +2791,11 @@ pub enum Statement {
         describe_alias: DescribeAlias,
         /// Hive style `FORMATTED | EXTENDED`
         hive_format: Option<HiveDescribeFormat>,
+        /// Snowflake and ClickHouse support `DESC|DESCRIBE TABLE <table_name>` syntax
+        ///
+        /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/desc-table.html)
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/describe-table)
+        has_table_keyword: bool,
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
@@ -2964,12 +2969,16 @@ impl fmt::Display for Statement {
             Statement::ExplainTable {
                 describe_alias,
                 hive_format,
+                has_table_keyword,
                 table_name,
             } => {
                 write!(f, "{describe_alias} ")?;
 
                 if let Some(format) = hive_format {
                     write!(f, "{} ", format)?;
+                }
+                if *has_table_keyword {
+                    write!(f, "TABLE ")?;
                 }
 
                 write!(f, "{table_name}")

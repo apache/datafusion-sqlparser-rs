@@ -4151,7 +4151,7 @@ fn parse_scalar_function_in_projection() {
 
     for function_name in names {
         // like SELECT sqrt(id) FROM foo
-        let sql = dbg!(format!("SELECT {function_name}(id) FROM foo"));
+        let sql = format!("SELECT {function_name}(id) FROM foo");
         let select = verified_only_select(&sql);
         assert_eq!(
             &call(function_name, [Expr::Identifier(Ident::new("id"))]),
@@ -4186,31 +4186,49 @@ fn run_explain_analyze(
 #[test]
 fn parse_explain_table() {
     let validate_explain =
-        |query: &str, expected_describe_alias: DescribeAlias| match verified_stmt(query) {
-            Statement::ExplainTable {
-                describe_alias,
-                hive_format,
-                table_name,
-            } => {
-                assert_eq!(describe_alias, expected_describe_alias);
-                assert_eq!(hive_format, None);
-                assert_eq!("test_identifier", table_name.to_string());
+        |query: &str, expected_describe_alias: DescribeAlias, expected_table_keyword| {
+            match verified_stmt(query) {
+                Statement::ExplainTable {
+                    describe_alias,
+                    hive_format,
+                    has_table_keyword,
+                    table_name,
+                } => {
+                    assert_eq!(describe_alias, expected_describe_alias);
+                    assert_eq!(hive_format, None);
+                    assert_eq!(has_table_keyword, expected_table_keyword);
+                    assert_eq!("test_identifier", table_name.to_string());
+                }
+                _ => panic!("Unexpected Statement, must be ExplainTable"),
             }
-            _ => panic!("Unexpected Statement, must be ExplainTable"),
         };
 
-    validate_explain("EXPLAIN test_identifier", DescribeAlias::Explain);
-    validate_explain("DESCRIBE test_identifier", DescribeAlias::Describe);
+    validate_explain("EXPLAIN test_identifier", DescribeAlias::Explain, false);
+    validate_explain("DESCRIBE test_identifier", DescribeAlias::Describe, false);
+    validate_explain("DESC test_identifier", DescribeAlias::Desc, false);
+    validate_explain(
+        "EXPLAIN TABLE test_identifier",
+        DescribeAlias::Explain,
+        true,
+    );
+    validate_explain(
+        "DESCRIBE TABLE test_identifier",
+        DescribeAlias::Describe,
+        true,
+    );
+    validate_explain("DESC TABLE test_identifier", DescribeAlias::Desc, true);
 }
 
 #[test]
 fn explain_describe() {
     verified_stmt("DESCRIBE test.table");
+    verified_stmt("DESCRIBE TABLE test.table");
 }
 
 #[test]
 fn explain_desc() {
     verified_stmt("DESC test.table");
+    verified_stmt("DESC TABLE test.table");
 }
 
 #[test]
@@ -8236,30 +8254,34 @@ fn parse_time_functions() {
 
 #[test]
 fn parse_position() {
-    let sql = "SELECT POSITION('@' IN field)";
-    let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Position {
+        Expr::Position {
             expr: Box::new(Expr::Value(Value::SingleQuotedString("@".to_string()))),
             r#in: Box::new(Expr::Identifier(Ident::new("field"))),
         },
-        expr_from_projection(only(&select.projection))
+        verified_expr("POSITION('@' IN field)"),
+    );
+
+    // some dialects (e.g. snowflake) support position as a function call (i.e. without IN)
+    assert_eq!(
+        call(
+            "position",
+            [
+                Expr::Value(Value::SingleQuotedString("an".to_owned())),
+                Expr::Value(Value::SingleQuotedString("banana".to_owned())),
+                Expr::Value(number("1")),
+            ]
+        ),
+        verified_expr("position('an', 'banana', 1)")
     );
 }
 
 #[test]
 fn parse_position_negative() {
-    let sql = "SELECT POSITION(foo) from bar";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError("Position function must include IN keyword".to_string()),
-        res.unwrap_err()
-    );
-
     let sql = "SELECT POSITION(foo IN) from bar";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError("Expected: an expression:, found: )".to_string()),
+        ParserError::ParserError("Expected: (, found: )".to_string()),
         res.unwrap_err()
     );
 }

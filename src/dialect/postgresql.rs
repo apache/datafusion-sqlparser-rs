@@ -40,6 +40,10 @@ impl Dialect for PostgreSqlDialect {
         ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'
     }
 
+    fn supports_unicode_string_literal(&self) -> bool {
+        true
+    }
+
     /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>
     fn is_custom_operator_part(&self, ch: char) -> bool {
         matches!(

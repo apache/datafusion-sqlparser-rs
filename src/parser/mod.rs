@@ -1038,7 +1038,7 @@ impl<'a> Parser<'a> {
                 Keyword::CEIL => self.parse_ceil_floor_expr(true),
                 Keyword::FLOOR => self.parse_ceil_floor_expr(false),
                 Keyword::POSITION if self.peek_token().token == Token::LParen => {
-                    self.parse_position_expr()
+                    self.parse_position_expr(w.to_ident())
                 }
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
@@ -1188,6 +1188,10 @@ impl<'a> Parser<'a> {
             }
             Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
             {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
+            Token::UnicodeStringLiteral(_) => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
@@ -1707,24 +1711,26 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_position_expr(&mut self) -> Result<Expr, ParserError> {
-        // PARSE SELECT POSITION('@' in field)
-        self.expect_token(&Token::LParen)?;
+    pub fn parse_position_expr(&mut self, ident: Ident) -> Result<Expr, ParserError> {
+        let position_expr = self.maybe_parse(|p| {
+            // PARSE SELECT POSITION('@' in field)
+            p.expect_token(&Token::LParen)?;
 
-        // Parse the subexpr till the IN keyword
-        let expr = self.parse_subexpr(Self::BETWEEN_PREC)?;
-        if self.parse_keyword(Keyword::IN) {
-            let from = self.parse_expr()?;
-            self.expect_token(&Token::RParen)?;
+            // Parse the subexpr till the IN keyword
+            let expr = p.parse_subexpr(Self::BETWEEN_PREC)?;
+            p.expect_keyword(Keyword::IN)?;
+            let from = p.parse_expr()?;
+            p.expect_token(&Token::RParen)?;
             Ok(Expr::Position {
                 expr: Box::new(expr),
                 r#in: Box::new(from),
             })
-        } else {
-            parser_err!(
-                "Position function must include IN keyword".to_string(),
-                self.peek_token().location
-            )
+        });
+        match position_expr {
+            Some(expr) => Ok(expr),
+            // Snowflake supports `position` as an ordinary function call
+            // without the special `IN` syntax.
+            None => self.parse_function(ObjectName(vec![ident])),
         }
     }
 
@@ -1866,6 +1872,7 @@ impl<'a> Parser<'a> {
                     }
                     Token::SingleQuotedString(_)
                     | Token::EscapedStringLiteral(_)
+                    | Token::UnicodeStringLiteral(_)
                     | Token::NationalStringLiteral(_)
                     | Token::HexStringLiteral(_) => Some(Box::new(self.parse_expr()?)),
                     _ => self.expected(
@@ -7144,6 +7151,7 @@ impl<'a> Parser<'a> {
             }
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
+            Token::UnicodeStringLiteral(ref s) => Ok(Value::UnicodeStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
             Token::Placeholder(ref s) => Ok(Value::Placeholder(s.to_string())),
             tok @ Token::Colon | tok @ Token::AtSign => {
@@ -7235,6 +7243,7 @@ impl<'a> Parser<'a> {
             Token::EscapedStringLiteral(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
                 Ok(s)
             }
+            Token::UnicodeStringLiteral(s) => Ok(s),
             _ => self.expected("literal string", next_token),
         }
     }
@@ -8154,10 +8163,13 @@ impl<'a> Parser<'a> {
                     _ => {}
                 }
 
+                // only allow to use TABLE keyword for DESC|DESCRIBE statement
+                let has_table_keyword = self.parse_keyword(Keyword::TABLE);
                 let table_name = self.parse_object_name(false)?;
                 Ok(Statement::ExplainTable {
                     describe_alias,
                     hive_format,
+                    has_table_keyword,
                     table_name,
                 })
             }

@@ -4748,6 +4748,17 @@ fn parse_create_trigger() {
                 }
             }
         }
+  }
+  
+}
+
+#[test]
+fn test_escaped_string_literal() {
+    match pg().verified_expr(r#"E'\n'"#) {
+        Expr::Value(Value::EscapedStringLiteral(s)) => {
+            assert_eq!("\n", s);
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -5055,4 +5066,26 @@ fn parse_trigger_related_functions() {
             option: None
         }
     );
+}
+
+#[test]      
+fn test_unicode_string_literal() {
+    let pairs = [
+        // Example from the postgres docs
+        (r#"U&'\0441\043B\043E\043D'"#, "слон"),
+        // High unicode code point (> 0xFFFF)
+        (r#"U&'\+01F418'"#, "🐘"),
+        // Escaped backslash
+        (r#"U&'\\'"#, r#"\"#),
+        // Escaped single quote
+        (r#"U&''''"#, "'"),
+    ];
+    for (input, expected) in pairs {
+        match pg_and_generic().verified_expr(input) {
+            Expr::Value(Value::UnicodeStringLiteral(s)) => {
+                assert_eq!(expected, s);
+            }
+            _ => unreachable!(),
+        }
+    }
 }

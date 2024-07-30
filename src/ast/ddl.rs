@@ -1154,7 +1154,7 @@ fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl fmt::Displ
 /// `<constraint_characteristics> = [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ] [ ENFORCED | NOT ENFORCED ]`
 ///
 /// Used in UNIQUE and foreign key constraints. The individual settings may occur in any order.
-#[derive(Debug, Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Default, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ConstraintCharacteristics {
@@ -1176,16 +1176,25 @@ pub enum DeferrableInitial {
     Deferred,
 }
 
-impl fmt::Display for DeferrableInitial {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self {
-            DeferrableInitial::Immediate => "INITIALLY IMMEDIATE",
-            DeferrableInitial::Deferred => "INITIALLY DEFERRED",
+impl ConstraintCharacteristics {
+    fn deferrable_text(&self) -> Option<&'static str> {
+        self.deferrable.map(|deferrable| {
+            if deferrable {
+                "DEFERRABLE"
+            } else {
+                "NOT DEFERRABLE"
+            }
         })
     }
-}
 
-impl ConstraintCharacteristics {
+    fn initially_immediate_text(&self) -> Option<&'static str> {
+        self.initially
+            .map(|initially_immediate| match initially_immediate {
+                DeferrableInitial::Immediate => "INITIALLY IMMEDIATE",
+                DeferrableInitial::Deferred => "INITIALLY DEFERRED",
+            })
+    }
+
     fn enforced_text(&self) -> Option<&'static str> {
         self.enforced.map(
             |enforced| {
@@ -1201,24 +1210,22 @@ impl ConstraintCharacteristics {
 
 impl fmt::Display for ConstraintCharacteristics {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut parts = vec![];
-        if let Some(deferrable) = self.deferrable {
-            parts.push(
-                if deferrable {
-                    "DEFERRABLE"
-                } else {
-                    "NOT DEFERRABLE"
-                }
-                .to_string(),
-            );
+        let deferrable = self.deferrable_text();
+        let initially_immediate = self.initially_immediate_text();
+        let enforced = self.enforced_text();
+
+        match (deferrable, initially_immediate, enforced) {
+            (None, None, None) => Ok(()),
+            (None, None, Some(enforced)) => write!(f, "{enforced}"),
+            (None, Some(initial), None) => write!(f, "{initial}"),
+            (None, Some(initial), Some(enforced)) => write!(f, "{initial} {enforced}"),
+            (Some(deferrable), None, None) => write!(f, "{deferrable}"),
+            (Some(deferrable), None, Some(enforced)) => write!(f, "{deferrable} {enforced}"),
+            (Some(deferrable), Some(initial), None) => write!(f, "{deferrable} {initial}"),
+            (Some(deferrable), Some(initial), Some(enforced)) => {
+                write!(f, "{deferrable} {initial} {enforced}")
+            }
         }
-        if let Some(initially) = self.initially {
-            parts.push(initially.to_string());
-        }
-        if let Some(enforced) = self.enforced_text() {
-            parts.push(enforced.to_string());
-        }
-        write!(f, "{}", display_separated(&parts, " "))
     }
 }
 

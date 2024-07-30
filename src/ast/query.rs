@@ -899,11 +899,16 @@ impl fmt::Display for ExprWithAlias {
     }
 }
 
+/// Arguments to a table-valued function
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableFunctionArgs {
     pub args: Vec<FunctionArg>,
+    /// ClickHouse-specific SETTINGS clause.
+    /// For example,
+    /// `SELECT * FROM executable('generate_random.py', TabSeparated, 'id UInt32, random String', SETTINGS send_chunk_header = false, pool_size = 16)`
+    /// [`executable` table function](https://clickhouse.com/docs/en/engines/table-functions/executable)
     pub settings: Option<Vec<Setting>>,
 }
 

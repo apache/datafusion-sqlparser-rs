@@ -5061,7 +5061,6 @@ fn parse_trigger_related_functions() {
 
     // Check the second statement
 
-
     assert_eq!(
         create_function,
         Statement::CreateFunction {

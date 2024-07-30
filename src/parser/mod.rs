@@ -4197,7 +4197,7 @@ impl<'a> Parser<'a> {
             option,
         })
     }
-    
+
     pub fn parse_create_trigger(
         &mut self,
         or_replace: bool,

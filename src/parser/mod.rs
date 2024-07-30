@@ -5379,6 +5379,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_optional_on_cluster(&mut self) -> Result<Option<Ident>, ParserError> {
+        if self.parse_keywords(&[Keyword::ON, Keyword::CLUSTER]) {
+            Ok(Some(self.parse_identifier(false)?))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn parse_create_table(
         &mut self,
         or_replace: bool,
@@ -5391,16 +5399,7 @@ impl<'a> Parser<'a> {
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
 
         // Clickhouse has `ON CLUSTER 'cluster'` syntax for DDLs
-        let on_cluster = if self.parse_keywords(&[Keyword::ON, Keyword::CLUSTER]) {
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(s) => Some(s),
-                Token::Word(s) => Some(s.to_string()),
-                _ => self.expected("identifier or cluster literal", next_token)?,
-            }
-        } else {
-            None
-        };
+        let on_cluster = self.parse_optional_on_cluster()?;
 
         let like = if self.parse_keyword(Keyword::LIKE) || self.parse_keyword(Keyword::ILIKE) {
             self.parse_object_name(allow_unquoted_hyphen).ok()
@@ -6583,6 +6582,7 @@ impl<'a> Parser<'a> {
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
                 let table_name = self.parse_object_name(false)?;
+                let on_cluster = self.parse_optional_on_cluster()?;
                 let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
 
                 let mut location = None;
@@ -6604,6 +6604,7 @@ impl<'a> Parser<'a> {
                     only,
                     operations,
                     location,
+                    on_cluster,
                 })
             }
             Keyword::INDEX => {

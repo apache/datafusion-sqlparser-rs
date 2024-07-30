@@ -677,6 +677,7 @@ fn parse_alter_table_add_columns() {
             only,
             operations,
             location: _,
+            on_cluster: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(if_exists);
@@ -759,6 +760,7 @@ fn parse_alter_table_owner_to() {
                 only: _,
                 operations,
                 location: _,
+                on_cluster: _,
             } => {
                 assert_eq!(name.to_string(), "tab");
                 assert_eq!(

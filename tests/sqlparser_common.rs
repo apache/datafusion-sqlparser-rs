@@ -3506,7 +3506,7 @@ fn parse_create_table_on_cluster() {
     let sql = "CREATE TABLE t ON CLUSTER '{cluster}' (a INT, b INT)";
     match generic.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { on_cluster, .. }) => {
-            assert_eq!(on_cluster.unwrap(), "{cluster}".to_string());
+            assert_eq!(on_cluster.unwrap().to_string(), "'{cluster}'".to_string());
         }
         _ => unreachable!(),
     }
@@ -3515,7 +3515,7 @@ fn parse_create_table_on_cluster() {
     let sql = "CREATE TABLE t ON CLUSTER my_cluster (a INT, b INT)";
     match generic.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { on_cluster, .. }) => {
-            assert_eq!(on_cluster.unwrap(), "my_cluster".to_string());
+            assert_eq!(on_cluster.unwrap().to_string(), "my_cluster".to_string());
         }
         _ => unreachable!(),
     }
@@ -3820,6 +3820,40 @@ fn parse_alter_table() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_alter_table_with_on_cluster() {
+    match all_dialects()
+        .verified_stmt("ALTER TABLE t ON CLUSTER 'cluster' ADD CONSTRAINT bar PRIMARY KEY (baz)")
+    {
+        Statement::AlterTable {
+            name, on_cluster, ..
+        } => {
+            std::assert_eq!(name.to_string(), "t");
+            std::assert_eq!(on_cluster, Some(Ident::with_quote('\'', "cluster")));
+        }
+        _ => unreachable!(),
+    }
+
+    match all_dialects()
+        .verified_stmt("ALTER TABLE t ON CLUSTER cluster_name ADD CONSTRAINT bar PRIMARY KEY (baz)")
+    {
+        Statement::AlterTable {
+            name, on_cluster, ..
+        } => {
+            std::assert_eq!(name.to_string(), "t");
+            std::assert_eq!(on_cluster, Some(Ident::new("cluster_name")));
+        }
+        _ => unreachable!(),
+    }
+
+    let res = all_dialects()
+        .parse_sql_statements("ALTER TABLE t ON CLUSTER 123 ADD CONSTRAINT bar PRIMARY KEY (baz)");
+    std::assert_eq!(
+        res.unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: 123".to_string())
+    )
 }
 
 #[test]

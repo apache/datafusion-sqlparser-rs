@@ -331,6 +331,7 @@ pub fn table_with_alias(name: impl Into<String>, alias: impl Into<String>) -> Ta
 pub fn join(relation: TableFactor) -> Join {
     Join {
         relation,
+        global: false,
         join_operator: JoinOperator::Inner(JoinConstraint::Natural),
     }
 }

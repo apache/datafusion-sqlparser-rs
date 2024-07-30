@@ -9015,6 +9015,7 @@ impl<'a> Parser<'a> {
         // a table alias.
         let mut joins = vec![];
         loop {
+            let global = self.parse_keyword(Keyword::GLOBAL);
             let join = if self.parse_keyword(Keyword::CROSS) {
                 let join_operator = if self.parse_keyword(Keyword::JOIN) {
                     JoinOperator::CrossJoin
@@ -9026,6 +9027,7 @@ impl<'a> Parser<'a> {
                 };
                 Join {
                     relation: self.parse_table_factor()?,
+                    global,
                     join_operator,
                 }
             } else if self.parse_keyword(Keyword::OUTER) {
@@ -9033,6 +9035,7 @@ impl<'a> Parser<'a> {
                 self.expect_keyword(Keyword::APPLY)?;
                 Join {
                     relation: self.parse_table_factor()?,
+                    global,
                     join_operator: JoinOperator::OuterApply,
                 }
             } else if self.parse_keyword(Keyword::ASOF) {
@@ -9042,6 +9045,7 @@ impl<'a> Parser<'a> {
                 let match_condition = self.parse_parenthesized(Self::parse_expr)?;
                 Join {
                     relation,
+                    global,
                     join_operator: JoinOperator::AsOf {
                         match_condition,
                         constraint: self.parse_join_constraint(false)?,
@@ -9127,6 +9131,7 @@ impl<'a> Parser<'a> {
                 let join_constraint = self.parse_join_constraint(natural)?;
                 Join {
                     relation,
+                    global,
                     join_operator: join_operator_type(join_constraint),
                 }
             };

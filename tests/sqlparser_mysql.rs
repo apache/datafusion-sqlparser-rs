@@ -1891,6 +1891,7 @@ fn parse_update_with_joins() {
                             partitions: vec![],
                             with_ordinality: false,
                         },
+                        global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
                                 Ident::new("o"),

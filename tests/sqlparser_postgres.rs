@@ -4995,7 +4995,6 @@ fn parse_trigger_related_functions() {
 
     // Check the second statement
 
-    dbg!(&create_function);
 
     assert_eq!(
         create_function,

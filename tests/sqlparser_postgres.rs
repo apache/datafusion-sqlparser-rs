@@ -4658,11 +4658,11 @@ fn iterate_trigger_configurations() -> impl Iterator<Item = PossibleTriggerConfi
         .flat_map(|prev| cartesian(prev, possible_trigger_exec_body_types))
         .flat_map(|prev| cartesian(prev, possible_trigger_function_descriptions))
         .flat_map(|prev| cartesian(prev, possible_trigger_condition))
-        // We exclude the case where the trigger is a constraint and the trigger is replaced
+        // Whether the trigger should be replaced
         .flat_map(|prev| cartesian(prev, || vec![true, false]))
-        // We exclude the case where the trigger is a constraint and the trigger is replaced
+        // Whether the 'EACH' keyword should be included
         .flat_map(|prev| cartesian(prev, || vec![true, false]))
-        // We exclude the case where the trigger is a constraint and the trigger is replaced
+        // Whether the trigger should be a constraint
         .flat_map(|prev| cartesian(prev, || vec![true, false]))
 }
 

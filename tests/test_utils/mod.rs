@@ -32,3 +32,6 @@ macro_rules! nest {
         }), alias: None}
     };
 }
+
+mod extend_tuple;
+pub use extend_tuple::ExtendTuple;

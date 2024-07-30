@@ -18,7 +18,6 @@
 mod test_utils;
 use test_utils::*;
 
-use itertools::Itertools;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -4636,62 +4635,35 @@ type PossibleTriggerConfiguration = (
     bool, // CONSTRAINT
 );
 
-fn iterate_trigger_configurations() -> impl Iterator<Item = PossibleTriggerConfiguration> {
-    possible_trigger_periods() // TriggerPeriod
+fn cartesian<F, T, V>(tuple: T, generator: F) -> impl Iterator<Item = <V as ExtendTuple<T>>::Output>
+where
+    F: Fn() -> Vec<V>,
+    V: Clone + ExtendTuple<T>,
+    T: Clone,
+{
+    generator()
         .into_iter()
-        .cartesian_product(possible_trigger_events()) // Vec<TriggerEvent>
-        .cartesian_product(possible_referencing_table_names()) // Option<ObjectName>
-        .cartesian_product(possible_trigger_referencing_variants()) // Vec<TriggerReferencing>
-        .cartesian_product(possible_trigger_object_variants()) // TriggerObject
-        .cartesian_product(possible_trigger_deferrable_variants()) // Option<ConstraintCharacteristics>
-        .cartesian_product(possible_trigger_exec_body_types()) // TriggerExecBodyType
-        .cartesian_product(possible_trigger_function_descriptions()) // FunctionDesc
-        .cartesian_product(possible_trigger_condition()) // Option<Expr>
-        .cartesian_product([true, false]) // bool (OR REPLACE)
-        .cartesian_product([true, false]) // bool (EACH)
-        .cartesian_product([true, false]) // bool (CONSTRAINT)
-        .map(
-            |(
-                (
-                    (
-                        (
-                            (
-                                (
-                                    (
-                                        (
-                                            (((period, events), referencing), trigger_referencing),
-                                            trigger_object,
-                                        ),
-                                        deferrable,
-                                    ),
-                                    exec_type,
-                                ),
-                                func_desc,
-                            ),
-                            condition,
-                        ),
-                        or_replace,
-                    ),
-                    include_each,
-                ),
-                is_constraint,
-            )| {
-                (
-                    period,
-                    events,
-                    referencing,
-                    trigger_referencing,
-                    trigger_object,
-                    deferrable,
-                    exec_type,
-                    func_desc,
-                    condition,
-                    or_replace,
-                    include_each,
-                    is_constraint,
-                )
-            },
-        )
+        .map(move |v| v.extend_tuple(tuple.clone()))
+}
+
+fn iterate_trigger_configurations() -> impl Iterator<Item = PossibleTriggerConfiguration> {
+    possible_trigger_periods()
+        .into_iter()
+        .map(|period| (period,))
+        .flat_map(|period| cartesian(period, possible_trigger_events))
+        .flat_map(|prev| cartesian(prev, possible_referencing_table_names))
+        .flat_map(|prev| cartesian(prev, possible_trigger_referencing_variants))
+        .flat_map(|prev| cartesian(prev, possible_trigger_object_variants))
+        .flat_map(|prev| cartesian(prev, possible_trigger_deferrable_variants))
+        .flat_map(|prev| cartesian(prev, possible_trigger_exec_body_types))
+        .flat_map(|prev| cartesian(prev, possible_trigger_function_descriptions))
+        .flat_map(|prev| cartesian(prev, possible_trigger_condition))
+        // We exclude the case where the trigger is a constraint and the trigger is replaced
+        .flat_map(|prev| cartesian(prev, || vec![true, false]))
+        // We exclude the case where the trigger is a constraint and the trigger is replaced
+        .flat_map(|prev| cartesian(prev, || vec![true, false]))
+        // We exclude the case where the trigger is a constraint and the trigger is replaced
+        .flat_map(|prev| cartesian(prev, || vec![true, false]))
 }
 
 fn build_sql_from_trigger_configuration(
@@ -4737,6 +4709,7 @@ fn build_sql_from_trigger_configuration(
                 referencing = referencing
                     .iter()
                     .map(|reference| format!("{reference}",))
+                    .collect::<Vec<String>>()
                     .join(" ")
             )
         })

@@ -1296,20 +1296,43 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
     }
 }
 
-/// PARTITION statement used in ALTER TABLE et al. such as in Hive SQL
+/// PARTITION statement used in ALTER TABLE et al. such as in Hive and ClickHouse SQL
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct Partition {
-    pub partitions: Vec<Expr>,
+pub enum Partition {
+    ID(Ident),
+    Expression(Expr),
+    Partitions(Vec<Expr>),
 }
 
 impl fmt::Display for Partition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "PARTITION ({})",
-            display_comma_separated(&self.partitions)
-        )
+        match self {
+            Partition::ID(id) => write!(f, "PARTITION ID {id}"),
+            Partition::Expression(expr) => write!(f, "PARTITION {expr}"),
+            Partition::Partitions(partitions) => {
+                write!(f, "PARTITION ({})", display_comma_separated(partitions))
+            }
+        }
+    }
+}
+
+/// DEDUPLICATE statement used in OPTIMIZE TABLE et al. such as in ClickHouse SQL
+/// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Deduplicate {
+    All,
+    ByExpression(Expr),
+}
+
+impl fmt::Display for Deduplicate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Deduplicate::All => write!(f, "DEDUPLICATE"),
+            Deduplicate::ByExpression(expr) => write!(f, "DEDUPLICATE BY {expr}"),
+        }
     }
 }

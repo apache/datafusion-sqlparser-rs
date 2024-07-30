@@ -551,6 +551,10 @@ impl<'a> Parser<'a> {
                 Keyword::LOAD if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     Ok(self.parse_load()?)
                 }
+                // `OPTIMIZE` is clickhouse specific https://clickhouse.tech/docs/en/sql-reference/statements/optimize/
+                Keyword::OPTIMIZE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
+                    Ok(self.parse_optimize_table()?)
+                }
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -6270,7 +6274,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let partitions = self.parse_comma_separated(Parser::parse_expr)?;
         self.expect_token(&Token::RParen)?;
-        Ok(Partition { partitions })
+        Ok(Partition::Partitions(partitions))
     }
 
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
@@ -11163,6 +11167,45 @@ impl<'a> Parser<'a> {
     pub fn parse_load(&mut self) -> Result<Statement, ParserError> {
         let extension_name = self.parse_identifier(false)?;
         Ok(Statement::Load { extension_name })
+    }
+
+    /// ```sql
+    /// OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
+    /// ```
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
+    pub fn parse_optimize_table(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::TABLE)?;
+        let name = self.parse_object_name(false)?;
+        let on_cluster = self.parse_optional_on_cluster()?;
+
+        let partition = if self.parse_keyword(Keyword::PARTITION) {
+            if self.parse_keyword(Keyword::ID) {
+                Some(Partition::ID(self.parse_identifier(false)?))
+            } else {
+                Some(Partition::Expression(self.parse_expr()?))
+            }
+        } else {
+            None
+        };
+
+        let include_final = self.parse_keyword(Keyword::FINAL);
+        let deduplicate = if self.parse_keyword(Keyword::DEDUPLICATE) {
+            if self.parse_keyword(Keyword::BY) {
+                Some(Deduplicate::ByExpression(self.parse_expr()?))
+            } else {
+                Some(Deduplicate::All)
+            }
+        } else {
+            None
+        };
+
+        Ok(Statement::OptimizeTable {
+            name,
+            on_cluster,
+            partition,
+            include_final,
+            deduplicate,
+        })
     }
 
     /// ```sql

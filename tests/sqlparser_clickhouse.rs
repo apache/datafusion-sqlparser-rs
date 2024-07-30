@@ -1093,7 +1093,7 @@ fn parse_create_table_on_commit_and_as_query() {
 
 #[test]
 fn parse_select_table_function_settings() {
-    let sql = r#"SELECT * FROM table_function(arg, SETTINGS setting = 3)"#;
+    let sql = r#"SELECT * FROM table_function(arg, SETTINGS s0 = 3, s1 = 's')"#;
     match clickhouse_and_generic().verified_stmt(sql) {
         Statement::Query(q) => {
             let from = &q.body.as_select().unwrap().from;
@@ -1110,10 +1110,16 @@ fn parse_select_table_function_settings() {
                     );
                     assert_eq!(
                         args.settings,
-                        Some(vec![Setting {
-                            key: "setting".into(),
-                            value: Value::Number("3".into(), false)
-                        }])
+                        Some(vec![
+                            Setting {
+                                key: "s0".into(),
+                                value: Value::Number("3".into(), false)
+                            },
+                            Setting {
+                                key: "s1".into(),
+                                value: Value::SingleQuotedString("s".into())
+                            }
+                        ])
                     )
                 }
                 _ => unreachable!(),

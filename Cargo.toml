@@ -40,6 +40,7 @@ sqlparser_derive = { version = "0.2.0", path = "derive", optional = true }
 simple_logger = "5.0"
 matches = "0.1"
 pretty_assertions = "1"
+itertools = "0.13"
 
 [package.metadata.release]
 # Instruct `cargo release` to not run `cargo publish` locally:

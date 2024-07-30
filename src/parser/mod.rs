@@ -3576,7 +3576,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_replace, temporary)
         } else if self.parse_keyword(Keyword::TRIGGER) {
-            self.parse_create_trigger(or_replace)
+            self.parse_create_trigger(or_replace, false)
+        } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
+            self.parse_create_trigger(or_replace, true)
         } else if self.parse_keyword(Keyword::MACRO) {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -4195,20 +4197,29 @@ impl<'a> Parser<'a> {
             option,
         })
     }
-
-    pub fn parse_create_trigger(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    
+    pub fn parse_create_trigger(
+        &mut self,
+        or_replace: bool,
+        is_constraint: bool,
+    ) -> Result<Statement, ParserError> {
         if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
             self.prev_token();
             return self.expected("an object type after CREATE", self.peek_token());
         }
 
-        let is_constraint = self.parse_keyword(Keyword::CONSTRAINT);
         let name = self.parse_object_name(false)?;
         let period = self.parse_trigger_period()?;
 
         let events = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
         self.expect_keyword(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
+
+        let referenced_table_name = if self.parse_keyword(Keyword::FROM) {
+            self.parse_object_name(true).ok()
+        } else {
+            None
+        };
 
         let characteristics = self.parse_constraint_characteristics()?;
 
@@ -4244,6 +4255,7 @@ impl<'a> Parser<'a> {
             period,
             events,
             table_name,
+            referenced_table_name,
             referencing,
             trigger_object,
             include_each,

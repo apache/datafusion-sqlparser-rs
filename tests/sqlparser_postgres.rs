@@ -18,6 +18,7 @@
 mod test_utils;
 use test_utils::*;
 
+use itertools::Itertools;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -4442,9 +4443,8 @@ fn test_table_unnest_with_ordinality() {
     }
 }
 
-#[test]
-fn parse_create_trigger() {
-    for referencing in [
+fn possible_trigger_referencing_variants() -> Vec<Vec<TriggerReferencing>> {
+    vec![
         vec![],
         vec![TriggerReferencing {
             refer_type: TriggerReferencingType::NewTable,
@@ -4480,276 +4480,342 @@ fn parse_create_trigger() {
                 transition_relation_name: ObjectName(vec![Ident::new("new_table")]),
             },
         ],
-    ] {
-        for trigger_object in [TriggerObject::Row, TriggerObject::Statement] {
-            for (characteristics, characteristics_text) in [
-                (None, ""),
-                (
-                    Some(ConstraintCharacteristics {
-                        deferrable: Some(true),
-                        enforced: None,
-                        initially: Some(DeferrableInitial::Deferred),
-                    }),
-                    "DEFERRABLE INITIALLY DEFERRED ",
-                ),
-                (
-                    Some(ConstraintCharacteristics {
-                        deferrable: Some(false),
-                        enforced: None,
-                        initially: Some(DeferrableInitial::Immediate),
-                    }),
-                    "NOT DEFERRABLE INITIALLY IMMEDIATE ",
-                ),
-                (
-                    Some(ConstraintCharacteristics {
-                        deferrable: Some(true),
-                        enforced: None,
-                        initially: Some(DeferrableInitial::Immediate),
-                    }),
-                    "DEFERRABLE INITIALLY IMMEDIATE ",
-                ),
-                (
-                    Some(ConstraintCharacteristics {
-                        deferrable: Some(true),
-                        enforced: None,
-                        initially: Some(DeferrableInitial::Deferred),
-                    }),
-                    "DEFERRABLE INITIALLY DEFERRED ",
-                ),
-            ] {
-                for func_desc in [
-                    FunctionDesc {
-                        name: ObjectName(vec![Ident::new("check_account_update")]),
-                        args: None,
-                    },
-                    FunctionDesc {
-                        name: ObjectName(vec![Ident::new("check_account_update")]),
-                        args: Some(vec![OperateFunctionArg::unnamed(DataType::Int(None))]),
-                    },
-                    FunctionDesc {
-                        name: ObjectName(vec![Ident::new("check_account_update")]),
-                        args: Some(vec![
-                            OperateFunctionArg::with_name("a", DataType::Int(None)),
-                            OperateFunctionArg {
-                                mode: Some(ArgMode::In),
-                                name: Some("b".into()),
-                                data_type: DataType::Int(None),
-                                default_expr: Some(Expr::Value(Value::Number(
-                                    "1".parse().unwrap(),
-                                    false,
-                                ))),
-                            },
-                        ]),
-                    },
-                ] {
-                    for exec_type in [
-                        TriggerExecBodyType::Function,
-                        TriggerExecBodyType::Procedure,
-                    ] {
-                        for (events, event_string) in [
-                            (vec![TriggerEvent::Update(vec![])], "UPDATE"),
-                            (vec![TriggerEvent::Insert], "INSERT"),
-                            (vec![TriggerEvent::Delete], "DELETE"),
-                            (
-                                vec![TriggerEvent::Update(vec![]), TriggerEvent::Insert],
-                                "UPDATE OR INSERT",
-                            ),
-                            (
-                                vec![
-                                    TriggerEvent::Update(vec![]),
-                                    TriggerEvent::Insert,
-                                    TriggerEvent::Delete,
-                                ],
-                                "UPDATE OR INSERT OR DELETE",
-                            ),
-                            (
-                                vec![TriggerEvent::Update(vec![Ident::new("balance")])],
-                                "UPDATE OF balance",
-                            ),
-                            (
-                                vec![
-                                    TriggerEvent::Update(vec![Ident::new("balance")]),
-                                    TriggerEvent::Insert,
-                                ],
-                                "UPDATE OF balance OR INSERT",
-                            ),
-                            (
-                                vec![
-                                    TriggerEvent::Update(vec![Ident::new("balance")]),
-                                    TriggerEvent::Insert,
-                                    TriggerEvent::Delete,
-                                    TriggerEvent::Update(vec![Ident::new("name")]),
-                                ],
-                                "UPDATE OF balance OR INSERT OR DELETE OR UPDATE OF name",
-                            ),
-                            (
-                                vec![
-                                    TriggerEvent::Update(vec![
-                                        Ident::new("balance"),
-                                        Ident::new("name"),
-                                        Ident::new("name2"),
-                                        Ident::new("name3"),
-                                    ]),
-                                    TriggerEvent::Update(vec![Ident::new("name")]),
-                                ],
-                                "UPDATE OF balance, name, name2, name3 OR UPDATE OF name",
-                            ),
-                            (
-                                vec![
-                                    TriggerEvent::Update(vec![
-                                        Ident::new("balance"),
-                                        Ident::new("name"),
-                                    ]),
-                                    TriggerEvent::Insert,
-                                ],
-                                "UPDATE OF balance, name OR INSERT",
-                            ),
-                            (
-                                vec![
-                                    TriggerEvent::Update(vec![
-                                        Ident::new("balance"),
-                                        Ident::new("name"),
-                                    ]),
-                                    TriggerEvent::Delete,
-                                ],
-                                "UPDATE OF balance, name OR DELETE",
-                            ),
-                            (
-                                vec![
-                                    TriggerEvent::Update(vec![
-                                        Ident::new("balance"),
-                                        Ident::new("name"),
-                                    ]),
-                                    TriggerEvent::Insert,
-                                    TriggerEvent::Delete,
-                                ],
-                                "UPDATE OF balance, name OR INSERT OR DELETE",
-                            ),
-                        ] {
-                            for period in [
-                                TriggerPeriod::Before,
-                                TriggerPeriod::After,
-                                TriggerPeriod::InsteadOf,
-                            ] {
-                                for include_each in [true, false] {
-                                    let referencing_text = if referencing.is_empty() {
-                                        "".to_string()
-                                    } else {
-                                        format!(
-                                            "REFERENCING {} ",
-                                            referencing
-                                                .iter()
-                                                .map(|r| {
-                                                    format!(
-                                                        "{} {}{}",
-                                                        r.refer_type,
-                                                        if r.is_as { "AS " } else { "" },
-                                                        r.transition_relation_name
-                                                    )
-                                                })
-                                                .collect::<Vec<String>>()
-                                                .join(" ")
-                                        )
-                                    };
+    ]
+}
 
-                                    let for_each = if include_each { "FOR EACH" } else { "FOR" };
+fn possible_trigger_object_variants() -> Vec<TriggerObject> {
+    vec![TriggerObject::Row, TriggerObject::Statement]
+}
 
-                                    let sql = &format!(
-                        "CREATE TRIGGER check_update {period} {event_string} ON accounts {characteristics_text}{referencing_text}{for_each} {trigger_object} EXECUTE {exec_type} {func_desc}"
-                    );
+fn possible_trigger_deferrable_variants() -> Vec<Option<ConstraintCharacteristics>> {
+    vec![
+        None,
+        Some(ConstraintCharacteristics {
+            deferrable: Some(true),
+            enforced: None,
+            initially: Some(DeferrableInitial::Deferred),
+        }),
+        Some(ConstraintCharacteristics {
+            deferrable: Some(false),
+            enforced: None,
+            initially: Some(DeferrableInitial::Immediate),
+        }),
+        Some(ConstraintCharacteristics {
+            deferrable: Some(true),
+            enforced: None,
+            initially: Some(DeferrableInitial::Immediate),
+        }),
+        Some(ConstraintCharacteristics {
+            deferrable: Some(true),
+            enforced: None,
+            initially: Some(DeferrableInitial::Deferred),
+        }),
+    ]
+}
 
-                                    assert_eq!(
-                                        pg().verified_stmt(sql),
-                                        Statement::CreateTrigger {
-                                            or_replace: false,
-                                            name: ObjectName(vec![Ident::new("check_update")]),
-                                            period,
-                                            events: events.clone(),
-                                            table_name: ObjectName(vec![Ident::new("accounts")]),
-                                            referencing: referencing.clone(),
+fn possible_trigger_function_descriptions() -> Vec<FunctionDesc> {
+    vec![
+        FunctionDesc {
+            name: ObjectName(vec![Ident::new("check_account_update")]),
+            args: None,
+        },
+        FunctionDesc {
+            name: ObjectName(vec![Ident::new("check_account_update")]),
+            args: Some(vec![OperateFunctionArg::unnamed(DataType::Int(None))]),
+        },
+        FunctionDesc {
+            name: ObjectName(vec![Ident::new("check_account_update")]),
+            args: Some(vec![
+                OperateFunctionArg::with_name("a", DataType::Int(None)),
+                OperateFunctionArg {
+                    mode: Some(ArgMode::In),
+                    name: Some("b".into()),
+                    data_type: DataType::Int(None),
+                    default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                },
+            ]),
+        },
+    ]
+}
+
+fn possible_trigger_exec_body_types() -> Vec<TriggerExecBodyType> {
+    vec![
+        TriggerExecBodyType::Function,
+        TriggerExecBodyType::Procedure,
+    ]
+}
+
+fn possible_trigger_events() -> Vec<Vec<TriggerEvent>> {
+    vec![
+        vec![TriggerEvent::Update(vec![])],
+        vec![TriggerEvent::Insert],
+        vec![TriggerEvent::Delete],
+        vec![TriggerEvent::Update(vec![]), TriggerEvent::Insert],
+        vec![
+            TriggerEvent::Update(vec![]),
+            TriggerEvent::Insert,
+            TriggerEvent::Delete,
+        ],
+        vec![TriggerEvent::Update(vec![Ident::new("balance")])],
+        vec![
+            TriggerEvent::Update(vec![Ident::new("balance")]),
+            TriggerEvent::Insert,
+        ],
+        vec![
+            TriggerEvent::Update(vec![Ident::new("balance")]),
+            TriggerEvent::Delete,
+        ],
+        vec![
+            TriggerEvent::Update(vec![Ident::new("balance")]),
+            TriggerEvent::Insert,
+            TriggerEvent::Delete,
+        ],
+    ]
+}
+
+fn possible_referencing_table_names() -> Vec<Option<ObjectName>> {
+    vec![
+        // Case with no referencing table
+        None,
+        // Case with a referencing table
+        Some(ObjectName(vec![Ident::new("referencing_table")])),
+        // Case with a referencing table from a different schema
+        Some(ObjectName(vec![
+            Ident::new("referencing_schema"),
+            Ident::new("referencing_table"),
+        ])),
+    ]
+}
+
+fn possible_trigger_periods() -> Vec<TriggerPeriod> {
+    vec![
+        TriggerPeriod::Before,
+        TriggerPeriod::After,
+        TriggerPeriod::InsteadOf,
+    ]
+}
+
+fn possible_trigger_condition() -> Vec<Option<Expr>> {
+    vec![
+        None,
+        Some(Expr::Nested(Box::new(Expr::IsNotDistinctFrom(
+            Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("OLD"),
+                Ident::new("balance"),
+            ])),
+            Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("NEW"),
+                Ident::new("balance"),
+            ])),
+        )))),
+        Some(Expr::Nested(Box::new(Expr::IsDistinctFrom(
+            Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("OLD"),
+                Ident::new("balance"),
+            ])),
+            Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("NEW"),
+                Ident::new("balance"),
+            ])),
+        )))),
+    ]
+}
+
+type PossibleTriggerConfiguration = (
+    TriggerPeriod,
+    Vec<TriggerEvent>,
+    Option<ObjectName>,
+    Vec<TriggerReferencing>,
+    TriggerObject,
+    Option<ConstraintCharacteristics>,
+    TriggerExecBodyType,
+    FunctionDesc,
+    Option<Expr>,
+    bool, // OR REPLACE
+    bool, // EACH
+    bool, // CONSTRAINT
+);
+
+fn iterate_trigger_configurations() -> impl Iterator<Item = PossibleTriggerConfiguration> {
+    possible_trigger_periods() // TriggerPeriod
+        .into_iter()
+        .cartesian_product(possible_trigger_events()) // Vec<TriggerEvent>
+        .cartesian_product(possible_referencing_table_names()) // Option<ObjectName>
+        .cartesian_product(possible_trigger_referencing_variants()) // Vec<TriggerReferencing>
+        .cartesian_product(possible_trigger_object_variants()) // TriggerObject
+        .cartesian_product(possible_trigger_deferrable_variants()) // Option<ConstraintCharacteristics>
+        .cartesian_product(possible_trigger_exec_body_types()) // TriggerExecBodyType
+        .cartesian_product(possible_trigger_function_descriptions()) // FunctionDesc
+        .cartesian_product(possible_trigger_condition()) // Option<Expr>
+        .cartesian_product([true, false]) // bool (OR REPLACE)
+        .cartesian_product([true, false]) // bool (EACH)
+        .cartesian_product([true, false]) // bool (CONSTRAINT)
+        .map(
+            |(
+                (
+                    (
+                        (
+                            (
+                                (
+                                    (
+                                        (
+                                            (((period, events), referencing), trigger_referencing),
                                             trigger_object,
-                                            include_each,
-                                            condition: None,
-                                            exec_body: TriggerExecBody {
-                                                exec_type,
-                                                func_desc: func_desc.clone()
-                                            },
-                                            characteristics
-                                        }
-                                    );
+                                        ),
+                                        deferrable,
+                                    ),
+                                    exec_type,
+                                ),
+                                func_desc,
+                            ),
+                            condition,
+                        ),
+                        or_replace,
+                    ),
+                    include_each,
+                ),
+                is_constraint,
+            )| {
+                (
+                    period,
+                    events,
+                    referencing,
+                    trigger_referencing,
+                    trigger_object,
+                    deferrable,
+                    exec_type,
+                    func_desc,
+                    condition,
+                    or_replace,
+                    include_each,
+                    is_constraint,
+                )
+            },
+        )
+}
 
-                                    let sql = &format!("CREATE TRIGGER check_update {period} {event_string} ON accounts {characteristics_text}{referencing_text}{for_each} {trigger_object} WHEN (OLD.balance IS DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
-                                    assert_eq!(
-                                        pg().verified_stmt(sql),
-                                        Statement::CreateTrigger {
-                                            or_replace: false,
-                                            name: ObjectName(vec![Ident::new("check_update")]),
-                                            period,
-                                            events: events.clone(),
-                                            table_name: ObjectName(vec![Ident::new("accounts")]),
-                                            referencing: referencing.clone(),
-                                            trigger_object,
-                                            include_each,
-                                            condition: Some(Expr::Nested(Box::new(
-                                                Expr::IsDistinctFrom(
-                                                    Box::new(Expr::CompoundIdentifier(vec![
-                                                        Ident::new("OLD"),
-                                                        Ident::new("balance")
-                                                    ])),
-                                                    Box::new(Expr::CompoundIdentifier(vec![
-                                                        Ident::new("NEW"),
-                                                        Ident::new("balance")
-                                                    ])),
-                                                )
-                                            ))),
-                                            exec_body: TriggerExecBody {
-                                                exec_type,
-                                                func_desc: func_desc.clone()
-                                            },
-                                            characteristics
-                                        }
-                                    );
+fn build_sql_from_trigger_configuration(
+    (
+        period,
+        events,
+        referenced_table_name,
+        referencing,
+        trigger_object,
+        characteristics,
+        exec_type,
+        func_desc,
+        condition,
+        or_replace,
+        include_each,
+        is_constraint,
+    ): &PossibleTriggerConfiguration,
+) -> String {
+    // First, we combine the possible events into a single string
+    // by joining them with ' OR '.
+    let events = events
+        .iter()
+        .map(|event| format!("{event}"))
+        .collect::<Vec<String>>()
+        .join(" OR ");
 
-                                    let sql = &format!("CREATE TRIGGER check_update {period} {event_string} ON accounts {characteristics_text}{referencing_text}{for_each} {trigger_object} WHEN (OLD.balance IS NOT DISTINCT FROM NEW.balance) EXECUTE {exec_type} {func_desc}");
-                                    assert_eq!(
-                                        pg().verified_stmt(sql),
-                                        Statement::CreateTrigger {
-                                            or_replace: false,
-                                            name: ObjectName(vec![Ident::new("check_update")]),
-                                            period,
-                                            events: events.clone(),
-                                            table_name: ObjectName(vec![Ident::new("accounts")]),
-                                            referencing: referencing.clone(),
-                                            trigger_object,
-                                            include_each,
-                                            condition: Some(Expr::Nested(Box::new(
-                                                Expr::IsNotDistinctFrom(
-                                                    Box::new(Expr::CompoundIdentifier(vec![
-                                                        Ident::new("OLD"),
-                                                        Ident::new("balance")
-                                                    ])),
-                                                    Box::new(Expr::CompoundIdentifier(vec![
-                                                        Ident::new("NEW"),
-                                                        Ident::new("balance")
-                                                    ])),
-                                                )
-                                            ))),
-                                            exec_body: TriggerExecBody {
-                                                exec_type,
-                                                func_desc: func_desc.clone()
-                                            },
-                                            characteristics
-                                        }
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-  }
-  
+    // When provided, we need to include the referenced table name in the statement,
+    // which is prefixed with the 'FROM' keyword.
+    let referenced_table_name = referenced_table_name
+        .as_ref()
+        .map(|referenced_table_name| format!("FROM {referenced_table_name} "))
+        .unwrap_or_default();
+
+    let characteristics = characteristics.map(|c| format!("{c} ")).unwrap_or_default();
+
+    // Next, we combine the possible referencing clauses into a single string
+    // by joining them with spaces, if there are any, and we prepend them with
+    // the 'REFERENCING' keyword.
+    let referencing = (!referencing.is_empty())
+        .then(|| {
+            format!(
+                "REFERENCING {referencing} ",
+                referencing = referencing
+                    .iter()
+                    .map(|reference| format!("{reference}",))
+                    .join(" ")
+            )
+        })
+        .unwrap_or_default();
+
+    // In the case where a condition is provided, we prepend it with the 'WHEN' keyword.
+    let condition = condition
+        .as_ref()
+        .map(|c| format!("WHEN {c} "))
+        .unwrap_or_default();
+
+    // When requested, we prepend the 'OR REPLACE' keyword to the statement.
+    let or_replace = if *or_replace { " OR REPLACE" } else { "" };
+    // Similarly, when requested, we prepend the 'FOR EACH' keyword to the statement.
+    let for_each = if *include_each { "FOR EACH" } else { "FOR" };
+    // And, when requested, we prepend the 'CONSTRAINT' keyword to the statement.
+    let is_constraint = if *is_constraint { " CONSTRAINT" } else { "" };
+
+    // Finally, we combine all the parts into a single string,
+    // following the syntax of a postgres CREATE TRIGGER statement:
+    //
+    // CREATE [ OR REPLACE ] [ CONSTRAINT ] TRIGGER name { BEFORE | AFTER | INSTEAD OF } { event [ OR ... ] }
+    // ON table_name
+    // [ FROM referenced_table_name ]
+    // [ NOT DEFERRABLE | [ DEFERRABLE ] [ INITIALLY IMMEDIATE | INITIALLY DEFERRED ] ]
+    // [ REFERENCING { { OLD | NEW } TABLE [ AS ] transition_relation_name } [ ... ] ]
+    // [ FOR [ EACH ] { ROW | STATEMENT } ]
+    // [ WHEN ( condition ) ]
+    // EXECUTE { FUNCTION | PROCEDURE } function_name ( arguments )
+    //
+    format!(
+        "CREATE{or_replace}{is_constraint} TRIGGER check_update {period} {events} ON accounts {referenced_table_name}{characteristics}{referencing}{for_each} {trigger_object} {condition}EXECUTE {exec_type} {func_desc}"
+    )
+}
+
+fn build_trigger_from_configuration(
+    (
+        period,
+        events,
+        referenced_table_name,
+        referencing,
+        trigger_object,
+        characteristics,
+        exec_type,
+        func_desc,
+        condition,
+        or_replace,
+        include_each,
+        is_constraint,
+    ): PossibleTriggerConfiguration,
+) -> Statement {
+    Statement::CreateTrigger {
+        or_replace,
+        is_constraint,
+        name: ObjectName(vec![Ident::new("check_update")]),
+        period,
+        events,
+        table_name: ObjectName(vec![Ident::new("accounts")]),
+        referenced_table_name,
+        referencing,
+        trigger_object,
+        include_each,
+        condition,
+        exec_body: TriggerExecBody {
+            exec_type,
+            func_desc,
+        },
+        characteristics,
+    }
+}
+
+#[test]
+fn parse_create_trigger() {
+    for configuration in iterate_trigger_configurations() {
+        let sql = build_sql_from_trigger_configuration(&configuration);
+        let trigger = build_trigger_from_configuration(configuration);
+
+        assert_eq!(pg().verified_stmt(&sql), trigger);
+    }
 }
 
 #[test]
@@ -5036,10 +5102,12 @@ fn parse_trigger_related_functions() {
         create_trigger,
         Statement::CreateTrigger {
             or_replace: false,
+            is_constraint: false,
             name: ObjectName(vec![Ident::new("emp_stamp")]),
             period: TriggerPeriod::Before,
             events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![])],
             table_name: ObjectName(vec![Ident::new("emp")]),
+            referenced_table_name: None,
             referencing: vec![],
             trigger_object: TriggerObject::Row,
             include_each: true,
@@ -5067,7 +5135,7 @@ fn parse_trigger_related_functions() {
     );
 }
 
-#[test]      
+#[test]
 fn test_unicode_string_literal() {
     let pairs = [
         // Example from the postgres docs

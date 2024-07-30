@@ -2656,6 +2656,9 @@ pub enum Statement {
         events: Vec<TriggerEvent>,
         /// The table on which the trigger is to be created.
         table_name: ObjectName,
+        /// The optional referenced table name that can be referenced via
+        /// the `FROM` keyword.
+        referenced_table_name: Option<ObjectName>,
         /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement.
         referencing: Vec<TriggerReferencing>,
         /// This specifies whether the trigger function should be fired once for
@@ -3454,6 +3457,7 @@ impl fmt::Display for Statement {
                 period,
                 events,
                 table_name,
+                referenced_table_name,
                 referencing,
                 trigger_object,
                 condition,
@@ -3467,10 +3471,15 @@ impl fmt::Display for Statement {
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
                 )?;
+
                 if !events.is_empty() {
                     write!(f, " {}", display_separated(events, " OR "))?;
                 }
                 write!(f, " ON {table_name}")?;
+
+                if let Some(referenced_table_name) = referenced_table_name {
+                    write!(f, " FROM {referenced_table_name}")?;
+                }
 
                 if let Some(characteristics) = characteristics {
                     write!(f, " {characteristics}")?;

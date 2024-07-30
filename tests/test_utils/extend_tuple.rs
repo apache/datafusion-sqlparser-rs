@@ -155,7 +155,10 @@ impl<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>
 {
     type Output = (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
 
-    fn extend_tuple(self, to_extend: (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)) -> Self::Output {
+    fn extend_tuple(
+        self,
+        to_extend: (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11),
+    ) -> Self::Output {
         (
             to_extend.0,
             to_extend.1,

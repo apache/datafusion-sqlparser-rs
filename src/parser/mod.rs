@@ -3426,24 +3426,26 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
-    fn parse_comma_separated_end(&mut self) -> Option<Token> {
+    /// Parse the comma of a comma-separated syntax element.
+    /// Returns true if there is a next element
+    fn is_parse_comma_separated_end(&mut self) -> bool {
         if !self.consume_token(&Token::Comma) {
-            Some(Token::Comma)
+            true
         } else if self.options.trailing_commas {
             let token = self.peek_token().token;
             match token {
                 Token::Word(ref kw)
                     if keywords::RESERVED_FOR_COLUMN_ALIAS.contains(&kw.keyword) =>
                 {
-                    Some(token)
+                    true
                 }
                 Token::RParen | Token::SemiColon | Token::EOF | Token::RBracket | Token::RBrace => {
-                    Some(token)
+                    true
                 }
-                _ => None,
+                _ => false,
             }
         } else {
-            None
+            false
         }
     }
 
@@ -3455,7 +3457,7 @@ impl<'a> Parser<'a> {
         let mut values = vec![];
         loop {
             values.push(f(self)?);
-            if self.parse_comma_separated_end().is_some() {
+            if self.is_parse_comma_separated_end() {
                 break;
             }
         }
@@ -10330,14 +10332,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_table_function_args(&mut self) -> Result<TableFunctionArgs, ParserError> {
-        {
-            let settings = self.parse_settings()?;
-            if self.consume_token(&Token::RParen) {
-                return Ok(TableFunctionArgs {
-                    args: vec![],
-                    settings,
-                });
-            }
+        if self.consume_token(&Token::RParen) {
+            return Ok(TableFunctionArgs {
+                args: vec![],
+                settings: None,
+            });
         }
         let mut args = vec![];
         let settings = loop {
@@ -10345,7 +10344,7 @@ impl<'a> Parser<'a> {
                 break Some(settings);
             }
             args.push(self.parse_function_args()?);
-            if self.parse_comma_separated_end().is_some() {
+            if self.is_parse_comma_separated_end() {
                 break None;
             }
         };

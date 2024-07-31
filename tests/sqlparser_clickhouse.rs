@@ -249,7 +249,7 @@ fn parse_optimize_table() {
             assert_eq!(on_cluster, Some(Ident::new("cluster")));
             assert_eq!(
                 partition,
-                Some(Partition::ID(Ident::with_quote('\'', "2024-07")))
+                Some(Partition::Identifier(Ident::with_quote('\'', "2024-07")))
             );
             assert!(include_final);
             assert_eq!(

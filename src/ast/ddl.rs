@@ -1296,21 +1296,23 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
     }
 }
 
-/// PARTITION statement used in ALTER TABLE et al. such as in Hive and ClickHouse SQL
+/// PARTITION statement used in ALTER TABLE et al. such as in Hive and ClickHouse SQL.
+/// For example, ClickHouse's OPTIMIZE TABLE supports syntax like PARTITION ID 'partition_id' and PARTITION expr.
+/// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/optimize)
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Partition {
-    ID(Ident),
-    Expression(Expr),
+    Identifier(Ident),
+    Expr(Expr),
     Partitions(Vec<Expr>),
 }
 
 impl fmt::Display for Partition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Partition::ID(id) => write!(f, "PARTITION ID {id}"),
-            Partition::Expression(expr) => write!(f, "PARTITION {expr}"),
+            Partition::Identifier(id) => write!(f, "PARTITION ID {id}"),
+            Partition::Expr(expr) => write!(f, "PARTITION {expr}"),
             Partition::Partitions(partitions) => {
                 write!(f, "PARTITION ({})", display_comma_separated(partitions))
             }

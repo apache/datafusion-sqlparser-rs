@@ -11180,9 +11180,9 @@ impl<'a> Parser<'a> {
 
         let partition = if self.parse_keyword(Keyword::PARTITION) {
             if self.parse_keyword(Keyword::ID) {
-                Some(Partition::ID(self.parse_identifier(false)?))
+                Some(Partition::Identifier(self.parse_identifier(false)?))
             } else {
-                Some(Partition::Expression(self.parse_expr()?))
+                Some(Partition::Expr(self.parse_expr()?))
             }
         } else {
             None

@@ -1330,7 +1330,10 @@ impl fmt::Display for TableFactor {
                     write!(f, "(")?;
                     write!(f, "{}", display_comma_separated(&args.args))?;
                     if let Some(ref settings) = args.settings {
-                        write!(f, ", SETTINGS {}", display_comma_separated(settings))?;
+                        if !args.args.is_empty() {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "SETTINGS {}", display_comma_separated(settings))?;
                     }
                     write!(f, ")")?;
                 }

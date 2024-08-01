@@ -44,10 +44,13 @@ pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
-use crate::parser::{Parser, ParserError, Precedence};
+use crate::parser::{Parser, ParserError};
 
+use crate::keywords::Keyword;
+use crate::tokenizer::Token;
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
+use log::debug;
 
 /// Convenience check if a [`Parser`] uses a certain dialect.
 ///
@@ -300,16 +303,169 @@ pub trait Dialect: Debug + Any {
         // return None to fall back to the default behavior
         None
     }
+
+    /// Get the precedence of the next token
+    ///
+    /// Higher number => higher precedence
+    fn get_next_precedence_full(&self, parser: &Parser) -> Result<u8, ParserError> {
+        if let Some(precedence) = self.get_next_precedence(parser) {
+            return precedence;
+        }
+
+        let token = parser.peek_token();
+        debug!("get_next_precedence() {:?}", token);
+        match token.token {
+            Token::Word(w) if w.keyword == Keyword::OR => Ok(OR_PREC),
+            Token::Word(w) if w.keyword == Keyword::AND => Ok(AND_PREC),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(XOR_PREC),
+
+            Token::Word(w) if w.keyword == Keyword::AT => {
+                match (
+                    parser.peek_nth_token(1).token,
+                    parser.peek_nth_token(2).token,
+                ) {
+                    (Token::Word(w), Token::Word(w2))
+                        if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
+                    {
+                        Ok(AT_TZ_PREC)
+                    }
+                    _ => Ok(UNKNOWN_PREC),
+                }
+            }
+
+            Token::Word(w) if w.keyword == Keyword::NOT => match parser.peek_nth_token(1).token {
+                // The precedence of NOT varies depending on keyword that
+                // follows it. If it is followed by IN, BETWEEN, or LIKE,
+                // it takes on the precedence of those tokens. Otherwise, it
+                // is not an infix operator, and therefore has zero
+                // precedence.
+                Token::Word(w) if w.keyword == Keyword::IN => Ok(BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(LIKE_PREC),
+                _ => Ok(UNKNOWN_PREC),
+            },
+            Token::Word(w) if w.keyword == Keyword::IS => Ok(IS_PREC),
+            Token::Word(w) if w.keyword == Keyword::IN => Ok(BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::DIV => Ok(MUL_DIV_MOD_OP_PREC),
+            Token::Eq
+            | Token::Lt
+            | Token::LtEq
+            | Token::Neq
+            | Token::Gt
+            | Token::GtEq
+            | Token::DoubleEq
+            | Token::Tilde
+            | Token::TildeAsterisk
+            | Token::ExclamationMarkTilde
+            | Token::ExclamationMarkTildeAsterisk
+            | Token::DoubleTilde
+            | Token::DoubleTildeAsterisk
+            | Token::ExclamationMarkDoubleTilde
+            | Token::ExclamationMarkDoubleTildeAsterisk
+            | Token::Spaceship => Ok(EQ_PREC),
+            Token::Pipe => Ok(PIPE_PREC),
+            Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(CARET_PREC),
+            Token::Ampersand => Ok(AMPERSAND_PREC),
+            Token::Plus | Token::Minus => Ok(PLUS_MINUS_PREC),
+            Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
+                Ok(MUL_DIV_MOD_OP_PREC)
+            }
+            Token::DoubleColon
+            | Token::ExclamationMark
+            | Token::LBracket
+            | Token::Overlap
+            | Token::CaretAt => Ok(DOUBLE_COLON_PREC),
+            // Token::Colon if (self as dyn Dialect).is::<SnowflakeDialect>() => Ok(DOUBLE_COLON_PREC),
+            Token::Arrow
+            | Token::LongArrow
+            | Token::HashArrow
+            | Token::HashLongArrow
+            | Token::AtArrow
+            | Token::ArrowAt
+            | Token::HashMinus
+            | Token::AtQuestion
+            | Token::AtAt
+            | Token::Question
+            | Token::QuestionAnd
+            | Token::QuestionPipe
+            | Token::CustomBinaryOperator(_) => Ok(PG_OTHER_PREC),
+            _ => Ok(UNKNOWN_PREC),
+        }
+    }
+
     /// Dialect-specific statement parser override
     fn parse_statement(&self, _parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         // return None to fall back to the default behavior
         None
     }
 
-    fn precedence_numeric(&self, p: Precedence) -> u8 {
-        p.numeric()
+    /// The following precedence values are used directly by `Parse` or in dialects,
+    /// so have to be made public by the dialect.
+    fn prec_double_colon(&self) -> u8 {
+        DOUBLE_COLON_PREC
+    }
+
+    fn prec_mul_div_mod_op(&self) -> u8 {
+        MUL_DIV_MOD_OP_PREC
+    }
+
+    fn prec_plus_minus(&self) -> u8 {
+        PLUS_MINUS_PREC
+    }
+
+    fn prec_between(&self) -> u8 {
+        BETWEEN_PREC
+    }
+
+    fn prec_like(&self) -> u8 {
+        LIKE_PREC
+    }
+
+    fn prec_unary_not(&self) -> u8 {
+        UNARY_NOT_PREC
+    }
+
+    fn prec_unknown(&self) -> u8 {
+        UNKNOWN_PREC
     }
 }
+
+// Define the lexical Precedence of operators.
+//
+// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
+// higher number = higher precedence
+//
+// NOTE: The pg documentation is incomplete, e.g. the AT TIME ZONE operator
+//       actually has higher precedence than addition.
+//       See <https://postgrespro.com/list/thread-id/2673331>.
+const DOUBLE_COLON_PREC: u8 = 50;
+const AT_TZ_PREC: u8 = 41;
+const MUL_DIV_MOD_OP_PREC: u8 = 40;
+const PLUS_MINUS_PREC: u8 = 30;
+const XOR_PREC: u8 = 24;
+const AMPERSAND_PREC: u8 = 23;
+const CARET_PREC: u8 = 22;
+const PIPE_PREC: u8 = 21;
+const BETWEEN_PREC: u8 = 20;
+const EQ_PREC: u8 = 20;
+const LIKE_PREC: u8 = 19;
+const IS_PREC: u8 = 17;
+const PG_OTHER_PREC: u8 = 16;
+const UNARY_NOT_PREC: u8 = 15;
+const AND_PREC: u8 = 10;
+const OR_PREC: u8 = 5;
+const UNKNOWN_PREC: u8 = 0;
 
 impl dyn Dialect {
     #[inline]

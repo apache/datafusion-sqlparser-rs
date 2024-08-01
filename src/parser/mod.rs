@@ -871,7 +871,7 @@ impl<'a> Parser<'a> {
     /// Parse a new expression.
     pub fn parse_expr(&mut self) -> Result<Expr, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
-        self.parse_subexpr(0)
+        self.parse_subexpr(self.dialect.prec_unknown())
     }
 
     /// Parse tokens until the precedence changes.
@@ -893,7 +893,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_interval_expr(&mut self) -> Result<Expr, ParserError> {
-        let precedence = 0;
+        let precedence = self.dialect.prec_unknown();
         let mut expr = self.parse_prefix()?;
 
         loop {
@@ -914,9 +914,9 @@ impl<'a> Parser<'a> {
         let token = self.peek_token();
 
         match token.token {
-            Token::Word(w) if w.keyword == Keyword::AND => Ok(0),
-            Token::Word(w) if w.keyword == Keyword::OR => Ok(0),
-            Token::Word(w) if w.keyword == Keyword::XOR => Ok(0),
+            Token::Word(w) if w.keyword == Keyword::AND => Ok(self.dialect.prec_unknown()),
+            Token::Word(w) if w.keyword == Keyword::OR => Ok(self.dialect.prec_unknown()),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(self.dialect.prec_unknown()),
             _ => self.get_next_precedence(),
         }
     }
@@ -1075,7 +1075,7 @@ impl<'a> Parser<'a> {
                     self.parse_bigquery_struct_literal()
                 }
                 Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
-                    let expr = self.parse_subexpr(self.prec(Precedence::PlusMinus))?;
+                    let expr = self.parse_subexpr(self.dialect.prec_plus_minus())?;
                     Ok(Expr::Prior(Box::new(expr)))
                 }
                 Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
@@ -1163,7 +1163,7 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(self.prec(Precedence::MulDivModOp))?),
+                    expr: Box::new(self.parse_subexpr(self.dialect.prec_mul_div_mod_op())?),
                 })
             }
             tok @ Token::DoubleExclamationMark
@@ -1183,7 +1183,7 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(self.prec(Precedence::PlusMinus))?),
+                    expr: Box::new(self.parse_subexpr(self.dialect.prec_plus_minus())?),
                 })
             }
             Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
@@ -1712,7 +1712,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_position_expr(&mut self, ident: Ident) -> Result<Expr, ParserError> {
-        let between_prec = self.prec(Precedence::Between);
+        let between_prec = self.dialect.prec_between();
         let position_expr = self.maybe_parse(|p| {
             // PARSE SELECT POSITION('@' in field)
             p.expect_token(&Token::LParen)?;
@@ -1968,12 +1968,12 @@ impl<'a> Parser<'a> {
                 }
                 _ => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
-                    expr: Box::new(self.parse_subexpr(self.prec(Precedence::UnaryNot))?),
+                    expr: Box::new(self.parse_subexpr(self.dialect.prec_unary_not())?),
                 }),
             },
             _ => Ok(Expr::UnaryOp {
                 op: UnaryOperator::Not,
-                expr: Box::new(self.parse_subexpr(self.prec(Precedence::UnaryNot))?),
+                expr: Box::new(self.parse_subexpr(self.dialect.prec_unary_not())?),
             }),
         }
     }
@@ -2649,7 +2649,7 @@ impl<'a> Parser<'a> {
                         Ok(Expr::RLike {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(self.prec(Precedence::Like))?),
+                            pattern: Box::new(self.parse_subexpr(self.dialect.prec_like())?),
                             regexp,
                         })
                     } else if self.parse_keyword(Keyword::IN) {
@@ -2660,21 +2660,21 @@ impl<'a> Parser<'a> {
                         Ok(Expr::Like {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(self.prec(Precedence::Like))?),
+                            pattern: Box::new(self.parse_subexpr(self.dialect.prec_like())?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Ok(Expr::ILike {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(self.prec(Precedence::Like))?),
+                            pattern: Box::new(self.parse_subexpr(self.dialect.prec_like())?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keywords(&[Keyword::SIMILAR, Keyword::TO]) {
                         Ok(Expr::SimilarTo {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(self.prec(Precedence::Like))?),
+                            pattern: Box::new(self.parse_subexpr(self.dialect.prec_like())?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else {
@@ -2949,9 +2949,9 @@ impl<'a> Parser<'a> {
     pub fn parse_between(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         // Stop parsing subexpressions for <low> and <high> on tokens with
         // precedence lower than that of `BETWEEN`, such as `AND`, `IS`, etc.
-        let low = self.parse_subexpr(self.prec(Precedence::Between))?;
+        let low = self.parse_subexpr(self.dialect.prec_between())?;
         self.expect_keyword(Keyword::AND)?;
-        let high = self.parse_subexpr(self.prec(Precedence::Between))?;
+        let high = self.parse_subexpr(self.dialect.prec_between())?;
         Ok(Expr::Between {
             expr: Box::new(expr),
             negated,
@@ -2972,108 +2972,7 @@ impl<'a> Parser<'a> {
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
-        // allow the dialect to override precedence logic
-        if let Some(precedence) = self.dialect.get_next_precedence(self) {
-            return precedence;
-        }
-
-        macro_rules! p {
-            ($precedence:ident) => {self.prec(Precedence::$precedence)};
-        }
-
-        let token = self.peek_token();
-        debug!("get_next_precedence() {:?}", token);
-        match token.token {
-            Token::Word(w) if w.keyword == Keyword::OR => Ok(p!(Or)),
-            Token::Word(w) if w.keyword == Keyword::AND => Ok(p!(And)),
-            Token::Word(w) if w.keyword == Keyword::XOR => Ok(p!(Xor)),
-
-            Token::Word(w) if w.keyword == Keyword::AT => {
-                match (self.peek_nth_token(1).token, self.peek_nth_token(2).token) {
-                    (Token::Word(w), Token::Word(w2))
-                        if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
-                    {
-                        Ok(p!(AtTz))
-                    }
-                    _ => Ok(p!(Unknown)),
-                }
-            }
-
-            Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1).token {
-                // The precedence of NOT varies depending on keyword that
-                // follows it. If it is followed by IN, BETWEEN, or LIKE,
-                // it takes on the precedence of those tokens. Otherwise, it
-                // is not an infix operator, and therefore has zero
-                // precedence.
-                Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
-                Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
-                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
-                _ => Ok(p!(Unknown)),
-            },
-            Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
-            Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
-            Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
-            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
-            Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
-            Token::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
-            Token::Eq
-            | Token::Lt
-            | Token::LtEq
-            | Token::Neq
-            | Token::Gt
-            | Token::GtEq
-            | Token::DoubleEq
-            | Token::Tilde
-            | Token::TildeAsterisk
-            | Token::ExclamationMarkTilde
-            | Token::ExclamationMarkTildeAsterisk
-            | Token::DoubleTilde
-            | Token::DoubleTildeAsterisk
-            | Token::ExclamationMarkDoubleTilde
-            | Token::ExclamationMarkDoubleTildeAsterisk
-            | Token::Spaceship => Ok(p!(Eq)),
-            Token::Pipe => Ok(p!(Pipe)),
-            Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => {
-                Ok(p!(Caret))
-            }
-            Token::Ampersand => Ok(p!(Ampersand)),
-            Token::Plus | Token::Minus => Ok(p!(PlusMinus)),
-            Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
-                Ok(p!(MulDivModOp))
-            }
-            Token::DoubleColon
-            | Token::ExclamationMark
-            | Token::LBracket
-            | Token::Overlap
-            | Token::CaretAt => Ok(p!(DoubleColon)),
-            Token::Colon if dialect_of!(self is SnowflakeDialect) => Ok(p!(DoubleColon)),
-            Token::Arrow
-            | Token::LongArrow
-            | Token::HashArrow
-            | Token::HashLongArrow
-            | Token::AtArrow
-            | Token::ArrowAt
-            | Token::HashMinus
-            | Token::AtQuestion
-            | Token::AtAt
-            | Token::Question
-            | Token::QuestionAnd
-            | Token::QuestionPipe
-            | Token::CustomBinaryOperator(_) => Ok(p!(PgOther)),
-            _ => Ok(p!(Unknown)),
-        }
-    }
-
-    fn prec(&self, p: Precedence) -> u8 {
-        self.dialect.precedence_numeric(p)
+        self.dialect.get_next_precedence_full(self)
     }
 
     /// Return the first non-whitespace token that has not yet been processed
@@ -8040,7 +7939,7 @@ impl<'a> Parser<'a> {
                 format_clause: None,
             })
         } else {
-            let body = self.parse_boxed_query_body(0)?;
+            let body = self.parse_boxed_query_body(self.dialect.prec_unknown())?;
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 let order_by_exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
@@ -11389,62 +11288,6 @@ impl<'a> Parser<'a> {
     /// Consume the parser and return its underlying token buffer
     pub fn into_tokens(self) -> Vec<TokenWithLocation> {
         self.tokens
-    }
-}
-
-
-/// Use to define the lexical Precedence of operators.
-///
-/// Numeric values of enum members are used to define the default precedence of the operators.
-///
-/// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
-/// higher number = higher precedence
-///
-/// NOTE: The pg documentation is incomplete, e.g. the AT TIME ZONE operator
-///       actually has higher precedence than addition.
-///       See <https://postgrespro.com/list/thread-id/2673331>.
-#[derive(Debug, Clone, Copy)]
-#[repr(u8)]
-pub enum Precedence {
-    DoubleColon,
-    AtTz,
-    MulDivModOp,
-    PlusMinus,
-    Xor,
-    Ampersand,
-    Caret,
-    Pipe,
-    Between,
-    Eq,
-    Like,
-    Is,
-    PgOther,
-    UnaryNot,
-    And,
-    Or,
-    Unknown,
-}
-
-impl Precedence {
-    pub fn numeric(&self) -> u8 {
-        match self {
-            Precedence::DoubleColon => 50,
-            Precedence::AtTz => 41,
-            Precedence::MulDivModOp => 40,
-            Precedence::PlusMinus => 30,
-            Precedence::Xor => 24,
-            Precedence::Ampersand => 23,
-            Precedence::Caret => 22,
-            Precedence::Pipe => 21,
-            Precedence::Between | Precedence::Eq => 20,
-            Precedence::Like => 19,
-            Precedence::Is => 17,
-            Precedence::PgOther => 16,
-            Precedence::UnaryNot => 15,
-            Precedence::And => 10,
-            Precedence::Or => 5,
-            Precedence::Unknown => 0,
-        }
     }
 }
 

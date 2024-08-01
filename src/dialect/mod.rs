@@ -24,11 +24,12 @@ mod redshift;
 mod snowflake;
 mod sqlite;
 
-use crate::ast::{Expr, Statement};
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
 use core::iter::Peekable;
 use core::str::Chars;
+
+use log::debug;
 
 pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
@@ -44,13 +45,13 @@ pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
+use crate::ast::{Expr, Statement};
 use crate::parser::{Parser, ParserError};
-
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
+
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
-use log::debug;
 
 /// Convenience check if a [`Parser`] uses a certain dialect.
 ///
@@ -304,7 +305,9 @@ pub trait Dialect: Debug + Any {
         None
     }
 
-    /// Get the precedence of the next token
+    /// Get the precedence of the next token. This "full" method means all precedence logic and remain
+    /// in the dialect. while still allowing overriding the `get_next_precedence` method with the option to
+    /// fallback to the default behavior.
     ///
     /// Higher number => higher precedence
     fn get_next_precedence_full(&self, parser: &Parser) -> Result<u8, ParserError> {

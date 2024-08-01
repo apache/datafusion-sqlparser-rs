@@ -33,7 +33,7 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConstraintCharacteristics, DeferrableInitial, GeneratedAs,
+    ColumnOptionDef, ConstraintCharacteristics, Deduplicate, DeferrableInitial, GeneratedAs,
     GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner, Partition,
     ProcedureParam, ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation, ViewColumnDef,
@@ -2831,6 +2831,18 @@ pub enum Statement {
         to: Ident,
         with: Vec<SqlOption>,
     },
+    /// ```sql
+    /// OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
+    /// ```
+    ///
+    /// See ClickHouse <https://clickhouse.com/docs/en/sql-reference/statements/optimize>
+    OptimizeTable {
+        name: ObjectName,
+        on_cluster: Option<Ident>,
+        partition: Option<Partition>,
+        include_final: bool,
+        deduplicate: Option<Deduplicate>,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -4281,6 +4293,28 @@ impl fmt::Display for Statement {
                     write!(f, " WITH ({})", display_comma_separated(with))?;
                 }
 
+                Ok(())
+            }
+            Statement::OptimizeTable {
+                name,
+                on_cluster,
+                partition,
+                include_final,
+                deduplicate,
+            } => {
+                write!(f, "OPTIMIZE TABLE {name}")?;
+                if let Some(on_cluster) = on_cluster {
+                    write!(f, " ON CLUSTER {on_cluster}", on_cluster = on_cluster)?;
+                }
+                if let Some(partition) = partition {
+                    write!(f, " {partition}", partition = partition)?;
+                }
+                if *include_final {
+                    write!(f, " FINAL")?;
+                }
+                if let Some(deduplicate) = deduplicate {
+                    write!(f, " {deduplicate}")?;
+                }
                 Ok(())
             }
         }

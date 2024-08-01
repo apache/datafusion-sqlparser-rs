@@ -44,10 +44,10 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
-pub use crate::keywords;
 use crate::ast::{Expr, Statement};
-use crate::parser::{Parser, ParserError};
+pub use crate::keywords;
 use crate::keywords::Keyword;
+use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
 #[cfg(not(feature = "std"))]

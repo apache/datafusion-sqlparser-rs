@@ -3430,6 +3430,29 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
+    /// Parse the comma of a comma-separated syntax element.
+    /// Returns true if there is a next element
+    fn is_parse_comma_separated_end(&mut self) -> bool {
+        if !self.consume_token(&Token::Comma) {
+            true
+        } else if self.options.trailing_commas {
+            let token = self.peek_token().token;
+            match token {
+                Token::Word(ref kw)
+                    if keywords::RESERVED_FOR_COLUMN_ALIAS.contains(&kw.keyword) =>
+                {
+                    true
+                }
+                Token::RParen | Token::SemiColon | Token::EOF | Token::RBracket | Token::RBrace => {
+                    true
+                }
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
@@ -3438,22 +3461,8 @@ impl<'a> Parser<'a> {
         let mut values = vec![];
         loop {
             values.push(f(self)?);
-            if !self.consume_token(&Token::Comma) {
+            if self.is_parse_comma_separated_end() {
                 break;
-            } else if self.options.trailing_commas {
-                match self.peek_token().token {
-                    Token::Word(kw)
-                        if keywords::RESERVED_FOR_COLUMN_ALIAS.contains(&kw.keyword) =>
-                    {
-                        break;
-                    }
-                    Token::RParen
-                    | Token::SemiColon
-                    | Token::EOF
-                    | Token::RBracket
-                    | Token::RBrace => break,
-                    _ => continue,
-                }
             }
         }
         Ok(values)
@@ -8104,19 +8113,7 @@ impl<'a> Parser<'a> {
                 vec![]
             };
 
-            let settings = if dialect_of!(self is ClickHouseDialect|GenericDialect)
-                && self.parse_keyword(Keyword::SETTINGS)
-            {
-                let key_values = self.parse_comma_separated(|p| {
-                    let key = p.parse_identifier(false)?;
-                    p.expect_token(&Token::Eq)?;
-                    let value = p.parse_value()?;
-                    Ok(Setting { key, value })
-                })?;
-                Some(key_values)
-            } else {
-                None
-            };
+            let settings = self.parse_settings()?;
 
             let fetch = if self.parse_keyword(Keyword::FETCH) {
                 Some(self.parse_fetch()?)
@@ -8161,6 +8158,23 @@ impl<'a> Parser<'a> {
                 format_clause,
             })
         }
+    }
+
+    fn parse_settings(&mut self) -> Result<Option<Vec<Setting>>, ParserError> {
+        let settings = if dialect_of!(self is ClickHouseDialect|GenericDialect)
+            && self.parse_keyword(Keyword::SETTINGS)
+        {
+            let key_values = self.parse_comma_separated(|p| {
+                let key = p.parse_identifier(false)?;
+                p.expect_token(&Token::Eq)?;
+                let value = p.parse_value()?;
+                Ok(Setting { key, value })
+            })?;
+            Some(key_values)
+        } else {
+            None
+        };
+        Ok(settings)
     }
 
     /// Parse a mssql `FOR [XML | JSON | BROWSE]` clause
@@ -9382,9 +9396,9 @@ impl<'a> Parser<'a> {
             // Parse potential version qualifier
             let version = self.parse_table_version()?;
 
-            // Postgres, MSSQL: table-valued functions:
+            // Postgres, MSSQL, ClickHouse: table-valued functions:
             let args = if self.consume_token(&Token::LParen) {
-                Some(self.parse_optional_args()?)
+                Some(self.parse_table_function_args()?)
             } else {
                 None
             };
@@ -10325,6 +10339,27 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             Ok(args)
         }
+    }
+
+    fn parse_table_function_args(&mut self) -> Result<TableFunctionArgs, ParserError> {
+        if self.consume_token(&Token::RParen) {
+            return Ok(TableFunctionArgs {
+                args: vec![],
+                settings: None,
+            });
+        }
+        let mut args = vec![];
+        let settings = loop {
+            if let Some(settings) = self.parse_settings()? {
+                break Some(settings);
+            }
+            args.push(self.parse_function_args()?);
+            if self.is_parse_comma_separated_end() {
+                break None;
+            }
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(TableFunctionArgs { args, settings })
     }
 
     /// Parses a potentially empty list of arguments to a window function

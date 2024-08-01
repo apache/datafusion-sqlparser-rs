@@ -1151,6 +1151,83 @@ fn parse_create_table_on_commit_and_as_query() {
     }
 }
 
+#[test]
+fn parse_select_table_function_settings() {
+    fn check_settings(sql: &str, expected: &TableFunctionArgs) {
+        match clickhouse_and_generic().verified_stmt(sql) {
+            Statement::Query(q) => {
+                let from = &q.body.as_select().unwrap().from;
+                assert_eq!(from.len(), 1);
+                assert_eq!(from[0].joins, vec![]);
+                match &from[0].relation {
+                    Table { args, .. } => {
+                        let args = args.as_ref().unwrap();
+                        assert_eq!(args, expected);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+    check_settings(
+        "SELECT * FROM table_function(arg, SETTINGS s0 = 3, s1 = 's')",
+        &TableFunctionArgs {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier("arg".into()),
+            ))],
+
+            settings: Some(vec![
+                Setting {
+                    key: "s0".into(),
+                    value: Value::Number("3".parse().unwrap(), false),
+                },
+                Setting {
+                    key: "s1".into(),
+                    value: Value::SingleQuotedString("s".into()),
+                },
+            ]),
+        },
+    );
+    check_settings(
+        r#"SELECT * FROM table_function(arg)"#,
+        &TableFunctionArgs {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier("arg".into()),
+            ))],
+            settings: None,
+        },
+    );
+    check_settings(
+        "SELECT * FROM table_function(SETTINGS s0 = 3, s1 = 's')",
+        &TableFunctionArgs {
+            args: vec![],
+            settings: Some(vec![
+                Setting {
+                    key: "s0".into(),
+                    value: Value::Number("3".parse().unwrap(), false),
+                },
+                Setting {
+                    key: "s1".into(),
+                    value: Value::SingleQuotedString("s".into()),
+                },
+            ]),
+        },
+    );
+    let invalid_cases = vec![
+        "SELECT * FROM t(SETTINGS a)",
+        "SELECT * FROM t(SETTINGS a=)",
+        "SELECT * FROM t(SETTINGS a=1, b)",
+        "SELECT * FROM t(SETTINGS a=1, b=)",
+        "SELECT * FROM t(SETTINGS a=1, b=c)",
+    ];
+    for sql in invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: SETTINGS key = value, found: ");
+    }
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

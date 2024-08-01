@@ -1075,7 +1075,7 @@ impl<'a> Parser<'a> {
                     self.parse_bigquery_struct_literal()
                 }
                 Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
-                    let expr = self.parse_subexpr(Self::PLUS_MINUS_PREC)?;
+                    let expr = self.parse_subexpr(self.prec(Precedence::PlusMinus))?;
                     Ok(Expr::Prior(Box::new(expr)))
                 }
                 Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
@@ -1163,7 +1163,7 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(Self::MUL_DIV_MOD_OP_PREC)?),
+                    expr: Box::new(self.parse_subexpr(self.prec(Precedence::MulDivModOp))?),
                 })
             }
             tok @ Token::DoubleExclamationMark
@@ -1183,7 +1183,7 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
+                    expr: Box::new(self.parse_subexpr(self.prec(Precedence::PlusMinus))?),
                 })
             }
             Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
@@ -1712,12 +1712,13 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_position_expr(&mut self, ident: Ident) -> Result<Expr, ParserError> {
+        let between_prec = self.prec(Precedence::Between);
         let position_expr = self.maybe_parse(|p| {
             // PARSE SELECT POSITION('@' in field)
             p.expect_token(&Token::LParen)?;
 
             // Parse the subexpr till the IN keyword
-            let expr = p.parse_subexpr(Self::BETWEEN_PREC)?;
+            let expr = p.parse_subexpr(between_prec)?;
             p.expect_keyword(Keyword::IN)?;
             let from = p.parse_expr()?;
             p.expect_token(&Token::RParen)?;
@@ -1967,12 +1968,12 @@ impl<'a> Parser<'a> {
                 }
                 _ => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
-                    expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
+                    expr: Box::new(self.parse_subexpr(self.prec(Precedence::UnaryNot))?),
                 }),
             },
             _ => Ok(Expr::UnaryOp {
                 op: UnaryOperator::Not,
-                expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
+                expr: Box::new(self.parse_subexpr(self.prec(Precedence::UnaryNot))?),
             }),
         }
     }
@@ -2648,7 +2649,7 @@ impl<'a> Parser<'a> {
                         Ok(Expr::RLike {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
+                            pattern: Box::new(self.parse_subexpr(self.prec(Precedence::Like))?),
                             regexp,
                         })
                     } else if self.parse_keyword(Keyword::IN) {
@@ -2659,21 +2660,21 @@ impl<'a> Parser<'a> {
                         Ok(Expr::Like {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
+                            pattern: Box::new(self.parse_subexpr(self.prec(Precedence::Like))?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Ok(Expr::ILike {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
+                            pattern: Box::new(self.parse_subexpr(self.prec(Precedence::Like))?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keywords(&[Keyword::SIMILAR, Keyword::TO]) {
                         Ok(Expr::SimilarTo {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
+                            pattern: Box::new(self.parse_subexpr(self.prec(Precedence::Like))?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else {
@@ -2948,9 +2949,9 @@ impl<'a> Parser<'a> {
     pub fn parse_between(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         // Stop parsing subexpressions for <low> and <high> on tokens with
         // precedence lower than that of `BETWEEN`, such as `AND`, `IS`, etc.
-        let low = self.parse_subexpr(Self::BETWEEN_PREC)?;
+        let low = self.parse_subexpr(self.prec(Precedence::Between))?;
         self.expect_keyword(Keyword::AND)?;
-        let high = self.parse_subexpr(Self::BETWEEN_PREC)?;
+        let high = self.parse_subexpr(self.prec(Precedence::Between))?;
         Ok(Expr::Between {
             expr: Box::new(expr),
             negated,
@@ -2969,24 +2970,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    // Use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
-    // higher number = higher precedence
-    //
-    // NOTE: The pg documentation is incomplete, e.g. the AT TIME ZONE operator
-    //       actually has higher precedence than addition.
-    //       See https://postgrespro.com/list/thread-id/2673331.
-    const AT_TZ_PREC: u8 = 41;
-    const MUL_DIV_MOD_OP_PREC: u8 = 40;
-    const PLUS_MINUS_PREC: u8 = 30;
-    const XOR_PREC: u8 = 24;
-    const BETWEEN_PREC: u8 = 20;
-    const LIKE_PREC: u8 = 19;
-    const IS_PREC: u8 = 17;
-    const PG_OTHER_PREC: u8 = 16;
-    const UNARY_NOT_PREC: u8 = 15;
-    const AND_PREC: u8 = 10;
-    const OR_PREC: u8 = 5;
-
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
         // allow the dialect to override precedence logic
@@ -2994,23 +2977,25 @@ impl<'a> Parser<'a> {
             return precedence;
         }
 
+        macro_rules! p {
+            ($precedence:ident) => {self.prec(Precedence::$precedence)};
+        }
+
         let token = self.peek_token();
         debug!("get_next_precedence() {:?}", token);
-        let [token_0, token_1, token_2] = self.peek_tokens_with_location();
-        debug!("0: {token_0} 1: {token_1} 2: {token_2}");
         match token.token {
-            Token::Word(w) if w.keyword == Keyword::OR => Ok(Self::OR_PREC),
-            Token::Word(w) if w.keyword == Keyword::AND => Ok(Self::AND_PREC),
-            Token::Word(w) if w.keyword == Keyword::XOR => Ok(Self::XOR_PREC),
+            Token::Word(w) if w.keyword == Keyword::OR => Ok(p!(Or)),
+            Token::Word(w) if w.keyword == Keyword::AND => Ok(p!(And)),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(p!(Xor)),
 
             Token::Word(w) if w.keyword == Keyword::AT => {
                 match (self.peek_nth_token(1).token, self.peek_nth_token(2).token) {
                     (Token::Word(w), Token::Word(w2))
                         if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
                     {
-                        Ok(Self::AT_TZ_PREC)
+                        Ok(p!(AtTz))
                     }
-                    _ => Ok(0),
+                    _ => Ok(p!(Unknown)),
                 }
             }
 
@@ -3020,25 +3005,25 @@ impl<'a> Parser<'a> {
                 // it takes on the precedence of those tokens. Otherwise, it
                 // is not an infix operator, and therefore has zero
                 // precedence.
-                Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
-                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
-                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::LIKE_PREC),
-                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::LIKE_PREC),
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
-                _ => Ok(0),
+                Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
+                Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+                _ => Ok(p!(Unknown)),
             },
-            Token::Word(w) if w.keyword == Keyword::IS => Ok(Self::IS_PREC),
-            Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::DIV => Ok(Self::MUL_DIV_MOD_OP_PREC),
+            Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
+            Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -3054,18 +3039,22 @@ impl<'a> Parser<'a> {
             | Token::DoubleTildeAsterisk
             | Token::ExclamationMarkDoubleTilde
             | Token::ExclamationMarkDoubleTildeAsterisk
-            | Token::Spaceship => Ok(20),
-            Token::Pipe => Ok(21),
-            Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
-            Token::Ampersand => Ok(23),
-            Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
-            Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
-                Ok(Self::MUL_DIV_MOD_OP_PREC)
+            | Token::Spaceship => Ok(p!(Eq)),
+            Token::Pipe => Ok(p!(Pipe)),
+            Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => {
+                Ok(p!(Caret))
             }
-            Token::DoubleColon => Ok(50),
-            Token::Colon if dialect_of!(self is SnowflakeDialect) => Ok(50),
-            Token::ExclamationMark => Ok(50),
-            Token::LBracket | Token::Overlap | Token::CaretAt => Ok(50),
+            Token::Ampersand => Ok(p!(Ampersand)),
+            Token::Plus | Token::Minus => Ok(p!(PlusMinus)),
+            Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
+                Ok(p!(MulDivModOp))
+            }
+            Token::DoubleColon
+            | Token::ExclamationMark
+            | Token::LBracket
+            | Token::Overlap
+            | Token::CaretAt => Ok(p!(DoubleColon)),
+            Token::Colon if dialect_of!(self is SnowflakeDialect) => Ok(p!(DoubleColon)),
             Token::Arrow
             | Token::LongArrow
             | Token::HashArrow
@@ -3078,9 +3067,13 @@ impl<'a> Parser<'a> {
             | Token::Question
             | Token::QuestionAnd
             | Token::QuestionPipe
-            | Token::CustomBinaryOperator(_) => Ok(Self::PG_OTHER_PREC),
-            _ => Ok(0),
+            | Token::CustomBinaryOperator(_) => Ok(p!(PgOther)),
+            _ => Ok(p!(Unknown)),
         }
+    }
+
+    fn prec(&self, p: Precedence) -> u8 {
+        self.dialect.precedence_numeric(p)
     }
 
     /// Return the first non-whitespace token that has not yet been processed
@@ -11396,6 +11389,62 @@ impl<'a> Parser<'a> {
     /// Consume the parser and return its underlying token buffer
     pub fn into_tokens(self) -> Vec<TokenWithLocation> {
         self.tokens
+    }
+}
+
+
+/// Use to define the lexical Precedence of operators.
+///
+/// Numeric values of enum members are used to define the default precedence of the operators.
+///
+/// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
+/// higher number = higher precedence
+///
+/// NOTE: The pg documentation is incomplete, e.g. the AT TIME ZONE operator
+///       actually has higher precedence than addition.
+///       See <https://postgrespro.com/list/thread-id/2673331>.
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum Precedence {
+    DoubleColon,
+    AtTz,
+    MulDivModOp,
+    PlusMinus,
+    Xor,
+    Ampersand,
+    Caret,
+    Pipe,
+    Between,
+    Eq,
+    Like,
+    Is,
+    PgOther,
+    UnaryNot,
+    And,
+    Or,
+    Unknown,
+}
+
+impl Precedence {
+    pub fn numeric(&self) -> u8 {
+        match self {
+            Precedence::DoubleColon => 50,
+            Precedence::AtTz => 41,
+            Precedence::MulDivModOp => 40,
+            Precedence::PlusMinus => 30,
+            Precedence::Xor => 24,
+            Precedence::Ampersand => 23,
+            Precedence::Caret => 22,
+            Precedence::Pipe => 21,
+            Precedence::Between | Precedence::Eq => 20,
+            Precedence::Like => 19,
+            Precedence::Is => 17,
+            Precedence::PgOther => 16,
+            Precedence::UnaryNot => 15,
+            Precedence::And => 10,
+            Precedence::Or => 5,
+            Precedence::Unknown => 0,
+        }
     }
 }
 

@@ -44,7 +44,7 @@ pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
-use crate::parser::{Parser, ParserError};
+use crate::parser::{Parser, ParserError, Precedence};
 
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
@@ -304,6 +304,10 @@ pub trait Dialect: Debug + Any {
     fn parse_statement(&self, _parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         // return None to fall back to the default behavior
         None
+    }
+
+    fn precedence_numeric(&self, p: Precedence) -> u8 {
+        p.numeric()
     }
 }
 

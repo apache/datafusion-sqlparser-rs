@@ -14,30 +14,15 @@ use log::debug;
 use crate::ast::{CommentObject, Statement};
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
-use crate::parser::{Parser, ParserError};
+use crate::parser::{Parser, ParserError, Precedence};
 use crate::tokenizer::Token;
 
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
 #[derive(Debug)]
 pub struct PostgreSqlDialect {}
 
-
-// based on https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE
-const DOUBLE_COLON_PREC: u8 = 140;
 const BRACKET_PREC: u8 = 130;
 const COLLATE_PREC: u8 = 120;
-const AT_TZ_PREC: u8 = 110;
-const CARET_PREC: u8 = 100;
-const MUL_DIV_MOD_OP_PREC: u8 = 90;
-const PLUS_MINUS_PREC: u8 = 80;
-const PG_OTHER_PREC: u8 = 70;
-const BETWEEN_LIKE_PREC: u8 = 60;
-const EQ_PREC: u8 = 50;
-const IS_PREC: u8 = 40;
-const NOT_PREC: u8 = 30;
-const AND_PREC: u8 = 20;
-const OR_PREC: u8 = 10;
-const UNKNOWN_PREC: u8 = 0;
 
 impl Dialect for PostgreSqlDialect {
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
@@ -87,21 +72,28 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
-        // return None to fall back to the default behavior
-
         let token = parser.peek_token();
         debug!("get_next_precedence() {:?}", token);
+
+        macro_rules! p {
+            ($precedence:ident) => {self.precedence_numeric(Precedence::$precedence)};
+        }
+
         let precedence = match token.token {
-            Token::Word(w) if w.keyword == Keyword::OR => OR_PREC,
-            Token::Word(w) if w.keyword == Keyword::AND => AND_PREC,
+            Token::Word(w) if w.keyword == Keyword::OR => p!(Or),
+            Token::Word(w) if w.keyword == Keyword::XOR => p!(Xor),
+            Token::Word(w) if w.keyword == Keyword::AND => p!(And),
             Token::Word(w) if w.keyword == Keyword::AT => {
-                match (parser.peek_nth_token(1).token, parser.peek_nth_token(2).token) {
+                match (
+                    parser.peek_nth_token(1).token,
+                    parser.peek_nth_token(2).token,
+                ) {
                     (Token::Word(w), Token::Word(w2))
                         if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
                     {
-                        AT_TZ_PREC
+                        p!(AtTz)
                     }
-                    _ => UNKNOWN_PREC,
+                    _ => p!(Unknown),
                 }
             }
 
@@ -111,25 +103,25 @@ impl Dialect for PostgreSqlDialect {
                 // it takes on the precedence of those tokens. Otherwise, it
                 // is not an infix operator, and therefore has zero
                 // precedence.
-                Token::Word(w) if w.keyword == Keyword::IN => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::BETWEEN => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::LIKE => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::ILIKE => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::RLIKE => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::REGEXP => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => BETWEEN_LIKE_PREC,
-                _ => NOT_PREC,
+                Token::Word(w) if w.keyword == Keyword::IN => p!(Between),
+                Token::Word(w) if w.keyword == Keyword::BETWEEN => p!(Between),
+                Token::Word(w) if w.keyword == Keyword::LIKE => p!(Between),
+                Token::Word(w) if w.keyword == Keyword::ILIKE => p!(Between),
+                Token::Word(w) if w.keyword == Keyword::RLIKE => p!(Between),
+                Token::Word(w) if w.keyword == Keyword::REGEXP => p!(Between),
+                Token::Word(w) if w.keyword == Keyword::SIMILAR => p!(Between),
+                _ => p!(Unknown),
             },
-            Token::Word(w) if w.keyword == Keyword::IS => IS_PREC,
-            Token::Word(w) if w.keyword == Keyword::IN => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::BETWEEN => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::LIKE => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::ILIKE => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::RLIKE => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::REGEXP => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::SIMILAR => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::OPERATOR => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::DIV => MUL_DIV_MOD_OP_PREC,
+            Token::Word(w) if w.keyword == Keyword::IS => p!(Is),
+            Token::Word(w) if w.keyword == Keyword::IN => p!(Between),
+            Token::Word(w) if w.keyword == Keyword::BETWEEN => p!(Between),
+            Token::Word(w) if w.keyword == Keyword::LIKE => p!(Between),
+            Token::Word(w) if w.keyword == Keyword::ILIKE => p!(Between),
+            Token::Word(w) if w.keyword == Keyword::RLIKE => p!(Between),
+            Token::Word(w) if w.keyword == Keyword::REGEXP => p!(Between),
+            Token::Word(w) if w.keyword == Keyword::SIMILAR => p!(Between),
+            Token::Word(w) if w.keyword == Keyword::OPERATOR => p!(Between),
+            Token::Word(w) if w.keyword == Keyword::DIV => p!(MulDivModOp),
             Token::Word(w) if w.keyword == Keyword::COLLATE => COLLATE_PREC,
             Token::Eq
             | Token::Lt
@@ -146,11 +138,13 @@ impl Dialect for PostgreSqlDialect {
             | Token::DoubleTildeAsterisk
             | Token::ExclamationMarkDoubleTilde
             | Token::ExclamationMarkDoubleTildeAsterisk
-            | Token::Spaceship => EQ_PREC,
-            Token::Caret => CARET_PREC,
-            Token::Plus | Token::Minus => PLUS_MINUS_PREC,
-            Token::Mul | Token::Div | Token::Mod => MUL_DIV_MOD_OP_PREC,
-            Token::DoubleColon => DOUBLE_COLON_PREC,
+            | Token::Spaceship => p!(Eq),
+            Token::Pipe => p!(Pipe),
+            Token::Caret => p!(Caret),
+            Token::Ampersand => p!(Ampersand),
+            Token::Plus | Token::Minus => p!(PlusMinus),
+            Token::Mul | Token::Div | Token::Mod => p!(MulDivModOp),
+            Token::DoubleColon => p!(DoubleColon),
             Token::LBracket => BRACKET_PREC,
             Token::Arrow
             | Token::LongArrow
@@ -171,8 +165,8 @@ impl Dialect for PostgreSqlDialect {
             | Token::Sharp
             | Token::ShiftRight
             | Token::ShiftLeft
-            | Token::CustomBinaryOperator(_) => PG_OTHER_PREC,
-            _ => UNKNOWN_PREC,
+            | Token::CustomBinaryOperator(_) => p!(PgOther),
+            _ => p!(Unknown),
         };
         Some(Ok(precedence))
     }
@@ -191,6 +185,44 @@ impl Dialect for PostgreSqlDialect {
 
     fn supports_group_by_expr(&self) -> bool {
         true
+    }
+
+    /*
+    const DOUBLE_COLON_PREC: u8 = 140;
+    const BRACKET_PREC: u8 = 130;
+    const COLLATE_PREC: u8 = 120;
+    const AT_TZ_PREC: u8 = 110;
+    const CARET_PREC: u8 = 100;
+    const MUL_DIV_MOD_OP_PREC: u8 = 90;
+    const PLUS_MINUS_PREC: u8 = 80;
+    const PG_OTHER_PREC: u8 = 70;
+    const BETWEEN_LIKE_PREC: u8 = 60;
+    const EQ_PREC: u8 = 50;
+    const IS_PREC: u8 = 40;
+    const NOT_PREC: u8 = 30;
+    const AND_PREC: u8 = 20;
+    const OR_PREC: u8 = 10;
+    const UNKNOWN_PREC: u8 = 0;
+     */
+    /// based on https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE
+    fn precedence_numeric(&self, p: Precedence) -> u8 {
+        match p {
+            Precedence::DoubleColon => 140,
+            Precedence::AtTz => 110,
+            Precedence::MulDivModOp => 90,
+            Precedence::PlusMinus => 80,
+            Precedence::Caret => 110,
+            Precedence::Between => 60,
+            Precedence::Eq => 50,
+            Precedence::Like => 60,
+            Precedence::Is => 40,
+            Precedence::PgOther | Precedence::Pipe | Precedence::Ampersand => 70,
+            Precedence::UnaryNot => 30,
+            Precedence::And => 20,
+            Precedence::Xor => 79,
+            Precedence::Or => 10,
+            Precedence::Unknown => 0,
+        }
     }
 }
 

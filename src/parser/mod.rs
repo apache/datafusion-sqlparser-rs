@@ -2352,12 +2352,14 @@ impl<'a> Parser<'a> {
     /// [map]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
     fn parse_duckdb_map_literal(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LBrace)?;
-
-        let fields = self.parse_comma_separated(Self::parse_duckdb_map_field)?;
-
-        self.expect_token(&Token::RBrace)?;
-
-        Ok(Expr::Map(Map { entries: fields }))
+        if self.peek_token().token == Token::RBrace {
+            let _ = self.next_token(); // consume }
+            Ok(Expr::Map(Map { entries: vec![] }))
+        } else {
+            let fields = self.parse_comma_separated(Self::parse_duckdb_map_field)?;
+            self.expect_token(&Token::RBrace)?;
+            Ok(Expr::Map(Map { entries: fields }))
+        }
     }
 
     /// Parse a field for a duckdb [map]

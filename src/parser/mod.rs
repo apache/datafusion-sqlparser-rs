@@ -1849,17 +1849,9 @@ impl<'a> Parser<'a> {
     /// Parses an array expression `[ex1, ex2, ..]`
     /// if `named` is `true`, came from an expression like  `ARRAY[ex1, ex2]`
     pub fn parse_array_expr(&mut self, named: bool) -> Result<Expr, ParserError> {
-        if self.peek_token().token == Token::RBracket {
-            let _ = self.next_token(); // consume ]
-            Ok(Expr::Array(Array {
-                elem: vec![],
-                named,
-            }))
-        } else {
-            let exprs = self.parse_comma_separated(Parser::parse_expr)?;
-            self.expect_token(&Token::RBracket)?;
-            Ok(Expr::Array(Array { elem: exprs, named }))
-        }
+        let exprs = self.parse_comma_separated0(Parser::parse_expr, false, Token::RBracket)?;
+        self.expect_token(&Token::RBracket)?;
+        Ok(Expr::Array(Array { elem: exprs, named }))
     }
 
     pub fn parse_listagg_on_overflow(&mut self) -> Result<Option<ListAggOnOverflow>, ParserError> {
@@ -2352,14 +2344,10 @@ impl<'a> Parser<'a> {
     /// [map]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
     fn parse_duckdb_map_literal(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LBrace)?;
-        if self.peek_token().token == Token::RBrace {
-            let _ = self.next_token(); // consume }
-            Ok(Expr::Map(Map { entries: vec![] }))
-        } else {
-            let fields = self.parse_comma_separated(Self::parse_duckdb_map_field)?;
-            self.expect_token(&Token::RBrace)?;
-            Ok(Expr::Map(Map { entries: fields }))
-        }
+        let fields =
+            self.parse_comma_separated0(Self::parse_duckdb_map_field, false, Token::RBrace)?;
+        self.expect_token(&Token::RBrace)?;
+        Ok(Expr::Map(Map { entries: fields }))
     }
 
     /// Parse a field for a duckdb [map]
@@ -2939,7 +2927,11 @@ impl<'a> Parser<'a> {
             Expr::InList {
                 expr: Box::new(expr),
                 list: if self.dialect.supports_in_empty_list() {
-                    self.parse_comma_separated0(Parser::parse_expr, self.options.trailing_commas, Token::RParen)?
+                    self.parse_comma_separated0(
+                        Parser::parse_expr,
+                        self.options.trailing_commas,
+                        Token::RParen,
+                    )?
                 } else {
                     self.parse_comma_separated(Parser::parse_expr)?
                 },
@@ -3483,7 +3475,12 @@ impl<'a> Parser<'a> {
     /// Parse a comma-separated list of 0+ items accepted by `F`
     /// - [trailing_commas]: support trailing_commas or not
     /// - [end_token]: expected end token for the closure (e.g. [Token::RParen], [Token::RBrace] ...)
-    pub fn parse_comma_separated0<T, F>(&mut self, f: F, trailing_commas: bool, end_token: Token) -> Result<Vec<T>, ParserError>
+    pub fn parse_comma_separated0<T, F>(
+        &mut self,
+        f: F,
+        trailing_commas: bool,
+        end_token: Token,
+    ) -> Result<Vec<T>, ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
@@ -3491,9 +3488,7 @@ impl<'a> Parser<'a> {
             return Ok(vec![]);
         }
 
-        if trailing_commas
-            && self.peek_tokens() == [Token::Comma, end_token]
-        {
+        if trailing_commas && self.peek_tokens() == [Token::Comma, end_token] {
             let _ = self.consume_token(&Token::Comma);
             return Ok(vec![]);
         }
@@ -4062,7 +4057,11 @@ impl<'a> Parser<'a> {
                 })
             };
         self.expect_token(&Token::LParen)?;
-        let args = self.parse_comma_separated0(parse_function_param, self.options.trailing_commas, Token::RParen)?;
+        let args = self.parse_comma_separated0(
+            parse_function_param,
+            self.options.trailing_commas,
+            Token::RParen,
+        )?;
         self.expect_token(&Token::RParen)?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
@@ -10716,7 +10715,11 @@ impl<'a> Parser<'a> {
         }
 
         if self.consume_token(&Token::LParen) {
-            let interpolations = self.parse_comma_separated0(|p| p.parse_interpolation(), self.options.trailing_commas, Token::RParen)?;
+            let interpolations = self.parse_comma_separated0(
+                |p| p.parse_interpolation(),
+                self.options.trailing_commas,
+                Token::RParen,
+            )?;
             self.expect_token(&Token::RParen)?;
             // INTERPOLATE () and INTERPOLATE ( ... ) variants
             return Ok(Some(Interpolate {

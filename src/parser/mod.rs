@@ -3473,8 +3473,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a comma-separated list of 0+ items accepted by `F`
-    /// - [trailing_commas]: support trailing_commas or not
-    /// - [end_token]: expected end token for the closure (e.g. [Token::RParen], [Token::RBrace] ...)
+    /// * `trailing_commas` - support trailing_commas or not
+    /// * `end_token` - expected end token for the closure (e.g. [Token::RParen], [Token::RBrace] ...)
     pub fn parse_comma_separated0<T, F>(
         &mut self,
         f: F,

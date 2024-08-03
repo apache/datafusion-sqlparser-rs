@@ -2939,7 +2939,7 @@ impl<'a> Parser<'a> {
             Expr::InList {
                 expr: Box::new(expr),
                 list: if self.dialect.supports_in_empty_list() {
-                    self.parse_comma_separated0(Parser::parse_expr)?
+                    self.parse_comma_separated0(Parser::parse_expr, self.options.trailing_commas, Token::RParen)?
                 } else {
                     self.parse_comma_separated(Parser::parse_expr)?
                 },
@@ -3481,17 +3481,18 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a comma-separated list of 0+ items accepted by `F`
-    pub fn parse_comma_separated0<T, F>(&mut self, f: F) -> Result<Vec<T>, ParserError>
+    /// - [trailing_commas]: support trailing_commas or not
+    /// - [end_token]: expected end token for the closure (e.g. [Token::RParen], [Token::RBrace] ...)
+    pub fn parse_comma_separated0<T, F>(&mut self, f: F, trailing_commas: bool, end_token: Token) -> Result<Vec<T>, ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
-        // ()
-        if matches!(self.peek_token().token, Token::RParen) {
+        if self.peek_token().token == end_token {
             return Ok(vec![]);
         }
-        // (,)
-        if self.options.trailing_commas
-            && matches!(self.peek_tokens(), [Token::Comma, Token::RParen])
+
+        if trailing_commas
+            && self.peek_tokens() == [Token::Comma, end_token]
         {
             let _ = self.consume_token(&Token::Comma);
             return Ok(vec![]);
@@ -4061,7 +4062,7 @@ impl<'a> Parser<'a> {
                 })
             };
         self.expect_token(&Token::LParen)?;
-        let args = self.parse_comma_separated0(parse_function_param)?;
+        let args = self.parse_comma_separated0(parse_function_param, self.options.trailing_commas, Token::RParen)?;
         self.expect_token(&Token::RParen)?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
@@ -10715,7 +10716,7 @@ impl<'a> Parser<'a> {
         }
 
         if self.consume_token(&Token::LParen) {
-            let interpolations = self.parse_comma_separated0(|p| p.parse_interpolation())?;
+            let interpolations = self.parse_comma_separated0(|p| p.parse_interpolation(), self.options.trailing_commas, Token::RParen)?;
             self.expect_token(&Token::RParen)?;
             // INTERPOLATE () and INTERPOLATE ( ... ) variants
             return Ok(Some(Interpolate {

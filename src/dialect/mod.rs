@@ -66,7 +66,8 @@ macro_rules! dialect_of {
 /// Encapsulates the differences between SQL implementations.
 ///
 /// # SQL Dialects
-/// SQL implementations deviatiate from one another, either due to
+///
+/// SQL implementations deviate from one another, either due to
 /// custom extensions or various historical reasons. This trait
 /// encapsulates the parsing differences between dialects.
 ///
@@ -114,16 +115,20 @@ pub trait Dialect: Debug + Any {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '`'
     }
+
     /// Return the character used to quote identifiers.
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         None
     }
+
     /// Determine if quoted characters are proper for identifier
     fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
         true
     }
+
     /// Determine if a character is a valid start character for an unquoted identifier
     fn is_identifier_start(&self, ch: char) -> bool;
+
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
 
@@ -168,6 +173,7 @@ pub trait Dialect: Debug + Any {
     fn supports_filter_during_aggregation(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports referencing another named window
     /// within a window clause declaration.
     ///
@@ -179,6 +185,7 @@ pub trait Dialect: Debug + Any {
     fn supports_window_clause_named_window_reference(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports `ARRAY_AGG() [WITHIN GROUP (ORDER BY)]` expressions.
     /// Otherwise, the dialect should expect an `ORDER BY` without the `WITHIN GROUP` clause, e.g. [`ANSI`]
     ///
@@ -186,38 +193,47 @@ pub trait Dialect: Debug + Any {
     fn supports_within_after_array_aggregation(&self) -> bool {
         false
     }
+
     /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
     fn supports_group_by_expr(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports CONNECT BY.
     fn supports_connect_by(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports the MATCH_RECOGNIZE operation.
     fn supports_match_recognize(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports `(NOT) IN ()` expressions
     fn supports_in_empty_list(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports identifiers starting with a numeric
-    /// prefix such as tables named: `59901_user_login`
+    /// prefix such as tables named `59901_user_login`
     fn supports_numeric_prefix(&self) -> bool {
         false
     }
+
     /// Returns true if the dialects supports specifying null treatment
-    /// as part of a window function's parameter list. As opposed
+    /// as part of a window function's parameter list as opposed
     /// to after the parameter list.
+    ///
     /// i.e The following syntax returns true
     /// ```sql
     /// FIRST_VALUE(a IGNORE NULLS) OVER ()
@@ -229,16 +245,19 @@ pub trait Dialect: Debug + Any {
     fn supports_window_function_null_treatment_arg(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports defining structs or objects using a
     /// syntax like `{'x': 1, 'y': 2, 'z': 3}`.
     fn supports_dictionary_syntax(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports defining object using the
     /// syntax like `Map {1: 10, 2: 20}`.
     fn support_map_literal_syntax(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports lambda functions, for example:
     ///
     /// ```sql
@@ -247,6 +266,7 @@ pub trait Dialect: Debug + Any {
     fn supports_lambda_functions(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports multiple variable assignment
     /// using parentheses in a `SET` variable declaration.
     ///
@@ -256,6 +276,7 @@ pub trait Dialect: Debug + Any {
     fn supports_parenthesized_set_variables(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports an `EXCEPT` clause following a
     /// wildcard in a select list.
     ///
@@ -266,30 +287,40 @@ pub trait Dialect: Debug + Any {
     fn supports_select_wildcard_except(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect has a CONVERT function which accepts a type first
     /// and an expression second, e.g. `CONVERT(varchar, 1)`
     fn convert_type_before_value(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports triple quoted string
     /// e.g. `"""abc"""`
     fn supports_triple_quoted_string(&self) -> bool {
         false
     }
+
     /// Dialect-specific prefix parser override
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior
         None
     }
+
     /// Does the dialect support trailing commas around the query?
     fn supports_trailing_commas(&self) -> bool {
         false
     }
+
     /// Does the dialect support trailing commas in the projection list?
     fn supports_projection_trailing_commas(&self) -> bool {
         self.supports_trailing_commas()
     }
+
     /// Dialect-specific infix parser override
+    ///
+    /// This method is called to parse the next infix expression.
+    ///
+    /// If `None` is returned, falls back to the default behavior.
     fn parse_infix(
         &self,
         _parser: &mut Parser,
@@ -299,24 +330,33 @@ pub trait Dialect: Debug + Any {
         // return None to fall back to the default behavior
         None
     }
+
     /// Dialect-specific precedence override
+    ///
+    /// This method is called to get the precedence of the next token.
+    ///
+    /// If `None` is returned, falls back to the default behavior.
     fn get_next_precedence(&self, _parser: &Parser) -> Option<Result<u8, ParserError>> {
         // return None to fall back to the default behavior
         None
     }
 
-    /// Get the precedence of the next token. This "full" method means all precedence logic and remain
-    /// in the dialect. while still allowing overriding the `get_next_precedence` method with the option to
-    /// fallback to the default behavior.
+    /// Get the precedence of the next token, looking at the full token stream.
     ///
-    /// Higher number => higher precedence
+    /// A higher number => higher precedence
+    ///
+    /// See [`Self::get_next_precedence`] to override the behavior for just the
+    /// next token.
+    ///
+    /// The default implementation is used for many dialects, but can be
+    /// overridden to provide dialect-specific behavior.
     fn get_next_precedence_full(&self, parser: &Parser) -> Result<u8, ParserError> {
         if let Some(precedence) = self.get_next_precedence(parser) {
             return precedence;
         }
 
         let token = parser.peek_token();
-        debug!("get_next_precedence() {:?}", token);
+        debug!("get_next_precedence_full() {:?}", token);
         match token.token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(OR_PREC),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(AND_PREC),
@@ -408,37 +448,67 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Dialect-specific statement parser override
+    ///
+    /// This method is called to parse the next statement.
+    ///
+    /// If `None` is returned, falls back to the default behavior.
     fn parse_statement(&self, _parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         // return None to fall back to the default behavior
         None
     }
 
-    /// The following precedence values are used directly by `Parse` or in dialects,
-    /// so have to be made public by the dialect.
+    // The following precedence values are used directly by `Parse` or in dialects,
+    // so have to be made public by the dialect.
+
+    /// Return the precedence of the `::` operator.
+    ///
+    /// Default is 50.
     fn prec_double_colon(&self) -> u8 {
         DOUBLE_COLON_PREC
     }
 
+    /// Return the precedence of `*`, `/`, and `%` operators.
+    ///
+    /// Default is 40.
     fn prec_mul_div_mod_op(&self) -> u8 {
         MUL_DIV_MOD_OP_PREC
     }
 
+    /// Return the precedence of the `+` and `-` operators.
+    ///
+    /// Default is 30.
     fn prec_plus_minus(&self) -> u8 {
         PLUS_MINUS_PREC
     }
 
+    /// Return the precedence of the `BETWEEN` operator.
+    ///
+    /// For example `BETWEEN <low> AND <high>`
+    ///
+    /// Default is 22.
     fn prec_between(&self) -> u8 {
         BETWEEN_PREC
     }
 
+    /// Return the precedence of the `LIKE` operator.
+    ///
+    /// Default is 19.
     fn prec_like(&self) -> u8 {
         LIKE_PREC
     }
 
+    /// Return the precedence of the unary `NOT` operator.
+    ///
+    /// For example `NOT (a OR b)`
+    ///
+    /// Default is 15.
     fn prec_unary_not(&self) -> u8 {
         UNARY_NOT_PREC
     }
 
+    /// Return the default (unknown) precedence.
+    ///
+    /// Default is 0.
     fn prec_unknown(&self) -> u8 {
         UNKNOWN_PREC
     }

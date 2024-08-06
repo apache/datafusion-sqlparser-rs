@@ -5469,15 +5469,14 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let with_order = if self.parse_keywords(&[Keyword::WITH, Keyword::ORDER])
-        {
+        let with_order = if self.parse_keywords(&[Keyword::WITH, Keyword::ORDER]) {
             let mut values = vec![];
             self.expect_token(&Token::LParen)?;
             loop {
                 values.push(self.parse_order_by_expr()?);
                 if !self.consume_token(&Token::Comma) {
                     self.expect_token(&Token::RParen)?;
-                    break
+                    break;
                 }
             }
             Some(values)

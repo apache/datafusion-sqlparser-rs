@@ -638,6 +638,7 @@ fn test_duckdb_union_datatype() {
             max_data_extension_time_in_days: Default::default(),
             default_ddl_collation: Default::default(),
             with_aggregation_policy: Default::default(),
+            with_order: Default::default(),
             with_row_access_policy: Default::default(),
             with_tags: Default::default()
         }),

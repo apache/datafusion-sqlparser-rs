@@ -5469,6 +5469,22 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let with_order = if self.parse_keywords(&[Keyword::WITH, Keyword::ORDER])
+        {
+            let mut values = vec![];
+            self.expect_token(&Token::LParen)?;
+            loop {
+                values.push(self.parse_order_by_expr()?);
+                if !self.consume_token(&Token::Comma) {
+                    self.expect_token(&Token::RParen)?;
+                    break
+                }
+            }
+            Some(values)
+        } else {
+            None
+        };
+
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             if self.consume_token(&Token::LParen) {
                 let columns = if self.peek_token() != Token::RParen {
@@ -5574,6 +5590,7 @@ impl<'a> Parser<'a> {
             .cluster_by(create_table_config.cluster_by)
             .options(create_table_config.options)
             .primary_key(primary_key)
+            .with_order(with_order)
             .strict(strict)
             .build())
     }

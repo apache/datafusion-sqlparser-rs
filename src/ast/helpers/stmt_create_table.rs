@@ -10,7 +10,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use super::super::dml::CreateTable;
 use crate::ast::{
     ColumnDef, CommentDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName,
-    OnCommit, OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement, TableConstraint,
+    OnCommit, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SqlOption, Statement, TableConstraint,
     TableEngine, Tag, WrappedCollection,
 };
 use crate::parser::ParserError;
@@ -75,6 +75,7 @@ pub struct CreateTableBuilder {
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<Ident>,
     pub primary_key: Option<Box<Expr>>,
+    pub with_order: Option<Vec<OrderByExpr>>,
     pub order_by: Option<OneOrManyWithParens<Expr>>,
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
@@ -134,6 +135,7 @@ impl CreateTableBuilder {
             max_data_extension_time_in_days: None,
             default_ddl_collation: None,
             with_aggregation_policy: None,
+            with_order: None,
             with_row_access_policy: None,
             with_tags: None,
         }
@@ -271,6 +273,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn with_order(mut self, with_order: Option<Vec<OrderByExpr>>) -> Self {
+        self.with_order = with_order;
+        self
+    }
+
     pub fn order_by(mut self, order_by: Option<OneOrManyWithParens<Expr>>) -> Self {
         self.order_by = order_by;
         self
@@ -389,6 +396,7 @@ impl CreateTableBuilder {
             max_data_extension_time_in_days: self.max_data_extension_time_in_days,
             default_ddl_collation: self.default_ddl_collation,
             with_aggregation_policy: self.with_aggregation_policy,
+            with_order: self.with_order,
             with_row_access_policy: self.with_row_access_policy,
             with_tags: self.with_tags,
         })
@@ -443,6 +451,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 max_data_extension_time_in_days,
                 default_ddl_collation,
                 with_aggregation_policy,
+                with_order,
                 with_row_access_policy,
                 with_tags,
             }) => Ok(Self {
@@ -486,6 +495,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 default_ddl_collation,
                 with_aggregation_policy,
                 with_row_access_policy,
+                with_order,
                 with_tags,
                 volatile,
             }),

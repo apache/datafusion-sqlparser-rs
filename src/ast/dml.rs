@@ -124,6 +124,7 @@ pub struct CreateTable {
     pub default_charset: Option<String>,
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
+    pub with_order: Option<Vec<OrderByExpr>>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
     pub on_cluster: Option<Ident>,

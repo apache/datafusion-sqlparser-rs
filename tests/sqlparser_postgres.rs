@@ -4476,3 +4476,115 @@ fn test_unicode_string_literal() {
         }
     }
 }
+
+fn check_arrow_precedence(sql: &str, arrow_operator: BinaryOperator) {
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::Query(Box::new(Query {
+            with: None,
+            body: Box::new(SetExpr::Select(Box::new(Select {
+                distinct: None,
+                top: None,
+                projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "foo".to_string(),
+                            quote_style: None,
+                        })),
+                        op: arrow_operator,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("bar".to_string()))),
+                    }),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("spam".to_string()))),
+                })],
+                into: None,
+                from: vec![],
+                lateral_views: vec![],
+                prewhere: None,
+                selection: None,
+                group_by: GroupByExpr::Expressions(vec![], vec![]),
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+                named_window: vec![],
+                qualify: None,
+                window_before_qualify: false,
+                value_table_mode: None,
+                connect_by: None,
+            }))),
+            order_by: None,
+            limit: None,
+            limit_by: vec![],
+            offset: None,
+            fetch: None,
+            locks: vec![],
+            for_clause: None,
+            settings: None,
+            format_clause: None,
+        }))
+    )
+}
+
+#[test]
+fn arrow_precedence() {
+    check_arrow_precedence("SELECT foo -> 'bar' = 'spam'", BinaryOperator::Arrow);
+}
+
+#[test]
+fn long_arrow_precedence() {
+    check_arrow_precedence("SELECT foo ->> 'bar' = 'spam'", BinaryOperator::LongArrow);
+}
+
+#[test]
+fn arrow_cast_precedence() {
+    // check this matches postgres where you would need `(foo -> 'bar')::TEXT`
+    let stmt = pg().verified_stmt("SELECT foo -> 'bar'::TEXT");
+    assert_eq!(
+        stmt,
+        Statement::Query(Box::new(Query {
+            with: None,
+            body: Box::new(SetExpr::Select(Box::new(Select {
+                distinct: None,
+                top: None,
+                projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident {
+                        value: "foo".to_string(),
+                        quote_style: None,
+                    })),
+                    op: BinaryOperator::Arrow,
+                    right: Box::new(Expr::Cast {
+                        kind: CastKind::DoubleColon,
+                        expr: Box::new(Expr::Value(Value::SingleQuotedString("bar".to_string()))),
+                        data_type: DataType::Text,
+                        format: None,
+                    }),
+                })],
+                into: None,
+                from: vec![],
+                lateral_views: vec![],
+                prewhere: None,
+                selection: None,
+                group_by: GroupByExpr::Expressions(vec![], vec![]),
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+                named_window: vec![],
+                qualify: None,
+                window_before_qualify: false,
+                value_table_mode: None,
+                connect_by: None,
+            }))),
+            order_by: None,
+            limit: None,
+            limit_by: vec![],
+            offset: None,
+            fetch: None,
+            locks: vec![],
+            for_clause: None,
+            settings: None,
+            format_clause: None,
+        }))
+    )
+}

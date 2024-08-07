@@ -72,6 +72,21 @@ pub enum AlterTableOperation {
         if_exists: bool,
         cascade: bool,
     },
+    /// `ATTACH PART|PARTITION <partition_expr>`
+    /// Note: this is a ClickHouse-specific operation, please refer to
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/pakrtition#attach-partitionpart)
+    AttachPartition {
+        // PART is not a short form of PARTITION, it's a separate keyword
+        // which represents a physical file on disk and partition is a logical entity.
+        partition: Partition,
+    },
+    /// `DETACH PART|PARTITION <partition_expr>`
+    /// Note: this is a ClickHouse-specific operation, please refer to
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#detach-partitionpart)
+    DetachPartition {
+        // See `AttachPartition` for more details
+        partition: Partition,
+    },
     /// `DROP PRIMARY KEY`
     ///
     /// Note: this is a MySQL-specific operation.
@@ -272,6 +287,12 @@ impl fmt::Display for AlterTableOperation {
                 column_name,
                 if *cascade { " CASCADE" } else { "" }
             ),
+            AlterTableOperation::AttachPartition { partition } => {
+                write!(f, "ATTACH {partition}")
+            }
+            AlterTableOperation::DetachPartition { partition } => {
+                write!(f, "DETACH {partition}")
+            }
             AlterTableOperation::EnableAlwaysRule { name } => {
                 write!(f, "ENABLE ALWAYS RULE {name}")
             }
@@ -1305,6 +1326,9 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
 pub enum Partition {
     Identifier(Ident),
     Expr(Expr),
+    /// ClickHouse supports PART expr which represents physical partition in disk.
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#attach-partitionpart)
+    Part(Expr),
     Partitions(Vec<Expr>),
 }
 
@@ -1313,6 +1337,7 @@ impl fmt::Display for Partition {
         match self {
             Partition::Identifier(id) => write!(f, "PARTITION ID {id}"),
             Partition::Expr(expr) => write!(f, "PARTITION {expr}"),
+            Partition::Part(expr) => write!(f, "PART {expr}"),
             Partition::Partitions(partitions) => {
                 write!(f, "PARTITION ({})", display_comma_separated(partitions))
             }

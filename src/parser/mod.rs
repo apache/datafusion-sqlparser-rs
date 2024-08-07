@@ -3383,7 +3383,7 @@ impl<'a> Parser<'a> {
 
     /// Run a parser method `f`, reverting back to the current position if unsuccessful.
     #[must_use]
-    fn maybe_parse<T, F>(&mut self, mut f: F) -> Option<T>
+    pub fn maybe_parse<T, F>(&mut self, mut f: F) -> Option<T>
     where
         F: FnMut(&mut Parser) -> Result<T, ParserError>,
     {

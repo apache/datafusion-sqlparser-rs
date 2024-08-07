@@ -20,6 +20,7 @@ use alloc::{
 };
 
 use core::fmt::{self, Display};
+use std::ops::Deref;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -952,6 +953,17 @@ pub enum OneOrManyWithParens<T> {
     One(T),
     /// One or more `T`s, parenthesized.
     Many(Vec<T>),
+}
+
+impl<T> Deref for OneOrManyWithParens<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &[T] {
+        match self {
+            OneOrManyWithParens::One(one) => std::slice::from_ref(one),
+            OneOrManyWithParens::Many(many) => many,
+        }
+    }
 }
 
 impl<T> fmt::Display for OneOrManyWithParens<T>

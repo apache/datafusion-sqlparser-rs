@@ -20,7 +20,7 @@ use alloc::{
 };
 
 use core::fmt::{self, Display};
-use std::ops::Deref;
+use core::ops::Deref;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -960,7 +960,7 @@ impl<T> Deref for OneOrManyWithParens<T> {
 
     fn deref(&self) -> &[T] {
         match self {
-            OneOrManyWithParens::One(one) => std::slice::from_ref(one),
+            OneOrManyWithParens::One(one) => core::slice::from_ref(one),
             OneOrManyWithParens::Many(many) => many,
         }
     }

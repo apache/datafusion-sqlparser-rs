@@ -8,31 +8,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Rust
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@v2
         with:
           components: rustfmt
           # Note that `nightly` is required for `license_template_path`, as
           # it's an unstable feature.
           rust-version: nightly
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: cargo +nightly fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')
 
   lint:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Rust
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@v2
         with:
           components: clippy
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   compile:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Rust
-        uses: hecrj/setup-rust-action@v1
-      - uses: actions/checkout@master
+        uses: hecrj/setup-rust-action@v2
+      - uses: actions/checkout@v4
       - run: cargo check --all-targets --all-features
 
   docs:
@@ -41,18 +41,18 @@ jobs:
       RUSTDOCFLAGS: "-Dwarnings"
     steps:
       - name: Set up Rust
-        uses: hecrj/setup-rust-action@v1
-      - uses: actions/checkout@master
+        uses: hecrj/setup-rust-action@v2
+      - uses: actions/checkout@v4
       - run: cargo doc --document-private-items --no-deps --workspace --all-features
 
   compile-no-std:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Rust
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@v2
         with:
           targets: 'thumbv6m-none-eabi'
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
       - run: cargo check --no-default-features --target thumbv6m-none-eabi
 
   test:
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Setup Rust
-      uses: hecrj/setup-rust-action@v1
+      uses: hecrj/setup-rust-action@v2
       with:
         rust-version: ${{ matrix.rust }}
     - name: Install Tarpaulin
@@ -72,7 +72,7 @@ jobs:
         version: 0.14.2
         use-tool-cache: true
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Test
       run: cargo test --all-features
 
@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Setup Rust
-      uses: hecrj/setup-rust-action@v1
+      uses: hecrj/setup-rust-action@v2
       with:
         rust-version: stable
     - name: Install Tarpaulin
@@ -90,7 +90,7 @@ jobs:
         version: 0.14.2
         use-tool-cache: true
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Coverage
       run: cargo tarpaulin -o Lcov --output-dir ./coverage
     - name: Coveralls
@@ -104,8 +104,8 @@ jobs:
     needs: [test]
     steps:
       - name: Set up Rust
-        uses: hecrj/setup-rust-action@v1
-      - uses: actions/checkout@v2
+        uses: hecrj/setup-rust-action@v2
+      - uses: actions/checkout@v4
       - name: Publish
         shell: bash
         run: |

@@ -539,6 +539,7 @@ define_keywords!(
     PARALLEL,
     PARAMETER,
     PARQUET,
+    PART,
     PARTITION,
     PARTITIONED,
     PARTITIONS,

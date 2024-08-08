@@ -223,6 +223,71 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_alter_table_attach_and_detach_partition() {
+    for operation in &["ATTACH", "DETACH"] {
+        match clickhouse_and_generic()
+            .verified_stmt(format!("ALTER TABLE t0 {operation} PARTITION part").as_str())
+        {
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
+                pretty_assertions::assert_eq!("t0", name.to_string());
+                pretty_assertions::assert_eq!(
+                    operations[0],
+                    if operation == &"ATTACH" {
+                        AlterTableOperation::AttachPartition {
+                            partition: Partition::Expr(Identifier(Ident::new("part"))),
+                        }
+                    } else {
+                        AlterTableOperation::DetachPartition {
+                            partition: Partition::Expr(Identifier(Ident::new("part"))),
+                        }
+                    }
+                );
+            }
+            _ => unreachable!(),
+        }
+
+        match clickhouse_and_generic()
+            .verified_stmt(format!("ALTER TABLE t1 {operation} PART part").as_str())
+        {
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
+                pretty_assertions::assert_eq!("t1", name.to_string());
+                pretty_assertions::assert_eq!(
+                    operations[0],
+                    if operation == &"ATTACH" {
+                        AlterTableOperation::AttachPartition {
+                            partition: Partition::Part(Identifier(Ident::new("part"))),
+                        }
+                    } else {
+                        AlterTableOperation::DetachPartition {
+                            partition: Partition::Part(Identifier(Ident::new("part"))),
+                        }
+                    }
+                );
+            }
+            _ => unreachable!(),
+        }
+
+        // negative cases
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {operation} PARTITION").as_str())
+                .unwrap_err(),
+            ParserError("Expected: an expression:, found: EOF".to_string())
+        );
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {operation} PART").as_str())
+                .unwrap_err(),
+            ParserError("Expected: an expression:, found: EOF".to_string())
+        );
+    }
+}
+
+#[test]
 fn parse_optimize_table() {
     clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0");
     clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE db.t0");

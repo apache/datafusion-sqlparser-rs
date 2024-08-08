@@ -151,7 +151,7 @@ pub enum BinaryOperator {
     Arrow,
     /// The `->>` operator.
     ///
-    /// On PostgreSQL, this operator that extracts a JSON object field or JSON
+    /// On PostgreSQL, this operator extracts a JSON object field or JSON
     /// array element and converts it to text, for example `'{"a":"b"}'::json
     /// ->> 'a'` or `[1, 2, 3]'::json ->> 2`.
     ///

@@ -5635,6 +5635,16 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let mut order_exprs: Vec<Vec<OrderByExpr>> = vec![];
+        while let Some(o) = &with_order {
+            order_exprs.push(o.clone())
+        }
+
+        let mut order_exprs_option: Option<Vec<Vec<OrderByExpr>>> = None;
+        if !order_exprs.is_empty() {
+            order_exprs_option = Some(order_exprs);
+        }
+
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             if self.consume_token(&Token::LParen) {
                 let columns = if self.peek_token() != Token::RParen {
@@ -5740,7 +5750,7 @@ impl<'a> Parser<'a> {
             .cluster_by(create_table_config.cluster_by)
             .options(create_table_config.options)
             .primary_key(primary_key)
-            .with_order(with_order)
+            .with_order(order_exprs_option)
             .strict(strict)
             .build())
     }

@@ -5318,7 +5318,10 @@ impl<'a> Parser<'a> {
         let hive_distribution = self.parse_hive_distribution()?;
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
-        let with_options = self.parse_options(Keyword::WITH)?;
+        let mut with_options: Vec<SqlOption> = vec![];
+        if !self.parse_keywords(&[Keyword::WITH, Keyword::ORDER]) {
+            with_options = self.parse_options(Keyword::WITH)?;
+        }
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {

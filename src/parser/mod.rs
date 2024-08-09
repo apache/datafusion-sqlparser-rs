@@ -2253,7 +2253,7 @@ impl<'a> Parser<'a> {
                 self.expect_closing_angle_bracket(trailing_bracket)?
             } else {
                 self.expect_closing_right_paren(trailing_bracket)?
-            }
+            },
         ))
     }
 
@@ -7279,7 +7279,7 @@ impl<'a> Parser<'a> {
                     // let field_defs=
                     let (field_defs, _trailing_bracket) =
                         self.parse_struct_type_def(Self::parse_struct_field_def, Token::LParen)?;
-                    
+
                     Ok(DataType::Struct(field_defs))
                 }
                 Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {

@@ -51,6 +51,18 @@ fn test_struct() {
     let sql = r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, s STRUCT(a1 INTEGER, a2 VARCHAR))[])"#;
     let select = duckdb().parse_sql_statements(sql).unwrap().pop().unwrap();
     assert_eq!(select.to_string(), canonical);
+
+    // failing test
+    let sql_list = vec![
+        r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER)))"#,
+        r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER>)"#,
+        r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, i INTEGER>)"#,
+        r#"CREATE TABLE t1 (s STRUCT v VARCHAR, i INTEGER )"#,
+    ];
+
+    for sql in sql_list {
+        duckdb().parse_sql_statements(sql).unwrap_err();
+    }
 }
 
 #[test]

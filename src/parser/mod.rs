@@ -1074,7 +1074,7 @@ impl<'a> Parser<'a> {
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
                 }
-                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect ) => {
+                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     self.prev_token();
                     self.parse_bigquery_struct_literal()
                 }
@@ -2231,7 +2231,11 @@ impl<'a> Parser<'a> {
             if token == Token::Lt {
                 self.expect_closing_angle_bracket(trailing_bracket)?
             } else {
-                self.expect_closing_right_paren(trailing_bracket)?
+                if !trailing_bracket.0 {
+                    self.expect_token(&Token::RParen)?;
+                };
+
+                false.into()
             },
         ))
     }
@@ -2441,25 +2445,6 @@ impl<'a> Parser<'a> {
                     true.into()
                 }
                 _ => return self.expected(">", self.peek_token()),
-            }
-        } else {
-            false.into()
-        };
-
-        Ok(trailing_bracket)
-    }
-
-    fn expect_closing_right_paren(
-        &mut self,
-        trailing_bracket: MatchedTrailingBracket,
-    ) -> Result<MatchedTrailingBracket, ParserError> {
-        let trailing_bracket = if !trailing_bracket.0 {
-            match self.peek_token().token {
-                Token::RParen => {
-                    self.next_token();
-                    false.into()
-                }
-                _ => return self.expected(")", self.peek_token()),
             }
         } else {
             false.into()

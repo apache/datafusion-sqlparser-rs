@@ -33,6 +33,27 @@ fn duckdb_and_generic() -> TestedDialects {
 }
 
 #[test]
+fn test_struct() {
+    // basic struct
+    let canonical = r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, i INTEGER>)"#;
+    let sql = r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER))"#;
+    let select = duckdb().parse_sql_statements(sql).unwrap().pop().unwrap();
+    assert_eq!(select.to_string(), canonical);
+
+    // struct array
+    let canonical = r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, i INTEGER>[])"#;
+    let sql = r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER)[])"#;
+    let select = duckdb().parse_sql_statements(sql).unwrap().pop().unwrap();
+    assert_eq!(select.to_string(), canonical);
+
+    // nested struct
+    let canonical = r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, s STRUCT<a1 INTEGER, a2 VARCHAR>>[])"#;
+    let sql = r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, s STRUCT(a1 INTEGER, a2 VARCHAR))[])"#;
+    let select = duckdb().parse_sql_statements(sql).unwrap().pop().unwrap();
+    assert_eq!(select.to_string(), canonical);
+}
+
+#[test]
 fn test_select_wildcard_with_exclude() {
     let select = duckdb().verified_only_select("SELECT * EXCLUDE (col_a) FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {

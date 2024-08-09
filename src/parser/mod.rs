@@ -1074,9 +1074,13 @@ impl<'a> Parser<'a> {
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
                 }
-                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect ) => {
                     self.prev_token();
                     self.parse_bigquery_struct_literal()
+                }
+                Keyword::STRUCT if dialect_of!(self is DuckDbDialect ) => {
+                    self.prev_token();
+                    self.parse_duckdb_struct_type()
                 }
                 Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
                     let expr = self.parse_subexpr(self.dialect.prec_plus_minus())?;
@@ -2136,10 +2140,27 @@ impl<'a> Parser<'a> {
     /// ```
     fn parse_bigquery_struct_literal(&mut self) -> Result<Expr, ParserError> {
         let (fields, trailing_bracket) =
-            self.parse_struct_type_def(Self::parse_struct_field_def)?;
+            self.parse_struct_type_def(Self::parse_struct_field_def, Token::Lt)?;
         if trailing_bracket.0 {
             return parser_err!("unmatched > in STRUCT literal", self.peek_token().location);
         }
+
+        self.expect_token(&Token::LParen)?;
+        let values = self
+            .parse_comma_separated(|parser| parser.parse_struct_field_expr(!fields.is_empty()))?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::Struct { values, fields })
+    }
+
+    /// Duckdb specific: Parse a struct data type
+    /// Syntax
+    /// ```sql
+    /// STRUCT(field_name field_type, ...)
+    /// ```
+    fn parse_duckdb_struct_type(&mut self) -> Result<Expr, ParserError> {
+        let (fields, _trailing_bracket) =
+            self.parse_struct_type_def(Self::parse_struct_field_def, Token::LParen)?;
 
         self.expect_token(&Token::LParen)?;
         let values = self
@@ -2196,6 +2217,7 @@ impl<'a> Parser<'a> {
     fn parse_struct_type_def<F>(
         &mut self,
         mut elem_parser: F,
+        token: Token,
     ) -> Result<(Vec<StructField>, MatchedTrailingBracket), ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<(StructField, MatchedTrailingBracket), ParserError>,
@@ -2204,7 +2226,7 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::STRUCT)?;
 
         // Nothing to do if we have no type information.
-        if Token::Lt != self.peek_token() {
+        if token != self.peek_token() {
             return Ok((Default::default(), false.into()));
         }
         self.next_token();
@@ -2227,7 +2249,11 @@ impl<'a> Parser<'a> {
 
         Ok((
             field_defs,
-            self.expect_closing_angle_bracket(trailing_bracket)?,
+            if token == Token::Lt {
+                self.expect_closing_angle_bracket(trailing_bracket)?
+            } else {
+                self.expect_closing_right_paren(trailing_bracket)?
+            }
         ))
     }
 
@@ -2436,6 +2462,25 @@ impl<'a> Parser<'a> {
                     true.into()
                 }
                 _ => return self.expected(">", self.peek_token()),
+            }
+        } else {
+            false.into()
+        };
+
+        Ok(trailing_bracket)
+    }
+
+    fn expect_closing_right_paren(
+        &mut self,
+        trailing_bracket: MatchedTrailingBracket,
+    ) -> Result<MatchedTrailingBracket, ParserError> {
+        let trailing_bracket = if !trailing_bracket.0 {
+            match self.peek_token().token {
+                Token::RParen => {
+                    self.next_token();
+                    false.into()
+                }
+                _ => return self.expected(")", self.peek_token()),
             }
         } else {
             false.into()
@@ -7229,10 +7274,18 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
+                Keyword::STRUCT if dialect_of!(self is DuckDbDialect) => {
+                    self.prev_token();
+                    // let field_defs=
+                    let (field_defs, _trailing_bracket) =
+                        self.parse_struct_type_def(Self::parse_struct_field_def, Token::LParen)?;
+                    
+                    Ok(DataType::Struct(field_defs))
+                }
                 Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
-                        self.parse_struct_type_def(Self::parse_struct_field_def)?;
+                        self.parse_struct_type_def(Self::parse_struct_field_def, Token::Lt)?;
                     trailing_bracket = _trailing_bracket;
                     Ok(DataType::Struct(field_defs))
                 }

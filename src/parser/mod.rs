@@ -1078,10 +1078,6 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_bigquery_struct_literal()
                 }
-                Keyword::STRUCT if dialect_of!(self is DuckDbDialect ) => {
-                    self.prev_token();
-                    self.parse_duckdb_struct_type()
-                }
                 Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
                     let expr = self.parse_subexpr(self.dialect.prec_plus_minus())?;
                     Ok(Expr::Prior(Box::new(expr)))
@@ -2144,23 +2140,6 @@ impl<'a> Parser<'a> {
         if trailing_bracket.0 {
             return parser_err!("unmatched > in STRUCT literal", self.peek_token().location);
         }
-
-        self.expect_token(&Token::LParen)?;
-        let values = self
-            .parse_comma_separated(|parser| parser.parse_struct_field_expr(!fields.is_empty()))?;
-        self.expect_token(&Token::RParen)?;
-
-        Ok(Expr::Struct { values, fields })
-    }
-
-    /// Duckdb specific: Parse a struct data type
-    /// Syntax
-    /// ```sql
-    /// STRUCT(field_name field_type, ...)
-    /// ```
-    fn parse_duckdb_struct_type(&mut self) -> Result<Expr, ParserError> {
-        let (fields, _trailing_bracket) =
-            self.parse_struct_type_def(Self::parse_struct_field_def, Token::LParen)?;
 
         self.expect_token(&Token::LParen)?;
         let values = self
@@ -7276,7 +7255,6 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::STRUCT if dialect_of!(self is DuckDbDialect) => {
                     self.prev_token();
-                    // let field_defs=
                     let (field_defs, _trailing_bracket) =
                         self.parse_struct_type_def(Self::parse_struct_field_def, Token::LParen)?;
 

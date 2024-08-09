@@ -22,6 +22,16 @@ use sqlparser::parser::{ParserError, ParserOptions};
 use test_utils::*;
 
 #[test]
+fn test_struct() {
+    // nested struct
+    let canonical = r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, s STRUCT<a1 INTEGER, a2 VARCHAR>>[])"#;
+    let sql = r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, s STRUCT<a1 INTEGER, a2 VARCHAR>>[])"#;
+    let select = bigquery().parse_sql_statements(sql).unwrap().pop().unwrap();
+    // TODO: '>>' is incorrect parsed in bigquery syntax
+    assert_ne!(select.to_string(), canonical);
+}
+
+#[test]
 fn parse_literal_string() {
     let sql = concat!(
         "SELECT ",

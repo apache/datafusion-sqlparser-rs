@@ -477,12 +477,19 @@ pub enum CastKind {
     DoubleColon,
 }
 
-/// `EXTRACT` syntax types.
+/// `EXTRACT` syntax variants.
+///
+/// In Snowflake dialect, the `EXTRACT` expression can support either the `from` syntax
+/// or the comma syntax. 
+///
+/// See <https://docs.snowflake.com/en/sql-reference/functions/extract>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ExtractSyntax {
+    /// `EXTRACT( <date_or_time_part> FROM <date_or_time_expr> )`
     From,
+    /// `EXTRACT( <date_or_time_part> , <date_or_timestamp_expr> )`
     Comma
 }
 

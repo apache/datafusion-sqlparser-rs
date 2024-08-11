@@ -31,7 +31,6 @@ runs:
   steps:
     - name: Setup Rust Toolchain
       shell: bash
-      # rustfmt is needed for the substrait build script
       run: |
         echo "Installing ${{ inputs.rust-version }}"
         if [ -n "${{ inputs.targets}}" ]; then
@@ -41,9 +40,3 @@ runs:
         fi
         rustup default ${{ inputs.rust-version }}
         rustup component add rustfmt clippy
-    - name: Configure Rust Runtime Env
-      uses: ./.github/actions/setup-rust-runtime
-    - name: Fixup Git Permissions
-      # https://github.com/actions/checkout/issues/766
-      shell: bash
-      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"

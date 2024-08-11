@@ -2041,6 +2041,20 @@ fn parse_extract_comma() {
 }
 
 #[test]
+fn parse_extract_comma_quoted() {
+    let sql = "SELECT EXTRACT('hour', d)";
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Custom(Ident::with_quote('\'', "hour")),
+            syntax: ExtractSyntax::Comma,
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_comma_outer_join() {
     // compound identifiers
     let case1 =

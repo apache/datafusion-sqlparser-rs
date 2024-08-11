@@ -1961,6 +1961,11 @@ impl<'a> Parser<'a> {
                 }
                 _ => self.expected("date/time field", next_token),
             },
+            Token::SingleQuotedString(_) if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
+                    self.prev_token();
+                    let custom = self.parse_identifier(false)?;
+                    Ok(DateTimeField::Custom(custom))
+            },
             _ => self.expected("date/time field", next_token),
         }
     }

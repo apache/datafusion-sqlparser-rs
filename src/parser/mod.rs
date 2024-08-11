@@ -1893,7 +1893,7 @@ impl<'a> Parser<'a> {
     /// Parses an array expression `[ex1, ex2, ..]`
     /// if `named` is `true`, came from an expression like  `ARRAY[ex1, ex2]`
     pub fn parse_array_expr(&mut self, named: bool) -> Result<Expr, ParserError> {
-        let exprs = self.parse_comma_separated0(Parser::parse_expr, Token::RBracket)?;
+        let exprs = self.parse_comma_separated_until_end(Parser::parse_expr, Token::RBracket)?;
         self.expect_token(&Token::RBracket)?;
         Ok(Expr::Array(Array { elem: exprs, named }))
     }
@@ -2431,7 +2431,8 @@ impl<'a> Parser<'a> {
     /// [map]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
     fn parse_duckdb_map_literal(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LBrace)?;
-        let fields = self.parse_comma_separated0(Self::parse_duckdb_map_field, Token::RBrace)?;
+        let fields =
+            self.parse_comma_separated_until_end(Self::parse_duckdb_map_field, Token::RBrace)?;
         self.expect_token(&Token::RBrace)?;
         Ok(Expr::Map(Map { entries: fields }))
     }
@@ -3035,7 +3036,7 @@ impl<'a> Parser<'a> {
             Expr::InList {
                 expr: Box::new(expr),
                 list: if self.dialect.supports_in_empty_list() {
-                    self.parse_comma_separated0(Parser::parse_expr, Token::RParen)?
+                    self.parse_comma_separated_until_end(Parser::parse_expr, Token::RParen)?
                 } else {
                     self.parse_comma_separated(Parser::parse_expr)?
                 },
@@ -3475,6 +3476,47 @@ impl<'a> Parser<'a> {
         }
         Ok(values)
     }
+    /// Parse a comma-separated list of 1+ items accepted by `F`
+    pub fn parse_comma_separated_with_skip_and_consume<T, F>(
+        &mut self,
+        mut f: F,
+        skip: &[Keyword],
+        consume: &[Keyword],
+    ) -> Result<Vec<T>, ParserError>
+    where
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+    {
+        let mut values = vec![];
+
+        loop {
+            let value = f(self)?;
+            values.push(value);
+
+            let should_consume = consume.iter().any(|keyword| {
+                matches!(self.peek_token(), TokenWithLocation{token, ..} if matches!(&token, Token::Word(word) if word.keyword.eq(keyword)))
+            });
+
+            if should_consume {
+                self.next_token();
+            }
+
+            let should_skip = skip.iter().any(|keyword| {
+                matches!(self.peek_token(), TokenWithLocation{token, ..} if matches!(&token, Token::Word(word) if word.keyword.eq(keyword)))
+            });
+
+            let is_no_keyword = matches!(self.peek_token(), TokenWithLocation{token, ..} if matches!(&token, Token::Word(word) if word.keyword.eq(&Keyword::NoKeyword)));
+
+            if !is_no_keyword && should_skip {
+                break;
+            }
+
+            if self.is_parse_comma_separated_end() && !should_skip {
+                break;
+            }
+        }
+
+        Ok(values)
+    }
 
     pub fn parse_parenthesized<T, F>(&mut self, mut f: F) -> Result<T, ParserError>
     where
@@ -3488,7 +3530,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a comma-separated list of 0+ items accepted by `F`
     /// * `end_token` - expected end token for the closure (e.g. [Token::RParen], [Token::RBrace] ...)
-    pub fn parse_comma_separated0<T, F>(
+    pub fn parse_comma_separated_until_end<T, F>(
         &mut self,
         f: F,
         end_token: Token,
@@ -4075,7 +4117,7 @@ impl<'a> Parser<'a> {
                 })
             };
         self.expect_token(&Token::LParen)?;
-        let args = self.parse_comma_separated0(parse_function_param, Token::RParen)?;
+        let args = self.parse_comma_separated_until_end(parse_function_param, Token::RParen)?;
         self.expect_token(&Token::RParen)?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
@@ -6016,10 +6058,8 @@ impl<'a> Parser<'a> {
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
             }
-
             let comma = self.consume_token(&Token::Comma);
             let rparen = self.peek_token().token == Token::RParen;
-
             if !comma && !rparen {
                 return self.expected("',' or ')' after column definition", self.peek_token());
             };
@@ -6545,8 +6585,11 @@ impl<'a> Parser<'a> {
                     _ => self.parse_optional_indent(),
                 };
 
-                let index_type = self.parse_optional_using_then_index_type()?;
+                let mut index_type = self.parse_optional_using_then_index_type()?;
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                if index_type.is_none() {
+                    index_type = self.parse_optional_using_then_index_type()?;
+                }
 
                 Ok(Some(TableConstraint::Index {
                     display_as_key,
@@ -8427,7 +8470,11 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 Ok(vec![])
             } else {
-                let cols = self.parse_comma_separated(|p| p.parse_identifier(false))?;
+                let cols = self.parse_comma_separated_with_skip_and_consume(
+                    |p| p.parse_identifier(false),
+                    &[Keyword::DESC, Keyword::ASC],
+                    &[Keyword::DESC, Keyword::ASC],
+                )?;
                 self.expect_token(&Token::RParen)?;
                 Ok(cols)
             }
@@ -11432,7 +11479,7 @@ impl<'a> Parser<'a> {
 
         if self.consume_token(&Token::LParen) {
             let interpolations =
-                self.parse_comma_separated0(|p| p.parse_interpolation(), Token::RParen)?;
+                self.parse_comma_separated_until_end(|p| p.parse_interpolation(), Token::RParen)?;
             self.expect_token(&Token::RParen)?;
             // INTERPOLATE () and INTERPOLATE ( ... ) variants
             return Ok(Some(Interpolate {
@@ -12768,6 +12815,25 @@ mod tests {
                 "Explain must be root of the plan".to_string()
             ))
         );
+    }
+
+    #[test]
+    fn emil_test() {
+        let constraint = Parser::new(&MySqlDialect {})
+            .try_with_sql("KEY `press_release_timestamp_IDX` USING BTREE (`timestamp`)")
+            .unwrap()
+            .parse_optional_table_constraint()
+            .unwrap()
+            .unwrap();
+
+        let expected = TableConstraint::Index {
+            display_as_key: true,
+            name: Some(Ident::with_quote('`', "press_release_timestamp_IDX")),
+            index_type: Some(IndexType::BTree),
+            columns: vec![Ident::with_quote('`', "timestamp")],
+        };
+
+        assert_eq!(constraint, expected);
     }
 
     #[test]

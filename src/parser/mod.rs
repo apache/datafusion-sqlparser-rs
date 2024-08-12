@@ -2136,7 +2136,7 @@ impl<'a> Parser<'a> {
     /// ```
     fn parse_bigquery_struct_literal(&mut self) -> Result<Expr, ParserError> {
         let (fields, trailing_bracket) =
-            self.parse_struct_type_def(Self::parse_struct_field_def, Token::Lt)?;
+            self.parse_struct_type_def(Self::parse_struct_field_def)?;
         if trailing_bracket.0 {
             return parser_err!("unmatched > in STRUCT literal", self.peek_token().location);
         }
@@ -2196,7 +2196,6 @@ impl<'a> Parser<'a> {
     fn parse_struct_type_def<F>(
         &mut self,
         mut elem_parser: F,
-        token: Token,
     ) -> Result<(Vec<StructField>, MatchedTrailingBracket), ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<(StructField, MatchedTrailingBracket), ParserError>,
@@ -2205,7 +2204,7 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::STRUCT)?;
 
         // Nothing to do if we have no type information.
-        if token != self.peek_token() {
+        if Token::Lt != self.peek_token() {
             return Ok((Default::default(), false.into()));
         }
         self.next_token();
@@ -2228,15 +2227,7 @@ impl<'a> Parser<'a> {
 
         Ok((
             field_defs,
-            if token == Token::Lt {
-                self.expect_closing_angle_bracket(trailing_bracket)?
-            } else {
-                if !trailing_bracket.0 {
-                    self.expect_token(&Token::RParen)?;
-                };
-
-                false.into()
-            },
+            self.expect_closing_angle_bracket(trailing_bracket)?,
         ))
     }
 
@@ -7258,7 +7249,7 @@ impl<'a> Parser<'a> {
                 Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
-                        self.parse_struct_type_def(Self::parse_struct_field_def, Token::Lt)?;
+                        self.parse_struct_type_def(Self::parse_struct_field_def)?;
                     trailing_bracket = _trailing_bracket;
                     Ok(DataType::Struct(field_defs))
                 }

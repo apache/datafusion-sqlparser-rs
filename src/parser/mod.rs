@@ -2240,6 +2240,18 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    fn parse_duckdb_struct_type_def(&mut self) -> Result<Vec<StructField>, ParserError> {
+        self.expect_keyword(Keyword::STRUCT)?;
+        self.expect_token(&Token::LParen)?;
+        let field_defs = self
+            .parse_comma_separated(Self::parse_struct_field_def)?
+            .into_iter()
+            .map(|(f, _)| f)
+            .collect();
+        self.expect_token(&Token::RParen)?;
+        Ok(field_defs)
+    }
+
     /// Parse a field definition in a [struct] or [tuple].
     /// Syntax:
     ///
@@ -7240,9 +7252,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::STRUCT if dialect_of!(self is DuckDbDialect) => {
                     self.prev_token();
-                    let (field_defs, _trailing_bracket) =
-                        self.parse_struct_type_def(Self::parse_struct_field_def, Token::LParen)?;
-
+                    let field_defs = self.parse_duckdb_struct_type_def()?;
                     Ok(DataType::Struct(field_defs))
                 }
                 Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {

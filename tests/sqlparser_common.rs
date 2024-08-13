@@ -2510,6 +2510,17 @@ fn parse_floor_number_scale() {
 fn parse_ceil_scale() {
     let sql = "SELECT CEIL(d, 2)";
     let select = verified_only_select(sql);
+
+    #[cfg(feature = "bigdecimal")]
+    assert_eq!(
+        &Expr::Ceil {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: CeilFloorKind::Scale(Value::Number(bigdecimal::BigDecimal::from(2), false)),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    #[cfg(not(feature = "bigdecimal"))]
     assert_eq!(
         &Expr::Ceil {
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
@@ -2523,6 +2534,17 @@ fn parse_ceil_scale() {
 fn parse_floor_scale() {
     let sql = "SELECT FLOOR(d, 2)";
     let select = verified_only_select(sql);
+
+    #[cfg(feature = "bigdecimal")]
+    assert_eq!(
+        &Expr::Floor {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: CeilFloorKind::Scale(Value::Number(bigdecimal::BigDecimal::from(2), false)),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    #[cfg(not(feature = "bigdecimal"))]
     assert_eq!(
         &Expr::Floor {
             expr: Box::new(Expr::Identifier(Ident::new("d"))),

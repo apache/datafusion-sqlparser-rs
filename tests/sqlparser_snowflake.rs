@@ -2019,6 +2019,35 @@ fn parse_extract_custom_part() {
     assert_eq!(
         &Expr::Extract {
             field: DateTimeField::Custom(Ident::new("eod")),
+            syntax: ExtractSyntax::From,
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_extract_comma() {
+    let sql = "SELECT EXTRACT(HOUR, d)";
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Hour,
+            syntax: ExtractSyntax::Comma,
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_extract_comma_quoted() {
+    let sql = "SELECT EXTRACT('hour', d)";
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Custom(Ident::with_quote('\'', "hour")),
+            syntax: ExtractSyntax::Comma,
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
         },
         expr_from_projection(only(&select.projection)),

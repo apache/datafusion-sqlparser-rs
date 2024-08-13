@@ -1682,12 +1682,25 @@ impl<'a> Parser<'a> {
     pub fn parse_extract_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let field = self.parse_date_time_field()?;
-        self.expect_keyword(Keyword::FROM)?;
+
+        let syntax = if self.parse_keyword(Keyword::FROM) {
+            ExtractSyntax::From
+        } else if self.consume_token(&Token::Comma)
+            && dialect_of!(self is SnowflakeDialect | GenericDialect)
+        {
+            ExtractSyntax::Comma
+        } else {
+            return Err(ParserError::ParserError(
+                "Expected 'FROM' or ','".to_string(),
+            ));
+        };
+
         let expr = self.parse_expr()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Extract {
             field,
             expr: Box::new(expr),
+            syntax,
         })
     }
 
@@ -1950,6 +1963,12 @@ impl<'a> Parser<'a> {
                 }
                 _ => self.expected("date/time field", next_token),
             },
+            Token::SingleQuotedString(_) if dialect_of!(self is SnowflakeDialect | GenericDialect) =>
+            {
+                self.prev_token();
+                let custom = self.parse_identifier(false)?;
+                Ok(DateTimeField::Custom(custom))
+            }
             _ => self.expected("date/time field", next_token),
         }
     }

@@ -2430,6 +2430,7 @@ fn parse_extract() {
     assert_eq!(
         &Expr::Extract {
             field: DateTimeField::Year,
+            syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
         },
         expr_from_projection(only(&select.projection)),

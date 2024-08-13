@@ -2136,6 +2136,7 @@ fn parse_extract_weekday() {
     assert_eq!(
         &Expr::Extract {
             field: DateTimeField::Week(Some(Ident::new("MONDAY"))),
+            syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
         },
         expr_from_projection(only(&select.projection)),

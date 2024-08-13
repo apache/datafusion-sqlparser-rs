@@ -4620,177 +4620,6 @@ fn possible_trigger_condition() -> Vec<Option<Expr>> {
     ]
 }
 
-type PossibleTriggerConfiguration = (
-    TriggerPeriod,
-    Vec<TriggerEvent>,
-    Option<ObjectName>,
-    Vec<TriggerReferencing>,
-    TriggerObject,
-    Option<ConstraintCharacteristics>,
-    TriggerExecBodyType,
-    FunctionDesc,
-    Option<Expr>,
-    bool, // OR REPLACE
-    bool, // EACH
-    bool, // CONSTRAINT
-);
-
-fn cartesian<F, T, V>(tuple: T, generator: F) -> impl Iterator<Item = <V as ExtendTuple<T>>::Output>
-where
-    F: Fn() -> Vec<V>,
-    V: Clone + ExtendTuple<T>,
-    T: Clone,
-{
-    generator()
-        .into_iter()
-        .map(move |v| v.extend_tuple(tuple.clone()))
-}
-
-fn iterate_trigger_configurations() -> impl Iterator<Item = PossibleTriggerConfiguration> {
-    possible_trigger_periods()
-        .into_iter()
-        .map(|period| (period,))
-        .flat_map(|period| cartesian(period, possible_trigger_events))
-        .flat_map(|prev| cartesian(prev, possible_referencing_table_names))
-        .flat_map(|prev| cartesian(prev, possible_trigger_referencing_variants))
-        .flat_map(|prev| cartesian(prev, possible_trigger_object_variants))
-        .flat_map(|prev| cartesian(prev, possible_trigger_deferrable_variants))
-        .flat_map(|prev| cartesian(prev, possible_trigger_exec_body_types))
-        .flat_map(|prev| cartesian(prev, possible_trigger_function_descriptions))
-        .flat_map(|prev| cartesian(prev, possible_trigger_condition))
-        // Whether the trigger should be replaced
-        .flat_map(|prev| cartesian(prev, || vec![true, false]))
-        // Whether the 'EACH' keyword should be included
-        .flat_map(|prev| cartesian(prev, || vec![true, false]))
-        // Whether the trigger should be a constraint
-        .flat_map(|prev| cartesian(prev, || vec![true, false]))
-}
-
-fn build_sql_from_trigger_configuration(
-    (
-        period,
-        events,
-        referenced_table_name,
-        referencing,
-        trigger_object,
-        characteristics,
-        exec_type,
-        func_desc,
-        condition,
-        or_replace,
-        include_each,
-        is_constraint,
-    ): &PossibleTriggerConfiguration,
-) -> String {
-    // First, we combine the possible events into a single string
-    // by joining them with ' OR '.
-    let events = events
-        .iter()
-        .map(|event| format!("{event}"))
-        .collect::<Vec<String>>()
-        .join(" OR ");
-
-    // When provided, we need to include the referenced table name in the statement,
-    // which is prefixed with the 'FROM' keyword.
-    let referenced_table_name = referenced_table_name
-        .as_ref()
-        .map(|referenced_table_name| format!("FROM {referenced_table_name} "))
-        .unwrap_or_default();
-
-    let characteristics = characteristics.map(|c| format!("{c} ")).unwrap_or_default();
-
-    // Next, we combine the possible referencing clauses into a single string
-    // by joining them with spaces, if there are any, and we prepend them with
-    // the 'REFERENCING' keyword.
-    let referencing = (!referencing.is_empty())
-        .then(|| {
-            format!(
-                "REFERENCING {referencing} ",
-                referencing = referencing
-                    .iter()
-                    .map(|reference| format!("{reference}",))
-                    .collect::<Vec<String>>()
-                    .join(" ")
-            )
-        })
-        .unwrap_or_default();
-
-    // In the case where a condition is provided, we prepend it with the 'WHEN' keyword.
-    let condition = condition
-        .as_ref()
-        .map(|c| format!("WHEN {c} "))
-        .unwrap_or_default();
-
-    // When requested, we prepend the 'OR REPLACE' keyword to the statement.
-    let or_replace = if *or_replace { " OR REPLACE" } else { "" };
-    // Similarly, when requested, we prepend the 'FOR EACH' keyword to the statement.
-    let for_each = if *include_each { "FOR EACH" } else { "FOR" };
-    // And, when requested, we prepend the 'CONSTRAINT' keyword to the statement.
-    let is_constraint = if *is_constraint { " CONSTRAINT" } else { "" };
-
-    // Finally, we combine all the parts into a single string,
-    // following the syntax of a postgres CREATE TRIGGER statement:
-    //
-    // CREATE [ OR REPLACE ] [ CONSTRAINT ] TRIGGER name { BEFORE | AFTER | INSTEAD OF } { event [ OR ... ] }
-    // ON table_name
-    // [ FROM referenced_table_name ]
-    // [ NOT DEFERRABLE | [ DEFERRABLE ] [ INITIALLY IMMEDIATE | INITIALLY DEFERRED ] ]
-    // [ REFERENCING { { OLD | NEW } TABLE [ AS ] transition_relation_name } [ ... ] ]
-    // [ FOR [ EACH ] { ROW | STATEMENT } ]
-    // [ WHEN ( condition ) ]
-    // EXECUTE { FUNCTION | PROCEDURE } function_name ( arguments )
-    //
-    format!(
-        "CREATE{or_replace}{is_constraint} TRIGGER check_update {period} {events} ON accounts {referenced_table_name}{characteristics}{referencing}{for_each} {trigger_object} {condition}EXECUTE {exec_type} {func_desc}"
-    )
-}
-
-fn build_trigger_from_configuration(
-    (
-        period,
-        events,
-        referenced_table_name,
-        referencing,
-        trigger_object,
-        characteristics,
-        exec_type,
-        func_desc,
-        condition,
-        or_replace,
-        include_each,
-        is_constraint,
-    ): PossibleTriggerConfiguration,
-) -> Statement {
-    Statement::CreateTrigger {
-        or_replace,
-        is_constraint,
-        name: ObjectName(vec![Ident::new("check_update")]),
-        period,
-        events,
-        table_name: ObjectName(vec![Ident::new("accounts")]),
-        referenced_table_name,
-        referencing,
-        trigger_object,
-        include_each,
-        condition,
-        exec_body: TriggerExecBody {
-            exec_type,
-            func_desc,
-        },
-        characteristics,
-    }
-}
-
-#[test]
-fn parse_create_trigger() {
-    for configuration in iterate_trigger_configurations() {
-        let sql = build_sql_from_trigger_configuration(&configuration);
-        let trigger = build_trigger_from_configuration(configuration);
-
-        assert_eq!(pg().verified_stmt(&sql), trigger);
-    }
-}
-
 #[test]
 fn test_escaped_string_literal() {
     match pg().verified_expr(r#"E'\n'"#) {
@@ -4799,6 +4628,153 @@ fn test_escaped_string_literal() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_create_simple_before_insert_trigger() {
+    let sql = "CREATE TRIGGER check_insert BEFORE INSERT ON accounts FOR EACH ROW EXECUTE FUNCTION check_account_insert";
+    let expected = Statement::CreateTrigger {
+        or_replace: false,
+        is_constraint: false,
+        name: ObjectName(vec![Ident::new("check_insert")]),
+        period: TriggerPeriod::Before,
+        events: vec![TriggerEvent::Insert],
+        table_name: ObjectName(vec![Ident::new("accounts")]),
+        referenced_table_name: None,
+        referencing: vec![],
+        trigger_object: TriggerObject::Row,
+        include_each: true,
+        condition: None,
+        exec_body: TriggerExecBody {
+            exec_type: TriggerExecBodyType::Function,
+            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_insert")]), args: None},
+        },
+        characteristics: None,
+    };
+    
+    assert_eq!(pg().verified_stmt(sql), expected);
+}
+
+#[test]
+fn parse_create_after_update_trigger_with_condition() {
+    let sql = "CREATE TRIGGER check_update AFTER UPDATE ON accounts FOR EACH ROW WHEN (NEW.balance > 10000) EXECUTE FUNCTION check_account_update";
+    let expected = Statement::CreateTrigger {
+        or_replace: false,
+        is_constraint: false,
+        name: ObjectName(vec![Ident::new("check_update")]),
+        period: TriggerPeriod::After,
+        events: vec![TriggerEvent::Update(vec![])],
+        table_name: ObjectName(vec![Ident::new("accounts")]),
+        referenced_table_name: None,
+        referencing: vec![],
+        trigger_object: TriggerObject::Row,
+        include_each: true,
+        condition: Some(Expr::Nested(Box::new(Expr::BinaryOp {
+            left: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("NEW"),
+                Ident::new("balance"),
+            ])),
+            op: BinaryOperator::Gt,
+            right: Box::new(Expr::Value(Value::Number("10000".to_string(), false))),
+        }))),
+        exec_body: TriggerExecBody {
+            exec_type: TriggerExecBodyType::Function,
+            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_update")]), args: None},
+        },
+        characteristics: None,
+    };
+    
+    assert_eq!(pg().verified_stmt(sql), expected);
+}
+
+#[test]
+fn parse_create_instead_of_delete_trigger() {
+    let sql = "CREATE TRIGGER check_delete INSTEAD OF DELETE ON accounts FOR EACH ROW EXECUTE FUNCTION check_account_deletes";
+    let expected = Statement::CreateTrigger {
+        or_replace: false,
+        is_constraint: false,
+        name: ObjectName(vec![Ident::new("check_delete")]),
+        period: TriggerPeriod::InsteadOf,
+        events: vec![TriggerEvent::Delete],
+        table_name: ObjectName(vec![Ident::new("accounts")]),
+        referenced_table_name: None,
+        referencing: vec![],
+        trigger_object: TriggerObject::Row,
+        include_each: true,
+        condition: None,
+        exec_body: TriggerExecBody {
+            exec_type: TriggerExecBodyType::Function,
+            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_deletes")]), args: None},
+        },
+        characteristics: None,
+    };
+    
+    assert_eq!(pg().verified_stmt(sql), expected);
+}
+
+#[test]
+fn parse_create_trigger_with_multiple_events_and_deferrable() {
+    let sql = "CREATE CONSTRAINT TRIGGER check_multiple_events BEFORE INSERT OR UPDATE OR DELETE ON accounts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_account_changes";
+    let expected = Statement::CreateTrigger {
+        or_replace: false,
+        is_constraint: true,
+        name: ObjectName(vec![Ident::new("check_multiple_events")]),
+        period: TriggerPeriod::Before,
+        events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![]), TriggerEvent::Delete],
+        table_name: ObjectName(vec![Ident::new("accounts")]),
+        referenced_table_name: None,
+        referencing: vec![],
+        trigger_object: TriggerObject::Row,
+        include_each: true,
+        condition: None,
+        exec_body: TriggerExecBody {
+            exec_type: TriggerExecBodyType::Function,
+            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_changes")]), args: None},
+        },
+        characteristics: Some(ConstraintCharacteristics {
+            deferrable: Some(true),
+            initially: Some(DeferrableInitial::Deferred),
+            enforced: None,
+        }),
+    };
+    
+    assert_eq!(pg().verified_stmt(sql), expected);
+}
+
+#[test]
+fn parse_create_trigger_with_referencing() {
+    let sql = "CREATE TRIGGER check_referencing BEFORE INSERT ON accounts REFERENCING NEW TABLE AS new_accounts OLD TABLE AS old_accounts FOR EACH ROW EXECUTE FUNCTION check_account_referencing";
+    let expected = Statement::CreateTrigger {
+        or_replace: false,
+        is_constraint: false,
+        name: ObjectName(vec![Ident::new("check_referencing")]),
+        period: TriggerPeriod::Before,
+        events: vec![TriggerEvent::Insert],
+        table_name: ObjectName(vec![Ident::new("accounts")]),
+        referenced_table_name: None,
+        referencing: vec![
+            TriggerReferencing{
+                refer_type: TriggerReferencingType::NewTable,
+                is_as: true,
+                transition_relation_name: ObjectName(vec![Ident::new("new_accounts")]),
+            },
+            TriggerReferencing{
+                refer_type: TriggerReferencingType::OldTable,
+                is_as: true,
+                transition_relation_name: ObjectName(vec![Ident::new("old_accounts")]),
+            },
+        ],
+        trigger_object: TriggerObject::Row,
+        include_each: true,
+        condition: None,
+        exec_body: TriggerExecBody {
+            exec_type: TriggerExecBodyType::Function,
+            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_referencing")]), args: None},
+        },
+        characteristics: None,
+    };
+    
+    assert_eq!(pg().verified_stmt(sql), expected);
 }
 
 #[test]

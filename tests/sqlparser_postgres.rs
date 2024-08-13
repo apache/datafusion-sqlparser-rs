@@ -4442,184 +4442,6 @@ fn test_table_unnest_with_ordinality() {
     }
 }
 
-fn possible_trigger_referencing_variants() -> Vec<Vec<TriggerReferencing>> {
-    vec![
-        vec![],
-        vec![TriggerReferencing {
-            refer_type: TriggerReferencingType::NewTable,
-            is_as: false,
-            transition_relation_name: ObjectName(vec![Ident::new("new_table")]),
-        }],
-        vec![TriggerReferencing {
-            refer_type: TriggerReferencingType::OldTable,
-            is_as: false,
-            transition_relation_name: ObjectName(vec![Ident::new("old_table")]),
-        }],
-        vec![
-            TriggerReferencing {
-                refer_type: TriggerReferencingType::NewTable,
-                is_as: false,
-                transition_relation_name: ObjectName(vec![Ident::new("new_table")]),
-            },
-            TriggerReferencing {
-                refer_type: TriggerReferencingType::OldTable,
-                is_as: false,
-                transition_relation_name: ObjectName(vec![Ident::new("old_table")]),
-            },
-        ],
-        vec![
-            TriggerReferencing {
-                refer_type: TriggerReferencingType::OldTable,
-                is_as: false,
-                transition_relation_name: ObjectName(vec![Ident::new("old_table")]),
-            },
-            TriggerReferencing {
-                refer_type: TriggerReferencingType::NewTable,
-                is_as: false,
-                transition_relation_name: ObjectName(vec![Ident::new("new_table")]),
-            },
-        ],
-    ]
-}
-
-fn possible_trigger_object_variants() -> Vec<TriggerObject> {
-    vec![TriggerObject::Row, TriggerObject::Statement]
-}
-
-fn possible_trigger_deferrable_variants() -> Vec<Option<ConstraintCharacteristics>> {
-    vec![
-        None,
-        Some(ConstraintCharacteristics {
-            deferrable: Some(true),
-            enforced: None,
-            initially: Some(DeferrableInitial::Deferred),
-        }),
-        Some(ConstraintCharacteristics {
-            deferrable: Some(false),
-            enforced: None,
-            initially: Some(DeferrableInitial::Immediate),
-        }),
-        Some(ConstraintCharacteristics {
-            deferrable: Some(true),
-            enforced: None,
-            initially: Some(DeferrableInitial::Immediate),
-        }),
-        Some(ConstraintCharacteristics {
-            deferrable: Some(true),
-            enforced: None,
-            initially: Some(DeferrableInitial::Deferred),
-        }),
-    ]
-}
-
-fn possible_trigger_function_descriptions() -> Vec<FunctionDesc> {
-    vec![
-        FunctionDesc {
-            name: ObjectName(vec![Ident::new("check_account_update")]),
-            args: None,
-        },
-        FunctionDesc {
-            name: ObjectName(vec![Ident::new("check_account_update")]),
-            args: Some(vec![OperateFunctionArg::unnamed(DataType::Int(None))]),
-        },
-        FunctionDesc {
-            name: ObjectName(vec![Ident::new("check_account_update")]),
-            args: Some(vec![
-                OperateFunctionArg::with_name("a", DataType::Int(None)),
-                OperateFunctionArg {
-                    mode: Some(ArgMode::In),
-                    name: Some("b".into()),
-                    data_type: DataType::Int(None),
-                    default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
-                },
-            ]),
-        },
-    ]
-}
-
-fn possible_trigger_exec_body_types() -> Vec<TriggerExecBodyType> {
-    vec![
-        TriggerExecBodyType::Function,
-        TriggerExecBodyType::Procedure,
-    ]
-}
-
-fn possible_trigger_events() -> Vec<Vec<TriggerEvent>> {
-    vec![
-        vec![TriggerEvent::Update(vec![])],
-        vec![TriggerEvent::Insert],
-        vec![TriggerEvent::Delete],
-        vec![TriggerEvent::Update(vec![]), TriggerEvent::Insert],
-        vec![
-            TriggerEvent::Update(vec![]),
-            TriggerEvent::Insert,
-            TriggerEvent::Delete,
-        ],
-        vec![TriggerEvent::Update(vec![Ident::new("balance")])],
-        vec![
-            TriggerEvent::Update(vec![Ident::new("balance")]),
-            TriggerEvent::Insert,
-        ],
-        vec![
-            TriggerEvent::Update(vec![Ident::new("balance")]),
-            TriggerEvent::Delete,
-        ],
-        vec![
-            TriggerEvent::Update(vec![Ident::new("balance")]),
-            TriggerEvent::Insert,
-            TriggerEvent::Delete,
-        ],
-    ]
-}
-
-fn possible_referencing_table_names() -> Vec<Option<ObjectName>> {
-    vec![
-        // Case with no referencing table
-        None,
-        // Case with a referencing table
-        Some(ObjectName(vec![Ident::new("referencing_table")])),
-        // Case with a referencing table from a different schema
-        Some(ObjectName(vec![
-            Ident::new("referencing_schema"),
-            Ident::new("referencing_table"),
-        ])),
-    ]
-}
-
-fn possible_trigger_periods() -> Vec<TriggerPeriod> {
-    vec![
-        TriggerPeriod::Before,
-        TriggerPeriod::After,
-        TriggerPeriod::InsteadOf,
-    ]
-}
-
-fn possible_trigger_condition() -> Vec<Option<Expr>> {
-    vec![
-        None,
-        Some(Expr::Nested(Box::new(Expr::IsNotDistinctFrom(
-            Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("OLD"),
-                Ident::new("balance"),
-            ])),
-            Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("NEW"),
-                Ident::new("balance"),
-            ])),
-        )))),
-        Some(Expr::Nested(Box::new(Expr::IsDistinctFrom(
-            Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("OLD"),
-                Ident::new("balance"),
-            ])),
-            Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("NEW"),
-                Ident::new("balance"),
-            ])),
-        )))),
-    ]
-}
-
 #[test]
 fn test_escaped_string_literal() {
     match pg().verified_expr(r#"E'\n'"#) {
@@ -4647,11 +4469,14 @@ fn parse_create_simple_before_insert_trigger() {
         condition: None,
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_insert")]), args: None},
+            func_desc: FunctionDesc {
+                name: ObjectName(vec![Ident::new("check_account_insert")]),
+                args: None,
+            },
         },
         characteristics: None,
     };
-    
+
     assert_eq!(pg().verified_stmt(sql), expected);
 }
 
@@ -4679,11 +4504,14 @@ fn parse_create_after_update_trigger_with_condition() {
         }))),
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_update")]), args: None},
+            func_desc: FunctionDesc {
+                name: ObjectName(vec![Ident::new("check_account_update")]),
+                args: None,
+            },
         },
         characteristics: None,
     };
-    
+
     assert_eq!(pg().verified_stmt(sql), expected);
 }
 
@@ -4704,11 +4532,14 @@ fn parse_create_instead_of_delete_trigger() {
         condition: None,
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_deletes")]), args: None},
+            func_desc: FunctionDesc {
+                name: ObjectName(vec![Ident::new("check_account_deletes")]),
+                args: None,
+            },
         },
         characteristics: None,
     };
-    
+
     assert_eq!(pg().verified_stmt(sql), expected);
 }
 
@@ -4720,7 +4551,11 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         is_constraint: true,
         name: ObjectName(vec![Ident::new("check_multiple_events")]),
         period: TriggerPeriod::Before,
-        events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![]), TriggerEvent::Delete],
+        events: vec![
+            TriggerEvent::Insert,
+            TriggerEvent::Update(vec![]),
+            TriggerEvent::Delete,
+        ],
         table_name: ObjectName(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
@@ -4729,7 +4564,10 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         condition: None,
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_changes")]), args: None},
+            func_desc: FunctionDesc {
+                name: ObjectName(vec![Ident::new("check_account_changes")]),
+                args: None,
+            },
         },
         characteristics: Some(ConstraintCharacteristics {
             deferrable: Some(true),
@@ -4737,7 +4575,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
             enforced: None,
         }),
     };
-    
+
     assert_eq!(pg().verified_stmt(sql), expected);
 }
 
@@ -4753,12 +4591,12 @@ fn parse_create_trigger_with_referencing() {
         table_name: ObjectName(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![
-            TriggerReferencing{
+            TriggerReferencing {
                 refer_type: TriggerReferencingType::NewTable,
                 is_as: true,
                 transition_relation_name: ObjectName(vec![Ident::new("new_accounts")]),
             },
-            TriggerReferencing{
+            TriggerReferencing {
                 refer_type: TriggerReferencingType::OldTable,
                 is_as: true,
                 transition_relation_name: ObjectName(vec![Ident::new("old_accounts")]),
@@ -4769,11 +4607,14 @@ fn parse_create_trigger_with_referencing() {
         condition: None,
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
-            func_desc: FunctionDesc{name: ObjectName(vec![Ident::new("check_account_referencing")]), args: None},
+            func_desc: FunctionDesc {
+                name: ObjectName(vec![Ident::new("check_account_referencing")]),
+                args: None,
+            },
         },
         characteristics: None,
     };
-    
+
     assert_eq!(pg().verified_stmt(sql), expected);
 }
 

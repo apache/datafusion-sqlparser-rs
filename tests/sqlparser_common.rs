@@ -2495,13 +2495,51 @@ fn parse_floor_number() {
 }
 
 #[test]
+fn parse_ceil_number_scale() {
+    verified_stmt("SELECT CEIL(1.5, 1)");
+    verified_stmt("SELECT CEIL(float_column, 3) FROM my_table");
+}
+
+#[test]
+fn parse_floor_number_scale() {
+    verified_stmt("SELECT FLOOR(1.5, 1)");
+    verified_stmt("SELECT FLOOR(float_column, 3) FROM my_table");
+}
+
+#[test]
+fn parse_ceil_scale() {
+    let sql = "SELECT CEIL(d, 2)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Ceil {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: CeilFloorKind::Scale(Value::Number(2.to_string(), false)),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_floor_scale() {
+    let sql = "SELECT FLOOR(d, 2)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Floor {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: CeilFloorKind::Scale(Value::Number(2.to_string(), false)),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_ceil_datetime() {
     let sql = "SELECT CEIL(d TO DAY)";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Ceil {
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
-            field: DateTimeField::Day,
+            field: CeilFloorKind::DateTimeField(DateTimeField::Day),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2528,7 +2566,7 @@ fn parse_floor_datetime() {
     assert_eq!(
         &Expr::Floor {
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
-            field: DateTimeField::Day,
+            field: CeilFloorKind::DateTimeField(DateTimeField::Day),
         },
         expr_from_projection(only(&select.projection)),
     );

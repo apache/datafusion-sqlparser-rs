@@ -494,6 +494,13 @@ pub enum ExtractSyntax {
 }
 
 /// The syntax used in a CEIL or FLOOR expression.
+///
+/// The `CEIL/FLOOR(<datetime value expression> TO <time unit>)` is an Amazon Kinesis Data Analytics extension.
+/// See <https://docs.aws.amazon.com/kinesisanalytics/latest/sqlref/sql-reference-ceil.html> for
+/// details.
+///
+/// Other dialects either support `CEIL/FLOOR( <expr> [, <scale>])` format or just
+/// `CEIL/FLOOR(<expr>)`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

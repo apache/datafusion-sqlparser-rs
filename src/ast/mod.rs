@@ -480,7 +480,7 @@ pub enum CastKind {
 /// `EXTRACT` syntax variants.
 ///
 /// In Snowflake dialect, the `EXTRACT` expression can support either the `from` syntax
-/// or the comma syntax. 
+/// or the comma syntax.
 ///
 /// See <https://docs.snowflake.com/en/sql-reference/functions/extract>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -490,7 +490,7 @@ pub enum ExtractSyntax {
     /// `EXTRACT( <date_or_time_part> FROM <date_or_time_expr> )`
     From,
     /// `EXTRACT( <date_or_time_part> , <date_or_timestamp_expr> )`
-    Comma
+    Comma,
 }
 
 /// An SQL expression of any type.
@@ -1215,12 +1215,14 @@ impl fmt::Display for Expr {
                     write!(f, "{expr}::{data_type}")
                 }
             },
-            Expr::Extract { field, syntax, expr } => {
-                match syntax {
-                    ExtractSyntax::From => write!(f, "EXTRACT({field} FROM {expr})"),
-                    ExtractSyntax::Comma => write!(f, "EXTRACT({field}, {expr})")
-                }
-            }
+            Expr::Extract {
+                field,
+                syntax,
+                expr,
+            } => match syntax {
+                ExtractSyntax::From => write!(f, "EXTRACT({field} FROM {expr})"),
+                ExtractSyntax::Comma => write!(f, "EXTRACT({field}, {expr})"),
+            },
             Expr::Ceil { expr, field } => {
                 if field == &DateTimeField::NoDateTime {
                     write!(f, "CEIL({expr})")

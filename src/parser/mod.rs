@@ -1685,7 +1685,9 @@ impl<'a> Parser<'a> {
 
         let syntax = if self.parse_keyword(Keyword::FROM) {
             ExtractSyntax::From
-        } else if self.consume_token(&Token::Comma) && dialect_of!(self is SnowflakeDialect | GenericDialect) {
+        } else if self.consume_token(&Token::Comma)
+            && dialect_of!(self is SnowflakeDialect | GenericDialect)
+        {
             ExtractSyntax::Comma
         } else {
             return Err(ParserError::ParserError(
@@ -1961,11 +1963,12 @@ impl<'a> Parser<'a> {
                 }
                 _ => self.expected("date/time field", next_token),
             },
-            Token::SingleQuotedString(_) if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
-                    self.prev_token();
-                    let custom = self.parse_identifier(false)?;
-                    Ok(DateTimeField::Custom(custom))
-            },
+            Token::SingleQuotedString(_) if dialect_of!(self is SnowflakeDialect | GenericDialect) =>
+            {
+                self.prev_token();
+                let custom = self.parse_identifier(false)?;
+                Ok(DateTimeField::Custom(custom))
+            }
             _ => self.expected("date/time field", next_token),
         }
     }

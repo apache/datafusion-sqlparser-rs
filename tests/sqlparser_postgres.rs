@@ -4503,7 +4503,7 @@ fn parse_create_after_update_trigger_with_condition() {
                 Ident::new("balance"),
             ])),
             op: BinaryOperator::Gt,
-            right: Box::new(Expr::Value(Value::Number("10000".to_string(), false))),
+            right: Box::new(Expr::Value(number("10000"))),
         }))),
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,

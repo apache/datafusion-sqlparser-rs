@@ -1557,6 +1557,7 @@ fn parse_join_constraint_unnest_alias() {
                 with_offset_alias: None,
                 with_ordinality: false,
             },
+            global: false,
             join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
                 op: BinaryOperator::Eq,
@@ -2135,6 +2136,7 @@ fn parse_extract_weekday() {
     assert_eq!(
         &Expr::Extract {
             field: DateTimeField::Week(Some(Ident::new("MONDAY"))),
+            syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
         },
         expr_from_projection(only(&select.projection)),

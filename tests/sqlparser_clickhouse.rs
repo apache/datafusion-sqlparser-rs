@@ -25,6 +25,7 @@ use sqlparser::ast::Value::Number;
 use sqlparser::ast::*;
 use sqlparser::dialect::ClickHouseDialect;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::ParserError::ParserError;
 
 #[test]
 fn parse_map_access_expr() {
@@ -218,6 +219,130 @@ fn parse_create_table() {
     clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x""#);
     clickhouse().verified_stmt(
         r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x" AS SELECT * FROM "t" WHERE true"#,
+    );
+}
+
+#[test]
+fn parse_alter_table_attach_and_detach_partition() {
+    for operation in &["ATTACH", "DETACH"] {
+        match clickhouse_and_generic()
+            .verified_stmt(format!("ALTER TABLE t0 {operation} PARTITION part").as_str())
+        {
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
+                pretty_assertions::assert_eq!("t0", name.to_string());
+                pretty_assertions::assert_eq!(
+                    operations[0],
+                    if operation == &"ATTACH" {
+                        AlterTableOperation::AttachPartition {
+                            partition: Partition::Expr(Identifier(Ident::new("part"))),
+                        }
+                    } else {
+                        AlterTableOperation::DetachPartition {
+                            partition: Partition::Expr(Identifier(Ident::new("part"))),
+                        }
+                    }
+                );
+            }
+            _ => unreachable!(),
+        }
+
+        match clickhouse_and_generic()
+            .verified_stmt(format!("ALTER TABLE t1 {operation} PART part").as_str())
+        {
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
+                pretty_assertions::assert_eq!("t1", name.to_string());
+                pretty_assertions::assert_eq!(
+                    operations[0],
+                    if operation == &"ATTACH" {
+                        AlterTableOperation::AttachPartition {
+                            partition: Partition::Part(Identifier(Ident::new("part"))),
+                        }
+                    } else {
+                        AlterTableOperation::DetachPartition {
+                            partition: Partition::Part(Identifier(Ident::new("part"))),
+                        }
+                    }
+                );
+            }
+            _ => unreachable!(),
+        }
+
+        // negative cases
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {operation} PARTITION").as_str())
+                .unwrap_err(),
+            ParserError("Expected: an expression:, found: EOF".to_string())
+        );
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {operation} PART").as_str())
+                .unwrap_err(),
+            ParserError("Expected: an expression:, found: EOF".to_string())
+        );
+    }
+}
+
+#[test]
+fn parse_optimize_table() {
+    clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0");
+    clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE db.t0");
+    clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0 ON CLUSTER 'cluster'");
+    clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0 ON CLUSTER 'cluster' FINAL");
+    clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0 FINAL DEDUPLICATE");
+    clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0 DEDUPLICATE");
+    clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0 DEDUPLICATE BY id");
+    clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0 FINAL DEDUPLICATE BY id");
+    clickhouse_and_generic()
+        .verified_stmt("OPTIMIZE TABLE t0 PARTITION tuple('2023-04-22') DEDUPLICATE BY id");
+    match clickhouse_and_generic().verified_stmt(
+        "OPTIMIZE TABLE t0 ON CLUSTER cluster PARTITION ID '2024-07' FINAL DEDUPLICATE BY id",
+    ) {
+        Statement::OptimizeTable {
+            name,
+            on_cluster,
+            partition,
+            include_final,
+            deduplicate,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "t0");
+            assert_eq!(on_cluster, Some(Ident::new("cluster")));
+            assert_eq!(
+                partition,
+                Some(Partition::Identifier(Ident::with_quote('\'', "2024-07")))
+            );
+            assert!(include_final);
+            assert_eq!(
+                deduplicate,
+                Some(Deduplicate::ByExpression(Identifier(Ident::new("id"))))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // negative cases
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("OPTIMIZE TABLE t0 DEDUPLICATE BY")
+            .unwrap_err(),
+        ParserError("Expected: an expression:, found: EOF".to_string())
+    );
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("OPTIMIZE TABLE t0 PARTITION")
+            .unwrap_err(),
+        ParserError("Expected: an expression:, found: EOF".to_string())
+    );
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("OPTIMIZE TABLE t0 PARTITION ID")
+            .unwrap_err(),
+        ParserError("Expected: identifier, found: EOF".to_string())
     );
 }
 
@@ -1088,6 +1213,83 @@ fn parse_create_table_on_commit_and_as_query() {
             );
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_select_table_function_settings() {
+    fn check_settings(sql: &str, expected: &TableFunctionArgs) {
+        match clickhouse_and_generic().verified_stmt(sql) {
+            Statement::Query(q) => {
+                let from = &q.body.as_select().unwrap().from;
+                assert_eq!(from.len(), 1);
+                assert_eq!(from[0].joins, vec![]);
+                match &from[0].relation {
+                    Table { args, .. } => {
+                        let args = args.as_ref().unwrap();
+                        assert_eq!(args, expected);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+    check_settings(
+        "SELECT * FROM table_function(arg, SETTINGS s0 = 3, s1 = 's')",
+        &TableFunctionArgs {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier("arg".into()),
+            ))],
+
+            settings: Some(vec![
+                Setting {
+                    key: "s0".into(),
+                    value: Value::Number("3".parse().unwrap(), false),
+                },
+                Setting {
+                    key: "s1".into(),
+                    value: Value::SingleQuotedString("s".into()),
+                },
+            ]),
+        },
+    );
+    check_settings(
+        r#"SELECT * FROM table_function(arg)"#,
+        &TableFunctionArgs {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier("arg".into()),
+            ))],
+            settings: None,
+        },
+    );
+    check_settings(
+        "SELECT * FROM table_function(SETTINGS s0 = 3, s1 = 's')",
+        &TableFunctionArgs {
+            args: vec![],
+            settings: Some(vec![
+                Setting {
+                    key: "s0".into(),
+                    value: Value::Number("3".parse().unwrap(), false),
+                },
+                Setting {
+                    key: "s1".into(),
+                    value: Value::SingleQuotedString("s".into()),
+                },
+            ]),
+        },
+    );
+    let invalid_cases = vec![
+        "SELECT * FROM t(SETTINGS a)",
+        "SELECT * FROM t(SETTINGS a=)",
+        "SELECT * FROM t(SETTINGS a=1, b)",
+        "SELECT * FROM t(SETTINGS a=1, b=)",
+        "SELECT * FROM t(SETTINGS a=1, b=c)",
+    ];
+    for sql in invalid_cases {
+        clickhouse_and_generic()
+            .parse_sql_statements(sql)
+            .expect_err("Expected: SETTINGS key = value, found: ");
     }
 }
 

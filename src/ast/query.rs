@@ -899,6 +899,19 @@ impl fmt::Display for ExprWithAlias {
     }
 }
 
+/// Arguments to a table-valued function
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableFunctionArgs {
+    pub args: Vec<FunctionArg>,
+    /// ClickHouse-specific SETTINGS clause.
+    /// For example,
+    /// `SELECT * FROM executable('generate_random.py', TabSeparated, 'id UInt32, random String', SETTINGS send_chunk_header = false, pool_size = 16)`
+    /// [`executable` table function](https://clickhouse.com/docs/en/engines/table-functions/executable)
+    pub settings: Option<Vec<Setting>>,
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -916,7 +929,7 @@ pub enum TableFactor {
         /// This field's value is `Some(v)`, where `v` is a (possibly empty)
         /// vector of arguments, in the case of a table-valued function call,
         /// whereas it's `None` in the case of a regular table name.
-        args: Option<Vec<FunctionArg>>,
+        args: Option<TableFunctionArgs>,
         /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
         with_hints: Vec<Expr>,
         /// Optional version qualifier to facilitate table time-travel, as
@@ -1314,7 +1327,15 @@ impl fmt::Display for TableFactor {
                     write!(f, "PARTITION ({})", display_comma_separated(partitions))?;
                 }
                 if let Some(args) = args {
-                    write!(f, "({})", display_comma_separated(args))?;
+                    write!(f, "(")?;
+                    write!(f, "{}", display_comma_separated(&args.args))?;
+                    if let Some(ref settings) = args.settings {
+                        if !args.args.is_empty() {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "SETTINGS {}", display_comma_separated(settings))?;
+                    }
+                    write!(f, ")")?;
                 }
                 if *with_ordinality {
                     write!(f, " WITH ORDINALITY")?;
@@ -1537,6 +1558,9 @@ impl Display for TableVersion {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Join {
     pub relation: TableFactor,
+    /// ClickHouse supports the optional `GLOBAL` keyword before the join operator.
+    /// See [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/join)
+    pub global: bool,
     pub join_operator: JoinOperator,
 }
 
@@ -1563,6 +1587,10 @@ impl fmt::Display for Join {
             }
             Suffix(constraint)
         }
+        if self.global {
+            write!(f, " GLOBAL")?;
+        }
+
         match &self.join_operator {
             JoinOperator::Inner(constraint) => write!(
                 f,

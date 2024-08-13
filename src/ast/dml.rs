@@ -126,7 +126,7 @@ pub struct CreateTable {
     pub on_commit: Option<OnCommit>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
-    pub on_cluster: Option<String>,
+    pub on_cluster: Option<Ident>,
     /// ClickHouse "PRIMARY KEY " clause.
     /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
     pub primary_key: Option<Box<Expr>>,
@@ -206,11 +206,7 @@ impl Display for CreateTable {
             name = self.name,
         )?;
         if let Some(on_cluster) = &self.on_cluster {
-            write!(
-                f,
-                " ON CLUSTER {}",
-                on_cluster.replace('{', "'{").replace('}', "}'")
-            )?;
+            write!(f, " ON CLUSTER {}", on_cluster)?;
         }
         if !self.columns.is_empty() || !self.constraints.is_empty() {
             write!(f, " ({}", display_comma_separated(&self.columns))?;

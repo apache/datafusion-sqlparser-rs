@@ -1891,6 +1891,7 @@ fn parse_update_with_joins() {
                             partitions: vec![],
                             with_ordinality: false,
                         },
+                        global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
                                 Ident::new("o"),
@@ -1975,6 +1976,7 @@ fn parse_alter_table_add_column() {
             only,
             operations,
             location: _,
+            on_cluster: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);
@@ -2004,6 +2006,7 @@ fn parse_alter_table_add_column() {
             only,
             operations,
             location: _,
+            on_cluster: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);
@@ -2041,6 +2044,7 @@ fn parse_alter_table_add_columns() {
             only,
             operations,
             location: _,
+            on_cluster: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(!if_exists);

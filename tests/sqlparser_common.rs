@@ -2430,6 +2430,7 @@ fn parse_extract() {
     assert_eq!(
         &Expr::Extract {
             field: DateTimeField::Year,
+            syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
         },
         expr_from_projection(only(&select.projection)),
@@ -3506,7 +3507,7 @@ fn parse_create_table_on_cluster() {
     let sql = "CREATE TABLE t ON CLUSTER '{cluster}' (a INT, b INT)";
     match generic.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { on_cluster, .. }) => {
-            assert_eq!(on_cluster.unwrap(), "{cluster}".to_string());
+            assert_eq!(on_cluster.unwrap().to_string(), "'{cluster}'".to_string());
         }
         _ => unreachable!(),
     }
@@ -3515,7 +3516,7 @@ fn parse_create_table_on_cluster() {
     let sql = "CREATE TABLE t ON CLUSTER my_cluster (a INT, b INT)";
     match generic.verified_stmt(sql) {
         Statement::CreateTable(CreateTable { on_cluster, .. }) => {
-            assert_eq!(on_cluster.unwrap(), "my_cluster".to_string());
+            assert_eq!(on_cluster.unwrap().to_string(), "my_cluster".to_string());
         }
         _ => unreachable!(),
     }
@@ -3820,6 +3821,40 @@ fn parse_alter_table() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_alter_table_with_on_cluster() {
+    match all_dialects()
+        .verified_stmt("ALTER TABLE t ON CLUSTER 'cluster' ADD CONSTRAINT bar PRIMARY KEY (baz)")
+    {
+        Statement::AlterTable {
+            name, on_cluster, ..
+        } => {
+            std::assert_eq!(name.to_string(), "t");
+            std::assert_eq!(on_cluster, Some(Ident::with_quote('\'', "cluster")));
+        }
+        _ => unreachable!(),
+    }
+
+    match all_dialects()
+        .verified_stmt("ALTER TABLE t ON CLUSTER cluster_name ADD CONSTRAINT bar PRIMARY KEY (baz)")
+    {
+        Statement::AlterTable {
+            name, on_cluster, ..
+        } => {
+            std::assert_eq!(name.to_string(), "t");
+            std::assert_eq!(on_cluster, Some(Ident::new("cluster_name")));
+        }
+        _ => unreachable!(),
+    }
+
+    let res = all_dialects()
+        .parse_sql_statements("ALTER TABLE t ON CLUSTER 123 ADD CONSTRAINT bar PRIMARY KEY (baz)");
+    std::assert_eq!(
+        res.unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: 123".to_string())
+    )
 }
 
 #[test]
@@ -5600,6 +5635,7 @@ fn parse_implicit_join() {
                         partitions: vec![],
                         with_ordinality: false,
                     },
+                    global: false,
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
                 }],
             },
@@ -5623,6 +5659,7 @@ fn parse_implicit_join() {
                         partitions: vec![],
                         with_ordinality: false,
                     },
+                    global: false,
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
                 }],
             },
@@ -5646,6 +5683,7 @@ fn parse_cross_join() {
                 partitions: vec![],
                 with_ordinality: false,
             },
+            global: false,
             join_operator: JoinOperator::CrossJoin,
         },
         only(only(select.from).joins),
@@ -5657,6 +5695,7 @@ fn parse_joins_on() {
     fn join_with_constraint(
         relation: impl Into<String>,
         alias: Option<TableAlias>,
+        global: bool,
         f: impl Fn(JoinConstraint) -> JoinOperator,
     ) -> Join {
         Join {
@@ -5669,6 +5708,7 @@ fn parse_joins_on() {
                 partitions: vec![],
                 with_ordinality: false,
             },
+            global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
                 op: BinaryOperator::Eq,
@@ -5682,6 +5722,7 @@ fn parse_joins_on() {
         vec![join_with_constraint(
             "t2",
             table_alias("foo"),
+            false,
             JoinOperator::Inner,
         )]
     );
@@ -5692,35 +5733,80 @@ fn parse_joins_on() {
     // Test parsing of different join operators
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, JoinOperator::Inner)]
+        vec![join_with_constraint("t2", None, false, JoinOperator::Inner)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
+        vec![join_with_constraint(
+            "t2",
+            None,
+            false,
+            JoinOperator::LeftOuter
+        )]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
+        vec![join_with_constraint(
+            "t2",
+            None,
+            false,
+            JoinOperator::RightOuter
+        )]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT SEMI JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, JoinOperator::LeftSemi)]
+        vec![join_with_constraint(
+            "t2",
+            None,
+            false,
+            JoinOperator::LeftSemi
+        )]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT SEMI JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, JoinOperator::RightSemi)]
+        vec![join_with_constraint(
+            "t2",
+            None,
+            false,
+            JoinOperator::RightSemi
+        )]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, JoinOperator::LeftAnti)]
+        vec![join_with_constraint(
+            "t2",
+            None,
+            false,
+            JoinOperator::LeftAnti
+        )]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT ANTI JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, JoinOperator::RightAnti)]
+        vec![join_with_constraint(
+            "t2",
+            None,
+            false,
+            JoinOperator::RightAnti
+        )]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
+        vec![join_with_constraint(
+            "t2",
+            None,
+            false,
+            JoinOperator::FullOuter
+        )]
+    );
+
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint(
+            "t2",
+            None,
+            true,
+            JoinOperator::FullOuter
+        )]
     );
 }
 
@@ -5741,6 +5827,7 @@ fn parse_joins_using() {
                 partitions: vec![],
                 with_ordinality: false,
             },
+            global: false,
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
         }
     }
@@ -5805,6 +5892,7 @@ fn parse_natural_join() {
                 partitions: vec![],
                 with_ordinality: false,
             },
+            global: false,
             join_operator: f(JoinConstraint::Natural),
         }
     }
@@ -6073,6 +6161,7 @@ fn parse_derived_tables() {
                         partitions: vec![],
                         with_ordinality: false,
                     },
+                    global: false,
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
                 }],
             }),
@@ -6983,6 +7072,7 @@ fn lateral_function() {
                     ],
                     alias: None,
                 },
+                global: false,
                 join_operator: JoinOperator::LeftOuter(JoinConstraint::None),
             }],
         }],
@@ -10193,6 +10283,8 @@ fn test_map_syntax() {
             }),
         },
     );
+
+    check("MAP {}", Expr::Map(Map { entries: vec![] }));
 }
 
 #[test]

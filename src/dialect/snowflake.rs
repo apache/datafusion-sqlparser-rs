@@ -145,6 +145,15 @@ impl Dialect for SnowflakeDialect {
 
         None
     }
+
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        let token = parser.peek_token();
+        // Snowflake supports the `:` cast operator unlike other dialects
+        match token.token {
+            Token::Colon => Some(Ok(self.prec_double_colon())),
+            _ => None,
+        }
+    }
 }
 
 /// Parse snowflake create table statement.

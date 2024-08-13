@@ -677,6 +677,7 @@ fn parse_alter_table_add_columns() {
             only,
             operations,
             location: _,
+            on_cluster: _,
         } => {
             assert_eq!(name.to_string(), "tab");
             assert!(if_exists);
@@ -759,6 +760,7 @@ fn parse_alter_table_owner_to() {
                 only: _,
                 operations,
                 location: _,
+                on_cluster: _,
             } => {
                 assert_eq!(name.to_string(), "tab");
                 assert_eq!(
@@ -4102,6 +4104,7 @@ fn parse_join_constraint_unnest_alias() {
                 with_offset_alias: None,
                 with_ordinality: false,
             },
+            global: false,
             join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
                 op: BinaryOperator::Eq,
@@ -4944,4 +4947,54 @@ fn test_unicode_string_literal() {
             _ => unreachable!(),
         }
     }
+}
+
+fn check_arrow_precedence(sql: &str, arrow_operator: BinaryOperator) {
+    assert_eq!(
+        pg().verified_expr(sql),
+        Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident {
+                    value: "foo".to_string(),
+                    quote_style: None,
+                })),
+                op: arrow_operator,
+                right: Box::new(Expr::Value(Value::SingleQuotedString("bar".to_string()))),
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(Value::SingleQuotedString("spam".to_string()))),
+        }
+    )
+}
+
+#[test]
+fn arrow_precedence() {
+    check_arrow_precedence("foo -> 'bar' = 'spam'", BinaryOperator::Arrow);
+}
+
+#[test]
+fn long_arrow_precedence() {
+    check_arrow_precedence("foo ->> 'bar' = 'spam'", BinaryOperator::LongArrow);
+}
+
+#[test]
+fn arrow_cast_precedence() {
+    // check this matches postgres where you would need `(foo -> 'bar')::TEXT`
+    let stmt = pg().verified_expr("foo -> 'bar'::TEXT");
+    assert_eq!(
+        stmt,
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident {
+                value: "foo".to_string(),
+                quote_style: None,
+            })),
+            op: BinaryOperator::Arrow,
+            right: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(Value::SingleQuotedString("bar".to_string()))),
+                data_type: DataType::Text,
+                format: None,
+            }),
+        }
+    )
 }

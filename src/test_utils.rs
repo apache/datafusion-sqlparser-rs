@@ -275,6 +275,7 @@ pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTa
             if_exists,
             only: is_only,
             operations,
+            on_cluster: _,
             location: _,
         } => {
             assert_eq!(name.to_string(), expected_name);
@@ -332,6 +333,7 @@ pub fn table_with_alias(name: impl Into<String>, alias: impl Into<String>) -> Ta
 pub fn join(relation: TableFactor) -> Join {
     Join {
         relation,
+        global: false,
         join_operator: JoinOperator::Inner(JoinConstraint::Natural),
     }
 }

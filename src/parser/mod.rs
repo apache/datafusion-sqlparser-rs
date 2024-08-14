@@ -6684,6 +6684,34 @@ impl<'a> Parser<'a> {
             AlterTableOperation::DetachPartition {
                 partition: self.parse_part_or_partition()?,
             }
+        } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
+            && self.parse_keyword(Keyword::FREEZE)
+        {
+            let partition = self.parse_part_or_partition()?;
+            let with_name = if self.parse_keyword(Keyword::WITH) {
+                self.expect_keyword(Keyword::NAME)?;
+                Some(self.parse_identifier(false)?)
+            } else {
+                None
+            };
+            AlterTableOperation::FreezePartition {
+                partition,
+                with_name,
+            }
+        } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
+            && self.parse_keyword(Keyword::UNFREEZE)
+        {
+            let partition = self.parse_part_or_partition()?;
+            let with_name = if self.parse_keyword(Keyword::WITH) {
+                self.expect_keyword(Keyword::NAME)?;
+                Some(self.parse_identifier(false)?)
+            } else {
+                None
+            };
+            AlterTableOperation::UnfreezePartition {
+                partition,
+                with_name,
+            }
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

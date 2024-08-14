@@ -1079,7 +1079,7 @@ impl<'a> Parser<'a> {
                     self.parse_bigquery_struct_literal()
                 }
                 Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
-                    let expr = self.parse_subexpr(self.dialect.prec_plus_minus())?;
+                    let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
                     Ok(Expr::Prior(Box::new(expr)))
                 }
                 Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
@@ -1167,7 +1167,9 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(self.dialect.prec_mul_div_mod_op())?),
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::MulDivModOp))?,
+                    ),
                 })
             }
             tok @ Token::DoubleExclamationMark
@@ -1187,7 +1189,9 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(self.dialect.prec_plus_minus())?),
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?,
+                    ),
                 })
             }
             Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
@@ -1729,7 +1733,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_position_expr(&mut self, ident: Ident) -> Result<Expr, ParserError> {
-        let between_prec = self.dialect.prec_between();
+        let between_prec = self.dialect.prec_value(Precedence::Between);
         let position_expr = self.maybe_parse(|p| {
             // PARSE SELECT POSITION('@' in field)
             p.expect_token(&Token::LParen)?;
@@ -1983,12 +1987,14 @@ impl<'a> Parser<'a> {
                 }
                 _ => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
-                    expr: Box::new(self.parse_subexpr(self.dialect.prec_unary_not())?),
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?,
+                    ),
                 }),
             },
             _ => Ok(Expr::UnaryOp {
                 op: UnaryOperator::Not,
-                expr: Box::new(self.parse_subexpr(self.dialect.prec_unary_not())?),
+                expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
             }),
         }
     }
@@ -2661,7 +2667,9 @@ impl<'a> Parser<'a> {
                         Ok(Expr::RLike {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(self.dialect.prec_like())?),
+                            pattern: Box::new(
+                                self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?,
+                            ),
                             regexp,
                         })
                     } else if self.parse_keyword(Keyword::IN) {
@@ -2672,21 +2680,27 @@ impl<'a> Parser<'a> {
                         Ok(Expr::Like {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(self.dialect.prec_like())?),
+                            pattern: Box::new(
+                                self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?,
+                            ),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Ok(Expr::ILike {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(self.dialect.prec_like())?),
+                            pattern: Box::new(
+                                self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?,
+                            ),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keywords(&[Keyword::SIMILAR, Keyword::TO]) {
                         Ok(Expr::SimilarTo {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_subexpr(self.dialect.prec_like())?),
+                            pattern: Box::new(
+                                self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?,
+                            ),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else {
@@ -2961,9 +2975,9 @@ impl<'a> Parser<'a> {
     pub fn parse_between(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         // Stop parsing subexpressions for <low> and <high> on tokens with
         // precedence lower than that of `BETWEEN`, such as `AND`, `IS`, etc.
-        let low = self.parse_subexpr(self.dialect.prec_between())?;
+        let low = self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?;
         self.expect_keyword(Keyword::AND)?;
-        let high = self.parse_subexpr(self.dialect.prec_between())?;
+        let high = self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?;
         Ok(Expr::Between {
             expr: Box::new(expr),
             negated,

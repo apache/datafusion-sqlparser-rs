@@ -354,13 +354,18 @@ pub trait Dialect: Debug + Any {
         if let Some(precedence) = self.get_next_precedence(parser) {
             return precedence;
         }
+        macro_rules! p {
+            ($precedence:ident) => {
+                self.prec_value(Precedence::$precedence)
+            };
+        }
 
         let token = parser.peek_token();
         debug!("get_next_precedence_full() {:?}", token);
         match token.token {
-            Token::Word(w) if w.keyword == Keyword::OR => Ok(OR_PREC),
-            Token::Word(w) if w.keyword == Keyword::AND => Ok(AND_PREC),
-            Token::Word(w) if w.keyword == Keyword::XOR => Ok(XOR_PREC),
+            Token::Word(w) if w.keyword == Keyword::OR => Ok(p!(Or)),
+            Token::Word(w) if w.keyword == Keyword::AND => Ok(p!(And)),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(p!(Xor)),
 
             Token::Word(w) if w.keyword == Keyword::AT => {
                 match (
@@ -370,9 +375,9 @@ pub trait Dialect: Debug + Any {
                     (Token::Word(w), Token::Word(w2))
                         if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
                     {
-                        Ok(AT_TZ_PREC)
+                        Ok(p!(AtTz))
                     }
-                    _ => Ok(UNKNOWN_PREC),
+                    _ => Ok(self.prec_unknown()),
                 }
             }
 
@@ -382,25 +387,25 @@ pub trait Dialect: Debug + Any {
                 // it takes on the precedence of those tokens. Otherwise, it
                 // is not an infix operator, and therefore has zero
                 // precedence.
-                Token::Word(w) if w.keyword == Keyword::IN => Ok(BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(LIKE_PREC),
-                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(LIKE_PREC),
-                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(LIKE_PREC),
-                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(LIKE_PREC),
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(LIKE_PREC),
-                _ => Ok(UNKNOWN_PREC),
+                Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
+                Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
+                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+                _ => Ok(self.prec_unknown()),
             },
-            Token::Word(w) if w.keyword == Keyword::IS => Ok(IS_PREC),
-            Token::Word(w) if w.keyword == Keyword::IN => Ok(BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(LIKE_PREC),
-            Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::DIV => Ok(MUL_DIV_MOD_OP_PREC),
+            Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
+            Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
+            Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -416,20 +421,19 @@ pub trait Dialect: Debug + Any {
             | Token::DoubleTildeAsterisk
             | Token::ExclamationMarkDoubleTilde
             | Token::ExclamationMarkDoubleTildeAsterisk
-            | Token::Spaceship => Ok(EQ_PREC),
-            Token::Pipe => Ok(PIPE_PREC),
-            Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(CARET_PREC),
-            Token::Ampersand => Ok(AMPERSAND_PREC),
-            Token::Plus | Token::Minus => Ok(PLUS_MINUS_PREC),
+            | Token::Spaceship => Ok(p!(Eq)),
+            Token::Pipe => Ok(p!(Pipe)),
+            Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(p!(Caret)),
+            Token::Ampersand => Ok(p!(Ampersand)),
+            Token::Plus | Token::Minus => Ok(p!(PlusMinus)),
             Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
-                Ok(MUL_DIV_MOD_OP_PREC)
+                Ok(p!(MulDivModOp))
             }
             Token::DoubleColon
             | Token::ExclamationMark
             | Token::LBracket
             | Token::Overlap
-            | Token::CaretAt => Ok(DOUBLE_COLON_PREC),
-            // Token::Colon if (self as dyn Dialect).is::<SnowflakeDialect>() => Ok(DOUBLE_COLON_PREC),
+            | Token::CaretAt => Ok(p!(DoubleColon)),
             Token::Arrow
             | Token::LongArrow
             | Token::HashArrow
@@ -442,8 +446,8 @@ pub trait Dialect: Debug + Any {
             | Token::Question
             | Token::QuestionAnd
             | Token::QuestionPipe
-            | Token::CustomBinaryOperator(_) => Ok(PG_OTHER_PREC),
-            _ => Ok(UNKNOWN_PREC),
+            | Token::CustomBinaryOperator(_) => Ok(p!(PgOther)),
+            _ => Ok(self.prec_unknown()),
         }
     }
 
@@ -457,88 +461,57 @@ pub trait Dialect: Debug + Any {
         None
     }
 
-    // The following precedence values are used directly by `Parse` or in dialects,
-    // so have to be made public by the dialect.
-
-    /// Return the precedence of the `::` operator.
+    /// Decide the lexical Precedence of operators.
     ///
-    /// Default is 50.
-    fn prec_double_colon(&self) -> u8 {
-        DOUBLE_COLON_PREC
+    /// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
+    fn prec_value(&self, prec: Precedence) -> u8 {
+        match prec {
+            Precedence::DoubleColon => 50,
+            Precedence::AtTz => 41,
+            Precedence::MulDivModOp => 40,
+            Precedence::PlusMinus => 30,
+            Precedence::Xor => 24,
+            Precedence::Ampersand => 23,
+            Precedence::Caret => 22,
+            Precedence::Pipe => 21,
+            Precedence::Between => 20,
+            Precedence::Eq => 20,
+            Precedence::Like => 19,
+            Precedence::Is => 17,
+            Precedence::PgOther => 16,
+            Precedence::UnaryNot => 15,
+            Precedence::And => 10,
+            Precedence::Or => 5,
+        }
     }
 
-    /// Return the precedence of `*`, `/`, and `%` operators.
-    ///
-    /// Default is 40.
-    fn prec_mul_div_mod_op(&self) -> u8 {
-        MUL_DIV_MOD_OP_PREC
-    }
-
-    /// Return the precedence of the `+` and `-` operators.
-    ///
-    /// Default is 30.
-    fn prec_plus_minus(&self) -> u8 {
-        PLUS_MINUS_PREC
-    }
-
-    /// Return the precedence of the `BETWEEN` operator.
-    ///
-    /// For example `BETWEEN <low> AND <high>`
-    ///
-    /// Default is 22.
-    fn prec_between(&self) -> u8 {
-        BETWEEN_PREC
-    }
-
-    /// Return the precedence of the `LIKE` operator.
-    ///
-    /// Default is 19.
-    fn prec_like(&self) -> u8 {
-        LIKE_PREC
-    }
-
-    /// Return the precedence of the unary `NOT` operator.
-    ///
-    /// For example `NOT (a OR b)`
-    ///
-    /// Default is 15.
-    fn prec_unary_not(&self) -> u8 {
-        UNARY_NOT_PREC
-    }
-
-    /// Return the default (unknown) precedence.
-    ///
-    /// Default is 0.
     fn prec_unknown(&self) -> u8 {
-        UNKNOWN_PREC
+        0
     }
 }
 
-// Define the lexical Precedence of operators.
-//
-// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
-// higher number = higher precedence
-//
-// NOTE: The pg documentation is incomplete, e.g. the AT TIME ZONE operator
-//       actually has higher precedence than addition.
-//       See <https://postgrespro.com/list/thread-id/2673331>.
-const DOUBLE_COLON_PREC: u8 = 50;
-const AT_TZ_PREC: u8 = 41;
-const MUL_DIV_MOD_OP_PREC: u8 = 40;
-const PLUS_MINUS_PREC: u8 = 30;
-const XOR_PREC: u8 = 24;
-const AMPERSAND_PREC: u8 = 23;
-const CARET_PREC: u8 = 22;
-const PIPE_PREC: u8 = 21;
-const BETWEEN_PREC: u8 = 20;
-const EQ_PREC: u8 = 20;
-const LIKE_PREC: u8 = 19;
-const IS_PREC: u8 = 17;
-const PG_OTHER_PREC: u8 = 16;
-const UNARY_NOT_PREC: u8 = 15;
-const AND_PREC: u8 = 10;
-const OR_PREC: u8 = 5;
-const UNKNOWN_PREC: u8 = 0;
+/// This represents the operators for which precedence must be defined
+///
+/// higher number -> higher precedence
+#[derive(Debug, Clone, Copy)]
+pub enum Precedence {
+    DoubleColon,
+    AtTz,
+    MulDivModOp,
+    PlusMinus,
+    Xor,
+    Ampersand,
+    Caret,
+    Pipe,
+    Between,
+    Eq,
+    Like,
+    Is,
+    PgOther,
+    UnaryNot,
+    And,
+    Or,
+}
 
 impl dyn Dialect {
     #[inline]

@@ -12,7 +12,7 @@
 use log::debug;
 
 use crate::ast::{CommentObject, Statement};
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -89,71 +89,11 @@ impl Dialect for PostgreSqlDialect {
         let token = parser.peek_token();
         debug!("get_next_precedence() {:?}", token);
 
-        let precedence = match token.token {
-            Token::Word(w) if w.keyword == Keyword::OR => OR_PREC,
-            Token::Word(w) if w.keyword == Keyword::XOR => XOR_PREC,
-            Token::Word(w) if w.keyword == Keyword::AND => AND_PREC,
-            Token::Word(w) if w.keyword == Keyword::AT => {
-                match (
-                    parser.peek_nth_token(1).token,
-                    parser.peek_nth_token(2).token,
-                ) {
-                    (Token::Word(w), Token::Word(w2))
-                        if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
-                    {
-                        AT_TZ_PREC
-                    }
-                    _ => self.prec_unknown(),
-                }
-            }
-
-            Token::Word(w) if w.keyword == Keyword::NOT => match parser.peek_nth_token(1).token {
-                // The precedence of NOT varies depending on keyword that
-                // follows it. If it is followed by IN, BETWEEN, or LIKE,
-                // it takes on the precedence of those tokens. Otherwise, it
-                // is not an infix operator, and therefore has zero
-                // precedence.
-                Token::Word(w) if w.keyword == Keyword::IN => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::BETWEEN => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::LIKE => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::ILIKE => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::RLIKE => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::REGEXP => BETWEEN_LIKE_PREC,
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => BETWEEN_LIKE_PREC,
-                _ => self.prec_unknown(),
-            },
-            Token::Word(w) if w.keyword == Keyword::IS => IS_PREC,
-            Token::Word(w) if w.keyword == Keyword::IN => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::BETWEEN => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::LIKE => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::ILIKE => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::RLIKE => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::REGEXP => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::SIMILAR => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::OPERATOR => BETWEEN_LIKE_PREC,
-            Token::Word(w) if w.keyword == Keyword::DIV => MUL_DIV_MOD_OP_PREC,
-            Token::Word(w) if w.keyword == Keyword::COLLATE => COLLATE_PREC,
-            Token::Eq
-            | Token::Lt
-            | Token::LtEq
-            | Token::Neq
-            | Token::Gt
-            | Token::GtEq
-            | Token::DoubleEq
-            | Token::Tilde
-            | Token::TildeAsterisk
-            | Token::ExclamationMarkTilde
-            | Token::ExclamationMarkTildeAsterisk
-            | Token::DoubleTilde
-            | Token::DoubleTildeAsterisk
-            | Token::ExclamationMarkDoubleTilde
-            | Token::ExclamationMarkDoubleTildeAsterisk
-            | Token::Spaceship => EQ_PREC,
-            Token::Caret => CARET_PREC,
-            Token::Plus | Token::Minus => PLUS_MINUS_PREC,
-            Token::Mul | Token::Div | Token::Mod => MUL_DIV_MOD_OP_PREC,
-            Token::DoubleColon => DOUBLE_COLON_PREC,
-            Token::LBracket => BRACKET_PREC,
+        // we only return some custom value here when the behaviour (not merely the numeric value) differs
+        // from the default implementation
+        match token.token {
+            Token::Word(w) if w.keyword == Keyword::COLLATE => Some(Ok(COLLATE_PREC)),
+            Token::LBracket => Some(Ok(BRACKET_PREC)),
             Token::Arrow
             | Token::LongArrow
             | Token::HashArrow
@@ -173,12 +113,9 @@ impl Dialect for PostgreSqlDialect {
             | Token::Sharp
             | Token::ShiftRight
             | Token::ShiftLeft
-            | Token::Pipe
-            | Token::Ampersand
-            | Token::CustomBinaryOperator(_) => PG_OTHER_PREC,
-            _ => self.prec_unknown(),
-        };
-        Some(Ok(precedence))
+            | Token::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
+            _ => None,
+        }
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
@@ -197,24 +134,25 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
-    fn prec_mul_div_mod_op(&self) -> u8 {
-        MUL_DIV_MOD_OP_PREC
-    }
-
-    fn prec_plus_minus(&self) -> u8 {
-        PLUS_MINUS_PREC
-    }
-
-    fn prec_between(&self) -> u8 {
-        BETWEEN_LIKE_PREC
-    }
-
-    fn prec_like(&self) -> u8 {
-        BETWEEN_LIKE_PREC
-    }
-
-    fn prec_unary_not(&self) -> u8 {
-        NOT_PREC
+    fn prec_value(&self, prec: Precedence) -> u8 {
+        match prec {
+            Precedence::DoubleColon => DOUBLE_COLON_PREC,
+            Precedence::AtTz => AT_TZ_PREC,
+            Precedence::MulDivModOp => MUL_DIV_MOD_OP_PREC,
+            Precedence::PlusMinus => PLUS_MINUS_PREC,
+            Precedence::Xor => XOR_PREC,
+            Precedence::Ampersand => PG_OTHER_PREC,
+            Precedence::Caret => CARET_PREC,
+            Precedence::Pipe => PG_OTHER_PREC,
+            Precedence::Between => BETWEEN_LIKE_PREC,
+            Precedence::Eq => EQ_PREC,
+            Precedence::Like => BETWEEN_LIKE_PREC,
+            Precedence::Is => IS_PREC,
+            Precedence::PgOther => PG_OTHER_PREC,
+            Precedence::UnaryNot => NOT_PREC,
+            Precedence::And => AND_PREC,
+            Precedence::Or => OR_PREC,
+        }
     }
 }
 

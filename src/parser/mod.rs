@@ -2984,7 +2984,7 @@ impl<'a> Parser<'a> {
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
-        self.dialect.get_next_precedence_full(self)
+        self.dialect.get_next_precedence_default(self)
     }
 
     /// Return the first non-whitespace token that has not yet been processed

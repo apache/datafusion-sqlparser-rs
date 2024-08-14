@@ -500,6 +500,24 @@ pub enum ExtractSyntax {
     Comma,
 }
 
+/// The syntax used in a CEIL or FLOOR expression.
+///
+/// The `CEIL/FLOOR(<datetime value expression> TO <time unit>)` is an Amazon Kinesis Data Analytics extension.
+/// See <https://docs.aws.amazon.com/kinesisanalytics/latest/sqlref/sql-reference-ceil.html> for
+/// details.
+///
+/// Other dialects either support `CEIL/FLOOR( <expr> [, <scale>])` format or just
+/// `CEIL/FLOOR(<expr>)`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CeilFloorKind {
+    /// `CEIL( <expr> TO <DateTimeField>)`
+    DateTimeField(DateTimeField),
+    /// `CEIL( <expr> [, <scale>])`
+    Scale(Value),
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -674,16 +692,22 @@ pub enum Expr {
     /// ```sql
     /// CEIL(<expr> [TO DateTimeField])
     /// ```
+    /// ```sql
+    /// CEIL( <input_expr> [, <scale_expr> ] )
+    /// ```
     Ceil {
         expr: Box<Expr>,
-        field: DateTimeField,
+        field: CeilFloorKind,
     },
     /// ```sql
     /// FLOOR(<expr> [TO DateTimeField])
     /// ```
+    /// ```sql
+    /// FLOOR( <input_expr> [, <scale_expr> ] )
+    ///
     Floor {
         expr: Box<Expr>,
-        field: DateTimeField,
+        field: CeilFloorKind,
     },
     /// ```sql
     /// POSITION(<expr> in <expr>)
@@ -1230,20 +1254,20 @@ impl fmt::Display for Expr {
                 ExtractSyntax::From => write!(f, "EXTRACT({field} FROM {expr})"),
                 ExtractSyntax::Comma => write!(f, "EXTRACT({field}, {expr})"),
             },
-            Expr::Ceil { expr, field } => {
-                if field == &DateTimeField::NoDateTime {
+            Expr::Ceil { expr, field } => match field {
+                CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => {
                     write!(f, "CEIL({expr})")
-                } else {
-                    write!(f, "CEIL({expr} TO {field})")
                 }
-            }
-            Expr::Floor { expr, field } => {
-                if field == &DateTimeField::NoDateTime {
+                CeilFloorKind::DateTimeField(dt_field) => write!(f, "CEIL({expr} TO {dt_field})"),
+                CeilFloorKind::Scale(s) => write!(f, "CEIL({expr}, {s})"),
+            },
+            Expr::Floor { expr, field } => match field {
+                CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => {
                     write!(f, "FLOOR({expr})")
-                } else {
-                    write!(f, "FLOOR({expr} TO {field})")
                 }
-            }
+                CeilFloorKind::DateTimeField(dt_field) => write!(f, "FLOOR({expr} TO {dt_field})"),
+                CeilFloorKind::Scale(s) => write!(f, "FLOOR({expr}, {s})"),
+            },
             Expr::Position { expr, r#in } => write!(f, "POSITION({expr} IN {in})"),
             Expr::Collate { expr, collation } => write!(f, "{expr} COLLATE {collation}"),
             Expr::Nested(ast) => write!(f, "({ast})"),

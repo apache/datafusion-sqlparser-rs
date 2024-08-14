@@ -1708,12 +1708,22 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         // Parse `CEIL/FLOOR(expr)`
-        let mut field = DateTimeField::NoDateTime;
-        let keyword_to = self.parse_keyword(Keyword::TO);
-        if keyword_to {
+        let field = if self.parse_keyword(Keyword::TO) {
             // Parse `CEIL/FLOOR(expr TO DateTimeField)`
-            field = self.parse_date_time_field()?;
-        }
+            CeilFloorKind::DateTimeField(self.parse_date_time_field()?)
+        } else if self.consume_token(&Token::Comma) {
+            // Parse `CEIL/FLOOR(expr, scale)`
+            match self.parse_value()? {
+                Value::Number(n, s) => CeilFloorKind::Scale(Value::Number(n, s)),
+                _ => {
+                    return Err(ParserError::ParserError(
+                        "Scale field can only be of number type".to_string(),
+                    ))
+                }
+            }
+        } else {
+            CeilFloorKind::DateTimeField(DateTimeField::NoDateTime)
+        };
         self.expect_token(&Token::RParen)?;
         if is_ceil {
             Ok(Expr::Ceil {

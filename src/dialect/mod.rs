@@ -350,7 +350,7 @@ pub trait Dialect: Debug + Any {
     ///
     /// The default implementation is used for many dialects, but can be
     /// overridden to provide dialect-specific behavior.
-    fn get_next_precedence_full(&self, parser: &Parser) -> Result<u8, ParserError> {
+    fn get_next_precedence_default(&self, parser: &Parser) -> Result<u8, ParserError> {
         if let Some(precedence) = self.get_next_precedence(parser) {
             return precedence;
         }

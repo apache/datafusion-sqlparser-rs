@@ -53,6 +53,12 @@ pub use self::query::{
     TableAlias, TableFactor, TableFunctionArgs, TableVersion, TableWithJoins, Top, TopQuantity,
     ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
 };
+
+pub use self::trigger::{
+    TriggerEvent, TriggerExecBody, TriggerExecBodyType, TriggerObject, TriggerPeriod,
+    TriggerReferencing, TriggerReferencingType,
+};
+
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
     TrimWhereField, Value,
@@ -71,6 +77,7 @@ mod dml;
 pub mod helpers;
 mod operator;
 mod query;
+mod trigger;
 mod value;
 
 #[cfg(feature = "visitor")]
@@ -2282,7 +2289,7 @@ pub enum Statement {
     DropFunction {
         if_exists: bool,
         /// One or more function to drop
-        func_desc: Vec<DropFunctionDesc>,
+        func_desc: Vec<FunctionDesc>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
@@ -2292,7 +2299,7 @@ pub enum Statement {
     DropProcedure {
         if_exists: bool,
         /// One or more function to drop
-        proc_desc: Vec<DropFunctionDesc>,
+        proc_desc: Vec<FunctionDesc>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
@@ -2617,6 +2624,96 @@ pub enum Statement {
         /// ```
         /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_remote_function)
         remote_connection: Option<ObjectName>,
+    },
+    /// CREATE TRIGGER
+    ///
+    /// Examples:
+    ///
+    /// ```sql
+    /// CREATE TRIGGER trigger_name
+    /// BEFORE INSERT ON table_name
+    /// FOR EACH ROW
+    /// EXECUTE FUNCTION trigger_function();
+    /// ```
+    ///
+    /// Postgres: <https://www.postgresql.org/docs/current/sql-createtrigger.html>
+    CreateTrigger {
+        /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
+        ///
+        /// Example:
+        /// ```sql
+        /// CREATE OR REPLACE TRIGGER trigger_name
+        /// AFTER INSERT ON table_name
+        /// FOR EACH ROW
+        /// EXECUTE FUNCTION trigger_function();
+        /// ```
+        or_replace: bool,
+        /// The `CONSTRAINT` keyword is used to create a trigger as a constraint.
+        is_constraint: bool,
+        /// The name of the trigger to be created.
+        name: ObjectName,
+        /// Determines whether the function is called before, after, or instead of the event.
+        ///
+        /// Example of BEFORE:
+        ///
+        /// ```sql
+        /// CREATE TRIGGER trigger_name
+        /// BEFORE INSERT ON table_name
+        /// FOR EACH ROW
+        /// EXECUTE FUNCTION trigger_function();
+        /// ```
+        ///
+        /// Example of AFTER:
+        ///
+        /// ```sql
+        /// CREATE TRIGGER trigger_name
+        /// AFTER INSERT ON table_name
+        /// FOR EACH ROW
+        /// EXECUTE FUNCTION trigger_function();
+        /// ```
+        ///
+        /// Example of INSTEAD OF:
+        ///
+        /// ```sql
+        /// CREATE TRIGGER trigger_name
+        /// INSTEAD OF INSERT ON table_name
+        /// FOR EACH ROW
+        /// EXECUTE FUNCTION trigger_function();
+        /// ```
+        period: TriggerPeriod,
+        /// Multiple events can be specified using OR, such as `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
+        events: Vec<TriggerEvent>,
+        /// The table on which the trigger is to be created.
+        table_name: ObjectName,
+        /// The optional referenced table name that can be referenced via
+        /// the `FROM` keyword.
+        referenced_table_name: Option<ObjectName>,
+        /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement.
+        referencing: Vec<TriggerReferencing>,
+        /// This specifies whether the trigger function should be fired once for
+        /// every row affected by the trigger event, or just once per SQL statement.
+        trigger_object: TriggerObject,
+        /// Whether to include the `EACH` term of the `FOR EACH`, as it is optional syntax.
+        include_each: bool,
+        ///  Triggering conditions
+        condition: Option<Expr>,
+        /// Execute logic block
+        exec_body: TriggerExecBody,
+        /// The characteristic of the trigger, which include whether the trigger is `DEFERRABLE`, `INITIALLY DEFERRED`, or `INITIALLY IMMEDIATE`,
+        characteristics: Option<ConstraintCharacteristics>,
+    },
+    /// DROP TRIGGER
+    ///
+    /// ```sql
+    /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
+    /// ```
+    ///
+    DropTrigger {
+        if_exists: bool,
+        trigger_name: ObjectName,
+        table_name: ObjectName,
+        /// `CASCADE` or `RESTRICT`
+        option: Option<ReferentialAction>,
     },
     /// ```sql
     /// CREATE PROCEDURE
@@ -3391,6 +3488,71 @@ impl fmt::Display for Statement {
                 }
                 if let Some(CreateFunctionBody::AsAfterOptions(function_body)) = function_body {
                     write!(f, " AS {function_body}")?;
+                }
+                Ok(())
+            }
+            Statement::CreateTrigger {
+                or_replace,
+                is_constraint,
+                name,
+                period,
+                events,
+                table_name,
+                referenced_table_name,
+                referencing,
+                trigger_object,
+                condition,
+                include_each,
+                exec_body,
+                characteristics,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}{is_constraint}TRIGGER {name} {period}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
+                )?;
+
+                if !events.is_empty() {
+                    write!(f, " {}", display_separated(events, " OR "))?;
+                }
+                write!(f, " ON {table_name}")?;
+
+                if let Some(referenced_table_name) = referenced_table_name {
+                    write!(f, " FROM {referenced_table_name}")?;
+                }
+
+                if let Some(characteristics) = characteristics {
+                    write!(f, " {characteristics}")?;
+                }
+
+                if !referencing.is_empty() {
+                    write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
+                }
+
+                if *include_each {
+                    write!(f, " FOR EACH {trigger_object}")?;
+                } else {
+                    write!(f, " FOR {trigger_object}")?;
+                }
+                if let Some(condition) = condition {
+                    write!(f, " WHEN {condition}")?;
+                }
+                write!(f, " EXECUTE {exec_body}")
+            }
+            Statement::DropTrigger {
+                if_exists,
+                trigger_name,
+                table_name,
+                option,
+            } => {
+                write!(f, "DROP TRIGGER")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {trigger_name} ON {table_name}")?;
+                if let Some(option) = option {
+                    write!(f, " {option}")?;
                 }
                 Ok(())
             }
@@ -6026,16 +6188,16 @@ impl fmt::Display for DropFunctionOption {
     }
 }
 
-/// Function describe in DROP FUNCTION.
+/// Generic function description for DROP FUNCTION and CREATE TRIGGER.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct DropFunctionDesc {
+pub struct FunctionDesc {
     pub name: ObjectName,
     pub args: Option<Vec<OperateFunctionArg>>,
 }
 
-impl fmt::Display for DropFunctionDesc {
+impl fmt::Display for FunctionDesc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)?;
         if let Some(args) = &self.args {

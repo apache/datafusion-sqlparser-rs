@@ -3368,6 +3368,25 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
+    /// Parse a keyword-separated list of 1+ items accepted by `F`
+    pub fn parse_keyword_separated<T, F>(
+        &mut self,
+        keyword: Keyword,
+        mut f: F,
+    ) -> Result<Vec<T>, ParserError>
+    where
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+    {
+        let mut values = vec![];
+        loop {
+            values.push(f(self)?);
+            if !self.parse_keyword(keyword) {
+                break;
+            }
+        }
+        Ok(values)
+    }
+
     pub fn parse_parenthesized<T, F>(&mut self, mut f: F) -> Result<T, ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
@@ -3471,6 +3490,10 @@ impl<'a> Parser<'a> {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_replace, temporary)
+        } else if self.parse_keyword(Keyword::TRIGGER) {
+            self.parse_create_trigger(or_replace, false)
+        } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
+            self.parse_create_trigger(or_replace, true)
         } else if self.parse_keyword(Keyword::MACRO) {
             self.parse_create_macro(or_replace, temporary)
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -4061,6 +4084,180 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse statements of the DropTrigger type such as:
+    ///
+    /// ```sql
+    /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
+    /// ```
+    pub fn parse_drop_trigger(&mut self) -> Result<Statement, ParserError> {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+            self.prev_token();
+            return self.expected("an object type after DROP", self.peek_token());
+        }
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let trigger_name = self.parse_object_name(false)?;
+        self.expect_keyword(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
+        let option = self
+            .parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT])
+            .map(|keyword| match keyword {
+                Keyword::CASCADE => ReferentialAction::Cascade,
+                Keyword::RESTRICT => ReferentialAction::Restrict,
+                _ => unreachable!(),
+            });
+        Ok(Statement::DropTrigger {
+            if_exists,
+            trigger_name,
+            table_name,
+            option,
+        })
+    }
+
+    pub fn parse_create_trigger(
+        &mut self,
+        or_replace: bool,
+        is_constraint: bool,
+    ) -> Result<Statement, ParserError> {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+            self.prev_token();
+            return self.expected("an object type after CREATE", self.peek_token());
+        }
+
+        let name = self.parse_object_name(false)?;
+        let period = self.parse_trigger_period()?;
+
+        let events = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
+        self.expect_keyword(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
+
+        let referenced_table_name = if self.parse_keyword(Keyword::FROM) {
+            self.parse_object_name(true).ok()
+        } else {
+            None
+        };
+
+        let characteristics = self.parse_constraint_characteristics()?;
+
+        let mut referencing = vec![];
+        if self.parse_keyword(Keyword::REFERENCING) {
+            while let Some(refer) = self.parse_trigger_referencing()? {
+                referencing.push(refer);
+            }
+        }
+
+        self.expect_keyword(Keyword::FOR)?;
+        let include_each = self.parse_keyword(Keyword::EACH);
+        let trigger_object =
+            match self.expect_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT])? {
+                Keyword::ROW => TriggerObject::Row,
+                Keyword::STATEMENT => TriggerObject::Statement,
+                _ => unreachable!(),
+            };
+
+        let condition = self
+            .parse_keyword(Keyword::WHEN)
+            .then(|| self.parse_expr())
+            .transpose()?;
+
+        self.expect_keyword(Keyword::EXECUTE)?;
+
+        let exec_body = self.parse_trigger_exec_body()?;
+
+        Ok(Statement::CreateTrigger {
+            or_replace,
+            is_constraint,
+            name,
+            period,
+            events,
+            table_name,
+            referenced_table_name,
+            referencing,
+            trigger_object,
+            include_each,
+            condition,
+            exec_body,
+            characteristics,
+        })
+    }
+
+    pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {
+        Ok(
+            match self.expect_one_of_keywords(&[
+                Keyword::BEFORE,
+                Keyword::AFTER,
+                Keyword::INSTEAD,
+            ])? {
+                Keyword::BEFORE => TriggerPeriod::Before,
+                Keyword::AFTER => TriggerPeriod::After,
+                Keyword::INSTEAD => self
+                    .expect_keyword(Keyword::OF)
+                    .map(|_| TriggerPeriod::InsteadOf)?,
+                _ => unreachable!(),
+            },
+        )
+    }
+
+    pub fn parse_trigger_event(&mut self) -> Result<TriggerEvent, ParserError> {
+        Ok(
+            match self.expect_one_of_keywords(&[
+                Keyword::INSERT,
+                Keyword::UPDATE,
+                Keyword::DELETE,
+                Keyword::TRUNCATE,
+            ])? {
+                Keyword::INSERT => TriggerEvent::Insert,
+                Keyword::UPDATE => {
+                    if self.parse_keyword(Keyword::OF) {
+                        let cols = self.parse_comma_separated(|ident| {
+                            Parser::parse_identifier(ident, false)
+                        })?;
+                        TriggerEvent::Update(cols)
+                    } else {
+                        TriggerEvent::Update(vec![])
+                    }
+                }
+                Keyword::DELETE => TriggerEvent::Delete,
+                Keyword::TRUNCATE => TriggerEvent::Truncate,
+                _ => unreachable!(),
+            },
+        )
+    }
+
+    pub fn parse_trigger_referencing(&mut self) -> Result<Option<TriggerReferencing>, ParserError> {
+        let refer_type = match self.parse_one_of_keywords(&[Keyword::OLD, Keyword::NEW]) {
+            Some(Keyword::OLD) if self.parse_keyword(Keyword::TABLE) => {
+                TriggerReferencingType::OldTable
+            }
+            Some(Keyword::NEW) if self.parse_keyword(Keyword::TABLE) => {
+                TriggerReferencingType::NewTable
+            }
+            _ => {
+                return Ok(None);
+            }
+        };
+
+        let is_as = self.parse_keyword(Keyword::AS);
+        let transition_relation_name = self.parse_object_name(false)?;
+        Ok(Some(TriggerReferencing {
+            refer_type,
+            is_as,
+            transition_relation_name,
+        }))
+    }
+
+    pub fn parse_trigger_exec_body(&mut self) -> Result<TriggerExecBody, ParserError> {
+        Ok(TriggerExecBody {
+            exec_type: match self
+                .expect_one_of_keywords(&[Keyword::FUNCTION, Keyword::PROCEDURE])?
+            {
+                Keyword::FUNCTION => TriggerExecBodyType::Function,
+                Keyword::PROCEDURE => TriggerExecBodyType::Procedure,
+                _ => unreachable!(),
+            },
+            func_desc: self.parse_function_desc()?,
+        })
+    }
+
     pub fn parse_create_macro(
         &mut self,
         or_replace: bool,
@@ -4509,9 +4706,11 @@ impl<'a> Parser<'a> {
             return self.parse_drop_procedure();
         } else if self.parse_keyword(Keyword::SECRET) {
             return self.parse_drop_secret(temporary, persistent);
+        } else if self.parse_keyword(Keyword::TRIGGER) {
+            return self.parse_drop_trigger();
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, PROCEDURE, STAGE or SEQUENCE after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, PROCEDURE, STAGE, TRIGGER, SECRET or SEQUENCE after DROP",
                 self.peek_token(),
             );
         };
@@ -4550,7 +4749,7 @@ impl<'a> Parser<'a> {
     /// ```
     fn parse_drop_function(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let func_desc = self.parse_comma_separated(Parser::parse_drop_function_desc)?;
+        let func_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
         let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
             Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
             Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
@@ -4569,7 +4768,7 @@ impl<'a> Parser<'a> {
     /// ```
     fn parse_drop_procedure(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let proc_desc = self.parse_comma_separated(Parser::parse_drop_function_desc)?;
+        let proc_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
         let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
             Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
             Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
@@ -4583,7 +4782,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_drop_function_desc(&mut self) -> Result<DropFunctionDesc, ParserError> {
+    fn parse_function_desc(&mut self) -> Result<FunctionDesc, ParserError> {
         let name = self.parse_object_name(false)?;
 
         let args = if self.consume_token(&Token::LParen) {
@@ -4598,7 +4797,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(DropFunctionDesc { name, args })
+        Ok(FunctionDesc { name, args })
     }
 
     /// See [DuckDB Docs](https://duckdb.org/docs/sql/statements/create_secret.html) for more details.
@@ -5882,11 +6081,7 @@ impl<'a> Parser<'a> {
     pub fn parse_constraint_characteristics(
         &mut self,
     ) -> Result<Option<ConstraintCharacteristics>, ParserError> {
-        let mut cc = ConstraintCharacteristics {
-            deferrable: None,
-            initially: None,
-            enforced: None,
-        };
+        let mut cc = ConstraintCharacteristics::default();
 
         loop {
             if cc.deferrable.is_none() && self.parse_keywords(&[Keyword::NOT, Keyword::DEFERRABLE])
@@ -7285,6 +7480,7 @@ impl<'a> Parser<'a> {
                     let field_defs = self.parse_click_house_tuple_def()?;
                     Ok(DataType::Tuple(field_defs))
                 }
+                Keyword::TRIGGER => Ok(DataType::Trigger),
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;

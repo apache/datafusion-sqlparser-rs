@@ -87,6 +87,20 @@ pub enum AlterTableOperation {
         // See `AttachPartition` for more details
         partition: Partition,
     },
+    /// `FREEZE PARTITION <partition_expr>`
+    /// Note: this is a ClickHouse-specific operation, please refer to
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#freeze-partition)
+    FreezePartition {
+        partition: Partition,
+        with_name: Option<Ident>,
+    },
+    /// `UNFREEZE PARTITION <partition_expr>`
+    /// Note: this is a ClickHouse-specific operation, please refer to
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#unfreeze-partition)
+    UnfreezePartition {
+        partition: Partition,
+        with_name: Option<Ident>,
+    },
     /// `DROP PRIMARY KEY`
     ///
     /// Note: this is a MySQL-specific operation.
@@ -378,6 +392,26 @@ impl fmt::Display for AlterTableOperation {
                     "SET TBLPROPERTIES({})",
                     display_comma_separated(table_properties)
                 )
+            }
+            AlterTableOperation::FreezePartition {
+                partition,
+                with_name,
+            } => {
+                write!(f, "FREEZE {partition}")?;
+                if let Some(name) = with_name {
+                    write!(f, " WITH NAME {name}")?;
+                }
+                Ok(())
+            }
+            AlterTableOperation::UnfreezePartition {
+                partition,
+                with_name,
+            } => {
+                write!(f, "UNFREEZE {partition}")?;
+                if let Some(name) = with_name {
+                    write!(f, " WITH NAME {name}")?;
+                }
+                Ok(())
             }
         }
     }

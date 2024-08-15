@@ -495,7 +495,7 @@ pub trait Dialect: Debug + Any {
     /// Defaults to false.
     ///
     /// If true, the following statement is valid: `DESCRIBE TABLE my_table`
-    /// If false, the following statement is valid: `DESCRIBE my_table`
+    /// If false, the following statements are valid: `DESCRIBE my_table` and `DESCRIBE table`
     fn describe_requires_table_keyword(&self) -> bool {
         false
     }

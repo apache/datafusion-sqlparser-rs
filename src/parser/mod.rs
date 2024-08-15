@@ -8185,15 +8185,20 @@ impl<'a> Parser<'a> {
                 format,
             }),
             _ => {
-                let mut hive_format = None;
-                match self.parse_one_of_keywords(&[Keyword::EXTENDED, Keyword::FORMATTED]) {
-                    Some(Keyword::EXTENDED) => hive_format = Some(HiveDescribeFormat::Extended),
-                    Some(Keyword::FORMATTED) => hive_format = Some(HiveDescribeFormat::Formatted),
-                    _ => {}
-                }
+                let hive_format =
+                    match self.parse_one_of_keywords(&[Keyword::EXTENDED, Keyword::FORMATTED]) {
+                        Some(Keyword::EXTENDED) => Some(HiveDescribeFormat::Extended),
+                        Some(Keyword::FORMATTED) => Some(HiveDescribeFormat::Formatted),
+                        _ => None,
+                    };
 
-                // only allow to use TABLE keyword for DESC|DESCRIBE statement
-                let has_table_keyword = self.parse_keyword(Keyword::TABLE);
+                let has_table_keyword = if self.dialect.describe_requires_table_keyword() {
+                    // only allow to use TABLE keyword for DESC|DESCRIBE statement
+                    self.parse_keyword(Keyword::TABLE)
+                } else {
+                    false
+                };
+
                 let table_name = self.parse_object_name(false)?;
                 Ok(Statement::ExplainTable {
                     describe_alias,

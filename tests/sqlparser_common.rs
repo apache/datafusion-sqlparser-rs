@@ -4301,29 +4301,16 @@ fn parse_explain_table() {
     validate_explain("EXPLAIN test_identifier", DescribeAlias::Explain, false);
     validate_explain("DESCRIBE test_identifier", DescribeAlias::Describe, false);
     validate_explain("DESC test_identifier", DescribeAlias::Desc, false);
-    validate_explain(
-        "EXPLAIN TABLE test_identifier",
-        DescribeAlias::Explain,
-        true,
-    );
-    validate_explain(
-        "DESCRIBE TABLE test_identifier",
-        DescribeAlias::Describe,
-        true,
-    );
-    validate_explain("DESC TABLE test_identifier", DescribeAlias::Desc, true);
 }
 
 #[test]
 fn explain_describe() {
     verified_stmt("DESCRIBE test.table");
-    verified_stmt("DESCRIBE TABLE test.table");
 }
 
 #[test]
 fn explain_desc() {
     verified_stmt("DESC test.table");
-    verified_stmt("DESC TABLE test.table");
 }
 
 #[test]

@@ -22,16 +22,6 @@ use sqlparser::parser::{ParserError, ParserOptions};
 use test_utils::*;
 
 #[test]
-fn test_struct() {
-    // nested struct
-    let canonical = r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, s STRUCT<a1 INTEGER, a2 VARCHAR>>[])"#;
-    let sql = r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, s STRUCT<a1 INTEGER, a2 VARCHAR>>[])"#;
-    let select = bigquery().parse_sql_statements(sql).unwrap().pop().unwrap();
-    // TODO: '>>' is incorrect parsed in bigquery syntax
-    assert_ne!(select.to_string(), canonical);
-}
-
-#[test]
 fn parse_literal_string() {
     let sql = concat!(
         "SELECT ",
@@ -499,28 +489,34 @@ fn parse_nested_data_types() {
                 vec![
                     ColumnDef {
                         name: Ident::new("x"),
-                        data_type: DataType::Struct(vec![
-                            StructField {
-                                field_name: Some("a".into()),
-                                field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(
-                                    Box::new(DataType::Int64,)
-                                ))
-                            },
-                            StructField {
-                                field_name: Some("b".into()),
-                                field_type: DataType::Bytes(Some(42))
-                            },
-                        ]),
+                        data_type: DataType::Struct(
+                            vec![
+                                StructField {
+                                    field_name: Some("a".into()),
+                                    field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(
+                                        Box::new(DataType::Int64,)
+                                    ))
+                                },
+                                StructField {
+                                    field_name: Some("b".into()),
+                                    field_type: DataType::Bytes(Some(42))
+                                },
+                            ],
+                            StructBracketKind::AngleBrakets
+                        ),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("y"),
                         data_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
-                            DataType::Struct(vec![StructField {
-                                field_name: None,
-                                field_type: DataType::Int64,
-                            }]),
+                            DataType::Struct(
+                                vec![StructField {
+                                    field_name: None,
+                                    field_type: DataType::Int64,
+                                }],
+                                StructBracketKind::AngleBrakets
+                            ),
                         ))),
                         collation: None,
                         options: vec![],
@@ -718,10 +714,13 @@ fn parse_typed_struct_syntax_bigquery() {
                 },
                 StructField {
                     field_name: Some("str".into()),
-                    field_type: DataType::Struct(vec![StructField {
-                        field_name: None,
-                        field_type: DataType::Bool
-                    }])
+                    field_type: DataType::Struct(
+                        vec![StructField {
+                            field_name: None,
+                            field_type: DataType::Bool
+                        }],
+                        StructBracketKind::AngleBrakets
+                    )
                 },
             ]
         },
@@ -740,12 +739,15 @@ fn parse_typed_struct_syntax_bigquery() {
             fields: vec![
                 StructField {
                     field_name: Some("x".into()),
-                    field_type: DataType::Struct(Default::default())
+                    field_type: DataType::Struct(
+                        Default::default(),
+                        StructBracketKind::AngleBrakets
+                    )
                 },
                 StructField {
                     field_name: Some("y".into()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
-                        DataType::Struct(Default::default())
+                        DataType::Struct(Default::default(), StructBracketKind::AngleBrakets)
                     )))
                 },
             ]
@@ -1023,10 +1025,13 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                 },
                 StructField {
                     field_name: Some("str".into()),
-                    field_type: DataType::Struct(vec![StructField {
-                        field_name: None,
-                        field_type: DataType::Bool
-                    }])
+                    field_type: DataType::Struct(
+                        vec![StructField {
+                            field_name: None,
+                            field_type: DataType::Bool
+                        }],
+                        StructBracketKind::AngleBrakets
+                    )
                 },
             ]
         },
@@ -1045,12 +1050,15 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             fields: vec![
                 StructField {
                     field_name: Some("x".into()),
-                    field_type: DataType::Struct(Default::default())
+                    field_type: DataType::Struct(
+                        Default::default(),
+                        StructBracketKind::AngleBrakets
+                    )
                 },
                 StructField {
                     field_name: Some("y".into()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
-                        DataType::Struct(Default::default())
+                        DataType::Struct(Default::default(), StructBracketKind::AngleBrakets)
                     )))
                 },
             ]

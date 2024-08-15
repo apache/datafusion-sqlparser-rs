@@ -2266,6 +2266,23 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    /// Duckdb Struct Data Type <https://duckdb.org/docs/sql/data_types/struct.html#retrieving-from-structs>
+    fn parse_duckdb_struct_type_def(&mut self) -> Result<Vec<StructField>, ParserError> {
+        self.expect_keyword(Keyword::STRUCT)?;
+        self.expect_token(&Token::LParen)?;
+        let struct_body = self.parse_comma_separated(|parser| {
+            let field_name = parser.parse_identifier(false)?;
+            let field_type = parser.parse_data_type()?;
+
+            Ok(StructField {
+                field_name: Some(field_name),
+                field_type,
+            })
+        });
+        self.expect_token(&Token::RParen)?;
+        struct_body
+    }
+
     /// Parse a field definition in a [struct] or [tuple].
     /// Syntax:
     ///
@@ -7495,12 +7512,20 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
+                Keyword::STRUCT if dialect_of!(self is DuckDbDialect) => {
+                    self.prev_token();
+                    let field_defs = self.parse_duckdb_struct_type_def()?;
+                    Ok(DataType::Struct(field_defs, StructBracketKind::Parentheses))
+                }
                 Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
                         self.parse_struct_type_def(Self::parse_struct_field_def)?;
                     trailing_bracket = _trailing_bracket;
-                    Ok(DataType::Struct(field_defs))
+                    Ok(DataType::Struct(
+                        field_defs,
+                        StructBracketKind::AngleBrackets,
+                    ))
                 }
                 Keyword::UNION if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     self.prev_token();

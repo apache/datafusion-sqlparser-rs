@@ -302,7 +302,7 @@ pub enum DataType {
     ///
     /// [hive]: https://docs.cloudera.com/cdw-runtime/cloud/impala-sql-reference/topics/impala-struct.html
     /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
-    Struct(Vec<StructField>),
+    Struct(Vec<StructField>, StructBracketKind),
     /// Union
     ///
     /// [duckdb]: https://duckdb.org/docs/sql/data_types/union.html
@@ -517,9 +517,16 @@ impl fmt::Display for DataType {
                 }
                 write!(f, ")")
             }
-            DataType::Struct(fields) => {
+            DataType::Struct(fields, bracket) => {
                 if !fields.is_empty() {
-                    write!(f, "STRUCT<{}>", display_comma_separated(fields))
+                    match bracket {
+                        StructBracketKind::Parentheses => {
+                            write!(f, "STRUCT({})", display_comma_separated(fields))
+                        }
+                        StructBracketKind::AngleBrackets => {
+                            write!(f, "STRUCT<{}>", display_comma_separated(fields))
+                        }
+                    }
                 } else {
                     write!(f, "STRUCT")
                 }
@@ -616,6 +623,17 @@ fn format_clickhouse_datetime_precision_and_timezone(
     write!(f, ")")?;
 
     Ok(())
+}
+
+/// Type of brackets used for `STRUCT` literals.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum StructBracketKind {
+    /// Example: `STRUCT(a INT, b STRING)`
+    Parentheses,
+    /// Example: `STRUCT<a INT, b STRING>`
+    AngleBrackets,
 }
 
 /// Timestamp and Time data types information about TimeZone formatting.

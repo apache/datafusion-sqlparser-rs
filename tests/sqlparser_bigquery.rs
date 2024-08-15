@@ -489,28 +489,34 @@ fn parse_nested_data_types() {
                 vec![
                     ColumnDef {
                         name: Ident::new("x"),
-                        data_type: DataType::Struct(vec![
-                            StructField {
-                                field_name: Some("a".into()),
-                                field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(
-                                    Box::new(DataType::Int64,)
-                                ))
-                            },
-                            StructField {
-                                field_name: Some("b".into()),
-                                field_type: DataType::Bytes(Some(42))
-                            },
-                        ]),
+                        data_type: DataType::Struct(
+                            vec![
+                                StructField {
+                                    field_name: Some("a".into()),
+                                    field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(
+                                        Box::new(DataType::Int64,)
+                                    ))
+                                },
+                                StructField {
+                                    field_name: Some("b".into()),
+                                    field_type: DataType::Bytes(Some(42))
+                                },
+                            ],
+                            StructBracketKind::AngleBrackets
+                        ),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("y"),
                         data_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
-                            DataType::Struct(vec![StructField {
-                                field_name: None,
-                                field_type: DataType::Int64,
-                            }]),
+                            DataType::Struct(
+                                vec![StructField {
+                                    field_name: None,
+                                    field_type: DataType::Int64,
+                                }],
+                                StructBracketKind::AngleBrackets
+                            ),
                         ))),
                         collation: None,
                         options: vec![],
@@ -708,10 +714,13 @@ fn parse_typed_struct_syntax_bigquery() {
                 },
                 StructField {
                     field_name: Some("str".into()),
-                    field_type: DataType::Struct(vec![StructField {
-                        field_name: None,
-                        field_type: DataType::Bool
-                    }])
+                    field_type: DataType::Struct(
+                        vec![StructField {
+                            field_name: None,
+                            field_type: DataType::Bool
+                        }],
+                        StructBracketKind::AngleBrackets
+                    )
                 },
             ]
         },
@@ -730,12 +739,15 @@ fn parse_typed_struct_syntax_bigquery() {
             fields: vec![
                 StructField {
                     field_name: Some("x".into()),
-                    field_type: DataType::Struct(Default::default())
+                    field_type: DataType::Struct(
+                        Default::default(),
+                        StructBracketKind::AngleBrackets
+                    )
                 },
                 StructField {
                     field_name: Some("y".into()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
-                        DataType::Struct(Default::default())
+                        DataType::Struct(Default::default(), StructBracketKind::AngleBrackets)
                     )))
                 },
             ]
@@ -1013,10 +1025,13 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                 },
                 StructField {
                     field_name: Some("str".into()),
-                    field_type: DataType::Struct(vec![StructField {
-                        field_name: None,
-                        field_type: DataType::Bool
-                    }])
+                    field_type: DataType::Struct(
+                        vec![StructField {
+                            field_name: None,
+                            field_type: DataType::Bool
+                        }],
+                        StructBracketKind::AngleBrackets
+                    )
                 },
             ]
         },
@@ -1035,12 +1050,15 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             fields: vec![
                 StructField {
                     field_name: Some("x".into()),
-                    field_type: DataType::Struct(Default::default())
+                    field_type: DataType::Struct(
+                        Default::default(),
+                        StructBracketKind::AngleBrackets
+                    )
                 },
                 StructField {
                     field_name: Some("y".into()),
                     field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
-                        DataType::Struct(Default::default())
+                        DataType::Struct(Default::default(), StructBracketKind::AngleBrackets)
                     )))
                 },
             ]

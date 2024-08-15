@@ -620,11 +620,14 @@ fn format_clickhouse_datetime_precision_and_timezone(
     Ok(())
 }
 
+/// Type of brackets used for `STRUCT` literals.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum StructBracketKind {
+    /// Example: `STRUCT(a INT, b STRING)`
     Parentheses,
+    /// Example: `STRUCT<a INT, b STRING>`
     AngleBrackets,
 }
 

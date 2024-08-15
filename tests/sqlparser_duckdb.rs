@@ -37,17 +37,14 @@ fn test_struct() {
     // basic struct
     let sql = r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER))"#;
     let statement = duckdb().verified_stmt(sql);
-    assert_eq!(statement.to_string(), sql);
 
     // struct array
     let sql = r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER)[])"#;
     let statement = duckdb().verified_stmt(sql);
-    assert_eq!(statement.to_string(), sql);
 
     // nested struct
     let sql = r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, s STRUCT(a1 INTEGER, a2 VARCHAR))[])"#;
     let statement = duckdb().verified_stmt(sql);
-    assert_eq!(statement.to_string(), sql);
 
     // failing test
     let sql_list = vec![

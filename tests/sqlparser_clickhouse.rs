@@ -1217,6 +1217,89 @@ fn parse_create_table_on_commit_and_as_query() {
 }
 
 #[test]
+fn parse_freeze_and_unfreeze_partition() {
+    // test cases without `WITH NAME`
+    for operation_name in &["FREEZE", "UNFREEZE"] {
+        let sql = format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14'");
+
+        let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
+            "2024-08-14".to_string(),
+        )));
+        match clickhouse_and_generic().verified_stmt(&sql) {
+            Statement::AlterTable { operations, .. } => {
+                assert_eq!(operations.len(), 1);
+                let expected_operation = if operation_name == &"FREEZE" {
+                    AlterTableOperation::FreezePartition {
+                        partition: expected_partition,
+                        with_name: None,
+                    }
+                } else {
+                    AlterTableOperation::UnfreezePartition {
+                        partition: expected_partition,
+                        with_name: None,
+                    }
+                };
+                assert_eq!(operations[0], expected_operation);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    // test case with `WITH NAME`
+    for operation_name in &["FREEZE", "UNFREEZE"] {
+        let sql =
+            format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14' WITH NAME 'hello'");
+        match clickhouse_and_generic().verified_stmt(&sql) {
+            Statement::AlterTable { operations, .. } => {
+                assert_eq!(operations.len(), 1);
+                let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
+                    "2024-08-14".to_string(),
+                )));
+                let expected_operation = if operation_name == &"FREEZE" {
+                    AlterTableOperation::FreezePartition {
+                        partition: expected_partition,
+                        with_name: Some(Ident::with_quote('\'', "hello")),
+                    }
+                } else {
+                    AlterTableOperation::UnfreezePartition {
+                        partition: expected_partition,
+                        with_name: Some(Ident::with_quote('\'', "hello")),
+                    }
+                };
+                assert_eq!(operations[0], expected_operation);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    // negative cases
+    for operation_name in &["FREEZE", "UNFREEZE"] {
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {operation_name} PARTITION").as_str())
+                .unwrap_err(),
+            ParserError("Expected: an expression:, found: EOF".to_string())
+        );
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(
+                    format!("ALTER TABLE t0 {operation_name} PARTITION p0 WITH").as_str()
+                )
+                .unwrap_err(),
+            ParserError("Expected: NAME, found: EOF".to_string())
+        );
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(
+                    format!("ALTER TABLE t0 {operation_name} PARTITION p0 WITH NAME").as_str()
+                )
+                .unwrap_err(),
+            ParserError("Expected: identifier, found: EOF".to_string())
+        );
+    }
+}
+
+#[test]
 fn parse_select_table_function_settings() {
     fn check_settings(sql: &str, expected: &TableFunctionArgs) {
         match clickhouse_and_generic().verified_stmt(sql) {

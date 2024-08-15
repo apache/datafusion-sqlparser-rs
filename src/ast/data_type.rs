@@ -319,6 +319,10 @@ pub enum DataType {
     /// [`SQLiteDialect`](crate::dialect::SQLiteDialect), from statements such
     /// as `CREATE TABLE t1 (a)`.
     Unspecified,
+    /// Trigger data type, returned by functions associated with triggers
+    ///
+    /// [postgresql]: https://www.postgresql.org/docs/current/plpgsql-trigger.html
+    Trigger,
 }
 
 impl fmt::Display for DataType {
@@ -550,6 +554,7 @@ impl fmt::Display for DataType {
                 write!(f, "Nested({})", display_comma_separated(fields))
             }
             DataType::Unspecified => Ok(()),
+            DataType::Trigger => write!(f, "TRIGGER"),
         }
     }
 }

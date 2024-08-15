@@ -55,6 +55,8 @@ fn test_struct() {
         r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER>)"#,
         r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, i INTEGER>)"#,
         r#"CREATE TABLE t1 (s STRUCT v VARCHAR, i INTEGER )"#,
+        r#"CREATE TABLE t1 (s STRUCT VARCHAR, i INTEGER )"#,
+        r#"CREATE TABLE t1 (s STRUCT (VARCHAR, INTEGER))"#,
     ];
 
     for sql in sql_list {

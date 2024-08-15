@@ -2236,11 +2236,11 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::STRUCT)?;
         self.expect_token(&Token::LParen)?;
         let struct_body = self.parse_comma_separated(|parser| {
-            let field_name = parser.parse_identifier(false).ok();
+            let field_name = parser.parse_identifier(false)?;
             let field_type = parser.parse_data_type()?;
 
             Ok(StructField {
-                field_name,
+                field_name: Some(field_name),
                 field_type,
             })
         });

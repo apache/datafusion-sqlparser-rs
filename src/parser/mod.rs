@@ -7258,7 +7258,7 @@ impl<'a> Parser<'a> {
                     trailing_bracket = _trailing_bracket;
                     Ok(DataType::Struct(
                         field_defs,
-                        StructBracketKind::AngleBrakets,
+                        StructBracketKind::AngleBrackets,
                     ))
                 }
                 Keyword::UNION if dialect_of!(self is DuckDbDialect | GenericDialect) => {

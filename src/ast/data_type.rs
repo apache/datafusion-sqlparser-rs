@@ -519,7 +519,7 @@ impl fmt::Display for DataType {
                         StructBracketKind::Parentheses => {
                             write!(f, "STRUCT({})", display_comma_separated(fields))
                         }
-                        StructBracketKind::AngleBrakets => {
+                        StructBracketKind::AngleBrackets => {
                             write!(f, "STRUCT<{}>", display_comma_separated(fields))
                         }
                     }
@@ -625,7 +625,7 @@ fn format_clickhouse_datetime_precision_and_timezone(
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum StructBracketKind {
     Parentheses,
-    AngleBrakets,
+    AngleBrackets,
 }
 
 /// Timestamp and Time data types information about TimeZone formatting.

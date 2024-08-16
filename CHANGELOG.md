@@ -39,6 +39,7 @@ DataFusion project: https://github.com/sqlparser-rs/sqlparser-rs/issues/1294
 * Support `TABLE` keyword in `DESC|DESCRIBE|EXPLAIN TABLE` statement (#1351) - Thanks @git-hulk
 
 # Changed
+* Only require `DESCRIBE TABLE` for Snowflake and ClickHouse dialect (#1386) - Thanks @ alamb
 * Rename (unreleased) `get_next_precedence_full` to `get_next_precedence_default` (#1378) - Thanks @samuelcolvin
 * Use local GitHub Action to replace setup-rust-action (#1371) - Thanks @git-hulk
 * Simplify arrow_cast tests (#1367) - Thanks @alamb

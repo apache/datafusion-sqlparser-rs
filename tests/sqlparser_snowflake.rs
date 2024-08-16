@@ -2292,3 +2292,33 @@ fn test_parse_position() {
     snowflake().verified_query("SELECT position('an', 'banana', 1)");
     snowflake().verified_query("SELECT n, h, POSITION(n IN h) FROM pos");
 }
+
+#[test]
+fn explain_describe() {
+    snowflake().verified_stmt("DESCRIBE test.table");
+    snowflake().verified_stmt("DESCRIBE TABLE test.table");
+}
+
+#[test]
+fn explain_desc() {
+    snowflake().verified_stmt("DESC test.table");
+    snowflake().verified_stmt("DESC TABLE test.table");
+}
+
+#[test]
+fn parse_explain_table() {
+    match snowflake().verified_stmt("EXPLAIN TABLE test_identifier") {
+        Statement::ExplainTable {
+            describe_alias,
+            hive_format,
+            has_table_keyword,
+            table_name,
+        } => {
+            assert_eq!(describe_alias, DescribeAlias::Explain);
+            assert_eq!(hive_format, None);
+            assert_eq!(has_table_keyword, true);
+            assert_eq!("test_identifier", table_name.to_string());
+        }
+        _ => panic!("Unexpected Statement, must be ExplainTable"),
+    }
+}

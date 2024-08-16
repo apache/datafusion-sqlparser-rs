@@ -154,6 +154,10 @@ impl Dialect for SnowflakeDialect {
             _ => None,
         }
     }
+
+    fn describe_requires_table_keyword(&self) -> bool {
+        true
+    }
 }
 
 /// Parse snowflake create table statement.

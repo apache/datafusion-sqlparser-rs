@@ -485,8 +485,19 @@ pub trait Dialect: Debug + Any {
         }
     }
 
+    /// Returns the precedence when the precedence is otherwise unknown
     fn prec_unknown(&self) -> u8 {
         0
+    }
+
+    /// Returns true if this dialect requires the `TABLE` keyword after `DESCRIBE`
+    ///
+    /// Defaults to false.
+    ///
+    /// If true, the following statement is valid: `DESCRIBE TABLE my_table`
+    /// If false, the following statements are valid: `DESCRIBE my_table` and `DESCRIBE table`
+    fn describe_requires_table_keyword(&self) -> bool {
+        false
     }
 }
 

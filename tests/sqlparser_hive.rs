@@ -21,7 +21,7 @@ use sqlparser::ast::{
     UnaryOperator, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
+use sqlparser::parser::ParserError;
 use sqlparser::test_utils::*;
 
 #[test]
@@ -35,18 +35,11 @@ fn parse_table_create() {
     hive().verified_stmt(serdeproperties);
 }
 
-fn generic(options: Option<ParserOptions>) -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
-        options,
-    }
-}
-
 #[test]
 fn parse_describe() {
-    let describe = r#"DESCRIBE namespace.`table`"#;
-    hive().verified_stmt(describe);
-    generic(None).verified_stmt(describe);
+    hive_and_generic().verified_stmt(r#"DESCRIBE namespace.`table`"#);
+    hive_and_generic().verified_stmt(r#"DESCRIBE namespace.table"#);
+    hive_and_generic().verified_stmt(r#"DESCRIBE table"#);
 }
 
 #[test]
@@ -411,6 +404,13 @@ fn parse_delimited_identifiers() {
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],
+        options: None,
+    }
+}
+
+fn hive_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(HiveDialect {}), Box::new(GenericDialect {})],
         options: None,
     }
 }

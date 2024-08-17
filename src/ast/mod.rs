@@ -966,6 +966,40 @@ impl<T> Deref for OneOrManyWithParens<T> {
     }
 }
 
+impl<T> AsRef<[T]> for OneOrManyWithParens<T> {
+    fn as_ref(&self) -> &[T] {
+        self
+    }
+}
+
+impl<'a, T> IntoIterator for &'a OneOrManyWithParens<T> {
+    type Item = &'a T;
+    type IntoIter = core::slice::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<T> IntoIterator for OneOrManyWithParens<T> {
+    type Item = T;
+
+    #[cfg(not(feature = "std"))]
+    type IntoIter = core::iter::Chain<core::option::IntoIter<T>, alloc::vec::IntoIter<T>>;
+
+    #[cfg(feature = "std")]
+    type IntoIter = core::iter::Chain<core::option::IntoIter<T>, std::vec::IntoIter<T>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let (one, many) = match self {
+            OneOrManyWithParens::One(one) => (Some(one), Vec::new()),
+            OneOrManyWithParens::Many(many) => (None, many),
+        };
+
+        one.into_iter().chain(many)
+    }
+}
+
 impl<T> fmt::Display for OneOrManyWithParens<T>
 where
     T: fmt::Display,
@@ -6718,5 +6752,116 @@ mod tests {
             fractional_seconds_precision: Some(3),
         });
         assert_eq!("INTERVAL '5' SECOND (1, 3)", format!("{interval}"));
+    }
+
+    #[test]
+    fn test_one_or_many_with_parens_deref() {
+        use core::ops::Index;
+
+        let one = OneOrManyWithParens::One("a");
+
+        assert_eq!(one.deref(), &["a"]);
+        assert_eq!(<OneOrManyWithParens<_> as Deref>::deref(&one), &["a"]);
+
+        assert_eq!(one[0], "a");
+        assert_eq!(one.index(0), &"a");
+        assert_eq!(
+            <<OneOrManyWithParens<_> as Deref>::Target as Index<usize>>::index(&one, 0),
+            &"a"
+        );
+
+        assert_eq!(one.len(), 1);
+        assert_eq!(<OneOrManyWithParens<_> as Deref>::Target::len(&one), 1);
+
+        let many1 = OneOrManyWithParens::Many(vec!["b"]);
+
+        assert_eq!(many1.deref(), &["b"]);
+        assert_eq!(<OneOrManyWithParens<_> as Deref>::deref(&many1), &["b"]);
+
+        assert_eq!(many1[0], "b");
+        assert_eq!(many1.index(0), &"b");
+        assert_eq!(
+            <<OneOrManyWithParens<_> as Deref>::Target as Index<usize>>::index(&many1, 0),
+            &"b"
+        );
+
+        assert_eq!(many1.len(), 1);
+        assert_eq!(<OneOrManyWithParens<_> as Deref>::Target::len(&many1), 1);
+
+        let many2 = OneOrManyWithParens::Many(vec!["c", "d"]);
+
+        assert_eq!(many2.deref(), &["c", "d"]);
+        assert_eq!(
+            <OneOrManyWithParens<_> as Deref>::deref(&many2),
+            &["c", "d"]
+        );
+
+        assert_eq!(many2[0], "c");
+        assert_eq!(many2.index(0), &"c");
+        assert_eq!(
+            <<OneOrManyWithParens<_> as Deref>::Target as Index<usize>>::index(&many2, 0),
+            &"c"
+        );
+
+        assert_eq!(many2[1], "d");
+        assert_eq!(many2.index(1), &"d");
+        assert_eq!(
+            <<OneOrManyWithParens<_> as Deref>::Target as Index<usize>>::index(&many2, 1),
+            &"d"
+        );
+
+        assert_eq!(many2.len(), 2);
+        assert_eq!(<OneOrManyWithParens<_> as Deref>::Target::len(&many2), 2);
+    }
+
+    #[test]
+    fn test_one_or_many_with_parens_as_ref() {
+        let one = OneOrManyWithParens::One("a");
+
+        assert_eq!(one.as_ref(), &["a"]);
+        assert_eq!(<OneOrManyWithParens<_> as AsRef<_>>::as_ref(&one), &["a"]);
+
+        let many1 = OneOrManyWithParens::Many(vec!["b"]);
+
+        assert_eq!(many1.as_ref(), &["b"]);
+        assert_eq!(<OneOrManyWithParens<_> as AsRef<_>>::as_ref(&many1), &["b"]);
+
+        let many2 = OneOrManyWithParens::Many(vec!["c", "d"]);
+
+        assert_eq!(many2.as_ref(), &["c", "d"]);
+        assert_eq!(
+            <OneOrManyWithParens<_> as AsRef<_>>::as_ref(&many2),
+            &["c", "d"]
+        );
+    }
+
+    #[test]
+    fn test_one_or_many_with_parens_ref_into_iter() {
+        let one = OneOrManyWithParens::One("a");
+
+        assert_eq!(Vec::from_iter(&one), vec![&"a"]);
+
+        let many1 = OneOrManyWithParens::Many(vec!["b"]);
+
+        assert_eq!(Vec::from_iter(&many1), vec![&"b"]);
+
+        let many2 = OneOrManyWithParens::Many(vec!["c", "d"]);
+
+        assert_eq!(Vec::from_iter(&many2), vec![&"c", &"d"]);
+    }
+
+    #[test]
+    fn test_one_or_many_with_parens_value_into_iter() {
+        let one = OneOrManyWithParens::One("a");
+
+        assert_eq!(Vec::from_iter(one), vec!["a"]);
+
+        let many1 = OneOrManyWithParens::Many(vec!["b"]);
+
+        assert_eq!(Vec::from_iter(many1), vec!["b"]);
+
+        let many2 = OneOrManyWithParens::Many(vec!["c", "d"]);
+
+        assert_eq!(Vec::from_iter(many2), vec!["c", "d"]);
     }
 }

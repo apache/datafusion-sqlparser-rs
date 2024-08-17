@@ -10,6 +10,44 @@ changes that break via addition as "Added".
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.50.0] 2024-08-15
+Again, huge props to @iffyio @jmhain and @lovasoa for their help reviewing and merging PRs 🙏.
+Without them this project would not be possible. 
+
+Reminder:  are in the process of moving sqlparser to governed as part of the Apache
+DataFusion project: https://github.com/sqlparser-rs/sqlparser-rs/issues/1294
+
+# Fixed
+* Clippy 1.80 warnings (#1357) - Thanks @lovasoa
+
+# Added
+* Support `STRUCT` and list of structs for DuckDB dialect (#1372) - Thanks @jayzhan211
+* Support custom lexical precedence in PostgreSQL dialect (#1379) - Thanks @samuelcolvin
+* Support `FREEZE|UNFREEZE PARTITION` syntax for ClickHouse (#1380) - Thanks @git-hulk
+* Support scale in `CEIL` and `FLOOR` functions (#1377) - Thanks @seve-martinez
+* Support `CREATE TRIGGER` and `DROP TRIGGER` statements (#1352) - Thanks @LucaCappelletti94
+* Support `EXTRACT` syntax for snowflake (#1374) - Thanks @seve-martinez
+* Support `ATTACH` / `DETACH PARTITION` for ClickHouse (#1362) - Thanks @git-hulk
+* Support Dialect level precedence, update Postgres Dialect to match Postgres (#1360) - Thanks @samuelcolvin
+* Support parsing empty map literal syntax for DuckDB and Generic dialects (#1361) - Thanks @goldmedal
+* Support `SETTINGS` clause for ClickHouse table-valued functions (#1358) - Thanks @Jesse-Bakker
+* Support `OPTIMIZE TABLE` statement for ClickHouse (#1359) - Thanks @git-hulk
+* Support `ON CLUSTER` in `ALTER TABLE` for ClickHouse (#1342) - Thanks @git-hulk
+* Support `GLOBAL` keyword before the join operator (#1353) - Thanks @git-hulk
+* Support postgres String Constants with Unicode Escapes (#1355) - Thanks @lovasoa
+* Support position with normal function call syntax for Snowflake  (#1341) - Thanks @jmhain
+* Support `TABLE` keyword in `DESC|DESCRIBE|EXPLAIN TABLE` statement (#1351) - Thanks @git-hulk
+
+# Changed
+* Only require `DESCRIBE TABLE` for Snowflake and ClickHouse dialect (#1386) - Thanks @ alamb
+* Rename (unreleased) `get_next_precedence_full` to `get_next_precedence_default` (#1378) - Thanks @samuelcolvin
+* Use local GitHub Action to replace setup-rust-action (#1371) - Thanks @git-hulk
+* Simplify arrow_cast tests (#1367) - Thanks @alamb
+* Update version of GitHub Actions (#1363) - Thanks @git-hulk
+* Make `Parser::maybe_parse` pub (#1364) - Thanks @Jesse-Bakker
+* Improve comments on 1Dialect` (#1366) - Thanks @alamb
+
+
 ## [0.49.0] 2024-07-23
 As always, huge props to @iffyio @jmhain and @lovasoa for their help reviewing and merging PRs!
 

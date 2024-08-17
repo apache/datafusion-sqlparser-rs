@@ -33,6 +33,118 @@ fn duckdb_and_generic() -> TestedDialects {
 }
 
 #[test]
+fn test_struct() {
+    // s STRUCT(v VARCHAR, i INTEGER)
+    let struct_type1 = DataType::Struct(
+        vec![
+            StructField {
+                field_name: Some(Ident::new("v")),
+                field_type: DataType::Varchar(None),
+            },
+            StructField {
+                field_name: Some(Ident::new("i")),
+                field_type: DataType::Integer(None),
+            },
+        ],
+        StructBracketKind::Parentheses,
+    );
+
+    // basic struct
+    let statement = duckdb().verified_stmt(r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER))"#);
+    assert_eq!(
+        column_defs(statement),
+        vec![ColumnDef {
+            name: "s".into(),
+            data_type: struct_type1.clone(),
+            collation: None,
+            options: vec![],
+        }]
+    );
+
+    // struct array
+    let statement = duckdb().verified_stmt(r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER)[])"#);
+    assert_eq!(
+        column_defs(statement),
+        vec![ColumnDef {
+            name: "s".into(),
+            data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(struct_type1),
+                None
+            )),
+            collation: None,
+            options: vec![],
+        }]
+    );
+
+    // s STRUCT(v VARCHAR, s STRUCT(a1 INTEGER, a2 VARCHAR))
+    let struct_type2 = DataType::Struct(
+        vec![
+            StructField {
+                field_name: Some(Ident::new("v")),
+                field_type: DataType::Varchar(None),
+            },
+            StructField {
+                field_name: Some(Ident::new("s")),
+                field_type: DataType::Struct(
+                    vec![
+                        StructField {
+                            field_name: Some(Ident::new("a1")),
+                            field_type: DataType::Integer(None),
+                        },
+                        StructField {
+                            field_name: Some(Ident::new("a2")),
+                            field_type: DataType::Varchar(None),
+                        },
+                    ],
+                    StructBracketKind::Parentheses,
+                ),
+            },
+        ],
+        StructBracketKind::Parentheses,
+    );
+
+    // nested struct
+    let statement = duckdb().verified_stmt(
+        r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, s STRUCT(a1 INTEGER, a2 VARCHAR))[])"#,
+    );
+
+    assert_eq!(
+        column_defs(statement),
+        vec![ColumnDef {
+            name: "s".into(),
+            data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                Box::new(struct_type2),
+                None
+            )),
+            collation: None,
+            options: vec![],
+        }]
+    );
+
+    // failing test (duckdb does not support bracket syntax)
+    let sql_list = vec![
+        r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER)))"#,
+        r#"CREATE TABLE t1 (s STRUCT(v VARCHAR, i INTEGER>)"#,
+        r#"CREATE TABLE t1 (s STRUCT<v VARCHAR, i INTEGER>)"#,
+        r#"CREATE TABLE t1 (s STRUCT v VARCHAR, i INTEGER )"#,
+        r#"CREATE TABLE t1 (s STRUCT VARCHAR, i INTEGER )"#,
+        r#"CREATE TABLE t1 (s STRUCT (VARCHAR, INTEGER))"#,
+    ];
+
+    for sql in sql_list {
+        duckdb().parse_sql_statements(sql).unwrap_err();
+    }
+}
+
+/// Returns the ColumnDefinitions from a CreateTable statement
+fn column_defs(statement: Statement) -> Vec<ColumnDef> {
+    match statement {
+        Statement::CreateTable(CreateTable { columns, .. }) => columns,
+        _ => panic!("Expected CreateTable"),
+    }
+}
+
+#[test]
 fn test_select_wildcard_with_exclude() {
     let select = duckdb().verified_only_select("SELECT * EXCLUDE (col_a) FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {

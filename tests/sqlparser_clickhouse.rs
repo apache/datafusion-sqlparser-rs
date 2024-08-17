@@ -1217,6 +1217,89 @@ fn parse_create_table_on_commit_and_as_query() {
 }
 
 #[test]
+fn parse_freeze_and_unfreeze_partition() {
+    // test cases without `WITH NAME`
+    for operation_name in &["FREEZE", "UNFREEZE"] {
+        let sql = format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14'");
+
+        let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
+            "2024-08-14".to_string(),
+        )));
+        match clickhouse_and_generic().verified_stmt(&sql) {
+            Statement::AlterTable { operations, .. } => {
+                assert_eq!(operations.len(), 1);
+                let expected_operation = if operation_name == &"FREEZE" {
+                    AlterTableOperation::FreezePartition {
+                        partition: expected_partition,
+                        with_name: None,
+                    }
+                } else {
+                    AlterTableOperation::UnfreezePartition {
+                        partition: expected_partition,
+                        with_name: None,
+                    }
+                };
+                assert_eq!(operations[0], expected_operation);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    // test case with `WITH NAME`
+    for operation_name in &["FREEZE", "UNFREEZE"] {
+        let sql =
+            format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14' WITH NAME 'hello'");
+        match clickhouse_and_generic().verified_stmt(&sql) {
+            Statement::AlterTable { operations, .. } => {
+                assert_eq!(operations.len(), 1);
+                let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
+                    "2024-08-14".to_string(),
+                )));
+                let expected_operation = if operation_name == &"FREEZE" {
+                    AlterTableOperation::FreezePartition {
+                        partition: expected_partition,
+                        with_name: Some(Ident::with_quote('\'', "hello")),
+                    }
+                } else {
+                    AlterTableOperation::UnfreezePartition {
+                        partition: expected_partition,
+                        with_name: Some(Ident::with_quote('\'', "hello")),
+                    }
+                };
+                assert_eq!(operations[0], expected_operation);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    // negative cases
+    for operation_name in &["FREEZE", "UNFREEZE"] {
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {operation_name} PARTITION").as_str())
+                .unwrap_err(),
+            ParserError("Expected: an expression:, found: EOF".to_string())
+        );
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(
+                    format!("ALTER TABLE t0 {operation_name} PARTITION p0 WITH").as_str()
+                )
+                .unwrap_err(),
+            ParserError("Expected: NAME, found: EOF".to_string())
+        );
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(
+                    format!("ALTER TABLE t0 {operation_name} PARTITION p0 WITH NAME").as_str()
+                )
+                .unwrap_err(),
+            ParserError("Expected: identifier, found: EOF".to_string())
+        );
+    }
+}
+
+#[test]
 fn parse_select_table_function_settings() {
     fn check_settings(sql: &str, expected: &TableFunctionArgs) {
         match clickhouse_and_generic().verified_stmt(sql) {
@@ -1290,6 +1373,36 @@ fn parse_select_table_function_settings() {
         clickhouse_and_generic()
             .parse_sql_statements(sql)
             .expect_err("Expected: SETTINGS key = value, found: ");
+    }
+}
+
+#[test]
+fn explain_describe() {
+    clickhouse().verified_stmt("DESCRIBE test.table");
+    clickhouse().verified_stmt("DESCRIBE TABLE test.table");
+}
+
+#[test]
+fn explain_desc() {
+    clickhouse().verified_stmt("DESC test.table");
+    clickhouse().verified_stmt("DESC TABLE test.table");
+}
+
+#[test]
+fn parse_explain_table() {
+    match clickhouse().verified_stmt("EXPLAIN TABLE test_identifier") {
+        Statement::ExplainTable {
+            describe_alias,
+            hive_format,
+            has_table_keyword,
+            table_name,
+        } => {
+            pretty_assertions::assert_eq!(describe_alias, DescribeAlias::Explain);
+            pretty_assertions::assert_eq!(hive_format, None);
+            pretty_assertions::assert_eq!(has_table_keyword, true);
+            pretty_assertions::assert_eq!("test_identifier", table_name.to_string());
+        }
+        _ => panic!("Unexpected Statement, must be ExplainTable"),
     }
 }
 

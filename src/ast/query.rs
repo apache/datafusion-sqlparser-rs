@@ -68,16 +68,7 @@ impl fmt::Display for Query {
         }
         write!(f, "{}", self.body)?;
         if let Some(ref order_by) = self.order_by {
-            write!(f, " ORDER BY")?;
-            if !order_by.exprs.is_empty() {
-                write!(f, " {}", display_comma_separated(&order_by.exprs))?;
-            }
-            if let Some(ref interpolate) = order_by.interpolate {
-                match &interpolate.exprs {
-                    Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
-                    None => write!(f, " INTERPOLATE")?,
-                }
-            }
+            write!(f, " {order_by}")?;
         }
         if let Some(ref limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
@@ -102,6 +93,33 @@ impl fmt::Display for Query {
         }
         if let Some(ref format) = self.format_clause {
             write!(f, " {}", format)?;
+        }
+        Ok(())
+    }
+}
+
+/// Query syntax for ClickHouse ADD PROJECTION statement.
+/// Its syntax is similar to SELECT statement, but it is used to add a new projection to a table.
+/// Syntax is `SELECT <COLUMN LIST EXPR> [GROUP BY] [ORDER BY]`
+///
+/// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#add-projection)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ProjectionSelect {
+    pub projection: Vec<SelectItem>,
+    pub order_by: Option<OrderBy>,
+    pub group_by: Option<GroupByExpr>,
+}
+
+impl fmt::Display for ProjectionSelect {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SELECT {}", display_comma_separated(&self.projection))?;
+        if let Some(ref group_by) = self.group_by {
+            write!(f, " {group_by}")?;
+        }
+        if let Some(ref order_by) = self.order_by {
+            write!(f, " {order_by}")?;
         }
         Ok(())
     }
@@ -1715,6 +1733,22 @@ pub struct OrderBy {
     ///
     /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
     pub interpolate: Option<Interpolate>,
+}
+
+impl fmt::Display for OrderBy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ORDER BY")?;
+        if !self.exprs.is_empty() {
+            write!(f, " {}", display_comma_separated(&self.exprs))?;
+        }
+        if let Some(ref interpolate) = self.interpolate {
+            match &interpolate.exprs {
+                Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
+                None => write!(f, " INTERPOLATE")?,
+            }
+        }
+        Ok(())
+    }
 }
 
 /// An `ORDER BY` expression

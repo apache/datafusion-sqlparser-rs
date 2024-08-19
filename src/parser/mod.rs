@@ -6424,10 +6424,36 @@ impl<'a> Parser<'a> {
         Ok(Partition::Partitions(partitions))
     }
 
+    pub fn parse_projection_select(&mut self) -> Result<ProjectionSelect, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        self.expect_keyword(Keyword::SELECT)?;
+        let projection = self.parse_projection()?;
+        let group_by = self.parse_optional_group_by()?;
+        let order_by = self.parse_optional_order_by()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(ProjectionSelect {
+            projection,
+            group_by,
+            order_by,
+        })
+    }
+
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 AlterTableOperation::AddConstraint(constraint)
+            } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
+                && self.parse_keyword(Keyword::PROJECTION)
+            {
+                let if_not_exists =
+                    self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+                let name = self.parse_identifier(false)?;
+                let query = self.parse_projection_select()?;
+                AlterTableOperation::AddProjection {
+                    if_not_exists,
+                    name,
+                    select: query,
+                }
             } else {
                 let if_not_exists =
                     self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -7672,6 +7698,66 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_optional_group_by(&mut self) -> Result<Option<GroupByExpr>, ParserError> {
+        if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
+            let expressions = if self.parse_keyword(Keyword::ALL) {
+                None
+            } else {
+                Some(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+            };
+
+            let mut modifiers = vec![];
+            if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                loop {
+                    if !self.parse_keyword(Keyword::WITH) {
+                        break;
+                    }
+                    let keyword = self.expect_one_of_keywords(&[
+                        Keyword::ROLLUP,
+                        Keyword::CUBE,
+                        Keyword::TOTALS,
+                    ])?;
+                    modifiers.push(match keyword {
+                        Keyword::ROLLUP => GroupByWithModifier::Rollup,
+                        Keyword::CUBE => GroupByWithModifier::Cube,
+                        Keyword::TOTALS => GroupByWithModifier::Totals,
+                        _ => {
+                            return parser_err!(
+                                "BUG: expected to match GroupBy modifier keyword",
+                                self.peek_token().location
+                            )
+                        }
+                    });
+                }
+            }
+            let group_by = match expressions {
+                None => GroupByExpr::All(modifiers),
+                Some(exprs) => GroupByExpr::Expressions(exprs, modifiers),
+            };
+            Ok(Some(group_by))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn parse_optional_order_by(&mut self) -> Result<Option<OrderBy>, ParserError> {
+        if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            let order_by_exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+            let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                self.parse_interpolations()?
+            } else {
+                None
+            };
+
+            Ok(Some(OrderBy {
+                exprs: order_by_exprs,
+                interpolate,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Parse a possibly qualified, possibly quoted identifier, e.g.
     /// `foo` or `myschema."table"
     ///
@@ -8264,21 +8350,7 @@ impl<'a> Parser<'a> {
         } else {
             let body = self.parse_boxed_query_body(self.dialect.prec_unknown())?;
 
-            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                let order_by_exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
-                let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
-                    self.parse_interpolations()?
-                } else {
-                    None
-                };
-
-                Some(OrderBy {
-                    exprs: order_by_exprs,
-                    interpolate,
-                })
-            } else {
-                None
-            };
+            let order_by = self.parse_optional_order_by()?;
 
             let mut limit = None;
             let mut offset = None;
@@ -8746,44 +8818,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
-            let expressions = if self.parse_keyword(Keyword::ALL) {
-                None
-            } else {
-                Some(self.parse_comma_separated(Parser::parse_group_by_expr)?)
-            };
-
-            let mut modifiers = vec![];
-            if dialect_of!(self is ClickHouseDialect | GenericDialect) {
-                loop {
-                    if !self.parse_keyword(Keyword::WITH) {
-                        break;
-                    }
-                    let keyword = self.expect_one_of_keywords(&[
-                        Keyword::ROLLUP,
-                        Keyword::CUBE,
-                        Keyword::TOTALS,
-                    ])?;
-                    modifiers.push(match keyword {
-                        Keyword::ROLLUP => GroupByWithModifier::Rollup,
-                        Keyword::CUBE => GroupByWithModifier::Cube,
-                        Keyword::TOTALS => GroupByWithModifier::Totals,
-                        _ => {
-                            return parser_err!(
-                                "BUG: expected to match GroupBy modifier keyword",
-                                self.peek_token().location
-                            )
-                        }
-                    });
-                }
-            }
-            match expressions {
-                None => GroupByExpr::All(modifiers),
-                Some(exprs) => GroupByExpr::Expressions(exprs, modifiers),
-            }
-        } else {
-            GroupByExpr::Expressions(vec![], vec![])
-        };
+        let group_by = self
+            .parse_optional_group_by()?
+            .unwrap_or_else(|| GroupByExpr::Expressions(vec![], vec![]));
 
         let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?

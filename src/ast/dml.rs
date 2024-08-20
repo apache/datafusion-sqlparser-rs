@@ -45,6 +45,7 @@ pub struct CreateIndex {
     pub if_not_exists: bool,
     pub include: Vec<Ident>,
     pub nulls_distinct: Option<bool>,
+    /// WITH clause: https://www.postgresql.org/docs/current/sql-createindex.html
     pub with: Vec<Expr>,
     pub predicate: Option<Expr>,
 }

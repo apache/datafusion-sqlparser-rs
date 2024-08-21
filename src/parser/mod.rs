@@ -6437,6 +6437,16 @@ impl<'a> Parser<'a> {
             order_by,
         })
     }
+    pub fn parse_alter_table_add_projection(&mut self) -> Result<AlterTableOperation, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_identifier(false)?;
+        let query = self.parse_projection_select()?;
+        Ok(AlterTableOperation::AddProjection {
+            if_not_exists,
+            name,
+            select: query,
+        })
+    }
 
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
@@ -6445,15 +6455,7 @@ impl<'a> Parser<'a> {
             } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
                 && self.parse_keyword(Keyword::PROJECTION)
             {
-                let if_not_exists =
-                    self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-                let name = self.parse_identifier(false)?;
-                let query = self.parse_projection_select()?;
-                AlterTableOperation::AddProjection {
-                    if_not_exists,
-                    name,
-                    select: query,
-                }
+                return self.parse_alter_table_add_projection();
             } else {
                 let if_not_exists =
                     self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);

@@ -7524,7 +7524,7 @@ fn test_create_index_with_using_function() {
 }
 
 #[test]
-fn test_create_index_with_with_function() {
+fn test_create_index_with_with_clause() {
     let sql = "CREATE UNIQUE INDEX title_idx ON films(title) WITH (fillfactor = 70, single_param)";
     let indexed_columns = vec![OrderByExpr {
         expr: Expr::Identifier(Ident::new("title")),

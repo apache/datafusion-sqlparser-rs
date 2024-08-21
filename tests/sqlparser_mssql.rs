@@ -621,6 +621,42 @@ fn parse_mssql_declare() {
     );
 }
 
+#[test]
+fn parse_use() {
+    assert_eq!(
+        ms().verified_stmt("USE mydb"),
+        Statement::Use {
+            db_name: Some(Ident::new("mydb")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        ms().verified_stmt("USE DATABASE"),
+        Statement::Use {
+            db_name: Some(Ident::new("DATABASE")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        ms().verified_stmt("USE SCHEMA"),
+        Statement::Use {
+            db_name: Some(Ident::new("SCHEMA")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        ms().verified_stmt("USE CATALOG"),
+        Statement::Use {
+            db_name: Some(Ident::new("CATALOG")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+}
+
 fn ms() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MsSqlDialect {})],

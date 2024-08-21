@@ -9225,8 +9225,63 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_use(&mut self) -> Result<Statement, ParserError> {
-        let db_name = self.parse_identifier(false)?;
-        Ok(Statement::Use { db_name })
+        // What should be treated as keyword in given dialect
+        let allowed_keywords = if dialect_of!(self is HiveDialect) {
+            vec![Keyword::DEFAULT]
+        } else if dialect_of!(self is DatabricksDialect) {
+            vec![Keyword::CATALOG, Keyword::DATABASE, Keyword::SCHEMA]
+        } else if dialect_of!(self is SnowflakeDialect) {
+            vec![Keyword::DATABASE, Keyword::SCHEMA]
+        } else {
+            vec![]
+        };
+        let parsed_keyword = self.parse_one_of_keywords(&allowed_keywords);
+
+        // Hive dialect accepts USE DEFAULT; statement without any db specified
+        if dialect_of!(self is HiveDialect) && parsed_keyword == Some(Keyword::DEFAULT) {
+            return Ok(Statement::Use {
+                db_name: None,
+                schema_name: None,
+                keyword: Some("DEFAULT".to_string()),
+            });
+        }
+
+        // Parse the object name, which might be a single identifier or fully qualified name (e.g., x.y)
+        let parts = self.parse_object_name(false)?.0;
+        let (db_name, schema_name) = match parts.len() {
+            1 => {
+                // Single identifier found
+                if dialect_of!(self is DatabricksDialect) {
+                    if parsed_keyword == Some(Keyword::CATALOG) {
+                        // Databricks: CATALOG keyword provided, treat as database name
+                        (Some(parts[0].clone()), None)
+                    } else {
+                        // Databricks: DATABASE, SCHEMA or no keyword provided, treat as schema name
+                        (None, Some(parts[0].clone()))
+                    }
+                } else if dialect_of!(self is SnowflakeDialect)
+                    && parsed_keyword == Some(Keyword::SCHEMA)
+                {
+                    // Snowflake: SCHEMA keyword provided, treat as schema name
+                    (None, Some(parts[0].clone()))
+                } else {
+                    // Other dialects: treat as database name by default
+                    (Some(parts[0].clone()), None)
+                }
+            }
+            2 => (Some(parts[0].clone()), Some(parts[1].clone())),
+            _ => {
+                return Err(ParserError::ParserError(
+                    "Invalid format in the USE statement".to_string(),
+                ))
+            }
+        };
+
+        Ok(Statement::Use {
+            db_name,
+            schema_name,
+            keyword: parsed_keyword.map(|kw| format!("{:?}", kw)),
+        })
     }
 
     pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {

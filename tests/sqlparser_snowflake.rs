@@ -2322,3 +2322,63 @@ fn parse_explain_table() {
         _ => panic!("Unexpected Statement, must be ExplainTable"),
     }
 }
+
+#[test]
+fn parse_use() {
+    std::assert_eq!(
+        snowflake().verified_stmt("USE mydb"),
+        Statement::Use {
+            db_name: Some(Ident::new("mydb")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    std::assert_eq!(
+        snowflake().verified_stmt("USE mydb.my_schema"),
+        Statement::Use {
+            db_name: Some(Ident::new("mydb")),
+            schema_name: Some(Ident::new("my_schema")),
+            keyword: None
+        }
+    );
+    std::assert_eq!(
+        snowflake().verified_stmt("USE DATABASE mydb"),
+        Statement::Use {
+            db_name: Some(Ident::new("mydb")),
+            schema_name: None,
+            keyword: Some("DATABASE".to_string()),
+        }
+    );
+    std::assert_eq!(
+        snowflake().verified_stmt("USE SCHEMA my_schema"),
+        Statement::Use {
+            db_name: None,
+            schema_name: Some(Ident::new("my_schema")),
+            keyword: Some("SCHEMA".to_string())
+        }
+    );
+    std::assert_eq!(
+        snowflake().verified_stmt("USE SCHEMA mydb.my_schema"),
+        Statement::Use {
+            db_name: Some(Ident::new("mydb")),
+            schema_name: Some(Ident::new("my_schema")),
+            keyword: Some("SCHEMA".to_string())
+        }
+    );
+    std::assert_eq!(
+        snowflake().verified_stmt("USE CATALOG"),
+        Statement::Use {
+            db_name: Some(Ident::new("CATALOG")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+
+    let invalid_cases = ["USE SCHEMA", "USE DATABASE"];
+    for sql in &invalid_cases {
+        std::assert_eq!(
+            snowflake().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+        );
+    }
+}

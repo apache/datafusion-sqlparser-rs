@@ -447,7 +447,33 @@ fn parse_use() {
     assert_eq!(
         mysql_and_generic().verified_stmt("USE mydb"),
         Statement::Use {
-            db_name: Ident::new("mydb")
+            db_name: Some(Ident::new("mydb")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("USE DATABASE"),
+        Statement::Use {
+            db_name: Some(Ident::new("DATABASE")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("USE SCHEMA"),
+        Statement::Use {
+            db_name: Some(Ident::new("SCHEMA")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("USE CATALOG"),
+        Statement::Use {
+            db_name: Some(Ident::new("CATALOG")),
+            schema_name: None,
+            keyword: None
         }
     );
 }

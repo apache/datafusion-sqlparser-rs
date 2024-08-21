@@ -137,6 +137,7 @@ define_keywords!(
     CASCADED,
     CASE,
     CAST,
+    CATALOG,
     CEIL,
     CEILING,
     CENTURY,

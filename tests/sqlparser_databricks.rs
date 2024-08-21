@@ -189,3 +189,55 @@ fn test_values_clause() {
     // TODO: support this example from https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-values.html#examples
     // databricks().verified_query("VALUES 1, 2, 3");
 }
+
+#[test]
+fn parse_use() {
+    assert_eq!(
+        databricks().verified_stmt("USE my_schema"),
+        Statement::Use {
+            db_name: None,
+            schema_name: Some(Ident::new("my_schema")),
+            keyword: None
+        }
+    );
+    assert_eq!(
+        databricks().verified_stmt("USE CATALOG my_catalog"),
+        Statement::Use {
+            db_name: Some(Ident::new("my_catalog")),
+            schema_name: None,
+            keyword: Some("CATALOG".to_string())
+        }
+    );
+    assert_eq!(
+        databricks().verified_stmt("USE CATALOG 'my_catalog'"),
+        Statement::Use {
+            db_name: Some(Ident::with_quote('\'', "my_catalog")),
+            schema_name: None,
+            keyword: Some("CATALOG".to_string())
+        }
+    );
+    assert_eq!(
+        databricks().verified_stmt("USE DATABASE my_schema"),
+        Statement::Use {
+            db_name: None,
+            schema_name: Some(Ident::new("my_schema")),
+            keyword: Some("DATABASE".to_string())
+        }
+    );
+    assert_eq!(
+        databricks().verified_stmt("USE SCHEMA my_schema"),
+        Statement::Use {
+            db_name: None,
+            schema_name: Some(Ident::new("my_schema")),
+            keyword: Some("SCHEMA".to_string())
+        }
+    );
+
+    let invalid_cases = ["USE SCHEMA", "USE DATABASE", "USE CATALOG"];
+    for sql in &invalid_cases {
+        assert_eq!(
+            databricks().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+        );
+    }
+}

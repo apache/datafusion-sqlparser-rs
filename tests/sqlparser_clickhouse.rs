@@ -1161,6 +1161,42 @@ fn test_prewhere() {
 }
 
 #[test]
+fn parse_use() {
+    assert_eq!(
+        clickhouse().verified_stmt("USE mydb"),
+        Statement::Use {
+            db_name: Some(Ident::new("mydb")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        clickhouse().verified_stmt("USE DATABASE"),
+        Statement::Use {
+            db_name: Some(Ident::new("DATABASE")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        clickhouse().verified_stmt("USE SCHEMA"),
+        Statement::Use {
+            db_name: Some(Ident::new("SCHEMA")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        clickhouse().verified_stmt("USE CATALOG"),
+        Statement::Use {
+            db_name: Some(Ident::new("CATALOG")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+}
+
+#[test]
 fn test_query_with_format_clause() {
     let format_options = vec!["TabSeparated", "JSONCompact", "NULL"];
     for format in &format_options {

@@ -2515,11 +2515,13 @@ pub enum Statement {
     /// Note: this is a MySQL-specific statement.
     ShowCollation { filter: Option<ShowStatementFilter> },
     /// ```sql
-    /// USE
+    /// USE [DATABASE|SCHEMA|CATALOG|...] [<db_name>.<schema_name>|<db_name>|<schema_name>]
     /// ```
-    ///
-    /// Note: This is a MySQL-specific statement.
-    Use { db_name: Ident },
+    Use {
+        db_name: Option<Ident>,
+        schema_name: Option<Ident>,
+        keyword: Option<String>,
+    },
     /// ```sql
     /// START  [ TRANSACTION | WORK ] | START TRANSACTION } ...
     /// ```
@@ -4125,8 +4127,26 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Use { db_name } => {
-                write!(f, "USE {db_name}")?;
+            Statement::Use {
+                db_name,
+                schema_name,
+                keyword,
+            } => {
+                write!(f, "USE")?;
+
+                if let Some(kw) = keyword.as_ref() {
+                    write!(f, " {}", kw)?;
+                }
+
+                if let Some(db_name) = db_name {
+                    write!(f, " {}", db_name)?;
+                    if let Some(schema_name) = schema_name {
+                        write!(f, ".{}", schema_name)?;
+                    }
+                } else if let Some(schema_name) = schema_name {
+                    write!(f, " {}", schema_name)?;
+                }
+
                 Ok(())
             }
             Statement::ShowCollation { filter } => {

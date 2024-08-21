@@ -756,3 +756,55 @@ fn test_duckdb_union_datatype() {
         stmt
     );
 }
+
+#[test]
+fn parse_use() {
+    std::assert_eq!(
+        duckdb().verified_stmt("USE mydb"),
+        Statement::Use {
+            db_name: Some(Ident::new("mydb")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    std::assert_eq!(
+        duckdb().verified_stmt("USE mydb.my_schema"),
+        Statement::Use {
+            db_name: Some(Ident::new("mydb")),
+            schema_name: Some(Ident::new("my_schema")),
+            keyword: None
+        }
+    );
+    assert_eq!(
+        duckdb().verified_stmt("USE DATABASE"),
+        Statement::Use {
+            db_name: Some(Ident::new("DATABASE")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        duckdb().verified_stmt("USE SCHEMA"),
+        Statement::Use {
+            db_name: Some(Ident::new("SCHEMA")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        duckdb().verified_stmt("USE CATALOG"),
+        Statement::Use {
+            db_name: Some(Ident::new("CATALOG")),
+            schema_name: None,
+            keyword: None
+        }
+    );
+    assert_eq!(
+        duckdb().verified_stmt("USE CATALOG.SCHEMA"),
+        Statement::Use {
+            db_name: Some(Ident::new("CATALOG")),
+            schema_name: Some(Ident::new("SCHEMA")),
+            keyword: None
+        }
+    );
+}

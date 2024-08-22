@@ -10467,3 +10467,25 @@ fn test_group_by_nothing() {
         );
     }
 }
+
+#[test]
+fn test_extract_seconds() {
+    let sql = "SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)";
+    let dialects = all_dialects_except(|d| d.allow_extract_custom());
+    let err = dialects.parse_sql_statements(sql).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Expected: date/time field, found: seconds"
+    );
+}
+
+#[test]
+fn test_extract_seconds_single_quote() {
+    let sql = r#"SELECT EXTRACT('seconds' FROM '2 seconds'::INTERVAL)"#;
+    let dialects = all_dialects_except(|d| d.allow_extract_single_quotes());
+    let err = dialects.parse_sql_statements(sql).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Expected: date/time field, found: 'seconds'"
+    );
+}

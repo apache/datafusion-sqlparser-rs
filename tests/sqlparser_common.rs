@@ -4954,8 +4954,10 @@ fn parse_interval() {
         expr_from_projection(only(&select.projection)),
     );
 
+
     let sql = "SELECT INTERVAL 1 + 1 DAY";
-    let select = verified_only_select(sql);
+    let all_except_pg = all_dialects_except(|d| d.is::<PostgreSqlDialect>());
+    let select = all_except_pg.verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::BinaryOp {

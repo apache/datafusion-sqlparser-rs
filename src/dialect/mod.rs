@@ -482,6 +482,7 @@ pub trait Dialect: Debug + Any {
             Precedence::UnaryNot => 15,
             Precedence::And => 10,
             Precedence::Or => 5,
+            Precedence::Interval => 4,
         }
     }
 
@@ -522,6 +523,7 @@ pub enum Precedence {
     UnaryNot,
     And,
     Or,
+    Interval,
 }
 
 impl dyn Dialect {

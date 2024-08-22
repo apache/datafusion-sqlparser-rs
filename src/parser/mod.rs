@@ -897,7 +897,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_interval_expr(&mut self) -> Result<Expr, ParserError> {
-        let precedence = self.dialect.prec_unknown();
+        let precedence = self.dialect.prec_value(Precedence::Interval);
         let mut expr = self.parse_prefix()?;
 
         loop {

@@ -21,6 +21,8 @@ use crate::tokenizer::Token;
 #[derive(Debug)]
 pub struct PostgreSqlDialect {}
 
+// matches <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE>
+const INTERVAL_COLON_PREC: u8 = 150;
 const DOUBLE_COLON_PREC: u8 = 140;
 const BRACKET_PREC: u8 = 130;
 const COLLATE_PREC: u8 = 120;
@@ -136,6 +138,7 @@ impl Dialect for PostgreSqlDialect {
 
     fn prec_value(&self, prec: Precedence) -> u8 {
         match prec {
+            Precedence::Interval => INTERVAL_COLON_PREC,
             Precedence::DoubleColon => DOUBLE_COLON_PREC,
             Precedence::AtTz => AT_TZ_PREC,
             Precedence::MulDivModOp => MUL_DIV_MOD_OP_PREC,

@@ -31,7 +31,7 @@ Usage:
 $ cargo run --example cli FILENAME.sql [--dialectname]
 
 To print the parse results as JSON:
-$ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
+$ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
 
 "#,
     );

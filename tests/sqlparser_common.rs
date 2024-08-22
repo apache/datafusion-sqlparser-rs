@@ -10469,7 +10469,57 @@ fn test_group_by_nothing() {
 }
 
 #[test]
-fn test_extract_seconds() {
+fn test_extract_seconds_ok() {
+    let dialects = all_dialects_where(|d| d.allow_extract_custom());
+    let stmt = dialects.verified_expr("EXTRACT(seconds FROM '2 seconds'::INTERVAL)");
+
+    assert_eq!(
+        stmt,
+        Expr::Extract {
+            field: DateTimeField::Custom(Ident {
+                value: "seconds".to_string(),
+                quote_style: None,
+            }),
+            syntax: ExtractSyntax::From,
+            expr: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "2 seconds".to_string()
+                ))),
+                data_type: DataType::Interval,
+                format: None,
+            }),
+        }
+    )
+}
+
+#[test]
+fn test_extract_seconds_single_quote_ok() {
+    let dialects = all_dialects_where(|d| d.allow_extract_custom());
+    let stmt = dialects.verified_expr(r#"EXTRACT('seconds' FROM '2 seconds'::INTERVAL)"#);
+
+    assert_eq!(
+        stmt,
+        Expr::Extract {
+            field: DateTimeField::Custom(Ident {
+                value: "seconds".to_string(),
+                quote_style: Some('\''),
+            }),
+            syntax: ExtractSyntax::From,
+            expr: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "2 seconds".to_string()
+                ))),
+                data_type: DataType::Interval,
+                format: None,
+            }),
+        }
+    )
+}
+
+#[test]
+fn test_extract_seconds_err() {
     let sql = "SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)";
     let dialects = all_dialects_except(|d| d.allow_extract_custom());
     let err = dialects.parse_sql_statements(sql).unwrap_err();
@@ -10480,7 +10530,7 @@ fn test_extract_seconds() {
 }
 
 #[test]
-fn test_extract_seconds_single_quote() {
+fn test_extract_seconds_single_quote_err() {
     let sql = r#"SELECT EXTRACT('seconds' FROM '2 seconds'::INTERVAL)"#;
     let dialects = all_dialects_except(|d| d.allow_extract_single_quotes());
     let err = dialects.parse_sql_statements(sql).unwrap_err();

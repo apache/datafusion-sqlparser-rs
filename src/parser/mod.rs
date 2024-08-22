@@ -1970,14 +1970,14 @@ impl<'a> Parser<'a> {
                 Keyword::TIMEZONE_HOUR => Ok(DateTimeField::TimezoneHour),
                 Keyword::TIMEZONE_MINUTE => Ok(DateTimeField::TimezoneMinute),
                 Keyword::TIMEZONE_REGION => Ok(DateTimeField::TimezoneRegion),
-                _ if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
+                _ if dialect_of!(self is SnowflakeDialect | GenericDialect | PostgreSqlDialect) => {
                     self.prev_token();
                     let custom = self.parse_identifier(false)?;
                     Ok(DateTimeField::Custom(custom))
                 }
                 _ => self.expected("date/time field", next_token),
             },
-            Token::SingleQuotedString(_) if dialect_of!(self is SnowflakeDialect | GenericDialect) =>
+            Token::SingleQuotedString(_) if dialect_of!(self is SnowflakeDialect | GenericDialect | PostgreSqlDialect) =>
             {
                 self.prev_token();
                 let custom = self.parse_identifier(false)?;

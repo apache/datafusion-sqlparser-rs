@@ -4952,43 +4952,47 @@ fn test_unicode_string_literal() {
 #[test]
 fn interval_precedence_gt() {
     let expr = pg().verified_expr("INTERVAL '1 second' > x");
-    assert_eq!(expr, Expr::BinaryOp {
-        left: Box::new(Expr::Interval(
-            Interval {
-                value: Box::new(Expr::Value(Value::SingleQuotedString("1 second".to_string()))),
+    assert_eq!(
+        expr,
+        Expr::BinaryOp {
+            left: Box::new(Expr::Interval(Interval {
+                value: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "1 second".to_string()
+                ))),
                 leading_field: None,
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None,
-            },
-        )),
-        op: BinaryOperator::Gt,
-        right: Box::new(Expr::Identifier(
-            Ident {
+            },)),
+            op: BinaryOperator::Gt,
+            right: Box::new(Expr::Identifier(Ident {
                 value: "x".to_string(),
                 quote_style: None,
-            },
-        )),
-    })
+            })),
+        }
+    )
 }
 
 #[test]
 fn interval_precedence_double_colon() {
     let expr = pg().verified_expr("INTERVAL '1 second'::TEXT");
-    assert_eq!(expr, Expr::Cast {
-        kind: CastKind::DoubleColon,
-        expr: Box::new(Expr::Interval(
-            Interval {
-                value: Box::new(Expr::Value(Value::SingleQuotedString("1 second".to_string()))),
+    assert_eq!(
+        expr,
+        Expr::Cast {
+            kind: CastKind::DoubleColon,
+            expr: Box::new(Expr::Interval(Interval {
+                value: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "1 second".to_string()
+                ))),
                 leading_field: None,
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None,
-            },
-        )),
-        data_type: DataType::Text,
-        format: None,
-    })
+            })),
+            data_type: DataType::Text,
+            format: None,
+        }
+    )
 }
 
 fn check_arrow_precedence(sql: &str, arrow_operator: BinaryOperator) {

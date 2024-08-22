@@ -499,6 +499,16 @@ pub trait Dialect: Debug + Any {
     fn describe_requires_table_keyword(&self) -> bool {
         false
     }
+
+    /// Returns true if this dialect allows the `EXTRACT` function to words other than [`Keyword`].
+    fn allow_extract_custom(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect allows the `EXTRACT` function to use single quotes in the part being extracted.
+    fn allow_extract_single_quotes(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

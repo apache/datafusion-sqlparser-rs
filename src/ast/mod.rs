@@ -31,7 +31,7 @@ pub use self::data_type::{
     ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, ExactNumberInfo,
     StructBracketKind, TimezoneInfo,
 };
-pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
+pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue, Use};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, ConstraintCharacteristics, Deduplicate, DeferrableInitial, GeneratedAs,
@@ -2515,13 +2515,9 @@ pub enum Statement {
     /// Note: this is a MySQL-specific statement.
     ShowCollation { filter: Option<ShowStatementFilter> },
     /// ```sql
-    /// USE [DATABASE|SCHEMA|CATALOG|...] [<db_name>.<schema_name>|<db_name>|<schema_name>]
+    /// `USE ...`
     /// ```
-    Use {
-        db_name: Option<Ident>,
-        schema_name: Option<Ident>,
-        keyword: Option<String>,
-    },
+    Use(Use),
     /// ```sql
     /// START  [ TRANSACTION | WORK ] | START TRANSACTION } ...
     /// ```
@@ -4127,28 +4123,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Use {
-                db_name,
-                schema_name,
-                keyword,
-            } => {
-                write!(f, "USE")?;
-
-                if let Some(kw) = keyword.as_ref() {
-                    write!(f, " {}", kw)?;
-                }
-
-                if let Some(db_name) = db_name {
-                    write!(f, " {}", db_name)?;
-                    if let Some(schema_name) = schema_name {
-                        write!(f, ".{}", schema_name)?;
-                    }
-                } else if let Some(schema_name) = schema_name {
-                    write!(f, " {}", schema_name)?;
-                }
-
-                Ok(())
-            }
+            Statement::Use(use_expr) => use_expr.fmt(f),
             Statement::ShowCollation { filter } => {
                 write!(f, "SHOW COLLATION")?;
                 if let Some(filter) = filter {

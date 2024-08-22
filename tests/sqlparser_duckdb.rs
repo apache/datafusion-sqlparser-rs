@@ -759,52 +759,52 @@ fn test_duckdb_union_datatype() {
 
 #[test]
 fn parse_use() {
-    std::assert_eq!(
-        duckdb().verified_stmt("USE mydb"),
-        Statement::Use {
-            db_name: Some(Ident::new("mydb")),
-            schema_name: None,
-            keyword: None
+    let valid_object_names = [
+        "mydb",
+        "SCHEMA",
+        "DATABASE",
+        "CATALOG",
+        "WAREHOUSE",
+        "DEFAULT",
+    ];
+    let quote_styles = ['"', '\''];
+
+    for object_name in &valid_object_names {
+        // Test single identifier without quotes
+        assert_eq!(
+            duckdb().verified_stmt(&format!("USE {}", object_name)),
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+                object_name.to_string()
+            )])))
+        );
+        for &quote in &quote_styles {
+            // Test single identifier with different type of quotes
+            assert_eq!(
+                duckdb().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                    quote,
+                    object_name.to_string(),
+                )])))
+            );
         }
-    );
-    std::assert_eq!(
+    }
+
+    for &quote in &quote_styles {
+        // Test double identifier with different type of quotes
+        assert_eq!(
+            duckdb().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
+            Statement::Use(Use::Object(ObjectName(vec![
+                Ident::with_quote(quote, "CATALOG"),
+                Ident::with_quote(quote, "my_schema")
+            ])))
+        );
+    }
+    // Test double identifier without quotes
+    assert_eq!(
         duckdb().verified_stmt("USE mydb.my_schema"),
-        Statement::Use {
-            db_name: Some(Ident::new("mydb")),
-            schema_name: Some(Ident::new("my_schema")),
-            keyword: None
-        }
-    );
-    assert_eq!(
-        duckdb().verified_stmt("USE DATABASE"),
-        Statement::Use {
-            db_name: Some(Ident::new("DATABASE")),
-            schema_name: None,
-            keyword: None
-        }
-    );
-    assert_eq!(
-        duckdb().verified_stmt("USE SCHEMA"),
-        Statement::Use {
-            db_name: Some(Ident::new("SCHEMA")),
-            schema_name: None,
-            keyword: None
-        }
-    );
-    assert_eq!(
-        duckdb().verified_stmt("USE CATALOG"),
-        Statement::Use {
-            db_name: Some(Ident::new("CATALOG")),
-            schema_name: None,
-            keyword: None
-        }
-    );
-    assert_eq!(
-        duckdb().verified_stmt("USE CATALOG.SCHEMA"),
-        Statement::Use {
-            db_name: Some(Ident::new("CATALOG")),
-            schema_name: Some(Ident::new("SCHEMA")),
-            keyword: None
-        }
+        Statement::Use(Use::Object(ObjectName(vec![
+            Ident::new("mydb"),
+            Ident::new("my_schema")
+        ])))
     );
 }

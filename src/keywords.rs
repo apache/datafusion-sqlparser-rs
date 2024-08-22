@@ -804,6 +804,7 @@ define_keywords!(
     VIEW,
     VIRTUAL,
     VOLATILE,
+    WAREHOUSE,
     WEEK,
     WHEN,
     WHENEVER,

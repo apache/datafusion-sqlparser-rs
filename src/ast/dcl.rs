@@ -193,3 +193,30 @@ impl fmt::Display for AlterRoleOperation {
         }
     }
 }
+
+/// A `USE` (`Statement::Use`) operation
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Use {
+    Catalog(ObjectName),   // e.g. `USE CATALOG foo.bar`
+    Schema(ObjectName),    // e.g. `USE SCHEMA foo.bar`
+    Database(ObjectName),  // e.g. `USE DATABASE foo.bar`
+    Warehouse(ObjectName), // e.g. `USE WAREHOUSE foo.bar`
+    Object(ObjectName),    // e.g. `USE foo.bar`
+    Default,               // e.g. `USE DEFAULT`
+}
+
+impl fmt::Display for Use {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("USE ")?;
+        match self {
+            Use::Catalog(name) => write!(f, "CATALOG {}", name),
+            Use::Schema(name) => write!(f, "SCHEMA {}", name),
+            Use::Database(name) => write!(f, "DATABASE {}", name),
+            Use::Warehouse(name) => write!(f, "WAREHOUSE {}", name),
+            Use::Object(name) => write!(f, "{}", name),
+            Use::Default => write!(f, "DEFAULT"),
+        }
+    }
+}

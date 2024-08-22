@@ -18,7 +18,7 @@
 use sqlparser::ast::{
     CreateFunctionBody, CreateFunctionUsing, Expr, Function, FunctionArgumentList,
     FunctionArguments, Ident, ObjectName, OneOrManyWithParens, SelectItem, Statement, TableFactor,
-    UnaryOperator, Value,
+    UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::ParserError;
@@ -403,45 +403,31 @@ fn parse_delimited_identifiers() {
 
 #[test]
 fn parse_use() {
-    assert_eq!(
-        hive().verified_stmt("USE mydb"),
-        Statement::Use {
-            db_name: Some(Ident::new("mydb")),
-            schema_name: None,
-            keyword: None
+    let valid_object_names = ["mydb", "SCHEMA", "DATABASE", "CATALOG", "WAREHOUSE"];
+    let quote_styles = ['\'', '"', '`'];
+    for object_name in &valid_object_names {
+        // Test single identifier without quotes
+        assert_eq!(
+            hive().verified_stmt(&format!("USE {}", object_name)),
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+                object_name.to_string()
+            )])))
+        );
+        for &quote in &quote_styles {
+            // Test single identifier with different type of quotes
+            assert_eq!(
+                hive().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                    quote,
+                    object_name.to_string(),
+                )])))
+            );
         }
-    );
+    }
+    // Test DEFAULT keyword that is special case in Hive
     assert_eq!(
         hive().verified_stmt("USE DEFAULT"),
-        Statement::Use {
-            db_name: None,
-            schema_name: None,
-            keyword: Some("DEFAULT".to_string()) // Yes, as keyword not db_name
-        }
-    );
-    assert_eq!(
-        hive().verified_stmt("USE DATABASE"),
-        Statement::Use {
-            db_name: Some(Ident::new("DATABASE")),
-            schema_name: None,
-            keyword: None
-        }
-    );
-    assert_eq!(
-        hive().verified_stmt("USE SCHEMA"),
-        Statement::Use {
-            db_name: Some(Ident::new("SCHEMA")),
-            schema_name: None,
-            keyword: None
-        }
-    );
-    assert_eq!(
-        hive().verified_stmt("USE CATALOG"),
-        Statement::Use {
-            db_name: Some(Ident::new("CATALOG")),
-            schema_name: None,
-            keyword: None
-        }
+        Statement::Use(Use::Default)
     );
 }
 

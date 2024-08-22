@@ -482,7 +482,7 @@ pub trait Dialect: Debug + Any {
             Precedence::UnaryNot => 15,
             Precedence::And => 10,
             Precedence::Or => 5,
-            Precedence::Interval => 4,
+            Precedence::Interval => self.prec_unknown(),
         }
     }
 

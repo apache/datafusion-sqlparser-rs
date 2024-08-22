@@ -576,6 +576,7 @@ define_keywords!(
     PRIVILEGES,
     PROCEDURE,
     PROGRAM,
+    PROJECTION,
     PURGE,
     QUALIFY,
     QUARTER,

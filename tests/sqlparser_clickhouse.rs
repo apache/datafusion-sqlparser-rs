@@ -288,6 +288,78 @@ fn parse_alter_table_attach_and_detach_partition() {
 }
 
 #[test]
+fn parse_alter_table_add_projection() {
+    match clickhouse_and_generic().verified_stmt(concat!(
+        "ALTER TABLE t0 ADD PROJECTION IF NOT EXISTS my_name",
+        " (SELECT a, b GROUP BY a ORDER BY b)",
+    )) {
+        Statement::AlterTable {
+            name, operations, ..
+        } => {
+            assert_eq!(name, ObjectName(vec!["t0".into()]));
+            assert_eq!(1, operations.len());
+            assert_eq!(
+                operations[0],
+                AlterTableOperation::AddProjection {
+                    if_not_exists: true,
+                    name: "my_name".into(),
+                    select: ProjectionSelect {
+                        projection: vec![
+                            UnnamedExpr(Identifier(Ident::new("a"))),
+                            UnnamedExpr(Identifier(Ident::new("b"))),
+                        ],
+                        group_by: Some(GroupByExpr::Expressions(
+                            vec![Identifier(Ident::new("a"))],
+                            vec![]
+                        )),
+                        order_by: Some(OrderBy {
+                            exprs: vec![OrderByExpr {
+                                expr: Identifier(Ident::new("b")),
+                                asc: None,
+                                nulls_first: None,
+                                with_fill: None,
+                            }],
+                            interpolate: None,
+                        }),
+                    }
+                }
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    // leave out IF NOT EXISTS is allowed
+    clickhouse_and_generic()
+        .verified_stmt("ALTER TABLE t0 ADD PROJECTION my_name (SELECT a, b GROUP BY a ORDER BY b)");
+    // leave out GROUP BY is allowed
+    clickhouse_and_generic()
+        .verified_stmt("ALTER TABLE t0 ADD PROJECTION my_name (SELECT a, b ORDER BY b)");
+    // leave out ORDER BY is allowed
+    clickhouse_and_generic()
+        .verified_stmt("ALTER TABLE t0 ADD PROJECTION my_name (SELECT a, b GROUP BY a)");
+
+    // missing select query is not allowed
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name")
+            .unwrap_err(),
+        ParserError("Expected: (, found: EOF".to_string())
+    );
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name ()")
+            .unwrap_err(),
+        ParserError("Expected: SELECT, found: )".to_string())
+    );
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name (SELECT)")
+            .unwrap_err(),
+        ParserError("Expected: an expression:, found: )".to_string())
+    );
+}
+
+#[test]
 fn parse_optimize_table() {
     clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0");
     clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE db.t0");

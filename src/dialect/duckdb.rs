@@ -55,4 +55,8 @@ impl Dialect for DuckDbDialect {
     fn support_map_literal_syntax(&self) -> bool {
         true
     }
+
+    fn require_interval_units(&self) -> bool {
+        false
+    }
 }

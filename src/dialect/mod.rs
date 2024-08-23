@@ -499,6 +499,23 @@ pub trait Dialect: Debug + Any {
     fn describe_requires_table_keyword(&self) -> bool {
         false
     }
+
+    /// Whether or not units are required with interval expressions.
+    ///
+    /// When `true`:
+    /// * `INTERVAL '1' DAY` is VALID
+    /// * `INTERVAL 1 + 1 DAY` is VALID
+    /// * `INTERVAL '1' + '1' DAY` is VALID
+    /// * `INTERVAL '1'` is INVALID
+    ///
+    /// When `false`:
+    /// * `INTERVAL '1' DAY` is VALID
+    /// * `INTERVAL '1'` is VALID
+    /// * `INTERVAL '1 second'` is VALID
+    /// * `INTERVAL 1 + 1 DAY` is INVALID
+    fn require_interval_units(&self) -> bool {
+        true
+    }
 }
 
 /// This represents the operators for which precedence must be defined

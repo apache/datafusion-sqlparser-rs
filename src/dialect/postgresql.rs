@@ -154,6 +154,10 @@ impl Dialect for PostgreSqlDialect {
             Precedence::Or => OR_PREC,
         }
     }
+
+    fn require_interval_units(&self) -> bool {
+        false
+    }
 }
 
 pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {

@@ -56,15 +56,6 @@ macro_rules! parser_err {
     };
 }
 
-// Returns a successful result if the optional expression is some
-macro_rules! return_ok_if_some {
-    ($e:expr) => {{
-        if let Some(v) = $e {
-            return Ok(v);
-        }
-    }};
-}
-
 #[cfg(feature = "std")]
 /// Implementation [`RecursionCounter`] if std is available
 mod recursion {
@@ -896,33 +887,61 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    pub fn parse_interval_expr(&mut self) -> Result<Expr, ParserError> {
-        let precedence = self.dialect.prec_unknown();
+    fn parse_interval_expr(&mut self) -> Result<(Expr, bool), ParserError> {
         let mut expr = self.parse_prefix()?;
 
-        loop {
-            let next_precedence = self.get_next_interval_precedence()?;
-
-            if precedence >= next_precedence {
-                break;
+        if self.dialect.require_interval_units() {
+            // if require_interval_units is true, continue parsing expressions until a unit is foudn
+            loop {
+                if self.next_token_is_unit() {
+                    return Ok((expr, true));
+                } else {
+                    expr = self.parse_infix(expr, self.dialect.prec_unknown())?;
+                }
             }
-
-            expr = self.parse_infix(expr, next_precedence)?;
+        } else {
+            // otherwise, check if the next token is a unit, but don't iterate
+            Ok((expr, self.next_token_is_unit()))
         }
-
-        Ok(expr)
     }
 
-    /// Get the precedence of the next token, with AND, OR, and XOR.
-    pub fn get_next_interval_precedence(&self) -> Result<u8, ParserError> {
-        let token = self.peek_token();
-
-        match token.token {
-            Token::Word(w) if w.keyword == Keyword::AND => Ok(self.dialect.prec_unknown()),
-            Token::Word(w) if w.keyword == Keyword::OR => Ok(self.dialect.prec_unknown()),
-            Token::Word(w) if w.keyword == Keyword::XOR => Ok(self.dialect.prec_unknown()),
-            _ => self.get_next_precedence(),
+    pub fn next_token_is_unit(&mut self) -> bool {
+        let token_loc = self.peek_token();
+        if let Token::Word(word) = token_loc.token {
+            if matches!(
+                word.keyword,
+                Keyword::YEAR
+                    | Keyword::MONTH
+                    | Keyword::WEEK
+                    | Keyword::DAY
+                    | Keyword::HOUR
+                    | Keyword::MINUTE
+                    | Keyword::SECOND
+                    | Keyword::CENTURY
+                    | Keyword::DECADE
+                    | Keyword::DOW
+                    | Keyword::DOY
+                    | Keyword::EPOCH
+                    | Keyword::ISODOW
+                    | Keyword::ISOYEAR
+                    | Keyword::JULIAN
+                    | Keyword::MICROSECOND
+                    | Keyword::MICROSECONDS
+                    | Keyword::MILLENIUM
+                    | Keyword::MILLENNIUM
+                    | Keyword::MILLISECOND
+                    | Keyword::MILLISECONDS
+                    | Keyword::NANOSECOND
+                    | Keyword::NANOSECONDS
+                    | Keyword::QUARTER
+                    | Keyword::TIMEZONE
+                    | Keyword::TIMEZONE_HOUR
+                    | Keyword::TIMEZONE_MINUTE
+            ) {
+                return true;
+            }
         }
+        return false;
     }
 
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
@@ -972,7 +991,7 @@ impl<'a> Parser<'a> {
         // name is not followed by a string literal, but in fact in PostgreSQL it is a valid
         // expression that should parse as the column name "date".
         let loc = self.peek_token().location;
-        return_ok_if_some!(self.maybe_parse(|parser| {
+        let opt_expr = self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
                 DataType::Interval => parser.parse_interval(),
                 // PostgreSQL allows almost any identifier to be used as custom data type name,
@@ -988,7 +1007,11 @@ impl<'a> Parser<'a> {
                     value: parser.parse_literal_string()?,
                 }),
             }
-        }));
+        });
+
+        if let Some(expr) = opt_expr {
+            return Ok(expr);
+        }
 
         let next_token = self.next_token();
         let expr = match next_token.token {
@@ -2079,52 +2102,17 @@ impl<'a> Parser<'a> {
         // don't currently try to parse it. (The sign can instead be included
         // inside the value string.)
 
-        // The first token in an interval is a string literal which specifies
-        // the duration of the interval.
-        let value = self.parse_interval_expr()?;
+        let (value, has_units) = self.parse_interval_expr()?;
 
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.
         //
         // Note that PostgreSQL allows omitting the qualifier, so we provide
         // this more general implementation.
-        let leading_field = match self.peek_token().token {
-            Token::Word(kw)
-                if [
-                    Keyword::YEAR,
-                    Keyword::MONTH,
-                    Keyword::WEEK,
-                    Keyword::DAY,
-                    Keyword::HOUR,
-                    Keyword::MINUTE,
-                    Keyword::SECOND,
-                    Keyword::CENTURY,
-                    Keyword::DECADE,
-                    Keyword::DOW,
-                    Keyword::DOY,
-                    Keyword::EPOCH,
-                    Keyword::ISODOW,
-                    Keyword::ISOYEAR,
-                    Keyword::JULIAN,
-                    Keyword::MICROSECOND,
-                    Keyword::MICROSECONDS,
-                    Keyword::MILLENIUM,
-                    Keyword::MILLENNIUM,
-                    Keyword::MILLISECOND,
-                    Keyword::MILLISECONDS,
-                    Keyword::NANOSECOND,
-                    Keyword::NANOSECONDS,
-                    Keyword::QUARTER,
-                    Keyword::TIMEZONE,
-                    Keyword::TIMEZONE_HOUR,
-                    Keyword::TIMEZONE_MINUTE,
-                ]
-                .iter()
-                .any(|d| kw.keyword == *d) =>
-            {
-                Some(self.parse_date_time_field()?)
-            }
-            _ => None,
+        let leading_field = if has_units {
+            Some(self.parse_date_time_field()?)
+        } else {
+            None
         };
 
         let (leading_precision, last_field, fsec_precision) =

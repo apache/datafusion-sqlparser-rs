@@ -63,4 +63,8 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_connect_by(&self) -> bool {
         true
     }
+
+    fn require_interval_units(&self) -> bool {
+        false
+    }
 }

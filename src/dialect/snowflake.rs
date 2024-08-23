@@ -158,6 +158,10 @@ impl Dialect for SnowflakeDialect {
     fn describe_requires_table_keyword(&self) -> bool {
         true
     }
+
+    fn require_interval_units(&self) -> bool {
+        false
+    }
 }
 
 /// Parse snowflake create table statement.

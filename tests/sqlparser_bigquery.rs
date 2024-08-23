@@ -830,16 +830,14 @@ fn parse_typed_struct_syntax_bigquery() {
         expr_from_projection(&select.projection[3])
     );
 
-    let sql = r#"SELECT STRUCT<INTERVAL>(INTERVAL '1-2 3 4:5:6.789999'), STRUCT<JSON>(JSON '{"class" : {"students" : [{"name" : "Jane"}]}}')"#;
+    let sql = r#"SELECT STRUCT<INTERVAL>(INTERVAL '1' DAY), STRUCT<JSON>(JSON '{"class" : {"students" : [{"name" : "Jane"}]}}')"#;
     let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::Interval(ast::Interval {
-                value: Box::new(Expr::Value(Value::SingleQuotedString(
-                    "1-2 3 4:5:6.789999".to_string()
-                ))),
-                leading_field: None,
+                value: Box::new(Expr::Value(Value::SingleQuotedString("1".to_string()))),
+                leading_field: Some(DateTimeField::Day),
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None
@@ -1141,16 +1139,14 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         expr_from_projection(&select.projection[3])
     );
 
-    let sql = r#"SELECT STRUCT<INTERVAL>(INTERVAL '1-2 3 4:5:6.789999'), STRUCT<JSON>(JSON '{"class" : {"students" : [{"name" : "Jane"}]}}')"#;
+    let sql = r#"SELECT STRUCT<INTERVAL>(INTERVAL '2' MONTH), STRUCT<JSON>(JSON '{"class" : {"students" : [{"name" : "Jane"}]}}')"#;
     let select = bigquery_and_generic().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Interval(ast::Interval {
-                value: Box::new(Expr::Value(Value::SingleQuotedString(
-                    "1-2 3 4:5:6.789999".to_string()
-                ))),
-                leading_field: None,
+            values: vec![Expr::Interval(Interval {
+                value: Box::new(Expr::Value(Value::SingleQuotedString("2".to_string()))),
+                leading_field: Some(DateTimeField::Month),
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None

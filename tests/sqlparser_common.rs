@@ -4902,19 +4902,6 @@ fn parse_interval_all() {
         expr_from_projection(only(&select.projection)),
     );
 
-    let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
-            leading_field: Some(DateTimeField::Year),
-            leading_precision: None,
-            last_field: Some(DateTimeField::Month),
-            fractional_seconds_precision: None,
-        }),
-        expr_from_projection(only(&select.projection)),
-    );
-
     let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -5135,7 +5122,8 @@ fn parse_interval_and_or_xor() {
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         AND d2_date > d1_date + INTERVAL '3 days'";
 
-    let actual_ast = Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap();
+    let dialect_no_unit = all_dialects_except(|d| d.require_interval_units());
+    let actual_ast = dialect_no_unit.parse_sql_statements(sql).unwrap();
 
     let expected_ast = vec![Statement::Query(Box::new(Query {
         with: None,

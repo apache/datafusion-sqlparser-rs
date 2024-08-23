@@ -26,7 +26,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, DataType, Expr, Ident, MySQLColumnPosition,
-    ObjectName, SequenceOptions, SqlOption,
+    ObjectName, ProjectionSelect, SequenceOptions, SqlOption,
 };
 use crate::tokenizer::Token;
 
@@ -47,6 +47,15 @@ pub enum AlterTableOperation {
         column_def: ColumnDef,
         /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
         column_position: Option<MySQLColumnPosition>,
+    },
+    /// `ADD PROJECTION [IF NOT EXISTS] name ( SELECT <COLUMN LIST EXPR> [GROUP BY] [ORDER BY])`
+    ///
+    /// Note: this is a ClickHouse-specific operation.
+    /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#add-projection)
+    AddProjection {
+        if_not_exists: bool,
+        name: Ident,
+        select: ProjectionSelect,
     },
     /// `DISABLE ROW LEVEL SECURITY`
     ///
@@ -254,6 +263,17 @@ impl fmt::Display for AlterTableOperation {
                 }
 
                 Ok(())
+            }
+            AlterTableOperation::AddProjection {
+                if_not_exists,
+                name,
+                select: query,
+            } => {
+                write!(f, "ADD PROJECTION")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {} ({})", name, query)
             }
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {column_name} {op}")

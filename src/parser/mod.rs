@@ -5549,6 +5549,7 @@ impl<'a> Parser<'a> {
         global: Option<bool>,
         transient: bool,
     ) -> Result<Statement, ParserError> {
+        println!("Debug 0");
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
@@ -5561,6 +5562,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        println!("Debug 5");
 
         let clone = if self.parse_keyword(Keyword::CLONE) {
             self.parse_object_name(allow_unquoted_hyphen).ok()
@@ -5571,6 +5573,7 @@ impl<'a> Parser<'a> {
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
 
+        println!("Debug 7");
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
@@ -5578,9 +5581,11 @@ impl<'a> Parser<'a> {
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let mut with_options: Vec<SqlOption> = vec![];
+        println!("Debug 10");
         if !self.parse_keywords(&[Keyword::WITH, Keyword::ORDER]) {
             with_options = self.parse_options(Keyword::WITH)?;
         }
+        println!("Debug 11");
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {
@@ -5613,6 +5618,7 @@ impl<'a> Parser<'a> {
             None
         };
 
+        println!("Debug 20");
         // ClickHouse supports `PRIMARY KEY`, before `ORDER BY`
         // https://clickhouse.com/docs/en/sql-reference/statements/create/table#primary-key
         let primary_key = if dialect_of!(self is ClickHouseDialect | GenericDialect)
@@ -5648,6 +5654,7 @@ impl<'a> Parser<'a> {
             order_exprs_option = Some(order_exprs);
         }
 
+        println!("Debug 30");
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             if self.consume_token(&Token::LParen) {
                 let columns = if self.peek_token() != Token::RParen {
@@ -5724,6 +5731,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        println!("Debug 50");
 
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)

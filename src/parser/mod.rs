@@ -2116,9 +2116,8 @@ impl<'a> Parser<'a> {
     }
 
     pub fn next_token_is_unit(&mut self) -> bool {
-        let token_loc = self.peek_token();
-        if let Token::Word(word) = token_loc.token {
-            if matches!(
+        if let Token::Word(word) = self.peek_token().token {
+            matches!(
                 word.keyword,
                 Keyword::YEAR
                     | Keyword::MONTH
@@ -2147,11 +2146,10 @@ impl<'a> Parser<'a> {
                     | Keyword::TIMEZONE
                     | Keyword::TIMEZONE_HOUR
                     | Keyword::TIMEZONE_MINUTE
-            ) {
-                return true;
-            }
+            )
+        } else {
+            false
         }
-        return false;
     }
 
     /// Bigquery specific: Parse a struct literal

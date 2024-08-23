@@ -994,7 +994,26 @@ impl fmt::Display for LambdaFunction {
 
 /// Encapsulates the common pattern in SQL where either one unparenthesized item
 /// such as an identifier or expression is permitted, or multiple of the same
-/// item in a parenthesized list.
+/// item in a parenthesized list. For accessing items regardless of the form,
+/// `OneOrManyWithParens` implements `Deref<Target = [T]>` and `IntoIterator`,
+/// so you can call slice methods on it and iterate over items
+/// # Examples
+/// Acessing as a slice:
+/// ```
+/// # use sqlparser::ast::OneOrManyWithParens;
+/// let one = OneOrManyWithParens::One("a");
+///
+/// assert_eq!(one[0], "a");
+/// assert_eq!(one.len(), 1);
+/// ```
+/// Iterating:
+/// ```
+/// # use sqlparser::ast::OneOrManyWithParens;
+/// let one = OneOrManyWithParens::One("a");
+/// let many = OneOrManyWithParens::Many(vec!["a", "b"]);
+///
+/// assert_eq!(one.into_iter().chain(many).collect::<Vec<_>>(), vec!["a", "a", "b"] );
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -1031,22 +1050,96 @@ impl<'a, T> IntoIterator for &'a OneOrManyWithParens<T> {
     }
 }
 
+/// Owned iterator implementation of `OneOrManyWithParens`
+#[derive(Debug, Clone)]
+pub struct OneOrManyWithParensIntoIter<T> {
+    inner: OneOrManyWithParensIntoIterInner<T>,
+}
+
+#[derive(Debug, Clone)]
+enum OneOrManyWithParensIntoIterInner<T> {
+    One(core::iter::Once<T>),
+    Many(<Vec<T> as IntoIterator>::IntoIter),
+}
+
+impl<T> core::iter::FusedIterator for OneOrManyWithParensIntoIter<T>
+where
+    core::iter::Once<T>: core::iter::FusedIterator,
+    <Vec<T> as IntoIterator>::IntoIter: core::iter::FusedIterator,
+{
+}
+
+impl<T> core::iter::ExactSizeIterator for OneOrManyWithParensIntoIter<T>
+where
+    core::iter::Once<T>: core::iter::ExactSizeIterator,
+    <Vec<T> as IntoIterator>::IntoIter: core::iter::ExactSizeIterator,
+{
+}
+
+impl<T> core::iter::Iterator for OneOrManyWithParensIntoIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.inner {
+            OneOrManyWithParensIntoIterInner::One(one) => one.next(),
+            OneOrManyWithParensIntoIterInner::Many(many) => many.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match &self.inner {
+            OneOrManyWithParensIntoIterInner::One(one) => one.size_hint(),
+            OneOrManyWithParensIntoIterInner::Many(many) => many.size_hint(),
+        }
+    }
+
+    fn count(self) -> usize
+    where
+        Self: Sized,
+    {
+        match self.inner {
+            OneOrManyWithParensIntoIterInner::One(one) => one.count(),
+            OneOrManyWithParensIntoIterInner::Many(many) => many.count(),
+        }
+    }
+
+    fn fold<B, F>(mut self, init: B, f: F) -> B
+    where
+        Self: Sized,
+        F: FnMut(B, Self::Item) -> B,
+    {
+        match &mut self.inner {
+            OneOrManyWithParensIntoIterInner::One(one) => one.fold(init, f),
+            OneOrManyWithParensIntoIterInner::Many(many) => many.fold(init, f),
+        }
+    }
+}
+
+impl<T> core::iter::DoubleEndedIterator for OneOrManyWithParensIntoIter<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match &mut self.inner {
+            OneOrManyWithParensIntoIterInner::One(one) => one.next_back(),
+            OneOrManyWithParensIntoIterInner::Many(many) => many.next_back(),
+        }
+    }
+}
+
 impl<T> IntoIterator for OneOrManyWithParens<T> {
     type Item = T;
 
-    #[cfg(not(feature = "std"))]
-    type IntoIter = core::iter::Chain<core::option::IntoIter<T>, alloc::vec::IntoIter<T>>;
-
-    #[cfg(feature = "std")]
-    type IntoIter = core::iter::Chain<core::option::IntoIter<T>, std::vec::IntoIter<T>>;
+    type IntoIter = OneOrManyWithParensIntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let (one, many) = match self {
-            OneOrManyWithParens::One(one) => (Some(one), Vec::new()),
-            OneOrManyWithParens::Many(many) => (None, many),
+        let inner = match self {
+            OneOrManyWithParens::One(one) => {
+                OneOrManyWithParensIntoIterInner::One(core::iter::once(one))
+            }
+            OneOrManyWithParens::Many(many) => {
+                OneOrManyWithParensIntoIterInner::Many(many.into_iter())
+            }
         };
 
-        one.into_iter().chain(many)
+        OneOrManyWithParensIntoIter { inner }
     }
 }
 
@@ -7064,16 +7157,79 @@ mod tests {
 
     #[test]
     fn test_one_or_many_with_parens_value_into_iter() {
-        let one = OneOrManyWithParens::One("a");
+        use core::iter::once;
 
-        assert_eq!(Vec::from_iter(one), vec!["a"]);
+        //tests that our iterator implemented methods behaves exactly as it's inner iterator, at every step up to n calls to next/next_back
+        fn test_steps<I>(ours: OneOrManyWithParens<usize>, inner: I, n: usize)
+        where
+            I: IntoIterator<Item = usize, IntoIter: DoubleEndedIterator + Clone> + Clone,
+        {
+            fn checks<I>(ours: OneOrManyWithParensIntoIter<usize>, inner: I)
+            where
+                I: Iterator<Item = usize> + Clone + DoubleEndedIterator,
+            {
+                assert_eq!(ours.size_hint(), inner.size_hint());
+                assert_eq!(ours.clone().count(), inner.clone().count());
 
-        let many1 = OneOrManyWithParens::Many(vec!["b"]);
+                assert_eq!(
+                    ours.clone().fold(1, |a, v| a + v),
+                    inner.clone().fold(1, |a, v| a + v)
+                );
 
-        assert_eq!(Vec::from_iter(many1), vec!["b"]);
+                assert_eq!(Vec::from_iter(ours.clone()), Vec::from_iter(inner.clone()));
+                assert_eq!(
+                    Vec::from_iter(ours.clone().rev()),
+                    Vec::from_iter(inner.clone().rev())
+                );
+            }
 
-        let many2 = OneOrManyWithParens::Many(vec!["c", "d"]);
+            let mut ours_next = ours.clone().into_iter();
+            let mut inner_next = inner.clone().into_iter();
 
-        assert_eq!(Vec::from_iter(many2), vec!["c", "d"]);
+            for _ in 0..n {
+                checks(ours_next.clone(), inner_next.clone());
+
+                assert_eq!(ours_next.next(), inner_next.next());
+            }
+
+            let mut ours_next_back = ours.clone().into_iter();
+            let mut inner_next_back = inner.clone().into_iter();
+
+            for _ in 0..n {
+                checks(ours_next_back.clone(), inner_next_back.clone());
+
+                assert_eq!(ours_next_back.next_back(), inner_next_back.next_back());
+            }
+
+            let mut ours_mixed = ours.clone().into_iter();
+            let mut inner_mixed = inner.clone().into_iter();
+
+            for i in 0..n {
+                checks(ours_mixed.clone(), inner_mixed.clone());
+
+                if i % 2 == 0 {
+                    assert_eq!(ours_mixed.next_back(), inner_mixed.next_back());
+                } else {
+                    assert_eq!(ours_mixed.next(), inner_mixed.next());
+                }
+            }
+
+            let mut ours_mixed2 = ours.into_iter();
+            let mut inner_mixed2 = inner.into_iter();
+
+            for i in 0..n {
+                checks(ours_mixed2.clone(), inner_mixed2.clone());
+
+                if i % 2 == 0 {
+                    assert_eq!(ours_mixed2.next(), inner_mixed2.next());
+                } else {
+                    assert_eq!(ours_mixed2.next_back(), inner_mixed2.next_back());
+                }
+            }
+        }
+
+        test_steps(OneOrManyWithParens::One(1), once(1), 3);
+        test_steps(OneOrManyWithParens::Many(vec![2]), vec![2], 3);
+        test_steps(OneOrManyWithParens::Many(vec![3, 4]), vec![3, 4], 4);
     }
 }

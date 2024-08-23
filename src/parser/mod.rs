@@ -2097,6 +2097,10 @@ impl<'a> Parser<'a> {
     }
 
     /// if `require_interval_units` is `true`, continue parsing expressions until a unit is found
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (interval expression, whether a unit is found)
     pub fn parse_interval_expr_units_required(&mut self) -> Result<(Expr, bool), ParserError> {
         let mut expr = self.parse_prefix()?;
 
@@ -2110,6 +2114,10 @@ impl<'a> Parser<'a> {
     }
 
     /// if `require_interval_units` is `false`, just parse the first expression, but check if the next token is a unit
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (interval expression, whether a unit is found)
     pub fn parse_interval_expr_units_not_require(&mut self) -> Result<(Expr, bool), ParserError> {
         self.parse_prefix()
             .map(|expr| (expr, self.next_token_is_unit()))

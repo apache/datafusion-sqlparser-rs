@@ -4887,7 +4887,113 @@ fn parse_literal_timestamp_with_time_zone() {
 
 #[test]
 fn parse_interval_all() {
-    // these intervals expressions should work with both variants of INTERVAL
+    // these intervals expressions all work with both variants of INTERVAL
+
+    let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
+            leading_field: Some(DateTimeField::Year),
+            leading_precision: None,
+            last_field: Some(DateTimeField::Month),
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
+            leading_field: Some(DateTimeField::Year),
+            leading_precision: None,
+            last_field: Some(DateTimeField::Month),
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
+                "01:01.01"
+            )))),
+            leading_field: Some(DateTimeField::Minute),
+            leading_precision: Some(5),
+            last_field: Some(DateTimeField::Second),
+            fractional_seconds_precision: Some(5),
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
+            leading_field: Some(DateTimeField::Second),
+            leading_precision: Some(5),
+            last_field: None,
+            fractional_seconds_precision: Some(4),
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT INTERVAL '10' HOUR";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
+            leading_field: Some(DateTimeField::Hour),
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT INTERVAL 5 DAY";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(number("5"))),
+            leading_field: Some(DateTimeField::Day),
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT INTERVAL '10' HOUR (1)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
+            leading_field: Some(DateTimeField::Hour),
+            leading_precision: Some(1),
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let result = parse_sql_statements("SELECT INTERVAL '1' SECOND TO SECOND");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: SECOND".to_string()),
+        result.unwrap_err(),
+    );
+
+    let result = parse_sql_statements("SELECT INTERVAL '10' HOUR (1) TO HOUR (2)");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: (".to_string()),
+        result.unwrap_err(),
+    );
+
     verified_only_select("SELECT INTERVAL '1' YEAR");
     verified_only_select("SELECT INTERVAL '1' MONTH");
     verified_only_select("SELECT INTERVAL '1' DAY");
@@ -4913,73 +5019,6 @@ fn parse_interval_all() {
 fn parse_interval_unit_required() {
     let dialects_unit_required = all_dialects_where(|d| d.require_interval_units());
 
-    let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
-    let select = dialects_unit_required.verified_only_select(sql);
-    assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
-            leading_field: Some(DateTimeField::Year),
-            leading_precision: None,
-            last_field: Some(DateTimeField::Month),
-            fractional_seconds_precision: None,
-        }),
-        expr_from_projection(only(&select.projection)),
-    );
-
-    let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
-    let select = dialects_unit_required.verified_only_select(sql);
-    assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
-                "01:01.01"
-            )))),
-            leading_field: Some(DateTimeField::Minute),
-            leading_precision: Some(5),
-            last_field: Some(DateTimeField::Second),
-            fractional_seconds_precision: Some(5),
-        }),
-        expr_from_projection(only(&select.projection)),
-    );
-
-    let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
-    let select = dialects_unit_required.verified_only_select(sql);
-    assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
-            leading_field: Some(DateTimeField::Second),
-            leading_precision: Some(5),
-            last_field: None,
-            fractional_seconds_precision: Some(4),
-        }),
-        expr_from_projection(only(&select.projection)),
-    );
-
-    let sql = "SELECT INTERVAL '10' HOUR";
-    let select = dialects_unit_required.verified_only_select(sql);
-    assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
-            leading_field: Some(DateTimeField::Hour),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
-        }),
-        expr_from_projection(only(&select.projection)),
-    );
-
-    let sql = "SELECT INTERVAL 5 DAY";
-    let select = dialects_unit_required.verified_only_select(sql);
-    assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(number("5"))),
-            leading_field: Some(DateTimeField::Day),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
-        }),
-        expr_from_projection(only(&select.projection)),
-    );
-
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = dialects_unit_required.verified_only_select(sql);
     assert_eq!(
@@ -4997,29 +5036,21 @@ fn parse_interval_unit_required() {
         expr_from_projection(only(&select.projection)),
     );
 
-    let sql = "SELECT INTERVAL '10' HOUR (1)";
+    let sql = "SELECT INTERVAL '1' + '1' DAY";
     let select = dialects_unit_required.verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
-            leading_field: Some(DateTimeField::Hour),
-            leading_precision: Some(1),
+            value: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Value(Value::SingleQuotedString("1".to_string()))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Value(Value::SingleQuotedString("1".to_string()))),
+            }),
+            leading_field: Some(DateTimeField::Day),
+            leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
         }),
         expr_from_projection(only(&select.projection)),
-    );
-
-    let result = parse_sql_statements("SELECT INTERVAL '1' SECOND TO SECOND");
-    assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: SECOND".to_string()),
-        result.unwrap_err(),
-    );
-
-    let result = parse_sql_statements("SELECT INTERVAL '10' HOUR (1) TO HOUR (2)");
-    assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: (".to_string()),
-        result.unwrap_err(),
     );
 }
 

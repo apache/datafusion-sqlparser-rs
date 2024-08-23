@@ -4886,6 +4886,30 @@ fn parse_literal_timestamp_with_time_zone() {
 }
 
 #[test]
+fn parse_interval_all() {
+    // these intervals expressions should work with both variants of INTERVAL
+    verified_only_select("SELECT INTERVAL '1' YEAR");
+    verified_only_select("SELECT INTERVAL '1' MONTH");
+    verified_only_select("SELECT INTERVAL '1' DAY");
+    verified_only_select("SELECT INTERVAL '1' HOUR");
+    verified_only_select("SELECT INTERVAL '1' MINUTE");
+    verified_only_select("SELECT INTERVAL '1' SECOND");
+    verified_only_select("SELECT INTERVAL '1' YEAR TO MONTH");
+    verified_only_select("SELECT INTERVAL '1' DAY TO HOUR");
+    verified_only_select("SELECT INTERVAL '1' DAY TO MINUTE");
+    verified_only_select("SELECT INTERVAL '1' DAY TO SECOND");
+    verified_only_select("SELECT INTERVAL '1' HOUR TO MINUTE");
+    verified_only_select("SELECT INTERVAL '1' HOUR TO SECOND");
+    verified_only_select("SELECT INTERVAL '1' MINUTE TO SECOND");
+    verified_only_select("SELECT INTERVAL 1 YEAR");
+    verified_only_select("SELECT INTERVAL 1 MONTH");
+    verified_only_select("SELECT INTERVAL 1 DAY");
+    verified_only_select("SELECT INTERVAL 1 HOUR");
+    verified_only_select("SELECT INTERVAL 1 MINUTE");
+    verified_only_select("SELECT INTERVAL 1 SECOND");
+}
+
+#[test]
 fn parse_interval_unit_required() {
     let dialects_unit_required = all_dialects_where(|d| d.require_interval_units());
 
@@ -4997,20 +5021,6 @@ fn parse_interval_unit_required() {
         ParserError::ParserError("Expected: end of statement, found: (".to_string()),
         result.unwrap_err(),
     );
-
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' YEAR");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' MONTH");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' DAY");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' HOUR");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' MINUTE");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' SECOND");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' YEAR TO MONTH");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' DAY TO HOUR");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' DAY TO MINUTE");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' DAY TO SECOND");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' HOUR TO MINUTE");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' HOUR TO SECOND");
-    dialects_unit_required.verified_only_select("SELECT INTERVAL '1' MINUTE TO SECOND");
 }
 
 #[test]

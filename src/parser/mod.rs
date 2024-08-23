@@ -887,63 +887,6 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn parse_interval_expr(&mut self) -> Result<(Expr, bool), ParserError> {
-        let mut expr = self.parse_prefix()?;
-
-        if self.dialect.require_interval_units() {
-            // if require_interval_units is true, continue parsing expressions until a unit is foudn
-            loop {
-                if self.next_token_is_unit() {
-                    return Ok((expr, true));
-                } else {
-                    expr = self.parse_infix(expr, self.dialect.prec_unknown())?;
-                }
-            }
-        } else {
-            // otherwise, check if the next token is a unit, but don't iterate
-            Ok((expr, self.next_token_is_unit()))
-        }
-    }
-
-    pub fn next_token_is_unit(&mut self) -> bool {
-        let token_loc = self.peek_token();
-        if let Token::Word(word) = token_loc.token {
-            if matches!(
-                word.keyword,
-                Keyword::YEAR
-                    | Keyword::MONTH
-                    | Keyword::WEEK
-                    | Keyword::DAY
-                    | Keyword::HOUR
-                    | Keyword::MINUTE
-                    | Keyword::SECOND
-                    | Keyword::CENTURY
-                    | Keyword::DECADE
-                    | Keyword::DOW
-                    | Keyword::DOY
-                    | Keyword::EPOCH
-                    | Keyword::ISODOW
-                    | Keyword::ISOYEAR
-                    | Keyword::JULIAN
-                    | Keyword::MICROSECOND
-                    | Keyword::MICROSECONDS
-                    | Keyword::MILLENIUM
-                    | Keyword::MILLENNIUM
-                    | Keyword::MILLISECOND
-                    | Keyword::MILLISECONDS
-                    | Keyword::NANOSECOND
-                    | Keyword::NANOSECONDS
-                    | Keyword::QUARTER
-                    | Keyword::TIMEZONE
-                    | Keyword::TIMEZONE_HOUR
-                    | Keyword::TIMEZONE_MINUTE
-            ) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
         let condition = self.parse_expr()?;
         let message = if self.parse_keyword(Keyword::AS) {
@@ -2102,7 +2045,11 @@ impl<'a> Parser<'a> {
         // don't currently try to parse it. (The sign can instead be included
         // inside the value string.)
 
-        let (value, has_units) = self.parse_interval_expr()?;
+        let (value, has_units) = if self.dialect.require_interval_units() {
+            self.parse_interval_expr_units_required()?
+        } else {
+            self.parse_interval_expr_units_not_require()?
+        };
 
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.
@@ -2147,6 +2094,64 @@ impl<'a> Parser<'a> {
             last_field,
             fractional_seconds_precision: fsec_precision,
         }))
+    }
+
+    /// if `require_interval_units` is `true`, continue parsing expressions until a unit is found
+    pub fn parse_interval_expr_units_required(&mut self) -> Result<(Expr, bool), ParserError> {
+        let mut expr = self.parse_prefix()?;
+
+        loop {
+            if self.next_token_is_unit() {
+                return Ok((expr, true));
+            } else {
+                expr = self.parse_infix(expr, self.dialect.prec_unknown())?;
+            }
+        }
+    }
+
+    /// if `require_interval_units` is `false`, just parse the first expression, but check if the next token is a unit
+    pub fn parse_interval_expr_units_not_require(&mut self) -> Result<(Expr, bool), ParserError> {
+        self.parse_prefix()
+            .map(|expr| (expr, self.next_token_is_unit()))
+    }
+
+    pub fn next_token_is_unit(&mut self) -> bool {
+        let token_loc = self.peek_token();
+        if let Token::Word(word) = token_loc.token {
+            if matches!(
+                word.keyword,
+                Keyword::YEAR
+                    | Keyword::MONTH
+                    | Keyword::WEEK
+                    | Keyword::DAY
+                    | Keyword::HOUR
+                    | Keyword::MINUTE
+                    | Keyword::SECOND
+                    | Keyword::CENTURY
+                    | Keyword::DECADE
+                    | Keyword::DOW
+                    | Keyword::DOY
+                    | Keyword::EPOCH
+                    | Keyword::ISODOW
+                    | Keyword::ISOYEAR
+                    | Keyword::JULIAN
+                    | Keyword::MICROSECOND
+                    | Keyword::MICROSECONDS
+                    | Keyword::MILLENIUM
+                    | Keyword::MILLENNIUM
+                    | Keyword::MILLISECOND
+                    | Keyword::MILLISECONDS
+                    | Keyword::NANOSECOND
+                    | Keyword::NANOSECONDS
+                    | Keyword::QUARTER
+                    | Keyword::TIMEZONE
+                    | Keyword::TIMEZONE_HOUR
+                    | Keyword::TIMEZONE_MINUTE
+            ) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Bigquery specific: Parse a struct literal

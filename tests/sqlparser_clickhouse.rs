@@ -1233,6 +1233,39 @@ fn test_prewhere() {
 }
 
 #[test]
+fn parse_use() {
+    let valid_object_names = [
+        "mydb",
+        "SCHEMA",
+        "DATABASE",
+        "CATALOG",
+        "WAREHOUSE",
+        "DEFAULT",
+    ];
+    let quote_styles = ['"', '`'];
+
+    for object_name in &valid_object_names {
+        // Test single identifier without quotes
+        assert_eq!(
+            clickhouse().verified_stmt(&format!("USE {}", object_name)),
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+                object_name.to_string()
+            )])))
+        );
+        for &quote in &quote_styles {
+            // Test single identifier with different type of quotes
+            assert_eq!(
+                clickhouse().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                    quote,
+                    object_name.to_string(),
+                )])))
+            );
+        }
+    }
+}
+
+#[test]
 fn test_query_with_format_clause() {
     let format_options = vec!["TabSeparated", "JSONCompact", "NULL"];
     for format in &format_options {

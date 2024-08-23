@@ -756,3 +756,55 @@ fn test_duckdb_union_datatype() {
         stmt
     );
 }
+
+#[test]
+fn parse_use() {
+    let valid_object_names = [
+        "mydb",
+        "SCHEMA",
+        "DATABASE",
+        "CATALOG",
+        "WAREHOUSE",
+        "DEFAULT",
+    ];
+    let quote_styles = ['"', '\''];
+
+    for object_name in &valid_object_names {
+        // Test single identifier without quotes
+        assert_eq!(
+            duckdb().verified_stmt(&format!("USE {}", object_name)),
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+                object_name.to_string()
+            )])))
+        );
+        for &quote in &quote_styles {
+            // Test single identifier with different type of quotes
+            assert_eq!(
+                duckdb().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                    quote,
+                    object_name.to_string(),
+                )])))
+            );
+        }
+    }
+
+    for &quote in &quote_styles {
+        // Test double identifier with different type of quotes
+        assert_eq!(
+            duckdb().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
+            Statement::Use(Use::Object(ObjectName(vec![
+                Ident::with_quote(quote, "CATALOG"),
+                Ident::with_quote(quote, "my_schema")
+            ])))
+        );
+    }
+    // Test double identifier without quotes
+    assert_eq!(
+        duckdb().verified_stmt("USE mydb.my_schema"),
+        Statement::Use(Use::Object(ObjectName(vec![
+            Ident::new("mydb"),
+            Ident::new("my_schema")
+        ])))
+    );
+}

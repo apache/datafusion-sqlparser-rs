@@ -31,7 +31,7 @@ pub use self::data_type::{
     ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, ExactNumberInfo,
     StructBracketKind, TimezoneInfo,
 };
-pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
+pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue, Use};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, ConstraintCharacteristics, Deduplicate, DeferrableInitial, GeneratedAs,
@@ -2515,11 +2515,9 @@ pub enum Statement {
     /// Note: this is a MySQL-specific statement.
     ShowCollation { filter: Option<ShowStatementFilter> },
     /// ```sql
-    /// USE
+    /// `USE ...`
     /// ```
-    ///
-    /// Note: This is a MySQL-specific statement.
-    Use { db_name: Ident },
+    Use(Use),
     /// ```sql
     /// START  [ TRANSACTION | WORK ] | START TRANSACTION } ...
     /// ```
@@ -4125,10 +4123,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Use { db_name } => {
-                write!(f, "USE {db_name}")?;
-                Ok(())
-            }
+            Statement::Use(use_expr) => use_expr.fmt(f),
             Statement::ShowCollation { filter } => {
                 write!(f, "SHOW COLLATION")?;
                 if let Some(filter) = filter {

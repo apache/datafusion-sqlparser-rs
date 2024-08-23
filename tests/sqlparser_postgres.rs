@@ -4838,6 +4838,7 @@ fn parse_trigger_related_functions() {
             order_by: None,
             partition_by: None,
             cluster_by: None,
+            clustered_by: None,
             options: None,
             strict: false,
             copy_grants: false,

@@ -78,4 +78,12 @@ impl Dialect for GenericDialect {
     fn support_map_literal_syntax(&self) -> bool {
         true
     }
+
+    fn allow_extract_custom(&self) -> bool {
+        true
+    }
+
+    fn allow_extract_single_quotes(&self) -> bool {
+        true
+    }
 }

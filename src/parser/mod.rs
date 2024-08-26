@@ -5591,7 +5591,7 @@ impl<'a> Parser<'a> {
                     }
                     c += 1;
                     if c > 5 {
-                        break
+                        break;
                     }
                 }
             } else {

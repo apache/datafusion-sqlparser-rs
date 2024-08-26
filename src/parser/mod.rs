@@ -5549,7 +5549,6 @@ impl<'a> Parser<'a> {
         global: Option<bool>,
         transient: bool,
     ) -> Result<Statement, ParserError> {
-        println!("Debug 0");
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
@@ -5562,7 +5561,6 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        println!("Debug 5");
 
         let clone = if self.parse_keyword(Keyword::CLONE) {
             self.parse_object_name(allow_unquoted_hyphen).ok()
@@ -5573,7 +5571,6 @@ impl<'a> Parser<'a> {
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
 
-        println!("Debug 7");
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
@@ -5581,11 +5578,31 @@ impl<'a> Parser<'a> {
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let mut with_options: Vec<SqlOption> = vec![];
-        println!("Debug 10");
-        if !self.parse_keywords(&[Keyword::WITH, Keyword::ORDER]) {
-            with_options = self.parse_options(Keyword::WITH)?;
+        let mut order_exprs: Vec<Vec<OrderByExpr>> = vec![];
+        if self.parse_keyword(Keyword::WITH) {
+            if self.parse_keyword(Keyword::ORDER) {
+                self.expect_token(&Token::LParen)?;
+                let mut c = 0;
+                loop {
+                    order_exprs.push(vec![self.parse_order_by_expr()?]);
+                    if !self.consume_token(&Token::Comma) {
+                        self.expect_token(&Token::RParen)?;
+                        break;
+                    }
+                    c += 1;
+                    if c > 5 {
+                        break
+                    }
+                }
+            } else {
+                with_options = self.parse_options_in_parentheses()?;
+            }
         }
-        println!("Debug 11");
+
+        let mut order_exprs_option: Option<Vec<Vec<OrderByExpr>>> = None;
+        if !order_exprs.is_empty() {
+            order_exprs_option = Some(order_exprs);
+        }
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {
@@ -5618,7 +5635,6 @@ impl<'a> Parser<'a> {
             None
         };
 
-        println!("Debug 20");
         // ClickHouse supports `PRIMARY KEY`, before `ORDER BY`
         // https://clickhouse.com/docs/en/sql-reference/statements/create/table#primary-key
         let primary_key = if dialect_of!(self is ClickHouseDialect | GenericDialect)
@@ -5629,32 +5645,6 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let with_order = if self.parse_keywords(&[Keyword::WITH, Keyword::ORDER]) {
-            let mut values = vec![];
-            self.expect_token(&Token::LParen)?;
-            loop {
-                values.push(self.parse_order_by_expr()?);
-                if !self.consume_token(&Token::Comma) {
-                    self.expect_token(&Token::RParen)?;
-                    break;
-                }
-            }
-            Some(values)
-        } else {
-            None
-        };
-
-        let mut order_exprs: Vec<Vec<OrderByExpr>> = vec![];
-        while let Some(o) = &with_order {
-            order_exprs.push(o.clone())
-        }
-
-        let mut order_exprs_option: Option<Vec<Vec<OrderByExpr>>> = None;
-        if !order_exprs.is_empty() {
-            order_exprs_option = Some(order_exprs);
-        }
-
-        println!("Debug 30");
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             if self.consume_token(&Token::LParen) {
                 let columns = if self.peek_token() != Token::RParen {
@@ -5731,7 +5721,6 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        println!("Debug 50");
 
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
@@ -6364,13 +6353,17 @@ impl<'a> Parser<'a> {
 
     pub fn parse_options(&mut self, keyword: Keyword) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keyword(keyword) {
-            self.expect_token(&Token::LParen)?;
-            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(options)
+            self.parse_options_in_parentheses()
         } else {
             Ok(vec![])
         }
+    }
+
+    fn parse_options_in_parentheses(&mut self) -> Result<Vec<SqlOption>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(options)
     }
 
     pub fn parse_options_with_keywords(

@@ -4849,6 +4849,7 @@ fn parse_trigger_related_functions() {
             with_aggregation_policy: None,
             with_row_access_policy: None,
             with_tags: None,
+            with_order: None,
         }
     );
 

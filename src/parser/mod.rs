@@ -5582,15 +5582,10 @@ impl<'a> Parser<'a> {
         if self.parse_keyword(Keyword::WITH) {
             if self.parse_keyword(Keyword::ORDER) {
                 self.expect_token(&Token::LParen)?;
-                let mut c = 0;
                 loop {
                     order_exprs.push(vec![self.parse_order_by_expr()?]);
                     if !self.consume_token(&Token::Comma) {
                         self.expect_token(&Token::RParen)?;
-                        break;
-                    }
-                    c += 1;
-                    if c > 5 {
                         break;
                     }
                 }

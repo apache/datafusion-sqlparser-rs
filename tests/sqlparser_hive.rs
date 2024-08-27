@@ -18,7 +18,7 @@
 use sqlparser::ast::{
     CreateFunctionBody, CreateFunctionUsing, Expr, Function, FunctionArgumentList,
     FunctionArguments, Ident, ObjectName, OneOrManyWithParens, SelectItem, Statement, TableFactor,
-    UnaryOperator, Value,
+    UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::ParserError;
@@ -399,6 +399,36 @@ fn parse_delimited_identifiers() {
     hive().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     hive().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
     //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
+}
+
+#[test]
+fn parse_use() {
+    let valid_object_names = ["mydb", "SCHEMA", "DATABASE", "CATALOG", "WAREHOUSE"];
+    let quote_styles = ['\'', '"', '`'];
+    for object_name in &valid_object_names {
+        // Test single identifier without quotes
+        assert_eq!(
+            hive().verified_stmt(&format!("USE {}", object_name)),
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+                object_name.to_string()
+            )])))
+        );
+        for &quote in &quote_styles {
+            // Test single identifier with different type of quotes
+            assert_eq!(
+                hive().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                    quote,
+                    object_name.to_string(),
+                )])))
+            );
+        }
+    }
+    // Test DEFAULT keyword that is special case in Hive
+    assert_eq!(
+        hive().verified_stmt("USE DEFAULT"),
+        Statement::Use(Use::Default)
+    );
 }
 
 fn hive() -> TestedDialects {

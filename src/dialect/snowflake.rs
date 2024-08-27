@@ -158,6 +158,14 @@ impl Dialect for SnowflakeDialect {
     fn describe_requires_table_keyword(&self) -> bool {
         true
     }
+
+    fn allow_extract_custom(&self) -> bool {
+        true
+    }
+
+    fn allow_extract_single_quotes(&self) -> bool {
+        true
+    }
 }
 
 /// Parse snowflake create table statement.

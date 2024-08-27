@@ -2474,7 +2474,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(TIMEZONE_REGION FROM d)");
     verified_stmt("SELECT EXTRACT(TIME FROM d)");
 
-    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| d.allow_extract_custom());
     let res = dialects.parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
     assert_eq!(
         ParserError::ParserError("Expected: date/time field, found: JIFFY".to_string()),
@@ -2573,7 +2573,7 @@ fn parse_ceil_datetime() {
     verified_stmt("SELECT CEIL(d TO SECOND) FROM df");
     verified_stmt("SELECT CEIL(d TO MILLISECOND) FROM df");
 
-    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| d.allow_extract_custom());
     let res = dialects.parse_sql_statements("SELECT CEIL(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected: date/time field, found: JIFFY".to_string()),
@@ -2600,7 +2600,7 @@ fn parse_floor_datetime() {
     verified_stmt("SELECT FLOOR(d TO SECOND) FROM df");
     verified_stmt("SELECT FLOOR(d TO MILLISECOND) FROM df");
 
-    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| d.allow_extract_custom());
     let res = dialects.parse_sql_statements("SELECT FLOOR(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected: date/time field, found: JIFFY".to_string()),
@@ -10466,4 +10466,76 @@ fn test_group_by_nothing() {
             group_by
         );
     }
+}
+
+#[test]
+fn test_extract_seconds_ok() {
+    let dialects = all_dialects_where(|d| d.allow_extract_custom());
+    let stmt = dialects.verified_expr("EXTRACT(seconds FROM '2 seconds'::INTERVAL)");
+
+    assert_eq!(
+        stmt,
+        Expr::Extract {
+            field: DateTimeField::Custom(Ident {
+                value: "seconds".to_string(),
+                quote_style: None,
+            }),
+            syntax: ExtractSyntax::From,
+            expr: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "2 seconds".to_string()
+                ))),
+                data_type: DataType::Interval,
+                format: None,
+            }),
+        }
+    )
+}
+
+#[test]
+fn test_extract_seconds_single_quote_ok() {
+    let dialects = all_dialects_where(|d| d.allow_extract_custom());
+    let stmt = dialects.verified_expr(r#"EXTRACT('seconds' FROM '2 seconds'::INTERVAL)"#);
+
+    assert_eq!(
+        stmt,
+        Expr::Extract {
+            field: DateTimeField::Custom(Ident {
+                value: "seconds".to_string(),
+                quote_style: Some('\''),
+            }),
+            syntax: ExtractSyntax::From,
+            expr: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "2 seconds".to_string()
+                ))),
+                data_type: DataType::Interval,
+                format: None,
+            }),
+        }
+    )
+}
+
+#[test]
+fn test_extract_seconds_err() {
+    let sql = "SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)";
+    let dialects = all_dialects_except(|d| d.allow_extract_custom());
+    let err = dialects.parse_sql_statements(sql).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Expected: date/time field, found: seconds"
+    );
+}
+
+#[test]
+fn test_extract_seconds_single_quote_err() {
+    let sql = r#"SELECT EXTRACT('seconds' FROM '2 seconds'::INTERVAL)"#;
+    let dialects = all_dialects_except(|d| d.allow_extract_single_quotes());
+    let err = dialects.parse_sql_statements(sql).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Expected: date/time field, found: 'seconds'"
+    );
 }

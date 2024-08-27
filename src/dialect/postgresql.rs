@@ -154,6 +154,14 @@ impl Dialect for PostgreSqlDialect {
             Precedence::Or => OR_PREC,
         }
     }
+
+    fn allow_extract_custom(&self) -> bool {
+        true
+    }
+
+    fn allow_extract_single_quotes(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {

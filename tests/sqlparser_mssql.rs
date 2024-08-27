@@ -621,6 +621,38 @@ fn parse_mssql_declare() {
     );
 }
 
+#[test]
+fn parse_use() {
+    let valid_object_names = [
+        "mydb",
+        "SCHEMA",
+        "DATABASE",
+        "CATALOG",
+        "WAREHOUSE",
+        "DEFAULT",
+    ];
+    let quote_styles = ['\'', '"'];
+    for object_name in &valid_object_names {
+        // Test single identifier without quotes
+        assert_eq!(
+            ms().verified_stmt(&format!("USE {}", object_name)),
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+                object_name.to_string()
+            )])))
+        );
+        for &quote in &quote_styles {
+            // Test single identifier with different type of quotes
+            assert_eq!(
+                ms().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                    quote,
+                    object_name.to_string(),
+                )])))
+            );
+        }
+    }
+}
+
 fn ms() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MsSqlDialect {})],

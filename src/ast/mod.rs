@@ -2013,11 +2013,12 @@ pub enum Statement {
     Truncate {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
+        table_names: Vec<ObjectName>,
         partitions: Option<Vec<Expr>>,
         /// TABLE - optional keyword;
         table: bool,
         /// Postgres-specific option
-        /// TRUNCATE [ TABLE ] [ ONLY ] name
+        /// [ TRUNCATE TABLE ONLY ]
         only: bool,
         /// Postgres-specific option
         /// [ RESTART IDENTITY | CONTINUE IDENTITY ]
@@ -3140,7 +3141,8 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Truncate {
-                table_name,
+                table_name: _,
+                table_names,
                 partitions,
                 table,
                 only,
@@ -3149,7 +3151,15 @@ impl fmt::Display for Statement {
             } => {
                 let table = if *table { "TABLE " } else { "" };
                 let only = if *only { "ONLY " } else { "" };
-                write!(f, "TRUNCATE {table}{only}{table_name}")?;
+
+                let table_names = table_names
+                    .iter()
+                    .map(|table_name| table_name.to_string()) // replace `to_string()` with the appropriate method if necessary
+                    .collect::<Vec<String>>()
+                    .join(", ");
+
+                write!(f, "TRUNCATE {table}{only}{table_names}")?;
+
                 if let Some(identity) = identity {
                     match identity {
                         TruncateIdentityOption::Restart => write!(f, " RESTART IDENTITY")?,

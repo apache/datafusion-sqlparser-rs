@@ -682,7 +682,11 @@ impl<'a> Parser<'a> {
     pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
         let table = self.parse_keyword(Keyword::TABLE);
         let only = self.parse_keyword(Keyword::ONLY);
-        let table_name = self.parse_object_name(false)?;
+
+        let table_names = self.parse_comma_separated(|p| p.parse_object_name(false))?;
+
+        // Unwrap is safe - the preceding parse  fails if there is not at least one table name
+        let table_name = table_names.first().unwrap().clone();
 
         let mut partitions = None;
         if self.parse_keyword(Keyword::PARTITION) {
@@ -709,6 +713,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::Truncate {
             table_name,
+            table_names,
             partitions,
             table,
             only,

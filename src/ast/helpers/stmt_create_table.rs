@@ -75,7 +75,7 @@ pub struct CreateTableBuilder {
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<Ident>,
     pub primary_key: Option<Box<Expr>>,
-    pub with_order: Option<Vec<Vec<OrderByExpr>>>,
+    pub with_order: Vec<Vec<OrderByExpr>>,
     pub order_by: Option<OneOrManyWithParens<Expr>>,
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
@@ -135,7 +135,7 @@ impl CreateTableBuilder {
             max_data_extension_time_in_days: None,
             default_ddl_collation: None,
             with_aggregation_policy: None,
-            with_order: None,
+            with_order: vec![],
             with_row_access_policy: None,
             with_tags: None,
         }
@@ -273,7 +273,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn with_order(mut self, with_order: Option<Vec<Vec<OrderByExpr>>>) -> Self {
+    pub fn with_order(mut self, with_order: Vec<Vec<OrderByExpr>>) -> Self {
         self.with_order = with_order;
         self
     }

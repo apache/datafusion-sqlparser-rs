@@ -5594,10 +5594,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let mut order_exprs_option: Option<Vec<Vec<OrderByExpr>>> = None;
-        if !order_exprs.is_empty() {
-            order_exprs_option = Some(order_exprs);
-        }
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {
@@ -5745,7 +5741,7 @@ impl<'a> Parser<'a> {
             .cluster_by(create_table_config.cluster_by)
             .options(create_table_config.options)
             .primary_key(primary_key)
-            .with_order(order_exprs_option)
+            .with_order(order_exprs)
             .strict(strict)
             .build())
     }

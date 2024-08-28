@@ -78,4 +78,8 @@ impl Dialect for GenericDialect {
     fn support_map_literal_syntax(&self) -> bool {
         true
     }
+
+    fn supports_create_index_with_clause(&self) -> bool {
+        true
+    }
 }

@@ -5174,7 +5174,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let with = if self.parse_keyword(Keyword::WITH) {
+        let with = if self.dialect.supports_create_index_with_clause()
+            && self.parse_keyword(Keyword::WITH)
+        {
             self.expect_token(&Token::LParen)?;
             let with_params = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;

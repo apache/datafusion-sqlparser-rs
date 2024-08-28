@@ -7524,50 +7524,6 @@ fn test_create_index_with_using_function() {
 }
 
 #[test]
-fn test_create_index_with_with_clause() {
-    let sql = "CREATE UNIQUE INDEX title_idx ON films(title) WITH (fillfactor = 70, single_param)";
-    let indexed_columns = vec![OrderByExpr {
-        expr: Expr::Identifier(Ident::new("title")),
-        asc: None,
-        nulls_first: None,
-        with_fill: None,
-    }];
-    let with_parameters = vec![
-        Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("fillfactor"))),
-            op: BinaryOperator::Eq,
-            right: Box::new(Expr::Value(number("70"))),
-        },
-        Expr::Identifier(Ident::new("single_param")),
-    ];
-    match verified_stmt(sql) {
-        Statement::CreateIndex(CreateIndex {
-            name: Some(name),
-            table_name,
-            using: None,
-            columns,
-            unique,
-            concurrently,
-            if_not_exists,
-            include,
-            nulls_distinct: None,
-            with,
-            predicate: None,
-        }) => {
-            assert_eq!("title_idx", name.to_string());
-            assert_eq!("films", table_name.to_string());
-            assert_eq!(indexed_columns, columns);
-            assert!(unique);
-            assert!(!concurrently);
-            assert!(!if_not_exists);
-            assert!(include.is_empty());
-            assert_eq!(with_parameters, with);
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_a";
     match verified_stmt(sql) {

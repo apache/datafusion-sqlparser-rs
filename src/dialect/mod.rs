@@ -305,6 +305,12 @@ pub trait Dialect: Debug + Any {
         // return None to fall back to the default behavior
         None
     }
+
+    /// Does the dialect support with clause in create index statement?
+    /// e.g. `CREATE INDEX idx ON t WITH (key = value, key2)`
+    fn supports_create_index_with_clause(&self) -> bool {
+        false
+    }
 }
 
 impl dyn Dialect {

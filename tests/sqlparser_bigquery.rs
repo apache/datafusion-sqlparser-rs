@@ -1146,7 +1146,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Interval(Interval {
+            values: vec![Expr::Interval(ast::Interval {
                 value: Box::new(Expr::Value(Value::SingleQuotedString(
                     "1-2 3 4:5:6.789999".to_string()
                 ))),

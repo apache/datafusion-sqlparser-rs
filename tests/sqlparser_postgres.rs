@@ -4353,10 +4353,7 @@ fn parse_mat_cte() {
 fn parse_at_time_zone() {
     pg_and_generic().verified_expr("CURRENT_TIMESTAMP AT TIME ZONE tz");
     pg_and_generic().verified_expr("CURRENT_TIMESTAMP AT TIME ZONE ('America/' || 'Los_Angeles')");
-}
 
-#[test]
-fn parse_at_time_zone_interval() {
     // check precedence
     let expr = Expr::BinaryOp {
         left: Box::new(Expr::AtTimeZone {
@@ -4385,7 +4382,7 @@ fn parse_at_time_zone_interval() {
         })),
     };
     pretty_assertions::assert_eq!(
-        pg().verified_expr(
+        pg_and_generic().verified_expr(
             "TIMESTAMP '2001-09-28 01:00' AT TIME ZONE 'America/Los_Angeles'::TEXT + INTERVAL '23 hours'",
         ),
         expr

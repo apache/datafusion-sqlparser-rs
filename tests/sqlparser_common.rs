@@ -4969,6 +4969,21 @@ fn parse_interval_all() {
         expr_from_projection(only(&select.projection)),
     );
 
+    let sql = "SELECT INTERVAL '1 DAY'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
+                "1 DAY"
+            )))),
+            leading_field: None,
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
     let result = parse_sql_statements("SELECT INTERVAL '1' SECOND TO SECOND");
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: SECOND".to_string()),
@@ -5000,7 +5015,7 @@ fn parse_interval_all() {
     verified_only_select("SELECT INTERVAL 1 HOUR");
     verified_only_select("SELECT INTERVAL 1 MINUTE");
     verified_only_select("SELECT INTERVAL 1 SECOND");
-    // these are allow with both variants for backwards compatibility
+    // these are allowed with both variants for backwards compatibility
     verified_only_select("SELECT INTERVAL '1 YEAR'");
     verified_only_select("SELECT INTERVAL '1 MONTH'");
     verified_only_select("SELECT INTERVAL '1 DAY'");

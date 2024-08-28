@@ -518,7 +518,7 @@ pub trait Dialect: Debug + Any {
     /// * `INTERVAL '1' + '1' DAY` is VALID
     /// * `INTERVAL '1'` is INVALID
     /// * `INTERVAL '2' SECOND > INTERVAL '1' SECOND` is interpreted correctly, but
-    ///  `INTERVAL '2' > INTERVAL '1'` is not!
+    /// * `INTERVAL '2' > INTERVAL '1'` is not!
     ///
     /// When `false`:
     /// * `INTERVAL '1' DAY` is VALID

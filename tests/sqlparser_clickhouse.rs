@@ -223,6 +223,143 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_alter_table_attach_and_detach_partition() {
+    for operation in &["ATTACH", "DETACH"] {
+        match clickhouse_and_generic()
+            .verified_stmt(format!("ALTER TABLE t0 {operation} PARTITION part").as_str())
+        {
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
+                pretty_assertions::assert_eq!("t0", name.to_string());
+                pretty_assertions::assert_eq!(
+                    operations[0],
+                    if operation == &"ATTACH" {
+                        AlterTableOperation::AttachPartition {
+                            partition: Partition::Expr(Identifier(Ident::new("part"))),
+                        }
+                    } else {
+                        AlterTableOperation::DetachPartition {
+                            partition: Partition::Expr(Identifier(Ident::new("part"))),
+                        }
+                    }
+                );
+            }
+            _ => unreachable!(),
+        }
+
+        match clickhouse_and_generic()
+            .verified_stmt(format!("ALTER TABLE t1 {operation} PART part").as_str())
+        {
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
+                pretty_assertions::assert_eq!("t1", name.to_string());
+                pretty_assertions::assert_eq!(
+                    operations[0],
+                    if operation == &"ATTACH" {
+                        AlterTableOperation::AttachPartition {
+                            partition: Partition::Part(Identifier(Ident::new("part"))),
+                        }
+                    } else {
+                        AlterTableOperation::DetachPartition {
+                            partition: Partition::Part(Identifier(Ident::new("part"))),
+                        }
+                    }
+                );
+            }
+            _ => unreachable!(),
+        }
+
+        // negative cases
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {operation} PARTITION").as_str())
+                .unwrap_err(),
+            ParserError("Expected: an expression:, found: EOF".to_string())
+        );
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {operation} PART").as_str())
+                .unwrap_err(),
+            ParserError("Expected: an expression:, found: EOF".to_string())
+        );
+    }
+}
+
+#[test]
+fn parse_alter_table_add_projection() {
+    match clickhouse_and_generic().verified_stmt(concat!(
+        "ALTER TABLE t0 ADD PROJECTION IF NOT EXISTS my_name",
+        " (SELECT a, b GROUP BY a ORDER BY b)",
+    )) {
+        Statement::AlterTable {
+            name, operations, ..
+        } => {
+            assert_eq!(name, ObjectName(vec!["t0".into()]));
+            assert_eq!(1, operations.len());
+            assert_eq!(
+                operations[0],
+                AlterTableOperation::AddProjection {
+                    if_not_exists: true,
+                    name: "my_name".into(),
+                    select: ProjectionSelect {
+                        projection: vec![
+                            UnnamedExpr(Identifier(Ident::new("a"))),
+                            UnnamedExpr(Identifier(Ident::new("b"))),
+                        ],
+                        group_by: Some(GroupByExpr::Expressions(
+                            vec![Identifier(Ident::new("a"))],
+                            vec![]
+                        )),
+                        order_by: Some(OrderBy {
+                            exprs: vec![OrderByExpr {
+                                expr: Identifier(Ident::new("b")),
+                                asc: None,
+                                nulls_first: None,
+                                with_fill: None,
+                            }],
+                            interpolate: None,
+                        }),
+                    }
+                }
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    // leave out IF NOT EXISTS is allowed
+    clickhouse_and_generic()
+        .verified_stmt("ALTER TABLE t0 ADD PROJECTION my_name (SELECT a, b GROUP BY a ORDER BY b)");
+    // leave out GROUP BY is allowed
+    clickhouse_and_generic()
+        .verified_stmt("ALTER TABLE t0 ADD PROJECTION my_name (SELECT a, b ORDER BY b)");
+    // leave out ORDER BY is allowed
+    clickhouse_and_generic()
+        .verified_stmt("ALTER TABLE t0 ADD PROJECTION my_name (SELECT a, b GROUP BY a)");
+
+    // missing select query is not allowed
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name")
+            .unwrap_err(),
+        ParserError("Expected: (, found: EOF".to_string())
+    );
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name ()")
+            .unwrap_err(),
+        ParserError("Expected: SELECT, found: )".to_string())
+    );
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name (SELECT)")
+            .unwrap_err(),
+        ParserError("Expected: an expression:, found: )".to_string())
+    );
+}
+
+#[test]
 fn parse_optimize_table() {
     clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0");
     clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE db.t0");
@@ -1096,6 +1233,39 @@ fn test_prewhere() {
 }
 
 #[test]
+fn parse_use() {
+    let valid_object_names = [
+        "mydb",
+        "SCHEMA",
+        "DATABASE",
+        "CATALOG",
+        "WAREHOUSE",
+        "DEFAULT",
+    ];
+    let quote_styles = ['"', '`'];
+
+    for object_name in &valid_object_names {
+        // Test single identifier without quotes
+        assert_eq!(
+            clickhouse().verified_stmt(&format!("USE {}", object_name)),
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+                object_name.to_string()
+            )])))
+        );
+        for &quote in &quote_styles {
+            // Test single identifier with different type of quotes
+            assert_eq!(
+                clickhouse().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                    quote,
+                    object_name.to_string(),
+                )])))
+            );
+        }
+    }
+}
+
+#[test]
 fn test_query_with_format_clause() {
     let format_options = vec!["TabSeparated", "JSONCompact", "NULL"];
     for format in &format_options {
@@ -1148,6 +1318,89 @@ fn parse_create_table_on_commit_and_as_query() {
             );
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_freeze_and_unfreeze_partition() {
+    // test cases without `WITH NAME`
+    for operation_name in &["FREEZE", "UNFREEZE"] {
+        let sql = format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14'");
+
+        let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
+            "2024-08-14".to_string(),
+        )));
+        match clickhouse_and_generic().verified_stmt(&sql) {
+            Statement::AlterTable { operations, .. } => {
+                assert_eq!(operations.len(), 1);
+                let expected_operation = if operation_name == &"FREEZE" {
+                    AlterTableOperation::FreezePartition {
+                        partition: expected_partition,
+                        with_name: None,
+                    }
+                } else {
+                    AlterTableOperation::UnfreezePartition {
+                        partition: expected_partition,
+                        with_name: None,
+                    }
+                };
+                assert_eq!(operations[0], expected_operation);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    // test case with `WITH NAME`
+    for operation_name in &["FREEZE", "UNFREEZE"] {
+        let sql =
+            format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14' WITH NAME 'hello'");
+        match clickhouse_and_generic().verified_stmt(&sql) {
+            Statement::AlterTable { operations, .. } => {
+                assert_eq!(operations.len(), 1);
+                let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
+                    "2024-08-14".to_string(),
+                )));
+                let expected_operation = if operation_name == &"FREEZE" {
+                    AlterTableOperation::FreezePartition {
+                        partition: expected_partition,
+                        with_name: Some(Ident::with_quote('\'', "hello")),
+                    }
+                } else {
+                    AlterTableOperation::UnfreezePartition {
+                        partition: expected_partition,
+                        with_name: Some(Ident::with_quote('\'', "hello")),
+                    }
+                };
+                assert_eq!(operations[0], expected_operation);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    // negative cases
+    for operation_name in &["FREEZE", "UNFREEZE"] {
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {operation_name} PARTITION").as_str())
+                .unwrap_err(),
+            ParserError("Expected: an expression:, found: EOF".to_string())
+        );
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(
+                    format!("ALTER TABLE t0 {operation_name} PARTITION p0 WITH").as_str()
+                )
+                .unwrap_err(),
+            ParserError("Expected: NAME, found: EOF".to_string())
+        );
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(
+                    format!("ALTER TABLE t0 {operation_name} PARTITION p0 WITH NAME").as_str()
+                )
+                .unwrap_err(),
+            ParserError("Expected: identifier, found: EOF".to_string())
+        );
     }
 }
 
@@ -1225,6 +1478,36 @@ fn parse_select_table_function_settings() {
         clickhouse_and_generic()
             .parse_sql_statements(sql)
             .expect_err("Expected: SETTINGS key = value, found: ");
+    }
+}
+
+#[test]
+fn explain_describe() {
+    clickhouse().verified_stmt("DESCRIBE test.table");
+    clickhouse().verified_stmt("DESCRIBE TABLE test.table");
+}
+
+#[test]
+fn explain_desc() {
+    clickhouse().verified_stmt("DESC test.table");
+    clickhouse().verified_stmt("DESC TABLE test.table");
+}
+
+#[test]
+fn parse_explain_table() {
+    match clickhouse().verified_stmt("EXPLAIN TABLE test_identifier") {
+        Statement::ExplainTable {
+            describe_alias,
+            hive_format,
+            has_table_keyword,
+            table_name,
+        } => {
+            pretty_assertions::assert_eq!(describe_alias, DescribeAlias::Explain);
+            pretty_assertions::assert_eq!(hive_format, None);
+            pretty_assertions::assert_eq!(has_table_keyword, true);
+            pretty_assertions::assert_eq!("test_identifier", table_name.to_string());
+        }
+        _ => panic!("Unexpected Statement, must be ExplainTable"),
     }
 }
 

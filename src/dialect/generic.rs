@@ -79,6 +79,14 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn allow_extract_custom(&self) -> bool {
+        true
+    }
+
+    fn allow_extract_single_quotes(&self) -> bool {
+        true
+    }
+
     fn supports_create_index_with_clause(&self) -> bool {
         true
     }

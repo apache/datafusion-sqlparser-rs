@@ -26,7 +26,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, DataType, Expr, Ident, MySQLColumnPosition,
-    ObjectName, SequenceOptions, SqlOption,
+    ObjectName, ProjectionSelect, SequenceOptions, SqlOption,
 };
 use crate::tokenizer::Token;
 
@@ -47,6 +47,15 @@ pub enum AlterTableOperation {
         column_def: ColumnDef,
         /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
         column_position: Option<MySQLColumnPosition>,
+    },
+    /// `ADD PROJECTION [IF NOT EXISTS] name ( SELECT <COLUMN LIST EXPR> [GROUP BY] [ORDER BY])`
+    ///
+    /// Note: this is a ClickHouse-specific operation.
+    /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#add-projection)
+    AddProjection {
+        if_not_exists: bool,
+        name: Ident,
+        select: ProjectionSelect,
     },
     /// `DISABLE ROW LEVEL SECURITY`
     ///
@@ -71,6 +80,35 @@ pub enum AlterTableOperation {
         column_name: Ident,
         if_exists: bool,
         cascade: bool,
+    },
+    /// `ATTACH PART|PARTITION <partition_expr>`
+    /// Note: this is a ClickHouse-specific operation, please refer to
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/pakrtition#attach-partitionpart)
+    AttachPartition {
+        // PART is not a short form of PARTITION, it's a separate keyword
+        // which represents a physical file on disk and partition is a logical entity.
+        partition: Partition,
+    },
+    /// `DETACH PART|PARTITION <partition_expr>`
+    /// Note: this is a ClickHouse-specific operation, please refer to
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#detach-partitionpart)
+    DetachPartition {
+        // See `AttachPartition` for more details
+        partition: Partition,
+    },
+    /// `FREEZE PARTITION <partition_expr>`
+    /// Note: this is a ClickHouse-specific operation, please refer to
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#freeze-partition)
+    FreezePartition {
+        partition: Partition,
+        with_name: Option<Ident>,
+    },
+    /// `UNFREEZE PARTITION <partition_expr>`
+    /// Note: this is a ClickHouse-specific operation, please refer to
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#unfreeze-partition)
+    UnfreezePartition {
+        partition: Partition,
+        with_name: Option<Ident>,
     },
     /// `DROP PRIMARY KEY`
     ///
@@ -226,6 +264,17 @@ impl fmt::Display for AlterTableOperation {
 
                 Ok(())
             }
+            AlterTableOperation::AddProjection {
+                if_not_exists,
+                name,
+                select: query,
+            } => {
+                write!(f, "ADD PROJECTION")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {} ({})", name, query)
+            }
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {column_name} {op}")
             }
@@ -272,6 +321,12 @@ impl fmt::Display for AlterTableOperation {
                 column_name,
                 if *cascade { " CASCADE" } else { "" }
             ),
+            AlterTableOperation::AttachPartition { partition } => {
+                write!(f, "ATTACH {partition}")
+            }
+            AlterTableOperation::DetachPartition { partition } => {
+                write!(f, "DETACH {partition}")
+            }
             AlterTableOperation::EnableAlwaysRule { name } => {
                 write!(f, "ENABLE ALWAYS RULE {name}")
             }
@@ -357,6 +412,26 @@ impl fmt::Display for AlterTableOperation {
                     "SET TBLPROPERTIES({})",
                     display_comma_separated(table_properties)
                 )
+            }
+            AlterTableOperation::FreezePartition {
+                partition,
+                with_name,
+            } => {
+                write!(f, "FREEZE {partition}")?;
+                if let Some(name) = with_name {
+                    write!(f, " WITH NAME {name}")?;
+                }
+                Ok(())
+            }
+            AlterTableOperation::UnfreezePartition {
+                partition,
+                with_name,
+            } => {
+                write!(f, "UNFREEZE {partition}")?;
+                if let Some(name) = with_name {
+                    write!(f, " WITH NAME {name}")?;
+                }
+                Ok(())
             }
         }
     }
@@ -1154,7 +1229,7 @@ fn display_option_spaced<T: fmt::Display>(option: &Option<T>) -> impl fmt::Displ
 /// `<constraint_characteristics> = [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ] [ ENFORCED | NOT ENFORCED ]`
 ///
 /// Used in UNIQUE and foreign key constraints. The individual settings may occur in any order.
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Default, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ConstraintCharacteristics {
@@ -1305,6 +1380,9 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
 pub enum Partition {
     Identifier(Ident),
     Expr(Expr),
+    /// ClickHouse supports PART expr which represents physical partition in disk.
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#attach-partitionpart)
+    Part(Expr),
     Partitions(Vec<Expr>),
 }
 
@@ -1313,6 +1391,7 @@ impl fmt::Display for Partition {
         match self {
             Partition::Identifier(id) => write!(f, "PARTITION ID {id}"),
             Partition::Expr(expr) => write!(f, "PARTITION {expr}"),
+            Partition::Part(expr) => write!(f, "PART {expr}"),
             Partition::Partitions(partitions) => {
                 write!(f, "PARTITION ({})", display_comma_separated(partitions))
             }

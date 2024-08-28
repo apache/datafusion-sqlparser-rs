@@ -16,3 +16,5 @@ Cargo.lock
 .vscode
 
 *.swp
+
+.DS_store

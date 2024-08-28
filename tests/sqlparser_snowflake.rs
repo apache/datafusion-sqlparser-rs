@@ -2019,6 +2019,35 @@ fn parse_extract_custom_part() {
     assert_eq!(
         &Expr::Extract {
             field: DateTimeField::Custom(Ident::new("eod")),
+            syntax: ExtractSyntax::From,
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_extract_comma() {
+    let sql = "SELECT EXTRACT(HOUR, d)";
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Hour,
+            syntax: ExtractSyntax::Comma,
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_extract_comma_quoted() {
+    let sql = "SELECT EXTRACT('hour', d)";
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Extract {
+            field: DateTimeField::Custom(Ident::with_quote('\'', "hour")),
+            syntax: ExtractSyntax::Comma,
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
         },
         expr_from_projection(only(&select.projection)),
@@ -2262,4 +2291,112 @@ fn asof_joins() {
 fn test_parse_position() {
     snowflake().verified_query("SELECT position('an', 'banana', 1)");
     snowflake().verified_query("SELECT n, h, POSITION(n IN h) FROM pos");
+}
+
+#[test]
+fn explain_describe() {
+    snowflake().verified_stmt("DESCRIBE test.table");
+    snowflake().verified_stmt("DESCRIBE TABLE test.table");
+}
+
+#[test]
+fn explain_desc() {
+    snowflake().verified_stmt("DESC test.table");
+    snowflake().verified_stmt("DESC TABLE test.table");
+}
+
+#[test]
+fn parse_explain_table() {
+    match snowflake().verified_stmt("EXPLAIN TABLE test_identifier") {
+        Statement::ExplainTable {
+            describe_alias,
+            hive_format,
+            has_table_keyword,
+            table_name,
+        } => {
+            assert_eq!(describe_alias, DescribeAlias::Explain);
+            assert_eq!(hive_format, None);
+            assert_eq!(has_table_keyword, true);
+            assert_eq!("test_identifier", table_name.to_string());
+        }
+        _ => panic!("Unexpected Statement, must be ExplainTable"),
+    }
+}
+
+#[test]
+fn parse_use() {
+    let valid_object_names = ["mydb", "CATALOG", "DEFAULT"];
+    let quote_styles = ['\'', '"', '`'];
+    for object_name in &valid_object_names {
+        // Test single identifier without quotes
+        std::assert_eq!(
+            snowflake().verified_stmt(&format!("USE {}", object_name)),
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+                object_name.to_string()
+            )])))
+        );
+        for &quote in &quote_styles {
+            // Test single identifier with different type of quotes
+            std::assert_eq!(
+                snowflake().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                    quote,
+                    object_name.to_string(),
+                )])))
+            );
+        }
+    }
+
+    for &quote in &quote_styles {
+        // Test double identifier with different type of quotes
+        std::assert_eq!(
+            snowflake().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
+            Statement::Use(Use::Object(ObjectName(vec![
+                Ident::with_quote(quote, "CATALOG"),
+                Ident::with_quote(quote, "my_schema")
+            ])))
+        );
+    }
+    // Test double identifier without quotes
+    std::assert_eq!(
+        snowflake().verified_stmt("USE mydb.my_schema"),
+        Statement::Use(Use::Object(ObjectName(vec![
+            Ident::new("mydb"),
+            Ident::new("my_schema")
+        ])))
+    );
+
+    for &quote in &quote_styles {
+        // Test single and double identifier with keyword and different type of quotes
+        std::assert_eq!(
+            snowflake().verified_stmt(&format!("USE DATABASE {0}my_database{0}", quote)),
+            Statement::Use(Use::Database(ObjectName(vec![Ident::with_quote(
+                quote,
+                "my_database".to_string(),
+            )])))
+        );
+        std::assert_eq!(
+            snowflake().verified_stmt(&format!("USE SCHEMA {0}my_schema{0}", quote)),
+            Statement::Use(Use::Schema(ObjectName(vec![Ident::with_quote(
+                quote,
+                "my_schema".to_string(),
+            )])))
+        );
+        std::assert_eq!(
+            snowflake().verified_stmt(&format!("USE SCHEMA {0}CATALOG{0}.{0}my_schema{0}", quote)),
+            Statement::Use(Use::Schema(ObjectName(vec![
+                Ident::with_quote(quote, "CATALOG"),
+                Ident::with_quote(quote, "my_schema")
+            ])))
+        );
+    }
+
+    // Test invalid syntax - missing identifier
+    let invalid_cases = ["USE SCHEMA", "USE DATABASE", "USE WAREHOUSE"];
+    for sql in &invalid_cases {
+        std::assert_eq!(
+            snowflake().parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+        );
+    }
 }

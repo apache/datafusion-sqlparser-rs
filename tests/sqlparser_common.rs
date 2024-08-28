@@ -2430,6 +2430,7 @@ fn parse_extract() {
     assert_eq!(
         &Expr::Extract {
             field: DateTimeField::Year,
+            syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
         },
         expr_from_projection(only(&select.projection)),
@@ -2473,7 +2474,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(TIMEZONE_REGION FROM d)");
     verified_stmt("SELECT EXTRACT(TIME FROM d)");
 
-    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| d.allow_extract_custom());
     let res = dialects.parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
     assert_eq!(
         ParserError::ParserError("Expected: date/time field, found: JIFFY".to_string()),
@@ -2494,13 +2495,73 @@ fn parse_floor_number() {
 }
 
 #[test]
+fn parse_ceil_number_scale() {
+    verified_stmt("SELECT CEIL(1.5, 1)");
+    verified_stmt("SELECT CEIL(float_column, 3) FROM my_table");
+}
+
+#[test]
+fn parse_floor_number_scale() {
+    verified_stmt("SELECT FLOOR(1.5, 1)");
+    verified_stmt("SELECT FLOOR(float_column, 3) FROM my_table");
+}
+
+#[test]
+fn parse_ceil_scale() {
+    let sql = "SELECT CEIL(d, 2)";
+    let select = verified_only_select(sql);
+
+    #[cfg(feature = "bigdecimal")]
+    assert_eq!(
+        &Expr::Ceil {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: CeilFloorKind::Scale(Value::Number(bigdecimal::BigDecimal::from(2), false)),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    #[cfg(not(feature = "bigdecimal"))]
+    assert_eq!(
+        &Expr::Ceil {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: CeilFloorKind::Scale(Value::Number(2.to_string(), false)),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_floor_scale() {
+    let sql = "SELECT FLOOR(d, 2)";
+    let select = verified_only_select(sql);
+
+    #[cfg(feature = "bigdecimal")]
+    assert_eq!(
+        &Expr::Floor {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: CeilFloorKind::Scale(Value::Number(bigdecimal::BigDecimal::from(2), false)),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    #[cfg(not(feature = "bigdecimal"))]
+    assert_eq!(
+        &Expr::Floor {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: CeilFloorKind::Scale(Value::Number(2.to_string(), false)),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_ceil_datetime() {
     let sql = "SELECT CEIL(d TO DAY)";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Ceil {
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
-            field: DateTimeField::Day,
+            field: CeilFloorKind::DateTimeField(DateTimeField::Day),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2512,7 +2573,7 @@ fn parse_ceil_datetime() {
     verified_stmt("SELECT CEIL(d TO SECOND) FROM df");
     verified_stmt("SELECT CEIL(d TO MILLISECOND) FROM df");
 
-    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| d.allow_extract_custom());
     let res = dialects.parse_sql_statements("SELECT CEIL(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected: date/time field, found: JIFFY".to_string()),
@@ -2527,7 +2588,7 @@ fn parse_floor_datetime() {
     assert_eq!(
         &Expr::Floor {
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
-            field: DateTimeField::Day,
+            field: CeilFloorKind::DateTimeField(DateTimeField::Day),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2539,7 +2600,7 @@ fn parse_floor_datetime() {
     verified_stmt("SELECT FLOOR(d TO SECOND) FROM df");
     verified_stmt("SELECT FLOOR(d TO MILLISECOND) FROM df");
 
-    let dialects = all_dialects_except(|d| d.is::<SnowflakeDialect>() || d.is::<GenericDialect>());
+    let dialects = all_dialects_except(|d| d.allow_extract_custom());
     let res = dialects.parse_sql_statements("SELECT FLOOR(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected: date/time field, found: JIFFY".to_string()),
@@ -4240,29 +4301,16 @@ fn parse_explain_table() {
     validate_explain("EXPLAIN test_identifier", DescribeAlias::Explain, false);
     validate_explain("DESCRIBE test_identifier", DescribeAlias::Describe, false);
     validate_explain("DESC test_identifier", DescribeAlias::Desc, false);
-    validate_explain(
-        "EXPLAIN TABLE test_identifier",
-        DescribeAlias::Explain,
-        true,
-    );
-    validate_explain(
-        "DESCRIBE TABLE test_identifier",
-        DescribeAlias::Describe,
-        true,
-    );
-    validate_explain("DESC TABLE test_identifier", DescribeAlias::Desc, true);
 }
 
 #[test]
 fn explain_describe() {
     verified_stmt("DESCRIBE test.table");
-    verified_stmt("DESCRIBE TABLE test.table");
 }
 
 #[test]
 fn explain_desc() {
     verified_stmt("DESC test.table");
-    verified_stmt("DESC TABLE test.table");
 }
 
 #[test]
@@ -10420,4 +10468,76 @@ fn test_group_by_nothing() {
             group_by
         );
     }
+}
+
+#[test]
+fn test_extract_seconds_ok() {
+    let dialects = all_dialects_where(|d| d.allow_extract_custom());
+    let stmt = dialects.verified_expr("EXTRACT(seconds FROM '2 seconds'::INTERVAL)");
+
+    assert_eq!(
+        stmt,
+        Expr::Extract {
+            field: DateTimeField::Custom(Ident {
+                value: "seconds".to_string(),
+                quote_style: None,
+            }),
+            syntax: ExtractSyntax::From,
+            expr: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "2 seconds".to_string()
+                ))),
+                data_type: DataType::Interval,
+                format: None,
+            }),
+        }
+    )
+}
+
+#[test]
+fn test_extract_seconds_single_quote_ok() {
+    let dialects = all_dialects_where(|d| d.allow_extract_custom());
+    let stmt = dialects.verified_expr(r#"EXTRACT('seconds' FROM '2 seconds'::INTERVAL)"#);
+
+    assert_eq!(
+        stmt,
+        Expr::Extract {
+            field: DateTimeField::Custom(Ident {
+                value: "seconds".to_string(),
+                quote_style: Some('\''),
+            }),
+            syntax: ExtractSyntax::From,
+            expr: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "2 seconds".to_string()
+                ))),
+                data_type: DataType::Interval,
+                format: None,
+            }),
+        }
+    )
+}
+
+#[test]
+fn test_extract_seconds_err() {
+    let sql = "SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)";
+    let dialects = all_dialects_except(|d| d.allow_extract_custom());
+    let err = dialects.parse_sql_statements(sql).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Expected: date/time field, found: seconds"
+    );
+}
+
+#[test]
+fn test_extract_seconds_single_quote_err() {
+    let sql = r#"SELECT EXTRACT('seconds' FROM '2 seconds'::INTERVAL)"#;
+    let dialects = all_dialects_except(|d| d.allow_extract_single_quotes());
+    let err = dialects.parse_sql_statements(sql).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: Expected: date/time field, found: 'seconds'"
+    );
 }

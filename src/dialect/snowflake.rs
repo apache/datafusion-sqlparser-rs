@@ -20,7 +20,7 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     CommentDef, Ident, ObjectName, RowAccessPolicy, Statement, Tag, WrappedCollection,
 };
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -144,6 +144,27 @@ impl Dialect for SnowflakeDialect {
         }
 
         None
+    }
+
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        let token = parser.peek_token();
+        // Snowflake supports the `:` cast operator unlike other dialects
+        match token.token {
+            Token::Colon => Some(Ok(self.prec_value(Precedence::DoubleColon))),
+            _ => None,
+        }
+    }
+
+    fn describe_requires_table_keyword(&self) -> bool {
+        true
+    }
+
+    fn allow_extract_custom(&self) -> bool {
+        true
+    }
+
+    fn allow_extract_single_quotes(&self) -> bool {
+        true
     }
 }
 

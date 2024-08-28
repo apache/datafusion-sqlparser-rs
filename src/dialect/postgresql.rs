@@ -9,9 +9,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use log::debug;
 
 use crate::ast::{CommentObject, Statement};
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -19,6 +20,23 @@ use crate::tokenizer::Token;
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
 #[derive(Debug)]
 pub struct PostgreSqlDialect {}
+
+const DOUBLE_COLON_PREC: u8 = 140;
+const BRACKET_PREC: u8 = 130;
+const COLLATE_PREC: u8 = 120;
+const AT_TZ_PREC: u8 = 110;
+const CARET_PREC: u8 = 100;
+const MUL_DIV_MOD_OP_PREC: u8 = 90;
+const PLUS_MINUS_PREC: u8 = 80;
+// there's no XOR operator in PostgreSQL, but support it here to avoid breaking tests
+const XOR_PREC: u8 = 75;
+const PG_OTHER_PREC: u8 = 70;
+const BETWEEN_LIKE_PREC: u8 = 60;
+const EQ_PREC: u8 = 50;
+const IS_PREC: u8 = 40;
+const NOT_PREC: u8 = 30;
+const AND_PREC: u8 = 20;
+const OR_PREC: u8 = 10;
 
 impl Dialect for PostgreSqlDialect {
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
@@ -67,6 +85,39 @@ impl Dialect for PostgreSqlDialect {
         )
     }
 
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        let token = parser.peek_token();
+        debug!("get_next_precedence() {:?}", token);
+
+        // we only return some custom value here when the behaviour (not merely the numeric value) differs
+        // from the default implementation
+        match token.token {
+            Token::Word(w) if w.keyword == Keyword::COLLATE => Some(Ok(COLLATE_PREC)),
+            Token::LBracket => Some(Ok(BRACKET_PREC)),
+            Token::Arrow
+            | Token::LongArrow
+            | Token::HashArrow
+            | Token::HashLongArrow
+            | Token::AtArrow
+            | Token::ArrowAt
+            | Token::HashMinus
+            | Token::AtQuestion
+            | Token::AtAt
+            | Token::Question
+            | Token::QuestionAnd
+            | Token::QuestionPipe
+            | Token::ExclamationMark
+            | Token::Overlap
+            | Token::CaretAt
+            | Token::StringConcat
+            | Token::Sharp
+            | Token::ShiftRight
+            | Token::ShiftLeft
+            | Token::CustomBinaryOperator(_) => Some(Ok(PG_OTHER_PREC)),
+            _ => None,
+        }
+    }
+
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::COMMENT) {
             Some(parse_comment(parser))
@@ -80,6 +131,35 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_group_by_expr(&self) -> bool {
+        true
+    }
+
+    fn prec_value(&self, prec: Precedence) -> u8 {
+        match prec {
+            Precedence::DoubleColon => DOUBLE_COLON_PREC,
+            Precedence::AtTz => AT_TZ_PREC,
+            Precedence::MulDivModOp => MUL_DIV_MOD_OP_PREC,
+            Precedence::PlusMinus => PLUS_MINUS_PREC,
+            Precedence::Xor => XOR_PREC,
+            Precedence::Ampersand => PG_OTHER_PREC,
+            Precedence::Caret => CARET_PREC,
+            Precedence::Pipe => PG_OTHER_PREC,
+            Precedence::Between => BETWEEN_LIKE_PREC,
+            Precedence::Eq => EQ_PREC,
+            Precedence::Like => BETWEEN_LIKE_PREC,
+            Precedence::Is => IS_PREC,
+            Precedence::PgOther => PG_OTHER_PREC,
+            Precedence::UnaryNot => NOT_PREC,
+            Precedence::And => AND_PREC,
+            Precedence::Or => OR_PREC,
+        }
+    }
+
+    fn allow_extract_custom(&self) -> bool {
+        true
+    }
+
+    fn allow_extract_single_quotes(&self) -> bool {
         true
     }
 

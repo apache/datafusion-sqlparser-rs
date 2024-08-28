@@ -20,7 +20,7 @@
 //!     As a matter of fact, most of these keywords are not used at all
 //!     and could be removed.
 //! 3) a `RESERVED_FOR_TABLE_ALIAS` array with keywords reserved in a
-//!    "table alias" context.
+//!     "table alias" context.
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -108,6 +108,7 @@ define_keywords!(
     AVRO,
     BACKWARD,
     BASE64,
+    BEFORE,
     BEGIN,
     BEGIN_FRAME,
     BEGIN_PARTITION,
@@ -136,6 +137,7 @@ define_keywords!(
     CASCADED,
     CASE,
     CAST,
+    CATALOG,
     CEIL,
     CEILING,
     CENTURY,
@@ -378,6 +380,7 @@ define_keywords!(
     INSENSITIVE,
     INSERT,
     INSTALL,
+    INSTEAD,
     INT,
     INT128,
     INT16,
@@ -539,6 +542,7 @@ define_keywords!(
     PARALLEL,
     PARAMETER,
     PARQUET,
+    PART,
     PARTITION,
     PARTITIONED,
     PARTITIONS,
@@ -573,6 +577,7 @@ define_keywords!(
     PRIVILEGES,
     PROCEDURE,
     PROGRAM,
+    PROJECTION,
     PURGE,
     QUALIFY,
     QUARTER,
@@ -682,6 +687,7 @@ define_keywords!(
     STABLE,
     STAGE,
     START,
+    STATEMENT,
     STATIC,
     STATISTICS,
     STATUS,
@@ -759,6 +765,7 @@ define_keywords!(
     UNBOUNDED,
     UNCACHE,
     UNCOMMITTED,
+    UNFREEZE,
     UNION,
     UNIQUE,
     UNKNOWN,
@@ -798,6 +805,7 @@ define_keywords!(
     VIEW,
     VIRTUAL,
     VOLATILE,
+    WAREHOUSE,
     WEEK,
     WHEN,
     WHENEVER,

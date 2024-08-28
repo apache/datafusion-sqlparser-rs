@@ -500,6 +500,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect allows the `EXTRACT` function to words other than [`Keyword`].
+    fn allow_extract_custom(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect allows the `EXTRACT` function to use single quotes in the part being extracted.
+    fn allow_extract_single_quotes(&self) -> bool {
+        false
+    }
+
     /// Whether or not units are required with interval expressions.
     ///
     /// When `true`:

@@ -155,6 +155,14 @@ impl Dialect for PostgreSqlDialect {
         }
     }
 
+    fn allow_extract_custom(&self) -> bool {
+        true
+    }
+
+    fn allow_extract_single_quotes(&self) -> bool {
+        true
+    }
+
     fn require_interval_units(&self) -> bool {
         false
     }

@@ -510,13 +510,15 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Whether or not units are required with interval expressions.
+    /// Whether expressions (like `1 + 1`) are allowed in `INTERVAL` expressions.
+    ///
+    /// See <https://github.com/sqlparser-rs/sqlparser-rs/pull/1398> for more information.
     ///
     /// When `true`:
     /// * `INTERVAL '1' DAY` is VALID
     /// * `INTERVAL 1 + 1 DAY` is VALID
     /// * `INTERVAL '1' + '1' DAY` is VALID
-    /// * `INTERVAL '1'` is INVALID
+    /// * `INTERVAL '1'` is VALID
     /// * `INTERVAL '2' SECOND > INTERVAL '1' SECOND` is interpreted correctly, but
     /// * `INTERVAL '2' > INTERVAL '1'` is not!
     ///
@@ -526,7 +528,7 @@ pub trait Dialect: Debug + Any {
     /// * `INTERVAL '1 second'` is VALID
     /// * `INTERVAL 1 + 1 DAY` is INVALID
     /// * `INTERVAL '2' > INTERVAL '1'` is interpreted correctly
-    fn prefer_interval_units(&self) -> bool {
+    fn allow_interval_expressions(&self) -> bool {
         true
     }
 }

@@ -167,7 +167,7 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
-    fn prefer_interval_units(&self) -> bool {
+    fn allow_interval_expressions(&self) -> bool {
         false
     }
 }

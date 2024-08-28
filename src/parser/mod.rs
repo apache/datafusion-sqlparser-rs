@@ -2044,7 +2044,7 @@ impl<'a> Parser<'a> {
         // don't currently try to parse it. (The sign can instead be included
         // inside the value string.)
 
-        let value = if self.dialect.prefer_interval_units() {
+        let value = if self.dialect.allow_interval_expressions() {
             // parse a whole expression so `INTERVAL 1 + 1 DAY` is valid
             self.parse_expr()?
         } else {

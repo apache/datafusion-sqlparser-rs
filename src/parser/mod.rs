@@ -2044,10 +2044,13 @@ impl<'a> Parser<'a> {
         // don't currently try to parse it. (The sign can instead be included
         // inside the value string.)
 
-        let (value, has_units) = if self.dialect.require_interval_units() {
-            self.parse_interval_expr_units_required()?
+        let value = if self.dialect.prefer_interval_units() {
+            // parse a whole expression so `INTERVAL 1 + 1 DAY` is valid
+            self.parse_expr()?
         } else {
-            self.parse_interval_expr_units_not_require()?
+            // parse a prefix expression so `INTERVAL 1 DAY` is valid, but `INTERVAL 1 + 1 DAY` is not
+            // this also means that `INTERVAL '5 days' > INTERVAL '1 day'` treated properly
+            self.parse_prefix()?
         };
 
         // Following the string literal is a qualifier which indicates the units
@@ -2055,7 +2058,7 @@ impl<'a> Parser<'a> {
         //
         // Note that PostgreSQL allows omitting the qualifier, so we provide
         // this more general implementation.
-        let leading_field = if has_units {
+        let leading_field = if self.next_token_is_unit() {
             Some(self.parse_date_time_field()?)
         } else {
             None
@@ -2093,33 +2096,6 @@ impl<'a> Parser<'a> {
             last_field,
             fractional_seconds_precision: fsec_precision,
         }))
-    }
-
-    /// if `require_interval_units` is `true`, continue parsing expressions until a unit is found
-    ///
-    /// # Returns
-    ///
-    /// A tuple of (interval expression, whether a unit is found)
-    pub fn parse_interval_expr_units_required(&mut self) -> Result<(Expr, bool), ParserError> {
-        let mut expr = self.parse_prefix()?;
-
-        loop {
-            if self.next_token_is_unit() {
-                return Ok((expr, true));
-            } else {
-                expr = self.parse_infix(expr, self.dialect.prec_unknown())?;
-            }
-        }
-    }
-
-    /// if `require_interval_units` is `false`, just parse the first expression, but check if the next token is a unit
-    ///
-    /// # Returns
-    ///
-    /// A tuple of (interval expression, whether a unit is found)
-    pub fn parse_interval_expr_units_not_require(&mut self) -> Result<(Expr, bool), ParserError> {
-        self.parse_prefix()
-            .map(|expr| (expr, self.next_token_is_unit()))
     }
 
     pub fn next_token_is_unit(&mut self) -> bool {

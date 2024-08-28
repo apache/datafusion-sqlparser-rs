@@ -56,7 +56,7 @@ impl Dialect for DuckDbDialect {
         true
     }
 
-    fn require_interval_units(&self) -> bool {
+    fn prefer_interval_units(&self) -> bool {
         false
     }
 }

@@ -5030,6 +5030,18 @@ fn parse_interval_dont_require_unit() {
 }
 
 #[test]
+fn parse_interval_require_unit() {
+    let dialects = all_dialects_where(|d| d.require_interval_units());
+
+    let sql = "SELECT INTERVAL '1 DAY'";
+    let err = dialects.parse_sql_statements(sql).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: INTERVAL requires a unit after the literal value"
+    )
+}
+
+#[test]
 fn parse_interval_allow_interval_expr() {
     let dialects = all_dialects_where(|d| d.allow_interval_expressions());
 
@@ -5127,7 +5139,8 @@ fn parse_interval_generic() {
 
 #[test]
 fn parse_interval_disallow_interval_expr() {
-    let dialects = all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
+    let dialects =
+        all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = dialects.verified_only_select(sql);
@@ -5181,7 +5194,8 @@ fn parse_interval_disallow_interval_expr() {
 
 #[test]
 fn interval_disallow_interval_expr_gt() {
-    let dialects = all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
+    let dialects =
+        all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
     let expr = dialects.verified_expr("INTERVAL '1 second' > x");
     assert_eq!(
         expr,
@@ -5206,7 +5220,8 @@ fn interval_disallow_interval_expr_gt() {
 
 #[test]
 fn interval_disallow_interval_expr_double_colon() {
-    let dialects = all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
+    let dialects =
+        all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
     let expr = dialects.verified_expr("INTERVAL '1 second'::TEXT");
     assert_eq!(
         expr,
@@ -5233,7 +5248,8 @@ fn parse_interval_and_or_xor() {
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         AND d2_date > d1_date + INTERVAL '3 days'";
 
-    let dialects = all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
+    let dialects =
+        all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
     let actual_ast = dialects.parse_sql_statements(sql).unwrap();
 
     let expected_ast = vec![Statement::Query(Box::new(Query {

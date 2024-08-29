@@ -4472,7 +4472,8 @@ fn parse_window_functions() {
                sum(qux) OVER (ORDER BY a \
                GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
-    let select = verified_only_select(sql);
+    let dialects = all_dialects_except(|d| d.require_interval_units());
+    let select = dialects.verified_only_select(sql);
 
     const EXPECTED_PROJ_QTY: usize = 7;
     assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
@@ -4969,21 +4970,6 @@ fn parse_interval_all() {
         expr_from_projection(only(&select.projection)),
     );
 
-    let sql = "SELECT INTERVAL '1 DAY'";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
-                "1 DAY"
-            )))),
-            leading_field: None,
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
-        }),
-        expr_from_projection(only(&select.projection)),
-    );
-
     let result = parse_sql_statements("SELECT INTERVAL '1' SECOND TO SECOND");
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: SECOND".to_string()),
@@ -5015,13 +5001,32 @@ fn parse_interval_all() {
     verified_only_select("SELECT INTERVAL 1 HOUR");
     verified_only_select("SELECT INTERVAL 1 MINUTE");
     verified_only_select("SELECT INTERVAL 1 SECOND");
-    // these are allowed with both variants for backwards compatibility
-    verified_only_select("SELECT INTERVAL '1 YEAR'");
-    verified_only_select("SELECT INTERVAL '1 MONTH'");
-    verified_only_select("SELECT INTERVAL '1 DAY'");
-    verified_only_select("SELECT INTERVAL '1 HOUR'");
-    verified_only_select("SELECT INTERVAL '1 MINUTE'");
-    verified_only_select("SELECT INTERVAL '1 SECOND'");
+}
+
+#[test]
+fn parse_interval_dont_require_unit() {
+    let dialects = all_dialects_except(|d| d.require_interval_units());
+
+    let sql = "SELECT INTERVAL '1 DAY'";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
+                "1 DAY"
+            )))),
+            leading_field: None,
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+    dialects.verified_only_select("SELECT INTERVAL '1 YEAR'");
+    dialects.verified_only_select("SELECT INTERVAL '1 MONTH'");
+    dialects.verified_only_select("SELECT INTERVAL '1 DAY'");
+    dialects.verified_only_select("SELECT INTERVAL '1 HOUR'");
+    dialects.verified_only_select("SELECT INTERVAL '1 MINUTE'");
+    dialects.verified_only_select("SELECT INTERVAL '1 SECOND'");
 }
 
 #[test]
@@ -5082,10 +5087,18 @@ fn parse_interval_allow_interval_expr() {
             fractional_seconds_precision: None,
         }),
     );
+}
 
+#[test]
+fn parse_interval_generic() {
     // NOTE: this is invalid SQL, hence why we need prefer_interval_units->false
     let sql = "SELECT INTERVAL '1 DAY' > INTERVAL '1 SECOND'";
-    let select = dialects.verified_only_select(sql);
+
+    let generic = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {}) as Box<dyn Dialect>],
+        options: None,
+    };
+    let select = generic.verified_only_select(sql);
     assert_eq!(
         expr_from_projection(only(&select.projection)),
         &Expr::Interval(Interval {
@@ -5114,7 +5127,7 @@ fn parse_interval_allow_interval_expr() {
 
 #[test]
 fn parse_interval_disallow_interval_expr() {
-    let dialects = all_dialects_except(|d| d.allow_interval_expressions());
+    let dialects = all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = dialects.verified_only_select(sql);
@@ -5168,7 +5181,7 @@ fn parse_interval_disallow_interval_expr() {
 
 #[test]
 fn interval_disallow_interval_expr_gt() {
-    let dialects = all_dialects_except(|d| d.allow_interval_expressions());
+    let dialects = all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
     let expr = dialects.verified_expr("INTERVAL '1 second' > x");
     assert_eq!(
         expr,
@@ -5193,7 +5206,7 @@ fn interval_disallow_interval_expr_gt() {
 
 #[test]
 fn interval_disallow_interval_expr_double_colon() {
-    let dialects = all_dialects_except(|d| d.allow_interval_expressions());
+    let dialects = all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
     let expr = dialects.verified_expr("INTERVAL '1 second'::TEXT");
     assert_eq!(
         expr,
@@ -5220,7 +5233,7 @@ fn parse_interval_and_or_xor() {
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         AND d2_date > d1_date + INTERVAL '3 days'";
 
-    let dialects = all_dialects_except(|d| d.allow_interval_expressions());
+    let dialects = all_dialects_where(|d| !d.allow_interval_expressions() && !d.require_interval_units());
     let actual_ast = dialects.parse_sql_statements(sql).unwrap();
 
     let expected_ast = vec![Statement::Query(Box::new(Query {
@@ -5323,20 +5336,19 @@ fn parse_interval_and_or_xor() {
 
     assert_eq!(actual_ast, expected_ast);
 
-    let dialect_no_unit = all_dialects_except(|d| d.allow_interval_expressions());
-    dialect_no_unit.verified_stmt(
+    dialects.verified_stmt(
         "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         AND d2_date > d1_date + INTERVAL '3 days'",
     );
 
-    dialect_no_unit.verified_stmt(
+    dialects.verified_stmt(
         "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         OR d2_date > d1_date + INTERVAL '3 days'",
     );
 
-    dialect_no_unit.verified_stmt(
+    dialects.verified_stmt(
         "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         XOR d2_date > d1_date + INTERVAL '3 days'",

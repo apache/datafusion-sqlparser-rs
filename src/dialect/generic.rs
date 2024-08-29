@@ -86,4 +86,8 @@ impl Dialect for GenericDialect {
     fn allow_extract_single_quotes(&self) -> bool {
         true
     }
+
+    fn require_interval_units(&self) -> bool {
+        false
+    }
 }

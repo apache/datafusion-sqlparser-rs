@@ -2060,6 +2060,10 @@ impl<'a> Parser<'a> {
         // this more general implementation.
         let leading_field = if self.next_token_is_unit() {
             Some(self.parse_date_time_field()?)
+        } else if self.dialect.require_interval_units() {
+            return Err(ParserError::ParserError(
+                "INTERVAL requires a unit like DAY after the literal value".to_string(),
+            ));
         } else {
             None
         };

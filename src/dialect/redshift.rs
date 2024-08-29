@@ -67,4 +67,8 @@ impl Dialect for RedshiftSqlDialect {
     fn allow_interval_expressions(&self) -> bool {
         false
     }
+
+    fn require_interval_units(&self) -> bool {
+        false
+    }
 }

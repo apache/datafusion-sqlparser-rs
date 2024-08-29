@@ -125,7 +125,7 @@ pub struct CreateTable {
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
     /// Datafusion "WITH ORDER" clause
-    /// https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table
+    /// <https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table/>
     pub with_order: Vec<Vec<OrderByExpr>>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>

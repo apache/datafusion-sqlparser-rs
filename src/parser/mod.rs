@@ -12347,35 +12347,35 @@ mod tests {
         let sql = "CREATE TABLE test (foo INT, bar VARCHAR(256)) WITH ORDER (foo ASC)";
         let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
         match ast[0].clone() {
-            Statement::CreateTable(CreateTable {
-                                       with_order,
-                                       ..
-                                   }) => {
-                assert_eq!(with_order, vec![vec![OrderByExpr{
-                    expr: Expr::Identifier(Ident::from("foo")),
-                    asc: Some(true),
-                    nulls_first: None,
-                    with_fill: None,
-                }]]);
-            },
-            _ => unreachable!()
+            Statement::CreateTable(CreateTable { with_order, .. }) => {
+                assert_eq!(
+                    with_order,
+                    vec![vec![OrderByExpr {
+                        expr: Expr::Identifier(Ident::from("foo")),
+                        asc: Some(true),
+                        nulls_first: None,
+                        with_fill: None,
+                    }]]
+                );
+            }
+            _ => unreachable!(),
         }
 
         let sql = "CREATE TABLE test (foo INT, bar VARCHAR(256)) WITH ORDER (bar DESC NULLS FIRST)";
         let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
         match ast[0].clone() {
-            Statement::CreateTable(CreateTable {
-                                       with_order,
-                                       ..
-                                   }) => {
-                assert_eq!(with_order, vec![vec![OrderByExpr{
-                    expr: Expr::Identifier(Ident::from("bar")),
-                    asc: Some(false),
-                    nulls_first: Some(true),
-                    with_fill: None,
-                }]]);
-            },
-            _ => unreachable!()
+            Statement::CreateTable(CreateTable { with_order, .. }) => {
+                assert_eq!(
+                    with_order,
+                    vec![vec![OrderByExpr {
+                        expr: Expr::Identifier(Ident::from("bar")),
+                        asc: Some(false),
+                        nulls_first: Some(true),
+                        with_fill: None,
+                    }]]
+                );
+            }
+            _ => unreachable!(),
         }
     }
 

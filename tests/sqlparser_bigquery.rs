@@ -13,7 +13,6 @@
 #[macro_use]
 mod test_utils;
 
-use sqlparser::ast;
 use std::ops::Deref;
 
 use sqlparser::ast::*;

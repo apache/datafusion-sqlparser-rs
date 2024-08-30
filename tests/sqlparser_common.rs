@@ -4984,18 +4984,36 @@ fn parse_interval() {
         expr_from_projection(only(&select.projection)),
     );
 
-    let sql = "SELECT INTERVAL '1 DAY'";
+    let sql = "SELECT INTERVAL 2 DAY - INTERVAL 2 DAY - INTERVAL 1 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
-                "1 DAY"
-            )))),
-            leading_field: None,
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
-        }),
+        &Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Interval(Interval {
+                    value: Box::new(Expr::Value(number("2"))),
+                    leading_field: Some(DateTimeField::Day),
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None,
+                })),
+                op: BinaryOperator::Minus,
+                right: Box::new(Expr::Interval(Interval {
+                    value: Box::new(Expr::Value(number("2"))),
+                    leading_field: Some(DateTimeField::Day),
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None,
+                })),
+            }),
+            op: BinaryOperator::Minus,
+            right: Box::new(Expr::Interval(Interval {
+                value: Box::new(Expr::Value(number("1"))),
+                leading_field: Some(DateTimeField::Day),
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }))
+        },
         expr_from_projection(only(&select.projection)),
     );
 

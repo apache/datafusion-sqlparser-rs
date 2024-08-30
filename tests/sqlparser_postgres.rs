@@ -4390,6 +4390,43 @@ fn parse_at_time_zone() {
 }
 
 #[test]
+fn parse_interval() {
+    let sql = "SELECT INTERVAL '2 DAY' - INTERVAL '2 DAY' - INTERVAL '1 DAY'";
+    let select = pg().verified_only_select(sql);
+
+    assert_eq!(
+        &Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Interval(Interval {
+                    value: Box::new(Expr::Value(number("2"))),
+                    leading_field: Some(DateTimeField::Day),
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None,
+                })),
+                op: BinaryOperator::Minus,
+                right: Box::new(Expr::Interval(Interval {
+                    value: Box::new(Expr::Value(number("2"))),
+                    leading_field: Some(DateTimeField::Day),
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None,
+                })),
+            }),
+            op: BinaryOperator::Minus,
+            right: Box::new(Expr::Interval(Interval {
+                value: Box::new(Expr::Value(number("1"))),
+                leading_field: Some(DateTimeField::Day),
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }))
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
     match pg().verified_stmt(sql) {
@@ -4731,12 +4768,12 @@ fn parse_trigger_related_functions() {
             IF NEW.salary IS NULL THEN
                 RAISE EXCEPTION '% cannot have null salary', NEW.empname;
             END IF;
-    
+
             -- Who works for us when they must pay for it?
             IF NEW.salary < 0 THEN
                 RAISE EXCEPTION '% cannot have a negative salary', NEW.empname;
             END IF;
-    
+
             -- Remember who changed the payroll when
             NEW.last_date := current_timestamp;
             NEW.last_user := current_user;

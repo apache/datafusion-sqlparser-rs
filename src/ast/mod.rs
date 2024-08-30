@@ -3154,7 +3154,7 @@ impl fmt::Display for Statement {
 
                 let table_names = table_names
                     .iter()
-                    .map(|table_name| table_name.to_string()) // replace `to_string()` with the appropriate method if necessary
+                    .map(|table_name| table_name.to_string())
                     .collect::<Vec<String>>()
                     .join(", ");
 

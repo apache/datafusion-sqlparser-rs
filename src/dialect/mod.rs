@@ -515,7 +515,6 @@ pub trait Dialect: Debug + Any {
     fn supports_create_index_with_clause(&self) -> bool {
         false
     }
-
 }
 
 /// This represents the operators for which precedence must be defined

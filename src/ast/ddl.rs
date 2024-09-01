@@ -26,7 +26,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, DataType, Expr, Ident, MySQLColumnPosition,
-    ObjectName, ProjectionSelect, SequenceOptions, SqlOption,
+    ObjectName, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Value,
 };
 use crate::tokenizer::Token;
 
@@ -1415,5 +1415,32 @@ impl fmt::Display for Deduplicate {
             Deduplicate::All => write!(f, "DEDUPLICATE"),
             Deduplicate::ByExpression(expr) => write!(f, "DEDUPLICATE BY {expr}"),
         }
+    }
+}
+
+/// Hive supports `CLUSTERED BY` statement in `CREATE TABLE`.
+/// Syntax: `CLUSTERED BY (col_name, ...) [SORTED BY (col_name [ASC|DESC], ...)] INTO num_buckets BUCKETS`
+///
+/// [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ClusteredBy {
+    pub columns: Vec<Ident>,
+    pub sorted_by: Option<Vec<OrderByExpr>>,
+    pub num_buckets: Value,
+}
+
+impl fmt::Display for ClusteredBy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CLUSTERED BY ({})",
+            display_comma_separated(&self.columns)
+        )?;
+        if let Some(ref sorted_by) = self.sorted_by {
+            write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
+        }
+        write!(f, " INTO {} BUCKETS", self.num_buckets)
     }
 }

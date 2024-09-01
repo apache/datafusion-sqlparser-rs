@@ -5377,7 +5377,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    //TODO: Implement parsing for Skewed and Clustered
+    //TODO: Implement parsing for Skewed
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
             self.expect_token(&Token::LParen)?;
@@ -5574,6 +5574,7 @@ impl<'a> Parser<'a> {
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
         let hive_distribution = self.parse_hive_distribution()?;
+        let clustered_by = self.parse_optional_clustered_by()?;
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let with_options = self.parse_options(Keyword::WITH)?;
@@ -5720,6 +5721,7 @@ impl<'a> Parser<'a> {
             .collation(collation)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
+            .clustered_by(clustered_by)
             .partition_by(create_table_config.partition_by)
             .cluster_by(create_table_config.cluster_by)
             .options(create_table_config.options)
@@ -6097,6 +6099,35 @@ impl<'a> Parser<'a> {
             generation_expr_mode: expr_mode,
             generated_keyword: false,
         }))
+    }
+
+    pub fn parse_optional_clustered_by(&mut self) -> Result<Option<ClusteredBy>, ParserError> {
+        let clustered_by = if dialect_of!(self is HiveDialect|GenericDialect)
+            && self.parse_keywords(&[Keyword::CLUSTERED, Keyword::BY])
+        {
+            let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+
+            let sorted_by = if self.parse_keywords(&[Keyword::SORTED, Keyword::BY]) {
+                self.expect_token(&Token::LParen)?;
+                let sorted_by_columns = self.parse_comma_separated(|p| p.parse_order_by_expr())?;
+                self.expect_token(&Token::RParen)?;
+                Some(sorted_by_columns)
+            } else {
+                None
+            };
+
+            self.expect_keyword(Keyword::INTO)?;
+            let num_buckets = self.parse_number_value()?;
+            self.expect_keyword(Keyword::BUCKETS)?;
+            Some(ClusteredBy {
+                columns,
+                sorted_by,
+                num_buckets,
+            })
+        } else {
+            None
+        };
+        Ok(clustered_by)
     }
 
     pub fn parse_referential_action(&mut self) -> Result<ReferentialAction, ParserError> {

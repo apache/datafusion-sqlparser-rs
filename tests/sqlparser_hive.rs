@@ -16,9 +16,9 @@
 //! is also tested (on the inputs it can handle).
 
 use sqlparser::ast::{
-    CreateFunctionBody, CreateFunctionUsing, Expr, Function, FunctionArgumentList,
-    FunctionArguments, Ident, ObjectName, OneOrManyWithParens, SelectItem, Statement, TableFactor,
-    UnaryOperator, Use, Value,
+    ClusteredBy, CreateFunctionBody, CreateFunctionUsing, CreateTable, Expr, Function,
+    FunctionArgumentList, FunctionArguments, Ident, ObjectName, OneOrManyWithParens, OrderByExpr,
+    SelectItem, Statement, TableFactor, UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::ParserError;
@@ -113,6 +113,74 @@ fn drop_table_purge() {
 fn create_table_like() {
     let like = "CREATE TABLE db.table_name LIKE db.other_table";
     hive().verified_stmt(like);
+}
+
+#[test]
+fn create_table_with_clustered_by() {
+    let sql = concat!(
+        "CREATE TABLE db.table_name (a INT, b STRING)",
+        " PARTITIONED BY (a INT, b STRING)",
+        " CLUSTERED BY (a, b) SORTED BY (a ASC, b DESC)",
+        " INTO 4 BUCKETS"
+    );
+    match hive_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { clustered_by, .. }) => {
+            assert_eq!(
+                clustered_by.unwrap(),
+                ClusteredBy {
+                    columns: vec![Ident::new("a"), Ident::new("b")],
+                    sorted_by: Some(vec![
+                        OrderByExpr {
+                            expr: Expr::Identifier(Ident::new("a")),
+                            asc: Some(true),
+                            nulls_first: None,
+                            with_fill: None,
+                        },
+                        OrderByExpr {
+                            expr: Expr::Identifier(Ident::new("b")),
+                            asc: Some(false),
+                            nulls_first: None,
+                            with_fill: None,
+                        },
+                    ]),
+                    num_buckets: Value::Number("4".parse().unwrap(), false),
+                }
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    // SORTED BY is optional
+    hive_and_generic().verified_stmt("CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY (a, b) INTO 4 BUCKETS");
+
+    // missing INTO BUCKETS
+    assert_eq!(
+    hive_and_generic().parse_sql_statements(
+        "CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY (a, b)"
+    ).unwrap_err(),
+        ParserError::ParserError("Expected: INTO, found: EOF".to_string())
+   );
+    // missing CLUSTER BY columns
+    assert_eq!(
+     hive_and_generic().parse_sql_statements(
+          "CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY () INTO 4 BUCKETS"
+     ).unwrap_err(),
+          ParserError::ParserError("Expected: identifier, found: )".to_string())
+    );
+    // missing SORT BY columns
+    assert_eq!(
+     hive_and_generic().parse_sql_statements(
+          "CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY (a, b) SORTED BY INTO 4 BUCKETS"
+     ).unwrap_err(),
+          ParserError::ParserError("Expected: (, found: INTO".to_string())
+    );
+    // missing number BUCKETS
+    assert_eq!(
+     hive_and_generic().parse_sql_statements(
+          "CREATE TABLE db.table_name (a INT, b STRING) PARTITIONED BY (a INT, b STRING) CLUSTERED BY (a, b) SORTED BY (a ASC, b DESC) INTO"
+     ).unwrap_err(),
+          ParserError::ParserError("Expected: a value, found: EOF".to_string())
+    );
 }
 
 // Turning off this test until we can parse identifiers starting with numbers :(

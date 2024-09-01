@@ -45,6 +45,8 @@ pub struct CreateIndex {
     pub if_not_exists: bool,
     pub include: Vec<Ident>,
     pub nulls_distinct: Option<bool>,
+    /// WITH clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
+    pub with: Vec<Expr>,
     pub predicate: Option<Expr>,
 }
 
@@ -82,6 +84,9 @@ impl Display for CreateIndex {
             } else {
                 write!(f, " NULLS NOT DISTINCT")?;
             }
+        }
+        if !self.with.is_empty() {
+            write!(f, " WITH ({})", display_comma_separated(&self.with))?;
         }
         if let Some(predicate) = &self.predicate {
             write!(f, " WHERE {predicate}")?;

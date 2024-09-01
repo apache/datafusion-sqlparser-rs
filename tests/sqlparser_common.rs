@@ -7554,6 +7554,7 @@ fn test_create_index_with_using_function() {
             if_not_exists,
             include,
             nulls_distinct: None,
+            with,
             predicate: None,
         }) => {
             assert_eq!("idx_name", name.to_string());
@@ -7564,6 +7565,52 @@ fn test_create_index_with_using_function() {
             assert!(!concurrently);
             assert!(if_not_exists);
             assert!(include.is_empty());
+            assert!(with.is_empty());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_create_index_with_with_clause() {
+    let sql = "CREATE UNIQUE INDEX title_idx ON films(title) WITH (fillfactor = 70, single_param)";
+    let indexed_columns = vec![OrderByExpr {
+        expr: Expr::Identifier(Ident::new("title")),
+        asc: None,
+        nulls_first: None,
+        with_fill: None,
+    }];
+    let with_parameters = vec![
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("fillfactor"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(number("70"))),
+        },
+        Expr::Identifier(Ident::new("single_param")),
+    ];
+    let dialects = all_dialects_where(|d| d.supports_create_index_with_clause());
+    match dialects.verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(name),
+            table_name,
+            using: None,
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+            pretty_assertions::assert_eq!("title_idx", name.to_string());
+            pretty_assertions::assert_eq!("films", table_name.to_string());
+            pretty_assertions::assert_eq!(indexed_columns, columns);
+            assert!(unique);
+            assert!(!concurrently);
+            assert!(!if_not_exists);
+            assert!(include.is_empty());
+            pretty_assertions::assert_eq!(with_parameters, with);
         }
         _ => unreachable!(),
     }

@@ -5324,6 +5324,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let with = if self.dialect.supports_create_index_with_clause()
+            && self.parse_keyword(Keyword::WITH)
+        {
+            self.expect_token(&Token::LParen)?;
+            let with_params = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            with_params
+        } else {
+            Vec::new()
+        };
+
         let predicate = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -5340,6 +5351,7 @@ impl<'a> Parser<'a> {
             if_not_exists,
             include,
             nulls_distinct,
+            with,
             predicate,
         }))
     }

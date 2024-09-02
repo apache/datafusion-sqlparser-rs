@@ -2011,9 +2011,7 @@ pub enum Statement {
     /// ```
     /// Truncate (Hive)
     Truncate {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        table_names: Vec<ObjectName>,
+        table_names: Vec<TruncateTableTarget>,
         partitions: Option<Vec<Expr>>,
         /// TABLE - optional keyword;
         table: bool,
@@ -3141,7 +3139,6 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Truncate {
-                table_name: _,
                 table_names,
                 partitions,
                 table,
@@ -3152,13 +3149,11 @@ impl fmt::Display for Statement {
                 let table = if *table { "TABLE " } else { "" };
                 let only = if *only { "ONLY " } else { "" };
 
-                let table_names = table_names
-                    .iter()
-                    .map(|table_name| table_name.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ");
-
-                write!(f, "TRUNCATE {table}{only}{table_names}")?;
+                write!(
+                    f,
+                    "TRUNCATE {table}{only}{table_names}",
+                    table_names = display_comma_separated(table_names)
+                )?;
 
                 if let Some(identity) = identity {
                     match identity {
@@ -4620,6 +4615,23 @@ impl fmt::Display for SequenceOptions {
                 write!(f, " {}CYCLE", if *no { "NO " } else { "" })
             }
         }
+    }
+}
+
+/// Target of a `TRUNCATE TABLE` command
+///
+/// Note this is its own struct because `visit_relation` requires an `ObjectName` (not a `Vec<ObjectName>`)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TruncateTableTarget {
+    /// name of the table being truncated
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+}
+
+impl fmt::Display for TruncateTableTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
     }
 }
 

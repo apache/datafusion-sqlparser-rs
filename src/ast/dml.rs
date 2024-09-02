@@ -22,11 +22,11 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, CommentDef, Expr, FileFormat, FromTable,
-    HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InsertAliases,
-    MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query,
-    RowAccessPolicy, SelectItem, SqlOption, SqliteOnConflict, TableEngine, TableWithJoins, Tag,
-    WrappedCollection,
+    display_comma_separated, display_separated, ClusteredBy, CommentDef, Expr, FileFormat,
+    FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident,
+    InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens,
+    OrderByExpr, Query, RowAccessPolicy, SelectItem, SqlOption, SqliteOnConflict, TableEngine,
+    TableWithJoins, Tag, WrappedCollection,
 };
 
 /// CREATE INDEX statement.
@@ -45,6 +45,8 @@ pub struct CreateIndex {
     pub if_not_exists: bool,
     pub include: Vec<Ident>,
     pub nulls_distinct: Option<bool>,
+    /// WITH clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
+    pub with: Vec<Expr>,
     pub predicate: Option<Expr>,
 }
 
@@ -82,6 +84,9 @@ impl Display for CreateIndex {
             } else {
                 write!(f, " NULLS NOT DISTINCT")?;
             }
+        }
+        if !self.with.is_empty() {
+            write!(f, " WITH ({})", display_comma_separated(&self.with))?;
         }
         if let Some(predicate) = &self.predicate {
             write!(f, " WHERE {predicate}")?;
@@ -143,6 +148,9 @@ pub struct CreateTable {
     /// BigQuery: Table clustering column list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
+    /// Hive: Table clustering column list.
+    /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
+    pub clustered_by: Option<ClusteredBy>,
     /// BigQuery: Table options list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     pub options: Option<Vec<SqlOption>>,
@@ -239,19 +247,6 @@ impl Display for CreateTable {
             HiveDistributionStyle::PARTITIONED { columns } => {
                 write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
             }
-            HiveDistributionStyle::CLUSTERED {
-                columns,
-                sorted_by,
-                num_buckets,
-            } => {
-                write!(f, " CLUSTERED BY ({})", display_comma_separated(columns))?;
-                if !sorted_by.is_empty() {
-                    write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
-                }
-                if *num_buckets > 0 {
-                    write!(f, " INTO {num_buckets} BUCKETS")?;
-                }
-            }
             HiveDistributionStyle::SKEWED {
                 columns,
                 on,
@@ -268,6 +263,10 @@ impl Display for CreateTable {
                 }
             }
             _ => (),
+        }
+
+        if let Some(clustered_by) = &self.clustered_by {
+            write!(f, " {clustered_by}")?;
         }
 
         if let Some(HiveFormat {

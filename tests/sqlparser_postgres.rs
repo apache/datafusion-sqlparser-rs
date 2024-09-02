@@ -2251,6 +2251,7 @@ fn parse_create_index() {
             if_not_exists,
             nulls_distinct: None,
             include,
+            with,
             predicate: None,
         }) => {
             assert_eq_vec(&["my_index"], &name);
@@ -2261,6 +2262,7 @@ fn parse_create_index() {
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
+            assert!(with.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2280,6 +2282,7 @@ fn parse_create_anonymous_index() {
             if_not_exists,
             include,
             nulls_distinct: None,
+            with,
             predicate: None,
         }) => {
             assert_eq!(None, name);
@@ -2290,6 +2293,7 @@ fn parse_create_anonymous_index() {
             assert!(!if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
+            assert!(with.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2309,6 +2313,7 @@ fn parse_create_index_concurrently() {
             if_not_exists,
             include,
             nulls_distinct: None,
+            with,
             predicate: None,
         }) => {
             assert_eq_vec(&["my_index"], &name);
@@ -2319,6 +2324,7 @@ fn parse_create_index_concurrently() {
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
+            assert!(with.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2338,6 +2344,7 @@ fn parse_create_index_with_predicate() {
             if_not_exists,
             include,
             nulls_distinct: None,
+            with,
             predicate: Some(_),
         }) => {
             assert_eq_vec(&["my_index"], &name);
@@ -2348,6 +2355,7 @@ fn parse_create_index_with_predicate() {
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
+            assert!(with.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2367,6 +2375,7 @@ fn parse_create_index_with_include() {
             if_not_exists,
             include,
             nulls_distinct: None,
+            with,
             predicate: None,
         }) => {
             assert_eq_vec(&["my_index"], &name);
@@ -2377,6 +2386,7 @@ fn parse_create_index_with_include() {
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert_eq_vec(&["col3"], &include);
+            assert!(with.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2396,6 +2406,7 @@ fn parse_create_index_with_nulls_distinct() {
             if_not_exists,
             include,
             nulls_distinct: Some(nulls_distinct),
+            with,
             predicate: None,
         }) => {
             assert_eq_vec(&["my_index"], &name);
@@ -2407,6 +2418,7 @@ fn parse_create_index_with_nulls_distinct() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(!nulls_distinct);
+            assert!(with.is_empty());
         }
         _ => unreachable!(),
     }
@@ -2423,6 +2435,7 @@ fn parse_create_index_with_nulls_distinct() {
             if_not_exists,
             include,
             nulls_distinct: Some(nulls_distinct),
+            with,
             predicate: None,
         }) => {
             assert_eq_vec(&["my_index"], &name);
@@ -2434,6 +2447,7 @@ fn parse_create_index_with_nulls_distinct() {
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
             assert!(nulls_distinct);
+            assert!(with.is_empty());
         }
         _ => unreachable!(),
     }
@@ -4838,6 +4852,7 @@ fn parse_trigger_related_functions() {
             order_by: None,
             partition_by: None,
             cluster_by: None,
+            clustered_by: None,
             options: None,
             strict: false,
             copy_grants: false,

@@ -509,6 +509,12 @@ pub trait Dialect: Debug + Any {
     fn allow_extract_single_quotes(&self) -> bool {
         false
     }
+
+    /// Does the dialect support with clause in create index statement?
+    /// e.g. `CREATE INDEX idx ON t WITH (key = value, key2)`
+    fn supports_create_index_with_clause(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

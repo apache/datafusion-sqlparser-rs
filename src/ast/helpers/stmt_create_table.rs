@@ -10,8 +10,8 @@ use sqlparser_derive::{Visit, VisitMut};
 use super::super::dml::CreateTable;
 use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident,
-    ObjectName, OnCommit, OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement,
-    TableConstraint, TableEngine, Tag, WrappedCollection,
+    ObjectName, OnCommit, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SqlOption,
+    Statement, TableConstraint, TableEngine, Tag, WrappedCollection,
 };
 use crate::parser::ParserError;
 

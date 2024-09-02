@@ -3965,10 +3965,11 @@ fn parse_select_group_by_cube() {
 fn parse_truncate() {
     let truncate = pg_and_generic().verified_stmt("TRUNCATE db.table_name");
     let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
-    let table_names = vec![table_name.clone()];
+    let table_names = vec![TruncateTableTarget {
+        name: table_name.clone(),
+    }];
     assert_eq!(
         Statement::Truncate {
-            table_name,
             table_names,
             partitions: None,
             table: false,
@@ -3986,11 +3987,12 @@ fn parse_truncate_with_options() {
         .verified_stmt("TRUNCATE TABLE ONLY db.table_name RESTART IDENTITY CASCADE");
 
     let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
-    let table_names = vec![table_name.clone()];
+    let table_names = vec![TruncateTableTarget {
+        name: table_name.clone(),
+    }];
 
     assert_eq!(
         Statement::Truncate {
-            table_name,
             table_names,
             partitions: None,
             table: true,
@@ -4008,16 +4010,20 @@ fn parse_truncate_with_table_list() {
         "TRUNCATE TABLE db.table_name, db.other_table_name RESTART IDENTITY CASCADE",
     );
 
-    let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+    let table_name_a = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+    let table_name_b = ObjectName(vec![Ident::new("db"), Ident::new("other_table_name")]);
 
     let table_names = vec![
-        table_name.clone(),
-        ObjectName(vec![Ident::new("db"), Ident::new("other_table_name")]),
+        TruncateTableTarget {
+            name: table_name_a.clone(),
+        },
+        TruncateTableTarget {
+            name: table_name_b.clone(),
+        },
     ];
 
     assert_eq!(
         Statement::Truncate {
-            table_name,
             table_names,
             partitions: None,
             table: true,

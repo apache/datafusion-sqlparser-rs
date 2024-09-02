@@ -4622,6 +4622,7 @@ impl fmt::Display for SequenceOptions {
 ///
 /// Note this is its own struct because `visit_relation` requires an `ObjectName` (not a `Vec<ObjectName>`)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TruncateTableTarget {
     /// name of the table being truncated

@@ -124,7 +124,6 @@ impl TestedDialects {
         }
 
         let only_statement = statements.pop().unwrap();
-        println!("Statement {:?}", only_statement);
 
         if !canonical.is_empty() {
             assert_eq!(canonical, only_statement.to_string())

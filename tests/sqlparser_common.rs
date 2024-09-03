@@ -8804,8 +8804,8 @@ fn parse_uncache_table() {
 #[test]
 fn parse_create_table_with_order() {
     let sql = "CREATE TABLE test (foo INT, bar VARCHAR(256)) WITH ORDER (foo ASC)";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    match ast[0].clone() {
+    let ast = all_dialects_where(|d| d.supports_with_order_expr()).verified_stmt(sql);
+    match ast {
         Statement::CreateTable(CreateTable { with_order, .. }) => {
             assert_eq!(
                 with_order,
@@ -8821,8 +8821,8 @@ fn parse_create_table_with_order() {
     }
 
     let sql = "CREATE TABLE test (foo INT, bar VARCHAR(256)) WITH ORDER (bar DESC NULLS FIRST)";
-    let ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-    match ast[0].clone() {
+    let ast = all_dialects_where(|d| d.supports_with_order_expr()).verified_stmt(sql);
+    match ast {
         Statement::CreateTable(CreateTable { with_order, .. }) => {
             assert_eq!(
                 with_order,

@@ -408,6 +408,14 @@ impl Display for CreateTable {
             write!(f, " WITH AGGREGATION POLICY {with_aggregation_policy}",)?;
         }
 
+        if !self.with_order.is_empty() {
+            write!(f, " WITH ORDER (")?;
+            for order_by in &self.with_order {
+                write!(f, "{}", display_comma_separated(order_by))?;
+            }
+            write!(f, ")")?;
+        }
+
         if let Some(row_access_policy) = &self.with_row_access_policy {
             write!(f, " {row_access_policy}",)?;
         }

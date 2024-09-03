@@ -199,6 +199,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialects supports `WITH ORDER` expressions.
+    fn supports_with_order_expr(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports CONNECT BY.
     fn supports_connect_by(&self) -> bool {
         false

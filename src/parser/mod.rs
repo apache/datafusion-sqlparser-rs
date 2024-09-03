@@ -5591,19 +5591,15 @@ impl<'a> Parser<'a> {
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let mut with_options: Vec<SqlOption> = vec![];
         let mut order_exprs: Vec<Vec<OrderByExpr>> = vec![];
-        if self.parse_keyword(Keyword::WITH) {
-            if self.parse_keyword(Keyword::ORDER) {
-                self.expect_token(&Token::LParen)?;
-                loop {
-                    order_exprs.push(vec![self.parse_order_by_expr()?]);
-                    if !self.consume_token(&Token::Comma) {
-                        self.expect_token(&Token::RParen)?;
-                        break;
-                    }
-                }
-            } else {
-                with_options = self.parse_options_in_parentheses()?;
-            }
+        if self.dialect.supports_with_order_expr()
+            && self.parse_keywords(&[Keyword::WITH, Keyword::ORDER])
+        {
+            self.expect_token(&Token::LParen)?;
+            let order_by = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+            order_exprs.push(order_by);
+            self.expect_token(&Token::RParen)?;
+        } else {
+            with_options = self.parse_options(Keyword::WITH)?;
         }
 
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
@@ -6386,17 +6382,13 @@ impl<'a> Parser<'a> {
 
     pub fn parse_options(&mut self, keyword: Keyword) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keyword(keyword) {
-            self.parse_options_in_parentheses()
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(options)
         } else {
             Ok(vec![])
         }
-    }
-
-    fn parse_options_in_parentheses(&mut self) -> Result<Vec<SqlOption>, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let options = self.parse_comma_separated(Parser::parse_sql_option)?;
-        self.expect_token(&Token::RParen)?;
-        Ok(options)
     }
 
     pub fn parse_options_with_keywords(

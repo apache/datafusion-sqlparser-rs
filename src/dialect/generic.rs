@@ -79,6 +79,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_with_order_expr(&self) -> bool {
+        true
+    }
+
     fn allow_extract_custom(&self) -> bool {
         true
     }

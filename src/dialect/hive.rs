@@ -42,4 +42,8 @@ impl Dialect for HiveDialect {
     fn supports_numeric_prefix(&self) -> bool {
         true
     }
+
+    fn require_interval_qualifier(&self) -> bool {
+        true
+    }
 }

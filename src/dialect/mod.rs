@@ -516,7 +516,10 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Whether expressions (like `1 + 1`) are allowed in `INTERVAL` expressions.
+    /// Whether `INTERVAL` expressions require units (called "qualifiers" in the ANSI SQL spec) to be specified,
+    /// e.g. `INTERVAL 1 DAY` vs `INTERVAL 1`.
+    ///
+    /// Expressions within intervals (e.g. `INTERVAL '1' + '1' DAY`) are only allowed when units are required.
     ///
     /// See <https://github.com/sqlparser-rs/sqlparser-rs/pull/1398> for more information.
     ///
@@ -524,32 +527,14 @@ pub trait Dialect: Debug + Any {
     /// * `INTERVAL '1' DAY` is VALID
     /// * `INTERVAL 1 + 1 DAY` is VALID
     /// * `INTERVAL '1' + '1' DAY` is VALID
-    /// * `INTERVAL '1'` is VALID
-    /// * `INTERVAL '2' SECOND > INTERVAL '1' SECOND` is interpreted correctly, but
-    /// * `INTERVAL '2' > INTERVAL '1'` is not!
-    ///
-    /// When `false`:
-    /// * `INTERVAL '1' DAY` is VALID
-    /// * `INTERVAL '1'` is VALID
-    /// * `INTERVAL 1 + 1 DAY` is INVALID
-    /// * `INTERVAL '2' > INTERVAL '1'` is interpreted correctly
-    fn allow_interval_expressions(&self) -> bool {
-        true
-    }
-
-    /// Whether the `INTERVAL` keyword requires units to be specified, e.g. `INTERVAL 1 DAY` vs `INTERVAL 1`.
-    ///
-    /// See <https://github.com/sqlparser-rs/sqlparser-rs/pull/1398> for more information.
-    ///
-    /// When `true`:
-    /// * `INTERVAL '1' DAY` is VALID
     /// * `INTERVAL '1'` is INVALID
     ///
     /// When `false`:
-    /// * `INTERVAL '1' DAY` is VALID
     /// * `INTERVAL '1'` is VALID
-    fn require_interval_units(&self) -> bool {
-        true
+    /// * `INTERVAL '1' DAY` is VALID — unit is not required, but still allowed
+    /// * `INTERVAL 1 + 1 DAY` is INVALID
+    fn require_interval_qualifier(&self) -> bool {
+        false
     }
 }
 

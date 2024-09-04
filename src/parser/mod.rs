@@ -2044,7 +2044,10 @@ impl<'a> Parser<'a> {
         // don't currently try to parse it. (The sign can instead be included
         // inside the value string.)
 
-        let value = if self.dialect.allow_interval_expressions() {
+        // to match the different flavours of INTERVAL syntax, we only allow expressions
+        // if the dialect requires an interval qualifier,
+        // see https://github.com/sqlparser-rs/sqlparser-rs/pull/1398 for more details
+        let value = if self.dialect.require_interval_qualifier() {
             // parse a whole expression so `INTERVAL 1 + 1 DAY` is valid
             self.parse_expr()?
         } else {
@@ -2060,7 +2063,7 @@ impl<'a> Parser<'a> {
         // this more general implementation.
         let leading_field = if self.next_token_is_temporal_unit() {
             Some(self.parse_date_time_field()?)
-        } else if self.dialect.require_interval_units() {
+        } else if self.dialect.require_interval_qualifier() {
             return parser_err!(
                 "INTERVAL requires a unit after the literal value",
                 self.peek_token().location

@@ -90,8 +90,4 @@ impl Dialect for GenericDialect {
     fn supports_create_index_with_clause(&self) -> bool {
         true
     }
-
-    fn require_interval_units(&self) -> bool {
-        false
-    }
 }

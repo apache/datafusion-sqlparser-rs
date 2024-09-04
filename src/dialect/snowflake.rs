@@ -166,14 +166,6 @@ impl Dialect for SnowflakeDialect {
     fn allow_extract_single_quotes(&self) -> bool {
         true
     }
-
-    fn allow_interval_expressions(&self) -> bool {
-        false
-    }
-
-    fn require_interval_units(&self) -> bool {
-        false
-    }
 }
 
 /// Parse snowflake create table statement.

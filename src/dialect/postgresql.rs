@@ -166,14 +166,6 @@ impl Dialect for PostgreSqlDialect {
     fn supports_create_index_with_clause(&self) -> bool {
         true
     }
-
-    fn allow_interval_expressions(&self) -> bool {
-        false
-    }
-
-    fn require_interval_units(&self) -> bool {
-        false
-    }
 }
 
 pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {

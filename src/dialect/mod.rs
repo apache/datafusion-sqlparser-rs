@@ -510,6 +510,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect support with clause in create index statement?
+    /// e.g. `CREATE INDEX idx ON t WITH (key = value, key2)`
+    fn supports_create_index_with_clause(&self) -> bool {
+        false
+    }
+
     /// Whether expressions (like `1 + 1`) are allowed in `INTERVAL` expressions.
     ///
     /// See <https://github.com/sqlparser-rs/sqlparser-rs/pull/1398> for more information.

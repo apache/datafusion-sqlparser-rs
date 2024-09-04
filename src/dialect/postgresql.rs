@@ -163,6 +163,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_create_index_with_clause(&self) -> bool {
+        true
+    }
+
     fn allow_interval_expressions(&self) -> bool {
         false
     }

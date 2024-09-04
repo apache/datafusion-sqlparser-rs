@@ -469,88 +469,88 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         match &next_token.token {
             Token::Word(w) => match w.keyword {
-                Keyword::KILL => Ok(self.parse_kill()?),
-                Keyword::FLUSH => Ok(self.parse_flush()?),
-                Keyword::DESC => Ok(self.parse_explain(DescribeAlias::Desc)?),
-                Keyword::DESCRIBE => Ok(self.parse_explain(DescribeAlias::Describe)?),
-                Keyword::EXPLAIN => Ok(self.parse_explain(DescribeAlias::Explain)?),
-                Keyword::ANALYZE => Ok(self.parse_analyze()?),
+                Keyword::KILL => self.parse_kill(),
+                Keyword::FLUSH => self.parse_flush(),
+                Keyword::DESC => self.parse_explain(DescribeAlias::Desc),
+                Keyword::DESCRIBE => self.parse_explain(DescribeAlias::Describe),
+                Keyword::EXPLAIN => self.parse_explain(DescribeAlias::Explain),
+                Keyword::ANALYZE => self.parse_analyze(),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
-                    Ok(Statement::Query(self.parse_boxed_query()?))
+                    self.parse_boxed_query().map(Statement::Query)
                 }
-                Keyword::TRUNCATE => Ok(self.parse_truncate()?),
+                Keyword::TRUNCATE => self.parse_truncate(),
                 Keyword::ATTACH => {
                     if dialect_of!(self is DuckDbDialect) {
-                        Ok(self.parse_attach_duckdb_database()?)
+                        self.parse_attach_duckdb_database()
                     } else {
-                        Ok(self.parse_attach_database()?)
+                        self.parse_attach_database()
                     }
                 }
                 Keyword::DETACH if dialect_of!(self is DuckDbDialect | GenericDialect) => {
-                    Ok(self.parse_detach_duckdb_database()?)
+                    self.parse_detach_duckdb_database()
                 }
-                Keyword::MSCK => Ok(self.parse_msck()?),
-                Keyword::CREATE => Ok(self.parse_create()?),
-                Keyword::CACHE => Ok(self.parse_cache_table()?),
-                Keyword::DROP => Ok(self.parse_drop()?),
-                Keyword::DISCARD => Ok(self.parse_discard()?),
-                Keyword::DECLARE => Ok(self.parse_declare()?),
-                Keyword::FETCH => Ok(self.parse_fetch_statement()?),
-                Keyword::DELETE => Ok(self.parse_delete()?),
-                Keyword::INSERT => Ok(self.parse_insert()?),
-                Keyword::REPLACE => Ok(self.parse_replace()?),
-                Keyword::UNCACHE => Ok(self.parse_uncache_table()?),
-                Keyword::UPDATE => Ok(self.parse_update()?),
-                Keyword::ALTER => Ok(self.parse_alter()?),
-                Keyword::CALL => Ok(self.parse_call()?),
-                Keyword::COPY => Ok(self.parse_copy()?),
-                Keyword::CLOSE => Ok(self.parse_close()?),
-                Keyword::SET => Ok(self.parse_set()?),
-                Keyword::SHOW => Ok(self.parse_show()?),
-                Keyword::USE => Ok(self.parse_use()?),
-                Keyword::GRANT => Ok(self.parse_grant()?),
-                Keyword::REVOKE => Ok(self.parse_revoke()?),
-                Keyword::START => Ok(self.parse_start_transaction()?),
+                Keyword::MSCK => self.parse_msck(),
+                Keyword::CREATE => self.parse_create(),
+                Keyword::CACHE => self.parse_cache_table(),
+                Keyword::DROP => self.parse_drop(),
+                Keyword::DISCARD => self.parse_discard(),
+                Keyword::DECLARE => self.parse_declare(),
+                Keyword::FETCH => self.parse_fetch_statement(),
+                Keyword::DELETE => self.parse_delete(),
+                Keyword::INSERT => self.parse_insert(),
+                Keyword::REPLACE => self.parse_replace(),
+                Keyword::UNCACHE => self.parse_uncache_table(),
+                Keyword::UPDATE => self.parse_update(),
+                Keyword::ALTER => self.parse_alter(),
+                Keyword::CALL => self.parse_call(),
+                Keyword::COPY => self.parse_copy(),
+                Keyword::CLOSE => self.parse_close(),
+                Keyword::SET => self.parse_set(),
+                Keyword::SHOW => self.parse_show(),
+                Keyword::USE => self.parse_use(),
+                Keyword::GRANT => self.parse_grant(),
+                Keyword::REVOKE => self.parse_revoke(),
+                Keyword::START => self.parse_start_transaction(),
                 // `BEGIN` is a nonstandard but common alias for the
                 // standard `START TRANSACTION` statement. It is supported
                 // by at least PostgreSQL and MySQL.
-                Keyword::BEGIN => Ok(self.parse_begin()?),
+                Keyword::BEGIN => self.parse_begin(),
                 // `END` is a nonstandard but common alias for the
                 // standard `COMMIT TRANSACTION` statement. It is supported
                 // by PostgreSQL.
-                Keyword::END => Ok(self.parse_end()?),
-                Keyword::SAVEPOINT => Ok(self.parse_savepoint()?),
-                Keyword::RELEASE => Ok(self.parse_release()?),
-                Keyword::COMMIT => Ok(self.parse_commit()?),
-                Keyword::ROLLBACK => Ok(self.parse_rollback()?),
-                Keyword::ASSERT => Ok(self.parse_assert()?),
+                Keyword::END => self.parse_end(),
+                Keyword::SAVEPOINT => self.parse_savepoint(),
+                Keyword::RELEASE => self.parse_release(),
+                Keyword::COMMIT => self.parse_commit(),
+                Keyword::ROLLBACK => self.parse_rollback(),
+                Keyword::ASSERT => self.parse_assert(),
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
                 // syntaxes. They are used for Postgres prepared statement.
-                Keyword::DEALLOCATE => Ok(self.parse_deallocate()?),
-                Keyword::EXECUTE => Ok(self.parse_execute()?),
-                Keyword::PREPARE => Ok(self.parse_prepare()?),
-                Keyword::MERGE => Ok(self.parse_merge()?),
+                Keyword::DEALLOCATE => self.parse_deallocate(),
+                Keyword::EXECUTE => self.parse_execute(),
+                Keyword::PREPARE => self.parse_prepare(),
+                Keyword::MERGE => self.parse_merge(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
-                Keyword::PRAGMA => Ok(self.parse_pragma()?),
-                Keyword::UNLOAD => Ok(self.parse_unload()?),
+                Keyword::PRAGMA => self.parse_pragma(),
+                Keyword::UNLOAD => self.parse_unload(),
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
-                    Ok(self.parse_install()?)
+                    self.parse_install()
                 }
                 // `LOAD` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::LOAD if dialect_of!(self is DuckDbDialect | GenericDialect) => {
-                    Ok(self.parse_load()?)
+                    self.parse_load()
                 }
                 // `OPTIMIZE` is clickhouse specific https://clickhouse.tech/docs/en/sql-reference/statements/optimize/
                 Keyword::OPTIMIZE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
-                    Ok(self.parse_optimize_table()?)
+                    self.parse_optimize_table()
                 }
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
                 self.prev_token();
-                Ok(Statement::Query(self.parse_boxed_query()?))
+                self.parse_boxed_query().map(Statement::Query)
             }
             _ => self.expected("an SQL statement", next_token),
         }
@@ -5304,6 +5304,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let with = if self.dialect.supports_create_index_with_clause()
+            && self.parse_keyword(Keyword::WITH)
+        {
+            self.expect_token(&Token::LParen)?;
+            let with_params = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            with_params
+        } else {
+            Vec::new()
+        };
+
         let predicate = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -5320,6 +5331,7 @@ impl<'a> Parser<'a> {
             if_not_exists,
             include,
             nulls_distinct,
+            with,
             predicate,
         }))
     }
@@ -5357,7 +5369,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    //TODO: Implement parsing for Skewed and Clustered
+    //TODO: Implement parsing for Skewed
     pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
         if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
             self.expect_token(&Token::LParen)?;
@@ -5554,6 +5566,7 @@ impl<'a> Parser<'a> {
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
         let hive_distribution = self.parse_hive_distribution()?;
+        let clustered_by = self.parse_optional_clustered_by()?;
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let with_options = self.parse_options(Keyword::WITH)?;
@@ -5700,6 +5713,7 @@ impl<'a> Parser<'a> {
             .collation(collation)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
+            .clustered_by(clustered_by)
             .partition_by(create_table_config.partition_by)
             .cluster_by(create_table_config.cluster_by)
             .options(create_table_config.options)
@@ -6077,6 +6091,35 @@ impl<'a> Parser<'a> {
             generation_expr_mode: expr_mode,
             generated_keyword: false,
         }))
+    }
+
+    pub fn parse_optional_clustered_by(&mut self) -> Result<Option<ClusteredBy>, ParserError> {
+        let clustered_by = if dialect_of!(self is HiveDialect|GenericDialect)
+            && self.parse_keywords(&[Keyword::CLUSTERED, Keyword::BY])
+        {
+            let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+
+            let sorted_by = if self.parse_keywords(&[Keyword::SORTED, Keyword::BY]) {
+                self.expect_token(&Token::LParen)?;
+                let sorted_by_columns = self.parse_comma_separated(|p| p.parse_order_by_expr())?;
+                self.expect_token(&Token::RParen)?;
+                Some(sorted_by_columns)
+            } else {
+                None
+            };
+
+            self.expect_keyword(Keyword::INTO)?;
+            let num_buckets = self.parse_number_value()?;
+            self.expect_keyword(Keyword::BUCKETS)?;
+            Some(ClusteredBy {
+                columns,
+                sorted_by,
+                num_buckets,
+            })
+        } else {
+            None
+        };
+        Ok(clustered_by)
     }
 
     pub fn parse_referential_action(&mut self) -> Result<ReferentialAction, ParserError> {

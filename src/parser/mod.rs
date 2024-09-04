@@ -2058,7 +2058,7 @@ impl<'a> Parser<'a> {
         //
         // Note that PostgreSQL allows omitting the qualifier, so we provide
         // this more general implementation.
-        let leading_field = if self.next_token_is_unit() {
+        let leading_field = if self.next_token_is_temporal_unit() {
             Some(self.parse_date_time_field()?)
         } else if self.dialect.require_interval_units() {
             return parser_err!(
@@ -2103,7 +2103,9 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    pub fn next_token_is_unit(&mut self) -> bool {
+    /// Peek at the next token and determine if it is a temporal unit
+    /// like `second`.
+    pub fn next_token_is_temporal_unit(&mut self) -> bool {
         if let Token::Word(word) = self.peek_token().token {
             matches!(
                 word.keyword,

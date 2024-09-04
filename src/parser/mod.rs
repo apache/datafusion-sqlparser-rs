@@ -874,12 +874,12 @@ impl<'a> Parser<'a> {
 
     /// Parse a new expression.
     pub fn parse_expr(&mut self) -> Result<Expr, ParserError> {
-        let _guard = self.recursion_counter.try_decrease()?;
         self.parse_subexpr(self.dialect.prec_unknown())
     }
 
     /// Parse tokens until the precedence changes.
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
+        let _guard = self.recursion_counter.try_decrease()?;
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
         debug!("prefix: {:?}", expr);

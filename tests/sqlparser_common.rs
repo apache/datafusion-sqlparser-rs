@@ -8839,6 +8839,13 @@ fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
 }
 
 #[test]
+fn parse_deeply_nested_update_hits_recursion_limits() {
+    let sql = format!("UPDATE {}", "(".repeat(1000));
+    let res = parse_sql_statements(&sql);
+    assert_eq!(ParserError::RecursionLimitExceeded, res.unwrap_err());
+}
+
+#[test]
 fn parse_with_recursion_limit() {
     let dialect = GenericDialect {};
 

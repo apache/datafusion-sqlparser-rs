@@ -9334,6 +9334,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {
+        let _guard = self.recursion_counter.try_decrease()?;
         let relation = self.parse_table_factor()?;
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_TABLE_ALIAS`, otherwise they may be parsed as

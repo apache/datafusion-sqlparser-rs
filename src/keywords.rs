@@ -177,6 +177,7 @@ define_keywords!(
     CONNECTION,
     CONSTRAINT,
     CONTAINS,
+    CONTINUE,
     CONVERT,
     COPY,
     COPY_OPTIONS,

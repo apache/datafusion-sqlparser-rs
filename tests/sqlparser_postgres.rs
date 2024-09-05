@@ -571,6 +571,10 @@ fn parse_alter_table_constraints_rename() {
 fn parse_alter_table_disable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
+}
+
+#[test]
+fn parse_alter_table_disable_trigger() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER trigger_name");
@@ -587,6 +591,13 @@ fn parse_alter_table_enable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER trigger_name");
+}
+
+#[test]
+fn parse_truncate_table() {
+    pg_and_generic()
+        .verified_stmt("TRUNCATE TABLE \"users\", \"orders\" RESTART IDENTITY RESTRICT");
+    pg_and_generic().verified_stmt("TRUNCATE users, orders RESTART IDENTITY");
 }
 
 #[test]
@@ -3967,11 +3978,72 @@ fn parse_select_group_by_cube() {
 #[test]
 fn parse_truncate() {
     let truncate = pg_and_generic().verified_stmt("TRUNCATE db.table_name");
+    let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+    let table_names = vec![TruncateTableTarget {
+        name: table_name.clone(),
+    }];
     assert_eq!(
         Statement::Truncate {
-            table_name: ObjectName(vec![Ident::new("db"), Ident::new("table_name")]),
+            table_names,
             partitions: None,
-            table: false
+            table: false,
+            only: false,
+            identity: None,
+            cascade: None,
+        },
+        truncate
+    );
+}
+
+#[test]
+fn parse_truncate_with_options() {
+    let truncate = pg_and_generic()
+        .verified_stmt("TRUNCATE TABLE ONLY db.table_name RESTART IDENTITY CASCADE");
+
+    let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+    let table_names = vec![TruncateTableTarget {
+        name: table_name.clone(),
+    }];
+
+    assert_eq!(
+        Statement::Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            only: true,
+            identity: Some(TruncateIdentityOption::Restart),
+            cascade: Some(TruncateCascadeOption::Cascade)
+        },
+        truncate
+    );
+}
+
+#[test]
+fn parse_truncate_with_table_list() {
+    let truncate = pg().verified_stmt(
+        "TRUNCATE TABLE db.table_name, db.other_table_name RESTART IDENTITY CASCADE",
+    );
+
+    let table_name_a = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+    let table_name_b = ObjectName(vec![Ident::new("db"), Ident::new("other_table_name")]);
+
+    let table_names = vec![
+        TruncateTableTarget {
+            name: table_name_a.clone(),
+        },
+        TruncateTableTarget {
+            name: table_name_b.clone(),
+        },
+    ];
+
+    assert_eq!(
+        Statement::Truncate {
+            table_names,
+            partitions: None,
+            table: true,
+            only: false,
+            identity: Some(TruncateIdentityOption::Restart),
+            cascade: Some(TruncateCascadeOption::Cascade)
         },
         truncate
     );
@@ -4745,12 +4817,12 @@ fn parse_trigger_related_functions() {
             IF NEW.salary IS NULL THEN
                 RAISE EXCEPTION '% cannot have null salary', NEW.empname;
             END IF;
-    
+
             -- Who works for us when they must pay for it?
             IF NEW.salary < 0 THEN
                 RAISE EXCEPTION '% cannot have a negative salary', NEW.empname;
             END IF;
-    
+
             -- Remember who changed the payroll when
             NEW.last_date := current_timestamp;
             NEW.last_user := current_user;
@@ -4883,7 +4955,7 @@ fn parse_trigger_related_functions() {
                     Expr::Value(
                         Value::DollarQuotedString(
                             DollarQuotedString {
-                                value: "\n        BEGIN\n            -- Check that empname and salary are given\n            IF NEW.empname IS NULL THEN\n                RAISE EXCEPTION 'empname cannot be null';\n            END IF;\n            IF NEW.salary IS NULL THEN\n                RAISE EXCEPTION '% cannot have null salary', NEW.empname;\n            END IF;\n    \n            -- Who works for us when they must pay for it?\n            IF NEW.salary < 0 THEN\n                RAISE EXCEPTION '% cannot have a negative salary', NEW.empname;\n            END IF;\n    \n            -- Remember who changed the payroll when\n            NEW.last_date := current_timestamp;\n            NEW.last_user := current_user;\n            RETURN NEW;\n        END;\n    ".to_owned(),
+                                value: "\n        BEGIN\n            -- Check that empname and salary are given\n            IF NEW.empname IS NULL THEN\n                RAISE EXCEPTION 'empname cannot be null';\n            END IF;\n            IF NEW.salary IS NULL THEN\n                RAISE EXCEPTION '% cannot have null salary', NEW.empname;\n            END IF;\n\n            -- Who works for us when they must pay for it?\n            IF NEW.salary < 0 THEN\n                RAISE EXCEPTION '% cannot have a negative salary', NEW.empname;\n            END IF;\n\n            -- Remember who changed the payroll when\n            NEW.last_date := current_timestamp;\n            NEW.last_user := current_user;\n            RETURN NEW;\n        END;\n    ".to_owned(),
                                 tag: Some(
                                     "emp_stamp".to_owned(),
                                 ),

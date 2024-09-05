@@ -2011,11 +2011,19 @@ pub enum Statement {
     /// ```
     /// Truncate (Hive)
     Truncate {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
+        table_names: Vec<TruncateTableTarget>,
         partitions: Option<Vec<Expr>>,
         /// TABLE - optional keyword;
         table: bool,
+        /// Postgres-specific option
+        /// [ TRUNCATE TABLE ONLY ]
+        only: bool,
+        /// Postgres-specific option
+        /// [ RESTART IDENTITY | CONTINUE IDENTITY ]
+        identity: Option<TruncateIdentityOption>,
+        /// Postgres-specific option
+        /// [ CASCADE | RESTRICT ]
+        cascade: Option<TruncateCascadeOption>,
     },
     /// ```sql
     /// MSCK
@@ -3131,12 +3139,35 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Truncate {
-                table_name,
+                table_names,
                 partitions,
                 table,
+                only,
+                identity,
+                cascade,
             } => {
                 let table = if *table { "TABLE " } else { "" };
-                write!(f, "TRUNCATE {table}{table_name}")?;
+                let only = if *only { "ONLY " } else { "" };
+
+                write!(
+                    f,
+                    "TRUNCATE {table}{only}{table_names}",
+                    table_names = display_comma_separated(table_names)
+                )?;
+
+                if let Some(identity) = identity {
+                    match identity {
+                        TruncateIdentityOption::Restart => write!(f, " RESTART IDENTITY")?,
+                        TruncateIdentityOption::Continue => write!(f, " CONTINUE IDENTITY")?,
+                    }
+                }
+                if let Some(cascade) = cascade {
+                    match cascade {
+                        TruncateCascadeOption::Cascade => write!(f, " CASCADE")?,
+                        TruncateCascadeOption::Restrict => write!(f, " RESTRICT")?,
+                    }
+                }
+
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
@@ -4585,6 +4616,44 @@ impl fmt::Display for SequenceOptions {
             }
         }
     }
+}
+
+/// Target of a `TRUNCATE TABLE` command
+///
+/// Note this is its own struct because `visit_relation` requires an `ObjectName` (not a `Vec<ObjectName>`)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TruncateTableTarget {
+    /// name of the table being truncated
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub name: ObjectName,
+}
+
+impl fmt::Display for TruncateTableTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+/// PostgreSQL identity option for TRUNCATE table
+/// [ RESTART IDENTITY | CONTINUE IDENTITY ]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TruncateIdentityOption {
+    Restart,
+    Continue,
+}
+
+/// PostgreSQL cascade option for TRUNCATE table
+/// [ CASCADE | RESTRICT ]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TruncateCascadeOption {
+    Cascade,
+    Restrict,
 }
 
 /// Can use to describe options in  create sequence or table column type identity

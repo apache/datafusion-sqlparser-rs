@@ -4458,7 +4458,7 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(allow_unquoted_hyphen)?;
         let columns = self.parse_view_columns()?;
         let mut options = CreateTableOptions::None;
-        let with_options = self.parse_options(Keyword::WITH)?;
+        let with_options = self.parse_table_options(Keyword::WITH)?;
         if !with_options.is_empty() {
             options = CreateTableOptions::With(with_options);
         }
@@ -5621,7 +5621,8 @@ impl<'a> Parser<'a> {
         let clustered_by = self.parse_optional_clustered_by()?;
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
-        let with_options = self.parse_options(Keyword::WITH)?;
+        // T-sql supports `WITH` options for clustering and distribution
+        let with_options = self.parse_table_options(Keyword::WITH)?;
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {
@@ -6399,6 +6400,17 @@ impl<'a> Parser<'a> {
         Ok(None)
     }
 
+    pub fn parse_table_options(&mut self, keyword: Keyword) -> Result<Vec<SqlOption>, ParserError> {
+        if self.parse_keyword(keyword) {
+            self.expect_token(&Token::LParen)?;
+            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(options)
+        } else {
+            Ok(vec![])
+        }
+    }
+
     pub fn parse_options(&mut self, keyword: Keyword) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keyword(keyword) {
             self.expect_token(&Token::LParen)?;
@@ -6484,11 +6496,99 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_sql_option(&mut self) -> Result<SqlOption, ParserError> {
+    pub fn parse_key_value(&mut self) -> Result<(Ident, Expr), ParserError> {
         let name = self.parse_identifier(false)?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_expr()?;
-        Ok(SqlOption { name, value })
+
+        Ok((name, value))
+    }
+
+    pub fn parse_sql_option(&mut self) -> Result<SqlOption, ParserError> {
+        let next_token = self.peek_token();
+        let is_mssql = dialect_of!(self is MsSqlDialect|GenericDialect);
+
+        let Token::Word(w) = next_token.token else {
+            let (name, value) = self.parse_key_value()?;
+            return Ok(SqlOption::KeyValue { name, value });
+        };
+
+        match w.keyword {
+            Keyword::HEAP if is_mssql => Ok(SqlOption::Ident(self.parse_identifier(false)?)),
+            Keyword::PARTITION if is_mssql => self.parse_table_option_partition(),
+            Keyword::CLUSTERED if is_mssql => self.parse_table_option_clustered(),
+            _ => {
+                let (name, value) = self.parse_key_value()?;
+                Ok(SqlOption::KeyValue { name, value })
+            }
+        }
+    }
+
+    pub fn parse_table_option_clustered(&mut self) -> Result<SqlOption, ParserError> {
+        self.expect_keyword(Keyword::CLUSTERED)?;
+
+        if self.parse_keywords(&[Keyword::COLUMNSTORE, Keyword::INDEX]) {
+            if self.parse_keyword(Keyword::ORDER) {
+                Ok(SqlOption::Clustered(
+                    TableOptionsClustered::ColumnstoreIndexOrder(
+                        self.parse_parenthesized_column_list(IsOptional::Mandatory, false)?,
+                    ),
+                ))
+            } else {
+                Ok(SqlOption::Clustered(
+                    TableOptionsClustered::ColumnstoreIndex,
+                ))
+            }
+        } else {
+            self.expect_keyword(Keyword::INDEX)?;
+            self.expect_token(&Token::LParen)?;
+
+            let columns = self.parse_comma_separated(|p| {
+                let name = p.parse_identifier(false)?;
+                let asc = if p.parse_keyword(Keyword::ASC) {
+                    Some(true)
+                } else if p.parse_keyword(Keyword::DESC) {
+                    Some(false)
+                } else {
+                    None
+                };
+
+                Ok(ClusteredIndex { name, asc })
+            })?;
+
+            self.expect_token(&Token::RParen)?;
+
+            Ok(SqlOption::Clustered(TableOptionsClustered::Index(columns)))
+        }
+    }
+
+    pub fn parse_table_option_partition(&mut self) -> Result<SqlOption, ParserError> {
+        self.expect_keyword(Keyword::PARTITION)?;
+        self.expect_token(&Token::LParen)?;
+        let column_name = self.parse_identifier(false)?;
+
+        self.expect_keyword(Keyword::RANGE)?;
+        let range_direction = if self.parse_keyword(Keyword::LEFT) {
+            Some(PartitionRangeDirection::Left)
+        } else if self.parse_keyword(Keyword::RIGHT) {
+            Some(PartitionRangeDirection::Right)
+        } else {
+            None
+        };
+
+        self.expect_keywords(&[Keyword::FOR, Keyword::VALUES])?;
+        self.expect_token(&Token::LParen)?;
+
+        let for_values = self.parse_comma_separated(Parser::parse_expr)?;
+
+        self.expect_token(&Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(SqlOption::Partition {
+            column_name,
+            range_direction,
+            for_values,
+        })
     }
 
     pub fn parse_partition(&mut self) -> Result<Partition, ParserError> {

@@ -56,15 +56,6 @@ macro_rules! parser_err {
     };
 }
 
-// Returns a successful result if the optional expression is some
-macro_rules! return_ok_if_some {
-    ($e:expr) => {{
-        if let Some(v) = $e {
-            return Ok(v);
-        }
-    }};
-}
-
 #[cfg(feature = "std")]
 /// Implementation [`RecursionCounter`] if std is available
 mod recursion {
@@ -928,35 +919,6 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    pub fn parse_interval_expr(&mut self) -> Result<Expr, ParserError> {
-        let precedence = self.dialect.prec_unknown();
-        let mut expr = self.parse_prefix()?;
-
-        loop {
-            let next_precedence = self.get_next_interval_precedence()?;
-
-            if precedence >= next_precedence {
-                break;
-            }
-
-            expr = self.parse_infix(expr, next_precedence)?;
-        }
-
-        Ok(expr)
-    }
-
-    /// Get the precedence of the next token, with AND, OR, and XOR.
-    pub fn get_next_interval_precedence(&self) -> Result<u8, ParserError> {
-        let token = self.peek_token();
-
-        match token.token {
-            Token::Word(w) if w.keyword == Keyword::AND => Ok(self.dialect.prec_unknown()),
-            Token::Word(w) if w.keyword == Keyword::OR => Ok(self.dialect.prec_unknown()),
-            Token::Word(w) if w.keyword == Keyword::XOR => Ok(self.dialect.prec_unknown()),
-            _ => self.get_next_precedence(),
-        }
-    }
-
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
         let condition = self.parse_expr()?;
         let message = if self.parse_keyword(Keyword::AS) {
@@ -1004,7 +966,7 @@ impl<'a> Parser<'a> {
         // name is not followed by a string literal, but in fact in PostgreSQL it is a valid
         // expression that should parse as the column name "date".
         let loc = self.peek_token().location;
-        return_ok_if_some!(self.maybe_parse(|parser| {
+        let opt_expr = self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
                 DataType::Interval => parser.parse_interval(),
                 // PostgreSQL allows almost any identifier to be used as custom data type name,
@@ -1020,7 +982,11 @@ impl<'a> Parser<'a> {
                     value: parser.parse_literal_string()?,
                 }),
             }
-        }));
+        });
+
+        if let Some(expr) = opt_expr {
+            return Ok(expr);
+        }
 
         let next_token = self.next_token();
         let expr = match next_token.token {
@@ -2110,52 +2076,32 @@ impl<'a> Parser<'a> {
         // don't currently try to parse it. (The sign can instead be included
         // inside the value string.)
 
-        // The first token in an interval is a string literal which specifies
-        // the duration of the interval.
-        let value = self.parse_interval_expr()?;
+        // to match the different flavours of INTERVAL syntax, we only allow expressions
+        // if the dialect requires an interval qualifier,
+        // see https://github.com/sqlparser-rs/sqlparser-rs/pull/1398 for more details
+        let value = if self.dialect.require_interval_qualifier() {
+            // parse a whole expression so `INTERVAL 1 + 1 DAY` is valid
+            self.parse_expr()?
+        } else {
+            // parse a prefix expression so `INTERVAL 1 DAY` is valid, but `INTERVAL 1 + 1 DAY` is not
+            // this also means that `INTERVAL '5 days' > INTERVAL '1 day'` treated properly
+            self.parse_prefix()?
+        };
 
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.
         //
         // Note that PostgreSQL allows omitting the qualifier, so we provide
         // this more general implementation.
-        let leading_field = match self.peek_token().token {
-            Token::Word(kw)
-                if [
-                    Keyword::YEAR,
-                    Keyword::MONTH,
-                    Keyword::WEEK,
-                    Keyword::DAY,
-                    Keyword::HOUR,
-                    Keyword::MINUTE,
-                    Keyword::SECOND,
-                    Keyword::CENTURY,
-                    Keyword::DECADE,
-                    Keyword::DOW,
-                    Keyword::DOY,
-                    Keyword::EPOCH,
-                    Keyword::ISODOW,
-                    Keyword::ISOYEAR,
-                    Keyword::JULIAN,
-                    Keyword::MICROSECOND,
-                    Keyword::MICROSECONDS,
-                    Keyword::MILLENIUM,
-                    Keyword::MILLENNIUM,
-                    Keyword::MILLISECOND,
-                    Keyword::MILLISECONDS,
-                    Keyword::NANOSECOND,
-                    Keyword::NANOSECONDS,
-                    Keyword::QUARTER,
-                    Keyword::TIMEZONE,
-                    Keyword::TIMEZONE_HOUR,
-                    Keyword::TIMEZONE_MINUTE,
-                ]
-                .iter()
-                .any(|d| kw.keyword == *d) =>
-            {
-                Some(self.parse_date_time_field()?)
-            }
-            _ => None,
+        let leading_field = if self.next_token_is_temporal_unit() {
+            Some(self.parse_date_time_field()?)
+        } else if self.dialect.require_interval_qualifier() {
+            return parser_err!(
+                "INTERVAL requires a unit after the literal value",
+                self.peek_token().location
+            );
+        } else {
+            None
         };
 
         let (leading_precision, last_field, fsec_precision) =
@@ -2190,6 +2136,45 @@ impl<'a> Parser<'a> {
             last_field,
             fractional_seconds_precision: fsec_precision,
         }))
+    }
+
+    /// Peek at the next token and determine if it is a temporal unit
+    /// like `second`.
+    pub fn next_token_is_temporal_unit(&mut self) -> bool {
+        if let Token::Word(word) = self.peek_token().token {
+            matches!(
+                word.keyword,
+                Keyword::YEAR
+                    | Keyword::MONTH
+                    | Keyword::WEEK
+                    | Keyword::DAY
+                    | Keyword::HOUR
+                    | Keyword::MINUTE
+                    | Keyword::SECOND
+                    | Keyword::CENTURY
+                    | Keyword::DECADE
+                    | Keyword::DOW
+                    | Keyword::DOY
+                    | Keyword::EPOCH
+                    | Keyword::ISODOW
+                    | Keyword::ISOYEAR
+                    | Keyword::JULIAN
+                    | Keyword::MICROSECOND
+                    | Keyword::MICROSECONDS
+                    | Keyword::MILLENIUM
+                    | Keyword::MILLENNIUM
+                    | Keyword::MILLISECOND
+                    | Keyword::MILLISECONDS
+                    | Keyword::NANOSECOND
+                    | Keyword::NANOSECONDS
+                    | Keyword::QUARTER
+                    | Keyword::TIMEZONE
+                    | Keyword::TIMEZONE_HOUR
+                    | Keyword::TIMEZONE_MINUTE
+            )
+        } else {
+            false
+        }
     }
 
     /// Bigquery specific: Parse a struct literal

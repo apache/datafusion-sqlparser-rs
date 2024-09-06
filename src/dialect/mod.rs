@@ -515,6 +515,27 @@ pub trait Dialect: Debug + Any {
     fn supports_create_index_with_clause(&self) -> bool {
         false
     }
+
+    /// Whether `INTERVAL` expressions require units (called "qualifiers" in the ANSI SQL spec) to be specified,
+    /// e.g. `INTERVAL 1 DAY` vs `INTERVAL 1`.
+    ///
+    /// Expressions within intervals (e.g. `INTERVAL '1' + '1' DAY`) are only allowed when units are required.
+    ///
+    /// See <https://github.com/sqlparser-rs/sqlparser-rs/pull/1398> for more information.
+    ///
+    /// When `true`:
+    /// * `INTERVAL '1' DAY` is VALID
+    /// * `INTERVAL 1 + 1 DAY` is VALID
+    /// * `INTERVAL '1' + '1' DAY` is VALID
+    /// * `INTERVAL '1'` is INVALID
+    ///
+    /// When `false`:
+    /// * `INTERVAL '1'` is VALID
+    /// * `INTERVAL '1' DAY` is VALID — unit is not required, but still allowed
+    /// * `INTERVAL 1 + 1 DAY` is INVALID
+    fn require_interval_qualifier(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

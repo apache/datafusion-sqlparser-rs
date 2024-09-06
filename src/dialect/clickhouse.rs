@@ -37,4 +37,8 @@ impl Dialect for ClickHouseDialect {
     fn describe_requires_table_keyword(&self) -> bool {
         true
     }
+
+    fn require_interval_qualifier(&self) -> bool {
+        true
+    }
 }

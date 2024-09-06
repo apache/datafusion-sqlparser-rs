@@ -84,6 +84,10 @@ impl Dialect for MySqlDialect {
             None
         }
     }
+
+    fn require_interval_qualifier(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

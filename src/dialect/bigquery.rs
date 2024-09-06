@@ -63,4 +63,8 @@ impl Dialect for BigQueryDialect {
     fn supports_select_wildcard_except(&self) -> bool {
         true
     }
+
+    fn require_interval_qualifier(&self) -> bool {
+        true
+    }
 }

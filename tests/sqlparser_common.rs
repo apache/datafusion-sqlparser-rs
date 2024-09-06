@@ -4472,7 +4472,8 @@ fn parse_window_functions() {
                sum(qux) OVER (ORDER BY a \
                GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
-    let select = verified_only_select(sql);
+    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let select = dialects.verified_only_select(sql);
 
     const EXPECTED_PROJ_QTY: usize = 7;
     assert_eq!(EXPECTED_PROJ_QTY, select.projection.len());
@@ -4886,7 +4887,9 @@ fn parse_literal_timestamp_with_time_zone() {
 }
 
 #[test]
-fn parse_interval() {
+fn parse_interval_all() {
+    // these intervals expressions all work with both variants of INTERVAL
+
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -4954,23 +4957,6 @@ fn parse_interval() {
         expr_from_projection(only(&select.projection)),
     );
 
-    let sql = "SELECT INTERVAL 1 + 1 DAY";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value(number("1"))),
-                op: BinaryOperator::Plus,
-                right: Box::new(Expr::Value(number("1"))),
-            }),
-            leading_field: Some(DateTimeField::Day),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
-        }),
-        expr_from_projection(only(&select.projection)),
-    );
-
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -4978,21 +4964,6 @@ fn parse_interval() {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
-            last_field: None,
-            fractional_seconds_precision: None,
-        }),
-        expr_from_projection(only(&select.projection)),
-    );
-
-    let sql = "SELECT INTERVAL '1 DAY'";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
-                "1 DAY"
-            )))),
-            leading_field: None,
-            leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
         }),
@@ -5024,12 +4995,212 @@ fn parse_interval() {
     verified_only_select("SELECT INTERVAL '1' HOUR TO MINUTE");
     verified_only_select("SELECT INTERVAL '1' HOUR TO SECOND");
     verified_only_select("SELECT INTERVAL '1' MINUTE TO SECOND");
-    verified_only_select("SELECT INTERVAL '1 YEAR'");
-    verified_only_select("SELECT INTERVAL '1 YEAR' AS one_year");
-    one_statement_parses_to(
+    verified_only_select("SELECT INTERVAL 1 YEAR");
+    verified_only_select("SELECT INTERVAL 1 MONTH");
+    verified_only_select("SELECT INTERVAL 1 DAY");
+    verified_only_select("SELECT INTERVAL 1 HOUR");
+    verified_only_select("SELECT INTERVAL 1 MINUTE");
+    verified_only_select("SELECT INTERVAL 1 SECOND");
+}
+
+#[test]
+fn parse_interval_dont_require_unit() {
+    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+
+    let sql = "SELECT INTERVAL '1 DAY'";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
+                "1 DAY"
+            )))),
+            leading_field: None,
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+    dialects.verified_only_select("SELECT INTERVAL '1 YEAR'");
+    dialects.verified_only_select("SELECT INTERVAL '1 MONTH'");
+    dialects.verified_only_select("SELECT INTERVAL '1 DAY'");
+    dialects.verified_only_select("SELECT INTERVAL '1 HOUR'");
+    dialects.verified_only_select("SELECT INTERVAL '1 MINUTE'");
+    dialects.verified_only_select("SELECT INTERVAL '1 SECOND'");
+}
+
+#[test]
+fn parse_interval_require_unit() {
+    let dialects = all_dialects_where(|d| d.require_interval_qualifier());
+
+    let sql = "SELECT INTERVAL '1 DAY'";
+    let err = dialects.parse_sql_statements(sql).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "sql parser error: INTERVAL requires a unit after the literal value"
+    )
+}
+
+#[test]
+fn parse_interval_require_qualifier() {
+    let dialects = all_dialects_where(|d| d.require_interval_qualifier());
+
+    let sql = "SELECT INTERVAL 1 + 1 DAY";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        expr_from_projection(only(&select.projection)),
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Value(number("1"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Value(number("1"))),
+            }),
+            leading_field: Some(DateTimeField::Day),
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+    );
+
+    let sql = "SELECT INTERVAL '1' + '1' DAY";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        expr_from_projection(only(&select.projection)),
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Value(Value::SingleQuotedString("1".to_string()))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Value(Value::SingleQuotedString("1".to_string()))),
+            }),
+            leading_field: Some(DateTimeField::Day),
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+    );
+
+    let sql = "SELECT INTERVAL '1' + '2' - '3' DAY";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        expr_from_projection(only(&select.projection)),
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Value(Value::SingleQuotedString("1".to_string()))),
+                    op: BinaryOperator::Plus,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("2".to_string()))),
+                }),
+                op: BinaryOperator::Minus,
+                right: Box::new(Expr::Value(Value::SingleQuotedString("3".to_string()))),
+            }),
+            leading_field: Some(DateTimeField::Day),
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+    );
+}
+
+#[test]
+fn parse_interval_disallow_interval_expr() {
+    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+
+    let sql = "SELECT INTERVAL '1 DAY'";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        expr_from_projection(only(&select.projection)),
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
+                "1 DAY"
+            )))),
+            leading_field: None,
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+    );
+
+    dialects.verified_only_select("SELECT INTERVAL '1 YEAR'");
+    dialects.verified_only_select("SELECT INTERVAL '1 YEAR' AS one_year");
+    dialects.one_statement_parses_to(
         "SELECT INTERVAL '1 YEAR' one_year",
         "SELECT INTERVAL '1 YEAR' AS one_year",
     );
+
+    let sql = "SELECT INTERVAL '1 DAY' > INTERVAL '1 SECOND'";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        expr_from_projection(only(&select.projection)),
+        &Expr::BinaryOp {
+            left: Box::new(Expr::Interval(Interval {
+                value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
+                    "1 DAY"
+                )))),
+                leading_field: None,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            })),
+            op: BinaryOperator::Gt,
+            right: Box::new(Expr::Interval(Interval {
+                value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
+                    "1 SECOND"
+                )))),
+                leading_field: None,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }))
+        }
+    );
+}
+
+#[test]
+fn interval_disallow_interval_expr_gt() {
+    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let expr = dialects.verified_expr("INTERVAL '1 second' > x");
+    assert_eq!(
+        expr,
+        Expr::BinaryOp {
+            left: Box::new(Expr::Interval(Interval {
+                value: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "1 second".to_string()
+                ))),
+                leading_field: None,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            },)),
+            op: BinaryOperator::Gt,
+            right: Box::new(Expr::Identifier(Ident {
+                value: "x".to_string(),
+                quote_style: None,
+            })),
+        }
+    )
+}
+
+#[test]
+fn interval_disallow_interval_expr_double_colon() {
+    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let expr = dialects.verified_expr("INTERVAL '1 second'::TEXT");
+    assert_eq!(
+        expr,
+        Expr::Cast {
+            kind: CastKind::DoubleColon,
+            expr: Box::new(Expr::Interval(Interval {
+                value: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "1 second".to_string()
+                ))),
+                leading_field: None,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            })),
+            data_type: DataType::Text,
+            format: None,
+        }
+    )
 }
 
 #[test]
@@ -5038,7 +5209,8 @@ fn parse_interval_and_or_xor() {
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         AND d2_date > d1_date + INTERVAL '3 days'";
 
-    let actual_ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
+    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let actual_ast = dialects.parse_sql_statements(sql).unwrap();
 
     let expected_ast = vec![Statement::Query(Box::new(Query {
         with: None,
@@ -5140,19 +5312,19 @@ fn parse_interval_and_or_xor() {
 
     assert_eq!(actual_ast, expected_ast);
 
-    verified_stmt(
+    dialects.verified_stmt(
         "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         AND d2_date > d1_date + INTERVAL '3 days'",
     );
 
-    verified_stmt(
+    dialects.verified_stmt(
         "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         OR d2_date > d1_date + INTERVAL '3 days'",
     );
 
-    verified_stmt(
+    dialects.verified_stmt(
         "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         XOR d2_date > d1_date + INTERVAL '3 days'",

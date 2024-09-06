@@ -38,4 +38,8 @@ impl Dialect for DatabricksDialect {
     fn supports_select_wildcard_except(&self) -> bool {
         true
     }
+
+    fn require_interval_qualifier(&self) -> bool {
+        true
+    }
 }

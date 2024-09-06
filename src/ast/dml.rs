@@ -226,6 +226,13 @@ impl Display for CreateTable {
             // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
             write!(f, " ()")?;
         }
+
+        // Hive table comment should be after column definitions, please refer to:
+        // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
+        if let Some(CommentDef::AfterColumnDefsWithoutEq(comment)) = &self.comment {
+            write!(f, " COMMENT '{comment}'")?;
+        }
+
         // Only for SQLite
         if self.without_rowid {
             write!(f, " WITHOUT ROWID")?;
@@ -336,6 +343,8 @@ impl Display for CreateTable {
                 CommentDef::WithoutEq(comment) => {
                     write!(f, " COMMENT '{comment}'")?;
                 }
+                // For CommentDef::AfterColumnDefsWithoutEq will be displayed after column definition
+                CommentDef::AfterColumnDefsWithoutEq(_) => (),
             }
         }
 

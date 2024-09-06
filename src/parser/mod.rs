@@ -5613,6 +5613,17 @@ impl<'a> Parser<'a> {
 
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
+        let mut comment = if dialect_of!(self is HiveDialect)
+            && self.parse_keyword(Keyword::COMMENT)
+        {
+            let next_token = self.next_token();
+            match next_token.token {
+                Token::SingleQuotedString(str) => Some(CommentDef::AfterColumnDefsWithoutEq(str)),
+                _ => self.expected("comment", next_token)?,
+            }
+        } else {
+            None
+        };
 
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
@@ -5723,16 +5734,19 @@ impl<'a> Parser<'a> {
 
         let strict = self.parse_keyword(Keyword::STRICT);
 
-        let comment = if self.parse_keyword(Keyword::COMMENT) {
-            let _ = self.consume_token(&Token::Eq);
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
-                _ => self.expected("comment", next_token)?,
-            }
-        } else {
-            None
-        };
+        // For Hive, the comment is after the table column definitions
+        if !dialect_of!(self is HiveDialect) {
+            comment = if self.parse_keyword(Keyword::COMMENT) {
+                let _ = self.consume_token(&Token::Eq);
+                let next_token = self.next_token();
+                match next_token.token {
+                    Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
+                    _ => self.expected("comment", next_token)?,
+                }
+            } else {
+                None
+            };
+        }
 
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {

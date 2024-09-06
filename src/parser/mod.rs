@@ -5734,7 +5734,7 @@ impl<'a> Parser<'a> {
 
         let strict = self.parse_keyword(Keyword::STRICT);
 
-        // For Hive, the comment is after the table column definitions
+        // Excludes Hive dialect here since it has been handled after table column definitions.
         if !dialect_of!(self is HiveDialect) {
             comment = if self.parse_keyword(Keyword::COMMENT) {
                 let _ = self.consume_token(&Token::Eq);

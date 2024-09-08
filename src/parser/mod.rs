@@ -6615,6 +6615,36 @@ impl<'a> Parser<'a> {
                     self.peek_token(),
                 );
             }
+        } else if self.parse_keywords(&[Keyword::CLEAR, Keyword::PROJECTION])
+            && dialect_of!(self is ClickHouseDialect|GenericDialect)
+        {
+            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+            let name = self.parse_identifier(false)?;
+            let partition = if self.parse_keywords(&[Keyword::IN, Keyword::PARTITION]) {
+                Some(self.parse_identifier(false)?)
+            } else {
+                None
+            };
+            AlterTableOperation::ClearProjection {
+                if_exists,
+                name,
+                partition,
+            }
+        } else if self.parse_keywords(&[Keyword::MATERIALIZE, Keyword::PROJECTION])
+            && dialect_of!(self is ClickHouseDialect|GenericDialect)
+        {
+            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+            let name = self.parse_identifier(false)?;
+            let partition = if self.parse_keywords(&[Keyword::IN, Keyword::PARTITION]) {
+                Some(self.parse_identifier(false)?)
+            } else {
+                None
+            };
+            AlterTableOperation::MaterializeProjection {
+                if_exists,
+                name,
+                partition,
+            }
         } else if self.parse_keyword(Keyword::DROP) {
             if self.parse_keywords(&[Keyword::IF, Keyword::EXISTS, Keyword::PARTITION]) {
                 self.expect_token(&Token::LParen)?;
@@ -6645,6 +6675,12 @@ impl<'a> Parser<'a> {
                 && dialect_of!(self is MySqlDialect | GenericDialect)
             {
                 AlterTableOperation::DropPrimaryKey
+            } else if self.parse_keyword(Keyword::PROJECTION)
+                && dialect_of!(self is ClickHouseDialect|GenericDialect)
+            {
+                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+                let name = self.parse_identifier(false)?;
+                AlterTableOperation::DropProjection { if_exists, name }
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);

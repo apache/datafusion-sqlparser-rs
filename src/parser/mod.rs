@@ -11069,8 +11069,8 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parsae ASC or DESC, returns Option<true> if ASC or Option<false> if DESC. If token is not
-    /// one of ASC or DESC, `None` is returned.
+    /// Parsae ASC or DESC, returns an Option with true if ASC, false of DESC or `None` if none of
+    /// them.
     pub fn parse_asc(&mut self) -> Option<bool> {
         if self.parse_keyword(Keyword::ASC) {
             Some(true)

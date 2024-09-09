@@ -462,15 +462,15 @@ fn parse_create_table_with_defaults() {
                 with_options,
                 vec![
                     SqlOption::KeyValue {
-                        name: "fillfactor".into(),
+                        key: "fillfactor".into(),
                         value: Expr::Value(number("20"))
                     },
                     SqlOption::KeyValue {
-                        name: "user_catalog_table".into(),
+                        key: "user_catalog_table".into(),
                         value: Expr::Value(Value::Boolean(true))
                     },
                     SqlOption::KeyValue {
-                        name: "autovacuum_vacuum_threshold".into(),
+                        key: "autovacuum_vacuum_threshold".into(),
                         value: Expr::Value(number("100"))
                     },
                 ]
@@ -4483,11 +4483,11 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        name: "foo".into(),
+                        key: "foo".into(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption::KeyValue {
-                        name: "a".into(),
+                        key: "a".into(),
                         value: Expr::Value(number("123")),
                     },
                 ],

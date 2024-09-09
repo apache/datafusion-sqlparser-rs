@@ -654,100 +654,144 @@ fn parse_use() {
 }
 
 #[test]
-fn parse_create_table_with_options() {
+fn parse_create_table_with_valid_options() {
     let options = [
         (
-            "PARTITION (column_a RANGE LEFT FOR VALUES (10, 11))",
-            SqlOption::Partition {
-                column_name: "column_a".into(),
-                range_direction: Some(PartitionRangeDirection::Left),
-                for_values: vec![Expr::Value(test_utils::number("10")), Expr::Value(test_utils::number("11"))] },
-            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (DISTRIBUTION = ROUND_ROBIN, PARTITION (column_a RANGE LEFT FOR VALUES (10, 11)))",
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (DISTRIBUTION = ROUND_ROBIN, PARTITION (column_a RANGE FOR VALUES (10, 11)))",
+            vec![
+                SqlOption::KeyValue {
+                    key: Ident {
+                        value: "DISTRIBUTION".to_string(),
+                        quote_style: None,
+                    },
+                    value: Expr::Identifier(Ident {
+                        value: "ROUND_ROBIN".to_string(),
+                        quote_style: None,
+                    })
+                },
+                SqlOption::Partition {
+                    column_name: "column_a".into(),
+                    range_direction: None,
+                    for_values: vec![Expr::Value(test_utils::number("10")), Expr::Value(test_utils::number("11"))] ,
+                },
+            ],
         ),
         (
-            "HEAP",
-            SqlOption::Ident("HEAP".into()),
-            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (DISTRIBUTION = ROUND_ROBIN, HEAP)",
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (PARTITION (column_a RANGE LEFT FOR VALUES (10, 11)))",
+            vec![
+                SqlOption::Partition {
+                        column_name: "column_a".into(),
+                        range_direction: Some(PartitionRangeDirection::Left),
+                        for_values: vec![
+                            Expr::Value(test_utils::number("10")),
+                            Expr::Value(test_utils::number("11")),
+                        ],
+                    }
+            ],
+        ),
+        (
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (CLUSTERED COLUMNSTORE INDEX)",
+            vec![SqlOption::Clustered(TableOptionsClustered::ColumnstoreIndex)],
+        ),
+        (
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (CLUSTERED COLUMNSTORE INDEX ORDER (column_a, column_b))",
+            vec![
+                SqlOption::Clustered(TableOptionsClustered::ColumnstoreIndexOrder(vec![
+                    "column_a".into(),
+                    "column_b".into(),
+                ]))
+            ],
+        ),
+        (
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (CLUSTERED INDEX (column_a ASC, column_b DESC, column_c))",
+            vec![
+                SqlOption::Clustered(TableOptionsClustered::Index(vec![
+                        ClusteredIndex {
+                            name: Ident {
+                                value: "column_a".to_string(),
+                                quote_style: None,
+                            },
+                            asc: Some(true),
+                        },
+                        ClusteredIndex {
+                            name: Ident {
+                                value: "column_b".to_string(),
+                                quote_style: None,
+                            },
+                            asc: Some(false),
+                        },
+                        ClusteredIndex {
+                            name: Ident {
+                                value: "column_c".to_string(),
+                                quote_style: None,
+                            },
+                            asc: None,
+                        },
+                    ]))
+            ],
+        ),
+        (
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (DISTRIBUTION = HASH(column_a, column_b), HEAP)",
+            vec![
+                SqlOption::KeyValue {
+                    key: Ident {
+                        value: "DISTRIBUTION".to_string(),
+                        quote_style: None,
+                    },
+                    value: Expr::Function(
+                        Function {
+                            name: ObjectName(
+                                vec![
+                                    Ident {
+                                        value: "HASH".to_string(),
+                                        quote_style: None,
+                                    },
+                                ],
+                            ),
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(
+                                FunctionArgumentList {
+                                    duplicate_treatment: None,
+                                    args: vec![
+                                        FunctionArg::Unnamed(
+                                            FunctionArgExpr::Expr(
+                                                Expr::Identifier(
+                                                    Ident {
+                                                        value: "column_a".to_string(),
+                                                        quote_style: None,
+                                                    },
+                                                ),
+                                            ),
+                                        ),
+                                        FunctionArg::Unnamed(
+                                            FunctionArgExpr::Expr(
+                                                Expr::Identifier(
+                                                    Ident {
+                                                        value: "column_b".to_string(),
+                                                        quote_style: None,
+                                                    },
+                                                ),
+                                            ),
+                                        ),
+                                    ],
+                                    clauses: vec![],
+                                },
+                            ),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![],
+                        },
+                    ),
+                },
+                SqlOption::Ident("HEAP".into()),
+            ],
          ),
-        (
-            "CLUSTERED COLUMNSTORE INDEX",
-            SqlOption::Clustered(TableOptionsClustered::ColumnstoreIndex),
-            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (DISTRIBUTION = ROUND_ROBIN, CLUSTERED COLUMNSTORE INDEX)",
-        ),
-        (
-            "CLUSTERED COLUMNSTORE INDEX ORDER (column_a, column_b)",
-            SqlOption::Clustered(TableOptionsClustered::ColumnstoreIndexOrder(vec![
-                "column_a".into(),
-                "column_b".into(),
-            ])),
-            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (DISTRIBUTION = ROUND_ROBIN, CLUSTERED COLUMNSTORE INDEX ORDER (column_a, column_b))",
-        ),
-        (
-            "CLUSTERED INDEX (column_a ASC, column_b DESC, column_c)",
-            SqlOption::Clustered(TableOptionsClustered::Index(vec![
-                ClusteredIndex {
-                    name: Ident {
-                        value: "column_a".to_string(),
-                        quote_style: None,
-                    },
-                    asc: Some(true),
-                },
-                ClusteredIndex {
-                    name: Ident {
-                        value: "column_b".to_string(),
-                        quote_style: None,
-                    },
-                    asc: Some(false),
-                },
-                ClusteredIndex {
-                    name: Ident {
-                        value: "column_c".to_string(),
-                        quote_style: None,
-                    },
-                    asc: None,
-                },
-            ])),
-            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (DISTRIBUTION = ROUND_ROBIN, CLUSTERED INDEX (column_a ASC, column_b DESC, column_c))",
-        ),
     ];
 
-    for (query_placeholder, query_with_option, full_query) in options {
-        let sql = format!(
-            "
-            CREATE TABLE mytable (
-                column_a INT,
-                column_b INT,
-                column_c INT
-            )
-            WITH (
-                DISTRIBUTION = ROUND_ROBIN,
-                {query_placeholder}
-            )
-            "
-        );
-
-        let stmt = ms()
-            .parse_sql_statements(sql.as_str())
-            .unwrap()
-            .first()
-            .unwrap()
-            .to_owned();
-
-        let with_options = vec![
-            SqlOption::KeyValue {
-                name: Ident {
-                    value: "DISTRIBUTION".to_string(),
-                    quote_style: None,
-                },
-                value: Expr::Identifier(Ident {
-                    value: "ROUND_ROBIN".to_string(),
-                    quote_style: None,
-                }),
-            },
-            query_with_option,
-        ];
-
+    for (sql, with_options) in options {
         assert_eq!(
+            ms().verified_stmt(sql),
             Statement::CreateTable(CreateTable {
                 or_replace: false,
                 temporary: false,
@@ -828,11 +872,39 @@ fn parse_create_table_with_options() {
                 with_aggregation_policy: None,
                 with_row_access_policy: None,
                 with_tags: None,
-            }),
-            stmt
+            })
         );
+    }
+}
 
-        assert_eq!(full_query, stmt.to_string());
+#[test]
+fn parse_create_table_with_invalid_options() {
+    let invalid_cases = vec![
+        (
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (CLUSTERED COLUMNSTORE INDEX ORDER ())",
+            "Expected: identifier, found: )",
+        ),
+        (
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (CLUSTERED COLUMNSTORE)",
+            "invalid CLUSTERED sequence",
+        ),
+        (
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (HEAP INDEX)",
+            "Expected: ), found: INDEX",
+        ),
+        (
+
+            "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (PARTITION (RANGE LEFT FOR VALUES (10, 11)))",
+            "Expected: RANGE, found: LEFT",
+        ),
+    ];
+
+    for (sql, expected_error) in invalid_cases {
+        let res = ms().parse_sql_statements(sql);
+        assert_eq!(
+            format!("sql parser error: {expected_error}"),
+            res.unwrap_err().to_string()
+        );
     }
 }
 

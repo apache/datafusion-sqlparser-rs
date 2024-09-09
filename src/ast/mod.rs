@@ -1944,7 +1944,7 @@ pub enum CreateTableOptions {
     ///
     /// <https://www.postgresql.org/docs/current/sql-createtable.html>
     ///
-    /// T-sql supports more specific options that's not only key-value pairs.
+    /// MSSQL supports more specific options that's not only key-value pairs.
     ///
     /// WITH (
     ///     DISTRIBUTION = ROUND_ROBIN,
@@ -5656,15 +5656,22 @@ pub enum PartitionRangeDirection {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SqlOption {
-    /// Clustered represents the clustered version of table storage for T-sql.
+    /// Clustered represents the clustered version of table storage for MSSQL.
     ///
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TableOptions>
     Clustered(TableOptionsClustered),
-    /// Single identifier options, e.g. `HEAP`.
+    /// Single identifier options, e.g. `HEAP` for MSSQL.
+    ///
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TableOptions>
     Ident(Ident),
-    /// Any option that consists of a key value pair where the value is an expression.
-    KeyValue { name: Ident, value: Expr },
-    /// One or more table partitions and represents which partition the boundary values belong to.
+    /// Any option that consists of a key value pair where the value is an expression. e.g.
+    ///
+    ///   WITH(DISTRIBUTION = ROUND_ROBIN)
+    KeyValue { key: Ident, value: Expr },
+    /// One or more table partitions and represents which partition the boundary values belong to,
+    /// e.g.
+    ///
+    ///   PARTITION (id RANGE LEFT FOR VALUES (10, 20, 30, 40))
     ///
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TablePartitionOptions>
     Partition {
@@ -5681,7 +5688,7 @@ impl fmt::Display for SqlOption {
             SqlOption::Ident(ident) => {
                 write!(f, "{}", ident)
             }
-            SqlOption::KeyValue { name, value } => {
+            SqlOption::KeyValue { key: name, value } => {
                 write!(f, "{} = {}", name, value)
             }
             SqlOption::Partition {

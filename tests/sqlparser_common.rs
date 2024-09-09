@@ -3638,11 +3638,11 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        name: "foo".into(),
+                        key: "foo".into(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption::KeyValue {
-                        name: "a".into(),
+                        key: "a".into(),
                         value: Expr::Value(number("123")),
                     },
                 ],
@@ -3871,7 +3871,7 @@ fn parse_alter_table() {
             assert_eq!(
                 table_properties,
                 [SqlOption::KeyValue {
-                    name: Ident {
+                    key: Ident {
                         value: "classification".to_string(),
                         quote_style: Some('\'')
                     },
@@ -3959,11 +3959,11 @@ fn parse_alter_view_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        name: "foo".into(),
+                        key: "foo".into(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption::KeyValue {
-                        name: "a".into(),
+                        key: "a".into(),
                         value: Expr::Value(number("123")),
                     },
                 ],
@@ -6531,11 +6531,11 @@ fn parse_create_view_with_options() {
             assert_eq!(
                 CreateTableOptions::With(vec![
                     SqlOption::KeyValue {
-                        name: "foo".into(),
+                        key: "foo".into(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption::KeyValue {
-                        name: "a".into(),
+                        key: "a".into(),
                         value: Expr::Value(number("123")),
                     },
                 ]),
@@ -8629,11 +8629,11 @@ fn parse_cache_table() {
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
-                    name: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1"),
                     value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption::KeyValue {
-                    name: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2"),
                     value: Expr::Value(number("0.88")),
                 },
             ],
@@ -8654,11 +8654,11 @@ fn parse_cache_table() {
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
-                    name: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1"),
                     value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption::KeyValue {
-                    name: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2"),
                     value: Expr::Value(number("0.88")),
                 },
             ],
@@ -8679,11 +8679,11 @@ fn parse_cache_table() {
             has_as: true,
             options: vec![
                 SqlOption::KeyValue {
-                    name: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1"),
                     value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption::KeyValue {
-                    name: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2"),
                     value: Expr::Value(number("0.88")),
                 },
             ],
@@ -9490,7 +9490,7 @@ fn parse_unload() {
                 quote_style: Some('\'')
             },
             with: vec![SqlOption::KeyValue {
-                name: Ident {
+                key: Ident {
                     value: "format".to_string(),
                     quote_style: None
                 },

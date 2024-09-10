@@ -360,6 +360,102 @@ fn parse_alter_table_add_projection() {
 }
 
 #[test]
+fn parse_alter_table_drop_projection() {
+    match clickhouse_and_generic().verified_stmt("ALTER TABLE t0 DROP PROJECTION IF EXISTS my_name")
+    {
+        Statement::AlterTable {
+            name, operations, ..
+        } => {
+            assert_eq!(name, ObjectName(vec!["t0".into()]));
+            assert_eq!(1, operations.len());
+            assert_eq!(
+                operations[0],
+                AlterTableOperation::DropProjection {
+                    if_exists: true,
+                    name: "my_name".into(),
+                }
+            )
+        }
+        _ => unreachable!(),
+    }
+    // allow to skip `IF EXISTS`
+    clickhouse_and_generic().verified_stmt("ALTER TABLE t0 DROP PROJECTION my_name");
+
+    assert_eq!(
+        clickhouse_and_generic()
+            .parse_sql_statements("ALTER TABLE t0 DROP PROJECTION")
+            .unwrap_err(),
+        ParserError("Expected: identifier, found: EOF".to_string())
+    );
+}
+
+#[test]
+fn parse_alter_table_clear_and_materialize_projection() {
+    for keyword in ["CLEAR", "MATERIALIZE"] {
+        match clickhouse_and_generic().verified_stmt(
+            format!("ALTER TABLE t0 {keyword} PROJECTION IF EXISTS my_name IN PARTITION p0",)
+                .as_str(),
+        ) {
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
+                assert_eq!(name, ObjectName(vec!["t0".into()]));
+                assert_eq!(1, operations.len());
+                assert_eq!(
+                    operations[0],
+                    if keyword == "CLEAR" {
+                        AlterTableOperation::ClearProjection {
+                            if_exists: true,
+                            name: "my_name".into(),
+                            partition: Some(Ident::new("p0")),
+                        }
+                    } else {
+                        AlterTableOperation::MaterializeProjection {
+                            if_exists: true,
+                            name: "my_name".into(),
+                            partition: Some(Ident::new("p0")),
+                        }
+                    }
+                )
+            }
+            _ => unreachable!(),
+        }
+        // allow to skip `IF EXISTS`
+        clickhouse_and_generic().verified_stmt(
+            format!("ALTER TABLE t0 {keyword} PROJECTION my_name IN PARTITION p0",).as_str(),
+        );
+        // allow to skip `IN PARTITION partition_name`
+        clickhouse_and_generic()
+            .verified_stmt(format!("ALTER TABLE t0 {keyword} PROJECTION my_name",).as_str());
+
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(format!("ALTER TABLE t0 {keyword} PROJECTION",).as_str())
+                .unwrap_err(),
+            ParserError("Expected: identifier, found: EOF".to_string())
+        );
+
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(
+                    format!("ALTER TABLE t0 {keyword} PROJECTION my_name IN PARTITION",).as_str()
+                )
+                .unwrap_err(),
+            ParserError("Expected: identifier, found: EOF".to_string())
+        );
+
+        assert_eq!(
+            clickhouse_and_generic()
+                .parse_sql_statements(
+                    format!("ALTER TABLE t0 {keyword} PROJECTION my_name IN",).as_str()
+                )
+                .unwrap_err(),
+            ParserError("Expected: end of statement, found: IN".to_string())
+        );
+    }
+}
+
+#[test]
 fn parse_optimize_table() {
     clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE t0");
     clickhouse_and_generic().verified_stmt("OPTIMIZE TABLE db.t0");

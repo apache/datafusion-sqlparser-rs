@@ -2820,6 +2820,29 @@ fn parse_window_function_null_treatment_arg() {
 }
 
 #[test]
+fn parse_signed_value() {
+    let sql1 = "CREATE SEQUENCE name1
+    AS BIGINT
+    INCREMENT   -15
+    MINVALUE - 2000  MAXVALUE -50
+    START WITH -   60";
+    one_statement_parses_to(
+        sql1,
+        "CREATE SEQUENCE name1 AS BIGINT INCREMENT -15 MINVALUE -2000 MAXVALUE -50 START WITH -60",
+    );
+
+    let sql2 = "CREATE SEQUENCE name2
+    AS BIGINT
+    INCREMENT   +10
+    MINVALUE + 30  MAXVALUE +5000
+    START WITH +   45";
+    one_statement_parses_to(
+        sql2,
+        "CREATE SEQUENCE name2 AS BIGINT INCREMENT +10 MINVALUE +30 MAXVALUE +5000 START WITH +45",
+    );
+}
+
+#[test]
 fn parse_create_table() {
     let sql = "CREATE TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

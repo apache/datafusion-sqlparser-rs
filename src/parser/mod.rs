@@ -7274,7 +7274,7 @@ impl<'a> Parser<'a> {
                 let placeholder = tok.to_string() + &ident.value;
                 Ok(Value::Placeholder(placeholder))
             }
-            tok @ Token::Minus => {
+            tok @ Token::Minus | tok @ Token::Plus => {
                 let next_token = self.next_token();
                 match next_token.token {
                     Token::Number(n, l) => Ok(Value::Number(

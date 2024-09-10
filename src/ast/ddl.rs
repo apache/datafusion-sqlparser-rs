@@ -57,6 +57,33 @@ pub enum AlterTableOperation {
         name: Ident,
         select: ProjectionSelect,
     },
+
+    /// `DROP PROJECTION [IF EXISTS] name`
+    ///
+    /// Note: this is a ClickHouse-specific operation.
+    /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#drop-projection)
+    DropProjection { if_exists: bool, name: Ident },
+
+    /// `MATERIALIZE PROJECTION [IF EXISTS] name [IN PARTITION partition_name]`
+    ///
+    ///  Note: this is a ClickHouse-specific operation.
+    /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#materialize-projection)
+    MaterializeProjection {
+        if_exists: bool,
+        name: Ident,
+        partition: Option<Ident>,
+    },
+
+    /// `CLEAR PROJECTION [IF EXISTS] name [IN PARTITION partition_name]`
+    ///
+    /// Note: this is a ClickHouse-specific operation.
+    /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#clear-projection)
+    ClearProjection {
+        if_exists: bool,
+        name: Ident,
+        partition: Option<Ident>,
+    },
+
     /// `DISABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -274,6 +301,43 @@ impl fmt::Display for AlterTableOperation {
                     write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {} ({})", name, query)
+            }
+            AlterTableOperation::DropProjection { if_exists, name } => {
+                write!(f, "DROP PROJECTION")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {}", name)
+            }
+            AlterTableOperation::MaterializeProjection {
+                if_exists,
+                name,
+                partition,
+            } => {
+                write!(f, "MATERIALIZE PROJECTION")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {}", name)?;
+                if let Some(partition) = partition {
+                    write!(f, " IN PARTITION {}", partition)?;
+                }
+                Ok(())
+            }
+            AlterTableOperation::ClearProjection {
+                if_exists,
+                name,
+                partition,
+            } => {
+                write!(f, "CLEAR PROJECTION")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {}", name)?;
+                if let Some(partition) = partition {
+                    write!(f, " IN PARTITION {}", partition)?;
+                }
+                Ok(())
             }
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {column_name} {op}")

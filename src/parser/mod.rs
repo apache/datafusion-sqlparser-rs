@@ -6484,14 +6484,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_key_value(&mut self) -> Result<(Ident, Expr), ParserError> {
-        let name = self.parse_identifier(false)?;
-        self.expect_token(&Token::Eq)?;
-        let value = self.parse_expr()?;
-
-        Ok((name, value))
-    }
-
     pub fn parse_sql_option(&mut self) -> Result<SqlOption, ParserError> {
         let is_mssql = dialect_of!(self is MsSqlDialect|GenericDialect);
 
@@ -6506,7 +6498,10 @@ impl<'a> Parser<'a> {
                 self.parse_option_clustered()
             }
             _ => {
-                let (name, value) = self.parse_key_value()?;
+                let name = self.parse_identifier(false)?;
+                self.expect_token(&Token::Eq)?;
+                let value = self.parse_expr()?;
+
                 Ok(SqlOption::KeyValue { key: name, value })
             }
         }
@@ -6533,7 +6528,7 @@ impl<'a> Parser<'a> {
 
             let columns = self.parse_comma_separated(|p| {
                 let name = p.parse_identifier(false)?;
-                let asc = p.parse_asc();
+                let asc = p.parse_asc_desc();
 
                 Ok(ClusteredIndex { name, asc })
             })?;
@@ -11069,9 +11064,9 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parsae ASC or DESC, returns an Option with true if ASC, false of DESC or `None` if none of
+    /// Parse ASC or DESC, returns an Option with true if ASC, false of DESC or `None` if none of
     /// them.
-    pub fn parse_asc(&mut self) -> Option<bool> {
+    pub fn parse_asc_desc(&mut self) -> Option<bool> {
         if self.parse_keyword(Keyword::ASC) {
             Some(true)
         } else if self.parse_keyword(Keyword::DESC) {
@@ -11085,7 +11080,7 @@ impl<'a> Parser<'a> {
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
         let expr = self.parse_expr()?;
 
-        let asc = self.parse_asc();
+        let asc = self.parse_asc_desc();
 
         let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
             Some(true)

@@ -791,7 +791,7 @@ fn parse_create_table_with_valid_options() {
 
     for (sql, with_options) in options {
         assert_eq!(
-            ms().verified_stmt(sql),
+            ms_and_generic().verified_stmt(sql),
             Statement::CreateTable(CreateTable {
                 or_replace: false,
                 temporary: false,
@@ -900,7 +900,7 @@ fn parse_create_table_with_invalid_options() {
     ];
 
     for (sql, expected_error) in invalid_cases {
-        let res = ms().parse_sql_statements(sql);
+        let res = ms_and_generic().parse_sql_statements(sql);
         assert_eq!(
             format!("sql parser error: {expected_error}"),
             res.unwrap_err().to_string()

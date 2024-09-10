@@ -4780,9 +4780,9 @@ fn parse_aggregate_with_group_by() {
 
 #[test]
 fn parse_literal_integer() {
-    let sql = "SELECT 1, -10";
+    let sql = "SELECT 1, -10, +20";
     let select = verified_only_select(sql);
-    assert_eq!(2, select.projection.len());
+    assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Value(number("1")),
         expr_from_projection(&select.projection[0]),
@@ -4794,6 +4794,14 @@ fn parse_literal_integer() {
             expr: Box::new(Expr::Value(number("10")))
         },
         expr_from_projection(&select.projection[1]),
+    );
+    // positive literal is parsed as a + and expr
+    assert_eq!(
+        &UnaryOp {
+            op: UnaryOperator::Plus,
+            expr: Box::new(Expr::Value(number("20")))
+        },
+        expr_from_projection(&select.projection[2]),
     )
 }
 

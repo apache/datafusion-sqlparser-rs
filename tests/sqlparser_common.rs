@@ -2838,7 +2838,7 @@ fn parse_signed_value() {
     START WITH +   45";
     one_statement_parses_to(
         sql2,
-        "CREATE SEQUENCE name2 AS BIGINT INCREMENT +10 MINVALUE +30 MAXVALUE +5000 START WITH +45",
+        "CREATE SEQUENCE name2 AS BIGINT INCREMENT 10 MINVALUE 30 MAXVALUE 5000 START WITH 45",
     );
 }
 

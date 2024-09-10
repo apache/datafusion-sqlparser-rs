@@ -7277,10 +7277,16 @@ impl<'a> Parser<'a> {
             tok @ Token::Minus | tok @ Token::Plus => {
                 let next_token = self.next_token();
                 match next_token.token {
-                    Token::Number(n, l) => Ok(Value::Number(
-                        Self::parse::<String>(tok.to_string() + &n, location)?,
-                        l,
-                    )),
+                    Token::Number(n, l) => {
+                        if tok == Token::Minus {
+                            Ok(Value::Number(
+                                Self::parse(tok.to_string() + &n, location)?,
+                                l,
+                            ))
+                        } else {
+                            Ok(Value::Number(Self::parse(n, location)?, l))
+                        }
+                    }
                     _ => self.expected("number", next_token),
                 }
             }

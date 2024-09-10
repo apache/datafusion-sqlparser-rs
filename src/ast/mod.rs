@@ -6807,12 +6807,18 @@ pub enum CommentDef {
     /// Does not include `=` when printing the comment, as `COMMENT 'comment'`
     WithEq(String),
     WithoutEq(String),
+    // For Hive dialect, the table comment is after the column definitions without `=`,
+    // so we need to add an extra variant to allow to identify this case when displaying.
+    // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
+    AfterColumnDefsWithoutEq(String),
 }
 
 impl Display for CommentDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CommentDef::WithEq(comment) | CommentDef::WithoutEq(comment) => write!(f, "{comment}"),
+            CommentDef::WithEq(comment)
+            | CommentDef::WithoutEq(comment)
+            | CommentDef::AfterColumnDefsWithoutEq(comment) => write!(f, "{comment}"),
         }
     }
 }

@@ -16,7 +16,7 @@
 //! is also tested (on the inputs it can handle).
 
 use sqlparser::ast::{
-    ClusteredBy, CreateFunctionBody, CreateFunctionUsing, CreateTable, Expr, Function,
+    ClusteredBy, CommentDef, CreateFunctionBody, CreateFunctionUsing, CreateTable, Expr, Function,
     FunctionArgumentList, FunctionArguments, Ident, ObjectName, OneOrManyWithParens, OrderByExpr,
     SelectItem, Statement, TableFactor, UnaryOperator, Use, Value,
 };
@@ -113,6 +113,39 @@ fn drop_table_purge() {
 fn create_table_like() {
     let like = "CREATE TABLE db.table_name LIKE db.other_table";
     hive().verified_stmt(like);
+}
+
+#[test]
+fn create_table_with_comment() {
+    let sql = concat!(
+        "CREATE TABLE db.table_name (a INT, b STRING)",
+        " COMMENT 'table comment'",
+        " PARTITIONED BY (a INT, b STRING)",
+        " CLUSTERED BY (a, b) SORTED BY (a ASC, b DESC)",
+        " INTO 4 BUCKETS"
+    );
+    match hive().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { comment, .. }) => {
+            assert_eq!(
+                comment,
+                Some(CommentDef::AfterColumnDefsWithoutEq(
+                    "table comment".to_string()
+                ))
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    // negative test case
+    let invalid_sql = concat!(
+        "CREATE TABLE db.table_name (a INT, b STRING)",
+        " PARTITIONED BY (a INT, b STRING)",
+        " COMMENT 'table comment'",
+    );
+    assert_eq!(
+        hive().parse_sql_statements(invalid_sql).unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: COMMENT".to_string())
+    );
 }
 
 #[test]

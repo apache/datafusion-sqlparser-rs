@@ -639,6 +639,8 @@ mod tests {
         assert!(parse_dialect("ANSI").is::<AnsiDialect>());
         assert!(parse_dialect("duckdb").is::<DuckDbDialect>());
         assert!(parse_dialect("DuckDb").is::<DuckDbDialect>());
+        assert!(parse_dialect("DataBricks").is::<DatabricksDialect>());
+        assert!(parse_dialect("databricks").is::<DatabricksDialect>());
 
         // error cases
         assert!(dialect_from_str("Unknown").is_none());

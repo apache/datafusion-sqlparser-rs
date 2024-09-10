@@ -42,7 +42,7 @@ mod test_utils;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
-use sqlparser::ast::Expr::Identifier;
+use sqlparser::ast::Expr::{Identifier, UnaryOp};
 use sqlparser::test_utils::all_dialects_except;
 
 #[test]
@@ -4776,6 +4776,25 @@ fn parse_aggregate_with_group_by() {
     let sql = "SELECT a, COUNT(1), MIN(b), MAX(b) FROM foo GROUP BY a";
     let _ast = verified_only_select(sql);
     //TODO: assertions
+}
+
+#[test]
+fn parse_literal_integer() {
+    let sql = "SELECT 1, -10";
+    let select = verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    assert_eq!(
+        &Expr::Value(number("1")),
+        expr_from_projection(&select.projection[0]),
+    );
+    // negative literal is parsed as a - and expr
+    assert_eq!(
+        &UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: Box::new(Expr::Value(number("10")))
+        },
+        expr_from_projection(&select.projection[1]),
+    )
 }
 
 #[test]

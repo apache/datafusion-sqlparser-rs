@@ -10,6 +10,37 @@ changes that break via addition as "Added".
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+
+## [0.51.0] 2024-09-11
+As always, huge props to @iffyio @jmhain and @lovasoa for their help reviewing and merging PRs 🙏.
+Without them this project would not be possible.
+
+Reminder: we are in the final phases of moving sqlparser-rs into the Apache
+DataFusion project: https://github.com/sqlparser-rs/sqlparser-rs/issues/1294
+
+### Fixed
+* Fix Hive table comment should be after table column definitions (#1413) - Thanks @git-hulk
+* Fix stack overflow in `parse_subexpr` (#1410) - Thanks @eejbyfeldt
+* Fix `INTERVAL` parsing to support expressions and units via dialect (#1398) - Thanks @samuelcolvin
+* Fix identifiers starting with `$` should be regarded as a placeholder in SQLite (#1402) - Thanks @git-hulk
+
+### Added
+* Support for MSSQL table options (#1414) - Thanks @bombsimon
+* Test showing how negative constants are parsed (#1421) - Thanks @alamb
+* Support databricks dialect to dialect_from_str (#1416) - Thanks @milenkovicmalamb
+* Support `DROP|CLEAR|MATERIALIZE PROJECTION` syntax for ClickHouse (#1417) - Thanks @git-hulk
+* Support postgres `TRUNCATE` syntax (#1406) - Thanks @tobyhede
+* Support `CREATE INDEX` with clause (#1389) - Thanks @lewiszlw
+* Support parsing `CLUSTERED BY` clause for Hive (#1397) - Thanks @git-hulk
+* Support different `USE` statement syntaxes (#1387) - Thanks @kacpermuda
+* Support `ADD PROJECTION` syntax for ClickHouse (#1390) - Thanks @git-hulk
+
+### Changed
+* Implement common traits for OneOrManyWithParens (#1368) - Thanks @gstvg
+* Cleanup parse_statement (#1407) - Thanks @samuelcolvin
+* Allow `DateTimeField::Custom` with `EXTRACT` in Postgres (#1394) - Thanks @samuelcolvin
+
+
 ## [0.50.0] 2024-08-15
 Again, huge props to @iffyio @jmhain and @lovasoa for their help reviewing and merging PRs 🙏.
 Without them this project would not be possible. 
@@ -17,10 +48,10 @@ Without them this project would not be possible.
 Reminder:  are in the process of moving sqlparser to governed as part of the Apache
 DataFusion project: https://github.com/sqlparser-rs/sqlparser-rs/issues/1294
 
-# Fixed
+### Fixed
 * Clippy 1.80 warnings (#1357) - Thanks @lovasoa
 
-# Added
+### Added
 * Support `STRUCT` and list of structs for DuckDB dialect (#1372) - Thanks @jayzhan211
 * Support custom lexical precedence in PostgreSQL dialect (#1379) - Thanks @samuelcolvin
 * Support `FREEZE|UNFREEZE PARTITION` syntax for ClickHouse (#1380) - Thanks @git-hulk
@@ -38,7 +69,7 @@ DataFusion project: https://github.com/sqlparser-rs/sqlparser-rs/issues/1294
 * Support position with normal function call syntax for Snowflake  (#1341) - Thanks @jmhain
 * Support `TABLE` keyword in `DESC|DESCRIBE|EXPLAIN TABLE` statement (#1351) - Thanks @git-hulk
 
-# Changed
+### Changed
 * Only require `DESCRIBE TABLE` for Snowflake and ClickHouse dialect (#1386) - Thanks @ alamb
 * Rename (unreleased) `get_next_precedence_full` to `get_next_precedence_default` (#1378) - Thanks @samuelcolvin
 * Use local GitHub Action to replace setup-rust-action (#1371) - Thanks @git-hulk

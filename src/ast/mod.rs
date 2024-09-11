@@ -2082,6 +2082,15 @@ pub enum CreateTableOptions {
     /// e.g. `WITH (description = "123")`
     ///
     /// <https://www.postgresql.org/docs/current/sql-createtable.html>
+    ///
+    /// MSSQL supports more specific options that's not only key-value pairs.
+    ///
+    /// WITH (
+    ///     DISTRIBUTION = ROUND_ROBIN,
+    ///     CLUSTERED INDEX (column_a DESC, column_b)
+    /// )
+    ///
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#syntax>
     With(Vec<SqlOption>),
     /// Options specified using the `OPTIONS` keyword.
     /// e.g. `OPTIONS(description = "123")`
@@ -5728,14 +5737,119 @@ pub struct HiveFormat {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct SqlOption {
+pub struct ClusteredIndex {
     pub name: Ident,
-    pub value: Expr,
+    pub asc: Option<bool>,
+}
+
+impl fmt::Display for ClusteredIndex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        match self.asc {
+            Some(true) => write!(f, " ASC"),
+            Some(false) => write!(f, " DESC"),
+            _ => Ok(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableOptionsClustered {
+    ColumnstoreIndex,
+    ColumnstoreIndexOrder(Vec<Ident>),
+    Index(Vec<ClusteredIndex>),
+}
+
+impl fmt::Display for TableOptionsClustered {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TableOptionsClustered::ColumnstoreIndex => {
+                write!(f, "CLUSTERED COLUMNSTORE INDEX")
+            }
+            TableOptionsClustered::ColumnstoreIndexOrder(values) => {
+                write!(
+                    f,
+                    "CLUSTERED COLUMNSTORE INDEX ORDER ({})",
+                    display_comma_separated(values)
+                )
+            }
+            TableOptionsClustered::Index(values) => {
+                write!(f, "CLUSTERED INDEX ({})", display_comma_separated(values))
+            }
+        }
+    }
+}
+
+/// Specifies which partition the boundary values on table partitioning belongs to.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum PartitionRangeDirection {
+    Left,
+    Right,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SqlOption {
+    /// Clustered represents the clustered version of table storage for MSSQL.
+    ///
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TableOptions>
+    Clustered(TableOptionsClustered),
+    /// Single identifier options, e.g. `HEAP` for MSSQL.
+    ///
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TableOptions>
+    Ident(Ident),
+    /// Any option that consists of a key value pair where the value is an expression. e.g.
+    ///
+    ///   WITH(DISTRIBUTION = ROUND_ROBIN)
+    KeyValue { key: Ident, value: Expr },
+    /// One or more table partitions and represents which partition the boundary values belong to,
+    /// e.g.
+    ///
+    ///   PARTITION (id RANGE LEFT FOR VALUES (10, 20, 30, 40))
+    ///
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TablePartitionOptions>
+    Partition {
+        column_name: Ident,
+        range_direction: Option<PartitionRangeDirection>,
+        for_values: Vec<Expr>,
+    },
 }
 
 impl fmt::Display for SqlOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.name, self.value)
+        match self {
+            SqlOption::Clustered(c) => write!(f, "{}", c),
+            SqlOption::Ident(ident) => {
+                write!(f, "{}", ident)
+            }
+            SqlOption::KeyValue { key: name, value } => {
+                write!(f, "{} = {}", name, value)
+            }
+            SqlOption::Partition {
+                column_name,
+                range_direction,
+                for_values,
+            } => {
+                let direction = match range_direction {
+                    Some(PartitionRangeDirection::Left) => " LEFT",
+                    Some(PartitionRangeDirection::Right) => " RIGHT",
+                    None => "",
+                };
+
+                write!(
+                    f,
+                    "PARTITION ({} RANGE{} FOR VALUES ({}))",
+                    column_name,
+                    direction,
+                    display_comma_separated(for_values)
+                )
+            }
+        }
     }
 }
 

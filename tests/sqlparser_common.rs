@@ -3637,12 +3637,12 @@ fn parse_create_table_with_options() {
         Statement::CreateTable(CreateTable { with_options, .. }) => {
             assert_eq!(
                 vec![
-                    SqlOption {
-                        name: "foo".into(),
+                    SqlOption::KeyValue {
+                        key: "foo".into(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
-                    SqlOption {
-                        name: "a".into(),
+                    SqlOption::KeyValue {
+                        key: "a".into(),
                         value: Expr::Value(number("123")),
                     },
                 ],
@@ -3870,8 +3870,8 @@ fn parse_alter_table() {
         AlterTableOperation::SetTblProperties { table_properties } => {
             assert_eq!(
                 table_properties,
-                [SqlOption {
-                    name: Ident {
+                [SqlOption::KeyValue {
+                    key: Ident {
                         value: "classification".to_string(),
                         quote_style: Some('\'')
                     },
@@ -3958,12 +3958,12 @@ fn parse_alter_view_with_options() {
         Statement::AlterView { with_options, .. } => {
             assert_eq!(
                 vec![
-                    SqlOption {
-                        name: "foo".into(),
+                    SqlOption::KeyValue {
+                        key: "foo".into(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
-                    SqlOption {
-                        name: "a".into(),
+                    SqlOption::KeyValue {
+                        key: "a".into(),
                         value: Expr::Value(number("123")),
                     },
                 ],
@@ -6729,12 +6729,12 @@ fn parse_create_view_with_options() {
         Statement::CreateView { options, .. } => {
             assert_eq!(
                 CreateTableOptions::With(vec![
-                    SqlOption {
-                        name: "foo".into(),
+                    SqlOption::KeyValue {
+                        key: "foo".into(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
-                    SqlOption {
-                        name: "a".into(),
+                    SqlOption::KeyValue {
+                        key: "a".into(),
                         value: Expr::Value(number("123")),
                     },
                 ]),
@@ -8827,12 +8827,12 @@ fn parse_cache_table() {
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![
-                SqlOption {
-                    name: Ident::with_quote('\'', "K1"),
+                SqlOption::KeyValue {
+                    key: Ident::with_quote('\'', "K1"),
                     value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
-                SqlOption {
-                    name: Ident::with_quote('\'', "K2"),
+                SqlOption::KeyValue {
+                    key: Ident::with_quote('\'', "K2"),
                     value: Expr::Value(number("0.88")),
                 },
             ],
@@ -8852,12 +8852,12 @@ fn parse_cache_table() {
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![
-                SqlOption {
-                    name: Ident::with_quote('\'', "K1"),
+                SqlOption::KeyValue {
+                    key: Ident::with_quote('\'', "K1"),
                     value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
-                SqlOption {
-                    name: Ident::with_quote('\'', "K2"),
+                SqlOption::KeyValue {
+                    key: Ident::with_quote('\'', "K2"),
                     value: Expr::Value(number("0.88")),
                 },
             ],
@@ -8877,12 +8877,12 @@ fn parse_cache_table() {
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: true,
             options: vec![
-                SqlOption {
-                    name: Ident::with_quote('\'', "K1"),
+                SqlOption::KeyValue {
+                    key: Ident::with_quote('\'', "K1"),
                     value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
-                SqlOption {
-                    name: Ident::with_quote('\'', "K2"),
+                SqlOption::KeyValue {
+                    key: Ident::with_quote('\'', "K2"),
                     value: Expr::Value(number("0.88")),
                 },
             ],
@@ -9695,8 +9695,8 @@ fn parse_unload() {
                 value: "s3://...".to_string(),
                 quote_style: Some('\'')
             },
-            with: vec![SqlOption {
-                name: Ident {
+            with: vec![SqlOption::KeyValue {
+                key: Ident {
                     value: "format".to_string(),
                     quote_style: None
                 },

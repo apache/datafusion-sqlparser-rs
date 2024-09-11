@@ -267,8 +267,8 @@ fn parse_create_view_with_options() {
                     ViewColumnDef {
                         name: Ident::new("age"),
                         data_type: None,
-                        options: Some(vec![SqlOption {
-                            name: Ident::new("description"),
+                        options: Some(vec![SqlOption::KeyValue {
+                            key: Ident::new("description"),
                             value: Expr::Value(Value::DoubleQuotedString("field age".to_string())),
                         }])
                     },
@@ -287,8 +287,8 @@ fn parse_create_view_with_options() {
                 unreachable!()
             };
             assert_eq!(
-                &SqlOption {
-                    name: Ident::new("description"),
+                &SqlOption::KeyValue {
+                    key: Ident::new("description"),
                     value: Expr::Value(Value::DoubleQuotedString(
                         "a view that expires in 2 days".to_string()
                     )),
@@ -414,8 +414,8 @@ fn parse_create_table_with_options() {
                             },
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Options(vec![SqlOption {
-                                    name: Ident::new("description"),
+                                option: ColumnOption::Options(vec![SqlOption::KeyValue {
+                                    key: Ident::new("description"),
                                     value: Expr::Value(Value::DoubleQuotedString(
                                         "field x".to_string()
                                     )),
@@ -429,8 +429,8 @@ fn parse_create_table_with_options() {
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Options(vec![SqlOption {
-                                name: Ident::new("description"),
+                            option: ColumnOption::Options(vec![SqlOption::KeyValue {
+                                key: Ident::new("description"),
                                 value: Expr::Value(Value::DoubleQuotedString(
                                     "field y".to_string()
                                 )),
@@ -448,12 +448,12 @@ fn parse_create_table_with_options() {
                         Ident::new("age"),
                     ])),
                     Some(vec![
-                        SqlOption {
-                            name: Ident::new("partition_expiration_days"),
+                        SqlOption::KeyValue {
+                            key: Ident::new("partition_expiration_days"),
                             value: Expr::Value(number("1")),
                         },
-                        SqlOption {
-                            name: Ident::new("description"),
+                        SqlOption::KeyValue {
+                            key: Ident::new("description"),
                             value: Expr::Value(Value::DoubleQuotedString(
                                 "table option description".to_string()
                             )),
@@ -2005,8 +2005,8 @@ fn test_bigquery_create_function() {
             function_body: Some(CreateFunctionBody::AsAfterOptions(Expr::Value(number(
                 "42"
             )))),
-            options: Some(vec![SqlOption {
-                name: Ident::new("x"),
+            options: Some(vec![SqlOption::KeyValue {
+                key: Ident::new("x"),
                 value: Expr::Value(Value::SingleQuotedString("y".into())),
             }]),
             behavior: None,

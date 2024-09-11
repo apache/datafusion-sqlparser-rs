@@ -6480,10 +6480,91 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_sql_option(&mut self) -> Result<SqlOption, ParserError> {
-        let name = self.parse_identifier(false)?;
-        self.expect_token(&Token::Eq)?;
-        let value = self.parse_expr()?;
-        Ok(SqlOption { name, value })
+        let is_mssql = dialect_of!(self is MsSqlDialect|GenericDialect);
+
+        match self.peek_token().token {
+            Token::Word(w) if w.keyword == Keyword::HEAP && is_mssql => {
+                Ok(SqlOption::Ident(self.parse_identifier(false)?))
+            }
+            Token::Word(w) if w.keyword == Keyword::PARTITION && is_mssql => {
+                self.parse_option_partition()
+            }
+            Token::Word(w) if w.keyword == Keyword::CLUSTERED && is_mssql => {
+                self.parse_option_clustered()
+            }
+            _ => {
+                let name = self.parse_identifier(false)?;
+                self.expect_token(&Token::Eq)?;
+                let value = self.parse_expr()?;
+
+                Ok(SqlOption::KeyValue { key: name, value })
+            }
+        }
+    }
+
+    pub fn parse_option_clustered(&mut self) -> Result<SqlOption, ParserError> {
+        if self.parse_keywords(&[
+            Keyword::CLUSTERED,
+            Keyword::COLUMNSTORE,
+            Keyword::INDEX,
+            Keyword::ORDER,
+        ]) {
+            Ok(SqlOption::Clustered(
+                TableOptionsClustered::ColumnstoreIndexOrder(
+                    self.parse_parenthesized_column_list(IsOptional::Mandatory, false)?,
+                ),
+            ))
+        } else if self.parse_keywords(&[Keyword::CLUSTERED, Keyword::COLUMNSTORE, Keyword::INDEX]) {
+            Ok(SqlOption::Clustered(
+                TableOptionsClustered::ColumnstoreIndex,
+            ))
+        } else if self.parse_keywords(&[Keyword::CLUSTERED, Keyword::INDEX]) {
+            self.expect_token(&Token::LParen)?;
+
+            let columns = self.parse_comma_separated(|p| {
+                let name = p.parse_identifier(false)?;
+                let asc = p.parse_asc_desc();
+
+                Ok(ClusteredIndex { name, asc })
+            })?;
+
+            self.expect_token(&Token::RParen)?;
+
+            Ok(SqlOption::Clustered(TableOptionsClustered::Index(columns)))
+        } else {
+            Err(ParserError::ParserError(
+                "invalid CLUSTERED sequence".to_string(),
+            ))
+        }
+    }
+
+    pub fn parse_option_partition(&mut self) -> Result<SqlOption, ParserError> {
+        self.expect_keyword(Keyword::PARTITION)?;
+        self.expect_token(&Token::LParen)?;
+        let column_name = self.parse_identifier(false)?;
+
+        self.expect_keyword(Keyword::RANGE)?;
+        let range_direction = if self.parse_keyword(Keyword::LEFT) {
+            Some(PartitionRangeDirection::Left)
+        } else if self.parse_keyword(Keyword::RIGHT) {
+            Some(PartitionRangeDirection::Right)
+        } else {
+            None
+        };
+
+        self.expect_keywords(&[Keyword::FOR, Keyword::VALUES])?;
+        self.expect_token(&Token::LParen)?;
+
+        let for_values = self.parse_comma_separated(Parser::parse_expr)?;
+
+        self.expect_token(&Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(SqlOption::Partition {
+            column_name,
+            range_direction,
+            for_values,
+        })
     }
 
     pub fn parse_partition(&mut self) -> Result<Partition, ParserError> {
@@ -11014,17 +11095,23 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
-    pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
-        let expr = self.parse_expr()?;
-
-        let asc = if self.parse_keyword(Keyword::ASC) {
+    /// Parse ASC or DESC, returns an Option with true if ASC, false of DESC or `None` if none of
+    /// them.
+    pub fn parse_asc_desc(&mut self) -> Option<bool> {
+        if self.parse_keyword(Keyword::ASC) {
             Some(true)
         } else if self.parse_keyword(Keyword::DESC) {
             Some(false)
         } else {
             None
-        };
+        }
+    }
+
+    /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
+    pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
+        let expr = self.parse_expr()?;
+
+        let asc = self.parse_asc_desc();
 
         let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
             Some(true)

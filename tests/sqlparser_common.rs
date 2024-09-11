@@ -2840,6 +2840,15 @@ fn parse_signed_value() {
         sql2,
         "CREATE SEQUENCE name2 AS BIGINT INCREMENT 10 MINVALUE 30 MAXVALUE 5000 START WITH 45",
     );
+
+    let sql3 = "CREATE SEQUENCE name3 INCREMENT -10 MINVALUE -1000 MAXVALUE 1 START -100;";
+    one_statement_parses_to(
+        sql3,
+        "CREATE SEQUENCE name3 INCREMENT -10 MINVALUE -1000 MAXVALUE 1 START -100",
+    );
+
+    let sql4 = "SELECT -1";
+    one_statement_parses_to(sql4, "SELECT -1");
 }
 
 #[test]

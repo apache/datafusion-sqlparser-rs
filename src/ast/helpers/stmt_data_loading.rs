@@ -103,11 +103,14 @@ impl fmt::Display for StageParamsObject {
 impl fmt::Display for DataLoadingOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if !self.options.is_empty() {
+            let mut first = false;
             for option in &self.options {
-                write!(f, "{}", option)?;
-                if !option.eq(self.options.last().unwrap()) {
-                    write!(f, " ")?;
+                if !first {
+                    first = true;
+                } else {
+                    f.write_str(" ")?;
                 }
+                write!(f, "{}", option)?;
             }
         }
         Ok(())

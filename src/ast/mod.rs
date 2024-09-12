@@ -4505,15 +4505,11 @@ impl fmt::Display for Statement {
                     write!(f, " OPTIONS({})", display_comma_separated(options))?;
                 }
 
-                let has_query = query.is_some();
-                if *has_as && has_query {
-                    write!(f, " AS {query}", query = query.clone().unwrap())
-                } else if !has_as && has_query {
-                    write!(f, " {query}", query = query.clone().unwrap())
-                } else if *has_as && !has_query {
-                    write!(f, " AS")
-                } else {
-                    Ok(())
+                match (*has_as, query) {
+                    (true, Some(query)) => write!(f, " AS {query}"),
+                    (true, None) => f.write_str(" AS"),
+                    (false, Some(query)) => write!(f, " {query}"),
+                    (false, None) => Ok(()),
                 }
             }
             Statement::UNCache {

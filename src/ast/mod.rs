@@ -4490,15 +4490,10 @@ impl fmt::Display for Statement {
                 options,
                 query,
             } => {
-                if table_flag.is_some() {
-                    write!(
-                        f,
-                        "CACHE {table_flag} TABLE {table_name}",
-                        table_flag = table_flag.clone().unwrap(),
-                        table_name = table_name,
-                    )?;
+                if let Some(table_flag) = table_flag {
+                    write!(f, "CACHE {table_flag} TABLE {table_name}")?;
                 } else {
-                    write!(f, "CACHE TABLE {table_name}",)?;
+                    write!(f, "CACHE TABLE {table_name}")?;
                 }
 
                 if !options.is_empty() {

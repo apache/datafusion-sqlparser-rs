@@ -3032,6 +3032,8 @@ pub enum Statement {
         statement: Box<Statement>,
         /// Optional output format of explain
         format: Option<AnalyzeFormat>,
+        /// Postgres style utility options
+        options: Option<Vec<(Ident, Option<String>)>>,
     },
     /// ```sql
     /// SAVEPOINT
@@ -3219,6 +3221,7 @@ impl fmt::Display for Statement {
                 analyze,
                 statement,
                 format,
+                options,
             } => {
                 write!(f, "{describe_alias} ")?;
 
@@ -3232,6 +3235,24 @@ impl fmt::Display for Statement {
 
                 if let Some(format) = format {
                     write!(f, "FORMAT {format} ")?;
+                }
+
+                if let Some(options) = options {
+                    write!(f, "( ")?;
+
+                    let mut iter = options.iter().peekable();
+                    while let Some((name, arg)) = iter.next() {
+                        if let Some(ref value) = arg {
+                            write!(f, "{} {}", name, value)?;
+                        } else {
+                            write!(f, "{}", name)?;
+                        }
+                        if iter.peek().is_some() {
+                            write!(f, ", ")?;
+                        }
+                    }
+
+                    write!(f, " ) ")?;
                 }
 
                 write!(f, "{statement}")

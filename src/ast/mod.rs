@@ -2149,6 +2149,34 @@ pub enum FromTable {
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement>
     WithoutKeyword(Vec<TableWithJoins>),
 }
+impl Display for FromTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FromTable::WithFromKeyword(tables) => {
+                write!(
+                    f,
+                    "FROM {}",
+                    tables
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            FromTable::WithoutKeyword(tables) => {
+                write!(
+                    f,
+                    "{}",
+                    tables
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        }
+    }
+}
 
 /// Policy type for a `CREATE POLICY` statement.
 /// ```sql

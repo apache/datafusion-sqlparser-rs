@@ -10,15 +10,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [ANSI SQL](https://en.wikipedia.org/wiki/SQL:2011).
 #[derive(Debug, Default)]
 pub struct AnsiDialect;
 
 impl Dialect for AnsiDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             require_interval_qualifier: true,
             ..Default::default()
         }

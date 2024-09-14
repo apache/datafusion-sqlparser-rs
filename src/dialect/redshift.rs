@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 use core::iter::Peekable;
 use core::str::Chars;
 
@@ -27,8 +27,8 @@ pub struct RedshiftSqlDialect;
 // in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             // redshift has `CONVERT(type, value)` instead of `CONVERT(value, type)`
             // <https://docs.aws.amazon.com/redshift/latest/dg/r_CONVERT_function.html>
             convert_type_before_value: true,

@@ -10,15 +10,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/)
 #[derive(Debug, Default)]
 pub struct MsSqlDialect;
 
 impl Dialect for MsSqlDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             // SQL Server has `CONVERT(type, value)` instead of `CONVERT(value, type)`
             // https://learn.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql?view=sql-server-ver16
             convert_type_before_value: true,

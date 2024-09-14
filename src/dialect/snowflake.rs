@@ -20,7 +20,7 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     CommentDef, Ident, ObjectName, RowAccessPolicy, Statement, Tag, WrappedCollection,
 };
-use crate::dialect::{Dialect, DialectSettings, Precedence};
+use crate::dialect::{Dialect, DialectFlags, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -37,8 +37,8 @@ pub struct SnowflakeDialect;
 
 /// see <https://docs.snowflake.com/en/sql-reference/identifiers-syntax.html>
 impl Dialect for SnowflakeDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#escape_sequences
             supports_string_literal_backslash_escape: true,
             supports_within_after_array_aggregation: true,

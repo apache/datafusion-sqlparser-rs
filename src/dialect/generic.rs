@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 
 /// A permissive, general purpose [`Dialect`], which parses a wide variety of SQL
 /// statements, from many different dialects.
@@ -18,8 +18,8 @@ use crate::dialect::{Dialect, DialectSettings};
 pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             supports_unicode_string_literal: true,
             supports_group_by_expr: true,
             supports_connect_by: true,

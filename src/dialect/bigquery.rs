@@ -10,15 +10,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [Google Bigquery](https://cloud.google.com/bigquery/)
 #[derive(Debug, Default)]
 pub struct BigQueryDialect;
 
 impl Dialect for BigQueryDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals
             supports_triple_quoted_string: true,
             // See https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value

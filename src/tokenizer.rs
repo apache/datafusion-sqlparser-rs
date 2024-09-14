@@ -703,7 +703,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('\'') => {
-                            if self.dialect.settings().supports_triple_quoted_string {
+                            if self.dialect.flags().supports_triple_quoted_string {
                                 return self
                                     .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
                                         chars,
@@ -717,7 +717,7 @@ impl<'a> Tokenizer<'a> {
                             Ok(Some(Token::SingleQuotedByteStringLiteral(s)))
                         }
                         Some('\"') => {
-                            if self.dialect.settings().supports_triple_quoted_string {
+                            if self.dialect.flags().supports_triple_quoted_string {
                                 return self
                                     .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
                                         chars,
@@ -798,7 +798,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // Unicode string literals like U&'first \000A second' are supported in some dialects, including PostgreSQL
-                x @ 'u' | x @ 'U' if self.dialect.settings().supports_unicode_string_literal => {
+                x @ 'u' | x @ 'U' if self.dialect.flags().supports_unicode_string_literal => {
                     chars.next(); // consume, to check the next char
                     if chars.peek() == Some(&'&') {
                         // we cannot advance the iterator here, as we need to consume the '&' later if the 'u' was an identifier
@@ -833,12 +833,14 @@ impl<'a> Tokenizer<'a> {
                 }
                 // single quoted string
                 '\'' => {
-                    if self.dialect.settings().supports_triple_quoted_string {
+                    if self.dialect.flags().supports_triple_quoted_string {
                         return self
                             .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
                                 chars,
                                 '\'',
-                                self.dialect.settings().supports_string_literal_backslash_escape,
+                                self.dialect
+                                    .flags()
+                                    .supports_string_literal_backslash_escape,
                                 Token::SingleQuotedString,
                                 Token::TripleSingleQuotedString,
                             );
@@ -846,7 +848,9 @@ impl<'a> Tokenizer<'a> {
                     let s = self.tokenize_single_quoted_string(
                         chars,
                         '\'',
-                        self.dialect.settings().supports_string_literal_backslash_escape,
+                        self.dialect
+                            .flags()
+                            .supports_string_literal_backslash_escape,
                     )?;
 
                     Ok(Some(Token::SingleQuotedString(s)))
@@ -855,12 +859,14 @@ impl<'a> Tokenizer<'a> {
                 '\"' if !self.dialect.is_delimited_identifier_start(ch)
                     && !self.dialect.is_identifier_start(ch) =>
                 {
-                    if self.dialect.settings().supports_triple_quoted_string {
+                    if self.dialect.flags().supports_triple_quoted_string {
                         return self
                             .tokenize_single_or_triple_quoted_string::<fn(String) -> Token>(
                                 chars,
                                 '"',
-                                self.dialect.settings().supports_string_literal_backslash_escape,
+                                self.dialect
+                                    .flags()
+                                    .supports_string_literal_backslash_escape,
                                 Token::DoubleQuotedString,
                                 Token::TripleDoubleQuotedString,
                             );
@@ -868,7 +874,9 @@ impl<'a> Tokenizer<'a> {
                     let s = self.tokenize_single_quoted_string(
                         chars,
                         '"',
-                        self.dialect.settings().supports_string_literal_backslash_escape,
+                        self.dialect
+                            .flags()
+                            .supports_string_literal_backslash_escape,
                     )?;
 
                     Ok(Some(Token::DoubleQuotedString(s)))
@@ -949,7 +957,7 @@ impl<'a> Tokenizer<'a> {
 
                     // mysql dialect supports identifiers that start with a numeric prefix,
                     // as long as they aren't an exponent number.
-                    if self.dialect.settings().supports_numeric_prefix && exponent_part.is_empty() {
+                    if self.dialect.flags().supports_numeric_prefix && exponent_part.is_empty() {
                         let word =
                             peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
 
@@ -1878,7 +1886,9 @@ fn take_char_from_hex_digits(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dialect::{BigQueryDialect, ClickHouseDialect, DialectSettings, HiveDialect, MsSqlDialect, MySqlDialect};
+    use crate::dialect::{
+        BigQueryDialect, ClickHouseDialect, DialectFlags, HiveDialect, MsSqlDialect, MySqlDialect,
+    };
     use core::fmt::Debug;
 
     #[test]
@@ -2755,8 +2765,8 @@ mod tests {
         struct NumericPrefixDialect;
 
         impl Dialect for NumericPrefixDialect {
-            fn settings(&self) -> DialectSettings {
-                DialectSettings {
+            fn flags(&self) -> DialectFlags {
+                DialectFlags {
                     supports_numeric_prefix: true,
                     ..Default::default()
                 }

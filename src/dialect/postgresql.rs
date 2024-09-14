@@ -12,7 +12,7 @@
 use log::debug;
 
 use crate::ast::{CommentObject, Statement};
-use crate::dialect::{Dialect, DialectSettings, Precedence};
+use crate::dialect::{Dialect, DialectFlags, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -39,8 +39,8 @@ const AND_PREC: u8 = 20;
 const OR_PREC: u8 = 10;
 
 impl Dialect for PostgreSqlDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             supports_unicode_string_literal: true,
             supports_filter_during_aggregation: true,
             supports_group_by_expr: true,

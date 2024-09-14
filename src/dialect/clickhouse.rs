@@ -10,15 +10,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 
 // A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
 #[derive(Debug, Default)]
 pub struct ClickHouseDialect;
 
 impl Dialect for ClickHouseDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             supports_string_literal_backslash_escape: true,
             supports_select_wildcard_except: true,
             describe_requires_table_keyword: true,

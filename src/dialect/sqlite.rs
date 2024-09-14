@@ -11,7 +11,7 @@
 // limitations under the License.
 
 use crate::ast::Statement;
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 
@@ -24,12 +24,12 @@ use crate::parser::{Parser, ParserError};
 #[derive(Debug, Default)]
 pub struct SQLiteDialect;
 
-/// see https://www.sqlite.org/lang_keywords.html
+/// see <https://www.sqlite.org/lang_keywords.html>
 /// parse `...`, [...] and "..." as identifier
 /// TODO: support depending on the context tread '...' as identifier too.
 impl Dialect for SQLiteDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             supports_filter_during_aggregation: true,
             supports_start_transaction_modifier: true,
             supports_in_empty_list: true,

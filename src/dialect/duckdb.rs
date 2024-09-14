@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [DuckDB](https://duckdb.org/)
 #[derive(Debug, Default)]
@@ -18,9 +18,8 @@ pub struct DuckDbDialect;
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
 impl Dialect for DuckDbDialect {
-
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             supports_trailing_commas: true,
             supports_filter_during_aggregation: true,
             supports_group_by_expr: true,

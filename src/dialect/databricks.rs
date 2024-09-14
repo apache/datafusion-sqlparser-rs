@@ -1,4 +1,4 @@
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [Databricks SQL](https://www.databricks.com/)
 ///
@@ -8,9 +8,8 @@ pub struct DatabricksDialect;
 
 /// see <https://docs.databricks.com/en/sql/language-manual/sql-ref-identifiers.html>
 impl Dialect for DatabricksDialect {
-
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             supports_filter_during_aggregation: true,
             // https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-groupby.html
             supports_group_by_expr: true,

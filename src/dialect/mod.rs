@@ -69,7 +69,7 @@ macro_rules! dialect_of {
 /// * It must be a const setting, not value that's dependent on context - that has to be a function
 /// * have a default that matches `Default::default()`
 #[derive(Debug, Default, Clone)]
-pub struct DialectSettings {
+pub struct DialectFlags {
     /// Determine if the dialect supports escaping characters via '\' in string literals.
     ///
     /// Some dialects like BigQuery and Snowflake support this while others like
@@ -253,8 +253,8 @@ pub trait Dialect: Debug + Any {
         self.type_id()
     }
 
-    fn settings(&self) -> DialectSettings {
-        DialectSettings::default()
+    fn flags(&self) -> DialectFlags {
+        DialectFlags::default()
     }
 
     /// Determine if a character starts a quoted identifier. The default
@@ -295,7 +295,7 @@ pub trait Dialect: Debug + Any {
 
     /// Does the dialect support trailing commas in the projection list?
     fn supports_projection_trailing_commas(&self) -> bool {
-        self.settings().supports_trailing_commas
+        self.flags().supports_trailing_commas
     }
 
     /// Dialect-specific infix parser override
@@ -610,15 +610,17 @@ mod tests {
         struct WrappedDialect(MySqlDialect);
 
         impl Dialect for WrappedDialect {
-            fn settings(&self) -> DialectSettings {
-                let s = self.0.settings();
-                DialectSettings {
+            fn flags(&self) -> DialectFlags {
+                let s = self.0.flags();
+                DialectFlags {
                     supports_filter_during_aggregation: s.supports_filter_during_aggregation,
-                    supports_within_after_array_aggregation: s.supports_within_after_array_aggregation,
+                    supports_within_after_array_aggregation: s
+                        .supports_within_after_array_aggregation,
                     supports_group_by_expr: s.supports_group_by_expr,
                     supports_in_empty_list: s.supports_in_empty_list,
                     convert_type_before_value: s.convert_type_before_value,
-                    supports_string_literal_backslash_escape: s.supports_string_literal_backslash_escape,
+                    supports_string_literal_backslash_escape: s
+                        .supports_string_literal_backslash_escape,
                     ..Default::default()
                 }
             }
@@ -639,17 +641,11 @@ mod tests {
                 self.0.identifier_quote_style(identifier)
             }
 
-            fn is_proper_identifier_inside_quotes(
-                &self,
-                chars: Peekable<Chars<'_>>,
-            ) -> bool {
+            fn is_proper_identifier_inside_quotes(&self, chars: Peekable<Chars<'_>>) -> bool {
                 self.0.is_proper_identifier_inside_quotes(chars)
             }
 
-            fn parse_prefix(
-                &self,
-                parser: &mut Parser,
-            ) -> Option<Result<Expr, ParserError>> {
+            fn parse_prefix(&self, parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
                 self.0.parse_prefix(parser)
             }
 
@@ -662,10 +658,7 @@ mod tests {
                 self.0.parse_infix(parser, expr, precedence)
             }
 
-            fn get_next_precedence(
-                &self,
-                parser: &Parser,
-            ) -> Option<Result<u8, ParserError>> {
+            fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
                 self.0.get_next_precedence(parser)
             }
 

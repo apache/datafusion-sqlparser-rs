@@ -13,21 +13,21 @@
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 
+use crate::dialect::DialectFlags;
 use crate::{
     ast::{BinaryOperator, Expr, LockTable, LockTableType, Statement},
     dialect::Dialect,
     keywords::Keyword,
     parser::{Parser, ParserError},
 };
-use crate::dialect::DialectSettings;
 
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
 #[derive(Debug, Default)]
 pub struct MySqlDialect;
 
 impl Dialect for MySqlDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
             supports_string_literal_backslash_escape: true,
             supports_numeric_prefix: true,

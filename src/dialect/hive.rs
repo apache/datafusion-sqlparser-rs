@@ -10,15 +10,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::{Dialect, DialectSettings};
+use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [Hive](https://hive.apache.org/).
 #[derive(Debug, Default)]
 pub struct HiveDialect;
 
 impl Dialect for HiveDialect {
-    fn settings(&self) -> DialectSettings {
-        DialectSettings {
+    fn flags(&self) -> DialectFlags {
+        DialectFlags {
             supports_filter_during_aggregation: true,
             supports_numeric_prefix: true,
             require_interval_qualifier: true,

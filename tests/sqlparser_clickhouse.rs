@@ -1616,7 +1616,10 @@ fn clickhouse() -> TestedDialects {
 
 fn clickhouse_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(ClickHouseDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(ClickHouseDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     }
 }

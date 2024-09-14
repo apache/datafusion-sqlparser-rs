@@ -12,6 +12,7 @@
 
 //! Test the ability for dialects to override parsing
 
+use sqlparser::dialect::DialectFlags;
 use sqlparser::{
     ast::{BinaryOperator, Expr, Statement, Value},
     dialect::Dialect,
@@ -19,7 +20,6 @@ use sqlparser::{
     parser::{Parser, ParserError},
     tokenizer::Token,
 };
-use sqlparser::dialect::DialectFlags;
 
 #[test]
 fn custom_prefix_parser() -> Result<(), ParserError> {

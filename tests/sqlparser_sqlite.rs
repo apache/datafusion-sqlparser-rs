@@ -503,7 +503,10 @@ fn sqlite_with_options(options: ParserOptions) -> TestedDialects {
 
 fn sqlite_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(SQLiteDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(SQLiteDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     }
 }

@@ -945,7 +945,10 @@ fn snowflake_without_unescape() -> TestedDialects {
 
 fn snowflake_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(SnowflakeDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     }
 }

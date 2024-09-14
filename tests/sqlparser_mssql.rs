@@ -916,7 +916,10 @@ fn ms() -> TestedDialects {
 }
 fn ms_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(MsSqlDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     }
 }

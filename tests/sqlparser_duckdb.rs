@@ -27,7 +27,10 @@ fn duckdb() -> TestedDialects {
 
 fn duckdb_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(DuckDbDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(DuckDbDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     }
 }

@@ -1846,10 +1846,12 @@ fn parse_pg_returning() {
 }
 
 fn test_operator(operator: &str, dialect: &TestedDialects, expected: BinaryOperator) {
-    let operator_tokens =
-        sqlparser::tokenizer::Tokenizer::new(&PostgreSqlDialect::default(), &format!("a{operator}b"))
-            .tokenize()
-            .unwrap();
+    let operator_tokens = sqlparser::tokenizer::Tokenizer::new(
+        &PostgreSqlDialect::default(),
+        &format!("a{operator}b"),
+    )
+    .tokenize()
+    .unwrap();
     assert_eq!(
         operator_tokens.len(),
         3,
@@ -2941,7 +2943,10 @@ fn pg() -> TestedDialects {
 
 fn pg_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     }
 }

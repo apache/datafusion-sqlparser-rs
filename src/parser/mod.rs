@@ -12046,7 +12046,10 @@ mod tests {
         fn test_ansii_character_string_types() {
             // Character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-string-type>
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
+                dialects: vec![
+                    Box::new(GenericDialect::default()),
+                    Box::new(AnsiDialect::default()),
+                ],
                 options: None,
             };
 
@@ -12176,7 +12179,10 @@ mod tests {
         fn test_ansii_character_large_object_types() {
             // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
+                dialects: vec![
+                    Box::new(GenericDialect::default()),
+                    Box::new(AnsiDialect::default()),
+                ],
                 options: None,
             };
 
@@ -12209,7 +12215,10 @@ mod tests {
         #[test]
         fn test_parse_custom_types() {
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
+                dialects: vec![
+                    Box::new(GenericDialect::default()),
+                    Box::new(AnsiDialect::default()),
+                ],
                 options: None,
             };
             test_parse_data_type!(
@@ -12241,7 +12250,10 @@ mod tests {
         fn test_ansii_exact_numeric_types() {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
+                dialects: vec![
+                    Box::new(GenericDialect::default()),
+                    Box::new(AnsiDialect::default()),
+                ],
                 options: None,
             };
 
@@ -12292,7 +12304,10 @@ mod tests {
         fn test_ansii_date_type() {
             // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
+                dialects: vec![
+                    Box::new(GenericDialect::default()),
+                    Box::new(AnsiDialect::default()),
+                ],
                 options: None,
             };
 
@@ -12404,7 +12419,10 @@ mod tests {
         }
 
         let dialect = TestedDialects {
-            dialects: vec![Box::new(GenericDialect::default()), Box::new(MySqlDialect::default())],
+            dialects: vec![
+                Box::new(GenericDialect::default()),
+                Box::new(MySqlDialect::default()),
+            ],
             options: None,
         };
 

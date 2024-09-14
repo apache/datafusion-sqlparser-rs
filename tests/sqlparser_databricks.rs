@@ -15,7 +15,10 @@ fn databricks() -> TestedDialects {
 
 fn databricks_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(DatabricksDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(DatabricksDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     }
 }

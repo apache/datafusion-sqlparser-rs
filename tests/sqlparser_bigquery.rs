@@ -1939,7 +1939,10 @@ fn bigquery() -> TestedDialects {
 
 fn bigquery_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(BigQueryDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     }
 }

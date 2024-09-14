@@ -1395,7 +1395,10 @@ fn parse_mod() {
 
 fn pg_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     }
 }
@@ -2746,7 +2749,10 @@ fn parse_window_rank_function() {
     }
 
     let supported_dialects_nulls = TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect::default()), Box::new(SnowflakeDialect::default())],
+        dialects: vec![
+            Box::new(MsSqlDialect::default()),
+            Box::new(SnowflakeDialect::default()),
+        ],
         options: None,
     };
 
@@ -5595,7 +5601,10 @@ fn parse_unnest_in_from_clause() {
         assert_eq!(select.from, want);
     }
     let dialects = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect::default()), Box::new(GenericDialect::default())],
+        dialects: vec![
+            Box::new(BigQueryDialect::default()),
+            Box::new(GenericDialect::default()),
+        ],
         options: None,
     };
     // 1. both Alias and WITH OFFSET clauses.
@@ -9496,7 +9505,10 @@ fn parse_trailing_comma() {
 fn parse_projection_trailing_comma() {
     // Some dialects allow trailing commas only in the projection
     let trailing_commas = TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect::default()), Box::new(BigQueryDialect::default())],
+        dialects: vec![
+            Box::new(SnowflakeDialect::default()),
+            Box::new(BigQueryDialect::default()),
+        ],
         options: None,
     };
 
@@ -9732,7 +9744,10 @@ fn test_release_savepoint() {
 #[test]
 fn test_comment_hash_syntax() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect::default()), Box::new(SnowflakeDialect::default())],
+        dialects: vec![
+            Box::new(BigQueryDialect::default()),
+            Box::new(SnowflakeDialect::default()),
+        ],
         options: None,
     };
     let sql = r#"
@@ -9764,7 +9779,10 @@ fn test_buffer_reuse() {
 fn parse_map_access_expr() {
     let sql = "users[-1][safe_offset(2)]";
     let dialects = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect::default()), Box::new(ClickHouseDialect::default())],
+        dialects: vec![
+            Box::new(BigQueryDialect::default()),
+            Box::new(ClickHouseDialect::default()),
+        ],
         options: None,
     };
     let expr = dialects.verified_expr(sql);

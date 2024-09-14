@@ -1277,7 +1277,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_utility_options(&mut self) -> Result<Vec<(Ident, Option<String>)>, ParserError> {
+    pub fn parse_utility_options(&mut self) -> Result<UtilityOptionList, ParserError> {
         self.expect_token(&Token::LParen)?;
         let mut options = vec![];
         loop {
@@ -1291,20 +1291,34 @@ impl<'a> Parser<'a> {
 
         self.expect_token(&Token::RParen)?;
 
-        Ok(options)
+        Ok(UtilityOptionList { options })
     }
 
-    fn parse_utility_option(&mut self) -> Result<(Ident, Option<String>), ParserError> {
+    fn parse_utility_option(&mut self) -> Result<UtilityOption, ParserError> {
         let name = self.parse_identifier(false)?;
 
         let next_token = self.peek_token();
         if next_token == Token::Comma || next_token == Token::RParen {
-            return Ok((name, None));
+            return Ok(UtilityOption { name, arg: None });
         }
         let arg = match next_token.token {
-            Token::Number(s, _) => {
+            sign @ Token::Plus | sign @ Token::Minus => {
                 self.next_token();
-                s
+                let cur_token = self.next_token();
+                match cur_token.token {
+                    Token::Number(num, _) => {
+                        if sign == Token::Minus {
+                            format!("-{num}")
+                        } else {
+                            num
+                        }
+                    }
+                    _ => return self.expected("literal number", cur_token),
+                }
+            }
+            Token::Number(num, _) => {
+                self.next_token();
+                num
             }
             // OFF is also accepted in parse_literal_string
             Token::Word(s)
@@ -1318,7 +1332,10 @@ impl<'a> Parser<'a> {
             _ => self.parse_literal_string()?,
         };
 
-        Ok((name, Some(arg)))
+        Ok(UtilityOption {
+            name,
+            arg: Some(arg),
+        })
     }
 
     fn try_parse_expr_sub_query(&mut self) -> Result<Option<Expr>, ParserError> {

@@ -3032,8 +3032,8 @@ pub enum Statement {
         statement: Box<Statement>,
         /// Optional output format of explain
         format: Option<AnalyzeFormat>,
-        /// Postgres style utility options
-        options: Option<Vec<(Ident, Option<String>)>>,
+        /// Postgres style utility options, `(analyze, verbose true)`
+        options: Option<UtilityOptionList>,
     },
     /// ```sql
     /// SAVEPOINT
@@ -3238,21 +3238,7 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(options) = options {
-                    write!(f, "( ")?;
-
-                    let mut iter = options.iter().peekable();
-                    while let Some((name, arg)) = iter.next() {
-                        if let Some(ref value) = arg {
-                            write!(f, "{} {}", name, value)?;
-                        } else {
-                            write!(f, "{}", name)?;
-                        }
-                        if iter.peek().is_some() {
-                            write!(f, ", ")?;
-                        }
-                    }
-
-                    write!(f, " ) ")?;
+                    write!(f, "{options}")?;
                 }
 
                 write!(f, "{statement}")
@@ -7142,6 +7128,63 @@ where
             WrappedCollection::Parentheses(inner) => {
                 write!(f, "({})", display_comma_separated(inner.as_slice()))
             }
+        }
+    }
+}
+
+/// Represents a list of options used in various PostgreSQL utility statements such as
+/// `EXPLAIN`, `VACUUM`, and `CLUSTER`.
+///
+/// For example, the `EXPLAIN` statement with options might look like this:
+///
+/// ```sql
+/// EXPLAIN (ANALYZE, VERBOSE true) SELECT * FROM my_table;
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct UtilityOptionList {
+    pub options: Vec<UtilityOption>,
+}
+
+impl Display for UtilityOptionList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "( ")?;
+
+        let mut iter = self.options.iter().peekable();
+        while let Some(option) = iter.next() {
+            write!(f, "{}", option)?;
+            if iter.peek().is_some() {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, " ) ")
+    }
+}
+
+/// Represents a single PostgreSQL utility option.
+///
+/// A utility option is a key-value pair where the key is an identifier (IDENT) and the value
+/// can be one of the following:
+/// - A number with an optional sign (`+` or `-`)
+/// - A non-keyword string
+/// - keyword: `true`, `false`, `on` (`off` is also accept)
+/// - Empty
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct UtilityOption {
+    pub name: Ident,
+    pub arg: Option<String>,
+}
+
+impl Display for UtilityOption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(ref arg) = self.arg {
+            write!(f, "{} {}", self.name, arg)
+        } else {
+            write!(f, "{}", self.name)
         }
     }
 }

@@ -489,21 +489,21 @@ fn test_dollar_identifier_as_placeholder() {
 
 fn sqlite() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(SQLiteDialect {})],
+        dialects: vec![Box::new(SQLiteDialect::default())],
         options: None,
     }
 }
 
 fn sqlite_with_options(options: ParserOptions) -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(SQLiteDialect {})],
+        dialects: vec![Box::new(SQLiteDialect::default())],
         options: Some(options),
     }
 }
 
 fn sqlite_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(SQLiteDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(SQLiteDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     }
 }

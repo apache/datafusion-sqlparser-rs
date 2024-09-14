@@ -228,7 +228,7 @@ pub struct DialectFlags {
 ///
 /// ```
 /// # use sqlparser::dialect::AnsiDialect;
-/// let dialect = AnsiDialect {};
+/// let dialect = AnsiDialect::default();
 /// ```
 ///
 /// It is also possible to dynamically create a [`Dialect`] from its
@@ -253,9 +253,7 @@ pub trait Dialect: Debug + Any {
         self.type_id()
     }
 
-    fn flags(&self) -> DialectFlags {
-        DialectFlags::default()
-    }
+    fn flags(&self) -> &DialectFlags;
 
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
@@ -510,19 +508,19 @@ impl dyn Dialect {
 pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect>> {
     let dialect_name = dialect_name.as_ref();
     match dialect_name.to_lowercase().as_str() {
-        "generic" => Some(Box::new(GenericDialect)),
-        "mysql" => Some(Box::new(MySqlDialect {})),
-        "postgresql" | "postgres" => Some(Box::new(PostgreSqlDialect {})),
-        "hive" => Some(Box::new(HiveDialect {})),
-        "sqlite" => Some(Box::new(SQLiteDialect {})),
-        "snowflake" => Some(Box::new(SnowflakeDialect)),
-        "redshift" => Some(Box::new(RedshiftSqlDialect {})),
-        "mssql" => Some(Box::new(MsSqlDialect {})),
-        "clickhouse" => Some(Box::new(ClickHouseDialect {})),
-        "bigquery" => Some(Box::new(BigQueryDialect)),
-        "ansi" => Some(Box::new(AnsiDialect {})),
-        "duckdb" => Some(Box::new(DuckDbDialect {})),
-        "databricks" => Some(Box::new(DatabricksDialect {})),
+        "generic" => Some(Box::new(GenericDialect::default())),
+        "mysql" => Some(Box::new(MySqlDialect::default())),
+        "postgresql" | "postgres" => Some(Box::new(PostgreSqlDialect::default())),
+        "hive" => Some(Box::new(HiveDialect::default())),
+        "sqlite" => Some(Box::new(SQLiteDialect::default())),
+        "snowflake" => Some(Box::new(SnowflakeDialect::default())),
+        "redshift" => Some(Box::new(RedshiftSqlDialect::default())),
+        "mssql" => Some(Box::new(MsSqlDialect::default())),
+        "clickhouse" => Some(Box::new(ClickHouseDialect::default())),
+        "bigquery" => Some(Box::new(BigQueryDialect::default())),
+        "ansi" => Some(Box::new(AnsiDialect::default())),
+        "duckdb" => Some(Box::new(DuckDbDialect::default())),
+        "databricks" => Some(Box::new(DatabricksDialect::default())),
         _ => None,
     }
 }
@@ -537,8 +535,8 @@ mod tests {
 
     #[test]
     fn test_is_dialect() {
-        let generic_dialect: &dyn Dialect = &GenericDialect {};
-        let ansi_dialect: &dyn Dialect = &AnsiDialect {};
+        let generic_dialect: &dyn Dialect = &GenericDialect::default();
+        let ansi_dialect: &dyn Dialect = &AnsiDialect::default();
 
         let generic_holder = DialectHolder {
             dialect: generic_dialect,
@@ -588,10 +586,15 @@ mod tests {
 
     #[test]
     fn identifier_quote_style() {
+        let dialects = (
+            GenericDialect::default(),
+            SQLiteDialect::default(),
+            PostgreSqlDialect::default(),
+        );
         let tests: Vec<(&dyn Dialect, &str, Option<char>)> = vec![
-            (&GenericDialect {}, "id", None),
-            (&SQLiteDialect {}, "id", Some('`')),
-            (&PostgreSqlDialect {}, "id", Some('"')),
+            (&dialects.0, "id", None),
+            (&dialects.1, "id", Some('`')),
+            (&dialects.2, "id", Some('"')),
         ];
 
         for (dialect, ident, expected) in tests {
@@ -607,22 +610,30 @@ mod tests {
         /// would tweak the behavior of the dialect. For the test case,
         /// it wraps all methods unaltered.
         #[derive(Debug)]
-        struct WrappedDialect(MySqlDialect);
+        struct WrappedDialect(MySqlDialect, DialectFlags);
 
-        impl Dialect for WrappedDialect {
-            fn flags(&self) -> DialectFlags {
-                let s = self.0.flags();
-                DialectFlags {
-                    supports_filter_during_aggregation: s.supports_filter_during_aggregation,
-                    supports_within_after_array_aggregation: s
+        impl Default for WrappedDialect {
+            fn default() -> Self {
+                let mysql = MySqlDialect::default();
+                let f = mysql.flags();
+                let flags = DialectFlags {
+                    supports_filter_during_aggregation: f.supports_filter_during_aggregation,
+                    supports_within_after_array_aggregation: f
                         .supports_within_after_array_aggregation,
-                    supports_group_by_expr: s.supports_group_by_expr,
-                    supports_in_empty_list: s.supports_in_empty_list,
-                    convert_type_before_value: s.convert_type_before_value,
-                    supports_string_literal_backslash_escape: s
+                    supports_group_by_expr: f.supports_group_by_expr,
+                    supports_in_empty_list: f.supports_in_empty_list,
+                    convert_type_before_value: f.convert_type_before_value,
+                    supports_string_literal_backslash_escape: f
                         .supports_string_literal_backslash_escape,
                     ..Default::default()
-                }
+                };
+                Self(mysql, flags)
+            }
+        }
+
+        impl Dialect for WrappedDialect {
+            fn flags(&self) -> &DialectFlags {
+                &self.1
             }
 
             fn dialect(&self) -> TypeId {
@@ -676,8 +687,8 @@ mod tests {
 
         #[allow(clippy::needless_raw_string_hashes)]
         let statement = r#"SELECT 'Wayne\'s World'"#;
-        let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
-        let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);
+        let res1 = Parser::parse_sql(&MySqlDialect::default(), statement);
+        let res2 = Parser::parse_sql(&WrappedDialect::default(), statement);
         assert!(res1.is_ok());
         assert_eq!(res1, res2);
     }

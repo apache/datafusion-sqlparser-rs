@@ -13,19 +13,26 @@
 use crate::dialect::{Dialect, DialectFlags};
 
 // A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
-#[derive(Debug, Default)]
-pub struct ClickHouseDialect;
+#[derive(Debug)]
+pub struct ClickHouseDialect(DialectFlags);
 
-impl Dialect for ClickHouseDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
+impl Default for ClickHouseDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
             supports_string_literal_backslash_escape: true,
             supports_select_wildcard_except: true,
             describe_requires_table_keyword: true,
             require_interval_qualifier: true,
             ..Default::default()
-        }
+        })
     }
+}
+
+impl Dialect for ClickHouseDialect {
+    fn flags(&self) -> &DialectFlags {
+        &self.0
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://clickhouse.com/docs/en/sql-reference/syntax/#syntax-identifiers
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'

@@ -207,18 +207,18 @@ impl TestedDialects {
 /// Returns all available dialects.
 pub fn all_dialects() -> TestedDialects {
     let all_dialects = vec![
-        Box::new(GenericDialect {}) as Box<dyn Dialect>,
-        Box::new(PostgreSqlDialect {}) as Box<dyn Dialect>,
-        Box::new(MsSqlDialect {}) as Box<dyn Dialect>,
-        Box::new(AnsiDialect {}) as Box<dyn Dialect>,
-        Box::new(SnowflakeDialect {}) as Box<dyn Dialect>,
-        Box::new(HiveDialect {}) as Box<dyn Dialect>,
-        Box::new(RedshiftSqlDialect {}) as Box<dyn Dialect>,
-        Box::new(MySqlDialect {}) as Box<dyn Dialect>,
-        Box::new(BigQueryDialect {}) as Box<dyn Dialect>,
-        Box::new(SQLiteDialect {}) as Box<dyn Dialect>,
-        Box::new(DuckDbDialect {}) as Box<dyn Dialect>,
-        Box::new(DatabricksDialect {}) as Box<dyn Dialect>,
+        Box::new(GenericDialect::default()) as Box<dyn Dialect>,
+        Box::new(PostgreSqlDialect::default()) as Box<dyn Dialect>,
+        Box::new(MsSqlDialect::default()) as Box<dyn Dialect>,
+        Box::new(AnsiDialect::default()) as Box<dyn Dialect>,
+        Box::new(SnowflakeDialect::default()) as Box<dyn Dialect>,
+        Box::new(HiveDialect::default()) as Box<dyn Dialect>,
+        Box::new(RedshiftSqlDialect::default()) as Box<dyn Dialect>,
+        Box::new(MySqlDialect::default()) as Box<dyn Dialect>,
+        Box::new(BigQueryDialect::default()) as Box<dyn Dialect>,
+        Box::new(SQLiteDialect::default()) as Box<dyn Dialect>,
+        Box::new(DuckDbDialect::default()) as Box<dyn Dialect>,
+        Box::new(DatabricksDialect::default()) as Box<dyn Dialect>,
     ];
     TestedDialects {
         dialects: all_dialects,

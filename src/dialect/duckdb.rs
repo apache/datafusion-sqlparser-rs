@@ -13,13 +13,12 @@
 use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [DuckDB](https://duckdb.org/)
-#[derive(Debug, Default)]
-pub struct DuckDbDialect;
+#[derive(Debug)]
+pub struct DuckDbDialect(DialectFlags);
 
-// In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
-impl Dialect for DuckDbDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
+impl Default for DuckDbDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
             supports_trailing_commas: true,
             supports_filter_during_aggregation: true,
             supports_group_by_expr: true,
@@ -33,7 +32,14 @@ impl Dialect for DuckDbDialect {
             // https://duckdb.org/docs/sql/data_types/map.html#creating-maps
             support_map_literal_syntax: true,
             ..Default::default()
-        }
+        })
+    }
+}
+
+// In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
+impl Dialect for DuckDbDialect {
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {

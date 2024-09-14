@@ -13,18 +13,24 @@
 use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/)
-#[derive(Debug, Default)]
-pub struct MsSqlDialect;
+#[derive(Debug)]
+pub struct MsSqlDialect(DialectFlags);
 
-impl Dialect for MsSqlDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
+impl Default for MsSqlDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
             // SQL Server has `CONVERT(type, value)` instead of `CONVERT(value, type)`
             // https://learn.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql?view=sql-server-ver16
             convert_type_before_value: true,
             supports_connect_by: true,
             ..Default::default()
-        }
+        })
+    }
+}
+
+impl Dialect for MsSqlDialect {
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {

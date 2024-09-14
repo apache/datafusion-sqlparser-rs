@@ -155,7 +155,7 @@ visit_noop!(bigdecimal::BigDecimal);
 /// }
 ///
 /// let sql = "SELECT a FROM foo where x IN (SELECT y FROM bar)";
-/// let statements = Parser::parse_sql(&GenericDialect{}, sql)
+/// let statements = Parser::parse_sql(&GenericDialect::default(), sql)
 ///    .unwrap();
 ///
 /// // Drive the visitor through the AST
@@ -266,7 +266,7 @@ pub trait Visitor {
 /// }
 ///
 /// let sql = "SELECT to_replace FROM foo where to_replace IN (SELECT to_replace FROM bar)";
-/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
+/// let mut statements = Parser::parse_sql(&GenericDialect::default(), sql).unwrap();
 ///
 /// // Drive the visitor through the AST
 /// statements.visit(&mut Replacer);
@@ -361,7 +361,7 @@ impl<E, F: FnMut(&mut ObjectName) -> ControlFlow<E>> VisitorMut for RelationVisi
 /// # use sqlparser::ast::{visit_relations};
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT a FROM foo where x IN (SELECT y FROM bar)";
-/// let statements = Parser::parse_sql(&GenericDialect{}, sql)
+/// let statements = Parser::parse_sql(&GenericDialect::default(), sql)
 ///    .unwrap();
 ///
 /// // visit statements, capturing relations (table names)
@@ -401,7 +401,7 @@ where
 /// # use sqlparser::ast::{ObjectName, visit_relations_mut};
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT a FROM foo";
-/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql)
+/// let mut statements = Parser::parse_sql(&GenericDialect::default(), sql)
 ///    .unwrap();
 ///
 /// // visit statements, renaming table foo to bar
@@ -449,7 +449,7 @@ impl<E, F: FnMut(&mut Expr) -> ControlFlow<E>> VisitorMut for ExprVisitor<F> {
 /// # use sqlparser::ast::{visit_expressions};
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT a FROM foo where x IN (SELECT y FROM bar)";
-/// let statements = Parser::parse_sql(&GenericDialect{}, sql)
+/// let statements = Parser::parse_sql(&GenericDialect::default(), sql)
 ///    .unwrap();
 ///
 /// // visit all expressions
@@ -493,7 +493,7 @@ where
 /// # use sqlparser::ast::{Expr, visit_expressions_mut, visit_statements_mut};
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT (SELECT y FROM z LIMIT 9) FROM t LIMIT 3";
-/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
+/// let mut statements = Parser::parse_sql(&GenericDialect::default(), sql).unwrap();
 ///
 /// // Remove all select limits in sub-queries
 /// visit_expressions_mut(&mut statements, |expr| {
@@ -518,7 +518,7 @@ where
 /// # use sqlparser::ast::*;
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT x, y FROM t";
-/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
+/// let mut statements = Parser::parse_sql(&GenericDialect::default(), sql).unwrap();
 ///
 /// visit_expressions_mut(&mut statements, |expr| {
 ///   if matches!(expr, Expr::Identifier(col_name) if col_name.value == "x") {
@@ -579,7 +579,7 @@ impl<E, F: FnMut(&mut Statement) -> ControlFlow<E>> VisitorMut for StatementVisi
 /// # use sqlparser::ast::{visit_statements};
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT a FROM foo where x IN (SELECT y FROM bar); CREATE TABLE baz(q int)";
-/// let statements = Parser::parse_sql(&GenericDialect{}, sql)
+/// let statements = Parser::parse_sql(&GenericDialect::default(), sql)
 ///    .unwrap();
 ///
 /// // visit all statements
@@ -616,7 +616,7 @@ where
 /// # use sqlparser::ast::{Statement, visit_statements_mut};
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT x FROM foo LIMIT 9+$limit; SELECT * FROM t LIMIT f()";
-/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
+/// let mut statements = Parser::parse_sql(&GenericDialect::default(), sql).unwrap();
 ///
 /// // Remove all select limits in outer statements (not in sub-queries)
 /// visit_statements_mut(&mut statements, |stmt| {
@@ -715,7 +715,7 @@ mod tests {
     }
 
     fn do_visit(sql: &str) -> Vec<String> {
-        let dialect = GenericDialect {};
+        let dialect = GenericDialect::default();
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let s = Parser::new(&dialect)
             .with_tokens(tokens)

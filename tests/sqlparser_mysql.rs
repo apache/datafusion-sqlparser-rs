@@ -940,7 +940,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
     let sql = "SELECT `quoted `` identifier`";
     assert_eq!(
         TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
+            dialects: vec![Box::new(MySqlDialect::default())],
             options: None,
         }
         .verified_stmt(sql),
@@ -987,7 +987,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
     let sql = "SELECT `quoted `` identifier`";
     assert_eq!(
         TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
+            dialects: vec![Box::new(MySqlDialect::default())],
             options: Some(ParserOptions {
                 trailing_commas: false,
                 unescape: false,
@@ -1037,7 +1037,7 @@ fn parse_escaped_backticks_with_escape() {
     let sql = "SELECT ```quoted identifier```";
     assert_eq!(
         TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
+            dialects: vec![Box::new(MySqlDialect::default())],
             options: None,
         }
         .verified_stmt(sql),
@@ -1084,7 +1084,7 @@ fn parse_escaped_backticks_with_no_escape() {
     let sql = "SELECT ```quoted identifier```";
     assert_eq!(
         TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
+            dialects: vec![Box::new(MySqlDialect::default())],
             options: Some(ParserOptions::new().with_unescape(false)),
         }
         .verified_stmt(sql),
@@ -1142,49 +1142,49 @@ fn check_roundtrip_of_escaped_string() {
     let options = Some(ParserOptions::new().with_unescape(false));
 
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: options.clone(),
     }
     .verified_stmt(r"SELECT 'I\'m fine'");
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: options.clone(),
     }
     .verified_stmt(r#"SELECT 'I''m fine'"#);
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: options.clone(),
     }
     .verified_stmt(r"SELECT 'I\\\'m fine'");
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: options.clone(),
     }
     .verified_stmt(r"SELECT 'I\\\'m fine'");
 
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: options.clone(),
     }
     .verified_stmt(r#"SELECT "I\"m fine""#);
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: options.clone(),
     }
     .verified_stmt(r#"SELECT "I""m fine""#);
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: options.clone(),
     }
     .verified_stmt(r#"SELECT "I\\\"m fine""#);
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: options.clone(),
     }
     .verified_stmt(r#"SELECT "I\\\"m fine""#);
 
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options,
     }
     .verified_stmt(r#"SELECT "I'm ''fine''""#);
@@ -2620,14 +2620,14 @@ fn parse_create_table_with_fulltext_definition_should_not_accept_constraint_name
 
 fn mysql() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: None,
     }
 }
 
 fn mysql_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     }
 }

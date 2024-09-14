@@ -37,18 +37,18 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
     );
 
     let dialect: Box<dyn Dialect> = match std::env::args().nth(2).unwrap_or_default().as_ref() {
-        "--ansi" => Box::new(AnsiDialect {}),
-        "--bigquery" => Box::new(BigQueryDialect {}),
-        "--postgres" => Box::new(PostgreSqlDialect {}),
-        "--ms" => Box::new(MsSqlDialect {}),
-        "--mysql" => Box::new(MySqlDialect {}),
-        "--snowflake" => Box::new(SnowflakeDialect {}),
-        "--hive" => Box::new(HiveDialect {}),
-        "--redshift" => Box::new(RedshiftSqlDialect {}),
-        "--clickhouse" => Box::new(ClickHouseDialect {}),
-        "--duckdb" => Box::new(DuckDbDialect {}),
-        "--sqlite" => Box::new(SQLiteDialect {}),
-        "--generic" | "" => Box::new(GenericDialect {}),
+        "--ansi" => Box::new(AnsiDialect::default()),
+        "--bigquery" => Box::new(BigQueryDialect::default()),
+        "--postgres" => Box::new(PostgreSqlDialect::default()),
+        "--ms" => Box::new(MsSqlDialect::default()),
+        "--mysql" => Box::new(MySqlDialect::default()),
+        "--snowflake" => Box::new(SnowflakeDialect::default()),
+        "--hive" => Box::new(HiveDialect::default()),
+        "--redshift" => Box::new(RedshiftSqlDialect::default()),
+        "--clickhouse" => Box::new(ClickHouseDialect::default()),
+        "--duckdb" => Box::new(DuckDbDialect::default()),
+        "--sqlite" => Box::new(SQLiteDialect::default()),
+        "--generic" | "" => Box::new(GenericDialect::default()),
         s => panic!("Unexpected parameter: {s}"),
     };
 

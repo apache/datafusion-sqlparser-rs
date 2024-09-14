@@ -22,18 +22,24 @@ use crate::{
 };
 
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
-#[derive(Debug, Default)]
-pub struct MySqlDialect;
+#[derive(Debug)]
+pub struct MySqlDialect(DialectFlags);
 
-impl Dialect for MySqlDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
+impl Default for MySqlDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
             // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
             supports_string_literal_backslash_escape: true,
             supports_numeric_prefix: true,
             require_interval_qualifier: true,
             ..Default::default()
-        }
+        })
+    }
+}
+
+impl Dialect for MySqlDialect {
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {

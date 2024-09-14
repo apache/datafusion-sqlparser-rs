@@ -24,7 +24,7 @@ let sql = "SELECT a, b, 123, myfunc(b) \
            WHERE a > b AND b < 100 \
            ORDER BY a DESC, b";
 
-let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
+let dialect = GenericDialect::default(); // or AnsiDialect, or your own dialect ...
 
 let ast = Parser::parse_sql(&dialect, sql).unwrap();
 

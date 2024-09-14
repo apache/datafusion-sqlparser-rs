@@ -20,14 +20,14 @@ use sqlparser::dialect::{DuckDbDialect, GenericDialect};
 
 fn duckdb() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(DuckDbDialect {})],
+        dialects: vec![Box::new(DuckDbDialect::default())],
         options: None,
     }
 }
 
 fn duckdb_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(DuckDbDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(DuckDbDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     }
 }

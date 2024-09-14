@@ -1609,14 +1609,14 @@ fn parse_explain_table() {
 
 fn clickhouse() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(ClickHouseDialect {})],
+        dialects: vec![Box::new(ClickHouseDialect::default())],
         options: None,
     }
 }
 
 fn clickhouse_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(ClickHouseDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(ClickHouseDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     }
 }

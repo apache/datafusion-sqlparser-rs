@@ -21,20 +21,26 @@ use crate::parser::{Parser, ParserError};
 /// [`CREATE TABLE`](https://sqlite.org/lang_createtable.html) statement with no
 /// type specified, as in `CREATE TABLE t1 (a)`. In the AST, these columns will
 /// have the data type [`Unspecified`](crate::ast::DataType::Unspecified).
-#[derive(Debug, Default)]
-pub struct SQLiteDialect;
+#[derive(Debug)]
+pub struct SQLiteDialect(DialectFlags);
+
+impl Default for SQLiteDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
+            supports_filter_during_aggregation: true,
+            supports_start_transaction_modifier: true,
+            supports_in_empty_list: true,
+            ..Default::default()
+        })
+    }
+}
 
 /// see <https://www.sqlite.org/lang_keywords.html>
 /// parse `...`, [...] and "..." as identifier
 /// TODO: support depending on the context tread '...' as identifier too.
 impl Dialect for SQLiteDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
-            supports_filter_during_aggregation: true,
-            supports_start_transaction_modifier: true,
-            supports_in_empty_list: true,
-            ..Default::default()
-        }
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {

@@ -13,17 +13,23 @@
 use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [Hive](https://hive.apache.org/).
-#[derive(Debug, Default)]
-pub struct HiveDialect;
+#[derive(Debug)]
+pub struct HiveDialect(DialectFlags);
 
-impl Dialect for HiveDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
+impl Default for HiveDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
             supports_filter_during_aggregation: true,
             supports_numeric_prefix: true,
             require_interval_qualifier: true,
             ..Default::default()
-        }
+        })
+    }
+}
+
+impl Dialect for HiveDialect {
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {

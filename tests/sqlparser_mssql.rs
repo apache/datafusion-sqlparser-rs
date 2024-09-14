@@ -566,7 +566,7 @@ fn parse_substring_in_select() {
 #[test]
 fn parse_mssql_declare() {
     let sql = "DECLARE @foo CURSOR, @bar INT, @baz AS TEXT = 'foobar';";
-    let ast = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();
+    let ast = Parser::parse_sql(&MsSqlDialect::default(), sql).unwrap();
 
     assert_eq!(
         vec![Statement::Declare {
@@ -910,13 +910,13 @@ fn parse_create_table_with_invalid_options() {
 
 fn ms() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {})],
+        dialects: vec![Box::new(MsSqlDialect::default())],
         options: None,
     }
 }
 fn ms_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(MsSqlDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     }
 }

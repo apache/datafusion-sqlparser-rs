@@ -19,13 +19,18 @@ use sqlparser::{
     parser::{Parser, ParserError},
     tokenizer::Token,
 };
+use sqlparser::dialect::DialectFlags;
 
 #[test]
 fn custom_prefix_parser() -> Result<(), ParserError> {
-    #[derive(Debug)]
-    struct MyDialect {}
+    #[derive(Debug, Default)]
+    struct MyDialect(DialectFlags);
 
     impl Dialect for MyDialect {
+        fn flags(&self) -> &DialectFlags {
+            &self.0
+        }
+
         fn is_identifier_start(&self, ch: char) -> bool {
             is_identifier_start(ch)
         }
@@ -43,7 +48,7 @@ fn custom_prefix_parser() -> Result<(), ParserError> {
         }
     }
 
-    let dialect = MyDialect {};
+    let dialect = MyDialect::default();
     let sql = "SELECT 1 + 2";
     let ast = Parser::parse_sql(&dialect, sql)?;
     let query = &ast[0];
@@ -53,10 +58,14 @@ fn custom_prefix_parser() -> Result<(), ParserError> {
 
 #[test]
 fn custom_infix_parser() -> Result<(), ParserError> {
-    #[derive(Debug)]
-    struct MyDialect {}
+    #[derive(Debug, Default)]
+    struct MyDialect(DialectFlags);
 
     impl Dialect for MyDialect {
+        fn flags(&self) -> &DialectFlags {
+            &self.0
+        }
+
         fn is_identifier_start(&self, ch: char) -> bool {
             is_identifier_start(ch)
         }
@@ -83,7 +92,7 @@ fn custom_infix_parser() -> Result<(), ParserError> {
         }
     }
 
-    let dialect = MyDialect {};
+    let dialect = MyDialect::default();
     let sql = "SELECT 1 + 2";
     let ast = Parser::parse_sql(&dialect, sql)?;
     let query = &ast[0];
@@ -93,10 +102,14 @@ fn custom_infix_parser() -> Result<(), ParserError> {
 
 #[test]
 fn custom_statement_parser() -> Result<(), ParserError> {
-    #[derive(Debug)]
-    struct MyDialect {}
+    #[derive(Debug, Default)]
+    struct MyDialect(DialectFlags);
 
     impl Dialect for MyDialect {
+        fn flags(&self) -> &DialectFlags {
+            &self.0
+        }
+
         fn is_identifier_start(&self, ch: char) -> bool {
             is_identifier_start(ch)
         }
@@ -117,7 +130,7 @@ fn custom_statement_parser() -> Result<(), ParserError> {
         }
     }
 
-    let dialect = MyDialect {};
+    let dialect = MyDialect::default();
     let sql = "SELECT 1 + 2";
     let ast = Parser::parse_sql(&dialect, sql)?;
     let query = &ast[0];
@@ -127,10 +140,14 @@ fn custom_statement_parser() -> Result<(), ParserError> {
 
 #[test]
 fn test_map_syntax_not_support_default() -> Result<(), ParserError> {
-    #[derive(Debug)]
-    struct MyDialect {}
+    #[derive(Debug, Default)]
+    struct MyDialect(DialectFlags);
 
     impl Dialect for MyDialect {
+        fn flags(&self) -> &DialectFlags {
+            &self.0
+        }
+
         fn is_identifier_start(&self, ch: char) -> bool {
             is_identifier_start(ch)
         }
@@ -140,7 +157,7 @@ fn test_map_syntax_not_support_default() -> Result<(), ParserError> {
         }
     }
 
-    let dialect = MyDialect {};
+    let dialect = MyDialect::default();
     let sql = "SELECT MAP {1: 2}";
     let ast = Parser::parse_sql(&dialect, sql);
     assert!(ast.is_err());

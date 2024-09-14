@@ -8,14 +8,14 @@ mod test_utils;
 
 fn databricks() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(DatabricksDialect {})],
+        dialects: vec![Box::new(DatabricksDialect::default())],
         options: None,
     }
 }
 
 fn databricks_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(DatabricksDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(DatabricksDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     }
 }

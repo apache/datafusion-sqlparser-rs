@@ -287,7 +287,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let statements = Parser::new(&dialect)
     ///   .try_with_sql("SELECT * FROM foo")?
     ///   .parse_statements()?;
@@ -316,7 +316,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let result = Parser::new(&dialect)
     ///   .with_recursion_limit(1)
     ///   .try_with_sql("SELECT * FROM foo WHERE (a OR (b OR (c OR d)))")?
@@ -340,7 +340,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError, ParserOptions}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let options = ParserOptions::new()
     ///    .with_trailing_commas(true)
     ///    .with_unescape(false);
@@ -397,7 +397,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let statements = Parser::new(&dialect)
     ///   // Parse a SQL string with 2 separate statements
     ///   .try_with_sql("SELECT * FROM foo; SELECT * FROM bar;")?
@@ -445,7 +445,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let statements = Parser::parse_sql(
     ///   &dialect, "SELECT * FROM foo"
     /// )?;
@@ -3060,7 +3060,7 @@ impl<'a> Parser<'a> {
     /// # use sqlparser::parser::Parser;
     /// # use sqlparser::keywords::Keyword;
     /// # use sqlparser::tokenizer::{Token, Word};
-    /// let dialect = GenericDialect {};
+    /// let dialect = GenericDialect::default();
     /// let mut parser = Parser::new(&dialect).try_with_sql("ORDER BY foo, bar").unwrap();
     ///
     /// // Note that Rust infers the number of tokens to peek based on the
@@ -8014,7 +8014,7 @@ impl<'a> Parser<'a> {
     /// use sqlparser::dialect::GenericDialect;
     /// use sqlparser::parser::Parser;
     ///
-    /// let dialect = GenericDialect {};
+    /// let dialect = GenericDialect::default();
     /// let expected = vec![Ident::new("one"), Ident::new("two")];
     ///
     /// // expected usage
@@ -12046,7 +12046,7 @@ mod tests {
         fn test_ansii_character_string_types() {
             // Character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-string-type>
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
                 options: None,
             };
 
@@ -12176,7 +12176,7 @@ mod tests {
         fn test_ansii_character_large_object_types() {
             // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
                 options: None,
             };
 
@@ -12209,7 +12209,7 @@ mod tests {
         #[test]
         fn test_parse_custom_types() {
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
                 options: None,
             };
             test_parse_data_type!(
@@ -12241,7 +12241,7 @@ mod tests {
         fn test_ansii_exact_numeric_types() {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
                 options: None,
             };
 
@@ -12292,7 +12292,7 @@ mod tests {
         fn test_ansii_date_type() {
             // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
             let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                dialects: vec![Box::new(GenericDialect::default()), Box::new(AnsiDialect::default())],
                 options: None,
             };
 
@@ -12404,7 +12404,7 @@ mod tests {
         }
 
         let dialect = TestedDialects {
-            dialects: vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})],
+            dialects: vec![Box::new(GenericDialect::default()), Box::new(MySqlDialect::default())],
             options: None,
         };
 
@@ -12489,7 +12489,8 @@ mod tests {
     #[test]
     fn test_tokenizer_error_loc() {
         let sql = "foo '";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
+        let dialect = GenericDialect::default();
+        let ast = Parser::parse_sql(&dialect, sql);
         assert_eq!(
             ast,
             Err(ParserError::TokenizerError(
@@ -12501,7 +12502,8 @@ mod tests {
     #[test]
     fn test_parser_error_loc() {
         let sql = "SELECT this is a syntax error";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
+        let dialect = GenericDialect::default();
+        let ast = Parser::parse_sql(&dialect, sql);
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
@@ -12514,7 +12516,8 @@ mod tests {
     #[test]
     fn test_nested_explain_error() {
         let sql = "EXPLAIN EXPLAIN SELECT 1";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
+        let dialect = GenericDialect::default();
+        let ast = Parser::parse_sql(&dialect, sql);
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
@@ -12526,7 +12529,7 @@ mod tests {
     #[test]
     fn test_parse_multipart_identifier_positive() {
         let dialect = TestedDialects {
-            dialects: vec![Box::new(GenericDialect {})],
+            dialects: vec![Box::new(GenericDialect::default())],
             options: None,
         };
 
@@ -12609,7 +12612,7 @@ mod tests {
         let sql = "SELECT * FROM employees PARTITION (p0, p2)";
         let expected = vec!["p0", "p2"];
 
-        let ast: Vec<Statement> = Parser::parse_sql(&MySqlDialect {}, sql).unwrap();
+        let ast: Vec<Statement> = Parser::parse_sql(&MySqlDialect::default(), sql).unwrap();
         assert_eq!(ast.len(), 1);
         if let Statement::Query(v) = &ast[0] {
             if let SetExpr::Select(select) = &*v.body {
@@ -12633,7 +12636,7 @@ mod tests {
     fn test_replace_into_placeholders() {
         let sql = "REPLACE INTO t (a) VALUES (&a)";
 
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+        assert!(Parser::parse_sql(&GenericDialect::default(), sql).is_err());
     }
 
     #[test]
@@ -12643,20 +12646,20 @@ mod tests {
         // https://dev.mysql.com/doc/refman/8.3/en/insert.html
         let sql = "REPLACE INTO t SET a='1'";
 
-        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+        assert!(Parser::parse_sql(&MySqlDialect::default(), sql).is_err());
     }
 
     #[test]
     fn test_replace_into_set_placeholder() {
         let sql = "REPLACE INTO t SET ?";
 
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+        assert!(Parser::parse_sql(&GenericDialect::default(), sql).is_err());
     }
 
     #[test]
     fn test_replace_incomplete() {
         let sql = r#"REPLACE"#;
 
-        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+        assert!(Parser::parse_sql(&MySqlDialect::default(), sql).is_err());
     }
 }

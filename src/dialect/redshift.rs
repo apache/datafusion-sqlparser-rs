@@ -17,8 +17,20 @@ use core::str::Chars;
 use super::PostgreSqlDialect;
 
 /// A [`Dialect`] for [RedShift](https://aws.amazon.com/redshift/)
-#[derive(Debug, Default)]
-pub struct RedshiftSqlDialect;
+#[derive(Debug)]
+pub struct RedshiftSqlDialect(DialectFlags);
+
+impl Default for RedshiftSqlDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
+            // redshift has `CONVERT(type, value)` instead of `CONVERT(value, type)`
+            // <https://docs.aws.amazon.com/redshift/latest/dg/r_CONVERT_function.html>
+            convert_type_before_value: true,
+            supports_connect_by: true,
+            ..Default::default()
+        })
+    }
+}
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
 //
@@ -27,14 +39,8 @@ pub struct RedshiftSqlDialect;
 // in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
-            // redshift has `CONVERT(type, value)` instead of `CONVERT(value, type)`
-            // <https://docs.aws.amazon.com/redshift/latest/dg/r_CONVERT_function.html>
-            convert_type_before_value: true,
-            supports_connect_by: true,
-            ..Default::default()
-        }
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
@@ -56,11 +62,11 @@ impl Dialect for RedshiftSqlDialect {
 
     fn is_identifier_start(&self, ch: char) -> bool {
         // Extends Postgres dialect with sharp
-        PostgreSqlDialect {}.is_identifier_start(ch) || ch == '#'
+        PostgreSqlDialect::default().is_identifier_start(ch) || ch == '#'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
         // Extends Postgres dialect with sharp
-        PostgreSqlDialect {}.is_identifier_part(ch) || ch == '#'
+        PostgreSqlDialect::default().is_identifier_part(ch) || ch == '#'
     }
 }

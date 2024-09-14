@@ -32,13 +32,12 @@ use alloc::vec::Vec;
 use alloc::{format, vec};
 
 /// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
-#[derive(Debug, Default)]
-pub struct SnowflakeDialect;
+#[derive(Debug)]
+pub struct SnowflakeDialect(DialectFlags);
 
-/// see <https://docs.snowflake.com/en/sql-reference/identifiers-syntax.html>
-impl Dialect for SnowflakeDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
+impl Default for SnowflakeDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
             // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#escape_sequences
             supports_string_literal_backslash_escape: true,
             supports_within_after_array_aggregation: true,
@@ -58,7 +57,14 @@ impl Dialect for SnowflakeDialect {
             allow_extract_custom: true,
             allow_extract_single_quotes: true,
             ..Default::default()
-        }
+        })
+    }
+}
+
+/// see <https://docs.snowflake.com/en/sql-reference/identifiers-syntax.html>
+impl Dialect for SnowflakeDialect {
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {

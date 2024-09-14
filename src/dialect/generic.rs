@@ -14,12 +14,12 @@ use crate::dialect::{Dialect, DialectFlags};
 
 /// A permissive, general purpose [`Dialect`], which parses a wide variety of SQL
 /// statements, from many different dialects.
-#[derive(Debug, Default)]
-pub struct GenericDialect;
+#[derive(Debug)]
+pub struct GenericDialect(DialectFlags);
 
-impl Dialect for GenericDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
+impl Default for GenericDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
             supports_unicode_string_literal: true,
             supports_group_by_expr: true,
             supports_connect_by: true,
@@ -35,8 +35,15 @@ impl Dialect for GenericDialect {
             allow_extract_single_quotes: true,
             supports_create_index_with_clause: true,
             ..Default::default()
-        }
+        })
     }
+}
+
+impl Dialect for GenericDialect {
+    fn flags(&self) -> &DialectFlags {
+        &self.0
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '`'
     }

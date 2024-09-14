@@ -13,12 +13,12 @@
 use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [Google Bigquery](https://cloud.google.com/bigquery/)
-#[derive(Debug, Default)]
-pub struct BigQueryDialect;
+#[derive(Debug)]
+pub struct BigQueryDialect(DialectFlags);
 
-impl Dialect for BigQueryDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
+impl Default for BigQueryDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
             // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals
             supports_triple_quoted_string: true,
             // See https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value
@@ -34,7 +34,13 @@ impl Dialect for BigQueryDialect {
             // See https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#interval_type
             require_interval_qualifier: true,
             ..Default::default()
-        }
+        })
+    }
+}
+
+impl Dialect for BigQueryDialect {
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#identifiers

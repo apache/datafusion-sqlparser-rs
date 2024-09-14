@@ -112,7 +112,7 @@ fn parse_insert_values() {
 
 #[test]
 fn parse_replace_into() {
-    let dialect = PostgreSqlDialect {};
+    let dialect = PostgreSqlDialect::default();
     let sql = "REPLACE INTO public.customer (id, name, active) VALUES (1, 2, 3)";
 
     assert_eq!(
@@ -247,7 +247,7 @@ fn parse_returning_as_column_alias() {
 
 #[test]
 fn parse_insert_sqlite() {
-    let dialect = SQLiteDialect {};
+    let dialect = SQLiteDialect::default();
 
     let check = |sql: &str, expected_action: Option<SqliteOnConflict>| match Parser::parse_sql(
         &dialect, sql,
@@ -337,14 +337,14 @@ fn parse_update_set_from() {
     let sql = "UPDATE t1 SET name = t2.name FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 WHERE t1.id = t2.id";
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(DuckDbDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(SQLiteDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(DuckDbDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(BigQueryDialect::default()),
+            Box::new(SnowflakeDialect::default()),
+            Box::new(RedshiftSqlDialect::default()),
+            Box::new(MsSqlDialect::default()),
+            Box::new(SQLiteDialect::default()),
         ],
         options: None,
     };
@@ -1046,7 +1046,7 @@ fn test_eof_after_as() {
 #[test]
 fn test_no_infix_error() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(ClickHouseDialect {})],
+        dialects: vec![Box::new(ClickHouseDialect::default())],
         options: None,
     };
 
@@ -1178,18 +1178,18 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
     // all except Hive, as it allows numbers to start an identifier
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(AnsiDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(ClickHouseDialect {}),
-            Box::new(DuckDbDialect {}),
-            Box::new(GenericDialect {}),
-            // Box::new(HiveDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(MySqlDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(SQLiteDialect {}),
+            Box::new(AnsiDialect::default()),
+            Box::new(BigQueryDialect::default()),
+            Box::new(ClickHouseDialect::default()),
+            Box::new(DuckDbDialect::default()),
+            Box::new(GenericDialect::default()),
+            // Box::new(HiveDialect::default()),
+            Box::new(MsSqlDialect::default()),
+            Box::new(MySqlDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(RedshiftSqlDialect::default()),
+            Box::new(SnowflakeDialect::default()),
+            Box::new(SQLiteDialect::default()),
         ],
         options: None,
     };
@@ -1266,7 +1266,7 @@ fn parse_escaped_single_quote_string_predicate_with_no_escape() {
                WHERE salary <> 'Jim''s salary'";
 
     let ast = TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
+        dialects: vec![Box::new(MySqlDialect::default())],
         options: Some(
             ParserOptions::new()
                 .with_trailing_commas(true)
@@ -1395,7 +1395,7 @@ fn parse_mod() {
 
 fn pg_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(PostgreSqlDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     }
 }
@@ -2677,12 +2677,12 @@ fn parse_listagg() {
 fn parse_array_agg_func() {
     let supported_dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(DuckDbDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(HiveDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(DuckDbDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(MsSqlDialect::default()),
+            Box::new(AnsiDialect::default()),
+            Box::new(HiveDialect::default()),
         ],
         options: None,
     };
@@ -2702,11 +2702,11 @@ fn parse_array_agg_func() {
 fn parse_agg_with_order_by() {
     let supported_dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(HiveDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(MsSqlDialect::default()),
+            Box::new(AnsiDialect::default()),
+            Box::new(HiveDialect::default()),
         ],
         options: None,
     };
@@ -2725,12 +2725,12 @@ fn parse_agg_with_order_by() {
 fn parse_window_rank_function() {
     let supported_dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(HiveDialect {}),
-            Box::new(SnowflakeDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(MsSqlDialect::default()),
+            Box::new(AnsiDialect::default()),
+            Box::new(HiveDialect::default()),
+            Box::new(SnowflakeDialect::default()),
         ],
         options: None,
     };
@@ -2746,7 +2746,7 @@ fn parse_window_rank_function() {
     }
 
     let supported_dialects_nulls = TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {}), Box::new(SnowflakeDialect {})],
+        dialects: vec![Box::new(MsSqlDialect::default()), Box::new(SnowflakeDialect::default())],
         options: None,
     };
 
@@ -3282,13 +3282,13 @@ fn parse_create_table_hive_array() {
     // Parsing [] type arrays does not work in MsSql since [ is used in is_delimited_identifier_start
     for (dialects, angle_bracket_syntax) in [
         (
-            vec![Box::new(PostgreSqlDialect {}) as Box<dyn Dialect>],
+            vec![Box::new(PostgreSqlDialect::default()) as Box<dyn Dialect>],
             false,
         ),
         (
             vec![
-                Box::new(HiveDialect {}) as Box<dyn Dialect>,
-                Box::new(BigQueryDialect {}) as Box<dyn Dialect>,
+                Box::new(HiveDialect::default()) as Box<dyn Dialect>,
+                Box::new(BigQueryDialect::default()) as Box<dyn Dialect>,
             ],
             true,
         ),
@@ -3348,9 +3348,9 @@ fn parse_create_table_hive_array() {
     // SnowflakeDialect using array different
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(PostgreSqlDialect {}),
-            Box::new(HiveDialect {}),
-            Box::new(MySqlDialect {}),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(HiveDialect::default()),
+            Box::new(MySqlDialect::default()),
         ],
         options: None,
     };
@@ -3559,7 +3559,7 @@ fn parse_create_table_as_table() {
 #[test]
 fn parse_create_table_on_cluster() {
     let generic = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
+        dialects: vec![Box::new(GenericDialect::default())],
         options: None,
     };
 
@@ -3628,7 +3628,7 @@ fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), Par
 #[test]
 fn parse_create_table_with_options() {
     let generic = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
+        dialects: vec![Box::new(GenericDialect::default())],
         options: None,
     };
 
@@ -3668,7 +3668,7 @@ fn parse_create_table_clone() {
 #[test]
 fn parse_create_table_trailing_comma() {
     let dialect = TestedDialects {
-        dialects: vec![Box::new(DuckDbDialect {})],
+        dialects: vec![Box::new(DuckDbDialect::default())],
         options: None,
     };
 
@@ -4014,10 +4014,10 @@ fn parse_alter_table_add_column() {
 fn parse_alter_table_add_column_if_not_exists() {
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(PostgreSqlDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(GenericDialect {}),
-            Box::new(DuckDbDialect {}),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(BigQueryDialect::default()),
+            Box::new(GenericDialect::default()),
+            Box::new(DuckDbDialect::default()),
         ],
         options: None,
     };
@@ -4164,7 +4164,7 @@ fn parse_alter_table_alter_column_type() {
     }
 
     let dialect = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
+        dialects: vec![Box::new(GenericDialect::default())],
         options: None,
     };
 
@@ -4523,10 +4523,10 @@ fn parse_window_functions() {
 fn parse_named_window_functions() {
     let supported_dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MySqlDialect {}),
-            Box::new(BigQueryDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(MySqlDialect::default()),
+            Box::new(BigQueryDialect::default()),
         ],
         options: None,
     };
@@ -5595,7 +5595,7 @@ fn parse_unnest_in_from_clause() {
         assert_eq!(select.from, want);
     }
     let dialects = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(BigQueryDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     };
     // 1. both Alias and WITH OFFSET clauses.
@@ -6582,17 +6582,17 @@ fn parse_trim() {
     //keep Snowflake/BigQuery TRIM syntax failing
     let all_expected_snowflake = TestedDialects {
         dialects: vec![
-            //Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            //Box::new(SnowflakeDialect {}),
-            Box::new(HiveDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(MySqlDialect {}),
-            //Box::new(BigQueryDialect {}),
-            Box::new(SQLiteDialect {}),
-            Box::new(DuckDbDialect {}),
+            //Box::new(GenericDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(MsSqlDialect::default()),
+            Box::new(AnsiDialect::default()),
+            //Box::new(SnowflakeDialect::default()),
+            Box::new(HiveDialect::default()),
+            Box::new(RedshiftSqlDialect::default()),
+            Box::new(MySqlDialect::default()),
+            //Box::new(BigQueryDialect::default()),
+            Box::new(SQLiteDialect::default()),
+            Box::new(DuckDbDialect::default()),
         ],
         options: None,
     };
@@ -7682,7 +7682,7 @@ fn parse_rollback() {
 }
 
 #[test]
-#[should_panic(expected = "Parse results with GenericDialect are different from PostgreSqlDialect")]
+#[should_panic(expected = r"Parse results with GenericDialect(DialectFlags")]
 fn ensure_multiple_dialects_are_tested() {
     // The SQL here must be parsed differently by different dialects.
     // At the time of writing, `@foo` is accepted as a valid identifier
@@ -8432,15 +8432,15 @@ fn test_lock_nonblock() {
 fn test_placeholder() {
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(DuckDbDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(SnowflakeDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(DuckDbDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(MsSqlDialect::default()),
+            Box::new(AnsiDialect::default()),
+            Box::new(BigQueryDialect::default()),
+            Box::new(SnowflakeDialect::default()),
             // Note: `$` is the starting word for the HiveDialect identifier
-            // Box::new(sqlparser::dialect::HiveDialect {}),
+            // Box::new(sqlparser::dialect::HiveDialect::default()),
         ],
         options: None,
     };
@@ -8471,16 +8471,16 @@ fn test_placeholder() {
 
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(DuckDbDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(DuckDbDialect::default()),
             // Note: `?` is for jsonb operators in PostgreSqlDialect
-            // Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(SnowflakeDialect {}),
+            // Box::new(PostgreSqlDialect::default()),
+            Box::new(MsSqlDialect::default()),
+            Box::new(AnsiDialect::default()),
+            Box::new(BigQueryDialect::default()),
+            Box::new(SnowflakeDialect::default()),
             // Note: `$` is the starting word for the HiveDialect identifier
-            // Box::new(sqlparser::dialect::HiveDialect {}),
+            // Box::new(sqlparser::dialect::HiveDialect::default()),
         ],
         options: None,
     };
@@ -9017,7 +9017,7 @@ fn parse_deeply_nested_unary_op_hits_recursion_limits() {
 
 #[test]
 fn parse_deeply_nested_expr_hits_recursion_limits() {
-    let dialect = GenericDialect {};
+    let dialect = GenericDialect::default();
 
     let where_clause = make_where_clause(100);
     let sql = format!("SELECT id, user_id FROM test WHERE {where_clause}");
@@ -9032,7 +9032,7 @@ fn parse_deeply_nested_expr_hits_recursion_limits() {
 
 #[test]
 fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
-    let dialect = GenericDialect {};
+    let dialect = GenericDialect::default();
 
     let where_clause = make_where_clause(100);
     let sql = format!("SELECT id, user_id where id IN (select id from t WHERE {where_clause})");
@@ -9047,7 +9047,7 @@ fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
 
 #[test]
 fn parse_with_recursion_limit() {
-    let dialect = GenericDialect {};
+    let dialect = GenericDialect::default();
 
     let where_clause = make_where_clause(20);
     let sql = format!("SELECT id, user_id FROM test WHERE {where_clause}");
@@ -9084,9 +9084,9 @@ fn parse_escaped_string_with_unescape() {
     fn assert_mysql_query_value(sql: &str, quoted: &str) {
         let stmt = TestedDialects {
             dialects: vec![
-                Box::new(MySqlDialect {}),
-                Box::new(BigQueryDialect {}),
-                Box::new(SnowflakeDialect {}),
+                Box::new(MySqlDialect::default()),
+                Box::new(BigQueryDialect::default()),
+                Box::new(SnowflakeDialect::default()),
             ],
             options: None,
         }
@@ -9124,9 +9124,9 @@ fn parse_escaped_string_without_unescape() {
     fn assert_mysql_query_value(sql: &str, quoted: &str) {
         let stmt = TestedDialects {
             dialects: vec![
-                Box::new(MySqlDialect {}),
-                Box::new(BigQueryDialect {}),
-                Box::new(SnowflakeDialect {}),
+                Box::new(MySqlDialect::default()),
+                Box::new(BigQueryDialect::default()),
+                Box::new(SnowflakeDialect::default()),
             ],
             options: Some(ParserOptions::new().with_unescape(false)),
         }
@@ -9399,12 +9399,12 @@ fn make_where_clause(num: usize) -> String {
 fn parse_non_latin_identifiers() {
     let supported_dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(DuckDbDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(MySqlDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(DuckDbDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(MsSqlDialect::default()),
+            Box::new(RedshiftSqlDialect::default()),
+            Box::new(MySqlDialect::default()),
         ],
         options: None,
     };
@@ -9422,7 +9422,7 @@ fn parse_trailing_comma() {
     // At the moment, DuckDB is the only dialect that allows
     // trailing commas anywhere in the query
     let trailing_commas = TestedDialects {
-        dialects: vec![Box::new(DuckDbDialect {})],
+        dialects: vec![Box::new(DuckDbDialect::default())],
         options: None,
     };
 
@@ -9464,7 +9464,7 @@ fn parse_trailing_comma() {
 
     // doesn't allow any trailing commas
     let trailing_commas = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
+        dialects: vec![Box::new(GenericDialect::default())],
         options: None,
     };
 
@@ -9496,7 +9496,7 @@ fn parse_trailing_comma() {
 fn parse_projection_trailing_comma() {
     // Some dialects allow trailing commas only in the projection
     let trailing_commas = TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {}), Box::new(BigQueryDialect {})],
+        dialects: vec![Box::new(SnowflakeDialect::default()), Box::new(BigQueryDialect::default())],
         options: None,
     };
 
@@ -9732,7 +9732,7 @@ fn test_release_savepoint() {
 #[test]
 fn test_comment_hash_syntax() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect {}), Box::new(SnowflakeDialect {})],
+        dialects: vec![Box::new(BigQueryDialect::default()), Box::new(SnowflakeDialect::default())],
         options: None,
     };
     let sql = r#"
@@ -9749,7 +9749,7 @@ fn test_comment_hash_syntax() {
 
 #[test]
 fn test_buffer_reuse() {
-    let d = GenericDialect {};
+    let d = GenericDialect::default();
     let q = "INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)";
     let mut buf = Vec::new();
     Tokenizer::new(&d, q)
@@ -9764,7 +9764,7 @@ fn test_buffer_reuse() {
 fn parse_map_access_expr() {
     let sql = "users[-1][safe_offset(2)]";
     let dialects = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect {}), Box::new(ClickHouseDialect {})],
+        dialects: vec![Box::new(BigQueryDialect::default()), Box::new(ClickHouseDialect::default())],
         options: None,
     };
     let expr = dialects.verified_expr(sql);
@@ -10343,11 +10343,11 @@ fn test_select_wildcard_with_replace() {
     let sql = r#"SELECT * REPLACE (lower(city) AS city) FROM addresses"#;
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(ClickHouseDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(DuckDbDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(BigQueryDialect::default()),
+            Box::new(ClickHouseDialect::default()),
+            Box::new(SnowflakeDialect::default()),
+            Box::new(DuckDbDialect::default()),
         ],
         options: None,
     };
@@ -10409,9 +10409,9 @@ fn test_select_wildcard_with_replace() {
 fn parse_sized_list() {
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(DuckDbDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(PostgreSqlDialect::default()),
+            Box::new(DuckDbDialect::default()),
         ],
         options: None,
     };
@@ -10427,9 +10427,9 @@ fn parse_sized_list() {
 fn insert_into_with_parentheses() {
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(SnowflakeDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(GenericDialect {}),
+            Box::new(SnowflakeDialect::default()),
+            Box::new(RedshiftSqlDialect::default()),
+            Box::new(GenericDialect::default()),
         ],
         options: None,
     };
@@ -10602,9 +10602,9 @@ fn parse_within_group() {
 fn tests_select_values_without_parens() {
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(DatabricksDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(SnowflakeDialect::default()),
+            Box::new(DatabricksDialect::default()),
         ],
         options: None,
     };
@@ -10617,9 +10617,9 @@ fn tests_select_values_without_parens() {
 fn tests_select_values_without_parens_and_set_op() {
     let dialects = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(DatabricksDialect {}),
+            Box::new(GenericDialect::default()),
+            Box::new(SnowflakeDialect::default()),
+            Box::new(DatabricksDialect::default()),
         ],
         options: None,
     };
@@ -10683,7 +10683,7 @@ fn parse_select_wildcard_with_except() {
 
 #[test]
 fn parse_auto_increment_too_large() {
-    let dialect = GenericDialect {};
+    let dialect = GenericDialect::default();
     let u64_max = u64::MAX;
     let sql =
         format!("CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) AUTO_INCREMENT=1{u64_max}");

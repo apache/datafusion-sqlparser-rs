@@ -13,15 +13,21 @@
 use crate::dialect::{Dialect, DialectFlags};
 
 /// A [`Dialect`] for [ANSI SQL](https://en.wikipedia.org/wiki/SQL:2011).
-#[derive(Debug, Default)]
-pub struct AnsiDialect;
+#[derive(Debug)]
+pub struct AnsiDialect(DialectFlags);
 
-impl Dialect for AnsiDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
+impl Default for AnsiDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
             require_interval_qualifier: true,
             ..Default::default()
-        }
+        })
+    }
+}
+
+impl Dialect for AnsiDialect {
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {

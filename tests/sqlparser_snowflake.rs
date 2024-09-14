@@ -486,7 +486,7 @@ fn test_snowflake_create_table_incomplete_statement() {
 #[test]
 fn test_snowflake_single_line_tokenize() {
     let sql = "CREATE TABLE# this is a comment \ntable_1";
-    let dialect = SnowflakeDialect {};
+    let dialect = SnowflakeDialect::default();
     let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
 
     let expected = vec![
@@ -535,7 +535,7 @@ fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
 fn parse_sf_create_or_replace_with_comment_for_snowflake() {
     let sql = "CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1";
     let dialect = test_utils::TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {}) as Box<dyn Dialect>],
+        dialects: vec![Box::new(SnowflakeDialect::default()) as Box<dyn Dialect>],
         options: None,
     };
 
@@ -931,21 +931,21 @@ fn test_array_agg_func() {
 
 fn snowflake() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {})],
+        dialects: vec![Box::new(SnowflakeDialect::default())],
         options: None,
     }
 }
 
 fn snowflake_without_unescape() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {})],
+        dialects: vec![Box::new(SnowflakeDialect::default())],
         options: Some(ParserOptions::new().with_unescape(false)),
     }
 }
 
 fn snowflake_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(SnowflakeDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     }
 }

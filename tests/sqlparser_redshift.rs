@@ -167,14 +167,14 @@ fn parse_delimited_identifiers() {
 
 fn redshift() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(RedshiftSqlDialect {})],
+        dialects: vec![Box::new(RedshiftSqlDialect::default())],
         options: None,
     }
 }
 
 fn redshift_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(RedshiftSqlDialect {}), Box::new(GenericDialect {})],
+        dialects: vec![Box::new(RedshiftSqlDialect::default()), Box::new(GenericDialect::default())],
         options: None,
     }
 }

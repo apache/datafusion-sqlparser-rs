@@ -18,8 +18,22 @@ use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
-#[derive(Debug, Default)]
-pub struct PostgreSqlDialect;
+#[derive(Debug)]
+pub struct PostgreSqlDialect(DialectFlags);
+
+impl Default for PostgreSqlDialect {
+    fn default() -> Self {
+        Self(DialectFlags {
+            supports_unicode_string_literal: true,
+            supports_filter_during_aggregation: true,
+            supports_group_by_expr: true,
+            allow_extract_custom: true,
+            allow_extract_single_quotes: true,
+            supports_create_index_with_clause: true,
+            ..Default::default()
+        })
+    }
+}
 
 const DOUBLE_COLON_PREC: u8 = 140;
 const BRACKET_PREC: u8 = 130;
@@ -39,16 +53,8 @@ const AND_PREC: u8 = 20;
 const OR_PREC: u8 = 10;
 
 impl Dialect for PostgreSqlDialect {
-    fn flags(&self) -> DialectFlags {
-        DialectFlags {
-            supports_unicode_string_literal: true,
-            supports_filter_during_aggregation: true,
-            supports_group_by_expr: true,
-            allow_extract_custom: true,
-            allow_extract_single_quotes: true,
-            supports_create_index_with_clause: true,
-            ..Default::default()
-        }
+    fn flags(&self) -> &DialectFlags {
+        &self.0
     }
 
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {

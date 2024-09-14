@@ -10792,3 +10792,24 @@ fn test_extract_seconds_single_quote_err() {
         "sql parser error: Expected: date/time field, found: 'seconds'"
     );
 }
+
+#[test]
+fn test_truncate_table_with_on_cluster() {
+    let sql = "TRUNCATE TABLE t ON CLUSTER cluster_name";
+    match all_dialects().verified_stmt(sql) {
+        Statement::Truncate { on_cluster, .. } => {
+            assert_eq!(on_cluster, Some(Ident::new("cluster_name")));
+        }
+        _ => panic!("Expected: TRUNCATE TABLE statement"),
+    }
+
+    // Omit ON CLUSTER is allowed
+    all_dialects().verified_stmt("TRUNCATE TABLE t");
+
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
+        all_dialects()
+            .parse_sql_statements("TRUNCATE TABLE t ON CLUSTER")
+            .unwrap_err()
+    );
+}

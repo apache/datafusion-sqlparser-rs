@@ -2172,6 +2172,11 @@ pub enum Statement {
         /// Postgres-specific option
         /// [ CASCADE | RESTRICT ]
         cascade: Option<TruncateCascadeOption>,
+        /// ClickHouse-specific option
+        /// [ ON CLUSTER cluster_name ]
+        ///
+        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/truncate/)
+        on_cluster: Option<Ident>,
     },
     /// ```sql
     /// MSCK
@@ -3293,6 +3298,7 @@ impl fmt::Display for Statement {
                 only,
                 identity,
                 cascade,
+                on_cluster,
             } => {
                 let table = if *table { "TABLE " } else { "" };
                 let only = if *only { "ONLY " } else { "" };
@@ -3320,6 +3326,9 @@ impl fmt::Display for Statement {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
                     }
+                }
+                if let Some(on_cluster) = on_cluster {
+                    write!(f, " ON CLUSTER {on_cluster}")?;
                 }
                 Ok(())
             }

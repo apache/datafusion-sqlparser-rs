@@ -708,6 +708,8 @@ impl<'a> Parser<'a> {
             };
         };
 
+        let on_cluster = self.parse_optional_on_cluster()?;
+
         Ok(Statement::Truncate {
             table_names,
             partitions,
@@ -715,6 +717,7 @@ impl<'a> Parser<'a> {
             only,
             identity,
             cascade,
+            on_cluster,
         })
     }
 

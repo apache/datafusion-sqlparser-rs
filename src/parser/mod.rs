@@ -301,7 +301,7 @@ impl<'a> Parser<'a> {
             state: ParserState::Normal,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
-            options: ParserOptions::new().with_trailing_commas(dialect.supports_trailing_commas()),
+            options: ParserOptions::new().with_trailing_commas(dialect.settings().supports_trailing_commas),
         }
     }
 
@@ -1080,7 +1080,7 @@ impl<'a> Parser<'a> {
                     let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
                     Ok(Expr::Prior(Box::new(expr)))
                 }
-                Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
+                Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.settings().support_map_literal_syntax => {
                     self.parse_duckdb_map_literal()
                 }
                 // Here `w` is a word, check if it's a part of a multipart
@@ -1145,7 +1145,7 @@ impl<'a> Parser<'a> {
                             value: self.parse_introduced_string_value()?,
                         })
                     }
-                    Token::Arrow if self.dialect.supports_lambda_functions() => {
+                    Token::Arrow if self.dialect.settings().supports_lambda_functions => {
                         self.expect_token(&Token::Arrow)?;
                         return Ok(Expr::Lambda(LambdaFunction {
                             params: OneOrManyWithParens::One(w.to_ident()),
@@ -1257,7 +1257,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-            Token::LBrace if self.dialect.supports_dictionary_syntax() => {
+            Token::LBrace if self.dialect.settings().supports_dictionary_syntax => {
                 self.prev_token();
                 self.parse_duckdb_struct_literal()
             }
@@ -1287,7 +1287,7 @@ impl<'a> Parser<'a> {
     }
 
     fn try_parse_lambda(&mut self) -> Option<Expr> {
-        if !self.dialect.supports_lambda_functions() {
+        if !self.dialect.settings().supports_lambda_functions {
             return None;
         }
         self.maybe_parse(|p| {
@@ -1347,7 +1347,7 @@ impl<'a> Parser<'a> {
             vec![]
         };
 
-        let filter = if self.dialect.supports_filter_during_aggregation()
+        let filter = if self.dialect.settings().supports_filter_during_aggregation
             && self.parse_keyword(Keyword::FILTER)
             && self.consume_token(&Token::LParen)
             && self.parse_keyword(Keyword::WHERE)
@@ -1481,7 +1481,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a group by expr. Group by expr can be one of group sets, roll up, cube, or simple expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
-        if self.dialect.supports_group_by_expr() {
+        if self.dialect.settings().supports_group_by_expr {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
                 let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
@@ -1621,7 +1621,7 @@ impl<'a> Parser<'a> {
     ///  - `CONVERT('héhé', CHAR CHARACTER SET utf8mb4)` (MySQL)
     ///  - `CONVERT(DECIMAL(10, 5), 42)` (MSSQL) - the type comes first
     pub fn parse_convert_expr(&mut self) -> Result<Expr, ParserError> {
-        if self.dialect.convert_type_before_value() {
+        if self.dialect.settings().convert_type_before_value {
             return self.parse_mssql_convert();
         }
         self.expect_token(&Token::LParen)?;
@@ -1968,14 +1968,14 @@ impl<'a> Parser<'a> {
                 Keyword::TIMEZONE_HOUR => Ok(DateTimeField::TimezoneHour),
                 Keyword::TIMEZONE_MINUTE => Ok(DateTimeField::TimezoneMinute),
                 Keyword::TIMEZONE_REGION => Ok(DateTimeField::TimezoneRegion),
-                _ if self.dialect.allow_extract_custom() => {
+                _ if self.dialect.settings().allow_extract_custom => {
                     self.prev_token();
                     let custom = self.parse_identifier(false)?;
                     Ok(DateTimeField::Custom(custom))
                 }
                 _ => self.expected("date/time field", next_token),
             },
-            Token::SingleQuotedString(_) if self.dialect.allow_extract_single_quotes() => {
+            Token::SingleQuotedString(_) if self.dialect.settings().allow_extract_single_quotes => {
                 self.prev_token();
                 let custom = self.parse_identifier(false)?;
                 Ok(DateTimeField::Custom(custom))
@@ -2079,7 +2079,7 @@ impl<'a> Parser<'a> {
         // to match the different flavours of INTERVAL syntax, we only allow expressions
         // if the dialect requires an interval qualifier,
         // see https://github.com/sqlparser-rs/sqlparser-rs/pull/1398 for more details
-        let value = if self.dialect.require_interval_qualifier() {
+        let value = if self.dialect.settings().require_interval_qualifier {
             // parse a whole expression so `INTERVAL 1 + 1 DAY` is valid
             self.parse_expr()?
         } else {
@@ -2095,7 +2095,7 @@ impl<'a> Parser<'a> {
         // this more general implementation.
         let leading_field = if self.next_token_is_temporal_unit() {
             Some(self.parse_date_time_field()?)
-        } else if self.dialect.require_interval_qualifier() {
+        } else if self.dialect.settings().require_interval_qualifier {
             return parser_err!(
                 "INTERVAL requires a unit after the literal value",
                 self.peek_token().location
@@ -3002,7 +3002,7 @@ impl<'a> Parser<'a> {
         } else {
             Expr::InList {
                 expr: Box::new(expr),
-                list: if self.dialect.supports_in_empty_list() {
+                list: if self.dialect.settings().supports_in_empty_list {
                     self.parse_comma_separated0(Parser::parse_expr, Token::RParen)?
                 } else {
                     self.parse_comma_separated(Parser::parse_expr)?
@@ -5341,7 +5341,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let with = if self.dialect.supports_create_index_with_clause()
+        let with = if self.dialect.settings().supports_create_index_with_clause
             && self.parse_keyword(Keyword::WITH)
         {
             self.expect_token(&Token::LParen)?;
@@ -8466,7 +8466,7 @@ impl<'a> Parser<'a> {
                         _ => None,
                     };
 
-                let has_table_keyword = if self.dialect.describe_requires_table_keyword() {
+                let has_table_keyword = if self.dialect.settings().describe_requires_table_keyword {
                     // only allow to use TABLE keyword for DESC|DESCRIBE statement
                     self.parse_keyword(Keyword::TABLE)
                 } else {
@@ -9058,7 +9058,7 @@ impl<'a> Parser<'a> {
             Default::default()
         };
 
-        let connect_by = if self.dialect.supports_connect_by()
+        let connect_by = if self.dialect.settings().supports_connect_by
             && self
                 .parse_one_of_keywords(&[Keyword::START, Keyword::CONNECT])
                 .is_some()
@@ -9198,7 +9198,7 @@ impl<'a> Parser<'a> {
 
         let variables = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
             OneOrManyWithParens::One(ObjectName(vec!["TIMEZONE".into()]))
-        } else if self.dialect.supports_parenthesized_set_variables()
+        } else if self.dialect.settings().supports_parenthesized_set_variables
             && self.consume_token(&Token::LParen)
         {
             let variables = OneOrManyWithParens::Many(
@@ -9887,7 +9887,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            if self.dialect.supports_match_recognize()
+            if self.dialect.settings().supports_match_recognize
                 && self.parse_keyword(Keyword::MATCH_RECOGNIZE)
             {
                 table = self.parse_match_recognize(table)?;
@@ -10750,7 +10750,7 @@ impl<'a> Parser<'a> {
                 arg,
                 operator: FunctionArgOperator::RightArrow,
             })
-        } else if self.dialect.supports_named_fn_args_with_eq_operator()
+        } else if self.dialect.settings().supports_named_fn_args_with_eq_operator
             && self.peek_nth_token(1) == Token::Eq
         {
             let name = self.parse_identifier(false)?;
@@ -10834,7 +10834,7 @@ impl<'a> Parser<'a> {
 
         let mut clauses = vec![];
 
-        if self.dialect.supports_window_function_null_treatment_arg() {
+        if self.dialect.settings().supports_window_function_null_treatment_arg {
             if let Some(null_treatment) = self.parse_null_treatment()? {
                 clauses.push(FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment));
             }
@@ -10938,7 +10938,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_except = if self.dialect.supports_select_wildcard_except() {
+        let opt_except = if self.dialect.settings().supports_select_wildcard_except {
             self.parse_optional_select_item_except()?
         } else {
             None
@@ -11327,7 +11327,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
-        let modifier = if !self.dialect.supports_start_transaction_modifier() {
+        let modifier = if !self.dialect.settings().supports_start_transaction_modifier {
             None
         } else if self.parse_keyword(Keyword::DEFERRED) {
             Some(TransactionModifier::Deferred)
@@ -11810,7 +11810,7 @@ impl<'a> Parser<'a> {
 
         let window_expr = if self.consume_token(&Token::LParen) {
             NamedWindowExpr::WindowSpec(self.parse_window_spec()?)
-        } else if self.dialect.supports_window_clause_named_window_reference() {
+        } else if self.dialect.settings().supports_window_clause_named_window_reference {
             NamedWindowExpr::NamedWindow(self.parse_identifier(false)?)
         } else {
             return self.expected("(", self.peek_token());

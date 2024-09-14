@@ -10,13 +10,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, DialectSettings};
 
 /// A [`Dialect`] for [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/)
-#[derive(Debug)]
-pub struct MsSqlDialect {}
+#[derive(Debug, Default)]
+pub struct MsSqlDialect;
 
 impl Dialect for MsSqlDialect {
+    fn settings(&self) -> DialectSettings {
+        DialectSettings {
+            // SQL Server has `CONVERT(type, value)` instead of `CONVERT(value, type)`
+            // https://learn.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql?view=sql-server-ver16
+            convert_type_before_value: true,
+            supports_connect_by: true,
+            ..Default::default()
+        }
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '['
     }
@@ -33,15 +43,5 @@ impl Dialect for MsSqlDialect {
             || ch == '$'
             || ch == '#'
             || ch == '_'
-    }
-
-    /// SQL Server has `CONVERT(type, value)` instead of `CONVERT(value, type)`
-    /// <https://learn.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql?view=sql-server-ver16>
-    fn convert_type_before_value(&self) -> bool {
-        true
-    }
-
-    fn supports_connect_by(&self) -> bool {
-        true
     }
 }

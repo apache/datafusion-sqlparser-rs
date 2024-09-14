@@ -10,15 +10,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, DialectSettings};
 use core::iter::Peekable;
 use core::str::Chars;
 
 use super::PostgreSqlDialect;
 
 /// A [`Dialect`] for [RedShift](https://aws.amazon.com/redshift/)
-#[derive(Debug)]
-pub struct RedshiftSqlDialect {}
+#[derive(Debug, Default)]
+pub struct RedshiftSqlDialect;
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
 //
@@ -27,6 +27,16 @@ pub struct RedshiftSqlDialect {}
 // in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
+    fn settings(&self) -> DialectSettings {
+        DialectSettings {
+            // redshift has `CONVERT(type, value)` instead of `CONVERT(value, type)`
+            // <https://docs.aws.amazon.com/redshift/latest/dg/r_CONVERT_function.html>
+            convert_type_before_value: true,
+            supports_connect_by: true,
+            ..Default::default()
+        }
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '['
     }
@@ -52,15 +62,5 @@ impl Dialect for RedshiftSqlDialect {
     fn is_identifier_part(&self, ch: char) -> bool {
         // Extends Postgres dialect with sharp
         PostgreSqlDialect {}.is_identifier_part(ch) || ch == '#'
-    }
-
-    /// redshift has `CONVERT(type, value)` instead of `CONVERT(value, type)`
-    /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CONVERT_function.html>
-    fn convert_type_before_value(&self) -> bool {
-        true
-    }
-
-    fn supports_connect_by(&self) -> bool {
-        true
     }
 }

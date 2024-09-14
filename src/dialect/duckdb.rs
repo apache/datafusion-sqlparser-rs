@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, DialectSettings};
 
 /// A [`Dialect`] for [DuckDB](https://duckdb.org/)
 #[derive(Debug, Default)]
@@ -18,8 +18,23 @@ pub struct DuckDbDialect;
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
 impl Dialect for DuckDbDialect {
-    fn supports_trailing_commas(&self) -> bool {
-        true
+
+    fn settings(&self) -> DialectSettings {
+        DialectSettings {
+            supports_trailing_commas: true,
+            supports_filter_during_aggregation: true,
+            supports_group_by_expr: true,
+            supports_named_fn_args_with_eq_operator: true,
+            // DuckDB uses this syntax for `STRUCT`s.
+            //
+            // https://duckdb.org/docs/sql/data_types/struct.html#creating-structs
+            supports_dictionary_syntax: true,
+            // DuckDB uses this syntax for `MAP`s.
+            //
+            // https://duckdb.org/docs/sql/data_types/map.html#creating-maps
+            support_map_literal_syntax: true,
+            ..Default::default()
+        }
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
@@ -28,31 +43,5 @@ impl Dialect for DuckDbDialect {
 
     fn is_identifier_part(&self, ch: char) -> bool {
         ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'
-    }
-
-    fn supports_filter_during_aggregation(&self) -> bool {
-        true
-    }
-
-    fn supports_group_by_expr(&self) -> bool {
-        true
-    }
-
-    fn supports_named_fn_args_with_eq_operator(&self) -> bool {
-        true
-    }
-
-    // DuckDB uses this syntax for `STRUCT`s.
-    //
-    // https://duckdb.org/docs/sql/data_types/struct.html#creating-structs
-    fn supports_dictionary_syntax(&self) -> bool {
-        true
-    }
-
-    // DuckDB uses this syntax for `MAP`s.
-    //
-    // https://duckdb.org/docs/sql/data_types/map.html#creating-maps
-    fn support_map_literal_syntax(&self) -> bool {
-        true
     }
 }

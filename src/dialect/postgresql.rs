@@ -12,14 +12,14 @@
 use log::debug;
 
 use crate::ast::{CommentObject, Statement};
-use crate::dialect::{Dialect, Precedence};
+use crate::dialect::{Dialect, DialectSettings, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
-#[derive(Debug)]
-pub struct PostgreSqlDialect {}
+#[derive(Debug, Default)]
+pub struct PostgreSqlDialect;
 
 const DOUBLE_COLON_PREC: u8 = 140;
 const BRACKET_PREC: u8 = 130;
@@ -39,6 +39,18 @@ const AND_PREC: u8 = 20;
 const OR_PREC: u8 = 10;
 
 impl Dialect for PostgreSqlDialect {
+    fn settings(&self) -> DialectSettings {
+        DialectSettings {
+            supports_unicode_string_literal: true,
+            supports_filter_during_aggregation: true,
+            supports_group_by_expr: true,
+            allow_extract_custom: true,
+            allow_extract_single_quotes: true,
+            supports_create_index_with_clause: true,
+            ..Default::default()
+        }
+    }
+
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')
     }
@@ -56,10 +68,6 @@ impl Dialect for PostgreSqlDialect {
 
     fn is_identifier_part(&self, ch: char) -> bool {
         ch.is_alphabetic() || ch.is_ascii_digit() || ch == '$' || ch == '_'
-    }
-
-    fn supports_unicode_string_literal(&self) -> bool {
-        true
     }
 
     /// See <https://www.postgresql.org/docs/current/sql-createoperator.html>
@@ -126,14 +134,6 @@ impl Dialect for PostgreSqlDialect {
         }
     }
 
-    fn supports_filter_during_aggregation(&self) -> bool {
-        true
-    }
-
-    fn supports_group_by_expr(&self) -> bool {
-        true
-    }
-
     fn prec_value(&self, prec: Precedence) -> u8 {
         match prec {
             Precedence::DoubleColon => DOUBLE_COLON_PREC,
@@ -153,18 +153,6 @@ impl Dialect for PostgreSqlDialect {
             Precedence::And => AND_PREC,
             Precedence::Or => OR_PREC,
         }
-    }
-
-    fn allow_extract_custom(&self) -> bool {
-        true
-    }
-
-    fn allow_extract_single_quotes(&self) -> bool {
-        true
-    }
-
-    fn supports_create_index_with_clause(&self) -> bool {
-        true
     }
 }
 

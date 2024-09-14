@@ -19,12 +19,23 @@ use crate::{
     keywords::Keyword,
     parser::{Parser, ParserError},
 };
+use crate::dialect::DialectSettings;
 
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
-#[derive(Debug)]
-pub struct MySqlDialect {}
+#[derive(Debug, Default)]
+pub struct MySqlDialect;
 
 impl Dialect for MySqlDialect {
+    fn settings(&self) -> DialectSettings {
+        DialectSettings {
+            // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
+            supports_string_literal_backslash_escape: true,
+            supports_numeric_prefix: true,
+            require_interval_qualifier: true,
+            ..Default::default()
+        }
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://dev.mysql.com/doc/refman/8.0/en/identifiers.html.
         // Identifiers which begin with a digit are recognized while tokenizing numbers,
@@ -46,15 +57,6 @@ impl Dialect for MySqlDialect {
 
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('`')
-    }
-
-    // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
-    fn supports_string_literal_backslash_escape(&self) -> bool {
-        true
-    }
-
-    fn supports_numeric_prefix(&self) -> bool {
-        true
     }
 
     fn parse_infix(
@@ -83,10 +85,6 @@ impl Dialect for MySqlDialect {
         } else {
             None
         }
-    }
-
-    fn require_interval_qualifier(&self) -> bool {
-        true
     }
 }
 

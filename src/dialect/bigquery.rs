@@ -10,13 +10,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, DialectSettings};
 
 /// A [`Dialect`] for [Google Bigquery](https://cloud.google.com/bigquery/)
 #[derive(Debug, Default)]
 pub struct BigQueryDialect;
 
 impl Dialect for BigQueryDialect {
+    fn settings(&self) -> DialectSettings {
+        DialectSettings {
+            // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals
+            supports_triple_quoted_string: true,
+            // See https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value
+            supports_window_function_null_treatment_arg: true,
+            // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#escape_sequences
+            supports_string_literal_backslash_escape: true,
+            // See https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#ref_named_window
+            supports_window_clause_named_window_reference: true,
+            // See https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#set
+            supports_parenthesized_set_variables: true,
+            // See https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_except
+            supports_select_wildcard_except: true,
+            // See https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#interval_type
+            require_interval_qualifier: true,
+            ..Default::default()
+        }
+    }
+
     // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#identifiers
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '`'
@@ -32,39 +52,5 @@ impl Dialect for BigQueryDialect {
 
     fn is_identifier_part(&self, ch: char) -> bool {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_'
-    }
-
-    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals)
-    fn supports_triple_quoted_string(&self) -> bool {
-        true
-    }
-
-    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value)
-    fn supports_window_function_null_treatment_arg(&self) -> bool {
-        true
-    }
-
-    // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#escape_sequences
-    fn supports_string_literal_backslash_escape(&self) -> bool {
-        true
-    }
-
-    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#ref_named_window)
-    fn supports_window_clause_named_window_reference(&self) -> bool {
-        true
-    }
-
-    /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#set)
-    fn supports_parenthesized_set_variables(&self) -> bool {
-        true
-    }
-
-    // See https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_except
-    fn supports_select_wildcard_except(&self) -> bool {
-        true
-    }
-
-    fn require_interval_qualifier(&self) -> bool {
-        true
     }
 }

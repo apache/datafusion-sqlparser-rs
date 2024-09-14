@@ -63,6 +63,152 @@ macro_rules! dialect_of {
     };
 }
 
+/// Constant settings for a dialect.
+///
+/// For configuration to be defined here, rather than on the rate:
+/// * It must be a const setting, not value that's dependent on context - that has to be a function
+/// * have a default that matches `Default::default()`
+#[derive(Debug, Default, Clone)]
+pub struct DialectSettings {
+    /// Determine if the dialect supports escaping characters via '\' in string literals.
+    ///
+    /// Some dialects like BigQuery and Snowflake support this while others like
+    /// Postgres do not. Such that the following is accepted by the former but
+    /// rejected by the latter.
+    /// ```sql
+    /// SELECT 'ab\'cd';
+    /// ```
+    ///
+    /// Conversely, such dialects reject the following statement which
+    /// otherwise would be valid in the other dialects.
+    /// ```sql
+    /// SELECT '\';
+    /// ```
+    pub supports_string_literal_backslash_escape: bool,
+    /// Determine if the dialect supports string literals with `U&` prefix.
+    /// This is used to specify Unicode code points in string literals.
+    /// For example, in PostgreSQL, the following is a valid string literal:
+    /// ```sql
+    /// SELECT U&'\0061\0062\0063';
+    /// ```
+    /// This is equivalent to the string literal `'abc'`.
+    /// See
+    ///  - [Postgres docs](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE)
+    ///  - [H2 docs](http://www.h2database.com/html/grammar.html#string)
+    pub supports_unicode_string_literal: bool,
+    /// Does the dialect support `FILTER (WHERE expr)` for aggregate queries?
+    pub supports_filter_during_aggregation: bool,
+    /// true if the dialect supports referencing another named window
+    /// within a window clause declaration.
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT * FROM mytable
+    /// WINDOW mynamed_window AS another_named_window
+    /// ```
+    pub supports_window_clause_named_window_reference: bool,
+    /// true if the dialect supports `ARRAY_AGG() [WITHIN GROUP (ORDER BY)]` expressions.
+    /// Otherwise, the dialect should expect an `ORDER BY` without the `WITHIN GROUP` clause, e.g. [`ANSI`]
+    ///
+    /// [`ANSI`]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#array-aggregate-function
+    pub supports_within_after_array_aggregation: bool,
+    /// true if the dialects supports `group sets, roll up, or cube` expressions.
+    pub supports_group_by_expr: bool,
+    /// true if the dialect supports CONNECT BY.
+    pub supports_connect_by: bool,
+    /// true if the dialect supports the MATCH_RECOGNIZE operation.
+    pub supports_match_recognize: bool,
+    /// true if the dialect supports `(NOT) IN ()` expressions
+    pub supports_in_empty_list: bool,
+    /// true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE} [TRANSACTION]` statements
+    pub supports_start_transaction_modifier: bool,
+    /// true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
+    pub supports_named_fn_args_with_eq_operator: bool,
+    /// true if the dialect supports identifiers starting with a numeric
+    /// prefix such as tables named `59901_user_login`
+    pub supports_numeric_prefix: bool,
+    /// true if the dialects supports specifying null treatment
+    /// as part of a window function's parameter list as opposed
+    /// to after the parameter list.
+    ///
+    /// i.e The following syntax returns true
+    /// ```sql
+    /// FIRST_VALUE(a IGNORE NULLS) OVER ()
+    /// ```
+    /// while the following syntax returns false
+    /// ```sql
+    /// FIRST_VALUE(a) IGNORE NULLS OVER ()
+    /// ```
+    pub supports_window_function_null_treatment_arg: bool,
+    /// true if the dialect supports defining structs or objects using a
+    /// syntax like `{'x': 1, 'y': 2, 'z': 3}`.
+    pub supports_dictionary_syntax: bool,
+    /// true if the dialect supports defining object using the
+    /// syntax like `Map {1: 10, 2: 20}`.
+    pub support_map_literal_syntax: bool,
+    /// true if the dialect supports lambda functions, for example:
+    ///
+    /// ```sql
+    /// SELECT transform(array(1, 2, 3), x -> x + 1); -- returns [2,3,4]
+    /// ```
+    pub supports_lambda_functions: bool,
+    /// true if the dialect supports multiple variable assignment
+    /// using parentheses in a `SET` variable declaration.
+    ///
+    /// ```sql
+    /// SET (variable[, ...]) = (expression[, ...]);
+    /// ```
+    pub supports_parenthesized_set_variables: bool,
+    /// true if the dialect supports an `EXCEPT` clause following a
+    /// wildcard in a select list.
+    ///
+    /// For example
+    /// ```sql
+    /// SELECT * EXCEPT order_id FROM orders;
+    /// ```
+    pub supports_select_wildcard_except: bool,
+    /// true if the dialect has a CONVERT function which accepts a type first
+    /// and an expression second, e.g. `CONVERT(varchar, 1)`
+    pub convert_type_before_value: bool,
+    /// true if the dialect supports triple quoted string
+    /// e.g. `"""abc"""`
+    pub supports_triple_quoted_string: bool,
+    /// Does the dialect support trailing commas around the query?
+    pub supports_trailing_commas: bool,
+    /// true if this dialect requires the `TABLE` keyword after `DESCRIBE`
+    ///
+    /// Defaults to false.
+    ///
+    /// If true, the following statement is valid: `DESCRIBE TABLE my_table`
+    /// If false, the following statements are valid: `DESCRIBE my_table` and `DESCRIBE table`
+    pub describe_requires_table_keyword: bool,
+    /// true if this dialect allows the `EXTRACT` function to words other than [`Keyword`].
+    pub allow_extract_custom: bool,
+    /// Returns true if this dialect allows the `EXTRACT` function to use single quotes in the part being extracted.
+    pub allow_extract_single_quotes: bool,
+    /// Does the dialect support with clause in create index statement?
+    /// e.g. `CREATE INDEX idx ON t WITH (key = value, key2)`
+    pub supports_create_index_with_clause: bool,
+    /// Whether `INTERVAL` expressions require units (called "qualifiers" in the ANSI SQL spec) to be specified,
+    /// e.g. `INTERVAL 1 DAY` vs `INTERVAL 1`.
+    ///
+    /// Expressions within intervals (e.g. `INTERVAL '1' + '1' DAY`) are only allowed when units are required.
+    ///
+    /// See <https://github.com/sqlparser-rs/sqlparser-rs/pull/1398> for more information.
+    ///
+    /// When `true`:
+    /// * `INTERVAL '1' DAY` is VALID
+    /// * `INTERVAL 1 + 1 DAY` is VALID
+    /// * `INTERVAL '1' + '1' DAY` is VALID
+    /// * `INTERVAL '1'` is INVALID
+    ///
+    /// When `false`:
+    /// * `INTERVAL '1'` is VALID
+    /// * `INTERVAL '1' DAY` is VALID — unit is not required, but still allowed
+    /// * `INTERVAL 1 + 1 DAY` is INVALID
+    pub require_interval_qualifier: bool,
+}
+
 /// Encapsulates the differences between SQL implementations.
 ///
 /// # SQL Dialects
@@ -107,6 +253,10 @@ pub trait Dialect: Debug + Any {
         self.type_id()
     }
 
+    fn settings(&self) -> DialectSettings {
+        DialectSettings::default()
+    }
+
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
     /// and appropriate for most dialects (with the notable exception of
@@ -137,183 +287,15 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Determine if the dialect supports escaping characters via '\' in string literals.
-    ///
-    /// Some dialects like BigQuery and Snowflake support this while others like
-    /// Postgres do not. Such that the following is accepted by the former but
-    /// rejected by the latter.
-    /// ```sql
-    /// SELECT 'ab\'cd';
-    /// ```
-    ///
-    /// Conversely, such dialects reject the following statement which
-    /// otherwise would be valid in the other dialects.
-    /// ```sql
-    /// SELECT '\';
-    /// ```
-    fn supports_string_literal_backslash_escape(&self) -> bool {
-        false
-    }
-
-    /// Determine if the dialect supports string literals with `U&` prefix.
-    /// This is used to specify Unicode code points in string literals.
-    /// For example, in PostgreSQL, the following is a valid string literal:
-    /// ```sql
-    /// SELECT U&'\0061\0062\0063';
-    /// ```
-    /// This is equivalent to the string literal `'abc'`.
-    /// See
-    ///  - [Postgres docs](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE)
-    ///  - [H2 docs](http://www.h2database.com/html/grammar.html#string)
-    fn supports_unicode_string_literal(&self) -> bool {
-        false
-    }
-
-    /// Does the dialect support `FILTER (WHERE expr)` for aggregate queries?
-    fn supports_filter_during_aggregation(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports referencing another named window
-    /// within a window clause declaration.
-    ///
-    /// Example
-    /// ```sql
-    /// SELECT * FROM mytable
-    /// WINDOW mynamed_window AS another_named_window
-    /// ```
-    fn supports_window_clause_named_window_reference(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports `ARRAY_AGG() [WITHIN GROUP (ORDER BY)]` expressions.
-    /// Otherwise, the dialect should expect an `ORDER BY` without the `WITHIN GROUP` clause, e.g. [`ANSI`]
-    ///
-    /// [`ANSI`]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#array-aggregate-function
-    fn supports_within_after_array_aggregation(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
-    fn supports_group_by_expr(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports CONNECT BY.
-    fn supports_connect_by(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports the MATCH_RECOGNIZE operation.
-    fn supports_match_recognize(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports `(NOT) IN ()` expressions
-    fn supports_in_empty_list(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE} [TRANSACTION]` statements
-    fn supports_start_transaction_modifier(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
-    fn supports_named_fn_args_with_eq_operator(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports identifiers starting with a numeric
-    /// prefix such as tables named `59901_user_login`
-    fn supports_numeric_prefix(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialects supports specifying null treatment
-    /// as part of a window function's parameter list as opposed
-    /// to after the parameter list.
-    ///
-    /// i.e The following syntax returns true
-    /// ```sql
-    /// FIRST_VALUE(a IGNORE NULLS) OVER ()
-    /// ```
-    /// while the following syntax returns false
-    /// ```sql
-    /// FIRST_VALUE(a) IGNORE NULLS OVER ()
-    /// ```
-    fn supports_window_function_null_treatment_arg(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports defining structs or objects using a
-    /// syntax like `{'x': 1, 'y': 2, 'z': 3}`.
-    fn supports_dictionary_syntax(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports defining object using the
-    /// syntax like `Map {1: 10, 2: 20}`.
-    fn support_map_literal_syntax(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports lambda functions, for example:
-    ///
-    /// ```sql
-    /// SELECT transform(array(1, 2, 3), x -> x + 1); -- returns [2,3,4]
-    /// ```
-    fn supports_lambda_functions(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports multiple variable assignment
-    /// using parentheses in a `SET` variable declaration.
-    ///
-    /// ```sql
-    /// SET (variable[, ...]) = (expression[, ...]);
-    /// ```
-    fn supports_parenthesized_set_variables(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports an `EXCEPT` clause following a
-    /// wildcard in a select list.
-    ///
-    /// For example
-    /// ```sql
-    /// SELECT * EXCEPT order_id FROM orders;
-    /// ```
-    fn supports_select_wildcard_except(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect has a CONVERT function which accepts a type first
-    /// and an expression second, e.g. `CONVERT(varchar, 1)`
-    fn convert_type_before_value(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports triple quoted string
-    /// e.g. `"""abc"""`
-    fn supports_triple_quoted_string(&self) -> bool {
-        false
-    }
-
     /// Dialect-specific prefix parser override
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior
         None
     }
 
-    /// Does the dialect support trailing commas around the query?
-    fn supports_trailing_commas(&self) -> bool {
-        false
-    }
-
     /// Does the dialect support trailing commas in the projection list?
     fn supports_projection_trailing_commas(&self) -> bool {
-        self.supports_trailing_commas()
+        self.settings().supports_trailing_commas
     }
 
     /// Dialect-specific infix parser override
@@ -489,53 +471,6 @@ pub trait Dialect: Debug + Any {
     fn prec_unknown(&self) -> u8 {
         0
     }
-
-    /// Returns true if this dialect requires the `TABLE` keyword after `DESCRIBE`
-    ///
-    /// Defaults to false.
-    ///
-    /// If true, the following statement is valid: `DESCRIBE TABLE my_table`
-    /// If false, the following statements are valid: `DESCRIBE my_table` and `DESCRIBE table`
-    fn describe_requires_table_keyword(&self) -> bool {
-        false
-    }
-
-    /// Returns true if this dialect allows the `EXTRACT` function to words other than [`Keyword`].
-    fn allow_extract_custom(&self) -> bool {
-        false
-    }
-
-    /// Returns true if this dialect allows the `EXTRACT` function to use single quotes in the part being extracted.
-    fn allow_extract_single_quotes(&self) -> bool {
-        false
-    }
-
-    /// Does the dialect support with clause in create index statement?
-    /// e.g. `CREATE INDEX idx ON t WITH (key = value, key2)`
-    fn supports_create_index_with_clause(&self) -> bool {
-        false
-    }
-
-    /// Whether `INTERVAL` expressions require units (called "qualifiers" in the ANSI SQL spec) to be specified,
-    /// e.g. `INTERVAL 1 DAY` vs `INTERVAL 1`.
-    ///
-    /// Expressions within intervals (e.g. `INTERVAL '1' + '1' DAY`) are only allowed when units are required.
-    ///
-    /// See <https://github.com/sqlparser-rs/sqlparser-rs/pull/1398> for more information.
-    ///
-    /// When `true`:
-    /// * `INTERVAL '1' DAY` is VALID
-    /// * `INTERVAL 1 + 1 DAY` is VALID
-    /// * `INTERVAL '1' + '1' DAY` is VALID
-    /// * `INTERVAL '1'` is INVALID
-    ///
-    /// When `false`:
-    /// * `INTERVAL '1'` is VALID
-    /// * `INTERVAL '1' DAY` is VALID — unit is not required, but still allowed
-    /// * `INTERVAL 1 + 1 DAY` is INVALID
-    fn require_interval_qualifier(&self) -> bool {
-        false
-    }
 }
 
 /// This represents the operators for which precedence must be defined
@@ -675,7 +610,20 @@ mod tests {
         struct WrappedDialect(MySqlDialect);
 
         impl Dialect for WrappedDialect {
-            fn dialect(&self) -> std::any::TypeId {
+            fn settings(&self) -> DialectSettings {
+                let s = self.0.settings();
+                DialectSettings {
+                    supports_filter_during_aggregation: s.supports_filter_during_aggregation,
+                    supports_within_after_array_aggregation: s.supports_within_after_array_aggregation,
+                    supports_group_by_expr: s.supports_group_by_expr,
+                    supports_in_empty_list: s.supports_in_empty_list,
+                    convert_type_before_value: s.convert_type_before_value,
+                    supports_string_literal_backslash_escape: s.supports_string_literal_backslash_escape,
+                    ..Default::default()
+                }
+            }
+
+            fn dialect(&self) -> TypeId {
                 self.0.dialect()
             }
 
@@ -691,64 +639,40 @@ mod tests {
                 self.0.identifier_quote_style(identifier)
             }
 
-            fn supports_string_literal_backslash_escape(&self) -> bool {
-                self.0.supports_string_literal_backslash_escape()
-            }
-
             fn is_proper_identifier_inside_quotes(
                 &self,
-                chars: std::iter::Peekable<std::str::Chars<'_>>,
+                chars: Peekable<Chars<'_>>,
             ) -> bool {
                 self.0.is_proper_identifier_inside_quotes(chars)
             }
 
-            fn supports_filter_during_aggregation(&self) -> bool {
-                self.0.supports_filter_during_aggregation()
-            }
-
-            fn supports_within_after_array_aggregation(&self) -> bool {
-                self.0.supports_within_after_array_aggregation()
-            }
-
-            fn supports_group_by_expr(&self) -> bool {
-                self.0.supports_group_by_expr()
-            }
-
-            fn supports_in_empty_list(&self) -> bool {
-                self.0.supports_in_empty_list()
-            }
-
-            fn convert_type_before_value(&self) -> bool {
-                self.0.convert_type_before_value()
-            }
-
             fn parse_prefix(
                 &self,
-                parser: &mut sqlparser::parser::Parser,
-            ) -> Option<Result<Expr, sqlparser::parser::ParserError>> {
+                parser: &mut Parser,
+            ) -> Option<Result<Expr, ParserError>> {
                 self.0.parse_prefix(parser)
             }
 
             fn parse_infix(
                 &self,
-                parser: &mut sqlparser::parser::Parser,
+                parser: &mut Parser,
                 expr: &Expr,
                 precedence: u8,
-            ) -> Option<Result<Expr, sqlparser::parser::ParserError>> {
+            ) -> Option<Result<Expr, ParserError>> {
                 self.0.parse_infix(parser, expr, precedence)
             }
 
             fn get_next_precedence(
                 &self,
-                parser: &sqlparser::parser::Parser,
-            ) -> Option<Result<u8, sqlparser::parser::ParserError>> {
+                parser: &Parser,
+            ) -> Option<Result<u8, ParserError>> {
                 self.0.get_next_precedence(parser)
             }
 
             fn parse_statement(
                 &self,
-                parser: &mut sqlparser::parser::Parser,
-            ) -> Option<Result<Statement, sqlparser::parser::ParserError>> {
+                parser: &mut Parser,
+            ) -> Option<Result<Statement, ParserError>> {
                 self.0.parse_statement(parser)
             }
 

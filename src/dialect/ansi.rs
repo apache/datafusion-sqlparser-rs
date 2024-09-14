@@ -10,22 +10,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, DialectSettings};
 
 /// A [`Dialect`] for [ANSI SQL](https://en.wikipedia.org/wiki/SQL:2011).
-#[derive(Debug)]
-pub struct AnsiDialect {}
+#[derive(Debug, Default)]
+pub struct AnsiDialect;
 
 impl Dialect for AnsiDialect {
+    fn settings(&self) -> DialectSettings {
+        DialectSettings {
+            require_interval_qualifier: true,
+            ..Default::default()
+        }
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase()
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_'
-    }
-
-    fn require_interval_qualifier(&self) -> bool {
-        true
     }
 }

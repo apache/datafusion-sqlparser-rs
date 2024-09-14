@@ -10,13 +10,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, DialectSettings};
 
 /// A [`Dialect`] for [Hive](https://hive.apache.org/).
-#[derive(Debug)]
-pub struct HiveDialect {}
+#[derive(Debug, Default)]
+pub struct HiveDialect;
 
 impl Dialect for HiveDialect {
+    fn settings(&self) -> DialectSettings {
+        DialectSettings {
+            supports_filter_during_aggregation: true,
+            supports_numeric_prefix: true,
+            require_interval_qualifier: true,
+            ..Default::default()
+        }
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         (ch == '"') || (ch == '`')
     }
@@ -33,17 +42,5 @@ impl Dialect for HiveDialect {
             || ch == '$'
             || ch == '{'
             || ch == '}'
-    }
-
-    fn supports_filter_during_aggregation(&self) -> bool {
-        true
-    }
-
-    fn supports_numeric_prefix(&self) -> bool {
-        true
-    }
-
-    fn require_interval_qualifier(&self) -> bool {
-        true
     }
 }

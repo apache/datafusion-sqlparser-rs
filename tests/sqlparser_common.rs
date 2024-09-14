@@ -1407,7 +1407,7 @@ fn parse_json_ops_without_colon() {
         (
             "->",
             Arrow,
-            all_dialects_except(|d| d.supports_lambda_functions()),
+            all_dialects_except(|d| d.settings().supports_lambda_functions),
         ),
         ("->>", LongArrow, all_dialects()),
         ("#>", HashArrow, pg_and_generic()),
@@ -2474,7 +2474,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(TIMEZONE_REGION FROM d)");
     verified_stmt("SELECT EXTRACT(TIME FROM d)");
 
-    let dialects = all_dialects_except(|d| d.allow_extract_custom());
+    let dialects = all_dialects_except(|d| d.settings().allow_extract_custom);
     let res = dialects.parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
     assert_eq!(
         ParserError::ParserError("Expected: date/time field, found: JIFFY".to_string()),
@@ -2573,7 +2573,7 @@ fn parse_ceil_datetime() {
     verified_stmt("SELECT CEIL(d TO SECOND) FROM df");
     verified_stmt("SELECT CEIL(d TO MILLISECOND) FROM df");
 
-    let dialects = all_dialects_except(|d| d.allow_extract_custom());
+    let dialects = all_dialects_except(|d| d.settings().allow_extract_custom);
     let res = dialects.parse_sql_statements("SELECT CEIL(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected: date/time field, found: JIFFY".to_string()),
@@ -2600,7 +2600,7 @@ fn parse_floor_datetime() {
     verified_stmt("SELECT FLOOR(d TO SECOND) FROM df");
     verified_stmt("SELECT FLOOR(d TO MILLISECOND) FROM df");
 
-    let dialects = all_dialects_except(|d| d.allow_extract_custom());
+    let dialects = all_dialects_except(|d| d.settings().allow_extract_custom);
     let res = dialects.parse_sql_statements("SELECT FLOOR(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected: date/time field, found: JIFFY".to_string()),
@@ -2762,7 +2762,7 @@ fn parse_window_rank_function() {
 
 #[test]
 fn parse_window_function_null_treatment_arg() {
-    let dialects = all_dialects_where(|d| d.supports_window_function_null_treatment_arg());
+    let dialects = all_dialects_where(|d| d.settings().supports_window_function_null_treatment_arg);
     let sql = "SELECT \
         FIRST_VALUE(a IGNORE NULLS) OVER (), \
         FIRST_VALUE(b RESPECT NULLS) OVER () \
@@ -2812,7 +2812,7 @@ fn parse_window_function_null_treatment_arg() {
 
     let sql = "SELECT LAG(1 IGNORE NULLS) IGNORE NULLS OVER () FROM t1";
     assert_eq!(
-        all_dialects_where(|d| !d.supports_window_function_null_treatment_arg())
+        all_dialects_except(|d| d.settings().supports_window_function_null_treatment_arg)
             .parse_sql_statements(sql)
             .unwrap_err(),
         ParserError::ParserError("Expected: ), found: IGNORE".to_string())
@@ -4402,7 +4402,7 @@ fn parse_named_argument_function() {
 fn parse_named_argument_function_with_eq_operator() {
     let sql = "SELECT FUN(a = '1', b = '2') FROM foo";
 
-    let select = all_dialects_where(|d| d.supports_named_fn_args_with_eq_operator())
+    let select = all_dialects_where(|d| d.settings().supports_named_fn_args_with_eq_operator)
         .verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
@@ -4439,7 +4439,7 @@ fn parse_named_argument_function_with_eq_operator() {
     // Ensure that bar = 42 in a function argument parses as an equality binop
     // rather than a named function argument.
     assert_eq!(
-        all_dialects_except(|d| d.supports_named_fn_args_with_eq_operator())
+        all_dialects_except(|d| d.settings().supports_named_fn_args_with_eq_operator)
             .verified_expr("foo(bar = 42)"),
         call(
             "foo",
@@ -4452,7 +4452,7 @@ fn parse_named_argument_function_with_eq_operator() {
     );
 
     // TODO: should this parse for all dialects?
-    all_dialects_except(|d| d.supports_named_fn_args_with_eq_operator())
+    all_dialects_except(|d| d.settings().supports_named_fn_args_with_eq_operator)
         .verified_expr("iff(1 = 1, 1, 0)");
 }
 
@@ -4472,7 +4472,7 @@ fn parse_window_functions() {
                sum(qux) OVER (ORDER BY a \
                GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
-    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_except(|d| d.settings().require_interval_qualifier);
     let select = dialects.verified_only_select(sql);
 
     const EXPECTED_PROJ_QTY: usize = 7;
@@ -4760,7 +4760,7 @@ fn parse_window_and_qualify_clause() {
 fn parse_window_clause_named_window() {
     let sql = "SELECT * FROM mytable WINDOW window1 AS window2";
     let Select { named_window, .. } =
-        all_dialects_where(|d| d.supports_window_clause_named_window_reference())
+        all_dialects_where(|d| d.settings().supports_window_clause_named_window_reference)
             .verified_only_select(sql);
     assert_eq!(
         vec![NamedWindowDefinition(
@@ -5032,7 +5032,7 @@ fn parse_interval_all() {
 
 #[test]
 fn parse_interval_dont_require_unit() {
-    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_except(|d| d.settings().require_interval_qualifier);
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = dialects.verified_only_select(sql);
@@ -5058,7 +5058,7 @@ fn parse_interval_dont_require_unit() {
 
 #[test]
 fn parse_interval_require_unit() {
-    let dialects = all_dialects_where(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_where(|d| d.settings().require_interval_qualifier);
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let err = dialects.parse_sql_statements(sql).unwrap_err();
@@ -5070,7 +5070,7 @@ fn parse_interval_require_unit() {
 
 #[test]
 fn parse_interval_require_qualifier() {
-    let dialects = all_dialects_where(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_where(|d| d.settings().require_interval_qualifier);
 
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = dialects.verified_only_select(sql);
@@ -5130,7 +5130,7 @@ fn parse_interval_require_qualifier() {
 
 #[test]
 fn parse_interval_disallow_interval_expr() {
-    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_except(|d| d.settings().require_interval_qualifier);
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = dialects.verified_only_select(sql);
@@ -5184,7 +5184,7 @@ fn parse_interval_disallow_interval_expr() {
 
 #[test]
 fn interval_disallow_interval_expr_gt() {
-    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_except(|d| d.settings().require_interval_qualifier);
     let expr = dialects.verified_expr("INTERVAL '1 second' > x");
     assert_eq!(
         expr,
@@ -5209,7 +5209,7 @@ fn interval_disallow_interval_expr_gt() {
 
 #[test]
 fn interval_disallow_interval_expr_double_colon() {
-    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_except(|d| d.settings().require_interval_qualifier);
     let expr = dialects.verified_expr("INTERVAL '1 second'::TEXT");
     assert_eq!(
         expr,
@@ -5236,7 +5236,7 @@ fn parse_interval_and_or_xor() {
         WHERE d3_date > d1_date + INTERVAL '5 days' \
         AND d2_date > d1_date + INTERVAL '3 days'";
 
-    let dialects = all_dialects_except(|d| d.require_interval_qualifier());
+    let dialects = all_dialects_except(|d| d.settings().require_interval_qualifier);
     let actual_ast = dialects.parse_sql_statements(sql).unwrap();
 
     let expected_ast = vec![Statement::Query(Box::new(Query {
@@ -7459,7 +7459,7 @@ fn parse_set_variable() {
         _ => unreachable!(),
     }
 
-    let multi_variable_dialects = all_dialects_where(|d| d.supports_parenthesized_set_variables());
+    let multi_variable_dialects = all_dialects_where(|d| d.settings().supports_parenthesized_set_variables);
     let sql = r#"SET (a, b, c) = (1, 2, 3)"#;
     match multi_variable_dialects.verified_stmt(sql) {
         Statement::SetVariable {
@@ -7787,7 +7787,7 @@ fn test_create_index_with_with_clause() {
         },
         Expr::Identifier(Ident::new("single_param")),
     ];
-    let dialects = all_dialects_where(|d| d.supports_create_index_with_clause());
+    let dialects = all_dialects_where(|d| d.settings().supports_create_index_with_clause);
     match dialects.verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
             name: Some(name),
@@ -9851,7 +9851,7 @@ fn parse_connect_by() {
     );
 
     assert_eq!(
-        all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_1),
+        all_dialects_where(|d| d.settings().supports_connect_by).verified_only_select(connect_by_1),
         expect_query
     );
 
@@ -9863,7 +9863,7 @@ fn parse_connect_by() {
         "ORDER BY employee_id"
     );
     assert_eq!(
-        all_dialects_where(|d| d.supports_connect_by())
+        all_dialects_where(|d| d.settings().supports_connect_by)
             .verified_only_select_with_canonical(connect_by_2, connect_by_1),
         expect_query
     );
@@ -9877,7 +9877,7 @@ fn parse_connect_by() {
         "ORDER BY employee_id"
     );
     assert_eq!(
-        all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_3),
+        all_dialects_where(|d| d.settings().supports_connect_by).verified_only_select(connect_by_3),
         Select {
             distinct: None,
             top: None,
@@ -9941,7 +9941,7 @@ fn parse_connect_by() {
         "WHERE employee_id <> 42 ",
         "ORDER BY employee_id"
     );
-    all_dialects_where(|d| d.supports_connect_by())
+    all_dialects_where(|d| d.settings().supports_connect_by)
         .parse_sql_statements(connect_by_4)
         .expect_err("should have failed");
 
@@ -9966,7 +9966,7 @@ fn test_selective_aggregation() {
         "FROM region"
     );
     assert_eq!(
-        all_dialects_where(|d| d.supports_filter_during_aggregation())
+        all_dialects_where(|d| d.settings().supports_filter_during_aggregation)
             .verified_only_select(sql)
             .projection,
         vec![
@@ -10023,7 +10023,7 @@ fn test_group_by_grouping_sets() {
         "ORDER BY city",
     );
     assert_eq!(
-        all_dialects_where(|d| d.supports_group_by_expr())
+        all_dialects_where(|d| d.settings().supports_group_by_expr)
             .verified_only_select(sql)
             .group_by,
         GroupByExpr::Expressions(
@@ -10058,7 +10058,7 @@ fn test_match_recognize() {
     };
 
     fn check(options: &str, expect: TableFactor) {
-        let select = all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(
+        let select = all_dialects_where(|d| d.settings().supports_match_recognize).verified_only_select(
             &format!("SELECT * FROM my_table MATCH_RECOGNIZE({options})"),
         );
         assert_eq!(&select.from[0].relation, &expect);
@@ -10187,7 +10187,7 @@ fn test_match_recognize() {
     ];
 
     for sql in examples {
-        all_dialects_where(|d| d.supports_match_recognize()).verified_query(sql);
+        all_dialects_where(|d| d.settings().supports_match_recognize).verified_query(sql);
     }
 }
 
@@ -10199,7 +10199,7 @@ fn test_match_recognize_patterns() {
 
     fn check(pattern: &str, expect: MatchRecognizePattern) {
         let select =
-            all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(&format!(
+            all_dialects_where(|d| d.settings().supports_match_recognize).verified_only_select(&format!(
                 "SELECT * FROM my_table MATCH_RECOGNIZE(PATTERN ({pattern}) DEFINE DUMMY AS true)" // "select * from my_table match_recognize ("
             ));
         let TableFactor::MatchRecognize {
@@ -10438,7 +10438,7 @@ fn insert_into_with_parentheses() {
 fn test_dictionary_syntax() {
     fn check(sql: &str, expect: Expr) {
         assert_eq!(
-            all_dialects_where(|d| d.supports_dictionary_syntax()).verified_expr(sql),
+            all_dialects_where(|d| d.settings().supports_dictionary_syntax).verified_expr(sql),
             expect
         );
     }
@@ -10494,7 +10494,7 @@ fn test_dictionary_syntax() {
 fn test_map_syntax() {
     fn check(sql: &str, expect: Expr) {
         assert_eq!(
-            all_dialects_where(|d| d.support_map_literal_syntax()).verified_expr(sql),
+            all_dialects_where(|d| d.settings().support_map_literal_syntax).verified_expr(sql),
             expect
         );
     }
@@ -10647,7 +10647,7 @@ fn tests_select_values_without_parens_and_set_op() {
 
 #[test]
 fn parse_select_wildcard_with_except() {
-    let dialects = all_dialects_where(|d| d.supports_select_wildcard_except());
+    let dialects = all_dialects_where(|d| d.settings().supports_select_wildcard_except);
 
     let select = dialects.verified_only_select("SELECT * EXCEPT (col_a) FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
@@ -10696,7 +10696,7 @@ fn parse_auto_increment_too_large() {
 
 #[test]
 fn test_group_by_nothing() {
-    let Select { group_by, .. } = all_dialects_where(|d| d.supports_group_by_expr())
+    let Select { group_by, .. } = all_dialects_where(|d| d.settings().supports_group_by_expr)
         .verified_only_select("SELECT count(1) FROM t GROUP BY ()");
     {
         std::assert_eq!(
@@ -10705,7 +10705,7 @@ fn test_group_by_nothing() {
         );
     }
 
-    let Select { group_by, .. } = all_dialects_where(|d| d.supports_group_by_expr())
+    let Select { group_by, .. } = all_dialects_where(|d| d.settings().supports_group_by_expr)
         .verified_only_select("SELECT name, count(1) FROM t GROUP BY name, ()");
     {
         std::assert_eq!(
@@ -10723,7 +10723,7 @@ fn test_group_by_nothing() {
 
 #[test]
 fn test_extract_seconds_ok() {
-    let dialects = all_dialects_where(|d| d.allow_extract_custom());
+    let dialects = all_dialects_where(|d| d.settings().allow_extract_custom);
     let stmt = dialects.verified_expr("EXTRACT(seconds FROM '2 seconds'::INTERVAL)");
 
     assert_eq!(
@@ -10748,7 +10748,7 @@ fn test_extract_seconds_ok() {
 
 #[test]
 fn test_extract_seconds_single_quote_ok() {
-    let dialects = all_dialects_where(|d| d.allow_extract_custom());
+    let dialects = all_dialects_where(|d| d.settings().allow_extract_custom);
     let stmt = dialects.verified_expr(r#"EXTRACT('seconds' FROM '2 seconds'::INTERVAL)"#);
 
     assert_eq!(
@@ -10774,7 +10774,7 @@ fn test_extract_seconds_single_quote_ok() {
 #[test]
 fn test_extract_seconds_err() {
     let sql = "SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)";
-    let dialects = all_dialects_except(|d| d.allow_extract_custom());
+    let dialects = all_dialects_except(|d| d.settings().allow_extract_custom);
     let err = dialects.parse_sql_statements(sql).unwrap_err();
     assert_eq!(
         err.to_string(),
@@ -10785,7 +10785,7 @@ fn test_extract_seconds_err() {
 #[test]
 fn test_extract_seconds_single_quote_err() {
     let sql = r#"SELECT EXTRACT('seconds' FROM '2 seconds'::INTERVAL)"#;
-    let dialects = all_dialects_except(|d| d.allow_extract_single_quotes());
+    let dialects = all_dialects_except(|d| d.settings().allow_extract_single_quotes);
     let err = dialects.parse_sql_statements(sql).unwrap_err();
     assert_eq!(
         err.to_string(),

@@ -23,7 +23,7 @@ use crate::ast::*;
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "visitor", visit(with = "visit_query"))]
@@ -150,6 +150,13 @@ pub enum SetExpr {
     Table(Box<Table>),
 }
 
+impl Default for SetExpr {
+    fn default() -> Self {
+        SetExpr::Select(Box::new(Select::default()))
+    }
+
+}
+
 impl SetExpr {
     /// If this `SetExpr` is a `SELECT`, returns the [`Select`].
     pub fn as_select(&self) -> Option<&Select> {
@@ -267,7 +274,7 @@ impl fmt::Display for Table {
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Select {
@@ -2106,7 +2113,13 @@ pub enum GroupByExpr {
     Expressions(Vec<Expr>, Vec<GroupByWithModifier>),
 }
 
-impl fmt::Display for GroupByExpr {
+impl Default for GroupByExpr {
+    fn default() -> Self {
+        GroupByExpr::Expressions(vec![], vec![])
+    }
+}
+
+impl Display for GroupByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             GroupByExpr::All(modifiers) => {

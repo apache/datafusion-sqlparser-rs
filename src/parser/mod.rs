@@ -479,6 +479,9 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_boxed_query().map(Statement::Query)
                 }
+                Keyword::FROM if self.dialect.allow_from_first() => {
+                    Ok(Statement::Query(self.parse_from_first_query(None).map(Box::new)?))
+                }
                 Keyword::TRUNCATE => self.parse_truncate(),
                 Keyword::ATTACH => {
                     if dialect_of!(self is DuckDbDialect) {
@@ -8535,91 +8538,131 @@ impl<'a> Parser<'a> {
                 settings: None,
                 format_clause: None,
             })
+        } else if self.parse_keyword(Keyword::FROM) && self.dialect.allow_from_first() {
+            self.parse_from_first_query(with)
         } else {
             let body = self.parse_boxed_query_body(self.dialect.prec_unknown())?;
-
-            let order_by = self.parse_optional_order_by()?;
-
-            let mut limit = None;
-            let mut offset = None;
-
-            for _x in 0..2 {
-                if limit.is_none() && self.parse_keyword(Keyword::LIMIT) {
-                    limit = self.parse_limit()?
-                }
-
-                if offset.is_none() && self.parse_keyword(Keyword::OFFSET) {
-                    offset = Some(self.parse_offset()?)
-                }
-
-                if dialect_of!(self is GenericDialect | MySqlDialect | ClickHouseDialect)
-                    && limit.is_some()
-                    && offset.is_none()
-                    && self.consume_token(&Token::Comma)
-                {
-                    // MySQL style LIMIT x,y => LIMIT y OFFSET x.
-                    // Check <https://dev.mysql.com/doc/refman/8.0/en/select.html> for more details.
-                    offset = Some(Offset {
-                        value: limit.unwrap(),
-                        rows: OffsetRows::None,
-                    });
-                    limit = Some(self.parse_expr()?);
-                }
-            }
-
-            let limit_by = if dialect_of!(self is ClickHouseDialect | GenericDialect)
-                && self.parse_keyword(Keyword::BY)
-            {
-                self.parse_comma_separated(Parser::parse_expr)?
-            } else {
-                vec![]
-            };
-
-            let settings = self.parse_settings()?;
-
-            let fetch = if self.parse_keyword(Keyword::FETCH) {
-                Some(self.parse_fetch()?)
-            } else {
-                None
-            };
-
-            let mut for_clause = None;
-            let mut locks = Vec::new();
-            while self.parse_keyword(Keyword::FOR) {
-                if let Some(parsed_for_clause) = self.parse_for_clause()? {
-                    for_clause = Some(parsed_for_clause);
-                    break;
-                } else {
-                    locks.push(self.parse_lock()?);
-                }
-            }
-            let format_clause = if dialect_of!(self is ClickHouseDialect | GenericDialect)
-                && self.parse_keyword(Keyword::FORMAT)
-            {
-                if self.parse_keyword(Keyword::NULL) {
-                    Some(FormatClause::Null)
-                } else {
-                    let ident = self.parse_identifier(false)?;
-                    Some(FormatClause::Identifier(ident))
-                }
-            } else {
-                None
-            };
-
-            Ok(Query {
-                with,
-                body,
-                order_by,
-                limit,
-                limit_by,
-                offset,
-                fetch,
-                locks,
-                for_clause,
-                settings,
-                format_clause,
-            })
+            self.parse_query_extra(body, with)
         }
+    }
+
+    /// Parse `SELECT` statements that start with a `FROM` clause,
+    /// e.g. `FROM x SELECT foo` see <https://github.com/sqlparser-rs/sqlparser-rs/issues/1400> for rationale.
+    fn parse_from_first_query(&mut self, with: Option<With>) -> Result<Query, ParserError> {
+        let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
+
+        if matches!(self.peek_token().token, Token::EOF | Token::SemiColon) {
+            // no select part e.g. `FROM x`, this is equivalent to `FROM x SELECT *`
+            return Ok(Query {
+                with,
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    projection: vec![
+                        SelectItem::Wildcard(WildcardAdditionalOptions::default()),
+                    ],
+                    from,
+                    ..Default::default()
+                }))),
+                ..Default::default()
+            });
+        } else {
+            let body = self.parse_boxed_query_body(self.dialect.prec_unknown())?;
+            let mut query = self.parse_query_extra(body, with)?;
+            if let SetExpr::Select(ref mut select) = *query.body {
+                if select.from.is_empty() {
+                    select.from = from;
+                    Ok(query)
+                } else {
+                    Err(ParserError::ParserError("FROM clause can only be used once".to_string()))
+                }
+            } else {
+                Err(ParserError::ParserError("leading FROM clause can only be used with SELECT".to_string()))
+            }
+        }
+    }
+
+    /// Parse everything beyond the body of a query, i.e. everything after the `SELECT` clause
+    fn parse_query_extra(&mut self, body: Box<SetExpr>, with: Option<With>) -> Result<Query, ParserError> {
+        let order_by = self.parse_optional_order_by()?;
+
+        let mut limit = None;
+        let mut offset = None;
+
+        for _x in 0..2 {
+            if limit.is_none() && self.parse_keyword(Keyword::LIMIT) {
+                limit = self.parse_limit()?
+            }
+
+            if offset.is_none() && self.parse_keyword(Keyword::OFFSET) {
+                offset = Some(self.parse_offset()?)
+            }
+
+            if dialect_of!(self is GenericDialect | MySqlDialect | ClickHouseDialect)
+                && limit.is_some()
+                && offset.is_none()
+                && self.consume_token(&Token::Comma)
+            {
+                // MySQL style LIMIT x,y => LIMIT y OFFSET x.
+                // Check <https://dev.mysql.com/doc/refman/8.0/en/select.html> for more details.
+                offset = Some(Offset {
+                    value: limit.unwrap(),
+                    rows: OffsetRows::None,
+                });
+                limit = Some(self.parse_expr()?);
+            }
+        }
+
+        let limit_by = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keyword(Keyword::BY)
+        {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+
+        let settings = self.parse_settings()?;
+
+        let fetch = if self.parse_keyword(Keyword::FETCH) {
+            Some(self.parse_fetch()?)
+        } else {
+            None
+        };
+
+        let mut for_clause = None;
+        let mut locks = Vec::new();
+        while self.parse_keyword(Keyword::FOR) {
+            if let Some(parsed_for_clause) = self.parse_for_clause()? {
+                for_clause = Some(parsed_for_clause);
+                break;
+            } else {
+                locks.push(self.parse_lock()?);
+            }
+        }
+        let format_clause = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keyword(Keyword::FORMAT)
+        {
+            if self.parse_keyword(Keyword::NULL) {
+                Some(FormatClause::Null)
+            } else {
+                let ident = self.parse_identifier(false)?;
+                Some(FormatClause::Identifier(ident))
+            }
+        } else {
+            None
+        };
+
+        Ok(Query {
+            with,
+            body,
+            order_by,
+            limit,
+            limit_by,
+            offset,
+            fetch,
+            locks,
+            for_clause,
+            settings,
+            format_clause,
+        })
     }
 
     fn parse_settings(&mut self) -> Result<Option<Vec<Setting>>, ParserError> {

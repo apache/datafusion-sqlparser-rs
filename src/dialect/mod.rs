@@ -536,6 +536,12 @@ pub trait Dialect: Debug + Any {
     fn require_interval_qualifier(&self) -> bool {
         false
     }
+
+    /// Whether to allow `SELECT` statements that start with a `FROM` clause,
+    /// e.g. `FROM x SELECT foo` see <https://github.com/sqlparser-rs/sqlparser-rs/issues/1400> for rationale.
+    fn allow_from_first(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

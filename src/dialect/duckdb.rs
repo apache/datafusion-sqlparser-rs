@@ -55,4 +55,11 @@ impl Dialect for DuckDbDialect {
     fn support_map_literal_syntax(&self) -> bool {
         true
     }
+
+    /// DuckDB allows this.
+    ///
+    /// https://duckdb.org/2023/08/23/even-friendlier-sql.html#from-first-in-select-statements
+    fn allow_from_first(&self) -> bool {
+        true
+    }
 }

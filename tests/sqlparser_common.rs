@@ -4272,6 +4272,7 @@ fn run_explain_analyze(
     expected_verbose: bool,
     expected_analyze: bool,
     expected_format: Option<AnalyzeFormat>,
+    exepcted_options: Option<UtilityOptionList>,
 ) {
     match verified_stmt(query) {
         Statement::Explain {
@@ -4280,10 +4281,12 @@ fn run_explain_analyze(
             verbose,
             statement,
             format,
+            options,
         } => {
             assert_eq!(verbose, expected_verbose);
             assert_eq!(analyze, expected_analyze);
             assert_eq!(format, expected_format);
+            assert_eq!(options, exepcted_options);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
         }
         _ => panic!("Unexpected Statement, must be Explain"),
@@ -4328,13 +4331,20 @@ fn explain_desc() {
 #[test]
 fn parse_explain_analyze_with_simple_select() {
     // Describe is an alias for EXPLAIN
-    run_explain_analyze("DESCRIBE SELECT sqrt(id) FROM foo", false, false, None);
+    run_explain_analyze(
+        "DESCRIBE SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        None,
+    );
 
-    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false, None);
+    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false, None, None);
     run_explain_analyze(
         "EXPLAIN VERBOSE SELECT sqrt(id) FROM foo",
         true,
         false,
+        None,
         None,
     );
     run_explain_analyze(
@@ -4342,11 +4352,13 @@ fn parse_explain_analyze_with_simple_select() {
         false,
         true,
         None,
+        None,
     );
     run_explain_analyze(
         "EXPLAIN ANALYZE VERBOSE SELECT sqrt(id) FROM foo",
         true,
         true,
+        None,
         None,
     );
 
@@ -4355,6 +4367,7 @@ fn parse_explain_analyze_with_simple_select() {
         false,
         true,
         Some(AnalyzeFormat::GRAPHVIZ),
+        None,
     );
 
     run_explain_analyze(
@@ -4362,6 +4375,7 @@ fn parse_explain_analyze_with_simple_select() {
         true,
         true,
         Some(AnalyzeFormat::JSON),
+        None,
     );
 
     run_explain_analyze(
@@ -4369,6 +4383,7 @@ fn parse_explain_analyze_with_simple_select() {
         true,
         false,
         Some(AnalyzeFormat::TEXT),
+        None,
     );
 }
 

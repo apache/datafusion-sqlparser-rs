@@ -1324,7 +1324,10 @@ impl<'a> Parser<'a> {
             Token::Word(s)
                 if s.keyword == Keyword::TRUE
                     || s.keyword == Keyword::FALSE
-                    || s.keyword == Keyword::ON =>
+                    || s.keyword == Keyword::ON
+                    || s.keyword == Keyword::TEXT
+                    || s.keyword == Keyword::JSON
+                    || s.keyword == Keyword::XML =>
             {
                 self.next_token();
                 s.value
@@ -8530,7 +8533,8 @@ impl<'a> Parser<'a> {
         let mut format = None;
         let mut options = None;
 
-        if dialect_of!(self is PostgreSqlDialect | DuckDbDialect )
+        if describe_alias == DescribeAlias::Explain
+            && dialect_of!(self is PostgreSqlDialect | DuckDbDialect )
             && self.peek_token().token == Token::LParen
         {
             options = Some(self.parse_utility_options()?)

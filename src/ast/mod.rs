@@ -3033,7 +3033,7 @@ pub enum Statement {
         /// Optional output format of explain
         format: Option<AnalyzeFormat>,
         /// Postgres style utility options, `(analyze, verbose true)`
-        options: Option<UtilityOptionList>,
+        options: Option<Vec<UtilityOption>>,
     },
     /// ```sql
     /// SAVEPOINT
@@ -3238,7 +3238,7 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(options) = options {
-                    write!(f, "{options}")?;
+                    write!(f, "({}) ",display_comma_separated(options))?;
                 }
 
                 write!(f, "{statement}")
@@ -7132,43 +7132,6 @@ where
     }
 }
 
-/// Represents a list of options used in various PostgreSQL utility statements such as
-/// CLUSTER, EXPLAIN, `VACUUM`, and `REINDEX`. It takes the form `( option [, ...] )`.
-///
-/// [CLUSTER]: https://www.postgresql.org/docs/current/sql-cluster.html
-/// [EXPLAIN]: https://www.postgresql.org/docs/current/sql-explain.html
-/// [VACUUM]: https://www.postgresql.org/docs/current/sql-vacuum.html
-/// [REINDEX]: https://www.postgresql.org/docs/current/sql-reindex.html
-///
-/// For example, the `EXPLAIN` AND `VACUUM` statements with options might look like this:
-/// ```sql
-/// EXPLAIN (ANALYZE, VERBOSE TRUE, FORMAT TEXT) SELECT * FROM my_table;
-///
-/// VACCUM (VERBOSE, ANALYZE ON, PARALLEL 10) my_table;
-/// ```
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct UtilityOptionList {
-    pub options: Vec<UtilityOption>,
-}
-
-impl Display for UtilityOptionList {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "( ")?;
-
-        let mut iter = self.options.iter().peekable();
-        while let Some(option) = iter.next() {
-            write!(f, "{}", option)?;
-            if iter.peek().is_some() {
-                write!(f, ", ")?;
-            }
-        }
-
-        write!(f, " ) ")
-    }
-}
-
 /// Represents a single PostgreSQL utility option.
 ///
 /// A utility option is a key-value pair where the key is an identifier (IDENT) and the value
@@ -7177,6 +7140,16 @@ impl Display for UtilityOptionList {
 /// - A non-keyword string. Example: `option1`, `'option2'`, `"option3"`
 /// - keyword: `TRUE`, `FALSE`, `ON` (`off` is also accept).
 /// - Empty. Example: `ANALYZE` (identifier only)
+///
+/// Utility options are used in various PostgreSQL DDL statements, including statements such as
+/// `CLUSTER`, `EXPLAIN`, `VACUUM`, and `REINDEX`. These statements format options as `( option [, ...] )`.
+///
+/// [CLUSTER]: https://www.postgresql.org/docs/current/sql-cluster.html
+/// [EXPLAIN]: https://www.postgresql.org/docs/current/sql-explain.html
+/// [VACUUM]: https://www.postgresql.org/docs/current/sql-vacuum.html
+/// [REINDEX]: https://www.postgresql.org/docs/current/sql-reindex.html
+///
+/// For example, the `EXPLAIN` AND `VACUUM` statements with options might look like this:
 /// ```sql
 /// EXPLAIN (ANALYZE, VERBOSE TRUE, FORMAT TEXT) SELECT * FROM my_table;
 ///

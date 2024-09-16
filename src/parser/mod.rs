@@ -1277,13 +1277,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_utility_option_list(&mut self) -> Result<UtilityOptionList, ParserError> {
+    pub fn parse_utility_option_list(&mut self) -> Result<Vec<UtilityOption>, ParserError> {
         self.expect_token(&Token::LParen)?;
         let options = self.parse_comma_separated(Self::parse_utility_option)?;
-
         self.expect_token(&Token::RParen)?;
 
-        Ok(UtilityOptionList { options })
+        Ok(options)
     }
 
     fn parse_utility_option(&mut self) -> Result<UtilityOption, ParserError> {

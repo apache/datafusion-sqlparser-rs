@@ -7298,7 +7298,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a numeric literal as an expression. Returns a [`Expr::UnaryOp`] if the number is signed,
     /// otherwise returns a [`Expr::Value`]
-    pub fn parse_number_value_with_sign(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_number(&mut self) -> Result<Expr, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Plus => Ok(Expr::UnaryOp {
@@ -11629,30 +11629,20 @@ impl<'a> Parser<'a> {
         //[ INCREMENT [ BY ] increment ]
         if self.parse_keywords(&[Keyword::INCREMENT]) {
             if self.parse_keywords(&[Keyword::BY]) {
-                sequence_options.push(SequenceOptions::IncrementBy(
-                    self.parse_number_value_with_sign()?,
-                    true,
-                ));
+                sequence_options.push(SequenceOptions::IncrementBy(self.parse_number()?, true));
             } else {
-                sequence_options.push(SequenceOptions::IncrementBy(
-                    self.parse_number_value_with_sign()?,
-                    false,
-                ));
+                sequence_options.push(SequenceOptions::IncrementBy(self.parse_number()?, false));
             }
         }
         //[ MINVALUE minvalue | NO MINVALUE ]
         if self.parse_keyword(Keyword::MINVALUE) {
-            sequence_options.push(SequenceOptions::MinValue(Some(
-                self.parse_number_value_with_sign()?,
-            )));
+            sequence_options.push(SequenceOptions::MinValue(Some(self.parse_number()?)));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
             sequence_options.push(SequenceOptions::MinValue(None));
         }
         //[ MAXVALUE maxvalue | NO MAXVALUE ]
         if self.parse_keywords(&[Keyword::MAXVALUE]) {
-            sequence_options.push(SequenceOptions::MaxValue(Some(
-                self.parse_number_value_with_sign()?,
-            )));
+            sequence_options.push(SequenceOptions::MaxValue(Some(self.parse_number()?)));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
             sequence_options.push(SequenceOptions::MaxValue(None));
         }
@@ -11660,20 +11650,14 @@ impl<'a> Parser<'a> {
         //[ START [ WITH ] start ]
         if self.parse_keywords(&[Keyword::START]) {
             if self.parse_keywords(&[Keyword::WITH]) {
-                sequence_options.push(SequenceOptions::StartWith(
-                    self.parse_number_value_with_sign()?,
-                    true,
-                ));
+                sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, true));
             } else {
-                sequence_options.push(SequenceOptions::StartWith(
-                    self.parse_number_value_with_sign()?,
-                    false,
-                ));
+                sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, false));
             }
         }
         //[ CACHE cache ]
         if self.parse_keywords(&[Keyword::CACHE]) {
-            sequence_options.push(SequenceOptions::Cache(self.parse_number_value_with_sign()?));
+            sequence_options.push(SequenceOptions::Cache(self.parse_number()?));
         }
         // [ [ NO ] CYCLE ]
         if self.parse_keywords(&[Keyword::NO, Keyword::CYCLE]) {

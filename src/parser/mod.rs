@@ -1277,17 +1277,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_utility_options(&mut self) -> Result<UtilityOptionList, ParserError> {
+    pub fn parse_utility_option_list(&mut self) -> Result<UtilityOptionList, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let mut options = vec![];
-        loop {
-            options.push(self.parse_utility_option()?);
-
-            if self.peek_token() != Token::Comma {
-                break;
-            }
-            self.next_token();
-        }
+        let options = self.parse_comma_separated(Self::parse_utility_option)?;
 
         self.expect_token(&Token::RParen)?;
 
@@ -1301,39 +1293,7 @@ impl<'a> Parser<'a> {
         if next_token == Token::Comma || next_token == Token::RParen {
             return Ok(UtilityOption { name, arg: None });
         }
-        let arg = match next_token.token {
-            sign @ Token::Plus | sign @ Token::Minus => {
-                self.next_token();
-                let cur_token = self.next_token();
-                match cur_token.token {
-                    Token::Number(num, _) => {
-                        if sign == Token::Minus {
-                            format!("-{num}")
-                        } else {
-                            num
-                        }
-                    }
-                    _ => return self.expected("literal number", cur_token),
-                }
-            }
-            Token::Number(num, _) => {
-                self.next_token();
-                num
-            }
-            // OFF is also accepted in parse_literal_string
-            Token::Word(s)
-                if s.keyword == Keyword::TRUE
-                    || s.keyword == Keyword::FALSE
-                    || s.keyword == Keyword::ON
-                    || s.keyword == Keyword::TEXT
-                    || s.keyword == Keyword::JSON
-                    || s.keyword == Keyword::XML =>
-            {
-                self.next_token();
-                s.value
-            }
-            _ => self.parse_literal_string()?,
-        };
+        let arg = self.parse_expr()?;
 
         Ok(UtilityOption {
             name,
@@ -8533,15 +8493,16 @@ impl<'a> Parser<'a> {
         let mut format = None;
         let mut options = None;
 
+        // Note: DuckDB is compatible with PostgreSQL syntax for this statement,
+        // although not all features may be implemented.
         if describe_alias == DescribeAlias::Explain
-            && dialect_of!(self is PostgreSqlDialect | DuckDbDialect )
+            && dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect)
             && self.peek_token().token == Token::LParen
         {
-            options = Some(self.parse_utility_options()?)
+            options = Some(self.parse_utility_option_list()?)
         } else {
             analyze = self.parse_keyword(Keyword::ANALYZE);
             verbose = self.parse_keyword(Keyword::VERBOSE);
-            format = None;
             if self.parse_keyword(Keyword::FORMAT) {
                 format = Some(self.parse_analyze_format()?);
             }

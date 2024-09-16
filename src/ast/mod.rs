@@ -7133,12 +7133,18 @@ where
 }
 
 /// Represents a list of options used in various PostgreSQL utility statements such as
-/// `EXPLAIN`, `VACUUM`, and `CLUSTER`.
+/// CLUSTER, EXPLAIN, `VACUUM`, and `REINDEX`. It takes the form `( option [, ...] )`.
 ///
-/// For example, the `EXPLAIN` statement with options might look like this:
+/// [CLUSTER]: https://www.postgresql.org/docs/current/sql-cluster.html
+/// [EXPLAIN]: https://www.postgresql.org/docs/current/sql-explain.html
+/// [VACUUM]: https://www.postgresql.org/docs/current/sql-vacuum.html
+/// [REINDEX]: https://www.postgresql.org/docs/current/sql-reindex.html
 ///
+/// For example, the `EXPLAIN` AND `VACUUM` statements with options might look like this:
 /// ```sql
-/// EXPLAIN (ANALYZE, VERBOSE true) SELECT * FROM my_table;
+/// EXPLAIN (ANALYZE, VERBOSE TRUE, FORMAT TEXT) SELECT * FROM my_table;
+///
+/// VACCUM (VERBOSE, ANALYZE ON, PARALLEL 10) my_table;
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -7167,16 +7173,21 @@ impl Display for UtilityOptionList {
 ///
 /// A utility option is a key-value pair where the key is an identifier (IDENT) and the value
 /// can be one of the following:
-/// - A number with an optional sign (`+` or `-`)
-/// - A non-keyword string
-/// - keyword: `true`, `false`, `on` (`off` is also accept)
-/// - Empty
+/// - A number with an optional sign (`+` or `-`). Example: `+10`, `-10.2`, `3`
+/// - A non-keyword string. Example: `option1`, `'option2'`, `"option3"`
+/// - keyword: `TRUE`, `FALSE`, `ON` (`off` is also accept).
+/// - Empty. Example: `ANALYZE` (identifier only)
+/// ```sql
+/// EXPLAIN (ANALYZE, VERBOSE TRUE, FORMAT TEXT) SELECT * FROM my_table;
+///
+/// VACCUM (VERBOSE, ANALYZE ON, PARALLEL 10) my_table;
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct UtilityOption {
     pub name: Ident,
-    pub arg: Option<String>,
+    pub arg: Option<Expr>,
 }
 
 impl Display for UtilityOption {

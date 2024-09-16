@@ -4274,7 +4274,25 @@ fn run_explain_analyze(
     expected_format: Option<AnalyzeFormat>,
     exepcted_options: Option<UtilityOptionList>,
 ) {
-    match verified_stmt(query) {
+    run_explain_analyze_with_specified_dialect(
+        |_d| true,
+        query,
+        expected_verbose,
+        expected_analyze,
+        expected_format,
+        exepcted_options,
+    )
+}
+
+fn run_explain_analyze_with_specified_dialect<T: Fn(&dyn Dialect) -> bool>(
+    dialect_predicate: T,
+    query: &str,
+    expected_verbose: bool,
+    expected_analyze: bool,
+    expected_format: Option<AnalyzeFormat>,
+    exepcted_options: Option<UtilityOptionList>,
+) {
+    match all_dialects_where(dialect_predicate).verified_stmt(query) {
         Statement::Explain {
             describe_alias: _,
             analyze,
@@ -10838,5 +10856,142 @@ fn test_truncate_table_with_on_cluster() {
         all_dialects()
             .parse_sql_statements("TRUNCATE TABLE t ON CLUSTER")
             .unwrap_err()
+    );
+}
+
+#[test]
+fn parse_explain_with_option_list() {
+    run_explain_analyze_with_specified_dialect(
+        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+        "EXPLAIN ( ANALYZE false, VERBOSE true ) SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        Some(UtilityOptionList {
+            options: vec![
+                UtilityOption {
+                    name: Ident::new("ANALYZE"),
+                    arg: Some(Expr::Value(Value::Boolean(false))),
+                },
+                UtilityOption {
+                    name: Ident::new("VERBOSE"),
+                    arg: Some(Expr::Value(Value::Boolean(true))),
+                },
+            ],
+        }),
+    );
+
+    run_explain_analyze_with_specified_dialect(
+        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+        "EXPLAIN ( ANALYZE ON, VERBOSE OFF ) SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        Some(UtilityOptionList {
+            options: vec![
+                UtilityOption {
+                    name: Ident::new("ANALYZE"),
+                    arg: Some(Expr::Identifier(Ident::new("ON"))),
+                },
+                UtilityOption {
+                    name: Ident::new("VERBOSE"),
+                    arg: Some(Expr::Identifier(Ident::new("OFF"))),
+                },
+            ],
+        }),
+    );
+
+    run_explain_analyze_with_specified_dialect(
+        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+        r#"EXPLAIN ( FORMAT1 TEXT, FORMAT2 'JSON', FORMAT3 "XML", FORMAT4 YAML ) SELECT sqrt(id) FROM foo"#,
+        false,
+        false,
+        None,
+        Some(UtilityOptionList {
+            options: vec![
+                UtilityOption {
+                    name: Ident::new("FORMAT1"),
+                    arg: Some(Expr::Identifier(Ident::new("TEXT"))),
+                },
+                UtilityOption {
+                    name: Ident::new("FORMAT2"),
+                    arg: Some(Expr::Value(Value::SingleQuotedString("JSON".to_string()))),
+                },
+                UtilityOption {
+                    name: Ident::new("FORMAT3"),
+                    arg: Some(Expr::Identifier(Ident::with_quote('"', "XML"))),
+                },
+                UtilityOption {
+                    name: Ident::new("FORMAT4"),
+                    arg: Some(Expr::Identifier(Ident::new("YAML"))),
+                },
+            ],
+        }),
+    );
+
+    run_explain_analyze_with_specified_dialect(
+        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+        r#"EXPLAIN ( NUM1 10, NUM2 +10.1, NUM3 -10.2 ) SELECT sqrt(id) FROM foo"#,
+        false,
+        false,
+        None,
+        Some(UtilityOptionList {
+            options: vec![
+                UtilityOption {
+                    name: Ident::new("NUM1"),
+                    arg: Some(Expr::Value(Value::Number("10".to_string(), false))),
+                },
+                UtilityOption {
+                    name: Ident::new("NUM2"),
+                    arg: Some(Expr::UnaryOp {
+                        op: UnaryOperator::Plus,
+                        expr: Box::new(Expr::Value(Value::Number("10.1".to_string(), false))),
+                    }),
+                },
+                UtilityOption {
+                    name: Ident::new("NUM3"),
+                    arg: Some(Expr::UnaryOp {
+                        op: UnaryOperator::Minus,
+                        expr: Box::new(Expr::Value(Value::Number("10.2".to_string(), false))),
+                    }),
+                },
+            ],
+        }),
+    );
+
+    let utility_option_list = UtilityOptionList {
+        options: vec![
+            UtilityOption {
+                name: Ident::new("ANALYZE"),
+                arg: None,
+            },
+            UtilityOption {
+                name: Ident::new("VERBOSE"),
+                arg: Some(Expr::Value(Value::Boolean(true))),
+            },
+            UtilityOption {
+                name: Ident::new("WAL"),
+                arg: Some(Expr::Identifier(Ident::new("OFF"))),
+            },
+            UtilityOption {
+                name: Ident::new("FORMAT"),
+                arg: Some(Expr::Identifier(Ident::new("YAML"))),
+            },
+            UtilityOption {
+                name: Ident::new("USER_DEF_NUM"),
+                arg: Some(Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: Box::new(Expr::Value(Value::Number("100.1".to_string(), false))),
+                }),
+            },
+        ],
+    };
+    run_explain_analyze_with_specified_dialect(
+        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+        "EXPLAIN ( ANALYZE, VERBOSE true, WAL OFF, FORMAT YAML, USER_DEF_NUM -100.1 ) SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        Some(utility_option_list),
     );
 }

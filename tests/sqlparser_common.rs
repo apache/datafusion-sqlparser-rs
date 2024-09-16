@@ -4274,7 +4274,7 @@ fn run_explain_analyze(
     expected_format: Option<AnalyzeFormat>,
     exepcted_options: Option<UtilityOptionList>,
 ) {
-    run_explain_analyze_with_specified_dialect(
+    run_explain_analyze_with_specific_dialect(
         |_d| true,
         query,
         expected_verbose,
@@ -4284,7 +4284,7 @@ fn run_explain_analyze(
     )
 }
 
-fn run_explain_analyze_with_specified_dialect<T: Fn(&dyn Dialect) -> bool>(
+fn run_explain_analyze_with_specific_dialect<T: Fn(&dyn Dialect) -> bool>(
     dialect_predicate: T,
     query: &str,
     expected_verbose: bool,
@@ -10861,8 +10861,8 @@ fn test_truncate_table_with_on_cluster() {
 
 #[test]
 fn parse_explain_with_option_list() {
-    run_explain_analyze_with_specified_dialect(
-        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+    run_explain_analyze_with_specific_dialect(
+        |d| d.supports_explain_with_utility_options(),
         "EXPLAIN ( ANALYZE false, VERBOSE true ) SELECT sqrt(id) FROM foo",
         false,
         false,
@@ -10881,8 +10881,8 @@ fn parse_explain_with_option_list() {
         }),
     );
 
-    run_explain_analyze_with_specified_dialect(
-        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+    run_explain_analyze_with_specific_dialect(
+        |d| d.supports_explain_with_utility_options(),
         "EXPLAIN ( ANALYZE ON, VERBOSE OFF ) SELECT sqrt(id) FROM foo",
         false,
         false,
@@ -10901,8 +10901,8 @@ fn parse_explain_with_option_list() {
         }),
     );
 
-    run_explain_analyze_with_specified_dialect(
-        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+    run_explain_analyze_with_specific_dialect(
+        |d| d.supports_explain_with_utility_options(),
         r#"EXPLAIN ( FORMAT1 TEXT, FORMAT2 'JSON', FORMAT3 "XML", FORMAT4 YAML ) SELECT sqrt(id) FROM foo"#,
         false,
         false,
@@ -10929,8 +10929,8 @@ fn parse_explain_with_option_list() {
         }),
     );
 
-    run_explain_analyze_with_specified_dialect(
-        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+    run_explain_analyze_with_specific_dialect(
+        |d| d.supports_explain_with_utility_options(),
         r#"EXPLAIN ( NUM1 10, NUM2 +10.1, NUM3 -10.2 ) SELECT sqrt(id) FROM foo"#,
         false,
         false,
@@ -10986,8 +10986,8 @@ fn parse_explain_with_option_list() {
             },
         ],
     };
-    run_explain_analyze_with_specified_dialect(
-        |d| d.is::<PostgreSqlDialect>() || d.is::<DuckDbDialect>() || d.is::<GenericDialect>(),
+    run_explain_analyze_with_specific_dialect(
+        |d| d.supports_explain_with_utility_options(),
         "EXPLAIN ( ANALYZE, VERBOSE true, WAL OFF, FORMAT YAML, USER_DEF_NUM -100.1 ) SELECT sqrt(id) FROM foo",
         false,
         false,

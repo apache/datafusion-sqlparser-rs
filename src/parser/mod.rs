@@ -7411,6 +7411,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse an unsigned numeric literal
     pub fn parse_number_value(&mut self) -> Result<Value, ParserError> {
         match self.parse_value()? {
             v @ Value::Number(_, _) => Ok(v),
@@ -7418,6 +7419,26 @@ impl<'a> Parser<'a> {
             _ => {
                 self.prev_token();
                 self.expected("literal number", self.peek_token())
+            }
+        }
+    }
+
+    /// Parse a numeric literal as an expression. Returns a [`Expr::UnaryOp`] if the number is signed,
+    /// otherwise returns a [`Expr::Value`]
+    pub fn parse_number(&mut self) -> Result<Expr, ParserError> {
+        let next_token = self.next_token();
+        match next_token.token {
+            Token::Plus => Ok(Expr::UnaryOp {
+                op: UnaryOperator::Plus,
+                expr: Box::new(Expr::Value(self.parse_number_value()?)),
+            }),
+            Token::Minus => Ok(Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: Box::new(Expr::Value(self.parse_number_value()?)),
+            }),
+            _ => {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_number_value()?))
             }
         }
     }
@@ -11741,30 +11762,20 @@ impl<'a> Parser<'a> {
         //[ INCREMENT [ BY ] increment ]
         if self.parse_keywords(&[Keyword::INCREMENT]) {
             if self.parse_keywords(&[Keyword::BY]) {
-                sequence_options.push(SequenceOptions::IncrementBy(
-                    Expr::Value(self.parse_number_value()?),
-                    true,
-                ));
+                sequence_options.push(SequenceOptions::IncrementBy(self.parse_number()?, true));
             } else {
-                sequence_options.push(SequenceOptions::IncrementBy(
-                    Expr::Value(self.parse_number_value()?),
-                    false,
-                ));
+                sequence_options.push(SequenceOptions::IncrementBy(self.parse_number()?, false));
             }
         }
         //[ MINVALUE minvalue | NO MINVALUE ]
         if self.parse_keyword(Keyword::MINVALUE) {
-            sequence_options.push(SequenceOptions::MinValue(Some(Expr::Value(
-                self.parse_number_value()?,
-            ))));
+            sequence_options.push(SequenceOptions::MinValue(Some(self.parse_number()?)));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
             sequence_options.push(SequenceOptions::MinValue(None));
         }
         //[ MAXVALUE maxvalue | NO MAXVALUE ]
         if self.parse_keywords(&[Keyword::MAXVALUE]) {
-            sequence_options.push(SequenceOptions::MaxValue(Some(Expr::Value(
-                self.parse_number_value()?,
-            ))));
+            sequence_options.push(SequenceOptions::MaxValue(Some(self.parse_number()?)));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
             sequence_options.push(SequenceOptions::MaxValue(None));
         }
@@ -11772,22 +11783,14 @@ impl<'a> Parser<'a> {
         //[ START [ WITH ] start ]
         if self.parse_keywords(&[Keyword::START]) {
             if self.parse_keywords(&[Keyword::WITH]) {
-                sequence_options.push(SequenceOptions::StartWith(
-                    Expr::Value(self.parse_number_value()?),
-                    true,
-                ));
+                sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, true));
             } else {
-                sequence_options.push(SequenceOptions::StartWith(
-                    Expr::Value(self.parse_number_value()?),
-                    false,
-                ));
+                sequence_options.push(SequenceOptions::StartWith(self.parse_number()?, false));
             }
         }
         //[ CACHE cache ]
         if self.parse_keywords(&[Keyword::CACHE]) {
-            sequence_options.push(SequenceOptions::Cache(Expr::Value(
-                self.parse_number_value()?,
-            )));
+            sequence_options.push(SequenceOptions::Cache(self.parse_number()?));
         }
         // [ [ NO ] CYCLE ]
         if self.parse_keywords(&[Keyword::NO, Keyword::CYCLE]) {

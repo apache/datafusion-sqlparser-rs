@@ -2820,6 +2820,18 @@ fn parse_window_function_null_treatment_arg() {
 }
 
 #[test]
+fn parse_negative_value() {
+    let sql1 = "SELECT -1";
+    one_statement_parses_to(sql1, "SELECT -1");
+
+    let sql2 = "CREATE SEQUENCE name INCREMENT -10 MINVALUE -1000 MAXVALUE 15 START -100;";
+    one_statement_parses_to(
+        sql2,
+        "CREATE SEQUENCE name INCREMENT -10 MINVALUE -1000 MAXVALUE 15 START -100",
+    );
+}
+
+#[test]
 fn parse_create_table() {
     let sql = "CREATE TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

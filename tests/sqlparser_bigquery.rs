@@ -15,6 +15,7 @@ mod test_utils;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 #[test]
@@ -317,6 +318,7 @@ fn parse_map_access_offset() {
             column: Box::new(Expr::Identifier(Ident {
                 value: "d".to_string(),
                 quote_style: None,
+                span: Span::empty(),
             })),
             keys: vec![Expr::Function(Function {
                 name: ObjectName(vec!["offset".into()]),

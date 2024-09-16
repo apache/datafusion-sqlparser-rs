@@ -26,8 +26,9 @@ use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
     MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
-use sqlparser::keywords::ALL_KEYWORDS;
+use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::{Span, Token, TokenWithLocation};
 use test_utils::{
     all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
     TestedDialects,
@@ -224,6 +225,7 @@ fn parse_update_set_from() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
+                            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                             distinct: false,
                             top: None,
                             projection: vec![
@@ -834,6 +836,7 @@ fn parse_select_with_date_column_name() {
         &Expr::Identifier(Ident {
             value: "date".into(),
             quote_style: None,
+            span: Span::empty(),
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -1060,6 +1063,7 @@ fn parse_null_like() {
             alias: Ident {
                 value: "col_null".to_owned(),
                 quote_style: None,
+                span: Span::empty(),
             },
         },
         select.projection[0]
@@ -1075,6 +1079,7 @@ fn parse_null_like() {
             alias: Ident {
                 value: "null_col".to_owned(),
                 quote_style: None,
+                span: Span::empty(),
             },
         },
         select.projection[1]
@@ -1909,6 +1914,7 @@ fn parse_listagg() {
             expr: Expr::Identifier(Ident {
                 value: "id".to_string(),
                 quote_style: None,
+                span: Span::empty(),
             }),
             asc: None,
             nulls_first: None,
@@ -1917,6 +1923,7 @@ fn parse_listagg() {
             expr: Expr::Identifier(Ident {
                 value: "username".to_string(),
                 quote_style: None,
+                span: Span::empty(),
             }),
             asc: None,
             nulls_first: None,
@@ -3442,11 +3449,13 @@ fn parse_interval_and_or_xor() {
     let expected_ast = vec![Statement::Query(Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
+            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
             distinct: false,
             top: None,
             projection: vec![UnnamedExpr(Expr::Identifier(Ident {
                 value: "col".to_string(),
                 quote_style: None,
+                span: Span::empty(),
             }))],
             into: None,
             from: vec![TableWithJoins {
@@ -3454,6 +3463,7 @@ fn parse_interval_and_or_xor() {
                     name: ObjectName(vec![Ident {
                         value: "test".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     }]),
                     alias: None,
                     args: None,
@@ -3467,12 +3477,14 @@ fn parse_interval_and_or_xor() {
                     left: Box::new(Expr::Identifier(Ident {
                         value: "d3_date".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     })),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident {
                             value: "d1_date".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         })),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval {
@@ -3491,12 +3503,14 @@ fn parse_interval_and_or_xor() {
                     left: Box::new(Expr::Identifier(Ident {
                         value: "d2_date".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     })),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident {
                             value: "d1_date".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         })),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval {
@@ -3557,6 +3571,7 @@ fn parse_at_timezone() {
                 name: ObjectName(vec![Ident {
                     value: "FROM_UNIXTIME".to_string(),
                     quote_style: None,
+                    span: Span::empty(),
                 }]),
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero.clone()))],
                 over: None,
@@ -3576,6 +3591,7 @@ fn parse_at_timezone() {
                 name: ObjectName(vec![Ident {
                     value: "DATE_FORMAT".to_string(),
                     quote_style: None,
+                    span: Span::empty(),
                 },],),
                 args: vec![
                     FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::AtTimeZone {
@@ -3583,6 +3599,7 @@ fn parse_at_timezone() {
                             name: ObjectName(vec![Ident {
                                 value: "FROM_UNIXTIME".to_string(),
                                 quote_style: None,
+                                span: Span::empty(),
                             },],),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero))],
                             over: None,
@@ -3602,6 +3619,7 @@ fn parse_at_timezone() {
             alias: Ident {
                 value: "hour".to_string(),
                 quote_style: Some('"'),
+                span: Span::empty(),
             },
         },
         only(&select.projection),
@@ -4286,10 +4304,12 @@ fn parse_recursive_cte() {
             name: Ident {
                 value: "nums".to_string(),
                 quote_style: None,
+                span: Span::empty(),
             },
             columns: vec![Ident {
                 value: "val".to_string(),
                 quote_style: None,
+                span: Span::empty(),
             }],
         },
         query: Box::new(cte_query),
@@ -5449,10 +5469,12 @@ fn parse_grant() {
                                 Ident {
                                     value: "shape".into(),
                                     quote_style: None,
+                                    span: Span::empty(),
                                 },
                                 Ident {
                                     value: "size".into(),
                                     quote_style: None,
+                                    span: Span::empty(),
                                 },
                             ])
                         },
@@ -5642,6 +5664,7 @@ fn parse_merge() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
+                            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                             distinct: false,
                             top: None,
                             projection: vec![SelectItem::Wildcard(
@@ -5676,6 +5699,7 @@ fn parse_merge() {
                         name: Ident {
                             value: "stg".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         },
                         columns: vec![],
                     }),
@@ -5822,7 +5846,8 @@ fn test_lock_table() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
+            span: Span::empty(),
         }]
     );
     assert!(lock.nonblock.is_none());
@@ -5836,7 +5861,8 @@ fn test_lock_table() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
+            span: Span::empty(),
         }]
     );
     assert!(lock.nonblock.is_none());
@@ -5850,7 +5876,8 @@ fn test_lock_table() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
+            span: Span::empty(),
         }]
     );
     assert!(lock.nonblock.is_none());
@@ -5860,7 +5887,8 @@ fn test_lock_table() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "student".to_string(),
-            quote_style: None
+            quote_style: None,
+            span: Span::empty(),
         }]
     );
     assert!(lock.nonblock.is_none());
@@ -5877,7 +5905,8 @@ fn test_lock_nonblock() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
+            span: Span::empty(),
         }]
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::SkipLocked);
@@ -5891,7 +5920,8 @@ fn test_lock_nonblock() {
         lock.of.unwrap().0,
         vec![Ident {
             value: "school".to_string(),
-            quote_style: None
+            quote_style: None,
+            span: Span::empty(),
         }]
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::Nowait);

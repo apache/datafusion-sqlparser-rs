@@ -18,7 +18,9 @@ use sqlparser::ast::Expr;
 use sqlparser::ast::Value;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
+use sqlparser::tokenizer::Span;
 use sqlparser::tokenizer::Token;
+use sqlparser::tokenizer::TokenWithLocation;
 use test_utils::*;
 
 #[macro_use]
@@ -445,11 +447,13 @@ fn parse_quote_identifiers_2() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                 distinct: false,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "quoted ` identifier".into(),
                     quote_style: Some('`'),
+                    span: Span::empty(),
                 }))],
                 into: None,
                 from: vec![],
@@ -479,11 +483,13 @@ fn parse_quote_identifiers_3() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                 distinct: false,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "`quoted identifier`".into(),
                     quote_style: Some('`'),
+                    span: Span::empty(),
                 }))],
                 into: None,
                 from: vec![],
@@ -966,6 +972,8 @@ fn parse_alter_table_change_column() {
 #[test]
 #[cfg(not(feature = "bigdecimal"))]
 fn parse_substring_in_select() {
+    use sqlparser::tokenizer::Span;
+
     let sql = "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test";
     match mysql().one_statement_parses_to(
         sql,
@@ -976,12 +984,14 @@ fn parse_substring_in_select() {
                 Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Select(Box::new(Select {
+                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                         distinct: true,
                         top: None,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
                             expr: Box::new(Expr::Identifier(Ident {
                                 value: "description".to_string(),
-                                quote_style: None
+                                quote_style: None,
+                                span: Span::empty(),
                             })),
                             substring_from: Some(Box::new(Expr::Value(Value::Number(
                                 "0".to_string(),
@@ -997,7 +1007,8 @@ fn parse_substring_in_select() {
                             relation: TableFactor::Table {
                                 name: ObjectName(vec![Ident {
                                     value: "test".to_string(),
-                                    quote_style: None
+                                    quote_style: None,
+                                    span: Span::empty(),
                                 }]),
                                 alias: None,
                                 args: None,

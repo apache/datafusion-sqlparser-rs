@@ -40,7 +40,7 @@ impl Dialect for SQLiteDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-        if parser.parse_keyword(Keyword::REPLACE) {
+        if parser.parse_keyword(Keyword::REPLACE).is_some() {
             parser.prev_token();
             Some(parser.parse_insert())
         } else {

@@ -16,6 +16,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::tokenizer::{Span, Token, TokenWithLocation};
 use test_utils::*;
 
 use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
@@ -32,12 +33,14 @@ fn parse_map_access_expr() {
     let select = clickhouse().verified_only_select(sql);
     assert_eq!(
         Select {
+            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
             distinct: false,
             top: None,
             projection: vec![UnnamedExpr(MapAccess {
                 column: Box::new(Identifier(Ident {
                     value: "string_values".to_string(),
                     quote_style: None,
+                    span: Span::empty(),
                 })),
                 keys: vec![Expr::Function(Function {
                     name: ObjectName(vec!["indexOf".into()]),

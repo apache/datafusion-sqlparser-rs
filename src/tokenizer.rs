@@ -24,9 +24,9 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::fmt;
 use core::iter::Peekable;
 use core::str::Chars;
+use core::{cmp, fmt};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -330,12 +330,18 @@ impl fmt::Display for Whitespace {
 }
 
 /// Location in input string
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Ord, PartialOrd)]
 pub struct Location {
     /// Line number, starting from 1
     pub line: u64,
     /// Line column, starting from 1
     pub column: u64,
+}
+
+impl std::fmt::Debug for Location {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Location({}:{})", self.line, self.column)
+    }
 }
 
 impl Location {
@@ -354,10 +360,16 @@ impl From<(u64, u64)> for Location {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Copy)]
 pub struct Span {
     pub start: Location,
     pub end: Location,
+}
+
+impl std::fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Span({:?}..{:?})", self.start, self.end)
+    }
 }
 
 impl Span {
@@ -371,11 +383,24 @@ impl Span {
             end: Location { line: 0, column: 0 },
         }
     }
+
+    pub fn union(&self, other: &Span) -> Span {
+        Span {
+            start: cmp::min(self.start, other.start),
+            end: cmp::max(self.end, other.end),
+        }
+    }
+
+    pub fn union_opt(&self, other: &Option<Span>) -> Span {
+        match other {
+            Some(other) => self.union(&other),
+            None => self.clone(),
+        }
+    }
 }
 
-
 /// A [Token] with [Location] attached to it
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, Hash, Clone)]
 pub struct TokenWithLocation {
     pub token: Token,
     pub span: Span,
@@ -383,10 +408,7 @@ pub struct TokenWithLocation {
 
 impl TokenWithLocation {
     pub fn new(token: Token, span: Span) -> TokenWithLocation {
-        TokenWithLocation {
-            token,
-            span,
-        }
+        TokenWithLocation { token, span }
     }
 
     pub fn wrap(token: Token) -> TokenWithLocation {
@@ -395,6 +417,24 @@ impl TokenWithLocation {
 
     pub fn at(token: Token, start: Location, end: Location) -> TokenWithLocation {
         TokenWithLocation::new(token, Span::new(start, end))
+    }
+}
+
+impl PartialEq<TokenWithLocation> for TokenWithLocation {
+    fn eq(&self, other: &TokenWithLocation) -> bool {
+        self.token == other.token
+    }
+}
+
+impl PartialOrd<TokenWithLocation> for TokenWithLocation {
+    fn partial_cmp(&self, other: &TokenWithLocation) -> Option<std::cmp::Ordering> {
+        self.token.partial_cmp(&other.token)
+    }
+}
+
+impl Ord for TokenWithLocation {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.token.cmp(&other.token)
     }
 }
 
@@ -492,6 +532,7 @@ impl<'a> Tokenizer<'a> {
         for token_with_location in twl {
             tokens.push(token_with_location.token);
         }
+
         Ok(tokens)
     }
 
@@ -508,14 +549,14 @@ impl<'a> Tokenizer<'a> {
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
             let span = location.span_to(state.location());
+            dbg!(span, &token);
 
-            tokens.push(TokenWithLocation {
-                token,
-                span,
-            });
+            tokens.push(TokenWithLocation { token, span });
 
             location = state.location();
         }
+
+        dbg!(&tokens);
         Ok(tokens)
     }
 
@@ -1858,11 +1899,23 @@ mod tests {
         let tokens = tokenizer.tokenize_with_location().unwrap();
         let expected = vec![
             TokenWithLocation::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
-            TokenWithLocation::at(Token::Whitespace(Whitespace::Space), (1, 7).into(), (1, 8).into()),
+            TokenWithLocation::at(
+                Token::Whitespace(Whitespace::Space),
+                (1, 7).into(),
+                (1, 8).into(),
+            ),
             TokenWithLocation::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
             TokenWithLocation::at(Token::Comma, (1, 9).into(), (1, 10).into()),
-            TokenWithLocation::at(Token::Whitespace(Whitespace::Newline), (1, 10).into(), (2, 1).into()),
-            TokenWithLocation::at(Token::Whitespace(Whitespace::Space), (2, 1).into(), (2, 2).into()),
+            TokenWithLocation::at(
+                Token::Whitespace(Whitespace::Newline),
+                (1, 10).into(),
+                (2, 1).into(),
+            ),
+            TokenWithLocation::at(
+                Token::Whitespace(Whitespace::Space),
+                (2, 1).into(),
+                (2, 2).into(),
+            ),
             TokenWithLocation::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
         ];
         compare(expected, tokens);

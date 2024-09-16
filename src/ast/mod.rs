@@ -25,6 +25,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+use crate::tokenizer::Span;
+
 pub use self::data_type::{
     CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
 };
@@ -51,8 +53,8 @@ mod ddl;
 pub mod helpers;
 mod operator;
 mod query;
-mod value;
 mod spans;
+mod value;
 
 #[cfg(feature = "visitor")]
 mod visitor;
@@ -104,6 +106,8 @@ pub struct Ident {
     /// The starting quote if any. Valid quote characters are the single quote,
     /// double quote, backtick, and opening square bracket.
     pub quote_style: Option<char>,
+    /// The span of the identifier in the original SQL string.
+    pub span: Span,
 }
 
 impl Ident {
@@ -115,6 +119,7 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: None,
+            span: Span::empty(),
         }
     }
 
@@ -128,6 +133,30 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: Some(quote),
+            span: Span::empty(),
+        }
+    }
+
+    pub fn with_span<S>(span: Span, value: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Ident {
+            value: value.into(),
+            quote_style: None,
+            span,
+        }
+    }
+
+    pub fn with_quote_and_span<S>(quote: char, span: Span, value: S) -> Self
+    where
+        S: Into<String>,
+    {
+        assert!(quote == '\'' || quote == '"' || quote == '`' || quote == '[');
+        Ident {
+            value: value.into(),
+            quote_style: Some(quote),
+            span,
         }
     }
 }
@@ -137,6 +166,7 @@ impl From<&str> for Ident {
         Ident {
             value: value.to_string(),
             quote_style: None,
+            span: Span::empty(),
         }
     }
 }

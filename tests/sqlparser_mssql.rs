@@ -16,6 +16,7 @@
 
 #[macro_use]
 mod test_utils;
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -132,7 +133,8 @@ fn parse_mssql_create_role() {
                 authorization_owner,
                 Some(ObjectName(vec![Ident {
                     value: "helena".into(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }]))
             );
         }

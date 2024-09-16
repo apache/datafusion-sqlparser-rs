@@ -269,7 +269,7 @@ impl<'a> Parser<'a> {
             .into_iter()
             .map(|token| TokenWithLocation {
                 token,
-                location: Location { line: 0, column: 0 },
+                span: Span::empty(),
             })
             .collect();
         self.with_tokens_with_locations(tokens_with_locations)
@@ -2022,13 +2022,13 @@ impl<'a> Parser<'a> {
             match self.tokens.get(index - 1) {
                 Some(TokenWithLocation {
                     token: Token::Whitespace(_),
-                    location: _,
+                    span: _,
                 }) => continue,
                 non_whitespace => {
                     if n == 0 {
                         return non_whitespace.cloned().unwrap_or(TokenWithLocation {
                             token: Token::EOF,
-                            location: Location { line: 0, column: 0 },
+                            span: Span::empty(),
                         });
                     }
                     n -= 1;
@@ -2046,7 +2046,7 @@ impl<'a> Parser<'a> {
             match self.tokens.get(self.index - 1) {
                 Some(TokenWithLocation {
                     token: Token::Whitespace(_),
-                    location: _,
+                    span: _,
                 }) => continue,
                 token => {
                     return token
@@ -2072,7 +2072,7 @@ impl<'a> Parser<'a> {
             self.index -= 1;
             if let Some(TokenWithLocation {
                 token: Token::Whitespace(_),
-                location: _,
+                span: _,
             }) = self.tokens.get(self.index)
             {
                 continue;
@@ -3600,7 +3600,7 @@ impl<'a> Parser<'a> {
                         "FULLTEXT or SPATIAL option without constraint name",
                         TokenWithLocation {
                             token: Token::make_keyword(&name.to_string()),
-                            location: next_token.location,
+                            span: next_token.span,
                         },
                     );
                 }
@@ -4073,7 +4073,7 @@ impl<'a> Parser<'a> {
     /// Parse a literal value (numbers, strings, date/time, booleans)
     pub fn parse_value(&mut self) -> Result<Value, ParserError> {
         let next_token = self.next_token();
-        let location = next_token.location;
+        let span = next_token.span;
         match next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE => Ok(Value::Boolean(true)),
@@ -4086,7 +4086,7 @@ impl<'a> Parser<'a> {
                         "A value?",
                         TokenWithLocation {
                             token: Token::Word(w),
-                            location,
+                            span,
                         },
                     )?,
                 },
@@ -4098,7 +4098,7 @@ impl<'a> Parser<'a> {
                     "a concrete value",
                     TokenWithLocation {
                         token: Token::Word(w),
-                        location,
+                        span,
                     },
                 ),
             },
@@ -4125,7 +4125,7 @@ impl<'a> Parser<'a> {
                 "a value",
                 TokenWithLocation {
                     token: unexpected,
-                    location,
+                    span,
                 },
             ),
         }

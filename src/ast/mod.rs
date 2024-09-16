@@ -52,6 +52,7 @@ pub mod helpers;
 mod operator;
 mod query;
 mod value;
+mod spans;
 
 #[cfg(feature = "visitor")]
 mod visitor;

@@ -338,23 +338,63 @@ pub struct Location {
     pub column: u64,
 }
 
+impl Location {
+    pub fn of(line: u64, column: u64) -> Self {
+        Self { line, column }
+    }
+
+    pub fn span_to(self, end: Self) -> Span {
+        Span { start: self, end }
+    }
+}
+
+impl From<(u64, u64)> for Location {
+    fn from((line, column): (u64, u64)) -> Self {
+        Self { line, column }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Span {
+    pub start: Location,
+    pub end: Location,
+}
+
+impl Span {
+    pub fn new(start: Location, end: Location) -> Span {
+        Span { start, end }
+    }
+
+    pub fn empty() -> Span {
+        Span {
+            start: Location { line: 0, column: 0 },
+            end: Location { line: 0, column: 0 },
+        }
+    }
+}
+
+
 /// A [Token] with [Location] attached to it
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct TokenWithLocation {
     pub token: Token,
-    pub location: Location,
+    pub span: Span,
 }
 
 impl TokenWithLocation {
-    pub fn new(token: Token, line: u64, column: u64) -> TokenWithLocation {
+    pub fn new(token: Token, span: Span) -> TokenWithLocation {
         TokenWithLocation {
             token,
-            location: Location { line, column },
+            span,
         }
     }
 
     pub fn wrap(token: Token) -> TokenWithLocation {
-        TokenWithLocation::new(token, 0, 0)
+        TokenWithLocation::new(token, Span::empty())
+    }
+
+    pub fn at(token: Token, start: Location, end: Location) -> TokenWithLocation {
+        TokenWithLocation::new(token, Span::new(start, end))
     }
 }
 
@@ -467,9 +507,11 @@ impl<'a> Tokenizer<'a> {
 
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
+            let span = location.span_to(state.location());
+
             tokens.push(TokenWithLocation {
                 token,
-                location: location.clone(),
+                span,
             });
 
             location = state.location();
@@ -1815,13 +1857,13 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&dialect, sql);
         let tokens = tokenizer.tokenize_with_location().unwrap();
         let expected = vec![
-            TokenWithLocation::new(Token::make_keyword("SELECT"), 1, 1),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 7),
-            TokenWithLocation::new(Token::make_word("a", None), 1, 8),
-            TokenWithLocation::new(Token::Comma, 1, 9),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 1, 10),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 1),
-            TokenWithLocation::new(Token::make_word("b", None), 2, 2),
+            TokenWithLocation::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
+            TokenWithLocation::at(Token::Whitespace(Whitespace::Space), (1, 7).into(), (1, 8).into()),
+            TokenWithLocation::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
+            TokenWithLocation::at(Token::Comma, (1, 9).into(), (1, 10).into()),
+            TokenWithLocation::at(Token::Whitespace(Whitespace::Newline), (1, 10).into(), (2, 1).into()),
+            TokenWithLocation::at(Token::Whitespace(Whitespace::Space), (2, 1).into(), (2, 2).into()),
+            TokenWithLocation::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
         ];
         compare(expected, tokens);
     }

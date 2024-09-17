@@ -424,9 +424,11 @@ pub struct Location {
     pub column: u64,
 }
 
-
 impl std::fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.line == 0 {
+            return Ok(());
+        }
         write!(f, " at Line: {}, Column: {}", self.line, self.column)
     }
 }
@@ -466,7 +468,7 @@ impl std::fmt::Debug for Span {
 }
 
 impl Span {
-    const EMPTY : Span = Self::empty();
+    const EMPTY: Span = Self::empty();
 
     pub fn new(start: Location, end: Location) -> Span {
         Span { start, end }

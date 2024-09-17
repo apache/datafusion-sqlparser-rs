@@ -3,7 +3,13 @@ use core::iter;
 use crate::ast;
 use crate::tokenizer::Span;
 
-use super::{Cte, Expr, FunctionArg, FunctionArgExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, Query, Select, SelectItem, SetExpr, TableAlias, TableFactor, TableWithJoins, With};
+use super::{
+    Cte, ExceptSelectItem, ExcludeSelectItem, Expr, Function, FunctionArg, FunctionArgExpr,
+    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, HavingBound, IlikeSelectItem,
+    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, Query, RenameSelectItem,
+    ReplaceSelectElement, ReplaceSelectItem, Select, SelectItem, SetExpr, TableAlias, TableFactor,
+    TableWithJoins, Value, WildcardAdditionalOptions, With,
+};
 
 pub trait Spanned {
     fn span(&self) -> Span;
@@ -12,8 +18,10 @@ pub trait Spanned {
 impl Spanned for Query {
     fn span(&self) -> Span {
         union_spans(
-            self.with.iter().map(|item| item.span())
-                .chain(core::iter::once(self.body.span()))
+            self.with
+                .iter()
+                .map(|item| item.span())
+                .chain(core::iter::once(self.body.span())),
         )
     }
 }
@@ -22,7 +30,7 @@ impl Spanned for With {
     fn span(&self) -> Span {
         union_spans(
             core::iter::once(self.with_token.span.clone())
-                .chain(self.cte_tables.iter().map(|item| item.span()))
+                .chain(self.cte_tables.iter().map(|item| item.span())),
         )
     }
 }
@@ -32,7 +40,7 @@ impl Spanned for Cte {
         union_spans(
             core::iter::once(self.alias.span())
                 .chain(core::iter::once(self.query.span()))
-                .chain(self.from.iter().map(|item| item.span))
+                .chain(self.from.iter().map(|item| item.span)),
         )
     }
 }
@@ -41,7 +49,7 @@ impl Spanned for SetExpr {
     fn span(&self) -> Span {
         match self {
             SetExpr::Select(select) => select.span(),
-            SetExpr::Query(query) => todo!(),
+            SetExpr::Query(query) => query.span(),
             SetExpr::SetOperation {
                 op,
                 set_quantifier,
@@ -76,7 +84,9 @@ impl Spanned for Expr {
                 expr,
                 list,
                 negated,
-            } => todo!(),
+            } => union_spans(
+                core::iter::once(expr.span()).chain(list.iter().map(|item| item.span())),
+            ),
             Expr::InSubquery {
                 expr,
                 subquery,
@@ -122,11 +132,11 @@ impl Spanned for Expr {
                 overlay_for,
             } => todo!(),
             Expr::Collate { expr, collation } => todo!(),
-            Expr::Nested(expr) => todo!(),
-            Expr::Value(value) => todo!(),
+            Expr::Nested(expr) => expr.span(),
+            Expr::Value(value) => value.span(),
             Expr::TypedString { data_type, value } => todo!(),
             Expr::MapAccess { column, keys } => todo!(),
-            Expr::Function(function) => todo!(),
+            Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => todo!(),
             Expr::Cube(vec) => todo!(),
             Expr::Rollup(vec) => todo!(),
@@ -138,20 +148,86 @@ impl Spanned for Expr {
                 opt_search_modifier,
             } => todo!(),
             Expr::JsonAccess { value, path } => value.span().union(&path.span()),
-            Expr::RLike { negated, expr, pattern, regexp } => todo!(),
-            Expr::AnyOp { left, compare_op, right } => todo!(),
-            Expr::AllOp { left, compare_op, right } => todo!(),
-            Expr::UnaryOp { op, expr } => todo!(),
-            Expr::Convert { expr, data_type, charset, target_before_value, styles } => todo!(),
-            Expr::Cast { kind, expr, data_type, format } => expr.span(),
-            Expr::AtTimeZone { timestamp, time_zone } => todo!(),
-            Expr::Extract { field, syntax, expr } => todo!(),
-            Expr::Substring { expr, substring_from, substring_for, special } => todo!(),
-            Expr::Trim { expr, trim_where, trim_what, trim_characters } => todo!(),
-            Expr::IntroducedString { introducer, value } => todo!(),
-            Expr::Case { operand, conditions, results, else_result } => todo!(),
-            Expr::Exists { subquery, negated } => todo!(),
-            Expr::Subquery(query) => todo!(),
+            Expr::RLike {
+                negated,
+                expr,
+                pattern,
+                regexp,
+            } => todo!(),
+            Expr::AnyOp {
+                left,
+                compare_op,
+                right,
+            } => todo!(),
+            Expr::AllOp {
+                left,
+                compare_op,
+                right,
+            } => todo!(),
+            Expr::UnaryOp { op, expr } => expr.span(),
+            Expr::Convert {
+                expr,
+                data_type,
+                charset,
+                target_before_value,
+                styles,
+            } => todo!(),
+            Expr::Cast {
+                kind,
+                expr,
+                data_type,
+                format,
+            } => expr.span(),
+            Expr::AtTimeZone {
+                timestamp,
+                time_zone,
+            } => todo!(),
+            Expr::Extract {
+                field,
+                syntax,
+                expr,
+            } => todo!(),
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                special,
+            } => union_spans(
+                core::iter::once(expr.span())
+                    .chain(substring_from.as_ref().map(|i| i.span()))
+                    .chain(substring_for.as_ref().map(|i| i.span())),
+            ),
+            Expr::Trim {
+                expr,
+                trim_where,
+                trim_what,
+                trim_characters,
+            } => union_spans(
+                core::iter::once(expr.span())
+                    .chain(trim_what.as_ref().map(|i| i.span()))
+                    .chain(
+                        trim_characters
+                            .as_ref()
+                            .map(|items| union_spans(items.iter().map(|i| i.span()))),
+                    ),
+            ),
+            Expr::IntroducedString { introducer, value } => value.span(),
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            } => union_spans(
+                operand
+                    .as_ref()
+                    .map(|i| i.span())
+                    .into_iter()
+                    .chain(conditions.iter().map(|i| i.span()))
+                    .chain(results.iter().map(|i| i.span()))
+                    .chain(else_result.as_ref().map(|i| i.span())),
+            ),
+            Expr::Exists { subquery, negated } => subquery.span(),
+            Expr::Subquery(query) => query.span(),
             Expr::Struct { values, fields } => todo!(),
             Expr::Named { expr, name } => todo!(),
             Expr::Dictionary(vec) => todo!(),
@@ -167,12 +243,58 @@ impl Spanned for Expr {
     }
 }
 
+impl Spanned for Function {
+    fn span(&self) -> Span {
+        union_spans(
+            self.name
+                .0
+                .iter()
+                .map(|i| i.span)
+                .chain(iter::once(self.args.span())),
+        )
+    }
+}
+
+impl Spanned for FunctionArguments {
+    fn span(&self) -> Span {
+        match self {
+            FunctionArguments::None => Span::empty(),
+            FunctionArguments::Subquery(query) => query.span(),
+            FunctionArguments::List(list) => list.span(),
+        }
+    }
+}
+
+impl Spanned for FunctionArgumentList {
+    fn span(&self) -> Span {
+        union_spans(
+            // # todo: duplicate-treatment span
+            self.args
+                .iter()
+                .map(|i| i.span())
+                .chain(self.clauses.iter().map(|i| i.span())),
+        )
+    }
+}
+
+impl Spanned for FunctionArgumentClause {
+    fn span(&self) -> Span {
+        match self {
+            FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment) => Span::empty(),
+            FunctionArgumentClause::OrderBy(vec) => union_spans(vec.iter().map(|i| i.expr.span())),
+            FunctionArgumentClause::Limit(expr) => expr.span(),
+            FunctionArgumentClause::OnOverflow(list_agg_on_overflow) => Span::empty(),
+            FunctionArgumentClause::Having(HavingBound(kind, expr)) => expr.span(),
+            FunctionArgumentClause::Separator(value) => value.span(),
+        }
+    }
+}
+
 impl Spanned for JsonPath {
     fn span(&self) -> Span {
         union_spans(self.path.iter().map(|i| i.span()))
     }
 }
-
 
 impl Spanned for JsonPathElem {
     fn span(&self) -> Span {
@@ -188,14 +310,77 @@ impl Spanned for SelectItem {
         match self {
             SelectItem::UnnamedExpr(expr) => expr.span(),
             SelectItem::ExprWithAlias { expr, alias } => expr.span().union(&alias.span),
-            SelectItem::QualifiedWildcard(object_name, wildcard_additional_options) => object_name
-                .0
-                .iter()
-                .map(|i| i.span)
-                .reduce(|acc, item| acc.union(&item))
-                .expect("Empty iterator"),
-            SelectItem::Wildcard(wildcard_additional_options) => todo!(),
+            SelectItem::QualifiedWildcard(object_name, wildcard_additional_options) => union_spans(
+                object_name
+                    .0
+                    .iter()
+                    .map(|i| i.span)
+                    .chain(iter::once(wildcard_additional_options.span())),
+            ),
+            SelectItem::Wildcard(wildcard_additional_options) => wildcard_additional_options.span(),
         }
+    }
+}
+
+impl Spanned for WildcardAdditionalOptions {
+    fn span(&self) -> Span {
+        union_spans(
+            self.opt_ilike
+                .as_ref()
+                .map(|i| i.span())
+                .into_iter()
+                .chain(self.opt_exclude.as_ref().map(|i| i.span()).into_iter())
+                .chain(self.opt_rename.as_ref().map(|i| i.span()).into_iter())
+                .chain(self.opt_replace.as_ref().map(|i| i.span()).into_iter())
+                .chain(self.opt_except.as_ref().map(|i| i.span()).into_iter()),
+        )
+    }
+}
+
+impl Spanned for IlikeSelectItem {
+    fn span(&self) -> Span {
+        Span::empty() // # todo: missing span
+    }
+}
+
+impl Spanned for ExcludeSelectItem {
+    fn span(&self) -> Span {
+        match self {
+            ExcludeSelectItem::Single(ident) => ident.span,
+            ExcludeSelectItem::Multiple(vec) => union_spans(vec.iter().map(|i| i.span)),
+        }
+    }
+}
+
+impl Spanned for RenameSelectItem {
+    fn span(&self) -> Span {
+        match self {
+            RenameSelectItem::Single(ident) => ident.ident.span.union(&ident.alias.span),
+            RenameSelectItem::Multiple(vec) => {
+                union_spans(vec.iter().map(|i| i.ident.span.union(&i.alias.span)))
+            }
+        }
+    }
+}
+
+impl Spanned for ExceptSelectItem {
+    fn span(&self) -> Span {
+        union_spans(
+            iter::once(self.first_element.span)
+                .chain(self.additional_elements.iter().map(|i| i.span)),
+        )
+    }
+}
+
+impl Spanned for ReplaceSelectItem {
+    fn span(&self) -> Span {
+        union_spans(self.items.iter().map(|i| i.span()))
+    }
+}
+
+impl Spanned for ReplaceSelectElement {
+    fn span(&self) -> Span {
+        self.expr.span().union(&self.column_name.span)
     }
 }
 
@@ -227,7 +412,9 @@ impl Spanned for TableFactor {
                 lateral,
                 subquery,
                 alias,
-            } => subquery.span().union_opt(&alias.as_ref().map(|alias| alias.span())),
+            } => subquery
+                .span()
+                .union_opt(&alias.as_ref().map(|alias| alias.span())),
             TableFactor::TableFunction { expr, alias } => todo!(),
             TableFactor::UNNEST {
                 alias,
@@ -240,26 +427,62 @@ impl Spanned for TableFactor {
                 table_with_joins,
                 alias,
             } => todo!(),
-            TableFactor::Function { lateral, name, args, alias } => union_spans(
-                name.0.iter().map(|i| i.span)
+            TableFactor::Function {
+                lateral,
+                name,
+                args,
+                alias,
+            } => union_spans(
+                name.0
+                    .iter()
+                    .map(|i| i.span)
                     .chain(args.iter().map(|i| i.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
-            TableFactor::JsonTable { json_expr, json_path, columns, alias } => todo!(),
-            TableFactor::Pivot { table, aggregate_functions, value_column, value_source, default_on_null, alias } => todo!(),
-            TableFactor::Unpivot { table, value, name, columns, alias } => todo!(),
-            TableFactor::MatchRecognize { table, partition_by, order_by, measures, rows_per_match, after_match_skip, pattern, symbols, alias } => todo!(),
+            TableFactor::JsonTable {
+                json_expr,
+                json_path,
+                columns,
+                alias,
+            } => todo!(),
+            TableFactor::Pivot {
+                table,
+                aggregate_functions,
+                value_column,
+                value_source,
+                default_on_null,
+                alias,
+            } => todo!(),
+            TableFactor::Unpivot {
+                table,
+                value,
+                name,
+                columns,
+                alias,
+            } => todo!(),
+            TableFactor::MatchRecognize {
+                table,
+                partition_by,
+                order_by,
+                measures,
+                rows_per_match,
+                after_match_skip,
+                pattern,
+                symbols,
+                alias,
+            } => todo!(),
         }
     }
 }
 
-
 impl Spanned for FunctionArg {
     fn span(&self) -> Span {
         match self {
-            FunctionArg::Named { name, arg, operator } => {
-                name.span.union(&arg.span())
-            },
+            FunctionArg::Named {
+                name,
+                arg,
+                operator,
+            } => name.span.union(&arg.span()),
             FunctionArg::Unnamed(arg) => arg.span(),
         }
     }
@@ -269,7 +492,9 @@ impl Spanned for FunctionArgExpr {
     fn span(&self) -> Span {
         match self {
             FunctionArgExpr::Expr(expr) => expr.span(),
-            FunctionArgExpr::QualifiedWildcard(object_name) => union_spans(object_name.0.iter().map(|i| i.span)),
+            FunctionArgExpr::QualifiedWildcard(object_name) => {
+                union_spans(object_name.0.iter().map(|i| i.span))
+            }
             FunctionArgExpr::Wildcard => Span::empty(),
         }
     }
@@ -277,10 +502,13 @@ impl Spanned for FunctionArgExpr {
 
 impl Spanned for TableAlias {
     fn span(&self) -> Span {
-        union_spans(
-            iter::once(self.name.span)
-                .chain(self.columns.iter().map(|i| i.span))
-        )
+        union_spans(iter::once(self.name.span).chain(self.columns.iter().map(|i| i.span)))
+    }
+}
+
+impl Spanned for Value {
+    fn span(&self) -> Span {
+        Span::empty() // # todo: Value needs to store spans before this is possible
     }
 }
 
@@ -304,7 +532,10 @@ impl Spanned for JoinOperator {
             JoinOperator::RightAnti(join_constraint) => join_constraint.span(),
             JoinOperator::CrossApply => Span::empty(),
             JoinOperator::OuterApply => Span::empty(),
-            JoinOperator::AsOf { match_condition, constraint } => todo!(),
+            JoinOperator::AsOf {
+                match_condition,
+                constraint,
+            } => todo!(),
         }
     }
 }
@@ -330,7 +561,7 @@ impl Spanned for TableWithJoins {
 
 pub fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
     iter.reduce(|acc, item| acc.union(&item))
-        .expect("Empty iterator")
+        .unwrap_or(Span::empty())
 }
 
 impl Spanned for Select {
@@ -355,7 +586,9 @@ pub mod tests {
     #[test]
     fn test_query_span() {
         let query = crate::parser::Parser::new(&GenericDialect::default())
-            .try_with_sql("SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id")
+            .try_with_sql(
+                "SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id",
+            )
             .unwrap()
             .parse_query()
             .unwrap();
@@ -366,11 +599,12 @@ pub mod tests {
         );
     }
 
-
     #[test]
     pub fn test_union() {
         let query = crate::parser::Parser::new(&GenericDialect::default())
-            .try_with_sql("SELECT a FROM postgres.public.source UNION SELECT a FROM postgres.public.source")
+            .try_with_sql(
+                "SELECT a FROM postgres.public.source UNION SELECT a FROM postgres.public.source",
+            )
             .unwrap()
             .parse_query()
             .unwrap();
@@ -414,7 +648,9 @@ pub mod tests {
     #[test]
     pub fn test_wildcard_from_cte() {
         let query = crate::parser::Parser::new(&GenericDialect::default())
-            .try_with_sql("WITH cte AS (SELECT a FROM postgres.public.source) SELECT cte.* FROM cte")
+            .try_with_sql(
+                "WITH cte AS (SELECT a FROM postgres.public.source) SELECT cte.* FROM cte",
+            )
             .unwrap()
             .parse_query()
             .unwrap();

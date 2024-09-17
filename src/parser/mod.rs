@@ -2189,7 +2189,10 @@ impl<'a> Parser<'a> {
         let (fields, trailing_bracket) =
             self.parse_struct_type_def(Self::parse_struct_field_def)?;
         if trailing_bracket.0 {
-            return parser_err!("unmatched > in STRUCT literal", self.peek_token().span.start);
+            return parser_err!(
+                "unmatched > in STRUCT literal",
+                self.peek_token().span.start
+            );
         }
 
         self.expect_token(&Token::LParen)?;
@@ -2992,7 +2995,9 @@ impl<'a> Parser<'a> {
             });
         }
         self.expect_token(&Token::LParen)?;
-        let in_op = if self.parse_keyword(Keyword::SELECT).is_some() || self.parse_keyword(Keyword::WITH).is_some() {
+        let in_op = if self.parse_keyword(Keyword::SELECT).is_some()
+            || self.parse_keyword(Keyword::WITH).is_some()
+        {
             self.prev_token();
             Expr::InSubquery {
                 expr: Box::new(expr),
@@ -3197,9 +3202,7 @@ impl<'a> Parser<'a> {
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> Option<TokenWithLocation> {
         match self.peek_token().token {
-            Token::Word(w) if expected == w.keyword => {
-                Some(self.next_token())
-            }
+            Token::Word(w) if expected == w.keyword => Some(self.next_token()),
             _ => None,
         }
     }
@@ -3547,7 +3550,9 @@ impl<'a> Parser<'a> {
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         if self.parse_keyword(Keyword::TABLE).is_some() {
             self.parse_create_table(or_replace, temporary, global, transient)
-        } else if self.parse_keyword(Keyword::MATERIALIZED).is_some() || self.parse_keyword(Keyword::VIEW).is_some() {
+        } else if self.parse_keyword(Keyword::MATERIALIZED).is_some()
+            || self.parse_keyword(Keyword::VIEW).is_some()
+        {
             self.prev_token();
             self.parse_create_view(or_replace, temporary)
         } else if self.parse_keyword(Keyword::EXTERNAL).is_some() {
@@ -4134,12 +4139,12 @@ impl<'a> Parser<'a> {
             data_type = self.parse_data_type()?;
         }
 
-        let default_expr = if self.parse_keyword(Keyword::DEFAULT).is_some() || self.consume_token(&Token::Eq)
-        {
-            Some(self.parse_expr()?)
-        } else {
-            None
-        };
+        let default_expr =
+            if self.parse_keyword(Keyword::DEFAULT).is_some() || self.consume_token(&Token::Eq) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
         Ok(OperateFunctionArg {
             mode,
             name,
@@ -4219,7 +4224,8 @@ impl<'a> Parser<'a> {
             };
 
         let condition = self
-            .parse_keyword(Keyword::WHEN).is_some()
+            .parse_keyword(Keyword::WHEN)
+            .is_some()
             .then(|| self.parse_expr())
             .transpose()?;
 
@@ -5300,7 +5306,9 @@ impl<'a> Parser<'a> {
             DiscardObject::PLANS
         } else if self.parse_keyword(Keyword::SEQUENCES).is_some() {
             DiscardObject::SEQUENCES
-        } else if self.parse_keyword(Keyword::TEMP).is_some() || self.parse_keyword(Keyword::TEMPORARY).is_some() {
+        } else if self.parse_keyword(Keyword::TEMP).is_some()
+            || self.parse_keyword(Keyword::TEMPORARY).is_some()
+        {
             DiscardObject::TEMP
         } else {
             return self.expected(
@@ -5591,7 +5599,9 @@ impl<'a> Parser<'a> {
         // Clickhouse has `ON CLUSTER 'cluster'` syntax for DDLs
         let on_cluster = self.parse_optional_on_cluster()?;
 
-        let like = if self.parse_keyword(Keyword::LIKE).is_some() || self.parse_keyword(Keyword::ILIKE).is_some() {
+        let like = if self.parse_keyword(Keyword::LIKE).is_some()
+            || self.parse_keyword(Keyword::ILIKE).is_some()
+        {
             self.parse_object_name(allow_unquoted_hyphen).ok()
         } else {
             None
@@ -6653,7 +6663,9 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.parse_keyword(Keyword::RENAME).is_some() {
-            if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::CONSTRAINT).is_some() {
+            if dialect_of!(self is PostgreSqlDialect)
+                && self.parse_keyword(Keyword::CONSTRAINT).is_some()
+            {
                 let old_name = self.parse_identifier(false)?;
                 self.expect_keyword(Keyword::TO)?;
                 let new_name = self.parse_identifier(false)?;
@@ -8091,20 +8103,22 @@ impl<'a> Parser<'a> {
         loop {
             match self.next_token().token {
                 // ensure that optional period is succeeded by another identifier
-                Token::Period => { let next_token = self.next_token(); match next_token.token {
-                    Token::Word(w) => idents.push(w.to_ident(next_token.span)),
-                    Token::EOF => {
-                        return Err(ParserError::ParserError(
-                            "Trailing period in identifier".to_string(),
-                        ))?
-                    }
-                    token => {
-                        return Err(ParserError::ParserError(format!(
-                            "Unexpected token following period in identifier: {token}"
-                        )))?
+                Token::Period => {
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Word(w) => idents.push(w.to_ident(next_token.span)),
+                        Token::EOF => {
+                            return Err(ParserError::ParserError(
+                                "Trailing period in identifier".to_string(),
+                            ))?
+                        }
+                        token => {
+                            return Err(ParserError::ParserError(format!(
+                                "Unexpected token following period in identifier: {token}"
+                            )))?
+                        }
                     }
                 }
-            },
                 Token::EOF => break,
                 token => {
                     return Err(ParserError::ParserError(format!(
@@ -9068,28 +9082,28 @@ impl<'a> Parser<'a> {
         };
 
         // Accept QUALIFY and WINDOW in any order and flag accordingly.
-        let (named_windows, qualify, window_before_qualify) = if self.parse_keyword(Keyword::WINDOW).is_some()
-        {
-            let named_windows = self.parse_comma_separated(Parser::parse_named_window)?;
-            if self.parse_keyword(Keyword::QUALIFY).is_some() {
-                (named_windows, Some(self.parse_expr()?), true)
-            } else {
-                (named_windows, None, true)
-            }
-        } else if self.parse_keyword(Keyword::QUALIFY).is_some() {
-            let qualify = Some(self.parse_expr()?);
+        let (named_windows, qualify, window_before_qualify) =
             if self.parse_keyword(Keyword::WINDOW).is_some() {
-                (
-                    self.parse_comma_separated(Parser::parse_named_window)?,
-                    qualify,
-                    false,
-                )
+                let named_windows = self.parse_comma_separated(Parser::parse_named_window)?;
+                if self.parse_keyword(Keyword::QUALIFY).is_some() {
+                    (named_windows, Some(self.parse_expr()?), true)
+                } else {
+                    (named_windows, None, true)
+                }
+            } else if self.parse_keyword(Keyword::QUALIFY).is_some() {
+                let qualify = Some(self.parse_expr()?);
+                if self.parse_keyword(Keyword::WINDOW).is_some() {
+                    (
+                        self.parse_comma_separated(Parser::parse_named_window)?,
+                        qualify,
+                        false,
+                    )
+                } else {
+                    (Default::default(), qualify, false)
+                }
             } else {
-                (Default::default(), qualify, false)
-            }
-        } else {
-            Default::default()
-        };
+                Default::default()
+            };
 
         let connect_by = if self.dialect.supports_connect_by()
             && self
@@ -10508,7 +10522,10 @@ impl<'a> Parser<'a> {
     /// Parse an REPLACE statement
     pub fn parse_replace(&mut self) -> Result<Statement, ParserError> {
         if !dialect_of!(self is MySqlDialect | GenericDialect) {
-            return parser_err!("Unsupported statement REPLACE", self.peek_token().span.start);
+            return parser_err!(
+                "Unsupported statement REPLACE",
+                self.peek_token().span.start
+            );
         }
 
         let insert = &mut self.parse_insert()?;
@@ -10589,12 +10606,13 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE).is_some();
             let table_name = self.parse_object_name(false)?;
 
-            let table_alias =
-                if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS).is_some() {
-                    Some(self.parse_identifier(false)?)
-                } else {
-                    None
-                };
+            let table_alias = if dialect_of!(self is PostgreSqlDialect)
+                && self.parse_keyword(Keyword::AS).is_some()
+            {
+                Some(self.parse_identifier(false)?)
+            } else {
+                None
+            };
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 

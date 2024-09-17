@@ -81,8 +81,10 @@ mod dml;
 pub mod helpers;
 mod operator;
 mod query;
-mod trigger;
 mod spans;
+pub use spans::Spanned;
+
+mod trigger;
 mod value;
 
 #[cfg(feature = "visitor")]

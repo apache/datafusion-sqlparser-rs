@@ -119,7 +119,7 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-        if parser.parse_keyword(Keyword::COMMENT) {
+        if parser.parse_keyword(Keyword::COMMENT).is_some() {
             Some(parse_comment(parser))
         } else {
             None
@@ -187,7 +187,7 @@ pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {
     };
 
     parser.expect_keyword(Keyword::IS)?;
-    let comment = if parser.parse_keyword(Keyword::NULL) {
+    let comment = if parser.parse_keyword(Keyword::NULL).is_some() {
         None
     } else {
         Some(parser.parse_literal_string()?)

@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::*;
+use crate::{ast::*, tokenizer::TokenWithLocation};
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
@@ -271,6 +271,8 @@ impl fmt::Display for Table {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Select {
+    /// SELECT
+    pub select_token: TokenWithLocation,
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
@@ -490,6 +492,7 @@ impl fmt::Display for NamedWindowDefinition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct With {
+    pub with_token: TokenWithLocation,
     pub recursive: bool,
     pub cte_tables: Vec<Cte>,
 }

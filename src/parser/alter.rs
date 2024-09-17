@@ -72,15 +72,15 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let operation = if self.parse_keyword(Keyword::RENAME) {
-            if self.parse_keyword(Keyword::TO) {
+        let operation = if self.parse_keyword(Keyword::RENAME).is_some() {
+            if self.parse_keyword(Keyword::TO).is_some() {
                 let role_name = self.parse_identifier(false)?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
                 return self.expected("TO after RENAME", self.peek_token());
             }
         // SET
-        } else if self.parse_keyword(Keyword::SET) {
+        } else if self.parse_keyword(Keyword::SET).is_some() {
             let config_name = self.parse_object_name(false)?;
             // FROM CURRENT
             if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
@@ -90,8 +90,8 @@ impl<'a> Parser<'a> {
                     in_database,
                 }
             // { TO | = } { value | DEFAULT }
-            } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
-                if self.parse_keyword(Keyword::DEFAULT) {
+            } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO).is_some() {
+                if self.parse_keyword(Keyword::DEFAULT).is_some() {
                     AlterRoleOperation::Set {
                         config_name,
                         config_value: SetConfigValue::Default,
@@ -110,8 +110,8 @@ impl<'a> Parser<'a> {
                 self.expected("'TO' or '=' or 'FROM CURRENT'", self.peek_token())?
             }
         // RESET
-        } else if self.parse_keyword(Keyword::RESET) {
-            if self.parse_keyword(Keyword::ALL) {
+        } else if self.parse_keyword(Keyword::RESET).is_some() {
+            if self.parse_keyword(Keyword::ALL).is_some() {
                 AlterRoleOperation::Reset {
                     config_name: ResetConfig::ALL,
                     in_database,
@@ -126,7 +126,7 @@ impl<'a> Parser<'a> {
         // option
         } else {
             // [ WITH ]
-            let _ = self.parse_keyword(Keyword::WITH);
+            let _ = self.parse_keyword(Keyword::WITH).is_some();
             // option
             let mut options = vec![];
             while let Some(opt) = self.maybe_parse(|parser| parser.parse_pg_role_option()) {
@@ -181,7 +181,7 @@ impl<'a> Parser<'a> {
             Some(Keyword::LOGIN) => RoleOption::Login(true),
             Some(Keyword::NOLOGIN) => RoleOption::Login(false),
             Some(Keyword::PASSWORD) => {
-                let password = if self.parse_keyword(Keyword::NULL) {
+                let password = if self.parse_keyword(Keyword::NULL).is_some() {
                     Password::NullPassword
                 } else {
                     Password::Password(Expr::Value(self.parse_value()?))

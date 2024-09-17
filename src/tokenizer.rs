@@ -24,10 +24,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::fmt;
 use core::iter::Peekable;
 use core::num::NonZeroU8;
 use core::str::Chars;
+use core::{cmp, fmt};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -416,7 +416,7 @@ impl fmt::Display for Whitespace {
 }
 
 /// Location in input string
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Ord, PartialOrd)]
 pub struct Location {
     /// Line number, starting from 1
     pub line: u64,
@@ -424,37 +424,116 @@ pub struct Location {
     pub column: u64,
 }
 
-impl fmt::Display for Location {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.line == 0 {
-            return Ok(());
+
+impl std::fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " at Line: {}, Column: {}", self.line, self.column)
+    }
+}
+
+impl std::fmt::Debug for Location {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Location({},{})", self.line, self.column)
+    }
+}
+
+impl Location {
+    pub fn of(line: u64, column: u64) -> Self {
+        Self { line, column }
+    }
+
+    pub fn span_to(self, end: Self) -> Span {
+        Span { start: self, end }
+    }
+}
+
+impl From<(u64, u64)> for Location {
+    fn from((line, column): (u64, u64)) -> Self {
+        Self { line, column }
+    }
+}
+
+#[derive(Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Copy)]
+pub struct Span {
+    pub start: Location,
+    pub end: Location,
+}
+
+impl std::fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Span({:?}..{:?})", self.start, self.end)
+    }
+}
+
+impl Span {
+    const EMPTY : Span = Self::empty();
+
+    pub fn new(start: Location, end: Location) -> Span {
+        Span { start, end }
+    }
+
+    pub const fn empty() -> Span {
+        Span {
+            start: Location { line: 0, column: 0 },
+            end: Location { line: 0, column: 0 },
         }
-        write!(
-            f,
-            // TODO: use standard compiler location syntax (<path>:<line>:<col>)
-            " at Line: {}, Column: {}",
-            self.line, self.column,
-        )
+    }
+
+    pub fn union(&self, other: &Span) -> Span {
+        match (self, other) {
+            (&Span::EMPTY, _) => other.clone(),
+            (_, &Span::EMPTY) => self.clone(),
+            _ => Span {
+                start: cmp::min(self.start, other.start),
+                end: cmp::max(self.end, other.end),
+            },
+        }
+    }
+
+    pub fn union_opt(&self, other: &Option<Span>) -> Span {
+        match other {
+            Some(other) => self.union(&other),
+            None => self.clone(),
+        }
     }
 }
 
 /// A [Token] with [Location] attached to it
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, Hash, Clone)]
 pub struct TokenWithLocation {
     pub token: Token,
-    pub location: Location,
+    pub span: Span,
 }
 
 impl TokenWithLocation {
-    pub fn new(token: Token, line: u64, column: u64) -> TokenWithLocation {
-        TokenWithLocation {
-            token,
-            location: Location { line, column },
-        }
+    pub fn new(token: Token, span: Span) -> TokenWithLocation {
+        TokenWithLocation { token, span }
     }
 
     pub fn wrap(token: Token) -> TokenWithLocation {
-        TokenWithLocation::new(token, 0, 0)
+        TokenWithLocation::new(token, Span::empty())
+    }
+
+    pub fn at(token: Token, start: Location, end: Location) -> TokenWithLocation {
+        TokenWithLocation::new(token, Span::new(start, end))
+    }
+}
+
+impl PartialEq<TokenWithLocation> for TokenWithLocation {
+    fn eq(&self, other: &TokenWithLocation) -> bool {
+        self.token == other.token
+    }
+}
+
+impl PartialOrd<TokenWithLocation> for TokenWithLocation {
+    fn partial_cmp(&self, other: &TokenWithLocation) -> Option<std::cmp::Ordering> {
+        self.token.partial_cmp(&other.token)
+    }
+}
+
+impl Ord for TokenWithLocation {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.token.cmp(&other.token)
     }
 }
 
@@ -650,7 +729,11 @@ impl<'a> Tokenizer<'a> {
 
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
-            buf.push(TokenWithLocation { token, location });
+            let span = location.span_to(state.location());
+
+            location = state.location();
+
+            buf.push(TokenWithLocation { token, span });
 
             location = state.location();
         }
@@ -2662,13 +2745,25 @@ mod tests {
             .tokenize_with_location()
             .unwrap();
         let expected = vec![
-            TokenWithLocation::new(Token::make_keyword("SELECT"), 1, 1),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 7),
-            TokenWithLocation::new(Token::make_word("a", None), 1, 8),
-            TokenWithLocation::new(Token::Comma, 1, 9),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 1, 10),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 1),
-            TokenWithLocation::new(Token::make_word("b", None), 2, 2),
+            TokenWithLocation::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
+            TokenWithLocation::at(
+                Token::Whitespace(Whitespace::Space),
+                (1, 7).into(),
+                (1, 8).into(),
+            ),
+            TokenWithLocation::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
+            TokenWithLocation::at(Token::Comma, (1, 9).into(), (1, 10).into()),
+            TokenWithLocation::at(
+                Token::Whitespace(Whitespace::Newline),
+                (1, 10).into(),
+                (2, 1).into(),
+            ),
+            TokenWithLocation::at(
+                Token::Whitespace(Whitespace::Space),
+                (2, 1).into(),
+                (2, 2).into(),
+            ),
+            TokenWithLocation::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
         ];
         compare(expected, tokens);
     }

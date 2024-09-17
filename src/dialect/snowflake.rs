@@ -90,7 +90,7 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-        if parser.parse_keyword(Keyword::CREATE) {
+        if parser.parse_keyword(Keyword::CREATE).is_some() {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
             let or_replace = parser.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
@@ -117,10 +117,10 @@ impl Dialect for SnowflakeDialect {
                 _ => {}
             }
 
-            if parser.parse_keyword(Keyword::STAGE) {
+            if parser.parse_keyword(Keyword::STAGE).is_some() {
                 // OK - this is CREATE STAGE statement
                 return Some(parse_create_stage(or_replace, temporary, parser));
-            } else if parser.parse_keyword(Keyword::TABLE) {
+            } else if parser.parse_keyword(Keyword::TABLE).is_some() {
                 return Some(parse_create_table(
                     or_replace, global, temporary, volatile, transient, parser,
                 ));
@@ -375,25 +375,25 @@ pub fn parse_create_stage(
     let stage_params = parse_stage_params(parser)?;
 
     // [ directoryTableParams ]
-    if parser.parse_keyword(Keyword::DIRECTORY) {
+    if parser.parse_keyword(Keyword::DIRECTORY).is_some() {
         parser.expect_token(&Token::Eq)?;
         directory_table_params = parse_parentheses_options(parser)?;
     }
 
     // [ file_format]
-    if parser.parse_keyword(Keyword::FILE_FORMAT) {
+    if parser.parse_keyword(Keyword::FILE_FORMAT).is_some() {
         parser.expect_token(&Token::Eq)?;
         file_format = parse_parentheses_options(parser)?;
     }
 
     // [ copy_options ]
-    if parser.parse_keyword(Keyword::COPY_OPTIONS) {
+    if parser.parse_keyword(Keyword::COPY_OPTIONS).is_some() {
         parser.expect_token(&Token::Eq)?;
         copy_options = parse_parentheses_options(parser)?;
     }
 
     // [ comment ]
-    if parser.parse_keyword(Keyword::COMMENT) {
+    if parser.parse_keyword(Keyword::COMMENT).is_some() {
         parser.expect_token(&Token::Eq)?;
         comment = Some(match parser.next_token().token {
             Token::SingleQuotedString(word) => Ok(word),
@@ -485,7 +485,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             stage_params = parse_stage_params(parser)?;
 
             // as
-            from_stage_alias = if parser.parse_keyword(Keyword::AS) {
+            from_stage_alias = if parser.parse_keyword(Keyword::AS).is_some() {
                 Some(match parser.next_token().token {
                     Token::Word(w) => Ok(Ident::new(w.value)),
                     _ => parser.expected("stage alias", parser.peek_token()),
@@ -501,7 +501,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             stage_params = parse_stage_params(parser)?;
 
             // as
-            from_stage_alias = if parser.parse_keyword(Keyword::AS) {
+            from_stage_alias = if parser.parse_keyword(Keyword::AS).is_some() {
                 Some(match parser.next_token().token {
                     Token::Word(w) => Ok(Ident::new(w.value)),
                     _ => parser.expected("stage alias", parser.peek_token()),
@@ -513,7 +513,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
     };
 
     // [ files ]
-    if parser.parse_keyword(Keyword::FILES) {
+    if parser.parse_keyword(Keyword::FILES).is_some() {
         parser.expect_token(&Token::Eq)?;
         parser.expect_token(&Token::LParen)?;
         let mut continue_loop = true;
@@ -535,7 +535,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
 
     // [ pattern ]
     let mut pattern = None;
-    if parser.parse_keyword(Keyword::PATTERN) {
+    if parser.parse_keyword(Keyword::PATTERN).is_some() {
         parser.expect_token(&Token::Eq)?;
         let next_token = parser.next_token();
         pattern = Some(match next_token.token {
@@ -546,21 +546,21 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
 
     // [ file_format]
     let mut file_format = Vec::new();
-    if parser.parse_keyword(Keyword::FILE_FORMAT) {
+    if parser.parse_keyword(Keyword::FILE_FORMAT).is_some() {
         parser.expect_token(&Token::Eq)?;
         file_format = parse_parentheses_options(parser)?;
     }
 
     // [ copy_options ]
     let mut copy_options = Vec::new();
-    if parser.parse_keyword(Keyword::COPY_OPTIONS) {
+    if parser.parse_keyword(Keyword::COPY_OPTIONS).is_some() {
         parser.expect_token(&Token::Eq)?;
         copy_options = parse_parentheses_options(parser)?;
     }
 
     // [ VALIDATION_MODE ]
     let mut validation_mode = None;
-    if parser.parse_keyword(Keyword::VALIDATION_MODE) {
+    if parser.parse_keyword(Keyword::VALIDATION_MODE).is_some() {
         parser.expect_token(&Token::Eq)?;
         validation_mode = Some(parser.next_token().token.to_string());
     }
@@ -640,7 +640,7 @@ fn parse_select_items_for_data_load(
         }
 
         // as
-        if parser.parse_keyword(Keyword::AS) {
+        if parser.parse_keyword(Keyword::AS).is_some() {
             item_as = Some(match parser.next_token().token {
                 Token::Word(w) => Ok(Ident::new(w.value)),
                 _ => parser.expected("column item alias", parser.peek_token()),
@@ -673,7 +673,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     let mut credentials: DataLoadingOptions = DataLoadingOptions { options: vec![] };
 
     // URL
-    if parser.parse_keyword(Keyword::URL) {
+    if parser.parse_keyword(Keyword::URL).is_some() {
         parser.expect_token(&Token::Eq)?;
         url = Some(match parser.next_token().token {
             Token::SingleQuotedString(word) => Ok(word),
@@ -682,13 +682,13 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     }
 
     // STORAGE INTEGRATION
-    if parser.parse_keyword(Keyword::STORAGE_INTEGRATION) {
+    if parser.parse_keyword(Keyword::STORAGE_INTEGRATION).is_some() {
         parser.expect_token(&Token::Eq)?;
         storage_integration = Some(parser.next_token().token.to_string());
     }
 
     // ENDPOINT
-    if parser.parse_keyword(Keyword::ENDPOINT) {
+    if parser.parse_keyword(Keyword::ENDPOINT).is_some() {
         parser.expect_token(&Token::Eq)?;
         endpoint = Some(match parser.next_token().token {
             Token::SingleQuotedString(word) => Ok(word),
@@ -697,7 +697,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     }
 
     // CREDENTIALS
-    if parser.parse_keyword(Keyword::CREDENTIALS) {
+    if parser.parse_keyword(Keyword::CREDENTIALS).is_some() {
         parser.expect_token(&Token::Eq)?;
         credentials = DataLoadingOptions {
             options: parse_parentheses_options(parser)?,
@@ -705,7 +705,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     }
 
     // ENCRYPTION
-    if parser.parse_keyword(Keyword::ENCRYPTION) {
+    if parser.parse_keyword(Keyword::ENCRYPTION).is_some() {
         parser.expect_token(&Token::Eq)?;
         encryption = DataLoadingOptions {
             options: parse_parentheses_options(parser)?,
@@ -736,14 +736,14 @@ fn parse_parentheses_options(parser: &mut Parser) -> Result<Vec<DataLoadingOptio
             Token::RParen => break,
             Token::Word(key) => {
                 parser.expect_token(&Token::Eq)?;
-                if parser.parse_keyword(Keyword::TRUE) {
+                if parser.parse_keyword(Keyword::TRUE).is_some() {
                     options.push(DataLoadingOption {
                         option_name: key.value,
                         option_type: DataLoadingOptionType::BOOLEAN,
                         value: "TRUE".to_string(),
                     });
                     Ok(())
-                } else if parser.parse_keyword(Keyword::FALSE) {
+                } else if parser.parse_keyword(Keyword::FALSE).is_some() {
                     options.push(DataLoadingOption {
                         option_name: key.value,
                         option_type: DataLoadingOptionType::BOOLEAN,

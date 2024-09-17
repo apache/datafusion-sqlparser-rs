@@ -373,11 +373,13 @@ impl std::fmt::Debug for Span {
 }
 
 impl Span {
+    const EMPTY : Span = Self::empty();
+
     pub fn new(start: Location, end: Location) -> Span {
         Span { start, end }
     }
 
-    pub fn empty() -> Span {
+    pub const fn empty() -> Span {
         Span {
             start: Location { line: 0, column: 0 },
             end: Location { line: 0, column: 0 },
@@ -385,9 +387,13 @@ impl Span {
     }
 
     pub fn union(&self, other: &Span) -> Span {
-        Span {
-            start: cmp::min(self.start, other.start),
-            end: cmp::max(self.end, other.end),
+        match (self, other) {
+            (&Span::EMPTY, _) => other.clone(),
+            (_, &Span::EMPTY) => self.clone(),
+            _ => Span {
+                start: cmp::min(self.start, other.start),
+                end: cmp::max(self.end, other.end),
+            },
         }
     }
 

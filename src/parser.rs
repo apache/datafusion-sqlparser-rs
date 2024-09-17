@@ -4756,8 +4756,9 @@ impl<'a> Parser<'a> {
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
-        let with = if self.parse_keyword(Keyword::WITH).is_some() {
+        let with = if let Some(with_token) = self.parse_keyword(Keyword::WITH) {
             Some(With {
+                with_token,
                 recursive: self.parse_keyword(Keyword::RECURSIVE).is_some(),
                 cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
             })

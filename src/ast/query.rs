@@ -314,6 +314,7 @@ impl fmt::Display for LateralView {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct With {
+    pub with_token: TokenWithLocation,
     pub recursive: bool,
     pub cte_tables: Vec<Cte>,
 }

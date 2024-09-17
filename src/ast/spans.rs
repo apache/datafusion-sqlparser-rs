@@ -3,7 +3,7 @@ use core::iter;
 use crate::ast;
 use crate::tokenizer::Span;
 
-use super::{Expr, Join, Query, Select, SelectItem, SetExpr, TableFactor, TableWithJoins};
+use super::{Cte, Expr, Join, JoinConstraint, JoinOperator, Query, Select, SelectItem, SetExpr, TableAlias, TableFactor, TableWithJoins, With};
 
 pub trait Spanned {
     fn span(&self) -> Span;
@@ -11,7 +11,29 @@ pub trait Spanned {
 
 impl Spanned for Query {
     fn span(&self) -> Span {
-        self.body.span()
+        union_spans(
+            self.with.iter().map(|item| item.span())
+                .chain(core::iter::once(self.body.span()))
+        )
+    }
+}
+
+impl Spanned for With {
+    fn span(&self) -> Span {
+        union_spans(
+            core::iter::once(self.with_token.span.clone())
+                .chain(self.cte_tables.iter().map(|item| item.span()))
+        )
+    }
+}
+
+impl Spanned for Cte {
+    fn span(&self) -> Span {
+        union_spans(
+            core::iter::once(self.alias.span())
+                .chain(core::iter::once(self.query.span()))
+                .chain(self.from.iter().map(|item| item.span))
+        )
     }
 }
 
@@ -25,7 +47,7 @@ impl Spanned for SetExpr {
                 set_quantifier,
                 left,
                 right,
-            } => todo!(),
+            } => left.span().union(&right.span()),
             SetExpr::Values(values) => todo!(),
             SetExpr::Insert(statement) => todo!(),
             SetExpr::Table(table) => todo!(),
@@ -37,23 +59,23 @@ impl Spanned for Expr {
     fn span(&self) -> Span {
         match self {
             Expr::Identifier(ident) => ident.span,
-            Expr::CompoundIdentifier(vec) => todo!(),
+            Expr::CompoundIdentifier(vec) => union_spans(vec.iter().map(|i| i.span)),
             Expr::JsonAccess {
                 left,
-                operator,
+                operator: _,
                 right,
-            } => todo!(),
-            Expr::CompositeAccess { expr, key } => todo!(),
-            Expr::IsFalse(expr) => todo!(),
-            Expr::IsNotFalse(expr) => todo!(),
-            Expr::IsTrue(expr) => todo!(),
-            Expr::IsNotTrue(expr) => todo!(),
-            Expr::IsNull(expr) => todo!(),
-            Expr::IsNotNull(expr) => todo!(),
-            Expr::IsUnknown(expr) => todo!(),
-            Expr::IsNotUnknown(expr) => todo!(),
-            Expr::IsDistinctFrom(expr, expr1) => todo!(),
-            Expr::IsNotDistinctFrom(expr, expr1) => todo!(),
+            } => left.span().union(&right.span()),
+            Expr::CompositeAccess { expr, key } => expr.span().union(&key.span),
+            Expr::IsFalse(expr) => expr.span(),
+            Expr::IsNotFalse(expr) => expr.span(),
+            Expr::IsTrue(expr) => expr.span(),
+            Expr::IsNotTrue(expr) => expr.span(),
+            Expr::IsNull(expr) => expr.span(),
+            Expr::IsNotNull(expr) => expr.span(),
+            Expr::IsUnknown(expr) => expr.span(),
+            Expr::IsNotUnknown(expr) => expr.span(),
+            Expr::IsDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
+            Expr::IsNotDistinctFrom(lhs, rhs) => lhs.span().union(&rhs.span()),
             Expr::InList {
                 expr,
                 list,
@@ -75,7 +97,7 @@ impl Spanned for Expr {
                 low,
                 high,
             } => todo!(),
-            Expr::BinaryOp { left, op, right } => todo!(),
+            Expr::BinaryOp { left, op, right } => left.span().union(&right.span()),
             Expr::Like {
                 negated,
                 expr,
@@ -205,7 +227,7 @@ impl Spanned for TableFactor {
                 lateral,
                 subquery,
                 alias,
-            } => todo!(),
+            } => subquery.span().union_opt(&alias.as_ref().map(|alias| alias.span())),
             TableFactor::TableFunction { expr, alias } => todo!(),
             TableFactor::UNNEST {
                 alias,
@@ -221,9 +243,47 @@ impl Spanned for TableFactor {
     }
 }
 
+impl Spanned for TableAlias {
+    fn span(&self) -> Span {
+        union_spans(
+            iter::once(self.name.span)
+                .chain(self.columns.iter().map(|i| i.span))
+        )
+    }
+}
+
 impl Spanned for Join {
     fn span(&self) -> Span {
-        todo!()
+        self.relation.span().union(&self.join_operator.span())
+    }
+}
+
+impl Spanned for JoinOperator {
+    fn span(&self) -> Span {
+        match self {
+            JoinOperator::Inner(join_constraint) => join_constraint.span(),
+            JoinOperator::LeftOuter(join_constraint) => join_constraint.span(),
+            JoinOperator::RightOuter(join_constraint) => join_constraint.span(),
+            JoinOperator::FullOuter(join_constraint) => join_constraint.span(),
+            JoinOperator::CrossJoin => Span::empty(),
+            JoinOperator::LeftSemi(join_constraint) => join_constraint.span(),
+            JoinOperator::RightSemi(join_constraint) => join_constraint.span(),
+            JoinOperator::LeftAnti(join_constraint) => join_constraint.span(),
+            JoinOperator::RightAnti(join_constraint) => join_constraint.span(),
+            JoinOperator::CrossApply => Span::empty(),
+            JoinOperator::OuterApply => Span::empty(),
+        }
+    }
+}
+
+impl Spanned for JoinConstraint {
+    fn span(&self) -> Span {
+        match self {
+            JoinConstraint::On(expr) => expr.span(),
+            JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span)),
+            JoinConstraint::Natural => Span::empty(),
+            JoinConstraint::None => Span::empty(),
+        }
     }
 }
 
@@ -250,37 +310,82 @@ impl Spanned for Select {
     }
 }
 
-/**
- * TODO:
- *
- * - CTE
- * - With
- * - SetExpr
- * - Fetch
- * - Lock Clause
- */
-struct Ignore;
-
 #[cfg(test)]
 pub mod tests {
-    use crate::dialect::{Dialect, GenericDialect};
+    use ast::query;
+
+    use crate::dialect::{Dialect, GenericDialect, SnowflakeDialect};
     use crate::tokenizer::Span;
 
     use super::*;
 
     #[test]
-    fn test_span() {
+    fn test_query_span() {
         let query = crate::parser::Parser::new(&GenericDialect::default())
-            .try_with_sql("SELECT id, name FROM users")
+            .try_with_sql("SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id")
             .unwrap()
             .parse_query()
             .unwrap();
 
-        dbg!(&query);
-
         assert_eq!(
             query.span(),
-            Span::new((1, 1).into(), (1, 54 - 28 + 1).into())
+            Span::new((1, 1).into(), (1, 109 - 28 + 1).into())
         );
+    }
+
+
+    #[test]
+    pub fn test_union() {
+        let query = crate::parser::Parser::new(&GenericDialect::default())
+            .try_with_sql("SELECT a FROM postgres.public.source UNION SELECT a FROM postgres.public.source")
+            .unwrap()
+            .parse_query()
+            .unwrap();
+
+        query.span();
+    }
+
+    #[test]
+    pub fn test_subquery() {
+        let query = crate::parser::Parser::new(&GenericDialect::default())
+            .try_with_sql("SELECT a FROM (SELECT a FROM postgres.public.source) AS b")
+            .unwrap()
+            .parse_query()
+            .unwrap();
+
+        query.span();
+    }
+
+    #[test]
+    pub fn test_cte() {
+        let query = crate::parser::Parser::new(&GenericDialect::default())
+            .try_with_sql("WITH cte_outer AS (SELECT a FROM postgres.public.source), cte_ignored AS (SELECT a FROM cte_outer), cte_inner AS (SELECT a FROM cte_outer) SELECT a FROM cte_inner")
+            .unwrap()
+            .parse_query()
+            .unwrap();
+
+        query.span();
+    }
+
+    #[test]
+    pub fn test_snowflake_lateral_flatten() {
+        let query = crate::parser::Parser::new(&SnowflakeDialect::default())
+            .try_with_sql("SELECT FLATTENED.VALUE:field::TEXT AS FIELD FROM SNOWFLAKE.SCHEMA.SOURCE AS S, LATERAL FLATTEN(INPUT => S.JSON_ARRAY) AS FLATTENED")
+            .unwrap()
+            .parse_query()
+            .unwrap();
+
+        query.span();
+    }
+
+    #[test]
+    pub fn test_wildcard_from_cte() {
+        let query = crate::parser::Parser::new(&GenericDialect::default())
+            .try_with_sql("WITH cte AS (SELECT a FROM postgres.public.source) SELECT cte.* FROM cte")
+            .unwrap()
+            .parse_query()
+            .unwrap();
+
+        query.span();
     }
 }

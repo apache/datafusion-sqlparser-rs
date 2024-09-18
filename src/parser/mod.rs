@@ -1277,7 +1277,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_utility_option_list(&mut self) -> Result<Vec<UtilityOption>, ParserError> {
+    pub fn parse_utility_options(&mut self) -> Result<Vec<UtilityOption>, ParserError> {
         self.expect_token(&Token::LParen)?;
         let options = self.parse_comma_separated(Self::parse_utility_option)?;
         self.expect_token(&Token::RParen)?;
@@ -8495,10 +8495,10 @@ impl<'a> Parser<'a> {
         // Note: DuckDB is compatible with PostgreSQL syntax for this statement,
         // although not all features may be implemented.
         if describe_alias == DescribeAlias::Explain
-            && dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect)
+            && self.dialect.supports_explain_with_utility_options()
             && self.peek_token().token == Token::LParen
         {
-            options = Some(self.parse_utility_option_list()?)
+            options = Some(self.parse_utility_options()?)
         } else {
             analyze = self.parse_keyword(Keyword::ANALYZE);
             verbose = self.parse_keyword(Keyword::VERBOSE);

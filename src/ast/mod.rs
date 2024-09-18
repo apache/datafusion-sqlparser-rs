@@ -3238,7 +3238,7 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(options) = options {
-                    write!(f, "({}) ",display_comma_separated(options))?;
+                    write!(f, "({}) ", display_comma_separated(options))?;
                 }
 
                 write!(f, "{statement}")

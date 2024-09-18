@@ -4268,31 +4268,14 @@ fn parse_scalar_function_in_projection() {
 }
 
 fn run_explain_analyze(
+    dialect: TestedDialects,
     query: &str,
     expected_verbose: bool,
     expected_analyze: bool,
     expected_format: Option<AnalyzeFormat>,
     exepcted_options: Option<Vec<UtilityOption>>,
 ) {
-    run_explain_analyze_with_specific_dialect(
-        |_d| true,
-        query,
-        expected_verbose,
-        expected_analyze,
-        expected_format,
-        exepcted_options,
-    )
-}
-
-fn run_explain_analyze_with_specific_dialect<T: Fn(&dyn Dialect) -> bool>(
-    dialect_predicate: T,
-    query: &str,
-    expected_verbose: bool,
-    expected_analyze: bool,
-    expected_format: Option<AnalyzeFormat>,
-    exepcted_options: Option<Vec<UtilityOption>>,
-) {
-    match all_dialects_where(dialect_predicate).verified_stmt(query) {
+    match dialect.verified_stmt(query) {
         Statement::Explain {
             describe_alias: _,
             analyze,
@@ -4350,6 +4333,7 @@ fn explain_desc() {
 fn parse_explain_analyze_with_simple_select() {
     // Describe is an alias for EXPLAIN
     run_explain_analyze(
+        all_dialects(),
         "DESCRIBE SELECT sqrt(id) FROM foo",
         false,
         false,
@@ -4357,8 +4341,16 @@ fn parse_explain_analyze_with_simple_select() {
         None,
     );
 
-    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false, None, None);
     run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        None,
+    );
+    run_explain_analyze(
+        all_dialects(),
         "EXPLAIN VERBOSE SELECT sqrt(id) FROM foo",
         true,
         false,
@@ -4366,6 +4358,7 @@ fn parse_explain_analyze_with_simple_select() {
         None,
     );
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN ANALYZE SELECT sqrt(id) FROM foo",
         false,
         true,
@@ -4373,6 +4366,7 @@ fn parse_explain_analyze_with_simple_select() {
         None,
     );
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN ANALYZE VERBOSE SELECT sqrt(id) FROM foo",
         true,
         true,
@@ -4381,6 +4375,7 @@ fn parse_explain_analyze_with_simple_select() {
     );
 
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN ANALYZE FORMAT GRAPHVIZ SELECT sqrt(id) FROM foo",
         false,
         true,
@@ -4389,6 +4384,7 @@ fn parse_explain_analyze_with_simple_select() {
     );
 
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN ANALYZE VERBOSE FORMAT JSON SELECT sqrt(id) FROM foo",
         true,
         true,
@@ -4397,6 +4393,7 @@ fn parse_explain_analyze_with_simple_select() {
     );
 
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN VERBOSE FORMAT TEXT SELECT sqrt(id) FROM foo",
         true,
         false,
@@ -10861,8 +10858,8 @@ fn test_truncate_table_with_on_cluster() {
 
 #[test]
 fn parse_explain_with_option_list() {
-    run_explain_analyze_with_specific_dialect(
-        |d| d.supports_explain_with_utility_options(),
+    run_explain_analyze(
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
         "EXPLAIN (ANALYZE false, VERBOSE true) SELECT sqrt(id) FROM foo",
         false,
         false,
@@ -10879,8 +10876,8 @@ fn parse_explain_with_option_list() {
         ]),
     );
 
-    run_explain_analyze_with_specific_dialect(
-        |d| d.supports_explain_with_utility_options(),
+    run_explain_analyze(
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
         "EXPLAIN (ANALYZE ON, VERBOSE OFF) SELECT sqrt(id) FROM foo",
         false,
         false,
@@ -10897,8 +10894,8 @@ fn parse_explain_with_option_list() {
         ]),
     );
 
-    run_explain_analyze_with_specific_dialect(
-        |d| d.supports_explain_with_utility_options(),
+    run_explain_analyze(
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
         r#"EXPLAIN (FORMAT1 TEXT, FORMAT2 'JSON', FORMAT3 "XML", FORMAT4 YAML) SELECT sqrt(id) FROM foo"#,
         false,
         false,
@@ -10923,8 +10920,8 @@ fn parse_explain_with_option_list() {
         ]),
     );
 
-    run_explain_analyze_with_specific_dialect(
-        |d| d.supports_explain_with_utility_options(),
+    run_explain_analyze(
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
         r#"EXPLAIN (NUM1 10, NUM2 +10.1, NUM3 -10.2) SELECT sqrt(id) FROM foo"#,
         false,
         false,
@@ -10951,7 +10948,7 @@ fn parse_explain_with_option_list() {
         ]),
     );
 
-    let utility_option_list = vec![
+    let utility_options = vec![
         UtilityOption {
             name: Ident::new("ANALYZE"),
             arg: None,
@@ -10976,12 +10973,12 @@ fn parse_explain_with_option_list() {
             }),
         },
     ];
-    run_explain_analyze_with_specific_dialect(
-        |d| d.supports_explain_with_utility_options(),
+    run_explain_analyze (
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
         "EXPLAIN (ANALYZE, VERBOSE true, WAL OFF, FORMAT YAML, USER_DEF_NUM -100.1) SELECT sqrt(id) FROM foo",
         false,
         false,
         None,
-        Some(utility_option_list),
+        Some(utility_options),
     );
 }

@@ -148,12 +148,6 @@ impl TestedDialects {
         self.one_statement_parses_to(sql, sql)
     }
 
-    /// Ensures that `sql` parses as a single [Statement] and that the re-serialization of the parsed
-    /// result matches the given `canonical` SQL string.
-    pub fn verified_stmt_with_canonical(&self, sql: &str, canonical: &str) -> Statement {
-        self.one_statement_parses_to(sql, canonical)
-    }
-
     /// Ensures that `sql` parses as a single [Query], and that
     /// re-serializing the parse result produces the same `sql`
     /// string (is not modified after a serialization round-trip).

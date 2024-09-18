@@ -908,6 +908,114 @@ fn parse_create_table_with_invalid_options() {
     }
 }
 
+#[test]
+fn parse_create_table_with_identity_column() {
+    let with_column_options = [
+        (
+            r#"CREATE TABLE [mytable] ([columnA] INT IDENTITY NOT NULL)"#,
+            vec![
+                ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::Identity(None),
+                },
+                ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::NotNull,
+                },
+            ],
+        ),
+        (
+            r#"CREATE TABLE [mytable] ([columnA] INT IDENTITY(1, 1) NOT NULL)"#,
+            vec![
+                ColumnOptionDef {
+                    name: None,
+                    #[cfg(not(feature = "bigdecimal"))]
+                    option: ColumnOption::Identity(Some(SqlOption::Identity {
+                        seed: Value::Number("1".to_string(), false),
+                        increment: Value::Number("1".to_string(), false),
+                    })),
+                    #[cfg(feature = "bigdecimal")]
+                    option: ColumnOption::Identity(Some(SqlOption::Identity {
+                        seed: Value::Number(bigdecimal::BigDecimal::from(1), false),
+                        increment: Value::Number(bigdecimal::BigDecimal::from(1), false),
+                    })),
+                },
+                ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::NotNull,
+                },
+            ],
+        ),
+    ];
+
+    for (sql, column_options) in with_column_options {
+        assert_eq!(
+            ms().verified_stmt(sql),
+            Statement::CreateTable(CreateTable {
+                or_replace: false,
+                temporary: false,
+                external: false,
+                global: None,
+                if_not_exists: false,
+                transient: false,
+                volatile: false,
+                name: ObjectName(vec![Ident {
+                    value: "mytable".to_string(),
+                    quote_style: Some('['),
+                },],),
+                columns: vec![ColumnDef {
+                    name: Ident {
+                        value: "columnA".to_string(),
+                        quote_style: Some('['),
+                    },
+                    data_type: Int(None,),
+                    collation: None,
+                    options: column_options,
+                },],
+                constraints: vec![],
+                hive_distribution: HiveDistributionStyle::NONE,
+                hive_formats: Some(HiveFormat {
+                    row_format: None,
+                    serde_properties: None,
+                    storage: None,
+                    location: None,
+                },),
+                table_properties: vec![],
+                with_options: vec![],
+                file_format: None,
+                location: None,
+                query: None,
+                without_rowid: false,
+                like: None,
+                clone: None,
+                engine: None,
+                comment: None,
+                auto_increment_offset: None,
+                default_charset: None,
+                collation: None,
+                on_commit: None,
+                on_cluster: None,
+                primary_key: None,
+                order_by: None,
+                partition_by: None,
+                cluster_by: None,
+                clustered_by: None,
+                options: None,
+                strict: false,
+                copy_grants: false,
+                enable_schema_evolution: None,
+                change_tracking: None,
+                data_retention_time_in_days: None,
+                max_data_extension_time_in_days: None,
+                default_ddl_collation: None,
+                with_aggregation_policy: None,
+                with_row_access_policy: None,
+                with_tags: None,
+            }),
+        );
+    }
+}
+
 fn ms() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MsSqlDialect {})],

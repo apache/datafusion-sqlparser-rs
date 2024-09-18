@@ -1120,6 +1120,13 @@ pub enum ColumnOption {
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
     /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
     Options(Vec<SqlOption>),
+    /// MS SQL Server specific: Creates an identity column in a table.
+    /// Syntax
+    /// ```sql
+    /// IDENTITY [ (seed , increment) ]
+    /// ```
+    /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+    Identity(Option<SqlOption>),
 }
 
 impl fmt::Display for ColumnOption {
@@ -1220,6 +1227,13 @@ impl fmt::Display for ColumnOption {
             }
             Options(options) => {
                 write!(f, "OPTIONS({})", display_comma_separated(options))
+            }
+            Identity(parameters) => {
+                write!(f, "IDENTITY")?;
+                if let Some(parameters) = parameters {
+                    write!(f, "({parameters})")?;
+                }
+                Ok(())
             }
         }
     }

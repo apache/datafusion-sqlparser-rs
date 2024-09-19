@@ -7144,10 +7144,10 @@ where
 /// Utility options are used in various PostgreSQL DDL statements, including statements such as
 /// `CLUSTER`, `EXPLAIN`, `VACUUM`, and `REINDEX`. These statements format options as `( option [, ...] )`.
 ///
-/// [CLUSTER]: https://www.postgresql.org/docs/current/sql-cluster.html
-/// [EXPLAIN]: https://www.postgresql.org/docs/current/sql-explain.html
-/// [VACUUM]: https://www.postgresql.org/docs/current/sql-vacuum.html
-/// [REINDEX]: https://www.postgresql.org/docs/current/sql-reindex.html
+/// [CLUSTER](https://www.postgresql.org/docs/current/sql-cluster.html)
+/// [EXPLAIN](https://www.postgresql.org/docs/current/sql-explain.html)
+/// [VACUUM](https://www.postgresql.org/docs/current/sql-vacuum.html)
+/// [REINDEX](https://www.postgresql.org/docs/current/sql-reindex.html)
 ///
 /// For example, the `EXPLAIN` AND `VACUUM` statements with options might look like this:
 /// ```sql

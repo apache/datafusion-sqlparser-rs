@@ -482,6 +482,8 @@ impl Span {
     }
 
     pub fn union(&self, other: &Span) -> Span {
+        // If either span is empty, return the other
+        // this prevents propagating (0, 0) through the tree
         match (self, other) {
             (&Span::EMPTY, _) => other.clone(),
             (_, &Span::EMPTY) => self.clone(),
@@ -732,8 +734,6 @@ impl<'a> Tokenizer<'a> {
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
             let span = location.span_to(state.location());
-
-            location = state.location();
 
             buf.push(TokenWithLocation { token, span });
 

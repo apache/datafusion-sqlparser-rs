@@ -91,56 +91,69 @@ impl Spanned for Expr {
                 expr,
                 subquery,
                 negated,
-            } => todo!(),
+            } => expr.span().union(&subquery.span()),
             Expr::InUnnest {
                 expr,
                 array_expr,
                 negated,
-            } => todo!(),
+            } => expr.span().union(&array_expr.span()),
             Expr::Between {
                 expr,
                 negated,
                 low,
                 high,
-            } => todo!(),
+            } => expr.span().union(&low.span()).union(&high.span()),
+
             Expr::BinaryOp { left, op, right } => left.span().union(&right.span()),
             Expr::Like {
                 negated,
                 expr,
                 pattern,
                 escape_char,
-            } => todo!(),
+            } => expr.span().union(&pattern.span()),
             Expr::ILike {
                 negated,
                 expr,
                 pattern,
                 escape_char,
-            } => todo!(),
+            } => expr.span().union(&pattern.span()),
             Expr::SimilarTo {
                 negated,
                 expr,
                 pattern,
                 escape_char,
-            } => todo!(),
-            Expr::Ceil { expr, field } => todo!(),
-            Expr::Floor { expr, field } => todo!(),
-            Expr::Position { expr, r#in } => todo!(),
+            } => expr.span().union(&pattern.span()),
+            Expr::Ceil { expr, field } => expr.span(),
+            Expr::Floor { expr, field } => expr.span(),
+            Expr::Position { expr, r#in } => expr.span().union(&r#in.span()),
             Expr::Overlay {
                 expr,
                 overlay_what,
                 overlay_from,
                 overlay_for,
-            } => todo!(),
-            Expr::Collate { expr, collation } => todo!(),
+            } => expr
+                .span()
+                .union(&overlay_what.span())
+                .union(&overlay_from.span())
+                .union_opt(&overlay_for.as_ref().map(|i| i.span())),
+            Expr::Collate { expr, collation } => expr
+                .span()
+                .union(&union_spans(collation.0.iter().map(|i| i.span))),
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
             Expr::TypedString { data_type, value } => todo!(),
             Expr::MapAccess { column, keys } => todo!(),
             Expr::Function(function) => function.span(),
-            Expr::GroupingSets(vec) => todo!(),
-            Expr::Cube(vec) => todo!(),
-            Expr::Rollup(vec) => todo!(),
-            Expr::Tuple(vec) => todo!(),
+            Expr::GroupingSets(vec) => {
+                union_spans(vec.iter().map(|i| i.iter().map(|k| k.span())).flatten())
+            }
+            Expr::Cube(vec) => {
+                union_spans(vec.iter().map(|i| i.iter().map(|k| k.span())).flatten())
+            }
+            Expr::Rollup(vec) => {
+                union_spans(vec.iter().map(|i| i.iter().map(|k| k.span())).flatten())
+            }
+            Expr::Tuple(vec) => union_spans(vec.iter().map(|i| i.span())),
             Expr::Array(array) => todo!(),
             Expr::MatchAgainst {
                 columns,

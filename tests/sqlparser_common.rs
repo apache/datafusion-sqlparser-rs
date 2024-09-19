@@ -10929,20 +10929,20 @@ fn parse_explain_with_option_list() {
         Some(vec![
             UtilityOption {
                 name: Ident::new("NUM1"),
-                arg: Some(Expr::Value(Value::Number("10".to_string(), false))),
+                arg: Some(Expr::Value(Value::Number("10".parse().unwrap(), false))),
             },
             UtilityOption {
                 name: Ident::new("NUM2"),
                 arg: Some(Expr::UnaryOp {
                     op: UnaryOperator::Plus,
-                    expr: Box::new(Expr::Value(Value::Number("10.1".to_string(), false))),
+                    expr: Box::new(Expr::Value(Value::Number("10.1".parse().unwrap(), false))),
                 }),
             },
             UtilityOption {
                 name: Ident::new("NUM3"),
                 arg: Some(Expr::UnaryOp {
                     op: UnaryOperator::Minus,
-                    expr: Box::new(Expr::Value(Value::Number("10.2".to_string(), false))),
+                    expr: Box::new(Expr::Value(Value::Number("10.2".parse().unwrap(), false))),
                 }),
             },
         ]),
@@ -10969,7 +10969,7 @@ fn parse_explain_with_option_list() {
             name: Ident::new("USER_DEF_NUM"),
             arg: Some(Expr::UnaryOp {
                 op: UnaryOperator::Minus,
-                expr: Box::new(Expr::Value(Value::Number("100.1".to_string(), false))),
+                expr: Box::new(Expr::Value(Value::Number("100.1".parse().unwrap(), false))),
             }),
         },
     ];

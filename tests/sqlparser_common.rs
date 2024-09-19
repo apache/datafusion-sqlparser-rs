@@ -4268,22 +4268,26 @@ fn parse_scalar_function_in_projection() {
 }
 
 fn run_explain_analyze(
+    dialect: TestedDialects,
     query: &str,
     expected_verbose: bool,
     expected_analyze: bool,
     expected_format: Option<AnalyzeFormat>,
+    exepcted_options: Option<Vec<UtilityOption>>,
 ) {
-    match verified_stmt(query) {
+    match dialect.verified_stmt(query) {
         Statement::Explain {
             describe_alias: _,
             analyze,
             verbose,
             statement,
             format,
+            options,
         } => {
             assert_eq!(verbose, expected_verbose);
             assert_eq!(analyze, expected_analyze);
             assert_eq!(format, expected_format);
+            assert_eq!(options, exepcted_options);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
         }
         _ => panic!("Unexpected Statement, must be Explain"),
@@ -4328,47 +4332,73 @@ fn explain_desc() {
 #[test]
 fn parse_explain_analyze_with_simple_select() {
     // Describe is an alias for EXPLAIN
-    run_explain_analyze("DESCRIBE SELECT sqrt(id) FROM foo", false, false, None);
-
-    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false, None);
     run_explain_analyze(
+        all_dialects(),
+        "DESCRIBE SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        None,
+    );
+
+    run_explain_analyze(
+        all_dialects(),
+        "EXPLAIN SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        None,
+    );
+    run_explain_analyze(
+        all_dialects(),
         "EXPLAIN VERBOSE SELECT sqrt(id) FROM foo",
         true,
         false,
         None,
+        None,
     );
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN ANALYZE SELECT sqrt(id) FROM foo",
         false,
         true,
         None,
+        None,
     );
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN ANALYZE VERBOSE SELECT sqrt(id) FROM foo",
         true,
         true,
         None,
+        None,
     );
 
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN ANALYZE FORMAT GRAPHVIZ SELECT sqrt(id) FROM foo",
         false,
         true,
         Some(AnalyzeFormat::GRAPHVIZ),
+        None,
     );
 
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN ANALYZE VERBOSE FORMAT JSON SELECT sqrt(id) FROM foo",
         true,
         true,
         Some(AnalyzeFormat::JSON),
+        None,
     );
 
     run_explain_analyze(
+        all_dialects(),
         "EXPLAIN VERBOSE FORMAT TEXT SELECT sqrt(id) FROM foo",
         true,
         false,
         Some(AnalyzeFormat::TEXT),
+        None,
     );
 }
 
@@ -10823,5 +10853,132 @@ fn test_truncate_table_with_on_cluster() {
         all_dialects()
             .parse_sql_statements("TRUNCATE TABLE t ON CLUSTER")
             .unwrap_err()
+    );
+}
+
+#[test]
+fn parse_explain_with_option_list() {
+    run_explain_analyze(
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
+        "EXPLAIN (ANALYZE false, VERBOSE true) SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        Some(vec![
+            UtilityOption {
+                name: Ident::new("ANALYZE"),
+                arg: Some(Expr::Value(Value::Boolean(false))),
+            },
+            UtilityOption {
+                name: Ident::new("VERBOSE"),
+                arg: Some(Expr::Value(Value::Boolean(true))),
+            },
+        ]),
+    );
+
+    run_explain_analyze(
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
+        "EXPLAIN (ANALYZE ON, VERBOSE OFF) SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        Some(vec![
+            UtilityOption {
+                name: Ident::new("ANALYZE"),
+                arg: Some(Expr::Identifier(Ident::new("ON"))),
+            },
+            UtilityOption {
+                name: Ident::new("VERBOSE"),
+                arg: Some(Expr::Identifier(Ident::new("OFF"))),
+            },
+        ]),
+    );
+
+    run_explain_analyze(
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
+        r#"EXPLAIN (FORMAT1 TEXT, FORMAT2 'JSON', FORMAT3 "XML", FORMAT4 YAML) SELECT sqrt(id) FROM foo"#,
+        false,
+        false,
+        None,
+        Some(vec![
+            UtilityOption {
+                name: Ident::new("FORMAT1"),
+                arg: Some(Expr::Identifier(Ident::new("TEXT"))),
+            },
+            UtilityOption {
+                name: Ident::new("FORMAT2"),
+                arg: Some(Expr::Value(Value::SingleQuotedString("JSON".to_string()))),
+            },
+            UtilityOption {
+                name: Ident::new("FORMAT3"),
+                arg: Some(Expr::Identifier(Ident::with_quote('"', "XML"))),
+            },
+            UtilityOption {
+                name: Ident::new("FORMAT4"),
+                arg: Some(Expr::Identifier(Ident::new("YAML"))),
+            },
+        ]),
+    );
+
+    run_explain_analyze(
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
+        r#"EXPLAIN (NUM1 10, NUM2 +10.1, NUM3 -10.2) SELECT sqrt(id) FROM foo"#,
+        false,
+        false,
+        None,
+        Some(vec![
+            UtilityOption {
+                name: Ident::new("NUM1"),
+                arg: Some(Expr::Value(Value::Number("10".parse().unwrap(), false))),
+            },
+            UtilityOption {
+                name: Ident::new("NUM2"),
+                arg: Some(Expr::UnaryOp {
+                    op: UnaryOperator::Plus,
+                    expr: Box::new(Expr::Value(Value::Number("10.1".parse().unwrap(), false))),
+                }),
+            },
+            UtilityOption {
+                name: Ident::new("NUM3"),
+                arg: Some(Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: Box::new(Expr::Value(Value::Number("10.2".parse().unwrap(), false))),
+                }),
+            },
+        ]),
+    );
+
+    let utility_options = vec![
+        UtilityOption {
+            name: Ident::new("ANALYZE"),
+            arg: None,
+        },
+        UtilityOption {
+            name: Ident::new("VERBOSE"),
+            arg: Some(Expr::Value(Value::Boolean(true))),
+        },
+        UtilityOption {
+            name: Ident::new("WAL"),
+            arg: Some(Expr::Identifier(Ident::new("OFF"))),
+        },
+        UtilityOption {
+            name: Ident::new("FORMAT"),
+            arg: Some(Expr::Identifier(Ident::new("YAML"))),
+        },
+        UtilityOption {
+            name: Ident::new("USER_DEF_NUM"),
+            arg: Some(Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: Box::new(Expr::Value(Value::Number("100.1".parse().unwrap(), false))),
+            }),
+        },
+    ];
+    run_explain_analyze (
+        all_dialects_where(|d| d.supports_explain_with_utility_options()),
+        "EXPLAIN (ANALYZE, VERBOSE true, WAL OFF, FORMAT YAML, USER_DEF_NUM -100.1) SELECT sqrt(id) FROM foo",
+        false,
+        false,
+        None,
+        Some(utility_options),
     );
 }

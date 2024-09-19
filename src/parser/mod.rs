@@ -1277,6 +1277,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_utility_options(&mut self) -> Result<Vec<UtilityOption>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let options = self.parse_comma_separated(Self::parse_utility_option)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(options)
+    }
+
+    fn parse_utility_option(&mut self) -> Result<UtilityOption, ParserError> {
+        let name = self.parse_identifier(false)?;
+
+        let next_token = self.peek_token();
+        if next_token == Token::Comma || next_token == Token::RParen {
+            return Ok(UtilityOption { name, arg: None });
+        }
+        let arg = self.parse_expr()?;
+
+        Ok(UtilityOption {
+            name,
+            arg: Some(arg),
+        })
+    }
+
     fn try_parse_expr_sub_query(&mut self) -> Result<Option<Expr>, ParserError> {
         if self
             .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
@@ -8464,11 +8487,24 @@ impl<'a> Parser<'a> {
         &mut self,
         describe_alias: DescribeAlias,
     ) -> Result<Statement, ParserError> {
-        let analyze = self.parse_keyword(Keyword::ANALYZE);
-        let verbose = self.parse_keyword(Keyword::VERBOSE);
+        let mut analyze = false;
+        let mut verbose = false;
         let mut format = None;
-        if self.parse_keyword(Keyword::FORMAT) {
-            format = Some(self.parse_analyze_format()?);
+        let mut options = None;
+
+        // Note: DuckDB is compatible with PostgreSQL syntax for this statement,
+        // although not all features may be implemented.
+        if describe_alias == DescribeAlias::Explain
+            && self.dialect.supports_explain_with_utility_options()
+            && self.peek_token().token == Token::LParen
+        {
+            options = Some(self.parse_utility_options()?)
+        } else {
+            analyze = self.parse_keyword(Keyword::ANALYZE);
+            verbose = self.parse_keyword(Keyword::VERBOSE);
+            if self.parse_keyword(Keyword::FORMAT) {
+                format = Some(self.parse_analyze_format()?);
+            }
         }
 
         match self.maybe_parse(|parser| parser.parse_statement()) {
@@ -8481,6 +8517,7 @@ impl<'a> Parser<'a> {
                 verbose,
                 statement: Box::new(statement),
                 format,
+                options,
             }),
             _ => {
                 let hive_format =

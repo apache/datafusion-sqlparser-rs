@@ -90,4 +90,8 @@ impl Dialect for GenericDialect {
     fn supports_create_index_with_clause(&self) -> bool {
         true
     }
+
+    fn supports_explain_with_utility_options(&self) -> bool {
+        true
+    }
 }

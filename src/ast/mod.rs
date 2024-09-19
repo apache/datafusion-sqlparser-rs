@@ -3032,6 +3032,8 @@ pub enum Statement {
         statement: Box<Statement>,
         /// Optional output format of explain
         format: Option<AnalyzeFormat>,
+        /// Postgres style utility options, `(analyze, verbose true)`
+        options: Option<Vec<UtilityOption>>,
     },
     /// ```sql
     /// SAVEPOINT
@@ -3219,6 +3221,7 @@ impl fmt::Display for Statement {
                 analyze,
                 statement,
                 format,
+                options,
             } => {
                 write!(f, "{describe_alias} ")?;
 
@@ -3232,6 +3235,10 @@ impl fmt::Display for Statement {
 
                 if let Some(format) = format {
                     write!(f, "FORMAT {format} ")?;
+                }
+
+                if let Some(options) = options {
+                    write!(f, "({}) ", display_comma_separated(options))?;
                 }
 
                 write!(f, "{statement}")
@@ -7121,6 +7128,47 @@ where
             WrappedCollection::Parentheses(inner) => {
                 write!(f, "({})", display_comma_separated(inner.as_slice()))
             }
+        }
+    }
+}
+
+/// Represents a single PostgreSQL utility option.
+///
+/// A utility option is a key-value pair where the key is an identifier (IDENT) and the value
+/// can be one of the following:
+/// - A number with an optional sign (`+` or `-`). Example: `+10`, `-10.2`, `3`
+/// - A non-keyword string. Example: `option1`, `'option2'`, `"option3"`
+/// - keyword: `TRUE`, `FALSE`, `ON` (`off` is also accept).
+/// - Empty. Example: `ANALYZE` (identifier only)
+///
+/// Utility options are used in various PostgreSQL DDL statements, including statements such as
+/// `CLUSTER`, `EXPLAIN`, `VACUUM`, and `REINDEX`. These statements format options as `( option [, ...] )`.
+///
+/// [CLUSTER](https://www.postgresql.org/docs/current/sql-cluster.html)
+/// [EXPLAIN](https://www.postgresql.org/docs/current/sql-explain.html)
+/// [VACUUM](https://www.postgresql.org/docs/current/sql-vacuum.html)
+/// [REINDEX](https://www.postgresql.org/docs/current/sql-reindex.html)
+///
+/// For example, the `EXPLAIN` AND `VACUUM` statements with options might look like this:
+/// ```sql
+/// EXPLAIN (ANALYZE, VERBOSE TRUE, FORMAT TEXT) SELECT * FROM my_table;
+///
+/// VACCUM (VERBOSE, ANALYZE ON, PARALLEL 10) my_table;
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct UtilityOption {
+    pub name: Ident,
+    pub arg: Option<Expr>,
+}
+
+impl Display for UtilityOption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(ref arg) = self.arg {
+            write!(f, "{} {}", self.name, arg)
+        } else {
+            write!(f, "{}", self.name)
         }
     }
 }

@@ -536,6 +536,10 @@ pub trait Dialect: Debug + Any {
     fn require_interval_qualifier(&self) -> bool {
         false
     }
+
+    fn supports_explain_with_utility_options(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

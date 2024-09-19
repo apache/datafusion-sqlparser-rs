@@ -1230,13 +1230,13 @@ fn parse_snowflake_declare_result_set() {
 
     let error_sql = "DECLARE res RESULTSET DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression:, found: EOF".to_owned()),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE res RESULTSET :=";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression:, found: EOF".to_owned()),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -1328,13 +1328,13 @@ fn parse_snowflake_declare_variable() {
 
     let error_sql = "DECLARE profit INT DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression:, found: EOF".to_owned()),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 
     let error_sql = "DECLARE profit DEFAULT";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression:, found: EOF".to_owned()),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }

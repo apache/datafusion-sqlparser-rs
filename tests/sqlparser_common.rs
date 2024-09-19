@@ -2051,7 +2051,7 @@ fn parse_tuple_invalid() {
     let sql = "select (), 2";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError("Expected: an expression:, found: )".to_string()),
+        ParserError::ParserError("Expected: an expression, found: )".to_string()),
         res.unwrap_err()
     );
 }
@@ -9526,7 +9526,7 @@ fn parse_projection_trailing_comma() {
         trailing_commas
             .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
             .unwrap_err(),
-        ParserError::ParserError("Expected: an expression:, found: EOF".to_string())
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
     );
 
     assert_eq!(

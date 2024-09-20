@@ -6046,17 +6046,17 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::IDENTITY)
             && dialect_of!(self is MsSqlDialect | GenericDialect)
         {
-            let parameters = if self.expect_token(&Token::LParen).is_ok() {
-                let seed = self.parse_number_value()?;
+            let property = if self.consume_token(&Token::LParen) {
+                let seed = self.parse_number()?;
                 self.expect_token(&Token::Comma)?;
-                let increment = self.parse_number_value()?;
+                let increment = self.parse_number()?;
                 self.expect_token(&Token::RParen)?;
 
-                Some(SqlOption::Identity { seed, increment })
+                Some(IdentityProperty { seed, increment })
             } else {
                 None
             };
-            Ok(Some(ColumnOption::Identity(parameters)))
+            Ok(Some(ColumnOption::Identity(property)))
         } else {
             Ok(None)
         }

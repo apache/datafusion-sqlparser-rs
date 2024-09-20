@@ -930,14 +930,17 @@ fn parse_create_table_with_identity_column() {
                 ColumnOptionDef {
                     name: None,
                     #[cfg(not(feature = "bigdecimal"))]
-                    option: ColumnOption::Identity(Some(SqlOption::Identity {
-                        seed: Value::Number("1".to_string(), false),
-                        increment: Value::Number("1".to_string(), false),
+                    option: ColumnOption::Identity(Some(IdentityProperty {
+                        seed: Expr::Value(Value::Number("1".to_string(), false)),
+                        increment: Expr::Value(Value::Number("1".to_string(), false)),
                     })),
                     #[cfg(feature = "bigdecimal")]
-                    option: ColumnOption::Identity(Some(SqlOption::Identity {
-                        seed: Value::Number(bigdecimal::BigDecimal::from(1), false),
-                        increment: Value::Number(bigdecimal::BigDecimal::from(1), false),
+                    option: ColumnOption::Identity(Some(IdentityProperty {
+                        seed: Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1), false)),
+                        increment: Expr::Value(Value::Number(
+                            bigdecimal::BigDecimal::from(1),
+                            false,
+                        )),
                     })),
                 },
                 ColumnOptionDef {

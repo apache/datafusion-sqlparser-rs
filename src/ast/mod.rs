@@ -36,8 +36,8 @@ pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue,
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ClusteredBy, ColumnDef,
     ColumnOption, ColumnOptionDef, ConstraintCharacteristics, Deduplicate, DeferrableInitial,
-    GeneratedAs, GeneratedExpressionMode, IndexOption, IndexType, KeyOrIndexDisplay, Owner,
-    Partition, ProcedureParam, ReferentialAction, TableConstraint,
+    GeneratedAs, GeneratedExpressionMode, IdentityProperty, IndexOption, IndexType,
+    KeyOrIndexDisplay, Owner, Partition, ProcedureParam, ReferentialAction, TableConstraint,
     UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
@@ -5818,13 +5818,6 @@ pub enum SqlOption {
         range_direction: Option<PartitionRangeDirection>,
         for_values: Vec<Expr>,
     },
-    /// MS SQL Server specific: Optional parameters of identity column
-    /// E.g.
-    ///
-    ///   IDENTITY(1, 2)
-    ///
-    /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
-    Identity { seed: Value, increment: Value },
 }
 
 impl fmt::Display for SqlOption {
@@ -5855,9 +5848,6 @@ impl fmt::Display for SqlOption {
                     direction,
                     display_comma_separated(for_values)
                 )
-            }
-            SqlOption::Identity { seed, increment } => {
-                write!(f, "{}, {}", seed, increment)
             }
         }
     }

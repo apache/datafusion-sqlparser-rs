@@ -276,13 +276,13 @@ fn parse_alter_table_attach_and_detach_partition() {
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {operation} PARTITION").as_str())
                 .unwrap_err(),
-            ParserError("Expected: an expression:, found: EOF".to_string())
+            ParserError("Expected: an expression, found: EOF".to_string())
         );
         assert_eq!(
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {operation} PART").as_str())
                 .unwrap_err(),
-            ParserError("Expected: an expression:, found: EOF".to_string())
+            ParserError("Expected: an expression, found: EOF".to_string())
         );
     }
 }
@@ -355,7 +355,7 @@ fn parse_alter_table_add_projection() {
         clickhouse_and_generic()
             .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name (SELECT)")
             .unwrap_err(),
-        ParserError("Expected: an expression:, found: )".to_string())
+        ParserError("Expected: an expression, found: )".to_string())
     );
 }
 
@@ -498,13 +498,13 @@ fn parse_optimize_table() {
         clickhouse_and_generic()
             .parse_sql_statements("OPTIMIZE TABLE t0 DEDUPLICATE BY")
             .unwrap_err(),
-        ParserError("Expected: an expression:, found: EOF".to_string())
+        ParserError("Expected: an expression, found: EOF".to_string())
     );
     assert_eq!(
         clickhouse_and_generic()
             .parse_sql_statements("OPTIMIZE TABLE t0 PARTITION")
             .unwrap_err(),
-        ParserError("Expected: an expression:, found: EOF".to_string())
+        ParserError("Expected: an expression, found: EOF".to_string())
     );
     assert_eq!(
         clickhouse_and_generic()
@@ -1479,7 +1479,7 @@ fn parse_freeze_and_unfreeze_partition() {
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {operation_name} PARTITION").as_str())
                 .unwrap_err(),
-            ParserError("Expected: an expression:, found: EOF".to_string())
+            ParserError("Expected: an expression, found: EOF".to_string())
         );
         assert_eq!(
             clickhouse_and_generic()

@@ -1264,7 +1264,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 self.parse_duckdb_struct_literal()
             }
-            _ => self.expected("an expression:", next_token),
+            _ => self.expected("an expression", next_token),
         }?;
 
         if self.parse_keyword(Keyword::COLLATE) {

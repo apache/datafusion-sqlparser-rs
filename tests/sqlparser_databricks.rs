@@ -64,7 +64,7 @@ fn test_databricks_exists() {
     let res = databricks().parse_sql_statements("SELECT EXISTS (");
     assert_eq!(
         // TODO: improve this error message...
-        ParserError::ParserError("Expected: an expression:, found: EOF".to_string()),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string()),
         res.unwrap_err(),
     );
 }

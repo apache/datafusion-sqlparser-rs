@@ -912,7 +912,7 @@ fn parse_create_table_with_invalid_options() {
 fn parse_create_table_with_identity_column() {
     let with_column_options = [
         (
-            r#"CREATE TABLE [mytable] ([columnA] INT IDENTITY NOT NULL)"#,
+            r#"CREATE TABLE mytable (columnA INT IDENTITY NOT NULL)"#,
             vec![
                 ColumnOptionDef {
                     name: None,
@@ -925,7 +925,7 @@ fn parse_create_table_with_identity_column() {
             ],
         ),
         (
-            r#"CREATE TABLE [mytable] ([columnA] INT IDENTITY(1, 1) NOT NULL)"#,
+            r#"CREATE TABLE mytable (columnA INT IDENTITY(1, 1) NOT NULL)"#,
             vec![
                 ColumnOptionDef {
                     name: None,
@@ -953,7 +953,7 @@ fn parse_create_table_with_identity_column() {
 
     for (sql, column_options) in with_column_options {
         assert_eq!(
-            ms().verified_stmt(sql),
+            ms_and_generic().verified_stmt(sql),
             Statement::CreateTable(CreateTable {
                 or_replace: false,
                 temporary: false,
@@ -964,12 +964,12 @@ fn parse_create_table_with_identity_column() {
                 volatile: false,
                 name: ObjectName(vec![Ident {
                     value: "mytable".to_string(),
-                    quote_style: Some('['),
+                    quote_style: None,
                 },],),
                 columns: vec![ColumnDef {
                     name: Ident {
                         value: "columnA".to_string(),
-                        quote_style: Some('['),
+                        quote_style: None,
                     },
                     data_type: Int(None,),
                     collation: None,

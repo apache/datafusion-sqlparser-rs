@@ -6069,6 +6069,20 @@ impl<'a> Parser<'a> {
             && dialect_of!(self is MySqlDialect | SQLiteDialect | DuckDbDialect | GenericDialect)
         {
             self.parse_optional_column_option_as()
+        } else if self.parse_keyword(Keyword::IDENTITY)
+            && dialect_of!(self is MsSqlDialect | GenericDialect)
+        {
+            let property = if self.consume_token(&Token::LParen) {
+                let seed = self.parse_number()?;
+                self.expect_token(&Token::Comma)?;
+                let increment = self.parse_number()?;
+                self.expect_token(&Token::RParen)?;
+
+                Some(IdentityProperty { seed, increment })
+            } else {
+                None
+            };
+            Ok(Some(ColumnOption::Identity(property)))
         } else {
             Ok(None)
         }

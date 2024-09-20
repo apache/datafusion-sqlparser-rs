@@ -1050,6 +1050,20 @@ impl fmt::Display for ColumnOptionDef {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IdentityProperty {
+    pub seed: Expr,
+    pub increment: Expr,
+}
+
+impl fmt::Display for IdentityProperty {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}, {}", self.seed, self.increment)
+    }
+}
+
 /// `ColumnOption`s are modifiers that follow a column definition in a `CREATE
 /// TABLE` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1120,6 +1134,13 @@ pub enum ColumnOption {
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
     /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
     Options(Vec<SqlOption>),
+    /// MS SQL Server specific: Creates an identity column in a table.
+    /// Syntax
+    /// ```sql
+    /// IDENTITY [ (seed , increment) ]
+    /// ```
+    /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+    Identity(Option<IdentityProperty>),
 }
 
 impl fmt::Display for ColumnOption {
@@ -1220,6 +1241,13 @@ impl fmt::Display for ColumnOption {
             }
             Options(options) => {
                 write!(f, "OPTIONS({})", display_comma_separated(options))
+            }
+            Identity(parameters) => {
+                write!(f, "IDENTITY")?;
+                if let Some(parameters) = parameters {
+                    write!(f, "({parameters})")?;
+                }
+                Ok(())
             }
         }
     }

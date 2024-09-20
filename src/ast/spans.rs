@@ -17,12 +17,9 @@ pub trait Spanned {
 
 impl Spanned for Query {
     fn span(&self) -> Span {
-        union_spans(
-            self.with
-                .iter()
-                .map(|item| item.span())
-                .chain(core::iter::once(self.body.span())),
-        )
+        self.body
+            .span()
+            .union_opt(&self.with.as_ref().map(|i| i.span()))
     }
 }
 
@@ -40,7 +37,8 @@ impl Spanned for Cte {
         union_spans(
             core::iter::once(self.alias.span())
                 .chain(core::iter::once(self.query.span()))
-                .chain(self.from.iter().map(|item| item.span)),
+                .chain(self.from.iter().map(|item| item.span))
+                .chain(core::iter::once(self.closing_paren_token.span)),
         )
     }
 }
@@ -589,12 +587,24 @@ impl Spanned for Select {
 
 #[cfg(test)]
 pub mod tests {
-    use ast::query;
-
     use crate::dialect::{Dialect, GenericDialect, SnowflakeDialect};
+    use crate::parser::Parser;
     use crate::tokenizer::Span;
 
     use super::*;
+
+    struct SpanTest<'a>(Parser<'a>, &'a str);
+
+    impl<'a> SpanTest<'a> {
+        fn new(dialect: &'a dyn Dialect, sql: &'a str) -> Self {
+            Self(Parser::new(dialect).try_with_sql(sql).unwrap(), sql)
+        }
+
+        fn get_source(&self, span: Span) -> &'a str {
+            // lines in spans are 1-indexed
+            &self.1[(span.start.column as usize - 1)..(span.end.column - 1) as usize]
+        }
+    }
 
     #[test]
     fn test_query_span() {
@@ -660,14 +670,27 @@ pub mod tests {
 
     #[test]
     pub fn test_wildcard_from_cte() {
-        let query = crate::parser::Parser::new(&GenericDialect::default())
-            .try_with_sql(
-                "WITH cte AS (SELECT a FROM postgres.public.source) SELECT cte.* FROM cte",
-            )
-            .unwrap()
-            .parse_query()
-            .unwrap();
+        let dialect = &GenericDialect::default();
+        let mut test = SpanTest::new(
+            dialect,
+            "WITH cte AS (SELECT a FROM postgres.public.source) SELECT cte.* FROM cte",
+        );
 
-        query.span();
+        let query = test.0.parse_query().unwrap();
+        let cte_span = query.clone().with.unwrap().cte_tables[0].span();
+        let cte_query_span = query.clone().with.unwrap().cte_tables[0].query.span();
+        let body_span = query.body.span();
+
+        // the WITH keyboard is part of the query
+        assert_eq!(
+            test.get_source(cte_span),
+            "cte AS (SELECT a FROM postgres.public.source)"
+        );
+        assert_eq!(
+            test.get_source(cte_query_span),
+            "SELECT a FROM postgres.public.source"
+        );
+
+        assert_eq!(test.get_source(body_span), "SELECT cte.* FROM cte");
     }
 }

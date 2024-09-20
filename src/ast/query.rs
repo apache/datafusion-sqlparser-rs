@@ -544,6 +544,8 @@ pub struct Cte {
     pub query: Box<Query>,
     pub from: Option<Ident>,
     pub materialized: Option<CteAsMaterialized>,
+    // needed for accurate span reporting
+    pub closing_paren_token: TokenWithLocation,
 }
 
 impl fmt::Display for Cte {

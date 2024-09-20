@@ -3336,9 +3336,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Bail out if the current token is not an expected keyword, or consume it if it is
-    pub fn expect_token(&mut self, expected: &Token) -> Result<(), ParserError> {
-        if self.consume_token(expected) {
-            Ok(())
+    pub fn expect_token(&mut self, expected: &Token) -> Result<TokenWithLocation, ParserError> {
+        if self.peek_token() == *expected {
+            Ok(self.next_token())
         } else {
             self.expected(&expected.to_string(), self.peek_token())
         }
@@ -8802,7 +8802,7 @@ impl<'a> Parser<'a> {
             }
             self.expect_token(&Token::LParen)?;
             let query = self.parse_boxed_query()?;
-            self.expect_token(&Token::RParen)?;
+            let closing_paren_token = self.expect_token(&Token::RParen)?;
             let alias = TableAlias {
                 name,
                 columns: vec![],
@@ -8812,6 +8812,7 @@ impl<'a> Parser<'a> {
                 query,
                 from: None,
                 materialized: is_materialized,
+                closing_paren_token,
             }
         } else {
             let columns = self.parse_parenthesized_column_list(Optional, false)?;
@@ -8826,13 +8827,14 @@ impl<'a> Parser<'a> {
             }
             self.expect_token(&Token::LParen)?;
             let query = self.parse_boxed_query()?;
-            self.expect_token(&Token::RParen)?;
+            let closing_paren_token = self.expect_token(&Token::RParen)?;
             let alias = TableAlias { name, columns };
             Cte {
                 alias,
                 query,
                 from: None,
                 materialized: is_materialized,
+                closing_paren_token,
             }
         };
         if self.parse_keyword(Keyword::FROM).is_some() {

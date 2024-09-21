@@ -10,11 +10,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup Rust Toolchain
         uses: ./.github/actions/setup-builder
-        with:
-          # Note that `nightly` is required for `license_template_path`, as
-          # it's an unstable feature.
-          rust-version: nightly
-      - run: cargo +nightly fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')
+      - run: cargo fmt -- --check 
 
   lint:
     runs-on: ubuntu-latest

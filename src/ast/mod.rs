@@ -4511,30 +4511,21 @@ impl fmt::Display for Statement {
                 options,
                 query,
             } => {
-                if table_flag.is_some() {
-                    write!(
-                        f,
-                        "CACHE {table_flag} TABLE {table_name}",
-                        table_flag = table_flag.clone().unwrap(),
-                        table_name = table_name,
-                    )?;
+                if let Some(table_flag) = table_flag {
+                    write!(f, "CACHE {table_flag} TABLE {table_name}")?;
                 } else {
-                    write!(f, "CACHE TABLE {table_name}",)?;
+                    write!(f, "CACHE TABLE {table_name}")?;
                 }
 
                 if !options.is_empty() {
                     write!(f, " OPTIONS({})", display_comma_separated(options))?;
                 }
 
-                let has_query = query.is_some();
-                if *has_as && has_query {
-                    write!(f, " AS {query}", query = query.clone().unwrap())
-                } else if !has_as && has_query {
-                    write!(f, " {query}", query = query.clone().unwrap())
-                } else if *has_as && !has_query {
-                    write!(f, " AS")
-                } else {
-                    Ok(())
+                match (*has_as, query) {
+                    (true, Some(query)) => write!(f, " AS {query}"),
+                    (true, None) => f.write_str(" AS"),
+                    (false, Some(query)) => write!(f, " {query}"),
+                    (false, None) => Ok(()),
                 }
             }
             Statement::UNCache {

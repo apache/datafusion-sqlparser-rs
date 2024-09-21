@@ -10552,12 +10552,12 @@ impl<'a> Parser<'a> {
             return parser_err!("Unsupported statement REPLACE", self.peek_token().location);
         }
 
-        let insert = &mut self.parse_insert()?;
-        if let Statement::Insert(Insert { replace_into, .. }) = insert {
+        let mut insert = self.parse_insert()?;
+        if let Statement::Insert(Insert { replace_into, .. }) = &mut insert {
             *replace_into = true;
         }
 
-        Ok(insert.clone())
+        Ok(insert)
     }
 
     /// Parse an INSERT statement, returning a `Box`ed SetExpr

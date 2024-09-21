@@ -494,84 +494,75 @@ pub struct Insert {
 
 impl Display for Insert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Start building the insert statement.
-        if self.replace_into {
-            write!(f, "REPLACE INTO ")?;
+        let table_name = if let Some(alias) = &self.table_alias {
+            format!("{0} AS {alias}", self.table_name)
         } else {
-            if self.ignore {
-                write!(f, "INSERT IGNORE ")?;
-            } else if let Some(priority) = &self.priority {
-                write!(f, "INSERT {} ", priority)?;
-            } else {
-                write!(f, "INSERT ")?;
+            self.table_name.to_string()
+        };
+
+        if let Some(action) = self.or {
+            write!(f, "INSERT OR {action} INTO {table_name} ")?;
+        } else {
+            write!(
+                f,
+                "{start}",
+                start = if self.replace_into {
+                    "REPLACE"
+                } else {
+                    "INSERT"
+                },
+            )?;
+            if let Some(priority) = self.priority {
+                write!(f, " {priority}",)?;
             }
 
-            if self.into {
-                write!(f, "INTO ")?;
-            }
-            if self.table {
-                write!(f, "TABLE ")?;
-            }
+            write!(
+                f,
+                "{ignore}{over}{int}{tbl} {table_name} ",
+                table_name = table_name,
+                ignore = if self.ignore { " IGNORE" } else { "" },
+                over = if self.overwrite { " OVERWRITE" } else { "" },
+                int = if self.into { " INTO" } else { "" },
+                tbl = if self.table { " TABLE" } else { "" },
+            )?;
         }
-
-        // Write table name and alias
-        write!(f, "{}", self.table_name)?;
-        if let Some(alias) = &self.table_alias {
-            write!(f, " AS {}", alias)?;
-        }
-
-        // Write columns if there are any
         if !self.columns.is_empty() {
-            let cols = self
-                .columns
-                .iter()
-                .map(|col| col.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            write!(f, " ({})", cols)?;
+            write!(f, "({}) ", display_comma_separated(&self.columns))?;
         }
-
-        // Write partitioned insert (Hive)
-        if let Some(partitions) = &self.partitioned {
-            let parts = partitions
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            write!(f, " PARTITION ({})", parts)?;
+        if let Some(ref parts) = self.partitioned {
+            if !parts.is_empty() {
+                write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
+            }
         }
-
-        // Write after columns (Hive)
         if !self.after_columns.is_empty() {
-            let after_cols = self
-                .after_columns
-                .iter()
-                .map(|col| col.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            write!(f, " ({})", after_cols)?;
+            write!(f, "({}) ", display_comma_separated(&self.after_columns))?;
         }
 
-        // Write the source query if it exists
         if let Some(source) = &self.source {
-            write!(f, " {}", source)?;
+            write!(f, "{source}")?;
         }
 
-        // Write ON conflict handling for Sqlite, MySQL, etc.
-        if let Some(on_conflict) = &self.on {
-            write!(f, " {}", on_conflict)?;
+        if self.source.is_none() && self.columns.is_empty() {
+            write!(f, "DEFAULT VALUES")?;
         }
 
-        // Write RETURNING clause if present
+        if let Some(insert_alias) = &self.insert_alias {
+            write!(f, " AS {0}", insert_alias.row_alias)?;
+
+            if let Some(col_aliases) = &insert_alias.col_aliases {
+                if !col_aliases.is_empty() {
+                    write!(f, " ({})", display_comma_separated(col_aliases))?;
+                }
+            }
+        }
+
+        if let Some(on) = &self.on {
+            write!(f, "{on}")?;
+        }
+
         if let Some(returning) = &self.returning {
-            let returns = returning
-                .iter()
-                .map(|r| r.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            write!(f, " RETURNING {}", returns)?;
+            write!(f, " RETURNING {}", display_comma_separated(returning))?;
         }
-
         Ok(())
     }
 }
@@ -600,62 +591,32 @@ pub struct Delete {
 impl Display for Delete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DELETE ")?;
-
-        // Handle multi-table DELETE if present
         if !self.tables.is_empty() {
-            let tables = self
-                .tables
-                .iter()
-                .map(|t| t.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            write!(f, "{} ", tables)?;
+            write!(f, "{} ", display_comma_separated(&self.tables))?;
         }
-
-        // The FromTable includes the `FROM` keyword.
-        write!(f, "{} ", self.from)?;
-
-        // USING clause (if present)
+        match &self.from {
+            FromTable::WithFromKeyword(from) => {
+                write!(f, "FROM {}", display_comma_separated(from))?;
+            }
+            FromTable::WithoutKeyword(from) => {
+                write!(f, "{}", display_comma_separated(from))?;
+            }
+        }
         if let Some(using) = &self.using {
-            let uses = using
-                .iter()
-                .map(|tab| tab.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            write!(f, "USING {} ", uses)?;
+            write!(f, " USING {}", display_comma_separated(using))?;
         }
-
-        // WHERE clause (if present)
-        if let Some(sel) = &self.selection {
-            write!(f, "WHERE {} ", sel)?;
+        if let Some(selection) = &self.selection {
+            write!(f, " WHERE {selection}")?;
         }
-
-        // RETURNING clause (if present)
-        if let Some(ret) = &self.returning {
-            let rets = ret
-                .iter()
-                .map(|col| col.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            write!(f, "RETURNING {} ", rets)?;
+        if let Some(returning) = &self.returning {
+            write!(f, " RETURNING {}", display_comma_separated(returning))?;
         }
-
-        // ORDER BY clause (if present)
         if !self.order_by.is_empty() {
-            let order_by = self
-                .order_by
-                .iter()
-                .map(|ob| ob.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            write!(f, "ORDER BY {} ", order_by)?;
+            write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
         }
-
-        // LIMIT clause (if present)
         if let Some(limit) = &self.limit {
-            write!(f, "LIMIT {}", limit)?;
+            write!(f, " LIMIT {limit}")?;
         }
-
         Ok(())
     }
 }

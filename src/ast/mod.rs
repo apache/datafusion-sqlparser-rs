@@ -2153,26 +2153,10 @@ impl Display for FromTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FromTable::WithFromKeyword(tables) => {
-                write!(
-                    f,
-                    "FROM {}",
-                    tables
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
+                write!(f, "FROM {}", display_comma_separated(tables))
             }
             FromTable::WithoutKeyword(tables) => {
-                write!(
-                    f,
-                    "{}",
-                    tables
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
+                write!(f, "{}", display_comma_separated(tables))
             }
         }
     }

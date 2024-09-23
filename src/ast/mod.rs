@@ -2135,6 +2135,35 @@ pub enum FromTable {
     WithoutKeyword(Vec<TableWithJoins>),
 }
 
+/// Policy type for a `CREATE POLICY` statement.
+/// ```sql
+/// AS [ PERMISSIVE | RESTRICTIVE ]
+/// ```
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreatePolicyType {
+    Permissive,
+    Restrictive,
+}
+
+/// Policy command for a `CREATE POLICY` statement.
+/// ```sql
+/// FOR [ALL | SELECT | INSERT | UPDATE | DELETE]
+/// ```
+/// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreatePolicyCommand {
+    All,
+    Select,
+    Insert,
+    Update,
+    Delete,
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -2373,6 +2402,20 @@ pub enum Statement {
         storage_specifier: Option<Ident>,
         secret_type: Ident,
         options: Vec<SecretOption>,
+    },
+    /// ```sql
+    /// CREATE POLICY
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
+    CreatePolicy {
+        name: Ident,
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        table_name: ObjectName,
+        policy_type: Option<CreatePolicyType>,
+        command: Option<CreatePolicyCommand>,
+        to: Option<Vec<Owner>>,
+        using: Option<Expr>,
+        with_check: Option<Expr>,
     },
     /// ```sql
     /// ALTER TABLE
@@ -4050,6 +4093,48 @@ impl fmt::Display for Statement {
                     write!(f, ", {o}", o = display_comma_separated(options))?;
                 }
                 write!(f, " )")?;
+                Ok(())
+            }
+            Statement::CreatePolicy {
+                name,
+                table_name,
+                policy_type,
+                command,
+                to,
+                using,
+                with_check,
+            } => {
+                write!(f, "CREATE POLICY {name} ON {table_name}")?;
+
+                if let Some(policy_type) = policy_type {
+                    match policy_type {
+                        CreatePolicyType::Permissive => write!(f, " AS PERMISSIVE")?,
+                        CreatePolicyType::Restrictive => write!(f, " AS RESTRICTIVE")?,
+                    }
+                }
+
+                if let Some(command) = command {
+                    match command {
+                        CreatePolicyCommand::All => write!(f, " FOR ALL")?,
+                        CreatePolicyCommand::Select => write!(f, " FOR SELECT")?,
+                        CreatePolicyCommand::Insert => write!(f, " FOR INSERT")?,
+                        CreatePolicyCommand::Update => write!(f, " FOR UPDATE")?,
+                        CreatePolicyCommand::Delete => write!(f, " FOR DELETE")?,
+                    }
+                }
+
+                if let Some(to) = to {
+                    write!(f, " TO {}", display_comma_separated(to))?;
+                }
+
+                if let Some(using) = using {
+                    write!(f, " USING ({using})")?;
+                }
+
+                if let Some(with_check) = with_check {
+                    write!(f, " WITH CHECK ({with_check})")?;
+                }
+
                 Ok(())
             }
             Statement::AlterTable {

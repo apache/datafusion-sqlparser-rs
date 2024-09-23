@@ -10987,3 +10987,105 @@ fn parse_explain_with_option_list() {
         Some(utility_options),
     );
 }
+
+#[test]
+fn test_create_policy() {
+    let sql = concat!(
+        "CREATE POLICY my_policy ON my_table ",
+        "AS PERMISSIVE FOR SELECT ",
+        "TO my_role, CURRENT_USER ",
+        "USING (c0 = 1) ",
+        "WITH CHECK (true)"
+    );
+
+    match all_dialects().verified_stmt(sql) {
+        Statement::CreatePolicy {
+            name,
+            table_name,
+            to,
+            using,
+            with_check,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "my_policy");
+            assert_eq!(table_name.to_string(), "my_table");
+            assert_eq!(
+                to,
+                Some(vec![
+                    Owner::Ident(Ident::new("my_role")),
+                    Owner::CurrentUser
+                ])
+            );
+            assert_eq!(
+                using,
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("c0"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                })
+            );
+            assert_eq!(with_check, Some(Expr::Value(Value::Boolean(true))));
+        }
+        _ => unreachable!(),
+    }
+
+    // USING with SELECT query
+    all_dialects().verified_stmt(concat!(
+        "CREATE POLICY my_policy ON my_table ",
+        "AS PERMISSIVE FOR SELECT ",
+        "TO my_role, CURRENT_USER ",
+        "USING (c0 IN (SELECT column FROM t0)) ",
+        "WITH CHECK (true)"
+    ));
+    // omit AS / FOR / TO / USING / WITH CHECK clauses is allowed
+    all_dialects().verified_stmt("CREATE POLICY my_policy ON my_table");
+
+    // missing table name
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE POLICY my_policy")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: ON, found: EOF"
+    );
+    // missing policy type
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE POLICY my_policy ON my_table AS")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: one of PERMISSIVE or RESTRICTIVE, found: EOF"
+    );
+    // missing FOR command
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE POLICY my_policy ON my_table FOR")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: one of ALL or SELECT or INSERT or UPDATE or DELETE, found: EOF"
+    );
+    // missing TO owners
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE POLICY my_policy ON my_table TO")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. sql parser error: Expected: identifier, found: EOF"
+    );
+    // missing USING expression
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE POLICY my_policy ON my_table USING")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: (, found: EOF"
+    );
+    // missing WITH CHECK expression
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE POLICY my_policy ON my_table WITH CHECK")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: (, found: EOF"
+    );
+}

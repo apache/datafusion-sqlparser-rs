@@ -992,6 +992,7 @@ impl fmt::Display for ColumnDef {
 /// ```sql
 /// name
 /// age OPTIONS(description = "age column", tag = "prod")
+/// amount COMMENT 'The total amount for the order line'
 /// created_at DateTime64
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1000,7 +1001,7 @@ impl fmt::Display for ColumnDef {
 pub struct ViewColumnDef {
     pub name: Ident,
     pub data_type: Option<DataType>,
-    pub options: Option<Vec<SqlOption>>,
+    pub options: Option<Vec<ColumnOption>>,
 }
 
 impl fmt::Display for ViewColumnDef {
@@ -1010,11 +1011,7 @@ impl fmt::Display for ViewColumnDef {
             write!(f, " {}", data_type)?;
         }
         if let Some(options) = self.options.as_ref() {
-            write!(
-                f,
-                " OPTIONS({})",
-                display_comma_separated(options.as_slice())
-            )?;
+            write!(f, " {}", display_comma_separated(options.as_slice()))?;
         }
         Ok(())
     }

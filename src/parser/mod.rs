@@ -32,6 +32,7 @@ use IsLateral::*;
 use IsOptional::*;
 
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
+use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
@@ -3569,6 +3570,8 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
             self.parse_create_view(or_replace, temporary)
+        } else if self.parse_keyword(Keyword::POLICY) {
+            self.parse_create_policy()
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
@@ -4759,6 +4762,105 @@ impl<'a> Parser<'a> {
             user,
             admin,
             authorization_owner,
+        })
+    }
+
+    pub fn parse_owner(&mut self) -> Result<Owner, ParserError> {
+        let owner = match self.parse_one_of_keywords(&[Keyword::CURRENT_USER, Keyword::CURRENT_ROLE, Keyword::SESSION_USER]) {
+            Some(Keyword::CURRENT_USER) => Owner::CurrentUser,
+            Some(Keyword::CURRENT_ROLE) => Owner::CurrentRole,
+            Some(Keyword::SESSION_USER) => Owner::SessionUser,
+            Some(_) => unreachable!(),
+            None => {
+                match self.parse_identifier(false) {
+                    Ok(ident) => Owner::Ident(ident),
+                    Err(e) => {
+                        return Err(ParserError::ParserError(format!("Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. {e}")))
+                    }
+                }
+            },
+        };
+        Ok(owner)
+    }
+
+    /// ```sql
+    ///     CREATE POLICY name ON table_name [ AS { PERMISSIVE | RESTRICTIVE } ]
+    ///     [ FOR { ALL | SELECT | INSERT | UPDATE | DELETE } ]
+    ///     [ TO { role_name | PUBLIC | CURRENT_USER | CURRENT_ROLE | SESSION_USER } [, ...] ]
+    ///     [ USING ( using_expression ) ]
+    ///     [ WITH CHECK ( with_check_expression ) ]
+    /// ```
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createpolicy.html)
+    pub fn parse_create_policy(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_identifier(false)?;
+        self.expect_keyword(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
+
+        let policy_type = if self.parse_keyword(Keyword::AS) {
+            let keyword =
+                self.expect_one_of_keywords(&[Keyword::PERMISSIVE, Keyword::RESTRICTIVE])?;
+            Some(match keyword {
+                Keyword::PERMISSIVE => CreatePolicyType::Permissive,
+                Keyword::RESTRICTIVE => CreatePolicyType::Restrictive,
+                _ => unreachable!(),
+            })
+        } else {
+            None
+        };
+
+        let command = if self.parse_keyword(Keyword::FOR) {
+            let keyword = self.expect_one_of_keywords(&[
+                Keyword::ALL,
+                Keyword::SELECT,
+                Keyword::INSERT,
+                Keyword::UPDATE,
+                Keyword::DELETE,
+            ])?;
+            Some(match keyword {
+                Keyword::ALL => CreatePolicyCommand::All,
+                Keyword::SELECT => CreatePolicyCommand::Select,
+                Keyword::INSERT => CreatePolicyCommand::Insert,
+                Keyword::UPDATE => CreatePolicyCommand::Update,
+                Keyword::DELETE => CreatePolicyCommand::Delete,
+                _ => unreachable!(),
+            })
+        } else {
+            None
+        };
+
+        let to = if self.parse_keyword(Keyword::TO) {
+            Some(self.parse_comma_separated(|p| p.parse_owner())?)
+        } else {
+            None
+        };
+
+        let using = if self.parse_keyword(Keyword::USING) {
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Some(expr)
+        } else {
+            None
+        };
+
+        let with_check = if self.parse_keywords(&[Keyword::WITH, Keyword::CHECK]) {
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Some(expr)
+        } else {
+            None
+        };
+
+        Ok(CreatePolicy {
+            name,
+            table_name,
+            policy_type,
+            command,
+            to,
+            using,
+            with_check,
         })
     }
 
@@ -6941,21 +7043,7 @@ impl<'a> Parser<'a> {
         } else if dialect_of!(self is PostgreSqlDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::OWNER, Keyword::TO])
         {
-            let new_owner = match self.parse_one_of_keywords(&[Keyword::CURRENT_USER, Keyword::CURRENT_ROLE, Keyword::SESSION_USER]) {
-                Some(Keyword::CURRENT_USER) => Owner::CurrentUser,
-                Some(Keyword::CURRENT_ROLE) => Owner::CurrentRole,
-                Some(Keyword::SESSION_USER) => Owner::SessionUser,
-                Some(_) => unreachable!(),
-                None => {
-                    match self.parse_identifier(false) {
-                        Ok(ident) => Owner::Ident(ident),
-                        Err(e) => {
-                            return Err(ParserError::ParserError(format!("Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. {e}")))
-                        }
-                    }
-                },
-            };
-
+            let new_owner = self.parse_owner()?;
             AlterTableOperation::OwnerTo { new_owner }
         } else if dialect_of!(self is ClickHouseDialect|GenericDialect)
             && self.parse_keyword(Keyword::ATTACH)

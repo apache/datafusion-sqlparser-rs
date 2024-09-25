@@ -6083,6 +6083,24 @@ impl<'a> Parser<'a> {
                 None
             };
             Ok(Some(ColumnOption::Identity(property)))
+        } else if dialect_of!(self is SQLiteDialect)
+            && self.parse_keywords(&[Keyword::ON, Keyword::CONFLICT])
+        {
+            // Support ON CONFLICT for SQLite
+            let on_confl = self.parse_one_of_keywords(&[
+                Keyword::ROLLBACK,
+                Keyword::ABORT,
+                Keyword::FAIL,
+                Keyword::IGNORE,
+                Keyword::REPLACE,
+            ]);
+            match on_confl {
+                Some(keyword) => Ok(Some(ColumnOption::OnConflict(keyword))),
+                _ => self.expected(
+                    "one of ROLLBACK, ABORT, FAIL, IGNORE or REPLACE",
+                    self.peek_token(),
+                ),
+            }
         } else {
             Ok(None)
         }

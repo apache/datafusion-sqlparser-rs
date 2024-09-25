@@ -8197,26 +8197,25 @@ impl<'a> Parser<'a> {
             && self.parse_keyword(Keyword::OPTIONS)
         {
             self.prev_token();
-            let option = ColumnOption::Options(self.parse_options(Keyword::OPTIONS)?);
-            options.push(option);
+            if let Some(option) = self.parse_optional_column_option()? {
+                options.push(option);
+            }
         };
         if dialect_of!(self is SnowflakeDialect | GenericDialect)
             && self.parse_keyword(Keyword::COMMENT)
         {
-            let next_token = self.next_token();
-            let option = match next_token.token {
-                Token::SingleQuotedString(str) => ColumnOption::Comment(str),
-                _ => self.expected("string literal", next_token)?,
-            };
-            options.push(option);
-        };
-        let data_type = if dialect_of!(self is ClickHouseDialect) {
-            Some(self.parse_data_type()?)
-        } else {
-            None
+            self.prev_token();
+            if let Some(option) = self.parse_optional_column_option()? {
+                options.push(option);
+            }
         };
         let options = if !options.is_empty() {
             Some(options)
+        } else {
+            None
+        };
+        let data_type = if dialect_of!(self is ClickHouseDialect) {
+            Some(self.parse_data_type()?)
         } else {
             None
         };

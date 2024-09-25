@@ -2402,25 +2402,33 @@ fn parse_use() {
 }
 
 #[test]
+fn view_comment_option_should_be_after_column_list() {
+    snowflake_and_generic()
+        .verified_stmt("CREATE OR REPLACE VIEW v (a) COMMENT = 'Comment' AS SELECT a FROM t");
+}
+
+#[test]
 fn parse_view_column_descriptions() {
-    let sql = "CREATE OR REPLACE VIEW v (a COMMENT 'Comment of field') COMMENT = 'Comment of view' AS SELECT a FROM table1 AS o";
+    let sql =
+        "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
 
     match snowflake_and_generic().verified_stmt(sql) {
-        Statement::CreateView {
-            name,
-            columns,
-            comment,
-            ..
-        } => {
+        Statement::CreateView { name, columns, .. } => {
             assert_eq!(name.to_string(), "v");
-            assert_eq!(comment, Some("Comment of view".to_string()));
             assert_eq!(
                 columns,
-                vec![ViewColumnDef {
-                    name: Ident::new("a"),
-                    data_type: None,
-                    options: Some(vec![ColumnOption::Comment("Comment of field".to_string())]),
-                },]
+                vec![
+                    ViewColumnDef {
+                        name: Ident::new("a"),
+                        data_type: None,
+                        options: Some(vec![ColumnOption::Comment("Comment".to_string())]),
+                    },
+                    ViewColumnDef {
+                        name: Ident::new("b"),
+                        data_type: None,
+                        options: None,
+                    }
+                ]
             );
         }
         _ => unreachable!(),

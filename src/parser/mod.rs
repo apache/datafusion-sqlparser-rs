@@ -10290,7 +10290,7 @@ impl<'a> Parser<'a> {
         Ok(ExprWithAlias { expr, alias })
     }
 
-    fn parse_expr_with_alias(&mut self) -> Result<ExprWithAlias, ParserError> {
+    pub fn parse_expr_with_alias(&mut self) -> Result<ExprWithAlias, ParserError> {
         let expr = self.parse_expr()?;
         let alias = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_identifier(false)?)

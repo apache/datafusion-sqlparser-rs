@@ -2409,8 +2409,7 @@ fn view_comment_option_should_be_after_column_list() {
 
 #[test]
 fn parse_view_column_descriptions() {
-    let sql =
-        "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
+    let sql = "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
 
     match snowflake_and_generic().verified_stmt(sql) {
         Statement::CreateView { name, columns, .. } => {

@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::tokenizer::Span;
+use crate::tokenizer::{Span, TokenWithLocation};
 
 pub use self::data_type::{
     ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, ExactNumberInfo,
@@ -922,10 +922,10 @@ pub enum Expr {
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
-    Wildcard,
+    Wildcard(TokenWithLocation),
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
     /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
-    QualifiedWildcard(ObjectName),
+    QualifiedWildcard(ObjectName, TokenWithLocation),
     /// Some dialects support an older syntax for outer joins where columns are
     /// marked with the `(+)` operator in the WHERE clause, for example:
     ///
@@ -1214,8 +1214,8 @@ impl fmt::Display for Expr {
             Expr::MapAccess { column, keys } => {
                 write!(f, "{column}{}", display_separated(keys, ""))
             }
-            Expr::Wildcard => f.write_str("*"),
-            Expr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
+            Expr::Wildcard(_) => f.write_str("*"),
+            Expr::QualifiedWildcard(prefix, _) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsTrue(ast) => write!(f, "{ast} IS TRUE"),
             Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
@@ -5210,8 +5210,8 @@ pub enum FunctionArgExpr {
 impl From<Expr> for FunctionArgExpr {
     fn from(wildcard_expr: Expr) -> Self {
         match wildcard_expr {
-            Expr::QualifiedWildcard(prefix) => Self::QualifiedWildcard(prefix),
-            Expr::Wildcard => Self::Wildcard,
+            Expr::QualifiedWildcard(prefix, _) => Self::QualifiedWildcard(prefix),
+            Expr::Wildcard(_) => Self::Wildcard,
             expr => Self::Expr(expr),
         }
     }

@@ -245,8 +245,14 @@ impl Spanned for Expr {
             Expr::Map(map) => todo!(),
             Expr::Subscript { expr, subscript } => todo!(),
             Expr::Interval(interval) => todo!(),
-            Expr::Wildcard => todo!(),
-            Expr::QualifiedWildcard(object_name) => todo!(),
+            Expr::Wildcard(token) => token.span,
+            Expr::QualifiedWildcard(object_name, token) => union_spans(
+                object_name
+                    .0
+                    .iter()
+                    .map(|i| i.span)
+                    .chain(iter::once(token.span)),
+            ),
             Expr::OuterJoin(expr) => todo!(),
             Expr::Prior(expr) => todo!(),
             Expr::Lambda(lambda_function) => todo!(),
@@ -336,10 +342,8 @@ impl Spanned for SelectItem {
 impl Spanned for WildcardAdditionalOptions {
     fn span(&self) -> Span {
         union_spans(
-            self.opt_ilike
-                .as_ref()
-                .map(|i| i.span())
-                .into_iter()
+            core::iter::once(self.wildcard_token.span)
+                .chain(self.opt_ilike.as_ref().map(|i| i.span()).into_iter())
                 .chain(self.opt_exclude.as_ref().map(|i| i.span()).into_iter())
                 .chain(self.opt_rename.as_ref().map(|i| i.span()).into_iter())
                 .chain(self.opt_replace.as_ref().map(|i| i.span()).into_iter())

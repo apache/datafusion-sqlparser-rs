@@ -261,13 +261,7 @@ fn test_select_union_by_name() {
                 select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
-                    opt_ilike: None,
-                    opt_exclude: None,
-                    opt_except: None,
-                    opt_rename: None,
-                    opt_replace: None,
-                })],
+                projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 into: None,
                 from: vec![TableWithJoins {
                     relation: TableFactor::Table {
@@ -303,13 +297,7 @@ fn test_select_union_by_name() {
                 select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
-                    opt_ilike: None,
-                    opt_exclude: None,
-                    opt_except: None,
-                    opt_rename: None,
-                    opt_replace: None,
-                })],
+                projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 into: None,
                 from: vec![TableWithJoins {
                     relation: TableFactor::Table {

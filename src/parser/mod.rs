@@ -875,7 +875,10 @@ impl<'a> Parser<'a> {
                                 id_parts.push(Ident::with_quote('\'', s))
                             }
                             Token::Mul => {
-                                return Ok(Expr::QualifiedWildcard(ObjectName(id_parts)));
+                                return Ok(Expr::QualifiedWildcard(
+                                    ObjectName(id_parts),
+                                    next_token,
+                                ));
                             }
                             _ => {
                                 return self
@@ -886,7 +889,7 @@ impl<'a> Parser<'a> {
                 }
             }
             Token::Mul => {
-                return Ok(Expr::Wildcard);
+                return Ok(Expr::Wildcard(next_token));
             }
             _ => (),
         };
@@ -1088,7 +1091,7 @@ impl<'a> Parser<'a> {
                 _ => match self.peek_token().token {
                     Token::LParen | Token::Period => {
                         let mut id_parts: Vec<Ident> = vec![w.to_ident(next_token.span)];
-                        let mut ends_with_wildcard = false;
+                        let mut ending_wildcard: Option<TokenWithLocation> = None;
                         while self.consume_token(&Token::Period) {
                             let next_token = self.next_token();
                             match next_token.token {
@@ -1097,7 +1100,7 @@ impl<'a> Parser<'a> {
                                     // Postgres explicitly allows funcnm(tablenm.*) and the
                                     // function array_agg traverses this control flow
                                     if dialect_of!(self is PostgreSqlDialect) {
-                                        ends_with_wildcard = true;
+                                        ending_wildcard = Some(next_token);
                                         break;
                                     } else {
                                         return self
@@ -1114,8 +1117,8 @@ impl<'a> Parser<'a> {
                             }
                         }
 
-                        if ends_with_wildcard {
-                            Ok(Expr::QualifiedWildcard(ObjectName(id_parts)))
+                        if let Some(ending_wildcard_token) = ending_wildcard {
+                            Ok(Expr::QualifiedWildcard(ObjectName(id_parts), ending_wildcard_token))
                         } else if self.consume_token(&Token::LParen) {
                             if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
                                 && self.consume_tokens(&[Token::Plus, Token::RParen])
@@ -10952,12 +10955,12 @@ impl<'a> Parser<'a> {
     /// Parse a comma-delimited list of projections after SELECT
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
         match self.parse_wildcard_expr()? {
-            Expr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(
+            Expr::QualifiedWildcard(prefix, token) => Ok(SelectItem::QualifiedWildcard(
                 prefix,
-                self.parse_wildcard_additional_options()?,
+                self.parse_wildcard_additional_options(token)?,
             )),
-            Expr::Wildcard => Ok(SelectItem::Wildcard(
-                self.parse_wildcard_additional_options()?,
+            Expr::Wildcard(token) => Ok(SelectItem::Wildcard(
+                self.parse_wildcard_additional_options(token)?,
             )),
             Expr::Identifier(v) if v.value.to_lowercase() == "from" && v.quote_style.is_none() => {
                 parser_err!(
@@ -10979,6 +10982,7 @@ impl<'a> Parser<'a> {
     /// If it is not possible to parse it, will return an option.
     pub fn parse_wildcard_additional_options(
         &mut self,
+        wildcard_token: TokenWithLocation,
     ) -> Result<WildcardAdditionalOptions, ParserError> {
         let opt_ilike = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
             self.parse_optional_select_item_ilike()?
@@ -11010,6 +11014,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(WildcardAdditionalOptions {
+            wildcard_token,
             opt_ilike,
             opt_exclude,
             opt_except,

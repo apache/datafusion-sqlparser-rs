@@ -19,7 +19,10 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::{ast::*, tokenizer::TokenWithLocation};
+use crate::{
+    ast::*,
+    tokenizer::{Token, TokenWithLocation},
+};
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
@@ -597,10 +600,11 @@ impl fmt::Display for IdentWithAlias {
 }
 
 /// Additional options for wildcards, e.g. Snowflake `EXCLUDE`/`RENAME` and Bigquery `EXCEPT`.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WildcardAdditionalOptions {
+    pub wildcard_token: TokenWithLocation,
     /// `[ILIKE...]`.
     ///  Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
     pub opt_ilike: Option<IlikeSelectItem>,
@@ -616,6 +620,19 @@ pub struct WildcardAdditionalOptions {
     pub opt_replace: Option<ReplaceSelectItem>,
     /// `[RENAME ...]`.
     pub opt_rename: Option<RenameSelectItem>,
+}
+
+impl Default for WildcardAdditionalOptions {
+    fn default() -> Self {
+        Self {
+            wildcard_token: TokenWithLocation::wrap(Token::Mul),
+            opt_ilike: None,
+            opt_exclude: None,
+            opt_except: None,
+            opt_replace: None,
+            opt_rename: None,
+        }
+    }
 }
 
 impl fmt::Display for WildcardAdditionalOptions {

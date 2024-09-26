@@ -82,7 +82,7 @@ pub mod helpers;
 mod operator;
 mod query;
 mod spans;
-pub use spans::Spanned;
+pub use spans::{Spanned, union_spans};
 
 mod trigger;
 mod value;

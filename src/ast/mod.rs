@@ -2546,6 +2546,16 @@ pub enum Statement {
         name: Ident,
         storage_specifier: Option<Ident>,
     },
+    ///```sql
+    /// DROP POLICY
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droppolicy.html)
+    DropPolicy {
+        if_exists: bool,
+        name: Ident,
+        table_name: ObjectName,
+        option: Option<ReferentialAction>,
+    },
     /// ```sql
     /// DECLARE
     /// ```
@@ -4255,6 +4265,22 @@ impl fmt::Display for Statement {
                 )?;
                 if let Some(s) = storage_specifier {
                     write!(f, " FROM {s}")?;
+                }
+                Ok(())
+            }
+            Statement::DropPolicy {
+                if_exists,
+                name,
+                table_name,
+                option,
+            } => {
+                write!(f, "DROP POLICY")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {name} ON {table_name}")?;
+                if let Some(option) = option {
+                    write!(f, " {option}")?;
                 }
                 Ok(())
             }

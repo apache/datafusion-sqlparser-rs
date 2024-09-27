@@ -6096,10 +6096,7 @@ impl<'a> Parser<'a> {
             ]);
             match on_confl {
                 Some(keyword) => Ok(Some(ColumnOption::OnConflict(keyword))),
-                _ => self.expected(
-                    "one of ROLLBACK, ABORT, FAIL, IGNORE or REPLACE",
-                    self.peek_token(),
-                ),
+                _ => unreachable!()
             }
         } else {
             Ok(None)

@@ -10289,6 +10289,19 @@ impl<'a> Parser<'a> {
 
         Ok(ExprWithAlias { expr, alias })
     }
+    /// return new expression with alias
+    ///
+    /// Example
+    /// ```
+    /// # use sqlparser::parser::{Parser, ParserError};
+    /// # use sqlparser::dialect::GenericDialect;
+    /// # fn main() ->Result<(), ParserError> {
+    /// let sql = r#"SUM("a") as "b""#;
+    /// let mut parser = Parser::new(&GenericDialect).try_with_sql(sql)?;
+    /// let expr_with_alias = parser.parse_expr_with_alias()?;
+    /// assert_eq!(Some("b".to_string()), expr_with_alias.alias.map(|x|x.value));
+    /// # Ok(())
+    /// # }
 
     pub fn parse_expr_with_alias(&mut self) -> Result<ExprWithAlias, ParserError> {
         let expr = self.parse_expr()?;

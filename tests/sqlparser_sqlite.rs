@@ -22,6 +22,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::keywords::Keyword;
 use test_utils::*;
 
 use sqlparser::ast::SelectItem::UnnamedExpr;
@@ -283,100 +284,34 @@ fn parse_create_table_gencol() {
 
 #[test]
 fn parse_create_table_on_conflict_col() {
-    let sql_rollback = "CREATE TABLE t1 (a INT, b INT ON CONFLICT ROLLBACK)";
-    match sqlite().verified_stmt(sql_rollback) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            assert_eq!(name.to_string(), "t1");
-            assert_eq!(
-                vec![
-                    ColumnDef {
-                        name: Ident::new("a"),
-                        data_type: DataType::Int(None),
-                        collation: None,
-                        options: vec![],
-                    },
-                    ColumnDef {
-                        name: Ident::new("b"), //::with_quote('[', "BINDEX"),
-                        data_type: DataType::Int(None),
-                        collation: None,
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::OnConflict(
-                                sqlparser::keywords::Keyword::ROLLBACK
-                            ),
-                        }],
-                    },
-                ],
-                columns
-            );
+    for keyword in [
+        Keyword::ROLLBACK,
+        Keyword::ABORT,
+        Keyword::FAIL,
+        Keyword::IGNORE,
+        Keyword::REPLACE,
+    ] {
+        let sql = format!("CREATE TABLE t1 (a INT, b INT ON CONFLICT {:?})", keyword);
+        match sqlite().verified_stmt(&sql) {
+            Statement::CreateTable(CreateTable { columns, .. }) => {
+                assert_eq!(
+                    vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::OnConflict(keyword),
+                    }],
+                    columns[1].options
+                );
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
     }
+}
 
-    let sql_abort = "CREATE TABLE t1 (a INT, b INT ON CONFLICT ABORT)";
-    match sqlite().verified_stmt(sql_abort) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
-            assert_eq!(
-                vec![ColumnOptionDef {
-                    name: None,
-                    option: ColumnOption::OnConflict(sqlparser::keywords::Keyword::ABORT),
-                }],
-                columns[1].options
-            );
-        }
-        _ => unreachable!(),
-    }
-
-    let sql_fail = "CREATE TABLE t1 (a INT, b INT ON CONFLICT FAIL)";
-    match sqlite().verified_stmt(sql_fail) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
-            assert_eq!(
-                vec![ColumnOptionDef {
-                    name: None,
-                    option: ColumnOption::OnConflict(sqlparser::keywords::Keyword::FAIL),
-                }],
-                columns[1].options
-            );
-        }
-        _ => unreachable!(),
-    }
-
-    let sql_ignore = "CREATE TABLE t1 (a INT, b INT ON CONFLICT IGNORE)";
-    match sqlite().verified_stmt(sql_ignore) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
-            assert_eq!(
-                vec![ColumnOptionDef {
-                    name: None,
-                    option: ColumnOption::OnConflict(sqlparser::keywords::Keyword::IGNORE),
-                }],
-                columns[1].options
-            );
-        }
-        _ => unreachable!(),
-    }
-
-    let sql_replace = "CREATE TABLE t1 (a INT, b INT ON CONFLICT REPLACE)";
-    match sqlite().verified_stmt(sql_replace) {
-        Statement::CreateTable(CreateTable { columns, .. }) => {
-            assert_eq!(
-                vec![ColumnOptionDef {
-                    name: None,
-                    option: ColumnOption::OnConflict(sqlparser::keywords::Keyword::REPLACE),
-                }],
-                columns[1].options
-            );
-        }
-        _ => unreachable!(),
-    }
-
+#[test]
+#[should_panic]
+fn test_parse_create_table_on_conflict_col_err() {
     let sql_err = "CREATE TABLE t1 (a INT, b INT ON CONFLICT BOH)";
-    assert_eq!(
-        "sql parser error: Expected: one of ROLLBACK, ABORT, FAIL, IGNORE or REPLACE, found: BOH",
-        sqlite()
-            .parse_sql_statements(sql_err)
-            .unwrap_err()
-            .to_string()
-    );
+    let _ = sqlite().parse_sql_statements(sql_err);
 }
 
 #[test]

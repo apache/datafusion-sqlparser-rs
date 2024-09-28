@@ -7118,6 +7118,7 @@ impl<'a> Parser<'a> {
             Keyword::TABLE,
             Keyword::INDEX,
             Keyword::ROLE,
+            Keyword::POLICY,
         ])?;
         match object_type {
             Keyword::VIEW => self.parse_alter_view(),
@@ -7169,6 +7170,7 @@ impl<'a> Parser<'a> {
                 })
             }
             Keyword::ROLE => self.parse_alter_role(),
+            Keyword::POLICY => self.parse_alter_policy(),
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }

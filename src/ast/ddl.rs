@@ -234,6 +234,49 @@ pub enum AlterTableOperation {
     OwnerTo { new_owner: Owner },
 }
 
+/// An `ALTER Policy` (`Statement::AlterPolicy`) operation
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterPolicyOperation {
+    Rename {
+        new_name: Ident,
+    },
+    Apply {
+        to: Option<Vec<Owner>>,
+        using: Option<Expr>,
+        with_check: Option<Expr>,
+    },
+}
+
+impl fmt::Display for AlterPolicyOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterPolicyOperation::Rename { new_name } => {
+                write!(f, " RENAME TO {new_name}")
+            }
+            AlterPolicyOperation::Apply {
+                to,
+                using,
+                with_check,
+            } => {
+                if let Some(to) = to {
+                    write!(f, " TO {}", display_comma_separated(to))?;
+                }
+                if let Some(using) = using {
+                    write!(f, " USING ({using})")?;
+                }
+                if let Some(with_check) = with_check {
+                    write!(f, " WITH CHECK ({with_check})")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

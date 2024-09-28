@@ -11089,3 +11089,71 @@ fn test_create_policy() {
         "sql parser error: Expected: (, found: EOF"
     );
 }
+
+#[test]
+fn test_alter_policy() {
+    match verified_stmt("ALTER POLICY old_policy ON my_table RENAME TO new_policy") {
+        Statement::AlterPolicy {
+            name,
+            table_name,
+            operation,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "old_policy");
+            assert_eq!(table_name.to_string(), "my_table");
+            assert_eq!(
+                operation,
+                AlterPolicyOperation::Rename {
+                    new_name: Ident::new("new_policy")
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt(concat!(
+        "ALTER POLICY my_policy ON my_table TO CURRENT_USER ",
+        "USING ((SELECT c0)) WITH CHECK (c0 > 0)"
+    )) {
+        Statement::AlterPolicy {
+            name, table_name, ..
+        } => {
+            assert_eq!(name.to_string(), "my_policy");
+            assert_eq!(table_name.to_string(), "my_table");
+        }
+        _ => unreachable!(),
+    }
+
+    // omit TO / USING / WITH CHECK clauses is allowed
+    verified_stmt("ALTER POLICY my_policy ON my_table");
+
+    // missing TO in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY old_policy ON my_table RENAME")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: EOF"
+    );
+    // missing new name in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY old_policy ON my_table RENAME TO")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+
+    // missing the expression in USING
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY my_policy ON my_table USING")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: (, found: EOF"
+    );
+    // missing the expression in WITH CHECK
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY my_policy ON my_table WITH CHECK")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: (, found: EOF"
+    );
+}

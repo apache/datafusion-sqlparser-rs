@@ -39,11 +39,12 @@ pub use self::data_type::{
 };
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue, Use};
 pub use self::ddl::{
-    AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ConstraintCharacteristics, Deduplicate, DeferrableInitial,
-    GeneratedAs, GeneratedExpressionMode, IdentityProperty, IndexOption, IndexType,
-    KeyOrIndexDisplay, Owner, Partition, ProcedureParam, ReferentialAction, TableConstraint,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ConstraintCharacteristics, Deduplicate,
+    DeferrableInitial, GeneratedAs, GeneratedExpressionMode, IdentityProperty, IndexOption,
+    IndexType, KeyOrIndexDisplay, Owner, Partition, ProcedureParam, ReferentialAction,
+    TableConstraint, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2459,6 +2460,14 @@ pub enum Statement {
         operation: AlterRoleOperation,
     },
     /// ```sql
+    ///
+    AlterPolicy {
+        name: Ident,
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        table_name: ObjectName,
+        operation: AlterPolicyOperation,
+    },
+    /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
     /// ```
     /// (SQLite-specific)
@@ -4186,6 +4195,13 @@ impl fmt::Display for Statement {
             }
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")
+            }
+            Statement::AlterPolicy {
+                name,
+                table_name,
+                operation,
+            } => {
+                write!(f, "ALTER POLICY {name} ON {table_name}{operation}")
             }
             Statement::Drop {
                 object_type,

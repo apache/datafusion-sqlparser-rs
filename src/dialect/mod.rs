@@ -60,7 +60,7 @@ use alloc::boxed::Box;
 
 /// Convenience check if a [`Parser`] uses a certain dialect.
 ///
-/// `dialect_of!(parser Is SQLiteDialect |  GenericDialect)` evaluates
+/// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the [`Dialect`]s specified.
 macro_rules! dialect_of {
     ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {

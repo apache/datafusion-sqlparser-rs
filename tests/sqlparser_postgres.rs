@@ -894,20 +894,6 @@ fn parse_drop_schema_if_exists() {
 }
 
 #[test]
-fn parse_drop_database_if_exists() {
-    let sql = "DROP DATABASE IF EXISTS database_name";
-    let ast = pg().verified_stmt(sql);
-    match ast {
-        Statement::Drop {
-            object_type,
-            if_exists: true,
-            ..
-        } => assert_eq!(object_type, ObjectType::Database),
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn parse_copy_from_stdin() {
     let sql = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
 1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111

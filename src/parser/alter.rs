@@ -55,12 +55,6 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
 
-        let to = if self.parse_keyword(Keyword::TO) {
-            Some(self.parse_comma_separated(|p| p.parse_owner())?)
-        } else {
-            None
-        };
-
         if self.parse_keyword(Keyword::RENAME) {
             self.expect_keyword(Keyword::TO)?;
             let new_name = self.parse_identifier(false)?;
@@ -70,6 +64,12 @@ impl<'a> Parser<'a> {
                 operation: AlterPolicyOperation::Rename { new_name },
             })
         } else {
+            let to = if self.parse_keyword(Keyword::TO) {
+                Some(self.parse_comma_separated(|p| p.parse_owner())?)
+            } else {
+                None
+            };
+
             let using = if self.parse_keyword(Keyword::USING) {
                 self.expect_token(&Token::LParen)?;
                 let expr = self.parse_expr()?;

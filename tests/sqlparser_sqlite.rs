@@ -292,7 +292,7 @@ fn parse_create_table_on_conflict_col() {
         Keyword::REPLACE,
     ] {
         let sql = format!("CREATE TABLE t1 (a INT, b INT ON CONFLICT {:?})", keyword);
-        match sqlite().verified_stmt(&sql) {
+        match sqlite_and_generic().verified_stmt(&sql) {
             Statement::CreateTable(CreateTable { columns, .. }) => {
                 assert_eq!(
                     vec![ColumnOptionDef {

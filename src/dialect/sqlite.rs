@@ -73,4 +73,8 @@ impl Dialect for SQLiteDialect {
     fn supports_in_empty_list(&self) -> bool {
         true
     }
+
+    fn supports_limit_comma(&self) -> bool {
+        true
+    }
 }

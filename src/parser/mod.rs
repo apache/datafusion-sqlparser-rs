@@ -8715,7 +8715,7 @@ impl<'a> Parser<'a> {
                     offset = Some(self.parse_offset()?)
                 }
 
-                if dialect_of!(self is GenericDialect | MySqlDialect | ClickHouseDialect | SQLiteDialect)
+                if self.dialect.supports_limit_comma()
                     && limit.is_some()
                     && offset.is_none()
                     && self.consume_token(&Token::Comma)

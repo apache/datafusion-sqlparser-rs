@@ -46,4 +46,8 @@ impl Dialect for ClickHouseDialect {
     fn require_interval_qualifier(&self) -> bool {
         true
     }
+
+    fn supports_limit_comma(&self) -> bool {
+        true
+    }
 }

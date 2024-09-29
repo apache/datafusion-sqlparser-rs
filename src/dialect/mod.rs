@@ -316,6 +316,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect support parsing `LIMIT 1, 2` as `LIMIT 2 OFFSET 1`?
+    fn supports_limit_comma(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support trailing commas in the projection list?
     fn supports_projection_trailing_commas(&self) -> bool {
         self.supports_trailing_commas()

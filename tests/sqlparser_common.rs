@@ -39,7 +39,7 @@ use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
     all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, call, expr_from_projection,
-    join, number, only, specific_dialects, table, table_alias, TestedDialects,
+    join, number, only, table, table_alias, TestedDialects,
 };
 
 #[macro_use]
@@ -6795,7 +6795,8 @@ fn parse_create_view_with_options() {
 #[test]
 fn parse_create_view_with_columns() {
     let sql = "CREATE VIEW v (has, cols) AS SELECT 1, 2";
-    // TODO: why does this fail for ClickHouseDialect?
+    // TODO: why does this fail for ClickHouseDialect? (#1449)
+    // match all_dialects().verified_stmt(sql) {
     match all_dialects_except(|d| d.is::<ClickHouseDialect>()).verified_stmt(sql) {
         Statement::CreateView {
             name,
@@ -8601,7 +8602,7 @@ fn parse_offset_and_limit() {
     one_statement_parses_to("SELECT foo FROM bar OFFSET 2 LIMIT 1", sql);
 
     // mysql syntax is ok for some dialects
-    specific_dialects(vec![
+    TestedDialects::new(vec![
         Box::new(GenericDialect {}),
         Box::new(MySqlDialect {}),
         Box::new(SQLiteDialect {}),

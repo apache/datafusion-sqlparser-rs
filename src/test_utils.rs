@@ -47,6 +47,14 @@ pub struct TestedDialects {
 }
 
 impl TestedDialects {
+    /// Create a TestedDialects with default options and the given dialects.
+    pub fn new(dialects: Vec<Box<dyn Dialect>>) -> Self {
+        Self {
+            dialects,
+            options: None,
+        }
+    }
+
     fn new_parser<'a>(&self, dialect: &'a dyn Dialect) -> Parser<'a> {
         let parser = Parser::new(dialect);
         if let Some(options) = &self.options {
@@ -211,7 +219,7 @@ impl TestedDialects {
 
 /// Returns all available dialects.
 pub fn all_dialects() -> TestedDialects {
-    specific_dialects(vec![
+    TestedDialects::new(vec![
         Box::new(GenericDialect {}),
         Box::new(PostgreSqlDialect {}),
         Box::new(MsSqlDialect {}),
@@ -226,14 +234,6 @@ pub fn all_dialects() -> TestedDialects {
         Box::new(DatabricksDialect {}),
         Box::new(ClickHouseDialect {}),
     ])
-}
-
-/// Returns a specific set of dialects.
-pub fn specific_dialects(dialects: Vec<Box<dyn Dialect>>) -> TestedDialects {
-    TestedDialects {
-        dialects,
-        options: None,
-    }
 }
 
 /// Returns all dialects matching the given predicate.

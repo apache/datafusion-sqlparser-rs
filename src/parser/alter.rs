@@ -17,7 +17,10 @@ use alloc::vec;
 
 use super::{Parser, ParserError};
 use crate::{
-    ast::{AlterRoleOperation, Expr, Password, ResetConfig, RoleOption, SetConfigValue, Statement},
+    ast::{
+        AlterPolicyOperation, AlterRoleOperation, Expr, Password, ResetConfig, RoleOption,
+        SetConfigValue, Statement,
+    },
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
     tokenizer::Token,
@@ -34,6 +37,66 @@ impl<'a> Parser<'a> {
         Err(ParserError::ParserError(
             "ALTER ROLE is only support for PostgreSqlDialect, MsSqlDialect".into(),
         ))
+    }
+
+    /// Parse ALTER POLICY statement
+    /// ```sql
+    /// ALTER POLICY policy_name ON table_name [ RENAME TO new_name ]
+    /// or
+    /// ALTER POLICY policy_name ON table_name
+    /// [ TO { role_name | PUBLIC | CURRENT_ROLE | CURRENT_USER | SESSION_USER } [, ...] ]
+    /// [ USING ( using_expression ) ]
+    /// [ WITH CHECK ( check_expression ) ]
+    /// ```
+    ///
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterpolicy.html)
+    pub fn parse_alter_policy(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_identifier(false)?;
+        self.expect_keyword(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
+
+        if self.parse_keyword(Keyword::RENAME) {
+            self.expect_keyword(Keyword::TO)?;
+            let new_name = self.parse_identifier(false)?;
+            Ok(Statement::AlterPolicy {
+                name,
+                table_name,
+                operation: AlterPolicyOperation::Rename { new_name },
+            })
+        } else {
+            let to = if self.parse_keyword(Keyword::TO) {
+                Some(self.parse_comma_separated(|p| p.parse_owner())?)
+            } else {
+                None
+            };
+
+            let using = if self.parse_keyword(Keyword::USING) {
+                self.expect_token(&Token::LParen)?;
+                let expr = self.parse_expr()?;
+                self.expect_token(&Token::RParen)?;
+                Some(expr)
+            } else {
+                None
+            };
+
+            let with_check = if self.parse_keywords(&[Keyword::WITH, Keyword::CHECK]) {
+                self.expect_token(&Token::LParen)?;
+                let expr = self.parse_expr()?;
+                self.expect_token(&Token::RParen)?;
+                Some(expr)
+            } else {
+                None
+            };
+            Ok(Statement::AlterPolicy {
+                name,
+                table_name,
+                operation: AlterPolicyOperation::Apply {
+                    to,
+                    using,
+                    with_check,
+                },
+            })
+        }
     }
 
     fn parse_mssql_alter_role(&mut self) -> Result<Statement, ParserError> {

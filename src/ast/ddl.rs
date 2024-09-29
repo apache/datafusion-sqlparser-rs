@@ -1147,8 +1147,8 @@ pub enum ColumnOption {
     /// ```
     /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
     Identity(Option<IdentityProperty>),
-    /// Sqlite specific: ON CONFLICT option on column definition
-    /// https://www.sqlite.org/lang_conflict.html
+    /// SQLite specific: ON CONFLICT option on column definition
+    /// <https://www.sqlite.org/lang_conflict.html>
     OnConflict(Keyword),
 }
 

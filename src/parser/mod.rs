@@ -10289,7 +10289,17 @@ impl<'a> Parser<'a> {
 
         Ok(ExprWithAlias { expr, alias })
     }
-    /// return new expression with alias
+    /// Parses an expression with an optional alias
+
+    /// Examples:
+
+    /// ```sql
+    /// SUM(price) AS total_price
+    /// ```
+
+    /// ```sql
+    /// SUM(price)
+    /// ```
     ///
     /// Example
     /// ```

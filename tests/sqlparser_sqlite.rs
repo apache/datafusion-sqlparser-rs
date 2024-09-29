@@ -308,10 +308,18 @@ fn parse_create_table_on_conflict_col() {
 }
 
 #[test]
-#[should_panic]
 fn test_parse_create_table_on_conflict_col_err() {
     let sql_err = "CREATE TABLE t1 (a INT, b INT ON CONFLICT BOH)";
-    let _ = sqlite().parse_sql_statements(sql_err);
+    let err = sqlite_and_generic()
+        .parse_sql_statements(sql_err)
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ParserError::ParserError(
+            "Expected: one of ROLLBACK or ABORT or FAIL or IGNORE or REPLACE, found: BOH"
+                .to_string()
+        )
+    );
 }
 
 #[test]

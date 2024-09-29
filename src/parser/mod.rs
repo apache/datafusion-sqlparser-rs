@@ -6087,17 +6087,15 @@ impl<'a> Parser<'a> {
             && self.parse_keywords(&[Keyword::ON, Keyword::CONFLICT])
         {
             // Support ON CONFLICT for SQLite
-            let on_conflict = self.parse_one_of_keywords(&[
-                Keyword::ROLLBACK,
-                Keyword::ABORT,
-                Keyword::FAIL,
-                Keyword::IGNORE,
-                Keyword::REPLACE,
-            ]);
-            match on_conflict {
-                Some(keyword) => Ok(Some(ColumnOption::OnConflict(keyword))),
-                _ => unreachable!(),
-            }
+            Ok(Some(ColumnOption::OnConflict(
+                self.expect_one_of_keywords(&[
+                    Keyword::ROLLBACK,
+                    Keyword::ABORT,
+                    Keyword::FAIL,
+                    Keyword::IGNORE,
+                    Keyword::REPLACE,
+                ])?,
+            )))
         } else {
             Ok(None)
         }

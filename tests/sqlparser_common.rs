@@ -6735,6 +6735,43 @@ fn parse_create_database_ine() {
 }
 
 #[test]
+fn parse_drop_database() {
+    let sql = "DROP DATABASE mycatalog.mydb";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq!(
+                vec!["mycatalog.mydb"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(ObjectType::Database, object_type);
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_drop_database_if_exists() {
+    let sql = "DROP DATABASE IF EXISTS mydb";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq!(ObjectType::Database, object_type);
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_view() {
     let sql = "CREATE VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {

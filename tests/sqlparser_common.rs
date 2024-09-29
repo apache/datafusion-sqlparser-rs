@@ -11127,6 +11127,19 @@ fn test_alter_policy() {
     // omit TO / USING / WITH CHECK clauses is allowed
     verified_stmt("ALTER POLICY my_policy ON my_table");
 
+    // mixing RENAME and APPLY expressions
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY old_policy ON my_table TO public RENAME TO new_policy")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: RENAME"
+    );
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY old_policy ON my_table RENAME TO new_policy TO public")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: TO"
+    );
     // missing TO in RENAME TO
     assert_eq!(
         parse_sql_statements("ALTER POLICY old_policy ON my_table RENAME")

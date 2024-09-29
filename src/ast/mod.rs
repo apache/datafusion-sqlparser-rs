@@ -2460,7 +2460,9 @@ pub enum Statement {
         operation: AlterRoleOperation,
     },
     /// ```sql
-    ///
+    /// ALTER POLICY <NAME> ON <TABLE NAME> [<OPERATION>]
+    /// ```
+    /// (Postgresql-specific)
     AlterPolicy {
         name: Ident,
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]

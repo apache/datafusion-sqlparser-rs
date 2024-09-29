@@ -6083,7 +6083,7 @@ impl<'a> Parser<'a> {
                 None
             };
             Ok(Some(ColumnOption::Identity(property)))
-        } else if dialect_of!(self is SQLiteDialect)
+        } else if dialect_of!(self is SQLiteDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::ON, Keyword::CONFLICT])
         {
             // Support ON CONFLICT for SQLite

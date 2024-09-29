@@ -4887,6 +4887,8 @@ impl<'a> Parser<'a> {
             ObjectType::Stage
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
+        } else if self.parse_keyword(Keyword::POLICY) {
+            return self.parse_drop_policy();
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             return self.parse_drop_procedure();
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -4928,6 +4930,14 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_optional_referential_action(&mut self) -> Option<ReferentialAction> {
+        match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
+            Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
+            Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
+            _ => None,
+        }
+    }
+
     /// ```sql
     /// DROP FUNCTION [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
     /// [ CASCADE | RESTRICT ]
@@ -4935,14 +4945,29 @@ impl<'a> Parser<'a> {
     fn parse_drop_function(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let func_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
-        let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
-            Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
-            Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
-            _ => None,
-        };
+        let option = self.parse_optional_referential_action();
         Ok(Statement::DropFunction {
             if_exists,
             func_desc,
+            option,
+        })
+    }
+
+    /// ```sql
+    /// DROP POLICY [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
+    /// ```
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-droppolicy.html)
+    fn parse_drop_policy(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parse_identifier(false)?;
+        self.expect_keyword(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
+        let option = self.parse_optional_referential_action();
+        Ok(Statement::DropPolicy {
+            if_exists,
+            name,
+            table_name,
             option,
         })
     }
@@ -4954,12 +4979,7 @@ impl<'a> Parser<'a> {
     fn parse_drop_procedure(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let proc_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
-        let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
-            Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
-            Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
-            Some(_) => unreachable!(), // parse_one_of_keywords does not return other keywords
-            None => None,
-        };
+        let option = self.parse_optional_referential_action();
         Ok(Statement::DropProcedure {
             if_exists,
             proc_desc,
@@ -10379,8 +10399,31 @@ impl<'a> Parser<'a> {
 
         Ok(ExprWithAlias { expr, alias })
     }
+    /// Parses an expression with an optional alias
 
-    fn parse_expr_with_alias(&mut self) -> Result<ExprWithAlias, ParserError> {
+    /// Examples:
+
+    /// ```sql
+    /// SUM(price) AS total_price
+    /// ```
+
+    /// ```sql
+    /// SUM(price)
+    /// ```
+    ///
+    /// Example
+    /// ```
+    /// # use sqlparser::parser::{Parser, ParserError};
+    /// # use sqlparser::dialect::GenericDialect;
+    /// # fn main() ->Result<(), ParserError> {
+    /// let sql = r#"SUM("a") as "b""#;
+    /// let mut parser = Parser::new(&GenericDialect).try_with_sql(sql)?;
+    /// let expr_with_alias = parser.parse_expr_with_alias()?;
+    /// assert_eq!(Some("b".to_string()), expr_with_alias.alias.map(|x|x.value));
+    /// # Ok(())
+    /// # }
+
+    pub fn parse_expr_with_alias(&mut self) -> Result<ExprWithAlias, ParserError> {
         let expr = self.parse_expr()?;
         let alias = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_identifier(false)?)

@@ -11091,6 +11091,47 @@ fn test_create_policy() {
 }
 
 #[test]
+fn test_drop_policy() {
+    let sql = "DROP POLICY IF EXISTS my_policy ON my_table RESTRICT";
+    match all_dialects().verified_stmt(sql) {
+        Statement::DropPolicy {
+            if_exists,
+            name,
+            table_name,
+            option,
+        } => {
+            assert_eq!(if_exists, true);
+            assert_eq!(name.to_string(), "my_policy");
+            assert_eq!(table_name.to_string(), "my_table");
+            assert_eq!(option, Some(ReferentialAction::Restrict));
+        }
+        _ => unreachable!(),
+    }
+
+    // omit IF EXISTS is allowed
+    all_dialects().verified_stmt("DROP POLICY my_policy ON my_table CASCADE");
+    // omit option is allowed
+    all_dialects().verified_stmt("DROP POLICY my_policy ON my_table");
+
+    // missing table name
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("DROP POLICY my_policy")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: ON, found: EOF"
+    );
+    // Wrong option name
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("DROP POLICY my_policy ON my_table WRONG")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: WRONG"
+    );
+}
+
+#[test]
 fn test_alter_policy() {
     match verified_stmt("ALTER POLICY old_policy ON my_table RENAME TO new_policy") {
         Statement::AlterPolicy {

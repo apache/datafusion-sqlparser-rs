@@ -417,6 +417,7 @@ impl fmt::Display for Whitespace {
 
 /// Location in input string
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Ord, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Location {
     /// Line number, starting from 1
     pub line: u64,
@@ -456,6 +457,7 @@ impl From<(u64, u64)> for Location {
 }
 
 #[derive(Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Span {
     pub start: Location,
     pub end: Location,
@@ -504,6 +506,7 @@ impl Span {
 
 /// A [Token] with [Location] attached to it
 #[derive(Debug, Eq, Hash, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TokenWithLocation {
     pub token: Token,
     pub span: Span,

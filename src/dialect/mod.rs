@@ -67,7 +67,7 @@ use alloc::boxed::Box;
 /// 1. user defined [`Dialect`]s can customize the parsing behavior
 /// 2. The differences between dialects can be clearly documented in the trait
 ///
-/// `dialect_of!(parser Is SQLiteDialect |  GenericDialect)` evaluates
+/// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the [`Dialect`]s specified.
 macro_rules! dialect_of {
     ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {
@@ -320,6 +320,11 @@ pub trait Dialect: Debug + Any {
 
     /// Does the dialect support trailing commas around the query?
     fn supports_trailing_commas(&self) -> bool {
+        false
+    }
+
+    /// Does the dialect support parsing `LIMIT 1, 2` as `LIMIT 2 OFFSET 1`?
+    fn supports_limit_comma(&self) -> bool {
         false
     }
 

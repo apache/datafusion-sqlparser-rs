@@ -99,4 +99,8 @@ impl Dialect for GenericDialect {
     fn supports_explain_with_utility_options(&self) -> bool {
         true
     }
+
+    fn supports_limit_comma(&self) -> bool {
+        true
+    }
 }

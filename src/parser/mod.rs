@@ -8193,16 +8193,10 @@ impl<'a> Parser<'a> {
     fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
         let name = self.parse_identifier(false)?;
         let mut options = vec![];
-        if dialect_of!(self is BigQueryDialect | GenericDialect)
-            && self.parse_keyword(Keyword::OPTIONS)
-        {
-            self.prev_token();
-            if let Some(option) = self.parse_optional_column_option()? {
-                options.push(option);
-            }
-        };
-        if dialect_of!(self is SnowflakeDialect | GenericDialect)
-            && self.parse_keyword(Keyword::COMMENT)
+        if (dialect_of!(self is BigQueryDialect | GenericDialect)
+            && self.parse_keyword(Keyword::OPTIONS))
+            || (dialect_of!(self is SnowflakeDialect | GenericDialect)
+                && self.parse_keyword(Keyword::COMMENT))
         {
             self.prev_token();
             if let Some(option) = self.parse_optional_column_option()? {

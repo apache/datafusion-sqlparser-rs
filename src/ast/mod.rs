@@ -39,11 +39,12 @@ pub use self::data_type::{
 };
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue, Use};
 pub use self::ddl::{
-    AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ClusteredBy, ColumnDef,
-    ColumnOption, ColumnOptionDef, ConstraintCharacteristics, Deduplicate, DeferrableInitial,
-    GeneratedAs, GeneratedExpressionMode, IdentityProperty, IndexOption, IndexType,
-    KeyOrIndexDisplay, Owner, Partition, ProcedureParam, ReferentialAction, TableConstraint,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ConstraintCharacteristics, Deduplicate,
+    DeferrableInitial, GeneratedAs, GeneratedExpressionMode, IdentityProperty, IndexOption,
+    IndexType, KeyOrIndexDisplay, Owner, Partition, ProcedureParam, ReferentialAction,
+    TableConstraint, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2459,6 +2460,16 @@ pub enum Statement {
         operation: AlterRoleOperation,
     },
     /// ```sql
+    /// ALTER POLICY <NAME> ON <TABLE NAME> [<OPERATION>]
+    /// ```
+    /// (Postgresql-specific)
+    AlterPolicy {
+        name: Ident,
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        table_name: ObjectName,
+        operation: AlterPolicyOperation,
+    },
+    /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
     /// ```
     /// (SQLite-specific)
@@ -2545,6 +2556,16 @@ pub enum Statement {
         temporary: Option<bool>,
         name: Ident,
         storage_specifier: Option<Ident>,
+    },
+    ///```sql
+    /// DROP POLICY
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droppolicy.html)
+    DropPolicy {
+        if_exists: bool,
+        name: Ident,
+        table_name: ObjectName,
+        option: Option<ReferentialAction>,
     },
     /// ```sql
     /// DECLARE
@@ -4187,6 +4208,13 @@ impl fmt::Display for Statement {
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")
             }
+            Statement::AlterPolicy {
+                name,
+                table_name,
+                operation,
+            } => {
+                write!(f, "ALTER POLICY {name} ON {table_name}{operation}")
+            }
             Statement::Drop {
                 object_type,
                 if_exists,
@@ -4255,6 +4283,22 @@ impl fmt::Display for Statement {
                 )?;
                 if let Some(s) = storage_specifier {
                     write!(f, " FROM {s}")?;
+                }
+                Ok(())
+            }
+            Statement::DropPolicy {
+                if_exists,
+                name,
+                table_name,
+                option,
+            } => {
+                write!(f, "DROP POLICY")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {name} ON {table_name}")?;
+                if let Some(option) = option {
+                    write!(f, " {option}")?;
                 }
                 Ok(())
             }
@@ -5665,6 +5709,7 @@ pub enum ObjectType {
     View,
     Index,
     Schema,
+    Database,
     Role,
     Sequence,
     Stage,
@@ -5677,6 +5722,7 @@ impl fmt::Display for ObjectType {
             ObjectType::View => "VIEW",
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
+            ObjectType::Database => "DATABASE",
             ObjectType::Role => "ROLE",
             ObjectType::Sequence => "SEQUENCE",
             ObjectType::Stage => "STAGE",

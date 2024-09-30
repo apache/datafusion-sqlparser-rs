@@ -6735,6 +6735,43 @@ fn parse_create_database_ine() {
 }
 
 #[test]
+fn parse_drop_database() {
+    let sql = "DROP DATABASE mycatalog.mydb";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq!(
+                vec!["mycatalog.mydb"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(ObjectType::Database, object_type);
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_drop_database_if_exists() {
+    let sql = "DROP DATABASE IF EXISTS mydb";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq!(ObjectType::Database, object_type);
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_view() {
     let sql = "CREATE VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
@@ -11095,6 +11132,128 @@ fn test_create_policy() {
     assert_eq!(
         all_dialects()
             .parse_sql_statements("CREATE POLICY my_policy ON my_table WITH CHECK")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: (, found: EOF"
+    );
+}
+
+#[test]
+fn test_drop_policy() {
+    let sql = "DROP POLICY IF EXISTS my_policy ON my_table RESTRICT";
+    match all_dialects().verified_stmt(sql) {
+        Statement::DropPolicy {
+            if_exists,
+            name,
+            table_name,
+            option,
+        } => {
+            assert_eq!(if_exists, true);
+            assert_eq!(name.to_string(), "my_policy");
+            assert_eq!(table_name.to_string(), "my_table");
+            assert_eq!(option, Some(ReferentialAction::Restrict));
+        }
+        _ => unreachable!(),
+    }
+
+    // omit IF EXISTS is allowed
+    all_dialects().verified_stmt("DROP POLICY my_policy ON my_table CASCADE");
+    // omit option is allowed
+    all_dialects().verified_stmt("DROP POLICY my_policy ON my_table");
+
+    // missing table name
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("DROP POLICY my_policy")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: ON, found: EOF"
+    );
+    // Wrong option name
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("DROP POLICY my_policy ON my_table WRONG")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: WRONG"
+    );
+}
+
+#[test]
+fn test_alter_policy() {
+    match verified_stmt("ALTER POLICY old_policy ON my_table RENAME TO new_policy") {
+        Statement::AlterPolicy {
+            name,
+            table_name,
+            operation,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "old_policy");
+            assert_eq!(table_name.to_string(), "my_table");
+            assert_eq!(
+                operation,
+                AlterPolicyOperation::Rename {
+                    new_name: Ident::new("new_policy")
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt(concat!(
+        "ALTER POLICY my_policy ON my_table TO CURRENT_USER ",
+        "USING ((SELECT c0)) WITH CHECK (c0 > 0)"
+    )) {
+        Statement::AlterPolicy {
+            name, table_name, ..
+        } => {
+            assert_eq!(name.to_string(), "my_policy");
+            assert_eq!(table_name.to_string(), "my_table");
+        }
+        _ => unreachable!(),
+    }
+
+    // omit TO / USING / WITH CHECK clauses is allowed
+    verified_stmt("ALTER POLICY my_policy ON my_table");
+
+    // mixing RENAME and APPLY expressions
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY old_policy ON my_table TO public RENAME TO new_policy")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: RENAME"
+    );
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY old_policy ON my_table RENAME TO new_policy TO public")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: TO"
+    );
+    // missing TO in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY old_policy ON my_table RENAME")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: TO, found: EOF"
+    );
+    // missing new name in RENAME TO
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY old_policy ON my_table RENAME TO")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+
+    // missing the expression in USING
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY my_policy ON my_table USING")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: (, found: EOF"
+    );
+    // missing the expression in WITH CHECK
+    assert_eq!(
+        parse_sql_statements("ALTER POLICY my_policy ON my_table WITH CHECK")
             .unwrap_err()
             .to_string(),
         "sql parser error: Expected: (, found: EOF"

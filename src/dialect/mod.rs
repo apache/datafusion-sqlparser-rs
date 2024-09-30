@@ -60,6 +60,13 @@ use alloc::boxed::Box;
 
 /// Convenience check if a [`Parser`] uses a certain dialect.
 ///
+/// Note: when possible please the new style, adding a method to the [`Dialect`]
+/// trait rather than using this macro.
+///
+/// The benefits of adding a method on `Dialect` over this macro are:
+/// 1. user defined [`Dialect`]s can customize the parsing behavior
+/// 2. The differences between dialects can be clearly documented in the trait
+///
 /// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the [`Dialect`]s specified.
 macro_rules! dialect_of {

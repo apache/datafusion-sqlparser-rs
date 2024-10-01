@@ -205,6 +205,10 @@ pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {
             let object_name = parser.parse_object_name(false)?;
             (CommentObject::Table, object_name)
         }
+        Token::Word(w) if w.keyword == Keyword::EXTENSION => {
+            let object_name = parser.parse_object_name(false)?;
+            (CommentObject::Extension, object_name)
+        }
         _ => parser.expected("comment object_type", token)?,
     };
 

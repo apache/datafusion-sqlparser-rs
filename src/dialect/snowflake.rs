@@ -22,9 +22,7 @@ use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOption, DataLoadingOptionType, DataLoadingOptions, StageLoadSelectItem,
     StageParamsObject,
 };
-use crate::ast::{
-    CommentDef, Ident, ObjectName, RowAccessPolicy, Statement, Tag, WrappedCollection,
-};
+use crate::ast::{Ident, ObjectName, RowAccessPolicy, Statement, Tag, WrappedCollection};
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -210,13 +208,9 @@ pub fn parse_create_table(
                     builder = builder.copy_grants(true);
                 }
                 Keyword::COMMENT => {
-                    parser.expect_token(&Token::Eq)?;
-                    let next_token = parser.next_token();
-                    let comment = match next_token.token {
-                        Token::SingleQuotedString(str) => Some(CommentDef::WithEq(str)),
-                        _ => parser.expected("comment", next_token)?,
-                    };
-                    builder = builder.comment(comment);
+                    // Rewind the COMMENT keyword
+                    parser.prev_token();
+                    builder = builder.comment(parser.parse_optional_inline_comment()?);
                 }
                 Keyword::AS => {
                     let query = parser.parse_boxed_query()?;

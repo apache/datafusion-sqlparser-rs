@@ -713,11 +713,11 @@ fn parse_create_table_primary_and_unique_key_characteristic_test() {
 
 #[test]
 fn parse_create_table_comment() {
-    let canonical = "CREATE TABLE foo (bar INT) COMMENT 'baz'";
+    let without_equal = "CREATE TABLE foo (bar INT) COMMENT 'baz'";
     let with_equal = "CREATE TABLE foo (bar INT) COMMENT = 'baz'";
 
-    for sql in [canonical, with_equal] {
-        match mysql().one_statement_parses_to(sql, canonical) {
+    for sql in [without_equal, with_equal] {
+        match mysql().verified_stmt(sql) {
             Statement::CreateTable(CreateTable { name, comment, .. }) => {
                 assert_eq!(name.to_string(), "foo");
                 assert_eq!(comment.expect("Should exist").to_string(), "baz");

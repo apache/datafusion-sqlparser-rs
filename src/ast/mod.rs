@@ -613,6 +613,8 @@ pub enum Expr {
     /// `[NOT] LIKE <pattern> [ESCAPE <escape_character>]`
     Like {
         negated: bool,
+        // Snowflake supports the ANY keyword to match against a list of patterns
+        // https://docs.snowflake.com/en/sql-reference/functions/like_any
         any: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
@@ -621,6 +623,8 @@ pub enum Expr {
     /// `ILIKE` (case-insensitive `LIKE`)
     ILike {
         negated: bool,
+        // Snowflake supports the ANY keyword to match against a list of patterns
+        // https://docs.snowflake.com/en/sql-reference/functions/like_any
         any: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,

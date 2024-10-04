@@ -11269,3 +11269,11 @@ fn test_alter_policy() {
         "sql parser error: Expected: (, found: EOF"
     );
 }
+
+#[test]
+fn test_select_where_with_like_or_ilike_any() {
+    verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY '%abc%'"#);
+    verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY '%abc%'"#);
+    verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY ('%Jo%oe%', 'T%e')"#);
+    verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')"#);
+}

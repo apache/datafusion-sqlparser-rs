@@ -2163,19 +2163,6 @@ fn test_select_wildcard_with_ilike_replace() {
 }
 
 #[test]
-fn test_select_where_with_like_or_ilike_any() {
-    snowflake().verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY '%abc%'"#);
-    snowflake().verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY '%abc%'"#);
-    snowflake().verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY ('%Jo%oe%', 'T%e')"#);
-    snowflake().verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')"#);
-    let res = snowflake().parse_sql_statements(r#"SELECT * FROM x WHERE a RLIKE ANY '%abc%'"#);
-    assert_eq!(
-        res.unwrap_err().to_string(),
-        "sql parser error: Expected: pattern after RLIKE or REGEXP, found: ANY"
-    );
-}
-
-#[test]
 fn first_value_ignore_nulls() {
     snowflake().verified_only_select(concat!(
         "SELECT FIRST_VALUE(column2 IGNORE NULLS) ",

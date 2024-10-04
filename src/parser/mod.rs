@@ -8192,19 +8192,14 @@ impl<'a> Parser<'a> {
     /// Parses a column definition within a view.
     fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
         let name = self.parse_identifier(false)?;
-        let mut options = vec![];
-        if (dialect_of!(self is BigQueryDialect | GenericDialect)
+        let options = if (dialect_of!(self is BigQueryDialect | GenericDialect)
             && self.parse_keyword(Keyword::OPTIONS))
             || (dialect_of!(self is SnowflakeDialect | GenericDialect)
                 && self.parse_keyword(Keyword::COMMENT))
         {
             self.prev_token();
-            if let Some(option) = self.parse_optional_column_option()? {
-                options.push(option);
-            }
-        };
-        let options = if !options.is_empty() {
-            Some(options)
+            self.parse_optional_column_option()?
+                .map(|option| vec![option])
         } else {
             None
         };

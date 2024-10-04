@@ -5871,12 +5871,9 @@ impl<'a> Parser<'a> {
 
         // Excludes Hive dialect here since it has been handled after table column definitions.
         if !dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
-            let _ = self.consume_token(&Token::Eq);
-            let next_token = self.next_token();
-            comment = match next_token.token {
-                Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
-                _ => self.expected("comment", next_token)?,
-            }
+            // rewind the COMMENT keyword
+            self.prev_token();
+            comment = self.parse_optional_inline_comment()?
         };
 
         // Parse optional `AS ( query )`
@@ -5955,6 +5952,24 @@ impl<'a> Parser<'a> {
             cluster_by,
             options,
         })
+    }
+
+    pub fn parse_optional_inline_comment(&mut self) -> Result<Option<CommentDef>, ParserError> {
+        let comment = if self.parse_keyword(Keyword::COMMENT) {
+            let has_eq = self.consume_token(&Token::Eq);
+            let next_token = self.next_token();
+            match next_token.token {
+                Token::SingleQuotedString(str) => Some(if has_eq {
+                    CommentDef::WithEq(str)
+                } else {
+                    CommentDef::WithoutEq(str)
+                }),
+                _ => self.expected("comment", next_token)?,
+            }
+        } else {
+            None
+        };
+        Ok(comment)
     }
 
     pub fn parse_optional_procedure_parameters(

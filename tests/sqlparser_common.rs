@@ -47,6 +47,7 @@ mod test_utils;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
+use sqlparser::ast::ColumnOption::Comment;
 use sqlparser::ast::Expr::{Identifier, UnaryOp};
 use sqlparser::test_utils::all_dialects_except;
 
@@ -9839,6 +9840,37 @@ fn test_comment_hash_syntax() {
     "#;
     let canonical = "SELECT a, b, c FROM T WHERE true";
     dialects.verified_only_select_with_canonical(sql, canonical);
+}
+
+#[test]
+fn test_parse_inline_comment() {
+    let sql =
+        "CREATE TABLE t0 (id INT COMMENT 'comment without equal') COMMENT = 'comment with equal'";
+    // Hive dialect doesn't support `=` in table comment, please refer:
+    // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
+    match all_dialects_except(|d| d.is::<HiveDialect>()).verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            columns, comment, ..
+        }) => {
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: Ident::new("id".to_string()),
+                    data_type: DataType::Int(None),
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: Comment("comment without equal".to_string()),
+                    }]
+                }]
+            );
+            assert_eq!(
+                comment.unwrap(),
+                CommentDef::WithEq("comment with equal".to_string())
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

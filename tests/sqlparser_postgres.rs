@@ -2902,6 +2902,21 @@ fn parse_comments() {
         _ => unreachable!(),
     }
 
+    match pg().verified_stmt("COMMENT ON EXTENSION plpgsql IS 'comment'") {
+        Statement::Comment {
+            object_type,
+            object_name,
+            comment: Some(comment),
+            if_exists,
+        } => {
+            assert_eq!("comment", comment);
+            assert_eq!("plpgsql", object_name.to_string());
+            assert_eq!(CommentObject::Extension, object_type);
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    }
+
     match pg().verified_stmt("COMMENT ON TABLE public.tab IS 'comment'") {
         Statement::Comment {
             object_type,

@@ -1855,6 +1855,7 @@ impl fmt::Display for ShowCreateObject {
 pub enum CommentObject {
     Column,
     Table,
+    Extension,
 }
 
 impl fmt::Display for CommentObject {
@@ -1862,6 +1863,7 @@ impl fmt::Display for CommentObject {
         match self {
             CommentObject::Column => f.write_str("COLUMN"),
             CommentObject::Table => f.write_str("TABLE"),
+            CommentObject::Extension => f.write_str("EXTENSION"),
         }
     }
 }

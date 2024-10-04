@@ -650,6 +650,8 @@ pub enum Expr {
         left: Box<Expr>,
         compare_op: BinaryOperator,
         right: Box<Expr>,
+        // ANY and SOME are synonymous
+        is_some: bool,
     },
     /// `ALL` operation e.g. `foo > ALL(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
     AllOp {
@@ -1332,12 +1334,30 @@ impl fmt::Display for Expr {
                 left,
                 compare_op,
                 right,
-            } => write!(f, "{left} {compare_op} ANY({right})"),
+                is_some,
+            } => {
+                let add_parens = !matches!(right.as_ref(), Expr::Subquery(_));
+                write!(
+                    f,
+                    "{left} {compare_op} {}{}{right}{}",
+                    if *is_some { "SOME" } else { "ANY" },
+                    if add_parens { "(" } else { "" },
+                    if add_parens { ")" } else { "" },
+                )
+            }
             Expr::AllOp {
                 left,
                 compare_op,
                 right,
-            } => write!(f, "{left} {compare_op} ALL({right})"),
+            } => {
+                let add_parens = !matches!(right.as_ref(), Expr::Subquery(_));
+                write!(
+                    f,
+                    "{left} {compare_op} ALL{}{right}{}",
+                    if add_parens { "(" } else { "" },
+                    if add_parens { ")" } else { "" },
+                )
+            }
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{expr}{op}")

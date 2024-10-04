@@ -2639,10 +2639,22 @@ impl<'a> Parser<'a> {
         };
 
         if let Some(op) = regular_binary_operator {
-            if let Some(keyword) = self.parse_one_of_keywords(&[Keyword::ANY, Keyword::ALL]) {
+            if let Some(keyword) =
+                self.parse_one_of_keywords(&[Keyword::ANY, Keyword::ALL, Keyword::SOME])
+            {
                 self.expect_token(&Token::LParen)?;
-                let right = self.parse_subexpr(precedence)?;
-                self.expect_token(&Token::RParen)?;
+                let right = if self.parse_keyword(Keyword::SELECT) {
+                    // We have a subquery ahead (SELECT ...) need to rewind and
+                    // use the parenthesis for parsing the subquery.
+                    self.prev_token(); // SELECT
+                    self.prev_token(); // LParen
+                    self.parse_subexpr(precedence)?
+                } else {
+                    // Non-subquery exp
+                    let right = self.parse_subexpr(precedence)?;
+                    self.expect_token(&Token::RParen)?;
+                    right
+                };
 
                 if !matches!(
                     op,
@@ -2667,10 +2679,11 @@ impl<'a> Parser<'a> {
                         compare_op: op,
                         right: Box::new(right),
                     },
-                    Keyword::ANY => Expr::AnyOp {
+                    Keyword::ANY | Keyword::SOME => Expr::AnyOp {
                         left: Box::new(expr),
                         compare_op: op,
                         right: Box::new(right),
+                        is_some: keyword == Keyword::SOME,
                     },
                     _ => unreachable!(),
                 })

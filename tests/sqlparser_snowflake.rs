@@ -2406,6 +2406,7 @@ fn view_comment_option_should_be_after_column_list() {
     for sql in [
         "CREATE OR REPLACE VIEW v (a) COMMENT = 'Comment' AS SELECT a FROM t",
         "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') COMMENT = 'Comment' AS SELECT a FROM t",
+        "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') WITH (foo = bar) COMMENT = 'Comment' AS SELECT a FROM t",
     ] {
         snowflake_and_generic()
             .verified_stmt(sql);

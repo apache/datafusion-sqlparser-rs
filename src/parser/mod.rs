@@ -2734,6 +2734,10 @@ impl<'a> Parser<'a> {
                     let regexp = self.parse_keyword(Keyword::REGEXP);
                     let rlike = self.parse_keyword(Keyword::RLIKE);
                     if regexp || rlike {
+                        if self.parse_keyword(Keyword::ANY) {
+                            self.prev_token();
+                            return self.expected("pattern after RLIKE or REGEXP", self.peek_token());
+                        }
                         Ok(Expr::RLike {
                             negated,
                             expr: Box::new(expr),
@@ -2749,6 +2753,7 @@ impl<'a> Parser<'a> {
                     } else if self.parse_keyword(Keyword::LIKE) {
                         Ok(Expr::Like {
                             negated,
+                            any: self.parse_keyword(Keyword::ANY),
                             expr: Box::new(expr),
                             pattern: Box::new(
                                 self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?,
@@ -2758,6 +2763,7 @@ impl<'a> Parser<'a> {
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Ok(Expr::ILike {
                             negated,
+                            any: self.parse_keyword(Keyword::ANY),
                             expr: Box::new(expr),
                             pattern: Box::new(
                                 self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?,

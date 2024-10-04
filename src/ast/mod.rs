@@ -613,6 +613,9 @@ pub enum Expr {
     /// `[NOT] LIKE <pattern> [ESCAPE <escape_character>]`
     Like {
         negated: bool,
+        // Snowflake supports the ANY keyword to match against a list of patterns
+        // https://docs.snowflake.com/en/sql-reference/functions/like_any
+        any: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
         escape_char: Option<String>,
@@ -620,6 +623,9 @@ pub enum Expr {
     /// `ILIKE` (case-insensitive `LIKE`)
     ILike {
         negated: bool,
+        // Snowflake supports the ANY keyword to match against a list of patterns
+        // https://docs.snowflake.com/en/sql-reference/functions/like_any
+        any: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
         escape_char: Option<String>,
@@ -1242,20 +1248,23 @@ impl fmt::Display for Expr {
                 expr,
                 pattern,
                 escape_char,
+                any,
             } => match escape_char {
                 Some(ch) => write!(
                     f,
-                    "{} {}LIKE {} ESCAPE '{}'",
+                    "{} {}LIKE {}{} ESCAPE '{}'",
                     expr,
                     if *negated { "NOT " } else { "" },
+                    if *any { "ANY " } else { "" },
                     pattern,
                     ch
                 ),
                 _ => write!(
                     f,
-                    "{} {}LIKE {}",
+                    "{} {}LIKE {}{}",
                     expr,
                     if *negated { "NOT " } else { "" },
+                    if *any { "ANY " } else { "" },
                     pattern
                 ),
             },
@@ -1264,20 +1273,23 @@ impl fmt::Display for Expr {
                 expr,
                 pattern,
                 escape_char,
+                any,
             } => match escape_char {
                 Some(ch) => write!(
                     f,
-                    "{} {}ILIKE {} ESCAPE '{}'",
+                    "{} {}ILIKE {}{} ESCAPE '{}'",
                     expr,
                     if *negated { "NOT " } else { "" },
+                    if *any { "ANY" } else { "" },
                     pattern,
                     ch
                 ),
                 _ => write!(
                     f,
-                    "{} {}ILIKE {}",
+                    "{} {}ILIKE {}{}",
                     expr,
                     if *negated { "NOT " } else { "" },
+                    if *any { "ANY " } else { "" },
                     pattern
                 ),
             },

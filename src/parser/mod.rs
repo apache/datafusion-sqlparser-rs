@@ -2749,6 +2749,7 @@ impl<'a> Parser<'a> {
                     } else if self.parse_keyword(Keyword::LIKE) {
                         Ok(Expr::Like {
                             negated,
+                            any: self.parse_keyword(Keyword::ANY),
                             expr: Box::new(expr),
                             pattern: Box::new(
                                 self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?,
@@ -2758,6 +2759,7 @@ impl<'a> Parser<'a> {
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Ok(Expr::ILike {
                             negated,
+                            any: self.parse_keyword(Keyword::ANY),
                             expr: Box::new(expr),
                             pattern: Box::new(
                                 self.parse_subexpr(self.dialect.prec_value(Precedence::Like))?,

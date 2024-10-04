@@ -1550,6 +1550,7 @@ fn parse_not_precedence() {
                 negated: true,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("b".into()))),
                 escape_char: None,
+                any: false,
             }),
         },
     );
@@ -1580,6 +1581,7 @@ fn parse_null_like() {
         SelectItem::ExprWithAlias {
             expr: Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("column1"))),
+                any: false,
                 negated: false,
                 pattern: Box::new(Expr::Value(Value::Null)),
                 escape_char: None,
@@ -1595,6 +1597,7 @@ fn parse_null_like() {
         SelectItem::ExprWithAlias {
             expr: Expr::Like {
                 expr: Box::new(Expr::Value(Value::Null)),
+                any: false,
                 negated: false,
                 pattern: Box::new(Expr::Identifier(Ident::new("column1"))),
                 escape_char: None,
@@ -1622,6 +1625,7 @@ fn parse_ilike() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
+                any: false,
             },
             select.selection.unwrap()
         );
@@ -1638,6 +1642,7 @@ fn parse_ilike() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('^'.to_string()),
+                any: false,
             },
             select.selection.unwrap()
         );
@@ -1655,6 +1660,7 @@ fn parse_ilike() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
+                any: false,
             })),
             select.selection.unwrap()
         );
@@ -1677,6 +1683,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
+                any: false,
             },
             select.selection.unwrap()
         );
@@ -1693,6 +1700,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('^'.to_string()),
+                any: false,
             },
             select.selection.unwrap()
         );
@@ -1710,6 +1718,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
+                any: false,
             })),
             select.selection.unwrap()
         );
@@ -10130,6 +10139,7 @@ fn test_selective_aggregation() {
                         expr: Box::new(Expr::Identifier(Ident::new("name"))),
                         pattern: Box::new(Expr::Value(Value::SingleQuotedString("a%".to_owned()))),
                         escape_char: None,
+                        any: false,
                     })),
                     null_treatment: None,
                     over: None,
@@ -11290,4 +11300,12 @@ fn test_alter_policy() {
             .to_string(),
         "sql parser error: Expected: (, found: EOF"
     );
+}
+
+#[test]
+fn test_select_where_with_like_or_ilike_any() {
+    verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY '%abc%'"#);
+    verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY '%abc%'"#);
+    verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY ('%Jo%oe%', 'T%e')"#);
+    verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')"#);
 }

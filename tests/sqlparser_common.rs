@@ -4295,6 +4295,7 @@ fn run_explain_analyze(
             describe_alias: _,
             analyze,
             verbose,
+            query_plan,
             statement,
             format,
             options,
@@ -4303,6 +4304,7 @@ fn run_explain_analyze(
             assert_eq!(analyze, expected_analyze);
             assert_eq!(format, expected_format);
             assert_eq!(options, exepcted_options);
+            assert!(!query_plan);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
         }
         _ => panic!("Unexpected Statement, must be Explain"),
@@ -4414,6 +4416,36 @@ fn parse_explain_analyze_with_simple_select() {
         false,
         Some(AnalyzeFormat::TEXT),
         None,
+    );
+}
+
+#[test]
+fn parse_explain_query_plan() {
+    match all_dialects().verified_stmt("EXPLAIN QUERY PLAN SELECT sqrt(id) FROM foo") {
+        Statement::Explain {
+            query_plan,
+            analyze,
+            verbose,
+            statement,
+            ..
+        } => {
+            assert!(query_plan);
+            assert!(!analyze);
+            assert!(!verbose);
+            assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    // omit QUERY PLAN should be good
+    all_dialects().verified_stmt("EXPLAIN SELECT sqrt(id) FROM foo");
+
+    // missing PLAN keyword should return error
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: SELECT".to_string()),
+        all_dialects()
+            .parse_sql_statements("EXPLAIN QUERY SELECT sqrt(id) FROM foo")
+            .unwrap_err()
     );
 }
 

@@ -1302,10 +1302,7 @@ impl<'a> Parser<'a> {
     }
 
     fn try_parse_expr_sub_query(&mut self) -> Result<Option<Expr>, ParserError> {
-        if self
-            .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
-            .is_none()
-        {
+        if !self.is_query_ahead() {
             return Ok(None);
         }
         self.prev_token();
@@ -1334,11 +1331,7 @@ impl<'a> Parser<'a> {
 
         // Snowflake permits a subquery to be passed as an argument without
         // an enclosing set of parens if it's the only argument.
-        if dialect_of!(self is SnowflakeDialect)
-            && self
-                .parse_one_of_keywords(&[Keyword::WITH, Keyword::SELECT])
-                .is_some()
-        {
+        if dialect_of!(self is SnowflakeDialect) && self.is_query_ahead() {
             self.prev_token();
             let subquery = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
@@ -2643,14 +2636,14 @@ impl<'a> Parser<'a> {
                 self.parse_one_of_keywords(&[Keyword::ANY, Keyword::ALL, Keyword::SOME])
             {
                 self.expect_token(&Token::LParen)?;
-                let right = if self.parse_keyword(Keyword::SELECT) {
-                    // We have a subquery ahead (SELECT ...) need to rewind and
-                    // use the parenthesis for parsing the subquery.
+                let right = if self.is_query_ahead() {
+                    // We have a subquery ahead (SELECT\WITH ...) need to rewind and
+                    // use the parenthesis for parsing the subquery as an expression.
                     self.prev_token(); // SELECT
                     self.prev_token(); // LParen
                     self.parse_subexpr(precedence)?
                 } else {
-                    // Non-subquery exp
+                    // Non-subquery expression
                     let right = self.parse_subexpr(precedence)?;
                     self.expect_token(&Token::RParen)?;
                     right
@@ -10484,10 +10477,7 @@ impl<'a> Parser<'a> {
                 vec![]
             };
             PivotValueSource::Any(order_by)
-        } else if self
-            .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
-            .is_some()
-        {
+        } else if self.is_query_ahead() {
             self.prev_token();
             PivotValueSource::Subquery(self.parse_query()?)
         } else {
@@ -12153,6 +12143,12 @@ impl<'a> Parser<'a> {
     /// Consume the parser and return its underlying token buffer
     pub fn into_tokens(self) -> Vec<TokenWithLocation> {
         self.tokens
+    }
+
+    /// Checks if the next keyword indicates a query, i.e. SELECT or WITH
+    pub fn is_query_ahead(&mut self) -> bool {
+        self.parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
+            .is_some()
     }
 }
 

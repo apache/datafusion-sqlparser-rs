@@ -11312,8 +11312,9 @@ fn test_select_where_with_like_or_ilike_any() {
 }
 
 #[test]
-fn parse_any_some_all_comparison() {
+fn test_any_some_all_comparison() {
     verified_stmt("SELECT c1 FROM tbl WHERE c1 = ANY(SELECT c2 FROM tbl)");
     verified_stmt("SELECT c1 FROM tbl WHERE c1 >= ALL(SELECT c2 FROM tbl)");
     verified_stmt("SELECT c1 FROM tbl WHERE c1 <> SOME(SELECT c2 FROM tbl)");
+    verified_stmt("SELECT 1 = ANY(WITH x AS (SELECT 1) SELECT * FROM x)");
 }

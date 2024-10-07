@@ -5113,3 +5113,32 @@ fn arrow_cast_precedence() {
         }
     )
 }
+
+#[test]
+fn parse_create_type_as_enum() {
+    let statement = pg().one_statement_parses_to(
+        r#"CREATE TYPE public.my_type AS ENUM (
+            'label1',
+            'label2',
+            'label3',
+            'label4'
+        );"#,
+        "CREATE TYPE public.my_type AS ENUM ('label1', 'label2', 'label3', 'label4')",
+    );
+    match statement {
+        Statement::CreateType {
+            name,
+            representation: UserDefinedTypeRepresentation::Enum { labels },
+        } => {
+            assert_eq!("public.my_type", name.to_string());
+            assert_eq!(
+                vec!["label1", "label2", "label3", "label4"]
+                    .into_iter()
+                    .map(|l| Ident::with_quote('\'', l))
+                    .collect::<Vec<Ident>>(),
+                labels
+            );
+        }
+        _ => unreachable!(),
+    }
+}

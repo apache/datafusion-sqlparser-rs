@@ -3930,18 +3930,18 @@ impl fmt::Display for Statement {
                         .map(|to| format!(" TO {to}"))
                         .unwrap_or_default()
                 )?;
+                if !columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                if matches!(options, CreateTableOptions::With(_)) {
+                    write!(f, " {options}")?;
+                }
                 if let Some(comment) = comment {
                     write!(
                         f,
                         " COMMENT = '{}'",
                         value::escape_single_quote_string(comment)
                     )?;
-                }
-                if matches!(options, CreateTableOptions::With(_)) {
-                    write!(f, " {options}")?;
-                }
-                if !columns.is_empty() {
-                    write!(f, " ({})", display_comma_separated(columns))?;
                 }
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;

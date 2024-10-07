@@ -2405,3 +2405,42 @@ fn parse_use() {
         );
     }
 }
+
+#[test]
+fn view_comment_option_should_be_after_column_list() {
+    for sql in [
+        "CREATE OR REPLACE VIEW v (a) COMMENT = 'Comment' AS SELECT a FROM t",
+        "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') COMMENT = 'Comment' AS SELECT a FROM t",
+        "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') WITH (foo = bar) COMMENT = 'Comment' AS SELECT a FROM t",
+    ] {
+        snowflake_and_generic()
+            .verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_view_column_descriptions() {
+    let sql = "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
+
+    match snowflake_and_generic().verified_stmt(sql) {
+        Statement::CreateView { name, columns, .. } => {
+            assert_eq!(name.to_string(), "v");
+            assert_eq!(
+                columns,
+                vec![
+                    ViewColumnDef {
+                        name: Ident::new("a"),
+                        data_type: None,
+                        options: Some(vec![ColumnOption::Comment("Comment".to_string())]),
+                    },
+                    ViewColumnDef {
+                        name: Ident::new("b"),
+                        data_type: None,
+                        options: None,
+                    }
+                ]
+            );
+        }
+        _ => unreachable!(),
+    };
+}

@@ -33,6 +33,7 @@ use crate::ast::{
     display_comma_separated, display_separated, DataType, Expr, Ident, MySQLColumnPosition,
     ObjectName, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Value,
 };
+use crate::keywords::Keyword;
 use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
@@ -1186,6 +1187,9 @@ pub enum ColumnOption {
     /// ```
     /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
     Identity(Option<IdentityProperty>),
+    /// SQLite specific: ON CONFLICT option on column definition
+    /// <https://www.sqlite.org/lang_conflict.html>
+    OnConflict(Keyword),
 }
 
 impl fmt::Display for ColumnOption {
@@ -1292,6 +1296,10 @@ impl fmt::Display for ColumnOption {
                 if let Some(parameters) = parameters {
                     write!(f, "({parameters})")?;
                 }
+                Ok(())
+            }
+            OnConflict(keyword) => {
+                write!(f, "ON CONFLICT {:?}", keyword)?;
                 Ok(())
             }
         }

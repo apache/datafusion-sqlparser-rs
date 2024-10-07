@@ -487,8 +487,8 @@ impl Span {
         // If either span is empty, return the other
         // this prevents propagating (0, 0) through the tree
         match (self, other) {
-            (&Span::EMPTY, _) => other.clone(),
-            (_, &Span::EMPTY) => self.clone(),
+            (&Span::EMPTY, _) => *other,
+            (_, &Span::EMPTY) => *self,
             _ => Span {
                 start: cmp::min(self.start, other.start),
                 end: cmp::max(self.end, other.end),
@@ -498,8 +498,8 @@ impl Span {
 
     pub fn union_opt(&self, other: &Option<Span>) -> Span {
         match other {
-            Some(other) => self.union(&other),
-            None => self.clone(),
+            Some(other) => self.union(other),
+            None => *self,
         }
     }
 }

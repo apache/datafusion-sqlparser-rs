@@ -1550,7 +1550,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_case_expr(&mut self) -> Result<Expr, ParserError> {
         let mut operand = None;
-        if !self.parse_keyword(Keyword::WHEN).is_some() {
+        if self.parse_keyword(Keyword::WHEN).is_none() {
             operand = Some(Box::new(self.parse_expr()?));
             self.expect_keyword(Keyword::WHEN)?;
         }
@@ -1560,7 +1560,7 @@ impl<'a> Parser<'a> {
             conditions.push(self.parse_expr()?);
             self.expect_keyword(Keyword::THEN)?;
             results.push(self.parse_expr()?);
-            if !self.parse_keyword(Keyword::WHEN).is_some() {
+            if self.parse_keyword(Keyword::WHEN).is_none() {
                 break;
             }
         }
@@ -1906,7 +1906,7 @@ impl<'a> Parser<'a> {
                     )?,
                 };
                 let with_count = self.parse_keyword(Keyword::WITH).is_some();
-                if !with_count && !self.parse_keyword(Keyword::WITHOUT).is_some() {
+                if !with_count && self.parse_keyword(Keyword::WITHOUT).is_none() {
                     self.expected("either WITH or WITHOUT in LISTAGG", self.peek_token())?;
                 }
                 self.expect_keyword(Keyword::COUNT)?;
@@ -3250,7 +3250,7 @@ impl<'a> Parser<'a> {
     pub fn parse_keywords(&mut self, keywords: &[Keyword]) -> bool {
         let index = self.index;
         for &keyword in keywords {
-            if !self.parse_keyword(keyword).is_some() {
+            if self.parse_keyword(keyword).is_none() {
                 // println!("parse_keywords aborting .. did not find {:?}", keyword);
                 // reset index and return immediately
                 self.index = index;
@@ -3450,7 +3450,7 @@ impl<'a> Parser<'a> {
         let mut values = vec![];
         loop {
             values.push(f(self)?);
-            if !self.parse_keyword(keyword).is_some() {
+            if self.parse_keyword(keyword).is_none() {
                 break;
             }
         }
@@ -3835,7 +3835,7 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_create_function_using(
         &mut self,
     ) -> Result<Option<CreateFunctionUsing>, ParserError> {
-        if !self.parse_keyword(Keyword::USING).is_some() {
+        if self.parse_keyword(Keyword::USING).is_none() {
             return Ok(None);
         };
         let keyword =
@@ -5325,7 +5325,7 @@ impl<'a> Parser<'a> {
     pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
         let concurrently = self.parse_keyword(Keyword::CONCURRENTLY).is_some();
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let index_name = if if_not_exists || !self.parse_keyword(Keyword::ON).is_some() {
+        let index_name = if if_not_exists || self.parse_keyword(Keyword::ON).is_none() {
             let index_name = self.parse_object_name(false)?;
             self.expect_keyword(Keyword::ON)?;
             Some(index_name)
@@ -7940,7 +7940,7 @@ impl<'a> Parser<'a> {
             let mut modifiers = vec![];
             if dialect_of!(self is ClickHouseDialect | GenericDialect) {
                 loop {
-                    if !self.parse_keyword(Keyword::WITH).is_some() {
+                    if self.parse_keyword(Keyword::WITH).is_none() {
                         break;
                     }
                     let keyword = self.expect_one_of_keywords(&[
@@ -8402,7 +8402,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
-        let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM).is_some() {
+        let (tables, with_from_keyword) = if self.parse_keyword(Keyword::FROM).is_none() {
             // `FROM` keyword is optional in BigQuery SQL.
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement
             if dialect_of!(self is BigQueryDialect | GenericDialect) {
@@ -11223,7 +11223,7 @@ impl<'a> Parser<'a> {
     // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)
     // that follow the INTERPOLATE keyword in an ORDER BY clause with the WITH FILL modifier
     pub fn parse_interpolations(&mut self) -> Result<Option<Interpolate>, ParserError> {
-        if !self.parse_keyword(Keyword::INTERPOLATE).is_some() {
+        if self.parse_keyword(Keyword::INTERPOLATE).is_none() {
             return Ok(None);
         }
 
@@ -11463,7 +11463,7 @@ impl<'a> Parser<'a> {
     pub fn parse_commit_rollback_chain(&mut self) -> Result<bool, ParserError> {
         let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
         if self.parse_keyword(Keyword::AND).is_some() {
-            let chain = !self.parse_keyword(Keyword::NO).is_some();
+            let chain = self.parse_keyword(Keyword::NO).is_none();
             self.expect_keyword(Keyword::CHAIN)?;
             Ok(chain)
         } else {

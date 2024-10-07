@@ -238,6 +238,43 @@ fn parse_create_table_auto_increment() {
 }
 
 #[test]
+fn parse_create_table_primary_key_asc_desc() {
+    let expected_column_def = |kind| ColumnDef {
+        name: "bar".into(),
+        data_type: DataType::Int(None),
+        collation: None,
+        options: vec![
+            ColumnOptionDef {
+                name: None,
+                option: ColumnOption::Unique {
+                    is_primary: true,
+                    characteristics: None,
+                },
+            },
+            ColumnOptionDef {
+                name: None,
+                option: ColumnOption::DialectSpecific(vec![Token::make_keyword(kind)]),
+            },
+        ],
+    };
+
+    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY ASC)";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(vec![expected_column_def("ASC")], columns);
+        }
+        _ => unreachable!(),
+    }
+    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY DESC)";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(vec![expected_column_def("DESC")], columns);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_sqlite_quote() {
     let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INT, [INDEX] INT)";
     match sqlite().verified_stmt(sql) {

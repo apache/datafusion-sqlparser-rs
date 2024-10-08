@@ -646,6 +646,7 @@ pub enum Expr {
         regexp: bool,
     },
     /// `ANY` operation e.g. `foo > ANY(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
+    /// https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#_8_9_quantified_comparison_predicate
     AnyOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,
@@ -654,6 +655,7 @@ pub enum Expr {
         is_some: bool,
     },
     /// `ALL` operation e.g. `foo > ALL(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
+    /// https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#_8_9_quantified_comparison_predicate
     AllOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,

@@ -1305,7 +1305,6 @@ impl<'a> Parser<'a> {
         if !self.is_query_ahead() {
             return Ok(None);
         }
-        self.prev_token();
 
         Ok(Some(Expr::Subquery(self.parse_boxed_query()?)))
     }
@@ -1332,7 +1331,6 @@ impl<'a> Parser<'a> {
         // Snowflake permits a subquery to be passed as an argument without
         // an enclosing set of parens if it's the only argument.
         if dialect_of!(self is SnowflakeDialect) && self.is_query_ahead() {
-            self.prev_token();
             let subquery = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::Function(Function {
@@ -2639,7 +2637,6 @@ impl<'a> Parser<'a> {
                 let right = if self.is_query_ahead() {
                     // We have a subquery ahead (SELECT\WITH ...) need to rewind and
                     // use the parenthesis for parsing the subquery as an expression.
-                    self.prev_token(); // SELECT
                     self.prev_token(); // LParen
                     self.parse_subexpr(precedence)?
                 } else {
@@ -10478,7 +10475,6 @@ impl<'a> Parser<'a> {
             };
             PivotValueSource::Any(order_by)
         } else if self.is_query_ahead() {
-            self.prev_token();
             PivotValueSource::Subquery(self.parse_query()?)
         } else {
             PivotValueSource::List(self.parse_comma_separated(Self::parse_expr_with_alias)?)
@@ -12145,10 +12141,16 @@ impl<'a> Parser<'a> {
         self.tokens
     }
 
-    /// Checks if the next keyword indicates a query, i.e. SELECT or WITH
-    pub fn is_query_ahead(&mut self) -> bool {
-        self.parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
+    /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH
+    fn is_query_ahead(&mut self) -> bool {
+        if self
+            .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
             .is_some()
+        {
+            self.prev_token();
+            return true;
+        }
+        false
     }
 }
 

@@ -1302,7 +1302,7 @@ impl<'a> Parser<'a> {
     }
 
     fn try_parse_expr_sub_query(&mut self) -> Result<Option<Expr>, ParserError> {
-        if !self.is_query_ahead() {
+        if !self.peek_sub_query() {
             return Ok(None);
         }
 
@@ -1330,7 +1330,7 @@ impl<'a> Parser<'a> {
 
         // Snowflake permits a subquery to be passed as an argument without
         // an enclosing set of parens if it's the only argument.
-        if dialect_of!(self is SnowflakeDialect) && self.is_query_ahead() {
+        if dialect_of!(self is SnowflakeDialect) && self.peek_sub_query() {
             let subquery = self.parse_boxed_query()?;
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::Function(Function {
@@ -2634,7 +2634,7 @@ impl<'a> Parser<'a> {
                 self.parse_one_of_keywords(&[Keyword::ANY, Keyword::ALL, Keyword::SOME])
             {
                 self.expect_token(&Token::LParen)?;
-                let right = if self.is_query_ahead() {
+                let right = if self.peek_sub_query() {
                     // We have a subquery ahead (SELECT\WITH ...) need to rewind and
                     // use the parenthesis for parsing the subquery as an expression.
                     self.prev_token(); // LParen
@@ -10474,7 +10474,7 @@ impl<'a> Parser<'a> {
                 vec![]
             };
             PivotValueSource::Any(order_by)
-        } else if self.is_query_ahead() {
+        } else if self.peek_sub_query() {
             PivotValueSource::Subquery(self.parse_query()?)
         } else {
             PivotValueSource::List(self.parse_comma_separated(Self::parse_expr_with_alias)?)
@@ -12142,7 +12142,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH
-    fn is_query_ahead(&mut self) -> bool {
+    fn peek_sub_query(&mut self) -> bool {
         if self
             .parse_one_of_keywords(&[Keyword::SELECT, Keyword::WITH])
             .is_some()

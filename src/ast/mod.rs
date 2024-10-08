@@ -3316,18 +3316,17 @@ impl fmt::Display for Statement {
 
                 if *query_plan {
                     write!(f, "QUERY PLAN ")?;
-                } else {
-                    if *analyze {
-                        write!(f, "ANALYZE ")?;
-                    }
+                }
+                if *analyze {
+                    write!(f, "ANALYZE ")?;
+                }
 
-                    if *verbose {
-                        write!(f, "VERBOSE ")?;
-                    }
+                if *verbose {
+                    write!(f, "VERBOSE ")?;
+                }
 
-                    if let Some(format) = format {
-                        write!(f, "FORMAT {format} ")?;
-                    }
+                if let Some(format) = format {
+                    write!(f, "FORMAT {format} ")?;
                 }
 
                 if let Some(options) = options {

@@ -106,7 +106,7 @@ fn custom_statement_parser() -> Result<(), ParserError> {
         }
 
         fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-            if parser.parse_keyword(Keyword::SELECT).is_some() {
+            if parser.parse_keyword(Keyword::SELECT) {
                 for _ in 0..3 {
                     let _ = parser.next_token();
                 }

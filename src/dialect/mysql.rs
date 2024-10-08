@@ -64,7 +64,7 @@ impl Dialect for MySqlDialect {
         _precedence: u8,
     ) -> Option<Result<crate::ast::Expr, ParserError>> {
         // Parse DIV as an operator
-        if parser.parse_keyword(Keyword::DIV).is_some() {
+        if parser.parse_keyword(Keyword::DIV) {
             Some(Ok(Expr::BinaryOp {
                 left: Box::new(expr.clone()),
                 op: BinaryOperator::MyIntegerDivide,
@@ -113,13 +113,13 @@ fn parse_lock_table(parser: &mut Parser) -> Result<LockTable, ParserError> {
 
 // READ [LOCAL] | [LOW_PRIORITY] WRITE
 fn parse_lock_tables_type(parser: &mut Parser) -> Result<LockTableType, ParserError> {
-    if parser.parse_keyword(Keyword::READ).is_some() {
-        if parser.parse_keyword(Keyword::LOCAL).is_some() {
+    if parser.parse_keyword(Keyword::READ) {
+        if parser.parse_keyword(Keyword::LOCAL) {
             Ok(LockTableType::Read { local: true })
         } else {
             Ok(LockTableType::Read { local: false })
         }
-    } else if parser.parse_keyword(Keyword::WRITE).is_some() {
+    } else if parser.parse_keyword(Keyword::WRITE) {
         Ok(LockTableType::Write {
             low_priority: false,
         })

@@ -8662,6 +8662,7 @@ impl<'a> Parser<'a> {
     ) -> Result<Statement, ParserError> {
         let mut analyze = false;
         let mut verbose = false;
+        let mut query_plan = false;
         let mut format = None;
         let mut options = None;
 
@@ -8672,6 +8673,8 @@ impl<'a> Parser<'a> {
             && self.peek_token().token == Token::LParen
         {
             options = Some(self.parse_utility_options()?)
+        } else if self.parse_keywords(&[Keyword::QUERY, Keyword::PLAN]) {
+            query_plan = true;
         } else {
             analyze = self.parse_keyword(Keyword::ANALYZE);
             verbose = self.parse_keyword(Keyword::VERBOSE);
@@ -8688,6 +8691,7 @@ impl<'a> Parser<'a> {
                 describe_alias,
                 analyze,
                 verbose,
+                query_plan,
                 statement: Box::new(statement),
                 format,
                 options,

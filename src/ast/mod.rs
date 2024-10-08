@@ -3111,6 +3111,11 @@ pub enum Statement {
         analyze: bool,
         // Display additional information regarding the plan.
         verbose: bool,
+        /// `EXPLAIN QUERY PLAN`
+        /// Display the query plan without running the query.
+        ///
+        /// [SQLite](https://sqlite.org/lang_explain.html)
+        query_plan: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
         /// Optional output format of explain
@@ -3302,12 +3307,16 @@ impl fmt::Display for Statement {
                 describe_alias,
                 verbose,
                 analyze,
+                query_plan,
                 statement,
                 format,
                 options,
             } => {
                 write!(f, "{describe_alias} ")?;
 
+                if *query_plan {
+                    write!(f, "QUERY PLAN ")?;
+                }
                 if *analyze {
                     write!(f, "ANALYZE ")?;
                 }

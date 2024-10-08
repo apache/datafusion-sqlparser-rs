@@ -572,6 +572,7 @@ define_keywords!(
     PERSISTENT,
     PIVOT,
     PLACING,
+    PLAN,
     PLANS,
     POLICY,
     PORTION,

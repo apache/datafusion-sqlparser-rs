@@ -6192,6 +6192,20 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::DialectSpecific(vec![
                 Token::make_keyword("AUTOINCREMENT"),
             ])))
+        } else if self.parse_keyword(Keyword::ASC)
+            && self.dialect.supports_asc_desc_in_column_definition()
+        {
+            // Support ASC for SQLite
+            Ok(Some(ColumnOption::DialectSpecific(vec![
+                Token::make_keyword("ASC"),
+            ])))
+        } else if self.parse_keyword(Keyword::DESC)
+            && self.dialect.supports_asc_desc_in_column_definition()
+        {
+            // Support DESC for SQLite
+            Ok(Some(ColumnOption::DialectSpecific(vec![
+                Token::make_keyword("DESC"),
+            ])))
         } else if self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {

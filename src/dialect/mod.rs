@@ -557,6 +557,10 @@ pub trait Dialect: Debug + Any {
     fn supports_explain_with_utility_options(&self) -> bool {
         false
     }
+
+    fn supports_asc_desc_in_column_definition(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

@@ -69,14 +69,14 @@ impl Spanned for SetExpr {
             SetExpr::Select(select) => select.span(),
             SetExpr::Query(query) => query.span(),
             SetExpr::SetOperation {
-                op,
-                set_quantifier,
+                op: _,
+                set_quantifier: _,
                 left,
                 right,
             } => left.span().union(&right.span()),
             SetExpr::Values(values) => values.span(),
             SetExpr::Insert(statement) => statement.span(),
-            SetExpr::Table(table) => Span::empty(),
+            SetExpr::Table(_) => Span::empty(),
             SetExpr::Update(statement) => statement.span(),
         }
     }
@@ -266,7 +266,7 @@ impl Spanned for Statement {
             Statement::CreateTable(create_table) => create_table.span(),
             Statement::CreateVirtualTable {
                 name,
-                if_not_exists,
+                if_not_exists: _,
                 module_name,
                 module_args,
             } => union_spans(
@@ -279,10 +279,10 @@ impl Spanned for Statement {
             Statement::CreateSecret { .. } => Span::empty(),
             Statement::AlterTable {
                 name,
-                if_exists,
-                only,
+                if_exists: _,
+                only: _,
                 operations,
-                location,
+                location: _,
                 on_cluster,
             } => union_spans(
                 core::iter::once(name.span())
@@ -331,8 +331,8 @@ impl Spanned for Statement {
             Statement::StartTransaction { .. } => Span::empty(),
             Statement::SetTransaction { .. } => Span::empty(),
             Statement::Comment { .. } => Span::empty(),
-            Statement::Commit { chain } => Span::empty(),
-            Statement::Rollback { chain, savepoint } => Span::empty(),
+            Statement::Commit { .. } => Span::empty(),
+            Statement::Rollback { .. } => Span::empty(),
             Statement::CreateSchema { .. } => Span::empty(),
             Statement::CreateDatabase { .. } => Span::empty(),
             Statement::CreateFunction { .. } => Span::empty(),
@@ -341,26 +341,26 @@ impl Spanned for Statement {
             Statement::CreateProcedure { .. } => Span::empty(),
             Statement::CreateMacro { .. } => Span::empty(),
             Statement::CreateStage { .. } => Span::empty(),
-            Statement::Assert { condition, message } => Span::empty(),
+            Statement::Assert { .. } => Span::empty(),
             Statement::Grant { .. } => Span::empty(),
             Statement::Revoke { .. } => Span::empty(),
-            Statement::Deallocate { name, prepare } => Span::empty(),
+            Statement::Deallocate { .. } => Span::empty(),
             Statement::Execute { .. } => Span::empty(),
             Statement::Prepare { .. } => Span::empty(),
-            Statement::Kill { modifier, id } => Span::empty(),
+            Statement::Kill { .. } => Span::empty(),
             Statement::ExplainTable { .. } => Span::empty(),
             Statement::Explain { .. } => Span::empty(),
-            Statement::Savepoint { name } => Span::empty(),
-            Statement::ReleaseSavepoint { name } => Span::empty(),
+            Statement::Savepoint { .. } => Span::empty(),
+            Statement::ReleaseSavepoint { .. } => Span::empty(),
             Statement::Merge { .. } => Span::empty(),
             Statement::Cache { .. } => Span::empty(),
             Statement::UNCache { .. } => Span::empty(),
             Statement::CreateSequence { .. } => Span::empty(),
             Statement::CreateType { .. } => Span::empty(),
-            Statement::Pragma { name, value, is_eq } => Span::empty(),
-            Statement::LockTables { tables } => Span::empty(),
+            Statement::Pragma { .. } => Span::empty(),
+            Statement::LockTables { .. } => Span::empty(),
             Statement::UnlockTables => Span::empty(),
-            Statement::Unload { query, to, with } => Span::empty(),
+            Statement::Unload { .. } => Span::empty(),
             Statement::OptimizeTable { .. } => Span::empty(),
         }
     }
@@ -466,9 +466,9 @@ impl Spanned for TableConstraint {
                 expr.span().union_opt(&name.as_ref().map(|i| i.span))
             }
             TableConstraint::Index {
-                display_as_key,
+                display_as_key: _,
                 name,
-                index_type,
+                index_type: _,
                 columns,
             } => union_spans(
                 name.iter()
@@ -476,8 +476,8 @@ impl Spanned for TableConstraint {
                     .chain(columns.iter().map(|i| i.span)),
             ),
             TableConstraint::FulltextOrSpatial {
-                fulltext,
-                index_type_display,
+                fulltext: _,
+                index_type_display: _,
                 opt_index_name,
                 columns,
             } => union_spans(
@@ -700,24 +700,24 @@ impl Spanned for AlterTableOperation {
         match self {
             AlterTableOperation::AddConstraint(table_constraint) => table_constraint.span(),
             AlterTableOperation::AddColumn {
-                column_keyword,
-                if_not_exists,
+                column_keyword: _,
+                if_not_exists: _,
                 column_def,
-                column_position,
+                column_position: _,
             } => column_def.span(),
             AlterTableOperation::AddProjection {
-                if_not_exists,
+                if_not_exists: _,
                 name,
                 select,
             } => name.span.union(&select.span()),
-            AlterTableOperation::DropProjection { if_exists, name } => name.span,
+            AlterTableOperation::DropProjection { if_exists: _, name } => name.span,
             AlterTableOperation::MaterializeProjection {
-                if_exists,
+                if_exists: _,
                 name,
                 partition,
             } => name.span.union_opt(&partition.as_ref().map(|i| i.span)),
             AlterTableOperation::ClearProjection {
-                if_exists,
+                if_exists: _,
                 name,
                 partition,
             } => name.span.union_opt(&partition.as_ref().map(|i| i.span)),
@@ -725,14 +725,14 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::DisableRule { name } => name.span,
             AlterTableOperation::DisableTrigger { name } => name.span,
             AlterTableOperation::DropConstraint {
-                if_exists,
+                if_exists: _,
                 name,
-                cascade,
+                cascade: _,
             } => name.span,
             AlterTableOperation::DropColumn {
                 column_name,
-                if_exists,
-                cascade,
+                if_exists: _,
+                cascade: _,
             } => column_name.span,
             AlterTableOperation::AttachPartition { partition } => partition.span(),
             AlterTableOperation::DetachPartition { partition } => partition.span(),
@@ -766,12 +766,12 @@ impl Spanned for AlterTableOperation {
                     .chain(new_partitions.iter().map(|i| i.span())),
             ),
             AlterTableOperation::AddPartitions {
-                if_not_exists,
+                if_not_exists: _,
                 new_partitions,
             } => union_spans(new_partitions.iter().map(|i| i.span())),
             AlterTableOperation::DropPartitions {
                 partitions,
-                if_exists,
+                if_exists: _,
             } => union_spans(partitions.iter().map(|i| i.span())),
             AlterTableOperation::RenameColumn {
                 old_column_name,
@@ -781,9 +781,9 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::ChangeColumn {
                 old_name,
                 new_name,
-                data_type,
+                data_type: _,
                 options,
-                column_position,
+                column_position: _,
             } => union_spans(
                 core::iter::once(old_name.span)
                     .chain(core::iter::once(new_name.span))
@@ -791,9 +791,9 @@ impl Spanned for AlterTableOperation {
             ),
             AlterTableOperation::ModifyColumn {
                 col_name,
-                data_type,
+                data_type: _,
                 options,
-                column_position,
+                column_position: _,
             } => {
                 union_spans(core::iter::once(col_name.span).chain(options.iter().map(|i| i.span())))
             }
@@ -807,7 +807,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::SetTblProperties { table_properties } => {
                 union_spans(table_properties.iter().map(|i| i.span()))
             }
-            AlterTableOperation::OwnerTo { new_owner } => Span::empty(),
+            AlterTableOperation::OwnerTo { .. } => Span::empty(),
         }
     }
 }
@@ -853,7 +853,7 @@ impl Spanned for OrderBy {
 impl Spanned for GroupByExpr {
     fn span(&self) -> Span {
         match self {
-            GroupByExpr::All(vec) => Span::empty(),
+            GroupByExpr::All(_) => Span::empty(),
             GroupByExpr::Expressions(exprs, _modifiers) => {
                 union_spans(exprs.iter().map(|i| i.span()))
             }
@@ -1008,48 +1008,48 @@ impl Spanned for Expr {
             Expr::InList {
                 expr,
                 list,
-                negated,
+                negated: _,
             } => union_spans(
                 core::iter::once(expr.span()).chain(list.iter().map(|item| item.span())),
             ),
             Expr::InSubquery {
                 expr,
                 subquery,
-                negated,
+                negated: _,
             } => expr.span().union(&subquery.span()),
             Expr::InUnnest {
                 expr,
                 array_expr,
-                negated,
+                negated: _,
             } => expr.span().union(&array_expr.span()),
             Expr::Between {
                 expr,
-                negated,
+                negated: _,
                 low,
                 high,
             } => expr.span().union(&low.span()).union(&high.span()),
 
-            Expr::BinaryOp { left, op, right } => left.span().union(&right.span()),
+            Expr::BinaryOp { left, op: _, right } => left.span().union(&right.span()),
             Expr::Like {
-                negated,
+                negated: _,
                 expr,
                 pattern,
-                escape_char,
+                escape_char: _,
             } => expr.span().union(&pattern.span()),
             Expr::ILike {
-                negated,
+                negated: _,
                 expr,
                 pattern,
-                escape_char,
+                escape_char: _,
             } => expr.span().union(&pattern.span()),
             Expr::SimilarTo {
-                negated,
+                negated: _,
                 expr,
                 pattern,
-                escape_char,
+                escape_char: _,
             } => expr.span().union(&pattern.span()),
-            Expr::Ceil { expr, field } => expr.span(),
-            Expr::Floor { expr, field } => expr.span(),
+            Expr::Ceil { expr, field: _ } => expr.span(),
+            Expr::Floor { expr, field: _ } => expr.span(),
             Expr::Position { expr, r#in } => expr.span().union(&r#in.span()),
             Expr::Overlay {
                 expr,
@@ -1066,7 +1066,7 @@ impl Spanned for Expr {
                 .union(&union_spans(collation.0.iter().map(|i| i.span))),
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
-            Expr::TypedString { data_type, value } => Span::empty(),
+            Expr::TypedString { .. } => Span::empty(),
             Expr::MapAccess { column, keys } => column
                 .span()
                 .union(&union_spans(keys.iter().map(|i| i.key.span()))),
@@ -1078,34 +1078,25 @@ impl Spanned for Expr {
             Expr::Rollup(vec) => union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span()))),
             Expr::Tuple(vec) => union_spans(vec.iter().map(|i| i.span())),
             Expr::Array(array) => array.span(),
-            Expr::MatchAgainst {
-                columns,
-                match_value,
-                opt_search_modifier,
-            } => Span::empty(),
+            Expr::MatchAgainst { .. } => Span::empty(),
             Expr::JsonAccess { value, path } => value.span().union(&path.span()),
-            Expr::RLike {
-                negated,
-                expr,
-                pattern,
-                regexp,
-            } => Span::empty(),
+            Expr::RLike { .. } => Span::empty(),
             Expr::AnyOp {
                 left,
-                compare_op,
+                compare_op: _,
                 right,
             } => left.span().union(&right.span()),
             Expr::AllOp {
                 left,
-                compare_op,
+                compare_op: _,
                 right,
             } => left.span().union(&right.span()),
-            Expr::UnaryOp { op, expr } => expr.span(),
+            Expr::UnaryOp { op: _, expr } => expr.span(),
             Expr::Convert {
                 expr,
-                data_type,
+                data_type: _,
                 charset,
-                target_before_value,
+                target_before_value: _,
                 styles,
             } => union_spans(
                 core::iter::once(expr.span())
@@ -1113,25 +1104,25 @@ impl Spanned for Expr {
                     .chain(styles.iter().map(|i| i.span())),
             ),
             Expr::Cast {
-                kind,
+                kind: _,
                 expr,
-                data_type,
-                format,
+                data_type: _,
+                format: _,
             } => expr.span(),
             Expr::AtTimeZone {
                 timestamp,
                 time_zone,
             } => timestamp.span().union(&time_zone.span()),
             Expr::Extract {
-                field,
-                syntax,
+                field: _,
+                syntax: _,
                 expr,
             } => expr.span(),
             Expr::Substring {
                 expr,
                 substring_from,
                 substring_for,
-                special,
+                special: _,
             } => union_spans(
                 core::iter::once(expr.span())
                     .chain(substring_from.as_ref().map(|i| i.span()))
@@ -1139,7 +1130,7 @@ impl Spanned for Expr {
             ),
             Expr::Trim {
                 expr,
-                trim_where,
+                trim_where: _,
                 trim_what,
                 trim_characters,
             } => union_spans(
@@ -1263,11 +1254,11 @@ impl Spanned for FunctionArgumentList {
 impl Spanned for FunctionArgumentClause {
     fn span(&self) -> Span {
         match self {
-            FunctionArgumentClause::IgnoreOrRespectNulls(null_treatment) => Span::empty(),
+            FunctionArgumentClause::IgnoreOrRespectNulls(_) => Span::empty(),
             FunctionArgumentClause::OrderBy(vec) => union_spans(vec.iter().map(|i| i.expr.span())),
             FunctionArgumentClause::Limit(expr) => expr.span(),
-            FunctionArgumentClause::OnOverflow(list_agg_on_overflow) => Span::empty(),
-            FunctionArgumentClause::Having(HavingBound(kind, expr)) => expr.span(),
+            FunctionArgumentClause::OnOverflow(_) => Span::empty(),
+            FunctionArgumentClause::Having(HavingBound(_kind, expr)) => expr.span(),
             FunctionArgumentClause::Separator(value) => value.span(),
         }
     }
@@ -1289,7 +1280,7 @@ impl Spanned for JsonPath {
 impl Spanned for JsonPathElem {
     fn span(&self) -> Span {
         match self {
-            JsonPathElem::Dot { key, quoted } => Span::empty(),
+            JsonPathElem::Dot { .. } => Span::empty(),
             JsonPathElem::Bracket { key } => key.span(),
         }
     }
@@ -1383,11 +1374,11 @@ impl Spanned for TableFactor {
             TableFactor::Table {
                 name,
                 alias,
-                args,
-                with_hints,
-                version,
-                with_ordinality,
-                partitions,
+                args: _,
+                with_hints: _,
+                version: _,
+                with_ordinality: _,
+                partitions: _,
             } => union_spans(
                 name.0
                     .iter()
@@ -1399,7 +1390,7 @@ impl Spanned for TableFactor {
                     })),
             ),
             TableFactor::Derived {
-                lateral,
+                lateral: _,
                 subquery,
                 alias,
             } => subquery
@@ -1410,10 +1401,10 @@ impl Spanned for TableFactor {
                 .union_opt(&alias.as_ref().map(|alias| alias.span())),
             TableFactor::UNNEST {
                 alias,
-                with_offset,
+                with_offset: _,
                 with_offset_alias,
                 array_exprs,
-                with_ordinality,
+                with_ordinality: _,
             } => union_spans(
                 alias
                     .iter()
@@ -1428,7 +1419,7 @@ impl Spanned for TableFactor {
                 .span()
                 .union_opt(&alias.as_ref().map(|alias| alias.span())),
             TableFactor::Function {
-                lateral,
+                lateral: _,
                 name,
                 args,
                 alias,
@@ -1439,12 +1430,7 @@ impl Spanned for TableFactor {
                     .chain(args.iter().map(|i| i.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
-            TableFactor::JsonTable {
-                json_expr,
-                json_path,
-                columns,
-                alias,
-            } => Span::empty(),
+            TableFactor::JsonTable { .. } => Span::empty(),
             TableFactor::Pivot {
                 table,
                 aggregate_functions,
@@ -1478,8 +1464,8 @@ impl Spanned for TableFactor {
                 partition_by,
                 order_by,
                 measures,
-                rows_per_match,
-                after_match_skip,
+                rows_per_match: _,
+                after_match_skip: _,
                 pattern,
                 symbols,
                 alias,
@@ -1559,7 +1545,7 @@ impl Spanned for FunctionArg {
             FunctionArg::Named {
                 name,
                 arg,
-                operator,
+                operator: _,
             } => name.span.union(&arg.span()),
             FunctionArg::Unnamed(arg) => arg.span(),
         }

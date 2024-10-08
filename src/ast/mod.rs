@@ -128,7 +128,7 @@ where
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Ident {
@@ -144,6 +144,13 @@ pub struct Ident {
 impl PartialEq for Ident {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value && self.quote_style == other.quote_style
+    }
+}
+
+impl core::hash::Hash for Ident {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+        self.quote_style.hash(state);
     }
 }
 

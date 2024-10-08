@@ -505,7 +505,7 @@ impl Span {
 }
 
 /// A [Token] with [Location] attached to it
-#[derive(Debug, Eq, Hash, Clone)]
+#[derive(Debug, Eq, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TokenWithLocation {
     pub token: Token,
@@ -523,6 +523,12 @@ impl TokenWithLocation {
 
     pub fn at(token: Token, start: Location, end: Location) -> TokenWithLocation {
         TokenWithLocation::new(token, Span::new(start, end))
+    }
+}
+
+impl core::hash::Hash for TokenWithLocation {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.token.hash(state);
     }
 }
 

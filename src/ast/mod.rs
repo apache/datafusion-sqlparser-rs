@@ -646,16 +646,16 @@ pub enum Expr {
         regexp: bool,
     },
     /// `ANY` operation e.g. `foo > ANY(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
-    /// https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#_8_9_quantified_comparison_predicate
+    /// https://docs.snowflake.com/en/sql-reference/operators-subquery#all-any
     AnyOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,
         right: Box<Expr>,
-        // ANY and SOME are synonymous
+        // ANY and SOME are synonymous: https://docs.cloudera.com/cdw-runtime/cloud/using-hiveql/topics/hive_comparison_predicates.html
         is_some: bool,
     },
     /// `ALL` operation e.g. `foo > ALL(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
-    /// https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#_8_9_quantified_comparison_predicate
+    /// https://docs.snowflake.com/en/sql-reference/operators-subquery#all-any
     AllOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,

@@ -22,7 +22,7 @@ use super::{
 ///
 /// Source spans are not guaranteed to be entirely accurate. They may
 /// be missing keywords or other tokens. Some nodes may not have a computable
-/// span at all, in which case they return `Span::empty()`.
+/// span at all, in which case they return [`Span::empty()`].
 ///
 /// Some impl blocks may contain doc comments with information
 /// on which nodes are missing spans.

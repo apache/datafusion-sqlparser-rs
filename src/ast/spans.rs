@@ -1680,65 +1680,94 @@ pub mod tests {
     }
 
     #[test]
-    fn test_query_span() {
-        let query = crate::parser::Parser::new(&GenericDialect)
-            .try_with_sql(
-                "SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id",
-            )
-            .unwrap()
-            .parse_query()
-            .unwrap();
+    fn test_join() {
+        let dialect = &GenericDialect;
+        let mut test = SpanTest::new(
+            dialect,
+            "SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id",
+        );
+
+        let query = test.0.parse_select().unwrap();
+        let select_span = query.span();
 
         assert_eq!(
-            query.span(),
-            Span::new((1, 1).into(), (1, 109 - 28 + 1).into())
+            test.get_source(select_span),
+            "SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id"
+        );
+
+        let join_span = query.from[0].joins[0].span();
+
+        // 'LEFT JOIN' missing
+        assert_eq!(
+            test.get_source(join_span),
+            "companies ON users.company_id = companies.id"
         );
     }
 
     #[test]
     pub fn test_union() {
-        let query = crate::parser::Parser::new(&GenericDialect)
-            .try_with_sql(
-                "SELECT a FROM postgres.public.source UNION SELECT a FROM postgres.public.source",
-            )
-            .unwrap()
-            .parse_query()
-            .unwrap();
+        let dialect = &GenericDialect;
+        let mut test = SpanTest::new(
+            dialect,
+            "SELECT a FROM postgres.public.source UNION SELECT a FROM postgres.public.source",
+        );
 
-        query.span();
+        let query = test.0.parse_query().unwrap();
+        let select_span = query.span();
+
+        assert_eq!(
+            test.get_source(select_span),
+            "SELECT a FROM postgres.public.source UNION SELECT a FROM postgres.public.source"
+        );
     }
 
     #[test]
     pub fn test_subquery() {
-        let query = crate::parser::Parser::new(&GenericDialect)
-            .try_with_sql("SELECT a FROM (SELECT a FROM postgres.public.source) AS b")
-            .unwrap()
-            .parse_query()
-            .unwrap();
+        let dialect = &GenericDialect;
+        let mut test = SpanTest::new(
+            dialect,
+            "SELECT a FROM (SELECT a FROM postgres.public.source) AS b",
+        );
 
-        query.span();
+        let query = test.0.parse_select().unwrap();
+        let select_span = query.span();
+
+        assert_eq!(
+            test.get_source(select_span),
+            "SELECT a FROM (SELECT a FROM postgres.public.source) AS b"
+        );
+
+        let subquery_span = query.from[0].span();
+
+        // left paren missing
+        assert_eq!(
+            test.get_source(subquery_span),
+            "SELECT a FROM postgres.public.source) AS b"
+        );
     }
 
     #[test]
     pub fn test_cte() {
-        let query = crate::parser::Parser::new(&GenericDialect)
-            .try_with_sql("WITH cte_outer AS (SELECT a FROM postgres.public.source), cte_ignored AS (SELECT a FROM cte_outer), cte_inner AS (SELECT a FROM cte_outer) SELECT a FROM cte_inner")
-            .unwrap()
-            .parse_query()
-            .unwrap();
+        let dialect = &GenericDialect;
+        let mut test = SpanTest::new(dialect, "WITH cte_outer AS (SELECT a FROM postgres.public.source), cte_ignored AS (SELECT a FROM cte_outer), cte_inner AS (SELECT a FROM cte_outer) SELECT a FROM cte_inner");
 
-        query.span();
+        let query = test.0.parse_query().unwrap();
+
+        let select_span = query.span();
+
+        assert_eq!(test.get_source(select_span), "WITH cte_outer AS (SELECT a FROM postgres.public.source), cte_ignored AS (SELECT a FROM cte_outer), cte_inner AS (SELECT a FROM cte_outer) SELECT a FROM cte_inner");
     }
 
     #[test]
     pub fn test_snowflake_lateral_flatten() {
-        let query = crate::parser::Parser::new(&SnowflakeDialect)
-            .try_with_sql("SELECT FLATTENED.VALUE:field::TEXT AS FIELD FROM SNOWFLAKE.SCHEMA.SOURCE AS S, LATERAL FLATTEN(INPUT => S.JSON_ARRAY) AS FLATTENED")
-            .unwrap()
-            .parse_query()
-            .unwrap();
+        let dialect = &SnowflakeDialect;
+        let mut test = SpanTest::new(dialect, "SELECT FLATTENED.VALUE:field::TEXT AS FIELD FROM SNOWFLAKE.SCHEMA.SOURCE AS S, LATERAL FLATTEN(INPUT => S.JSON_ARRAY) AS FLATTENED");
 
-        query.span();
+        let query = test.0.parse_select().unwrap();
+
+        let select_span = query.span();
+
+        assert_eq!(test.get_source(select_span), "SELECT FLATTENED.VALUE:field::TEXT AS FIELD FROM SNOWFLAKE.SCHEMA.SOURCE AS S, LATERAL FLATTEN(INPUT => S.JSON_ARRAY) AS FLATTENED");
     }
 
     #[test]

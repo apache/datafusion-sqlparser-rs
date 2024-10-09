@@ -646,7 +646,7 @@ pub enum Expr {
         regexp: bool,
     },
     /// `ANY` operation e.g. `foo > ANY(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
-    /// https://docs.snowflake.com/en/sql-reference/operators-subquery#all-any
+    /// <https://docs.snowflake.com/en/sql-reference/operators-subquery#all-any>
     AnyOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,
@@ -655,7 +655,7 @@ pub enum Expr {
         is_some: bool,
     },
     /// `ALL` operation e.g. `foo > ALL(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
-    /// https://docs.snowflake.com/en/sql-reference/operators-subquery#all-any
+    /// <https://docs.snowflake.com/en/sql-reference/operators-subquery#all-any>
     AllOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,

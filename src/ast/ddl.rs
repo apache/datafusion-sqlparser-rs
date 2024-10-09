@@ -31,7 +31,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, DataType, Expr, Ident, MySQLColumnPosition,
-    ObjectName, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Value,
+    ObjectName, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -1096,17 +1096,172 @@ impl fmt::Display for ColumnOptionDef {
     }
 }
 
+/// Identity is a column option for defining an identity or autoincrement column in a creating table statement.
+/// Syntax
+/// ```sql
+/// { IDENTITY | AUTOINCREMENT } [ (seed , increment) | START num INCREMENT num ] [ ORDER | NOORDER ]
+/// ```
+/// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Identity {
+    Autoincrement(IdentityProperty),
+    Identity(IdentityProperty),
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IdentityProperty {
+    pub parameters: Option<IdentityFormat>,
+    pub order: Option<IdentityOrder>,
+}
+
+/// A format of parameters of identity column.
+///
+/// It is [Snowflake] specific.
+/// Syntax
+/// ```sql
+/// (seed , increment) | START num INCREMENT num
+/// ```
+/// [MS SQL Server] uses one way of representing these parameters.
+/// Syntax
+/// ```sql
+/// (seed , increment)
+/// ```
+/// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IdentityFormat {
+    FunctionCall(IdentityParameters),
+    StartAndIncrement(IdentityParameters),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IdentityParameters {
     pub seed: Expr,
     pub increment: Expr,
 }
 
-impl fmt::Display for IdentityProperty {
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IdentityOrder {
+    Order,
+    NoOrder,
+}
+
+impl fmt::Display for Identity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}, {}", self.seed, self.increment)
+        let (command, property) = match self {
+            Identity::Identity(property) => ("IDENTITY", property),
+            Identity::Autoincrement(property) => ("AUTOINCREMENT", property),
+        };
+        write!(f, "{command}")?;
+        if let Some(parameters) = &property.parameters {
+            write!(f, "{parameters}")?;
+        }
+        if let Some(order) = &property.order {
+            write!(f, "{order}")?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for IdentityFormat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IdentityFormat::FunctionCall(parameters) => {
+                write!(f, "({}, {})", parameters.seed, parameters.increment)
+            }
+            IdentityFormat::StartAndIncrement(parameters) => {
+                write!(
+                    f,
+                    " START {} INCREMENT {}",
+                    parameters.seed, parameters.increment
+                )
+            }
+        }
+    }
+}
+
+impl fmt::Display for IdentityOrder {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IdentityOrder::Order => write!(f, " ORDER"),
+            IdentityOrder::NoOrder => write!(f, " NOORDER"),
+        }
+    }
+}
+
+/// Column policy that identify a security policy of access to a column.
+/// Syntax
+/// ```sql
+/// [ WITH ] MASKING POLICY <policy_name> [ USING ( <col_name> , <cond_col1> , ... ) ]
+/// [ WITH ] PROJECTION POLICY <policy_name>
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ColumnPolicy {
+    MaskingPolicy(ColumnPolicyProperty),
+    ProjectionPolicy(ColumnPolicyProperty),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ColumnPolicyProperty {
+    pub with: bool,
+    pub policy_name: Ident,
+    pub using_columns: Option<Vec<Ident>>,
+}
+
+impl fmt::Display for ColumnPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (command, property) = match self {
+            ColumnPolicy::MaskingPolicy(property) => ("MASKING POLICY", property),
+            ColumnPolicy::ProjectionPolicy(property) => ("PROJECTION POLICY", property),
+        };
+        if property.with {
+            write!(f, "WITH ")?;
+        }
+        write!(f, "{command} {}", property.policy_name)?;
+        if let Some(using_columns) = &property.using_columns {
+            write!(f, " USING ({})", display_comma_separated(using_columns))?;
+        }
+        Ok(())
+    }
+}
+
+/// Tags option of column
+/// Syntax
+/// ```sql
+/// [ WITH ] TAG ( <tag_name> = '<tag_value>' [ , <tag_name> = '<tag_value>' , ... ] )
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TagsColumnOption {
+    pub with: bool,
+    pub tags: Vec<Tag>,
+}
+
+impl fmt::Display for TagsColumnOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.with {
+            write!(f, "WITH ")?;
+        }
+        write!(f, "TAG ({})", display_comma_separated(&self.tags))?;
+        Ok(())
     }
 }
 
@@ -1180,16 +1335,32 @@ pub enum ColumnOption {
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
     /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
     Options(Vec<SqlOption>),
-    /// MS SQL Server specific: Creates an identity column in a table.
+    /// Creates an identity or an autoincrement column in a table.
     /// Syntax
     /// ```sql
-    /// IDENTITY [ (seed , increment) ]
+    /// { IDENTITY | AUTOINCREMENT } [ (seed , increment) | START num INCREMENT num ] [ ORDER | NOORDER ]
     /// ```
     /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
-    Identity(Option<IdentityProperty>),
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    Identity(Identity),
     /// SQLite specific: ON CONFLICT option on column definition
     /// <https://www.sqlite.org/lang_conflict.html>
     OnConflict(Keyword),
+    /// Snowflake specific: an option of specifying security masking or projection policy to set on a column.
+    /// Syntax:
+    /// ```sql
+    /// [ WITH ] MASKING POLICY <policy_name> [ USING ( <col_name> , <cond_col1> , ... ) ]
+    /// [ WITH ] PROJECTION POLICY <policy_name>
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    Policy(ColumnPolicy),
+    /// Snowflake specific: Specifies the tag name and the tag string value.
+    /// Syntax:
+    /// ```sql
+    /// [ WITH ] TAG ( <tag_name> = '<tag_value>' [ , <tag_name> = '<tag_value>' , ... ] )
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    Tags(TagsColumnOption),
 }
 
 impl fmt::Display for ColumnOption {
@@ -1292,15 +1463,17 @@ impl fmt::Display for ColumnOption {
                 write!(f, "OPTIONS({})", display_comma_separated(options))
             }
             Identity(parameters) => {
-                write!(f, "IDENTITY")?;
-                if let Some(parameters) = parameters {
-                    write!(f, "({parameters})")?;
-                }
-                Ok(())
+                write!(f, "{parameters}")
             }
             OnConflict(keyword) => {
                 write!(f, "ON CONFLICT {:?}", keyword)?;
                 Ok(())
+            }
+            Policy(parameters) => {
+                write!(f, "{parameters}")
+            }
+            Tags(tags) => {
+                write!(f, "{tags}")
             }
         }
     }

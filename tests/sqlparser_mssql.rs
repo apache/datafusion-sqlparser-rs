@@ -921,7 +921,10 @@ fn parse_create_table_with_identity_column() {
             vec![
                 ColumnOptionDef {
                     name: None,
-                    option: ColumnOption::Identity(None),
+                    option: ColumnOption::Identity(Identity::Identity(IdentityProperty {
+                        parameters: None,
+                        order: None,
+                    })),
                 },
                 ColumnOptionDef {
                     name: None,
@@ -934,18 +937,12 @@ fn parse_create_table_with_identity_column() {
             vec![
                 ColumnOptionDef {
                     name: None,
-                    #[cfg(not(feature = "bigdecimal"))]
-                    option: ColumnOption::Identity(Some(IdentityProperty {
-                        seed: Expr::Value(Value::Number("1".to_string(), false)),
-                        increment: Expr::Value(Value::Number("1".to_string(), false)),
-                    })),
-                    #[cfg(feature = "bigdecimal")]
-                    option: ColumnOption::Identity(Some(IdentityProperty {
-                        seed: Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1), false)),
-                        increment: Expr::Value(Value::Number(
-                            bigdecimal::BigDecimal::from(1),
-                            false,
-                        )),
+                    option: ColumnOption::Identity(Identity::Identity(IdentityProperty {
+                        parameters: Some(IdentityFormat::FunctionCall(IdentityParameters {
+                            seed: Expr::Value(number("1")),
+                            increment: Expr::Value(number("1")),
+                        })),
+                        order: None,
                     })),
                 },
                 ColumnOptionDef {

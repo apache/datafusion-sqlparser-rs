@@ -18,6 +18,12 @@ use super::{
     WildcardAdditionalOptions, With, WithFill,
 };
 
+/// Given an iterator of spans, return the [Span::union] of all spans.
+fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
+    iter.reduce(|acc, item| acc.union(&item))
+        .unwrap_or(Span::empty())
+}
+
 /// A trait for AST nodes that have a source span for use in diagnostics.
 ///
 /// Source spans are not guaranteed to be entirely accurate. They may
@@ -1640,12 +1646,6 @@ impl Spanned for TableWithJoins {
             core::iter::once(self.relation.span()).chain(self.joins.iter().map(|item| item.span())),
         )
     }
-}
-
-/// Given an iterator of spans, return the [Span::union] of all spans.
-fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
-    iter.reduce(|acc, item| acc.union(&item))
-        .unwrap_or(Span::empty())
 }
 
 impl Spanned for Select {

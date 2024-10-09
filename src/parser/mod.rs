@@ -662,7 +662,7 @@ impl<'a> Parser<'a> {
                 };
                 parser.expect_keyword(Keyword::PARTITIONS)?;
                 Ok(pa)
-            })
+            })?
             .unwrap_or_default();
         Ok(Statement::Msck {
             repair,
@@ -829,7 +829,7 @@ impl<'a> Parser<'a> {
                     columns = self
                         .maybe_parse(|parser| {
                             parser.parse_comma_separated(|p| p.parse_identifier(false))
-                        })
+                        })?
                         .unwrap_or_default();
                     for_columns = true
                 }
@@ -986,7 +986,7 @@ impl<'a> Parser<'a> {
                     value: parser.parse_literal_string()?,
                 }),
             }
-        });
+        })?;
 
         if let Some(expr) = opt_expr {
             return Ok(expr);
@@ -1227,7 +1227,7 @@ impl<'a> Parser<'a> {
             Token::LParen => {
                 let expr = if let Some(expr) = self.try_parse_expr_sub_query()? {
                     expr
-                } else if let Some(lambda) = self.try_parse_lambda() {
+                } else if let Some(lambda) = self.try_parse_lambda()? {
                     return Ok(lambda);
                 } else {
                     let exprs = self.parse_comma_separated(Parser::parse_expr)?;
@@ -1309,9 +1309,9 @@ impl<'a> Parser<'a> {
         Ok(Some(Expr::Subquery(self.parse_boxed_query()?)))
     }
 
-    fn try_parse_lambda(&mut self) -> Option<Expr> {
+    fn try_parse_lambda(&mut self) -> Result<Option<Expr>, ParserError> {
         if !self.dialect.supports_lambda_functions() {
-            return None;
+            return Ok(None);
         }
         self.maybe_parse(|p| {
             let params = p.parse_comma_separated(|p| p.parse_identifier(false))?;
@@ -1773,7 +1773,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 r#in: Box::new(from),
             })
-        });
+        })?;
         match position_expr {
             Some(expr) => Ok(expr),
             // Snowflake supports `position` as an ordinary function call
@@ -3510,16 +3510,19 @@ impl<'a> Parser<'a> {
 
     /// Run a parser method `f`, reverting back to the current position if unsuccessful.
     #[must_use]
-    pub fn maybe_parse<T, F>(&mut self, mut f: F) -> Option<T>
+    pub fn maybe_parse<T, F>(&mut self, mut f: F) -> Result<Option<T>, ParserError>
     where
         F: FnMut(&mut Parser) -> Result<T, ParserError>,
     {
         let index = self.index;
-        if let Ok(t) = f(self) {
-            Some(t)
-        } else {
-            self.index = index;
-            None
+        match f(self) {
+            Ok(t) => Ok(Some(t)),
+            // Unwind stack if limit exceeded
+            Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
+            Err(_) => {
+                self.index = index;
+                Ok(None)
+            }
         }
     }
 
@@ -6459,7 +6462,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // optional index name
-                let index_name = self.parse_optional_indent();
+                let index_name = self.parse_optional_indent()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
@@ -6480,7 +6483,7 @@ impl<'a> Parser<'a> {
                 self.expect_keyword(Keyword::KEY)?;
 
                 // optional index name
-                let index_name = self.parse_optional_indent();
+                let index_name = self.parse_optional_indent()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
@@ -6542,7 +6545,7 @@ impl<'a> Parser<'a> {
 
                 let name = match self.peek_token().token {
                     Token::Word(word) if word.keyword == Keyword::USING => None,
-                    _ => self.parse_optional_indent(),
+                    _ => self.parse_optional_indent()?,
                 };
 
                 let index_type = self.parse_optional_using_then_index_type()?;
@@ -6573,7 +6576,7 @@ impl<'a> Parser<'a> {
 
                 let index_type_display = self.parse_index_type_display();
 
-                let opt_index_name = self.parse_optional_indent();
+                let opt_index_name = self.parse_optional_indent()?;
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
 
@@ -6655,7 +6658,7 @@ impl<'a> Parser<'a> {
 
     /// Parse `[ident]`, mostly `ident` is name, like:
     /// `window_name`, `index_name`, ...
-    pub fn parse_optional_indent(&mut self) -> Option<Ident> {
+    pub fn parse_optional_indent(&mut self) -> Result<Option<Ident>, ParserError> {
         self.maybe_parse(|parser| parser.parse_identifier(false))
     }
 
@@ -7337,7 +7340,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
         }
         let mut legacy_options = vec![];
-        while let Some(opt) = self.maybe_parse(|parser| parser.parse_copy_legacy_option()) {
+        while let Some(opt) = self.maybe_parse(|parser| parser.parse_copy_legacy_option())? {
             legacy_options.push(opt);
         }
         let values = if let CopyTarget::Stdin = target {
@@ -7429,7 +7432,7 @@ impl<'a> Parser<'a> {
             Some(Keyword::CSV) => CopyLegacyOption::Csv({
                 let mut opts = vec![];
                 while let Some(opt) =
-                    self.maybe_parse(|parser| parser.parse_copy_legacy_csv_option())
+                    self.maybe_parse(|parser| parser.parse_copy_legacy_csv_option())?
                 {
                     opts.push(opt);
                 }
@@ -8011,7 +8014,7 @@ impl<'a> Parser<'a> {
         // Keyword::ARRAY syntax from above
         while self.consume_token(&Token::LBracket) {
             let size = if dialect_of!(self is GenericDialect | DuckDbDialect | PostgreSqlDialect) {
-                self.maybe_parse(|p| p.parse_literal_uint())
+                self.maybe_parse(|p| p.parse_literal_uint())?
             } else {
                 None
             };
@@ -8688,7 +8691,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        match self.maybe_parse(|parser| parser.parse_statement()) {
+        match self.maybe_parse(|parser| parser.parse_statement())? {
             Some(Statement::Explain { .. }) | Some(Statement::ExplainTable { .. }) => Err(
                 ParserError::ParserError("Explain must be root of the plan".to_string()),
             ),
@@ -9900,7 +9903,7 @@ impl<'a> Parser<'a> {
             // subquery, followed by the closing ')', and the alias of the derived table.
             // In the example above this is case (3).
             if let Some(mut table) =
-                self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))
+                self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))?
             {
                 while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT])
                 {
@@ -12080,7 +12083,9 @@ impl<'a> Parser<'a> {
 
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
         let window_name = match self.peek_token().token {
-            Token::Word(word) if word.keyword == Keyword::NoKeyword => self.parse_optional_indent(),
+            Token::Word(word) if word.keyword == Keyword::NoKeyword => {
+                self.parse_optional_indent()?
+            }
             _ => None,
         };
 

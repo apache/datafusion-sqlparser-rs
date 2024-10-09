@@ -36,7 +36,3 @@ github:
     rebase: false
   features:
     issues: true
-  protected_branches:
-    main:
-      required_pull_request_reviews:
-        required_approving_review_count: 1

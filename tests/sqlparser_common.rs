@@ -9691,6 +9691,60 @@ fn parse_create_type() {
 }
 
 #[test]
+fn parse_drop_type() {
+    let sql = "DROP TYPE abc";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            cascade,
+            ..
+        } => {
+            assert_eq_vec(&["abc"], &names);
+            assert_eq!(ObjectType::Type, object_type);
+            assert!(!if_exists);
+            assert!(!cascade);
+        }
+        _ => unreachable!(),
+    };
+
+    let sql = "DROP TYPE IF EXISTS def, magician, quaternion";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            cascade,
+            ..
+        } => {
+            assert_eq_vec(&["def", "magician", "quaternion"], &names);
+            assert_eq!(ObjectType::Type, object_type);
+            assert!(if_exists);
+            assert!(!cascade);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "DROP TYPE IF EXISTS my_type CASCADE";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            cascade,
+            ..
+        } => {
+            assert_eq_vec(&["my_type"], &names);
+            assert_eq!(ObjectType::Type, object_type);
+            assert!(if_exists);
+            assert!(cascade);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_call() {
     all_dialects().verified_stmt("CALL my_procedure()");
     all_dialects().verified_stmt("CALL my_procedure(1, 'a')");

@@ -4889,6 +4889,8 @@ impl<'a> Parser<'a> {
             ObjectType::Sequence
         } else if self.parse_keyword(Keyword::STAGE) {
             ObjectType::Stage
+        } else if self.parse_keyword(Keyword::TYPE) {
+            ObjectType::Type
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
         } else if self.parse_keyword(Keyword::POLICY) {
@@ -4901,7 +4903,7 @@ impl<'a> Parser<'a> {
             return self.parse_drop_trigger();
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, DATABASE, FUNCTION, PROCEDURE, STAGE, TRIGGER, SECRET or SEQUENCE after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, DATABASE, FUNCTION, PROCEDURE, STAGE, TRIGGER, SECRET, SEQUENCE, or TYPE after DROP",
                 self.peek_token(),
             );
         };

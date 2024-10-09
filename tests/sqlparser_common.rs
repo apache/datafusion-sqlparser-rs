@@ -1907,6 +1907,7 @@ fn parse_binary_any() {
             left: Box::new(Expr::Identifier(Ident::new("a"))),
             compare_op: BinaryOperator::Eq,
             right: Box::new(Expr::Identifier(Ident::new("b"))),
+            is_some: false,
         }),
         select.projection[0]
     );
@@ -11394,4 +11395,12 @@ fn test_select_where_with_like_or_ilike_any() {
     verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY '%abc%'"#);
     verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY ('%Jo%oe%', 'T%e')"#);
     verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')"#);
+}
+
+#[test]
+fn test_any_some_all_comparison() {
+    verified_stmt("SELECT c1 FROM tbl WHERE c1 = ANY(SELECT c2 FROM tbl)");
+    verified_stmt("SELECT c1 FROM tbl WHERE c1 >= ALL(SELECT c2 FROM tbl)");
+    verified_stmt("SELECT c1 FROM tbl WHERE c1 <> SOME(SELECT c2 FROM tbl)");
+    verified_stmt("SELECT 1 = ANY(WITH x AS (SELECT 1) SELECT * FROM x)");
 }

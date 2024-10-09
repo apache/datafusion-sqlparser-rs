@@ -470,12 +470,16 @@ impl std::fmt::Debug for Span {
 }
 
 impl Span {
+    // An empty span (0, 0) -> (0, 0)
+    // We need a const instance for pattern matching
     const EMPTY: Span = Self::empty();
 
     pub fn new(start: Location, end: Location) -> Span {
         Span { start, end }
     }
 
+    /// Returns an empty span (0, 0) -> (0, 0)
+    /// Empty spans represent no knowledge of source location
     pub const fn empty() -> Span {
         Span {
             start: Location { line: 0, column: 0 },
@@ -483,6 +487,8 @@ impl Span {
         }
     }
 
+    /// Returns the smallest Span that contains both `self` and `other`
+    /// If either span is [Span::empty], the other span is returned
     pub fn union(&self, other: &Span) -> Span {
         // If either span is empty, return the other
         // this prevents propagating (0, 0) through the tree
@@ -496,6 +502,8 @@ impl Span {
         }
     }
 
+    /// Same as [Span::union] for `Option<Span>`
+    /// If `other` is `None`, `self` is returned
     pub fn union_opt(&self, other: &Option<Span>) -> Span {
         match other {
             Some(other) => self.union(other),

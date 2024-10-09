@@ -1642,7 +1642,8 @@ impl Spanned for TableWithJoins {
     }
 }
 
-pub fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
+/// Given an iterator of spans, return the [Span::union] of all spans.
+fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
     iter.reduce(|acc, item| acc.union(&item))
         .unwrap_or(Span::empty())
 }

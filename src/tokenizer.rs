@@ -43,7 +43,8 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::DollarQuotedString;
 use crate::dialect::Dialect;
 use crate::dialect::{
-    BigQueryDialect, DuckDbDialect, GenericDialect, PostgreSqlDialect, SnowflakeDialect,
+    BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
+    SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
@@ -1140,7 +1141,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect) => {
+                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect) => {
                     chars.next(); // consume the '#', starting a snowflake single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {

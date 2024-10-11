@@ -12819,7 +12819,7 @@ mod tests {
     }
 
     #[test]
-    fn emil_test() {
+    fn test_type_name_to_right() {
         let constraint = Parser::new(&MySqlDialect {})
             .try_with_sql("KEY `press_release_timestamp_IDX` USING BTREE (`timestamp`)")
             .unwrap()

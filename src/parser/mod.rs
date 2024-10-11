@@ -3476,12 +3476,13 @@ impl<'a> Parser<'a> {
         }
         Ok(values)
     }
-    /// Parse a comma-separated list of 1+ items accepted by `F`
+    /// Parse a comma-separated list of 1+ items accepted by `F` with possibility to skip [`Keyword`] and consume [`Keyword`].
+    /// Extended behavior to [`Self::parse_comma_separated`]
     pub fn parse_comma_separated_with_skip_and_consume<T, F>(
         &mut self,
-        mut f: F,
         skip: &[Keyword],
         consume: &[Keyword],
+        mut f: F,
     ) -> Result<Vec<T>, ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
@@ -8471,9 +8472,9 @@ impl<'a> Parser<'a> {
                 Ok(vec![])
             } else {
                 let cols = self.parse_comma_separated_with_skip_and_consume(
+                    &[Keyword::DESC, Keyword::ASC],
+                    &[Keyword::DESC, Keyword::ASC],
                     |p| p.parse_identifier(false),
-                    &[Keyword::DESC, Keyword::ASC],
-                    &[Keyword::DESC, Keyword::ASC],
                 )?;
                 self.expect_token(&Token::RParen)?;
                 Ok(cols)

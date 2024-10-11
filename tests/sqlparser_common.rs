@@ -9923,7 +9923,11 @@ fn test_release_savepoint() {
 #[test]
 fn test_comment_hash_syntax() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect {}), Box::new(SnowflakeDialect {})],
+        dialects: vec![
+            Box::new(BigQueryDialect {}),
+            Box::new(SnowflakeDialect {}),
+            Box::new(MySqlDialect {}),
+        ],
         options: None,
     };
     let sql = r#"

@@ -11181,13 +11181,40 @@ impl<'a> Parser<'a> {
                     self.peek_token().location
                 )
             }
-            expr => self
-                .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
-                .map(|alias| match alias {
-                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
-                    None => SelectItem::UnnamedExpr(expr),
-                }),
+            expr => {
+                if dialect_of!(self is MsSqlDialect) {
+                    if let Some(select_item) = self.parse_mssql_alias_with_equal(&expr) {
+                        return Ok(select_item);
+                    }
+                }
+                self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
+                    .map(|alias| match alias {
+                        Some(alias) => SelectItem::ExprWithAlias { expr, alias },
+                        None => SelectItem::UnnamedExpr(expr),
+                    })
+            }
         }
+    }
+
+    /// Parse a [`SelectItem`] based on an MsSql syntax that uses the equal sign
+    /// to denote an alias, for example: SELECT col_alias = col FROM tbl
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/queries/select-examples-transact-sql?view=sql-server-ver16#b-use-select-with-column-headings-and-calculations>    
+    fn parse_mssql_alias_with_equal(&mut self, expr: &Expr) -> Option<SelectItem> {
+        if let Expr::BinaryOp {
+            left, op, right, ..
+        } = expr
+        {
+            if op == &BinaryOperator::Eq {
+                if let Expr::Identifier(ref alias) = **left {
+                    return Some(SelectItem::ExprWithAlias {
+                        expr: *right.clone(),
+                        alias: alias.clone(),
+                    });
+                }
+            }
+        }
+
+        None
     }
 
     /// Parse an [`WildcardAdditionalOptions`] information for wildcard select items.

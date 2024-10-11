@@ -1024,6 +1024,17 @@ fn parse_create_table_with_identity_column() {
     }
 }
 
+#[test]
+fn test_alias_equal_expr() {
+    let sql = r#"SELECT some_alias = some_column FROM some_table"#;
+    let expected = r#"SELECT some_column AS some_alias FROM some_table"#;
+    let _ = ms().one_statement_parses_to(sql, expected);
+
+    let sql = r#"SELECT some_alias = (a*b) FROM some_table"#;
+    let expected = r#"SELECT (a * b) AS some_alias FROM some_table"#;
+    let _ = ms().one_statement_parses_to(sql, expected);
+}
+
 fn ms() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MsSqlDialect {})],

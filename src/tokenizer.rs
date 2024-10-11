@@ -456,6 +456,7 @@ impl From<(u64, u64)> for Location {
     }
 }
 
+/// A span of source code locations (start, end)
 #[derive(Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Span {
@@ -536,25 +537,30 @@ impl TokenWithLocation {
 
 impl core::hash::Hash for TokenWithLocation {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.token.hash(state);
+        let TokenWithLocation { token, span: _ } = self;
+
+        token.hash(state);
     }
 }
 
 impl PartialEq<TokenWithLocation> for TokenWithLocation {
     fn eq(&self, other: &TokenWithLocation) -> bool {
-        self.token == other.token
+        let TokenWithLocation { token, span: _ } = self;
+
+        token == &other.token
     }
 }
 
 impl PartialOrd<TokenWithLocation> for TokenWithLocation {
     fn partial_cmp(&self, other: &TokenWithLocation) -> Option<std::cmp::Ordering> {
-        self.token.partial_cmp(&other.token)
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for TokenWithLocation {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.token.cmp(&other.token)
+        let TokenWithLocation { token, span: _ } = self;
+        token.cmp(&other.token)
     }
 }
 

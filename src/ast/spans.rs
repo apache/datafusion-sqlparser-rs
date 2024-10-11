@@ -1200,9 +1200,8 @@ impl Spanned for Subscript {
                     upper_bound.as_ref().map(|i| i.span()),
                     stride.as_ref().map(|i| i.span()),
                 ]
-                .iter()
-                .flatten()
-                .cloned(),
+                .into_iter()
+                .flatten(),
             ),
         }
     }
@@ -1529,7 +1528,7 @@ impl Spanned for OrderByExpr {
     fn span(&self) -> Span {
         self.expr
             .span()
-            .union_opt(&self.with_fill.as_ref().map(|f| f.span()).clone())
+            .union_opt(&self.with_fill.as_ref().map(|f| f.span()))
     }
 }
 
@@ -1673,6 +1672,8 @@ pub mod tests {
             Self(Parser::new(dialect).try_with_sql(sql).unwrap(), sql)
         }
 
+        // get the subsection of the source string that corresponds to the span
+        // only works on single-line strings
         fn get_source(&self, span: Span) -> &'a str {
             // lines in spans are 1-indexed
             &self.1[(span.start.column as usize - 1)..(span.end.column - 1) as usize]

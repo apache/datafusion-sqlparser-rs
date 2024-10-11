@@ -143,14 +143,26 @@ pub struct Ident {
 
 impl PartialEq for Ident {
     fn eq(&self, other: &Self) -> bool {
-        self.value == other.value && self.quote_style == other.quote_style
+        let Ident {
+            value,
+            quote_style,
+            span: _,
+        } = self;
+
+        value == &other.value && quote_style == &other.quote_style
     }
 }
 
 impl core::hash::Hash for Ident {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.value.hash(state);
-        self.quote_style.hash(state);
+        let Ident {
+            value,
+            quote_style,
+            span: _,
+        } = self;
+
+        value.hash(state);
+        quote_style.hash(state);
     }
 }
 

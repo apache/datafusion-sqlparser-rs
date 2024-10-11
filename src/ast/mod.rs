@@ -146,6 +146,7 @@ impl PartialEq for Ident {
         let Ident {
             value,
             quote_style,
+            // backwards compat
             span: _,
         } = self;
 
@@ -158,6 +159,7 @@ impl core::hash::Hash for Ident {
         let Ident {
             value,
             quote_style,
+            // backwards compat
             span: _,
         } = self;
 

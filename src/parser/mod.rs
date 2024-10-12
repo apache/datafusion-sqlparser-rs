@@ -9416,27 +9416,42 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_set_role(&mut self, modifier: Option<Keyword>) -> Option<Statement> {
+        let context_modifier = match modifier {
+            Some(Keyword::LOCAL) => ContextModifier::Local,
+            Some(Keyword::SESSION) => ContextModifier::Session,
+            _ => ContextModifier::None,
+        };
+
+        if self.parse_keyword(Keyword::NONE) {
+            Some(Statement::SetRole {
+                context_modifier,
+                role_name: None,
+            })
+        } else if matches!(
+            self.peek_token().token,
+            Token::Word(_) | Token::DoubleQuotedString(_) | Token::SingleQuotedString(_)
+        ) {
+            Some(Statement::SetRole {
+                context_modifier,
+                role_name: Some(self.parse_identifier(false).ok()?),
+            })
+        } else {
+            None
+        }
+    }
+
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
         let modifier =
             self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
         if let Some(Keyword::HIVEVAR) = modifier {
             self.expect_token(&Token::Colon)?;
         } else if self.parse_keyword(Keyword::ROLE) {
-            let context_modifier = match modifier {
-                Some(Keyword::LOCAL) => ContextModifier::Local,
-                Some(Keyword::SESSION) => ContextModifier::Session,
-                _ => ContextModifier::None,
-            };
-
-            let role_name = if self.parse_keyword(Keyword::NONE) {
-                None
+            if let Some(set_role_stmt) = self.parse_set_role(modifier) {
+                return Ok(set_role_stmt);
             } else {
-                Some(self.parse_identifier(false)?)
-            };
-            return Ok(Statement::SetRole {
-                context_modifier,
-                role_name,
-            });
+                self.prev_token(); // replace the "role" token which was actually a variable name
+            }
         }
 
         let variables = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {

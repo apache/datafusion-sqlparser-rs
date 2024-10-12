@@ -1073,6 +1073,7 @@ impl<'a> Parser<'a> {
                     }))
                 }
                 Keyword::NOT => self.parse_not(),
+
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
                 }
@@ -1174,6 +1175,14 @@ impl<'a> Parser<'a> {
                     ),
                 })
             }
+            Token::ExclamationMark if !self.dialect.supports_factorial_operator() => {
+                Ok(Expr::UnaryOp {
+                    op: UnaryOperator::SpecialNot,
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?,
+                    ),
+                })
+            }
             tok @ Token::DoubleExclamationMark
             | tok @ Token::PGSquareRoot
             | tok @ Token::PGCubeRoot
@@ -1267,7 +1276,6 @@ impl<'a> Parser<'a> {
             }
             _ => self.expected("an expression", next_token),
         }?;
-
         if self.parse_keyword(Keyword::COLLATE) {
             Ok(Expr::Collate {
                 expr: Box::new(expr),
@@ -2022,6 +2030,13 @@ impl<'a> Parser<'a> {
                 expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
             }),
         }
+    }
+
+    pub fn parse_special_not(&mut self) -> Result<Expr, ParserError> {
+        Ok(Expr::UnaryOp {
+            op: UnaryOperator::SpecialNot,
+            expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
+        })
     }
 
     /// Parses fulltext expressions [`sqlparser::ast::Expr::MatchAgainst`]
@@ -2796,9 +2811,27 @@ impl<'a> Parser<'a> {
                 format: None,
             })
         } else if Token::ExclamationMark == tok {
-            // PostgreSQL factorial operation
+            match expr {
+                Expr::Value(_) | Expr::Identifier(_) => {
+                    if !self.dialect.supports_factorial_operator() {
+                        return parser_err!(
+                            format!(
+                                "current dialect: {:?} does not support factorial operator",
+                                self.dialect
+                            ),
+                            self.peek_token().location
+                        );
+                    }
+                }
+                _ => {}
+            };
+            let op = if !self.dialect.supports_factorial_operator() {
+                UnaryOperator::SpecialNot
+            } else {
+                UnaryOperator::PGPostfixFactorial
+            };
             Ok(Expr::UnaryOp {
-                op: UnaryOperator::PGPostfixFactorial,
+                op,
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {

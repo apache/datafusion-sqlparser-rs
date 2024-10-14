@@ -562,7 +562,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// For example: SELECT col_alias = col FROM tbl
+    /// Returns true if this dialect supports treating the equals operator `=` within a [`SelectItem`]
+    /// as an alias assignment operator, rather than a boolean expression.
+    /// For example: the following statements are equivalent for such a dialect:
+    /// ```sql
+    ///  SELECT col_alias = col FROM tbl;
+    ///  SELECT col_alias AS col FROM tbl;
+    /// ```
     fn supports_eq_alias_assigment(&self) -> bool {
         false
     }

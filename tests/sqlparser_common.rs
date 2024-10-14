@@ -8999,7 +8999,7 @@ fn parse_cache_table() {
                     value: Expr::Value(number("0.88")),
                 },
             ],
-            query: Some(query.clone()),
+            query: Some(query.clone().into()),
         }
     );
 
@@ -9024,7 +9024,7 @@ fn parse_cache_table() {
                     value: Expr::Value(number("0.88")),
                 },
             ],
-            query: Some(query.clone()),
+            query: Some(query.clone().into()),
         }
     );
 
@@ -9035,7 +9035,7 @@ fn parse_cache_table() {
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![],
-            query: Some(query.clone()),
+            query: Some(query.clone().into()),
         }
     );
 
@@ -9046,7 +9046,7 @@ fn parse_cache_table() {
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: true,
             options: vec![],
-            query: Some(query),
+            query: Some(query.into()),
         }
     );
 

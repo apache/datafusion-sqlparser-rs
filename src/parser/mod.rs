@@ -478,7 +478,7 @@ impl<'a> Parser<'a> {
                 Keyword::ANALYZE => self.parse_analyze(),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
-                    self.parse_boxed_query().map(Statement::Query)
+                    self.parse_query().map(Statement::Query)
                 }
                 Keyword::TRUNCATE => self.parse_truncate(),
                 Keyword::ATTACH => {
@@ -551,7 +551,7 @@ impl<'a> Parser<'a> {
             },
             Token::LParen => {
                 self.prev_token();
-                self.parse_boxed_query().map(Statement::Query)
+                self.parse_query().map(Statement::Query)
             }
             _ => self.expected("an SQL statement", next_token),
         }
@@ -1060,7 +1060,7 @@ impl<'a> Parser<'a> {
                         && !dialect_of!(self is ClickHouseDialect | DatabricksDialect) =>
                 {
                     self.expect_token(&Token::LParen)?;
-                    let query = self.parse_boxed_query()?;
+                    let query = self.parse_query()?;
                     self.expect_token(&Token::RParen)?;
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
@@ -1306,7 +1306,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
 
-        Ok(Some(Expr::Subquery(self.parse_boxed_query()?)))
+        Ok(Some(Expr::Subquery(self.parse_query()?)))
     }
 
     fn try_parse_lambda(&mut self) -> Result<Option<Expr>, ParserError> {
@@ -1331,7 +1331,7 @@ impl<'a> Parser<'a> {
         // Snowflake permits a subquery to be passed as an argument without
         // an enclosing set of parens if it's the only argument.
         if dialect_of!(self is SnowflakeDialect) && self.peek_sub_query() {
-            let subquery = self.parse_boxed_query()?;
+            let subquery = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::Function(Function {
                 name,
@@ -1693,7 +1693,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let exists_node = Expr::Exists {
             negated,
-            subquery: self.parse_boxed_query()?,
+            subquery: self.parse_query()?,
         };
         self.expect_token(&Token::RParen)?;
         Ok(exists_node)
@@ -3028,7 +3028,7 @@ impl<'a> Parser<'a> {
             self.prev_token();
             Expr::InSubquery {
                 expr: Box::new(expr),
-                subquery: self.parse_boxed_query()?,
+                subquery: self.parse_query()?,
                 negated,
             }
         } else {
@@ -3758,7 +3758,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse 'AS' before as query,such as `WITH XXX AS SELECT XXX` oer `CACHE TABLE AS SELECT XXX`
-    pub fn parse_as_query(&mut self) -> Result<(bool, Query), ParserError> {
+    pub fn parse_as_query(&mut self) -> Result<(bool, Box<Query>), ParserError> {
         match self.peek_token().token {
             Token::Word(word) => match word.keyword {
                 Keyword::AS => {
@@ -4522,7 +4522,7 @@ impl<'a> Parser<'a> {
         };
 
         self.expect_keyword(Keyword::AS)?;
-        let query = self.parse_boxed_query()?;
+        let query = self.parse_query()?;
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
 
         let with_no_schema_binding = dialect_of!(self is RedshiftSqlDialect | GenericDialect)
@@ -5101,7 +5101,7 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword(Keyword::FOR)?;
 
-        let query = Some(self.parse_boxed_query()?);
+        let query = Some(self.parse_query()?);
 
         Ok(Statement::Declare {
             stmts: vec![Declare {
@@ -5195,7 +5195,7 @@ impl<'a> Parser<'a> {
                     match self.peek_token().token {
                         Token::Word(w) if w.keyword == Keyword::SELECT => (
                             Some(DeclareType::Cursor),
-                            Some(self.parse_boxed_query()?),
+                            Some(self.parse_query()?),
                             None,
                             None,
                         ),
@@ -5888,7 +5888,7 @@ impl<'a> Parser<'a> {
 
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
-            Some(self.parse_boxed_query()?)
+            Some(self.parse_query()?)
         } else {
             None
         };
@@ -7257,7 +7257,7 @@ impl<'a> Parser<'a> {
         let with_options = self.parse_options(Keyword::WITH)?;
 
         self.expect_keyword(Keyword::AS)?;
-        let query = self.parse_boxed_query()?;
+        let query = self.parse_query()?;
 
         Ok(Statement::AlterView {
             name,
@@ -7296,7 +7296,7 @@ impl<'a> Parser<'a> {
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let source;
         if self.consume_token(&Token::LParen) {
-            source = CopySource::Query(self.parse_boxed_query()?);
+            source = CopySource::Query(self.parse_query()?);
             self.expect_token(&Token::RParen)?;
         } else {
             let table_name = self.parse_object_name(false)?;
@@ -8730,20 +8730,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Call's [`Self::parse_query`] returning a `Box`'ed  result.
-    ///
-    /// This function can be used to reduce the stack size required in debug
-    /// builds. Instead of `sizeof(Query)` only a pointer (`Box<Query>`)
-    /// is used.
-    pub fn parse_boxed_query(&mut self) -> Result<Box<Query>, ParserError> {
-        self.parse_query().map(Box::new)
-    }
-
     /// Parse a query expression, i.e. a `SELECT` statement optionally
     /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
-    pub fn parse_query(&mut self) -> Result<Query, ParserError> {
+    pub fn parse_query(&mut self) -> Result<Box<Query>, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if self.parse_keyword(Keyword::WITH) {
             Some(With {
@@ -8766,7 +8757,8 @@ impl<'a> Parser<'a> {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
-            })
+            }
+            .into())
         } else if self.parse_keyword(Keyword::UPDATE) {
             Ok(Query {
                 with,
@@ -8780,7 +8772,8 @@ impl<'a> Parser<'a> {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
-            })
+            }
+            .into())
         } else {
             let body = self.parse_boxed_query_body(self.dialect.prec_unknown())?;
 
@@ -8864,7 +8857,8 @@ impl<'a> Parser<'a> {
                 for_clause,
                 settings,
                 format_clause,
-            })
+            }
+            .into())
         }
     }
 
@@ -9001,7 +8995,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.expect_token(&Token::LParen)?;
-            let query = self.parse_boxed_query()?;
+            let query = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
             let alias = TableAlias {
                 name,
@@ -9025,7 +9019,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.expect_token(&Token::LParen)?;
-            let query = self.parse_boxed_query()?;
+            let query = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
             let alias = TableAlias { name, columns };
             Cte {
@@ -9068,7 +9062,7 @@ impl<'a> Parser<'a> {
             SetExpr::Select(self.parse_select().map(Box::new)?)
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
-            let subquery = self.parse_boxed_query()?;
+            let subquery = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
             SetExpr::Query(subquery)
         } else if self.parse_keyword(Keyword::VALUES) {
@@ -10433,7 +10427,7 @@ impl<'a> Parser<'a> {
         &mut self,
         lateral: IsLateral,
     ) -> Result<TableFactor, ParserError> {
-        let subquery = self.parse_boxed_query()?;
+        let subquery = self.parse_query()?;
         self.expect_token(&Token::RParen)?;
         let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(TableFactor::Derived {
@@ -10807,7 +10801,7 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            let source = self.parse_boxed_query()?;
+            let source = self.parse_query()?;
             Ok(Statement::Directory {
                 local,
                 path,
@@ -10843,7 +10837,7 @@ impl<'a> Parser<'a> {
                         vec![]
                     };
 
-                    let source = Some(self.parse_boxed_query()?);
+                    let source = Some(self.parse_query()?);
 
                     (columns, partitioned, after_columns, source)
                 };
@@ -11739,7 +11733,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_unload(&mut self) -> Result<Statement, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let query = self.parse_boxed_query()?;
+        let query = self.parse_query()?;
         self.expect_token(&Token::RParen)?;
 
         self.expect_keyword(Keyword::TO)?;

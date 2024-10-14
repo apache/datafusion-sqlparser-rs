@@ -242,7 +242,7 @@ fn test_create_table_macro() {
             MacroArg::new("col1_value"),
             MacroArg::new("col2_value"),
         ]),
-        definition: MacroDefinition::Table(duckdb().verified_query(query)),
+        definition: MacroDefinition::Table(duckdb().verified_query(query).into()),
     };
     assert_eq!(expected, macro_);
 }

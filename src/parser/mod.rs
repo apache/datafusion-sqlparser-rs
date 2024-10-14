@@ -6104,8 +6104,6 @@ impl<'a> Parser<'a> {
             return option;
         }
 
-        let with = self.parse_keyword(Keyword::WITH);
-
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -6239,19 +6237,18 @@ impl<'a> Parser<'a> {
                 let increment = self.parse_number()?;
                 self.expect_token(&Token::RParen)?;
 
-                Some(IdentityFormat::FunctionCall(IdentityParameters {
-                    seed,
-                    increment,
-                }))
+                Some(IdentityPropertyFormatKind::FunctionCall(
+                    IdentityParameters { seed, increment },
+                ))
             } else {
                 None
             };
-            Ok(Some(ColumnOption::Identity(Identity::Identity(
-                IdentityProperty {
+            Ok(Some(ColumnOption::Identity(
+                IdentityPropertyKind::Identity(IdentityProperty {
                     parameters,
                     order: None,
-                },
-            ))))
+                }),
+            )))
         } else if dialect_of!(self is SQLiteDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::ON, Keyword::CONFLICT])
         {
@@ -6265,18 +6262,7 @@ impl<'a> Parser<'a> {
                     Keyword::REPLACE,
                 ])?,
             )))
-        } else if self.parse_keywords(&[Keyword::TAG])
-            && dialect_of!(self is SnowflakeDialect | GenericDialect)
-        {
-            self.expect_token(&Token::LParen)?;
-            let tags = self.parse_comma_separated(Self::parse_tag)?;
-            self.expect_token(&Token::RParen)?;
-
-            Ok(Some(ColumnOption::Tags(TagsColumnOption { with, tags })))
         } else {
-            if with {
-                self.prev_token();
-            }
             Ok(None)
         }
     }

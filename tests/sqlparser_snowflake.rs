@@ -547,10 +547,10 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Identity(Identity::Autoincrement(
+                            option: ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
                                 IdentityProperty {
                                     parameters: None,
-                                    order: Some(IdentityOrder::Order),
+                                    order: Some(IdentityPropertyOrder::Order),
                                 }
                             ))
                         }]
@@ -561,15 +561,15 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Identity(Identity::Autoincrement(
+                            option: ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
                                 IdentityProperty {
-                                    parameters: Some(IdentityFormat::FunctionCall(
+                                    parameters: Some(IdentityPropertyFormatKind::FunctionCall(
                                         IdentityParameters {
                                             seed: Expr::Value(number("100")),
                                             increment: Expr::Value(number("1")),
                                         }
                                     )),
-                                    order: Some(IdentityOrder::NoOrder),
+                                    order: Some(IdentityPropertyOrder::NoOrder),
                                 }
                             ))
                         }]
@@ -580,10 +580,12 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Identity(Identity::Identity(IdentityProperty {
-                                parameters: None,
-                                order: None,
-                            }))
+                            option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                                IdentityProperty {
+                                    parameters: None,
+                                    order: None,
+                                }
+                            ))
                         }]
                     },
                     ColumnDef {
@@ -592,15 +594,19 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Identity(Identity::Identity(IdentityProperty {
-                                parameters: Some(IdentityFormat::StartAndIncrement(
-                                    IdentityParameters {
-                                        seed: Expr::Value(number("100")),
-                                        increment: Expr::Value(number("1")),
-                                    }
-                                )),
-                                order: Some(IdentityOrder::Order),
-                            }))
+                            option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                                IdentityProperty {
+                                    parameters: Some(
+                                        IdentityPropertyFormatKind::StartAndIncrement(
+                                            IdentityParameters {
+                                                seed: Expr::Value(number("100")),
+                                                increment: Expr::Value(number("1")),
+                                            }
+                                        )
+                                    ),
+                                    order: Some(IdentityPropertyOrder::Order),
+                                }
+                            ))
                         }]
                     },
                 ]
@@ -725,7 +731,7 @@ fn test_snowflake_create_table_with_columns_tags() {
             false,
         ),
     ] {
-        match snowflake_and_generic().verified_stmt(sql) {
+        match snowflake().verified_stmt(sql) {
             Statement::CreateTable(CreateTable { columns, .. }) => {
                 assert_eq!(
                     columns,
@@ -771,7 +777,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Identity(Identity::Identity(
+                                option: ColumnOption::Identity(IdentityPropertyKind::Identity(
                                     IdentityProperty {
                                         parameters: None,
                                         order: None

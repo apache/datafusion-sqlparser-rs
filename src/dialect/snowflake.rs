@@ -23,9 +23,9 @@ use crate::ast::helpers::stmt_data_loading::{
     StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, Identity, IdentityFormat,
-    IdentityOrder, IdentityParameters, IdentityProperty, ObjectName, RowAccessPolicy, Statement,
-    WrappedCollection,
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
+    RowAccessPolicy, Statement, TagsColumnOption, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -162,13 +162,14 @@ impl Dialect for SnowflakeDialect {
         if parser.parse_keyword(Keyword::IDENTITY) {
             Some(
                 parse_identity_property(parser)
-                    .map(|p| Some(ColumnOption::Identity(Identity::Identity(p)))),
+                    .map(|p| Some(ColumnOption::Identity(IdentityPropertyKind::Identity(p)))),
             )
         } else if parser.parse_keyword(Keyword::AUTOINCREMENT) {
-            Some(
-                parse_identity_property(parser)
-                    .map(|p| Some(ColumnOption::Identity(Identity::Autoincrement(p)))),
-            )
+            Some(parse_identity_property(parser).map(|p| {
+                Some(ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
+                    p,
+                )))
+            }))
         } else if parser.parse_keywords(&[Keyword::MASKING, Keyword::POLICY]) {
             Some(
                 parse_column_policy_property(parser, with)
@@ -179,6 +180,8 @@ impl Dialect for SnowflakeDialect {
                 parse_column_policy_property(parser, with)
                     .map(|p| Some(ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(p)))),
             )
+        } else if parser.parse_keywords(&[Keyword::TAG]) {
+            Some(parse_column_tags(parser, with).map(|p| Some(ColumnOption::Tags(p))))
         } else {
             // needs to revert initial state of parser if dialect finds any matching
             if with {
@@ -821,25 +824,23 @@ fn parse_identity_property(parser: &mut Parser) -> Result<IdentityProperty, Pars
         let increment = parser.parse_number()?;
         parser.expect_token(&Token::RParen)?;
 
-        Some(IdentityFormat::FunctionCall(IdentityParameters {
-            seed,
-            increment,
-        }))
+        Some(IdentityPropertyFormatKind::FunctionCall(
+            IdentityParameters { seed, increment },
+        ))
     } else if parser.parse_keyword(Keyword::START) {
         let seed = parser.parse_number()?;
         parser.expect_keyword(Keyword::INCREMENT)?;
         let increment = parser.parse_number()?;
 
-        Some(IdentityFormat::StartAndIncrement(IdentityParameters {
-            seed,
-            increment,
-        }))
+        Some(IdentityPropertyFormatKind::StartAndIncrement(
+            IdentityParameters { seed, increment },
+        ))
     } else {
         None
     };
     let order = match parser.parse_one_of_keywords(&[Keyword::ORDER, Keyword::NOORDER]) {
-        Some(Keyword::ORDER) => Some(IdentityOrder::Order),
-        Some(Keyword::NOORDER) => Some(IdentityOrder::NoOrder),
+        Some(Keyword::ORDER) => Some(IdentityPropertyOrder::Order),
+        Some(Keyword::NOORDER) => Some(IdentityPropertyOrder::NoOrder),
         _ => None,
     };
     Ok(IdentityProperty { parameters, order })
@@ -870,4 +871,18 @@ fn parse_column_policy_property(
         policy_name,
         using_columns,
     })
+}
+
+/// Parsing tags list of column
+/// Syntax:
+/// ```sql
+/// ( <tag_name> = '<tag_value>' [ , <tag_name> = '<tag_value>' , ... ] )
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption, ParserError> {
+    parser.expect_token(&Token::LParen)?;
+    let tags = parser.parse_comma_separated(Parser::parse_tag)?;
+    parser.expect_token(&Token::RParen)?;
+
+    Ok(TagsColumnOption { with, tags })
 }

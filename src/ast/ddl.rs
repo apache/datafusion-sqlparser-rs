@@ -1096,7 +1096,7 @@ impl fmt::Display for ColumnOptionDef {
     }
 }
 
-/// Identity is a column option for defining an identity or autoincrement column in a creating table statement.
+/// Identity is a column option for defining an identity or autoincrement column in a `CREATE TABLE` statement.
 /// Syntax
 /// ```sql
 /// { IDENTITY | AUTOINCREMENT } [ (seed , increment) | START num INCREMENT num ] [ ORDER | NOORDER ]
@@ -1106,17 +1106,53 @@ impl fmt::Display for ColumnOptionDef {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum Identity {
+pub enum IdentityPropertyKind {
+    /// An identity property declared via the `AUTOINCREMENT` key word
+    /// Example:
+    /// ```sql
+    ///  AUTOINCREMENT(100, 1) NOORDER
+    ///  AUTOINCREMENT START 100 INCREMENT 1 ORDER
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
     Autoincrement(IdentityProperty),
+    /// An identity property declared via the `IDENTITY` key word
+    /// Example, [MS SQL Server] or [Snowflake]:
+    /// ```sql
+    ///  IDENTITY(100, 1)
+    /// ```
+    /// [Snowflake]
+    /// ```sql
+    ///  IDENTITY(100, 1) ORDER
+    ///  IDENTITY START 100 INCREMENT 1 NOORDER
+    /// ```
+    /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
     Identity(IdentityProperty),
+}
+
+impl fmt::Display for IdentityPropertyKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (command, property) = match self {
+            IdentityPropertyKind::Identity(property) => ("IDENTITY", property),
+            IdentityPropertyKind::Autoincrement(property) => ("AUTOINCREMENT", property),
+        };
+        write!(f, "{command}")?;
+        if let Some(parameters) = &property.parameters {
+            write!(f, "{parameters}")?;
+        }
+        if let Some(order) = &property.order {
+            write!(f, "{order}")?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IdentityProperty {
-    pub parameters: Option<IdentityFormat>,
-    pub order: Option<IdentityOrder>,
+    pub parameters: Option<IdentityPropertyFormatKind>,
+    pub order: Option<IdentityPropertyOrder>,
 }
 
 /// A format of parameters of identity column.
@@ -1136,51 +1172,31 @@ pub struct IdentityProperty {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum IdentityFormat {
+pub enum IdentityPropertyFormatKind {
+    /// A parameters of identity column declared like parameters of function call
+    /// Example:
+    /// ```sql
+    ///  (100, 1)
+    /// ```
+    /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
     FunctionCall(IdentityParameters),
+    /// A parameters of identity column declared with keywords `START` and `INCREMENT`
+    /// Example:
+    /// ```sql
+    ///  START 100 INCREMENT 1
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
     StartAndIncrement(IdentityParameters),
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct IdentityParameters {
-    pub seed: Expr,
-    pub increment: Expr,
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum IdentityOrder {
-    Order,
-    NoOrder,
-}
-
-impl fmt::Display for Identity {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (command, property) = match self {
-            Identity::Identity(property) => ("IDENTITY", property),
-            Identity::Autoincrement(property) => ("AUTOINCREMENT", property),
-        };
-        write!(f, "{command}")?;
-        if let Some(parameters) = &property.parameters {
-            write!(f, "{parameters}")?;
-        }
-        if let Some(order) = &property.order {
-            write!(f, "{order}")?;
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Display for IdentityFormat {
+impl fmt::Display for IdentityPropertyFormatKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            IdentityFormat::FunctionCall(parameters) => {
+            IdentityPropertyFormatKind::FunctionCall(parameters) => {
                 write!(f, "({}, {})", parameters.seed, parameters.increment)
             }
-            IdentityFormat::StartAndIncrement(parameters) => {
+            IdentityPropertyFormatKind::StartAndIncrement(parameters) => {
                 write!(
                     f,
                     " START {} INCREMENT {}",
@@ -1190,12 +1206,33 @@ impl fmt::Display for IdentityFormat {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IdentityParameters {
+    pub seed: Expr,
+    pub increment: Expr,
+}
 
-impl fmt::Display for IdentityOrder {
+/// The identity column option specifies how values are generated for the auto-incremented column, either in increasing or decreasing order.
+/// Syntax
+/// ```sql
+/// ORDER | NOORDER
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IdentityPropertyOrder {
+    Order,
+    NoOrder,
+}
+
+impl fmt::Display for IdentityPropertyOrder {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            IdentityOrder::Order => write!(f, " ORDER"),
-            IdentityOrder::NoOrder => write!(f, " NOORDER"),
+            IdentityPropertyOrder::Order => write!(f, " ORDER"),
+            IdentityPropertyOrder::NoOrder => write!(f, " NOORDER"),
         }
     }
 }
@@ -1215,15 +1252,6 @@ pub enum ColumnPolicy {
     ProjectionPolicy(ColumnPolicyProperty),
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ColumnPolicyProperty {
-    pub with: bool,
-    pub policy_name: Ident,
-    pub using_columns: Option<Vec<Ident>>,
-}
-
 impl fmt::Display for ColumnPolicy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (command, property) = match self {
@@ -1241,6 +1269,21 @@ impl fmt::Display for ColumnPolicy {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ColumnPolicyProperty {
+    /// This flag indicates that the column policy option is declared using the `WITH` prefix.
+    /// Example
+    /// ```sql
+    /// WITH PROJECTION POLICY sample_policy
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    pub with: bool,
+    pub policy_name: Ident,
+    pub using_columns: Option<Vec<Ident>>,
+}
+
 /// Tags option of column
 /// Syntax
 /// ```sql
@@ -1251,6 +1294,12 @@ impl fmt::Display for ColumnPolicy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TagsColumnOption {
+    /// This flag indicates that the tags option is declared using the `WITH` prefix.
+    /// Example:
+    /// ```sql
+    /// WITH TAG (A = 'Tag A')
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
     pub with: bool,
     pub tags: Vec<Tag>,
 }
@@ -1342,7 +1391,7 @@ pub enum ColumnOption {
     /// ```
     /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
     /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
-    Identity(Identity),
+    Identity(IdentityPropertyKind),
     /// SQLite specific: ON CONFLICT option on column definition
     /// <https://www.sqlite.org/lang_conflict.html>
     OnConflict(Keyword),

@@ -921,10 +921,12 @@ fn parse_create_table_with_identity_column() {
             vec![
                 ColumnOptionDef {
                     name: None,
-                    option: ColumnOption::Identity(Identity::Identity(IdentityProperty {
-                        parameters: None,
-                        order: None,
-                    })),
+                    option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                        IdentityProperty {
+                            parameters: None,
+                            order: None,
+                        },
+                    )),
                 },
                 ColumnOptionDef {
                     name: None,
@@ -937,13 +939,17 @@ fn parse_create_table_with_identity_column() {
             vec![
                 ColumnOptionDef {
                     name: None,
-                    option: ColumnOption::Identity(Identity::Identity(IdentityProperty {
-                        parameters: Some(IdentityFormat::FunctionCall(IdentityParameters {
-                            seed: Expr::Value(number("1")),
-                            increment: Expr::Value(number("1")),
-                        })),
-                        order: None,
-                    })),
+                    option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                        IdentityProperty {
+                            parameters: Some(IdentityPropertyFormatKind::FunctionCall(
+                                IdentityParameters {
+                                    seed: Expr::Value(number("1")),
+                                    increment: Expr::Value(number("1")),
+                                },
+                            )),
+                            order: None,
+                        },
+                    )),
                 },
                 ColumnOptionDef {
                     name: None,

@@ -561,6 +561,11 @@ pub trait Dialect: Debug + Any {
     fn supports_asc_desc_in_column_definition(&self) -> bool {
         false
     }
+
+    /// For example: SELECT col_alias = col FROM tbl
+    fn supports_eq_alias_assigment(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

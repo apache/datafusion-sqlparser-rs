@@ -24,17 +24,14 @@ use test_utils::*;
 mod test_utils;
 
 fn databricks() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(DatabricksDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(DatabricksDialect {})])
 }
 
 fn databricks_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(DatabricksDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(DatabricksDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }
 
 #[test]

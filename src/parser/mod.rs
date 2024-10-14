@@ -3509,7 +3509,6 @@ impl<'a> Parser<'a> {
     }
 
     /// Run a parser method `f`, reverting back to the current position if unsuccessful.
-    #[must_use]
     pub fn maybe_parse<T, F>(&mut self, mut f: F) -> Result<Option<T>, ParserError>
     where
         F: FnMut(&mut Parser) -> Result<T, ParserError>,
@@ -12279,10 +12278,8 @@ mod tests {
         #[test]
         fn test_ansii_character_string_types() {
             // Character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-string-type>
-            let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
-                options: None,
-            };
+            let dialect =
+                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
 
             test_parse_data_type!(dialect, "CHARACTER", DataType::Character(None));
 
@@ -12409,10 +12406,8 @@ mod tests {
         #[test]
         fn test_ansii_character_large_object_types() {
             // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
-            let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
-                options: None,
-            };
+            let dialect =
+                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
 
             test_parse_data_type!(
                 dialect,
@@ -12442,10 +12437,9 @@ mod tests {
 
         #[test]
         fn test_parse_custom_types() {
-            let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
-                options: None,
-            };
+            let dialect =
+                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+
             test_parse_data_type!(
                 dialect,
                 "GEOMETRY",
@@ -12474,10 +12468,8 @@ mod tests {
         #[test]
         fn test_ansii_exact_numeric_types() {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
-            let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
-                options: None,
-            };
+            let dialect =
+                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
 
             test_parse_data_type!(dialect, "NUMERIC", DataType::Numeric(ExactNumberInfo::None));
 
@@ -12525,10 +12517,8 @@ mod tests {
         #[test]
         fn test_ansii_date_type() {
             // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
-            let dialect = TestedDialects {
-                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
-                options: None,
-            };
+            let dialect =
+                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
 
             test_parse_data_type!(dialect, "DATE", DataType::Date);
 
@@ -12637,10 +12627,8 @@ mod tests {
             }};
         }
 
-        let dialect = TestedDialects {
-            dialects: vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})],
-            options: None,
-        };
+        let dialect =
+            TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})]);
 
         test_parse_table_constraint!(
             dialect,
@@ -12759,10 +12747,7 @@ mod tests {
 
     #[test]
     fn test_parse_multipart_identifier_positive() {
-        let dialect = TestedDialects {
-            dialects: vec![Box::new(GenericDialect {})],
-            options: None,
-        };
+        let dialect = TestedDialects::new(vec![Box::new(GenericDialect {})]);
 
         // parse multipart with quotes
         let expected = vec![

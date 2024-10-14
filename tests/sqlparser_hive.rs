@@ -418,10 +418,7 @@ fn parse_create_function() {
     }
 
     // Test error in dialect that doesn't support parsing CREATE FUNCTION
-    let unsupported_dialects = TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {})],
-        options: None,
-    };
+    let unsupported_dialects = TestedDialects::new(vec![Box::new(MsSqlDialect {})]);
 
     assert_eq!(
         unsupported_dialects.parse_sql_statements(sql).unwrap_err(),
@@ -538,15 +535,9 @@ fn parse_use() {
 }
 
 fn hive() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(HiveDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(HiveDialect {})])
 }
 
 fn hive_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(HiveDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(HiveDialect {}), Box::new(GenericDialect {})])
 }

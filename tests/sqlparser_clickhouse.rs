@@ -1613,15 +1613,12 @@ fn parse_explain_table() {
 }
 
 fn clickhouse() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(ClickHouseDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }
 
 fn clickhouse_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(ClickHouseDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(ClickHouseDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }

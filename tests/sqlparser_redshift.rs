@@ -171,17 +171,14 @@ fn parse_delimited_identifiers() {
 }
 
 fn redshift() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(RedshiftSqlDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(RedshiftSqlDialect {})])
 }
 
 fn redshift_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(RedshiftSqlDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }
 
 #[test]

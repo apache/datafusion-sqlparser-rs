@@ -8775,7 +8775,7 @@ impl<'a> Parser<'a> {
             }
             .into())
         } else {
-            let body = self.parse_boxed_query_body(self.dialect.prec_unknown())?;
+            let body = self.parse_query_body(self.dialect.prec_unknown())?;
 
             let order_by = self.parse_optional_order_by()?;
 
@@ -9035,15 +9035,6 @@ impl<'a> Parser<'a> {
         Ok(cte)
     }
 
-    /// Call's [`Self::parse_query_body`] returning a `Box`'ed  result.
-    ///
-    /// This function can be used to reduce the stack size required in debug
-    /// builds. Instead of `sizeof(QueryBody)` only a pointer (`Box<QueryBody>`)
-    /// is used.
-    fn parse_boxed_query_body(&mut self, precedence: u8) -> Result<Box<SetExpr>, ParserError> {
-        self.parse_query_body(precedence).map(Box::new)
-    }
-
     /// Parse a "query body", which is an expression with roughly the
     /// following grammar:
     /// ```sql
@@ -9052,10 +9043,7 @@ impl<'a> Parser<'a> {
     ///   subquery ::= query_body [ order_by_limit ]
     ///   set_operation ::= query_body { 'UNION' | 'EXCEPT' | 'INTERSECT' } [ 'ALL' ] query_body
     /// ```
-    ///
-    /// If you need `Box<SetExpr>` then maybe there is sense to use `parse_boxed_query_body`
-    /// due to prevent stack overflow in debug building(to reserve less memory on stack).
-    pub fn parse_query_body(&mut self, precedence: u8) -> Result<SetExpr, ParserError> {
+    pub fn parse_query_body(&mut self, precedence: u8) -> Result<Box<SetExpr>, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
         let expr = if self.parse_keyword(Keyword::SELECT) {
@@ -9087,7 +9075,7 @@ impl<'a> Parser<'a> {
         &mut self,
         mut expr: SetExpr,
         precedence: u8,
-    ) -> Result<SetExpr, ParserError> {
+    ) -> Result<Box<SetExpr>, ParserError> {
         loop {
             // The query can be optionally followed by a set operator:
             let op = self.parse_set_operator(&self.peek_token().token);
@@ -9108,11 +9096,11 @@ impl<'a> Parser<'a> {
                 left: Box::new(expr),
                 op: op.unwrap(),
                 set_quantifier,
-                right: self.parse_boxed_query_body(next_precedence)?,
+                right: self.parse_query_body(next_precedence)?,
             };
         }
 
-        Ok(expr)
+        Ok(expr.into())
     }
 
     pub fn parse_set_operator(&mut self, token: &Token) -> Option<SetOperator> {

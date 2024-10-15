@@ -11432,3 +11432,24 @@ fn test_any_some_all_comparison() {
     verified_stmt("SELECT c1 FROM tbl WHERE c1 <> SOME(SELECT c2 FROM tbl)");
     verified_stmt("SELECT 1 = ANY(WITH x AS (SELECT 1) SELECT * FROM x)");
 }
+
+#[test]
+fn test_parse_alter_table_update() {
+    let dialects = all_dialects_where(|d| d.supports_alter_table_update());
+    let cases = [
+        (
+            "ALTER TABLE t UPDATE col1 = 1, col2 = col3 + col4 WHERE cod4 = 1",
+            true,
+        ),
+        ("ALTER TABLE t UPDATE c = 0 IN PARTITION abc", true),
+        ("ALTER TABLE t UPDATE", false),
+        ("ALTER TABLE t UPDATE c WHERE 1 = 1", false),
+    ];
+    for (sql, is_valid) in cases {
+        if is_valid {
+            dialects.verified_stmt(sql);
+        } else {
+            assert!(dialects.parse_sql_statements(sql).is_err());
+        }
+    }
+}

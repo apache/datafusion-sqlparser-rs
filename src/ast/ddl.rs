@@ -36,6 +36,8 @@ use crate::ast::{
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
 
+use super::Assignment;
+
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -142,6 +144,17 @@ pub enum AlterTableOperation {
     UnfreezePartition {
         partition: Partition,
         with_name: Option<Ident>,
+    },
+    /// `UPDATE <column> = <expression> [, ...] [IN PARTITION partition_id] WHERE <filter_expr>`
+    /// Note: this is a ClickHouse-specific operation, please refer to
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
+    Update {
+        /// Column assignments
+        assignments: Vec<Assignment>,
+        /// PARTITION
+        partition_id: Option<Ident>,
+        /// WHERE
+        selection: Option<Expr>,
     },
     /// `DROP PRIMARY KEY`
     ///
@@ -543,6 +556,20 @@ impl fmt::Display for AlterTableOperation {
                 write!(f, "UNFREEZE {partition}")?;
                 if let Some(name) = with_name {
                     write!(f, " WITH NAME {name}")?;
+                }
+                Ok(())
+            }
+            AlterTableOperation::Update {
+                assignments,
+                partition_id,
+                selection,
+            } => {
+                write!(f, "UPDATE {}", display_comma_separated(assignments))?;
+                if let Some(partition_id) = partition_id {
+                    write!(f, " IN PARTITION {}", partition_id)?;
+                }
+                if let Some(selection) = selection {
+                    write!(f, " WHERE {}", selection)?;
                 }
                 Ok(())
             }

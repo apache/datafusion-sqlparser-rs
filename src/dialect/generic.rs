@@ -40,6 +40,10 @@ impl Dialect for GenericDialect {
             || ch == '_'
     }
 
+    fn supports_alter_table_update(&self) -> bool {
+        true
+    }
+
     fn supports_unicode_string_literal(&self) -> bool {
         true
     }

@@ -1081,7 +1081,7 @@ impl<'a> Parser<'a> {
                     self.parse_bigquery_struct_literal()
                 }
                 Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
-                    let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
+                    let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::Pipe))?;
                     Ok(Expr::Prior(Box::new(expr)))
                 }
                 Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
@@ -7155,6 +7155,35 @@ impl<'a> Parser<'a> {
             AlterTableOperation::UnfreezePartition {
                 partition,
                 with_name,
+            }
+        } else if self.dialect.supports_alter_table_update() && self.parse_keyword(Keyword::UPDATE)
+        {
+            let mut assignments = vec![];
+            loop {
+                let target = self.parse_assignment_target()?;
+                self.expect_token(&Token::Eq)?;
+                // NOTE: Maybe it's better to save the index before parse_subexpr to do a real look
+                // ahead.
+                let value = self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?;
+                assignments.push(Assignment { target, value });
+                if self.is_parse_comma_separated_end() {
+                    break;
+                }
+            }
+            let partition_id = if self.parse_keywords(&[Keyword::IN, Keyword::PARTITION]) {
+                Some(self.parse_identifier(false)?)
+            } else {
+                None
+            };
+            let selection = if self.parse_keyword(Keyword::WHERE) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
+            AlterTableOperation::Update {
+                assignments,
+                partition_id,
+                selection,
             }
         } else {
             let options: Vec<SqlOption> =

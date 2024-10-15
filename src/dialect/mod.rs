@@ -60,7 +60,7 @@ use alloc::boxed::Box;
 
 /// Convenience check if a [`Parser`] uses a certain dialect.
 ///
-/// Note: when possible please the new style, adding a method to the [`Dialect`]
+/// Note: when possible please use the new style, adding a method to the [`Dialect`]
 /// trait rather than using this macro.
 ///
 /// The benefits of adding a method on `Dialect` over this macro are:
@@ -146,6 +146,11 @@ pub trait Dialect: Debug + Any {
 
     /// Most dialects do not have custom operators. Override this method to provide custom operators.
     fn is_custom_operator_part(&self, _ch: char) -> bool {
+        false
+    }
+
+    /// Determine if the dialect supports `ALTER TABLE ... UPDATE ...` statements.
+    fn supports_alter_table_update(&self) -> bool {
         false
     }
 

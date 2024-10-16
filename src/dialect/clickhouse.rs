@@ -31,6 +31,10 @@ impl Dialect for ClickHouseDialect {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
     }
 
+    fn supports_alter_table_update(&self) -> bool {
+        true
+    }
+
     fn supports_string_literal_backslash_escape(&self) -> bool {
         true
     }

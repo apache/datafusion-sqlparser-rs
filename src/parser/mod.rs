@@ -11181,18 +11181,30 @@ impl<'a> Parser<'a> {
                     self.peek_token().location
                 )
             }
-            expr => {
-                if self.dialect.supports_eq_alias_assigment() {
-                    if let Some(select_item) = Self::maybe_unpack_alias_assignment(&expr) {
-                        return Ok(select_item);
-                    }
-                }
-                self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
-                    .map(|alias| match alias {
-                        Some(alias) => SelectItem::ExprWithAlias { expr, alias },
-                        None => SelectItem::UnnamedExpr(expr),
-                    })
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right,
+            } if self.dialect.supports_eq_alias_assigment()
+                && matches!(left.as_ref(), Expr::Identifier(_)) =>
+            {
+                let Expr::Identifier(alias) = *left else {
+                    return parser_err!(
+                        "BUG: expected identifier expression as alias",
+                        self.peek_token().location
+                    );
+                };
+                Ok(SelectItem::ExprWithAlias {
+                    expr: *right,
+                    alias,
+                })
             }
+            expr => self
+                .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
+                .map(|alias| match alias {
+                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
+                    None => SelectItem::UnnamedExpr(expr),
+                }),
         }
     }
 
@@ -12201,28 +12213,6 @@ impl<'a> Parser<'a> {
             return true;
         }
         false
-    }
-
-    /// Parse a [`SelectItem`] based on an [MsSql] syntax that uses the equal sign
-    /// to denote an alias, for example: SELECT col_alias = col FROM tbl
-    /// [MsSql]: <https://learn.microsoft.com/en-us/sql/t-sql/queries/select-examples-transact-sql?view=sql-server-ver16#b-use-select-with-column-headings-and-calculations>
-    fn maybe_unpack_alias_assignment(expr: &Expr) -> Option<SelectItem> {
-        if let Expr::BinaryOp {
-            left,
-            op: BinaryOperator::Eq,
-            right,
-            ..
-        } = expr
-        {
-            if let Expr::Identifier(ref alias) = **left {
-                return Some(SelectItem::ExprWithAlias {
-                    expr: *right.clone(),
-                    alias: alias.clone(),
-                });
-            }
-        }
-
-        None
     }
 }
 

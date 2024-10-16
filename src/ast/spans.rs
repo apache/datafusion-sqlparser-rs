@@ -5,16 +5,17 @@ use crate::tokenizer::Span;
 use super::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Array, Assignment,
     AssignmentTarget, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef,
-    ConflictTarget, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
+    ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
     CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
-    ExprWithAlias, FromTable, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
-    FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound, IlikeSelectItem, Insert,
-    Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem,
-    MatchRecognizePattern, Measure, ObjectName, OnConflict, OnConflictAction, OnInsert, OrderBy,
+    ExprWithAlias, Fetch, FromTable, Function, FunctionArg, FunctionArgExpr,
+    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
+    IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
+    JsonPath, JsonPathElem, LateralView, MatchRecognizePattern, Measure, NamedWindowDefinition,
+    ObjectName, Offset, OnConflict, OnConflictAction, OnInsert, OrderBy,
     OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectItem, SetExpr,
-    SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableConstraint, TableFactor,
-    TableOptionsClustered, TableWithJoins, Use, Value, Values, ViewColumnDef,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableConstraint,
+    TableFactor, TableOptionsClustered, TableWithJoins, Use, Value, Values, ViewColumnDef,
     WildcardAdditionalOptions, With, WithFill,
 };
 
@@ -40,28 +41,85 @@ pub trait Spanned {
 
 impl Spanned for Query {
     fn span(&self) -> Span {
-        self.body
-            .span()
-            .union_opt(&self.with.as_ref().map(|i| i.span()))
+        let Query {
+            with,
+            body,
+            order_by,
+            limit,
+            limit_by,
+            offset,
+            fetch,
+            locks: _,         // todo
+            for_clause: _,    // todo, mysql specific
+            settings: _,      // todo, clickhouse specific
+            format_clause: _, // todo, clickhouse specific
+        } = self;
+
+        union_spans(
+            with.iter()
+                .map(|i| i.span())
+                .chain(core::iter::once(body.span()))
+                .chain(order_by.as_ref().map(|i| i.span()))
+                .chain(limit.as_ref().map(|i| i.span()))
+                .chain(limit_by.iter().map(|i| i.span()))
+                .chain(offset.as_ref().map(|i| i.span()))
+                .chain(fetch.as_ref().map(|i| i.span())),
+        )
+    }
+}
+
+impl Spanned for Offset {
+    fn span(&self) -> Span {
+        let Offset {
+            value,
+            rows: _, // enum
+        } = self;
+
+        value.span()
+    }
+}
+
+impl Spanned for Fetch {
+    fn span(&self) -> Span {
+        let Fetch {
+            with_ties: _, // bool
+            percent: _,   // bool
+            quantity,
+        } = self;
+
+        quantity.as_ref().map_or(Span::empty(), |i| i.span())
     }
 }
 
 impl Spanned for With {
     fn span(&self) -> Span {
+        let With {
+            with_token,
+            recursive: _, // bool
+            cte_tables,
+        } = self;
+
         union_spans(
-            core::iter::once(self.with_token.span)
-                .chain(self.cte_tables.iter().map(|item| item.span())),
+            core::iter::once(with_token.span).chain(cte_tables.iter().map(|item| item.span())),
         )
     }
 }
 
 impl Spanned for Cte {
     fn span(&self) -> Span {
+        let Cte {
+            alias,
+            query,
+            from,
+            materialized: _, // enum
+            closing_paren_token,
+        } = self;
+
         union_spans(
-            core::iter::once(self.alias.span())
-                .chain(core::iter::once(self.query.span()))
-                .chain(self.from.iter().map(|item| item.span))
-                .chain(core::iter::once(self.closing_paren_token.span)),
+            core::iter::once(alias.span())
+                .chain(core::iter::once(query.span()))
+                .chain(from.iter().map(|item| item.span))
+                .chain(core::iter::once(closing_paren_token.span)),
         )
     }
 }
@@ -90,9 +148,13 @@ impl Spanned for SetExpr {
 
 impl Spanned for Values {
     fn span(&self) -> Span {
+        let Values {
+            explicit_row: _, // bool,
+            rows,
+        } = self;
+
         union_spans(
-            self.rows
-                .iter()
+            rows.iter()
                 .map(|row| union_spans(row.iter().map(|expr| expr.span()))),
         )
     }
@@ -387,34 +449,87 @@ impl Spanned for Use {
 
 impl Spanned for CreateTable {
     fn span(&self) -> Span {
+        let CreateTable {
+            or_replace: _,    // bool
+            temporary: _,     // bool
+            external: _,      // bool
+            global: _,        // bool
+            if_not_exists: _, // bool
+            transient: _,     // bool
+            volatile: _,      // bool
+            name,
+            columns,
+            constraints,
+            hive_distribution: _, // hive specific
+            hive_formats: _,      // hive specific
+            table_properties,
+            with_options,
+            file_format: _, // enum
+            location: _,    // string, no span
+            query,
+            without_rowid: _, // bool
+            like,
+            clone,
+            engine: _,                          // todo
+            comment: _,                         // todo, no span
+            auto_increment_offset: _,           // u32, no span
+            default_charset: _,                 // string, no span
+            collation: _,                       // string, no span
+            on_commit: _,                       // enum
+            on_cluster: _,                      // todo, clickhouse specific
+            primary_key: _,                     // todo, clickhouse specific
+            order_by: _,                        // todo, clickhouse specific
+            partition_by: _,                    // todo, BigQuery specific
+            cluster_by: _,                      // todo, BigQuery specific
+            clustered_by: _,                    // todo, Hive specific
+            options: _,                         // todo, BigQuery specific
+            strict: _,                          // bool
+            copy_grants: _,                     // bool
+            enable_schema_evolution: _,         // bool
+            change_tracking: _,                 // bool
+            data_retention_time_in_days: _,     // u64, no span
+            max_data_extension_time_in_days: _, // u64, no span
+            default_ddl_collation: _,           // string, no span
+            with_aggregation_policy: _,         // todo, Snowflake specific
+            with_row_access_policy: _,          // todo, Snowflake specific
+            with_tags: _,                       // todo, Snowflake specific
+        } = self;
+
         union_spans(
-            core::iter::once(self.name.span())
-                .chain(self.columns.iter().map(|i| i.span()))
-                .chain(self.constraints.iter().map(|i| i.span()))
-                .chain(self.table_properties.iter().map(|i| i.span()))
-                .chain(self.with_options.iter().map(|i| i.span()))
-                .chain(self.query.iter().map(|i| i.span()))
-                .chain(self.like.iter().map(|i| i.span()))
-                .chain(self.clone.iter().map(|i| i.span())),
+            core::iter::once(name.span())
+                .chain(columns.iter().map(|i| i.span()))
+                .chain(constraints.iter().map(|i| i.span()))
+                .chain(table_properties.iter().map(|i| i.span()))
+                .chain(with_options.iter().map(|i| i.span()))
+                .chain(query.iter().map(|i| i.span()))
+                .chain(like.iter().map(|i| i.span()))
+                .chain(clone.iter().map(|i| i.span())),
         )
     }
 }
 
 impl Spanned for ColumnDef {
     fn span(&self) -> Span {
+        let ColumnDef {
+            name,
+            data_type: _, // enum
+            collation,
+            options,
+        } = self;
+
         union_spans(
-            core::iter::once(self.name.span)
-                .chain(self.collation.iter().map(|i| i.span()))
-                .chain(self.options.iter().map(|i| i.span())),
+            core::iter::once(name.span)
+                .chain(collation.iter().map(|i| i.span()))
+                .chain(options.iter().map(|i| i.span())),
         )
     }
 }
 
 impl Spanned for ColumnOptionDef {
     fn span(&self) -> Span {
-        self.option
-            .span()
-            .union_opt(&self.name.as_ref().map(|i| i.span))
+        let ColumnOptionDef { name, option } = self;
+
+        option.span().union_opt(&name.as_ref().map(|i| i.span))
     }
 }
 
@@ -498,16 +613,29 @@ impl Spanned for TableConstraint {
 
 impl Spanned for CreateIndex {
     fn span(&self) -> Span {
+        let CreateIndex {
+            name,
+            table_name,
+            using,
+            columns,
+            unique: _,        // bool
+            concurrently: _,  // bool
+            if_not_exists: _, // bool
+            include,
+            nulls_distinct: _, // bool
+            with,
+            predicate,
+        } = self;
+
         union_spans(
-            self.name
-                .iter()
+            name.iter()
                 .map(|i| i.span())
-                .chain(core::iter::once(self.table_name.span()))
-                .chain(self.using.iter().map(|i| i.span))
-                .chain(self.columns.iter().map(|i| i.span()))
-                .chain(self.include.iter().map(|i| i.span))
-                .chain(self.with.iter().map(|i| i.span()))
-                .chain(self.predicate.iter().map(|i| i.span())),
+                .chain(core::iter::once(table_name.span()))
+                .chain(using.iter().map(|i| i.span))
+                .chain(columns.iter().map(|i| i.span()))
+                .chain(include.iter().map(|i| i.span))
+                .chain(with.iter().map(|i| i.span()))
+                .chain(predicate.iter().map(|i| i.span())),
         )
     }
 }
@@ -565,6 +693,12 @@ impl Spanned for ReferentialAction {
 /// # missing span
 impl Spanned for ConstraintCharacteristics {
     fn span(&self) -> Span {
+        let ConstraintCharacteristics {
+            deferrable: _, // bool
+            initially: _,  // enum
+            enforced: _,   // bool
+        } = self;
+
         Span::empty()
     }
 }
@@ -608,24 +742,30 @@ impl Spanned for CopySource {
 
 impl Spanned for Delete {
     fn span(&self) -> Span {
+        let Delete {
+            tables,
+            from,
+            using,
+            selection,
+            returning,
+            order_by,
+            limit,
+        } = self;
+
         union_spans(
-            self.tables
+            tables
                 .iter()
                 .map(|i| i.span())
-                .chain(core::iter::once(self.from.span()))
+                .chain(core::iter::once(from.span()))
                 .chain(
-                    self.using
+                    using
                         .iter()
                         .map(|u| union_spans(u.iter().map(|i| i.span()))),
                 )
-                .chain(self.selection.iter().map(|i| i.span()))
-                .chain(
-                    self.returning
-                        .iter()
-                        .flat_map(|i| i.iter().map(|k| k.span())),
-                )
-                .chain(self.order_by.iter().map(|i| i.span()))
-                .chain(self.limit.iter().map(|i| i.span())),
+                .chain(selection.iter().map(|i| i.span()))
+                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                .chain(order_by.iter().map(|i| i.span()))
+                .chain(limit.iter().map(|i| i.span())),
         )
     }
 }
@@ -641,9 +781,15 @@ impl Spanned for FromTable {
 
 impl Spanned for ViewColumnDef {
     fn span(&self) -> Span {
+        let ViewColumnDef {
+            name,
+            data_type: _, // todo, DataType
+            options,
+        } = self;
+
         union_spans(
-            core::iter::once(self.name.span)
-                .chain(self.options.iter().flat_map(|i| i.iter().map(|k| k.span()))),
+            core::iter::once(name.span)
+                .chain(options.iter().flat_map(|i| i.iter().map(|k| k.span()))),
         )
     }
 }
@@ -683,7 +829,12 @@ impl Spanned for TableOptionsClustered {
 
 impl Spanned for ClusteredIndex {
     fn span(&self) -> Span {
-        self.name.span
+        let ClusteredIndex {
+            name,
+            asc: _, // bool
+        } = self;
+
+        name.span
     }
 }
 
@@ -831,23 +982,31 @@ impl Spanned for Partition {
 
 impl Spanned for ProjectionSelect {
     fn span(&self) -> Span {
+        let ProjectionSelect {
+            projection,
+            order_by,
+            group_by,
+        } = self;
+
         union_spans(
-            self.projection
+            projection
                 .iter()
                 .map(|i| i.span())
-                .chain(self.order_by.iter().map(|i| i.span()))
-                .chain(self.group_by.iter().map(|i| i.span())),
+                .chain(order_by.iter().map(|i| i.span()))
+                .chain(group_by.iter().map(|i| i.span())),
         )
     }
 }
 
 impl Spanned for OrderBy {
     fn span(&self) -> Span {
+        let OrderBy { exprs, interpolate } = self;
+
         union_spans(
-            self.exprs
+            exprs
                 .iter()
                 .map(|i| i.span())
-                .chain(self.interpolate.iter().map(|i| i.span())),
+                .chain(interpolate.iter().map(|i| i.span())),
         )
     }
 }
@@ -869,15 +1028,17 @@ impl Spanned for GroupByExpr {
 
 impl Spanned for Interpolate {
     fn span(&self) -> Span {
-        union_spans(self.exprs.iter().flat_map(|i| i.iter().map(|e| e.span())))
+        let Interpolate { exprs } = self;
+
+        union_spans(exprs.iter().flat_map(|i| i.iter().map(|e| e.span())))
     }
 }
 
 impl Spanned for InterpolateExpr {
     fn span(&self) -> Span {
-        self.column
-            .span
-            .union_opt(&self.expr.as_ref().map(|e| e.span()))
+        let InterpolateExpr { column, expr } = self;
+
+        column.span.union_opt(&expr.as_ref().map(|e| e.span()))
     }
 }
 
@@ -895,23 +1056,34 @@ impl Spanned for AlterIndexOperation {
 /// - [Insert::insert_alias]
 impl Spanned for Insert {
     fn span(&self) -> Span {
+        let Insert {
+            or: _,     // enum, sqlite specific
+            ignore: _, // bool
+            into: _,   // bool
+            table_name,
+            table_alias,
+            columns,
+            overwrite: _, // bool
+            source,
+            partitioned,
+            after_columns,
+            table: _, // bool
+            on,
+            returning,
+            replace_into: _, // bool
+            priority: _,     // todo, mysql specific
+            insert_alias: _, // todo, mysql specific
+        } = self;
+
         union_spans(
-            core::iter::once(self.table_name.span())
-                .chain(self.table_alias.as_ref().map(|i| i.span))
-                .chain(self.columns.iter().map(|i| i.span))
-                .chain(self.source.as_ref().map(|q| q.span()))
-                .chain(
-                    self.partitioned
-                        .iter()
-                        .flat_map(|i| i.iter().map(|k| k.span())),
-                )
-                .chain(self.after_columns.iter().map(|i| i.span))
-                .chain(self.on.as_ref().map(|i| i.span()))
-                .chain(
-                    self.returning
-                        .iter()
-                        .flat_map(|i| i.iter().map(|k| k.span())),
-                ),
+            core::iter::once(table_name.span())
+                .chain(table_alias.as_ref().map(|i| i.span))
+                .chain(columns.iter().map(|i| i.span))
+                .chain(source.as_ref().map(|q| q.span()))
+                .chain(partitioned.iter().flat_map(|i| i.iter().map(|k| k.span())))
+                .chain(after_columns.iter().map(|i| i.span))
+                .chain(on.as_ref().map(|i| i.span()))
+                .chain(returning.iter().flat_map(|i| i.iter().map(|k| k.span()))),
         )
     }
 }
@@ -927,9 +1099,14 @@ impl Spanned for OnInsert {
 
 impl Spanned for OnConflict {
     fn span(&self) -> Span {
-        self.action
+        let OnConflict {
+            conflict_target,
+            action,
+        } = self;
+
+        action
             .span()
-            .union_opt(&self.conflict_target.as_ref().map(|i| i.span()))
+            .union_opt(&conflict_target.as_ref().map(|i| i.span()))
     }
 }
 
@@ -957,18 +1134,25 @@ impl Spanned for OnConflictAction {
 
 impl Spanned for DoUpdate {
     fn span(&self) -> Span {
+        let DoUpdate {
+            assignments,
+            selection,
+        } = self;
+
         union_spans(
-            self.assignments
+            assignments
                 .iter()
                 .map(|i| i.span())
-                .chain(self.selection.iter().map(|i| i.span())),
+                .chain(selection.iter().map(|i| i.span())),
         )
     }
 }
 
 impl Spanned for Assignment {
     fn span(&self) -> Span {
-        self.target.span().union(&self.value.span())
+        let Assignment { target, value } = self;
+
+        target.span().union(&value.span())
     }
 }
 
@@ -1209,24 +1393,43 @@ impl Spanned for Subscript {
 
 impl Spanned for ObjectName {
     fn span(&self) -> Span {
-        union_spans(self.0.iter().map(|i| i.span))
+        let ObjectName(segments) = self;
+
+        union_spans(segments.iter().map(|i| i.span))
     }
 }
 
 impl Spanned for Array {
     fn span(&self) -> Span {
-        union_spans(self.elem.iter().map(|i| i.span()))
+        let Array {
+            elem,
+            named: _, // bool
+        } = self;
+
+        union_spans(elem.iter().map(|i| i.span()))
     }
 }
 
 impl Spanned for Function {
     fn span(&self) -> Span {
+        let Function {
+            name,
+            parameters,
+            args,
+            filter,
+            null_treatment: _, // enum
+            over: _,           // todo
+            within_group,
+        } = self;
+
         union_spans(
-            self.name
-                .0
+            name.0
                 .iter()
                 .map(|i| i.span)
-                .chain(iter::once(self.args.span())),
+                .chain(iter::once(args.span()))
+                .chain(iter::once(parameters.span()))
+                .chain(filter.iter().map(|i| i.span()))
+                .chain(within_group.iter().map(|i| i.span())),
         )
     }
 }
@@ -1246,12 +1449,17 @@ impl Spanned for FunctionArguments {
 
 impl Spanned for FunctionArgumentList {
     fn span(&self) -> Span {
+        let FunctionArgumentList {
+            duplicate_treatment: _, // enum
+            args,
+            clauses,
+        } = self;
+
         union_spans(
             // # todo: duplicate-treatment span
-            self.args
-                .iter()
+            args.iter()
                 .map(|i| i.span())
-                .chain(self.clauses.iter().map(|i| i.span())),
+                .chain(clauses.iter().map(|i| i.span())),
         )
     }
 }
@@ -1274,7 +1482,9 @@ impl Spanned for FunctionArgumentClause {
 /// see Spanned impl for JsonPathElem for more information
 impl Spanned for JsonPath {
     fn span(&self) -> Span {
-        union_spans(self.path.iter().map(|i| i.span()))
+        let JsonPath { path } = self;
+
+        union_spans(path.iter().map(|i| i.span()))
     }
 }
 
@@ -1310,13 +1520,22 @@ impl Spanned for SelectItem {
 
 impl Spanned for WildcardAdditionalOptions {
     fn span(&self) -> Span {
+        let WildcardAdditionalOptions {
+            wildcard_token,
+            opt_ilike,
+            opt_exclude,
+            opt_except,
+            opt_replace,
+            opt_rename,
+        } = self;
+
         union_spans(
-            core::iter::once(self.wildcard_token.span)
-                .chain(self.opt_ilike.as_ref().map(|i| i.span()))
-                .chain(self.opt_exclude.as_ref().map(|i| i.span()))
-                .chain(self.opt_rename.as_ref().map(|i| i.span()))
-                .chain(self.opt_replace.as_ref().map(|i| i.span()))
-                .chain(self.opt_except.as_ref().map(|i| i.span())),
+            core::iter::once(wildcard_token.span)
+                .chain(opt_ilike.as_ref().map(|i| i.span()))
+                .chain(opt_exclude.as_ref().map(|i| i.span()))
+                .chain(opt_rename.as_ref().map(|i| i.span()))
+                .chain(opt_replace.as_ref().map(|i| i.span()))
+                .chain(opt_except.as_ref().map(|i| i.span())),
         )
     }
 }
@@ -1350,22 +1569,34 @@ impl Spanned for RenameSelectItem {
 
 impl Spanned for ExceptSelectItem {
     fn span(&self) -> Span {
+        let ExceptSelectItem {
+            first_element,
+            additional_elements,
+        } = self;
+
         union_spans(
-            iter::once(self.first_element.span)
-                .chain(self.additional_elements.iter().map(|i| i.span)),
+            iter::once(first_element.span).chain(additional_elements.iter().map(|i| i.span)),
         )
     }
 }
 
 impl Spanned for ReplaceSelectItem {
     fn span(&self) -> Span {
-        union_spans(self.items.iter().map(|i| i.span()))
+        let ReplaceSelectItem { items } = self;
+
+        union_spans(items.iter().map(|i| i.span()))
     }
 }
 
 impl Spanned for ReplaceSelectElement {
     fn span(&self) -> Span {
-        self.expr.span().union(&self.column_name.span)
+        let ReplaceSelectElement {
+            expr,
+            column_name,
+            as_keyword: _, // bool
+        } = self;
+
+        expr.span().union(&column_name.span)
     }
 }
 
@@ -1499,9 +1730,9 @@ impl Spanned for PivotValueSource {
 
 impl Spanned for ExprWithAlias {
     fn span(&self) -> Span {
-        self.expr
-            .span()
-            .union_opt(&self.alias.as_ref().map(|i| i.span))
+        let ExprWithAlias { expr, alias } = self;
+
+        expr.span().union_opt(&alias.as_ref().map(|i| i.span))
     }
 }
 
@@ -1514,32 +1745,42 @@ impl Spanned for MatchRecognizePattern {
 
 impl Spanned for SymbolDefinition {
     fn span(&self) -> Span {
-        self.symbol.span.union(&self.definition.span())
+        let SymbolDefinition { symbol, definition } = self;
+
+        symbol.span.union(&definition.span())
     }
 }
 
 impl Spanned for Measure {
     fn span(&self) -> Span {
-        self.expr.span().union(&self.alias.span)
+        let Measure { expr, alias } = self;
+
+        expr.span().union(&alias.span)
     }
 }
 
 impl Spanned for OrderByExpr {
     fn span(&self) -> Span {
-        self.expr
-            .span()
-            .union_opt(&self.with_fill.as_ref().map(|f| f.span()))
+        let OrderByExpr {
+            expr,
+            asc: _,         // bool
+            nulls_first: _, // bool
+            with_fill,
+        } = self;
+
+        expr.span().union_opt(&with_fill.as_ref().map(|f| f.span()))
     }
 }
 
 impl Spanned for WithFill {
     fn span(&self) -> Span {
+        let WithFill { from, to, step } = self;
+
         union_spans(
-            self.from
-                .iter()
+            from.iter()
                 .map(|f| f.span())
-                .chain(self.to.iter().map(|t| t.span()))
-                .chain(self.step.iter().map(|s| s.span())),
+                .chain(to.iter().map(|t| t.span()))
+                .chain(step.iter().map(|s| s.span())),
         )
     }
 }
@@ -1575,7 +1816,9 @@ impl Spanned for FunctionArgExpr {
 
 impl Spanned for TableAlias {
     fn span(&self) -> Span {
-        union_spans(iter::once(self.name.span).chain(self.columns.iter().map(|i| i.span)))
+        let TableAlias { name, columns } = self;
+
+        union_spans(iter::once(name.span).chain(columns.iter().map(|i| i.span)))
     }
 }
 
@@ -1591,7 +1834,13 @@ impl Spanned for Value {
 
 impl Spanned for Join {
     fn span(&self) -> Span {
-        self.relation.span().union(&self.join_operator.span())
+        let Join {
+            relation,
+            global: _, // bool
+            join_operator,
+        } = self;
+
+        relation.span().union(&join_operator.span())
     }
 }
 
@@ -1641,19 +1890,107 @@ impl Spanned for JoinConstraint {
 
 impl Spanned for TableWithJoins {
     fn span(&self) -> Span {
-        union_spans(
-            core::iter::once(self.relation.span()).chain(self.joins.iter().map(|item| item.span())),
-        )
+        let TableWithJoins { relation, joins } = self;
+
+        union_spans(core::iter::once(relation.span()).chain(joins.iter().map(|item| item.span())))
     }
 }
 
 impl Spanned for Select {
     fn span(&self) -> Span {
+        let Select {
+            select_token,
+            distinct: _, // todo
+            top: _,      // todo, mysql specific
+            projection,
+            into,
+            from,
+            lateral_views,
+            prewhere,
+            selection,
+            group_by,
+            cluster_by,
+            distribute_by,
+            sort_by,
+            having,
+            named_window,
+            qualify,
+            window_before_qualify: _, // bool
+            value_table_mode: _,      // todo, BigQuery specific
+            connect_by,
+        } = self;
+
         union_spans(
-            core::iter::once(self.select_token.span)
-                .chain(self.projection.iter().map(|item| item.span()))
-                .chain(self.from.iter().map(|item| item.span())),
+            core::iter::once(select_token.span)
+                .chain(projection.iter().map(|item| item.span()))
+                .chain(into.iter().map(|item| item.span()))
+                .chain(from.iter().map(|item| item.span()))
+                .chain(lateral_views.iter().map(|item| item.span()))
+                .chain(prewhere.iter().map(|item| item.span()))
+                .chain(selection.iter().map(|item| item.span()))
+                .chain(core::iter::once(group_by.span()))
+                .chain(cluster_by.iter().map(|item| item.span()))
+                .chain(distribute_by.iter().map(|item| item.span()))
+                .chain(sort_by.iter().map(|item| item.span()))
+                .chain(having.iter().map(|item| item.span()))
+                .chain(named_window.iter().map(|item| item.span()))
+                .chain(qualify.iter().map(|item| item.span()))
+                .chain(connect_by.iter().map(|item| item.span())),
         )
+    }
+}
+
+impl Spanned for ConnectBy {
+    fn span(&self) -> Span {
+        let ConnectBy {
+            condition,
+            relationships,
+        } = self;
+
+        union_spans(
+            core::iter::once(condition.span()).chain(relationships.iter().map(|item| item.span())),
+        )
+    }
+}
+
+impl Spanned for NamedWindowDefinition {
+    fn span(&self) -> Span {
+        let NamedWindowDefinition(
+            ident,
+            _, // todo: NamedWindowExpr
+        ) = self;
+
+        ident.span
+    }
+}
+
+impl Spanned for LateralView {
+    fn span(&self) -> Span {
+        let LateralView {
+            lateral_view,
+            lateral_view_name,
+            lateral_col_alias,
+            outer: _, // bool
+        } = self;
+
+        union_spans(
+            core::iter::once(lateral_view.span())
+                .chain(core::iter::once(lateral_view_name.span()))
+                .chain(lateral_col_alias.iter().map(|i| i.span)),
+        )
+    }
+}
+
+impl Spanned for SelectInto {
+    fn span(&self) -> Span {
+        let SelectInto {
+            temporary: _, // bool
+            unlogged: _,  // bool
+            table: _,     // bool
+            name,
+        } = self;
+
+        name.span()
     }
 }
 

@@ -3222,6 +3222,14 @@ pub enum Statement {
         representation: UserDefinedTypeRepresentation,
     },
     /// ```sql
+    /// CREATE TYPE <name> AS ENUM
+    /// ```
+    /// Note: this is a PostgreSQL-specific statement. See <https://www.postgresql.org/docs/current/sql-createtype.html>
+    CreateTypeAsEnum {
+        name: ObjectName,
+        labels: Vec<Ident>,
+    },
+    /// ```sql
     /// PRAGMA <schema-name>.<pragma-name> = <pragma-value>
     /// ```
     Pragma {
@@ -4839,6 +4847,13 @@ impl fmt::Display for Statement {
                 representation,
             } => {
                 write!(f, "CREATE TYPE {name} AS {representation}")
+            }
+            Statement::CreateTypeAsEnum { name, labels } => {
+                write!(
+                    f,
+                    "CREATE TYPE {name} AS ENUM ({})",
+                    display_comma_separated(labels)
+                )
             }
             Statement::Pragma { name, value, is_eq } => {
                 write!(f, "PRAGMA {name}")?;

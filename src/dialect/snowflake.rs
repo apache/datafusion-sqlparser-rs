@@ -22,7 +22,11 @@ use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOption, DataLoadingOptionType, DataLoadingOptions, StageLoadSelectItem,
     StageParamsObject,
 };
-use crate::ast::{Ident, ObjectName, RowAccessPolicy, Statement, Tag, WrappedCollection};
+use crate::ast::{
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
+    RowAccessPolicy, Statement, TagsColumnOption, WrappedCollection,
+};
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -147,6 +151,36 @@ impl Dialect for SnowflakeDialect {
         }
 
         None
+    }
+
+    fn parse_column_option(
+        &self,
+        parser: &mut Parser,
+    ) -> Option<Result<Option<ColumnOption>, ParserError>> {
+        parser.maybe_parse(|parser| {
+            let with = parser.parse_keyword(Keyword::WITH);
+
+            if parser.parse_keyword(Keyword::IDENTITY) {
+                Ok(parse_identity_property(parser)
+                    .map(|p| Some(ColumnOption::Identity(IdentityPropertyKind::Identity(p)))))
+            } else if parser.parse_keyword(Keyword::AUTOINCREMENT) {
+                Ok(parse_identity_property(parser).map(|p| {
+                    Some(ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
+                        p,
+                    )))
+                }))
+            } else if parser.parse_keywords(&[Keyword::MASKING, Keyword::POLICY]) {
+                Ok(parse_column_policy_property(parser, with)
+                    .map(|p| Some(ColumnOption::Policy(ColumnPolicy::MaskingPolicy(p)))))
+            } else if parser.parse_keywords(&[Keyword::PROJECTION, Keyword::POLICY]) {
+                Ok(parse_column_policy_property(parser, with)
+                    .map(|p| Some(ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(p)))))
+            } else if parser.parse_keywords(&[Keyword::TAG]) {
+                Ok(parse_column_tags(parser, with).map(|p| Some(ColumnOption::Tags(p))))
+            } else {
+                Err(ParserError::ParserError("not found match".to_string()))
+            }
+        })
     }
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
@@ -307,16 +341,8 @@ pub fn parse_create_table(
                         builder.with_row_access_policy(Some(RowAccessPolicy::new(policy, columns)))
                 }
                 Keyword::TAG => {
-                    fn parse_tag(parser: &mut Parser) -> Result<Tag, ParserError> {
-                        let name = parser.parse_identifier(false)?;
-                        parser.expect_token(&Token::Eq)?;
-                        let value = parser.parse_literal_string()?;
-
-                        Ok(Tag::new(name, value))
-                    }
-
                     parser.expect_token(&Token::LParen)?;
-                    let tags = parser.parse_comma_separated(parse_tag)?;
+                    let tags = parser.parse_comma_separated(Parser::parse_tag)?;
                     parser.expect_token(&Token::RParen)?;
                     builder = builder.with_tags(Some(tags));
                 }
@@ -775,4 +801,80 @@ fn parse_parentheses_options(parser: &mut Parser) -> Result<Vec<DataLoadingOptio
         }?;
     }
     Ok(options)
+}
+
+/// Parsing a property of identity or autoincrement column option
+/// Syntax:
+/// ```sql
+/// [ (seed , increment) | START num INCREMENT num ] [ ORDER | NOORDER ]
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+fn parse_identity_property(parser: &mut Parser) -> Result<IdentityProperty, ParserError> {
+    let parameters = if parser.consume_token(&Token::LParen) {
+        let seed = parser.parse_number()?;
+        parser.expect_token(&Token::Comma)?;
+        let increment = parser.parse_number()?;
+        parser.expect_token(&Token::RParen)?;
+
+        Some(IdentityPropertyFormatKind::FunctionCall(
+            IdentityParameters { seed, increment },
+        ))
+    } else if parser.parse_keyword(Keyword::START) {
+        let seed = parser.parse_number()?;
+        parser.expect_keyword(Keyword::INCREMENT)?;
+        let increment = parser.parse_number()?;
+
+        Some(IdentityPropertyFormatKind::StartAndIncrement(
+            IdentityParameters { seed, increment },
+        ))
+    } else {
+        None
+    };
+    let order = match parser.parse_one_of_keywords(&[Keyword::ORDER, Keyword::NOORDER]) {
+        Some(Keyword::ORDER) => Some(IdentityPropertyOrder::Order),
+        Some(Keyword::NOORDER) => Some(IdentityPropertyOrder::NoOrder),
+        _ => None,
+    };
+    Ok(IdentityProperty { parameters, order })
+}
+
+/// Parsing a policy property of column option
+/// Syntax:
+/// ```sql
+/// <policy_name> [ USING ( <col_name> , <cond_col1> , ... )
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+fn parse_column_policy_property(
+    parser: &mut Parser,
+    with: bool,
+) -> Result<ColumnPolicyProperty, ParserError> {
+    let policy_name = parser.parse_identifier(false)?;
+    let using_columns = if parser.parse_keyword(Keyword::USING) {
+        parser.expect_token(&Token::LParen)?;
+        let columns = parser.parse_comma_separated(|p| p.parse_identifier(false))?;
+        parser.expect_token(&Token::RParen)?;
+        Some(columns)
+    } else {
+        None
+    };
+
+    Ok(ColumnPolicyProperty {
+        with,
+        policy_name,
+        using_columns,
+    })
+}
+
+/// Parsing tags list of column
+/// Syntax:
+/// ```sql
+/// ( <tag_name> = '<tag_value>' [ , <tag_name> = '<tag_value>' , ... ] )
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption, ParserError> {
+    parser.expect_token(&Token::LParen)?;
+    let tags = parser.parse_comma_separated(Parser::parse_tag)?;
+    parser.expect_token(&Token::RParen)?;
+
+    Ok(TagsColumnOption { with, tags })
 }

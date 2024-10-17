@@ -157,38 +157,30 @@ impl Dialect for SnowflakeDialect {
         &self,
         parser: &mut Parser,
     ) -> Option<Result<Option<ColumnOption>, ParserError>> {
-        let with = parser.parse_keyword(Keyword::WITH);
+        parser.maybe_parse(|parser| {
+            let with = parser.parse_keyword(Keyword::WITH);
 
-        if parser.parse_keyword(Keyword::IDENTITY) {
-            Some(
-                parse_identity_property(parser)
-                    .map(|p| Some(ColumnOption::Identity(IdentityPropertyKind::Identity(p)))),
-            )
-        } else if parser.parse_keyword(Keyword::AUTOINCREMENT) {
-            Some(parse_identity_property(parser).map(|p| {
-                Some(ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
-                    p,
-                )))
-            }))
-        } else if parser.parse_keywords(&[Keyword::MASKING, Keyword::POLICY]) {
-            Some(
-                parse_column_policy_property(parser, with)
-                    .map(|p| Some(ColumnOption::Policy(ColumnPolicy::MaskingPolicy(p)))),
-            )
-        } else if parser.parse_keywords(&[Keyword::PROJECTION, Keyword::POLICY]) {
-            Some(
-                parse_column_policy_property(parser, with)
-                    .map(|p| Some(ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(p)))),
-            )
-        } else if parser.parse_keywords(&[Keyword::TAG]) {
-            Some(parse_column_tags(parser, with).map(|p| Some(ColumnOption::Tags(p))))
-        } else {
-            // needs to revert initial state of parser if dialect finds any matching
-            if with {
-                parser.prev_token();
+            if parser.parse_keyword(Keyword::IDENTITY) {
+                Ok(parse_identity_property(parser)
+                    .map(|p| Some(ColumnOption::Identity(IdentityPropertyKind::Identity(p)))))
+            } else if parser.parse_keyword(Keyword::AUTOINCREMENT) {
+                Ok(parse_identity_property(parser).map(|p| {
+                    Some(ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
+                        p,
+                    )))
+                }))
+            } else if parser.parse_keywords(&[Keyword::MASKING, Keyword::POLICY]) {
+                Ok(parse_column_policy_property(parser, with)
+                    .map(|p| Some(ColumnOption::Policy(ColumnPolicy::MaskingPolicy(p)))))
+            } else if parser.parse_keywords(&[Keyword::PROJECTION, Keyword::POLICY]) {
+                Ok(parse_column_policy_property(parser, with)
+                    .map(|p| Some(ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(p)))))
+            } else if parser.parse_keywords(&[Keyword::TAG]) {
+                Ok(parse_column_tags(parser, with).map(|p| Some(ColumnOption::Tags(p))))
+            } else {
+                Err(ParserError::ParserError("not found match".to_string()))
             }
-            None
-        }
+        })
     }
 
     fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {

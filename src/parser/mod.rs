@@ -6267,7 +6267,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_tag(&mut self) -> Result<Tag, ParserError> {
+    pub(crate) fn parse_tag(&mut self) -> Result<Tag, ParserError> {
         let name = self.parse_identifier(false)?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_literal_string()?;

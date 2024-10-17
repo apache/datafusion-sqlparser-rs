@@ -44,6 +44,7 @@ use pretty_assertions::assert_eq;
 pub struct TestedDialects {
     pub dialects: Vec<Box<dyn Dialect>>,
     pub options: Option<ParserOptions>,
+    pub recursion_limit: Option<usize>,
 }
 
 impl TestedDialects {
@@ -52,16 +53,38 @@ impl TestedDialects {
         Self {
             dialects,
             options: None,
+            recursion_limit: None,
         }
+    }
+
+    pub fn new_with_options(dialects: Vec<Box<dyn Dialect>>, options: ParserOptions) -> Self {
+        Self {
+            dialects,
+            options: Some(options),
+            recursion_limit: None,
+        }
+    }
+
+    pub fn with_recursion_limit(mut self, recursion_limit: usize) -> Self {
+        self.recursion_limit = Some(recursion_limit);
+        self
     }
 
     fn new_parser<'a>(&self, dialect: &'a dyn Dialect) -> Parser<'a> {
         let parser = Parser::new(dialect);
-        if let Some(options) = &self.options {
+        let parser = if let Some(options) = &self.options {
             parser.with_options(options.clone())
         } else {
             parser
-        }
+        };
+
+        let parser = if let Some(recursion_limit) = &self.recursion_limit {
+            parser.with_recursion_limit(*recursion_limit)
+        } else {
+            parser
+        };
+
+        parser
     }
 
     /// Run the given function for all of `self.dialects`, assert that they

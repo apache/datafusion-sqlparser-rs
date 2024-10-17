@@ -2973,17 +2973,14 @@ fn parse_on_commit() {
 }
 
 fn pg() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(PostgreSqlDialect {})])
 }
 
 fn pg_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }
 
 #[test]

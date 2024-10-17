@@ -539,10 +539,8 @@ fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
 #[test]
 fn parse_sf_create_or_replace_with_comment_for_snowflake() {
     let sql = "CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1";
-    let dialect = test_utils::TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {}) as Box<dyn Dialect>],
-        options: None,
-    };
+    let dialect =
+        test_utils::TestedDialects::new(vec![Box::new(SnowflakeDialect {}) as Box<dyn Dialect>]);
 
     match dialect.verified_stmt(sql) {
         Statement::CreateView {
@@ -935,24 +933,25 @@ fn test_array_agg_func() {
 }
 
 fn snowflake() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(SnowflakeDialect {})])
+}
+
+fn snowflake_with_recursion_limit(recursion_limit: usize) -> TestedDialects {
+    TestedDialects::new(vec![Box::new(SnowflakeDialect {})]).with_recursion_limit(recursion_limit)
 }
 
 fn snowflake_without_unescape() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {})],
-        options: Some(ParserOptions::new().with_unescape(false)),
-    }
+    TestedDialects::new_with_options(
+        vec![Box::new(SnowflakeDialect {})],
+        ParserOptions::new().with_unescape(false),
+    )
 }
 
 fn snowflake_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(SnowflakeDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }
 
 #[test]
@@ -2443,4 +2442,27 @@ fn parse_view_column_descriptions() {
         }
         _ => unreachable!(),
     };
+}
+
+#[test]
+fn test_parentheses_overflow() {
+    let max_nesting_level: usize = 30;
+
+    // Verify the recursion check is not too wasteful... (num of parentheses - 2 is acceptable)
+    let slack = 2;
+    let l_parens = "(".repeat(max_nesting_level - slack);
+    let r_parens = ")".repeat(max_nesting_level - slack);
+    let sql = format!("SELECT * FROM {l_parens}a.b.c{r_parens}");
+    let parsed =
+        snowflake_with_recursion_limit(max_nesting_level).parse_sql_statements(sql.as_str());
+    assert_eq!(parsed.err(), None);
+
+    // Verify the recursion check triggers... (num of parentheses - 1 is acceptable)
+    let slack = 1;
+    let l_parens = "(".repeat(max_nesting_level - slack);
+    let r_parens = ")".repeat(max_nesting_level - slack);
+    let sql = format!("SELECT * FROM {l_parens}a.b.c{r_parens}");
+    let parsed =
+        snowflake_with_recursion_limit(max_nesting_level).parse_sql_statements(sql.as_str());
+    assert_eq!(parsed.err(), Some(ParserError::RecursionLimitExceeded));
 }

@@ -3191,7 +3191,7 @@ pub enum Statement {
         /// Table confs
         options: Vec<SqlOption>,
         /// Cache table as a Query
-        query: Option<Query>,
+        query: Option<Box<Query>>,
     },
     /// ```sql
     /// UNCACHE TABLE [ IF EXISTS ]  <table_name>
@@ -6990,7 +6990,7 @@ impl fmt::Display for MacroArg {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum MacroDefinition {
     Expr(Expr),
-    Table(Query),
+    Table(Box<Query>),
 }
 
 impl fmt::Display for MacroDefinition {

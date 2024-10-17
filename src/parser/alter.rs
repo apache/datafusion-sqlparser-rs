@@ -192,7 +192,7 @@ impl<'a> Parser<'a> {
             let _ = self.parse_keyword(Keyword::WITH);
             // option
             let mut options = vec![];
-            while let Some(opt) = self.maybe_parse(|parser| parser.parse_pg_role_option()) {
+            while let Some(opt) = self.maybe_parse(|parser| parser.parse_pg_role_option())? {
                 options.push(opt);
             }
             // check option

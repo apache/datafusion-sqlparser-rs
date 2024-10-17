@@ -1103,7 +1103,7 @@ pub enum PivotValueSource {
     /// Pivot on all values returned by a subquery.
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/pivot#pivot-on-column-values-using-a-subquery-with-dynamic-pivot>.
-    Subquery(Query),
+    Subquery(Box<Query>),
 }
 
 impl fmt::Display for PivotValueSource {

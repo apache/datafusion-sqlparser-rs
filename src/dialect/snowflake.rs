@@ -213,7 +213,7 @@ pub fn parse_create_table(
                     builder = builder.comment(parser.parse_optional_inline_comment()?);
                 }
                 Keyword::AS => {
-                    let query = parser.parse_boxed_query()?;
+                    let query = parser.parse_query()?;
                     builder = builder.query(Some(query));
                     break;
                 }

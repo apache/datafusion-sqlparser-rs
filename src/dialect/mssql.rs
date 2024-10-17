@@ -49,4 +49,8 @@ impl Dialect for MsSqlDialect {
     fn supports_connect_by(&self) -> bool {
         true
     }
+
+    fn supports_eq_alias_assigment(&self) -> bool {
+        true
+    }
 }

@@ -1023,7 +1023,8 @@ impl<'a> Parser<'a> {
                     self.parse_time_functions(ObjectName(vec![w.to_ident()]))
                 }
                 Keyword::CASE => self.parse_case_expr(),
-                Keyword::CONVERT => self.parse_convert_expr(),
+                Keyword::CONVERT => self.parse_convert_expr(false),
+                Keyword::TRY_CONVERT if dialect_of!(self is MsSqlDialect) => self.parse_convert_expr(true),
                 Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
                 Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
                 Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
@@ -1614,7 +1615,7 @@ impl<'a> Parser<'a> {
     }
 
     /// mssql-like convert function
-    fn parse_mssql_convert(&mut self) -> Result<Expr, ParserError> {
+    fn parse_mssql_convert(&mut self, is_try: bool) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::Comma)?;
@@ -1626,6 +1627,7 @@ impl<'a> Parser<'a> {
         };
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Convert {
+            is_try,
             expr: Box::new(expr),
             data_type: Some(data_type),
             charset: None,
@@ -1638,9 +1640,9 @@ impl<'a> Parser<'a> {
     ///  - `CONVERT('héhé' USING utf8mb4)` (MySQL)
     ///  - `CONVERT('héhé', CHAR CHARACTER SET utf8mb4)` (MySQL)
     ///  - `CONVERT(DECIMAL(10, 5), 42)` (MSSQL) - the type comes first
-    pub fn parse_convert_expr(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_convert_expr(&mut self, is_try: bool) -> Result<Expr, ParserError> {
         if self.dialect.convert_type_before_value() {
-            return self.parse_mssql_convert();
+            return self.parse_mssql_convert(is_try);
         }
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
@@ -1648,6 +1650,7 @@ impl<'a> Parser<'a> {
             let charset = self.parse_object_name(false)?;
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::Convert {
+                is_try,
                 expr: Box::new(expr),
                 data_type: None,
                 charset: Some(charset),
@@ -1664,6 +1667,7 @@ impl<'a> Parser<'a> {
         };
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Convert {
+            is_try,
             expr: Box::new(expr),
             data_type: Some(data_type),
             charset,

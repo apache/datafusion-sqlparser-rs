@@ -769,6 +769,7 @@ define_keywords!(
     TRUE,
     TRUNCATE,
     TRY_CAST,
+    TRY_CONVERT,
     TUPLE,
     TYPE,
     UESCAPE,

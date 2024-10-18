@@ -50,7 +50,7 @@ impl Spanned for Query {
             offset,
             fetch,
             locks: _,         // todo
-            for_clause: _,    // todo, mysql specific
+            for_clause: _,    // todo, mssql specific
             settings: _,      // todo, clickhouse specific
             format_clause: _, // todo, clickhouse specific
         } = self;

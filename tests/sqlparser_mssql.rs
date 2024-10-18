@@ -474,7 +474,7 @@ fn parse_convert() {
     else {
         unreachable!()
     };
-    assert_eq!(false, is_try);
+    assert!(!is_try);
     assert_eq!(Expr::Value(number("1")), *expr);
     assert_eq!(Some(DataType::Int(None)), data_type);
     assert!(charset.is_none());

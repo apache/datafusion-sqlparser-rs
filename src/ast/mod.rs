@@ -670,7 +670,7 @@ pub enum Expr {
     /// CONVERT a value to a different data type or character encoding. e.g. `CONVERT(foo USING utf8mb4)`
     Convert {
         /// CONVERT (false) or TRY_CONVERT (true)
-        /// [MSSQL]: https://learn.microsoft.com/en-us/sql/t-sql/functions/try-convert-transact-sql?view=sql-server-ver16
+        /// [MSSQL]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/try-convert-transact-sql?view=sql-server-ver16>
         is_try: bool,
         /// The expression to convert
         expr: Box<Expr>,

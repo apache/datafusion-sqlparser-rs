@@ -669,6 +669,9 @@ pub enum Expr {
     },
     /// CONVERT a value to a different data type or character encoding. e.g. `CONVERT(foo USING utf8mb4)`
     Convert {
+        /// CONVERT (false) or TRY_CONVERT (true)
+        /// [MSSQL]: https://learn.microsoft.com/en-us/sql/t-sql/functions/try-convert-transact-sql?view=sql-server-ver16
+        is_try: bool,
         /// The expression to convert
         expr: Box<Expr>,
         /// The target data type
@@ -1371,13 +1374,14 @@ impl fmt::Display for Expr {
                 }
             }
             Expr::Convert {
+                is_try,
                 expr,
                 target_before_value,
                 data_type,
                 charset,
                 styles,
             } => {
-                write!(f, "CONVERT(")?;
+                write!(f, "{}CONVERT(", if *is_try { "TRY_" } else { "" })?;
                 if let Some(data_type) = data_type {
                     if let Some(charset) = charset {
                         write!(f, "{expr}, {data_type} CHARACTER SET {charset}")

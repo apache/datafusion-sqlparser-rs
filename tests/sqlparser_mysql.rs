@@ -2839,9 +2839,3 @@ fn test_group_concat() {
     mysql_and_generic()
         .verified_expr("GROUP_CONCAT(DISTINCT test_score ORDER BY test_score DESC SEPARATOR ' ')");
 }
-
-
-#[test]
-fn test_xxx() {
-    println!("{:#?}", mysql().parse_sql_statements("SELECT CONVERT(T1_COL1, JSON) FROM TABLE1").unwrap());
-}

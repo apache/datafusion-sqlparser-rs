@@ -22,6 +22,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::tokenizer::{Span, Token, TokenWithLocation};
 use test_utils::*;
 
 use sqlparser::ast::DataType::{Int, Text};
@@ -112,6 +113,7 @@ fn parse_create_procedure() {
                 settings: None,
                 format_clause: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
+                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                     distinct: None,
                     top: None,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
@@ -136,14 +138,16 @@ fn parse_create_procedure() {
                 ProcedureParam {
                     name: Ident {
                         value: "@foo".into(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     },
                     data_type: DataType::Int(None)
                 },
                 ProcedureParam {
                     name: Ident {
                         value: "@bar".into(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     },
                     data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                         length: 256,
@@ -153,7 +157,8 @@ fn parse_create_procedure() {
             ]),
             name: ObjectName(vec![Ident {
                 value: "test".into(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             }])
         }
     )
@@ -265,7 +270,8 @@ fn parse_mssql_create_role() {
                 authorization_owner,
                 Some(ObjectName(vec![Ident {
                     value: "helena".into(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }]))
             );
         }
@@ -281,12 +287,14 @@ fn parse_alter_role() {
         [Statement::AlterRole {
             name: Ident {
                 value: "old_name".into(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             },
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident {
                     value: "new_name".into(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }
             },
         }]
@@ -298,12 +306,14 @@ fn parse_alter_role() {
         Statement::AlterRole {
             name: Ident {
                 value: "role_name".into(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             },
             operation: AlterRoleOperation::AddMember {
                 member_name: Ident {
                     value: "new_member".into(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }
             },
         }
@@ -315,12 +325,14 @@ fn parse_alter_role() {
         Statement::AlterRole {
             name: Ident {
                 value: "role_name".into(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             },
             operation: AlterRoleOperation::DropMember {
                 member_name: Ident {
                     value: "old_member".into(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }
             },
         }
@@ -510,12 +522,14 @@ fn parse_substring_in_select() {
                     with: None,
 
                     body: Box::new(SetExpr::Select(Box::new(Select {
+                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
                             expr: Box::new(Expr::Identifier(Ident {
                                 value: "description".to_string(),
-                                quote_style: None
+                                quote_style: None,
+                                span: Span::empty(),
                             })),
                             substring_from: Some(Box::new(Expr::Value(number("0")))),
                             substring_for: Some(Box::new(Expr::Value(number("1")))),
@@ -526,7 +540,8 @@ fn parse_substring_in_select() {
                             relation: TableFactor::Table {
                                 name: ObjectName(vec![Ident {
                                     value: "test".to_string(),
-                                    quote_style: None
+                                    quote_style: None,
+                                    span: Span::empty(),
                                 }]),
                                 alias: None,
                                 args: None,
@@ -579,7 +594,8 @@ fn parse_mssql_declare() {
                 Declare {
                     names: vec![Ident {
                         value: "@foo".to_string(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     }],
                     data_type: None,
                     assignment: None,
@@ -593,7 +609,8 @@ fn parse_mssql_declare() {
                 Declare {
                     names: vec![Ident {
                         value: "@bar".to_string(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     }],
                     data_type: Some(Int(None)),
                     assignment: None,
@@ -607,7 +624,8 @@ fn parse_mssql_declare() {
                 Declare {
                     names: vec![Ident {
                         value: "@baz".to_string(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     }],
                     data_type: Some(Text),
                     assignment: Some(MsSqlAssignment(Box::new(Expr::Value(SingleQuotedString(
@@ -668,10 +686,12 @@ fn parse_create_table_with_valid_options() {
                     key: Ident {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                     value: Expr::Identifier(Ident {
                         value: "ROUND_ROBIN".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     })
                 },
                 SqlOption::Partition {
@@ -715,6 +735,7 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_a".to_string(),
                                 quote_style: None,
+                                span: Span::empty(),
                             },
                             asc: Some(true),
                         },
@@ -722,6 +743,7 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_b".to_string(),
                                 quote_style: None,
+                                span: Span::empty(),
                             },
                             asc: Some(false),
                         },
@@ -729,6 +751,7 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_c".to_string(),
                                 quote_style: None,
+                                span: Span::empty(),
                             },
                             asc: None,
                         },
@@ -742,6 +765,7 @@ fn parse_create_table_with_valid_options() {
                     key: Ident {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                     value: Expr::Function(
                         Function {
@@ -750,6 +774,7 @@ fn parse_create_table_with_valid_options() {
                                     Ident {
                                         value: "HASH".to_string(),
                                         quote_style: None,
+                                        span: Span::empty(),
                                     },
                                 ],
                             ),
@@ -764,6 +789,7 @@ fn parse_create_table_with_valid_options() {
                                                     Ident {
                                                         value: "column_a".to_string(),
                                                         quote_style: None,
+                                                        span: Span::empty(),
                                                     },
                                                 ),
                                             ),
@@ -774,6 +800,7 @@ fn parse_create_table_with_valid_options() {
                                                     Ident {
                                                         value: "column_b".to_string(),
                                                         quote_style: None,
+                                                        span: Span::empty(),
                                                     },
                                                 ),
                                             ),
@@ -808,12 +835,14 @@ fn parse_create_table_with_valid_options() {
                 name: ObjectName(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
+                    span: Span::empty(),
                 },],),
                 columns: vec![
                     ColumnDef {
                         name: Ident {
                             value: "column_a".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         },
                         data_type: Int(None,),
                         collation: None,
@@ -823,6 +852,7 @@ fn parse_create_table_with_valid_options() {
                         name: Ident {
                             value: "column_b".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         },
                         data_type: Int(None,),
                         collation: None,
@@ -832,6 +862,7 @@ fn parse_create_table_with_valid_options() {
                         name: Ident {
                             value: "column_c".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         },
                         data_type: Int(None,),
                         collation: None,

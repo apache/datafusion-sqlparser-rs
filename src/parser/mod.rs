@@ -1175,7 +1175,7 @@ impl<'a> Parser<'a> {
                     ),
                 })
             }
-            Token::ExclamationMark if !self.dialect.supports_factorial_operator() => {
+            Token::ExclamationMark if self.dialect.supports_bang_not_operator() => {
                 Ok(Expr::UnaryOp {
                     op: UnaryOperator::SpecialNot,
                     expr: Box::new(

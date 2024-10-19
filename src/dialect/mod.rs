@@ -561,6 +561,11 @@ pub trait Dialect: Debug + Any {
     fn supports_asc_desc_in_column_definition(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports `a!` expressions
+    fn supports_factorial_operator(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

@@ -537,6 +537,33 @@ fn parse_use() {
     );
 }
 
+#[test]
+fn parse_hive_unary_ops() {
+    let hive_unary_ops = &[("!", UnaryOperator::SpecialNot)];
+
+    for (str_op, op) in hive_unary_ops {
+        let select = hive().verified_only_select(&format!("SELECT {}a", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: *op,
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_factorial_operator() {
+    let res = hive().parse_sql_statements("select a!");
+    assert_eq!(
+        ParserError::ParserError(
+            "current dialect: HiveDialect does not support factorial operator".to_string()
+        ),
+        res.unwrap_err()
+    );
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

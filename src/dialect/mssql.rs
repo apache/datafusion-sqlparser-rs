@@ -53,4 +53,8 @@ impl Dialect for MsSqlDialect {
     fn supports_eq_alias_assigment(&self) -> bool {
         true
     }
+
+    fn supports_try_convert(&self) -> bool {
+        true
+    }
 }

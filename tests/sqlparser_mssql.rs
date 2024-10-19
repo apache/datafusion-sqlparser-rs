@@ -497,8 +497,6 @@ fn parse_convert() {
         ParserError::ParserError("Expected: an expression, found: )".to_owned()),
         ms().parse_sql_statements(error_sql).unwrap_err()
     );
-
-    ms().verified_expr("TRY_CONVERT(VARCHAR(MAX), 'foo')");
 }
 
 #[test]

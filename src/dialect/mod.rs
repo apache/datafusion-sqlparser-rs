@@ -585,6 +585,11 @@ pub trait Dialect: Debug + Any {
     fn supports_eq_alias_assigment(&self) -> bool {
         false
     }
+
+    /// Returns true if this dialect supports the `TRY_CONVERT` function
+    fn supports_try_convert(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

@@ -464,6 +464,7 @@ fn parse_cast_varchar_max() {
 fn parse_convert() {
     let sql = "CONVERT(INT, 1, 2, 3, NULL)";
     let Expr::Convert {
+        is_try,
         expr,
         data_type,
         charset,
@@ -473,6 +474,7 @@ fn parse_convert() {
     else {
         unreachable!()
     };
+    assert!(!is_try);
     assert_eq!(Expr::Value(number("1")), *expr);
     assert_eq!(Some(DataType::Int(None)), data_type);
     assert!(charset.is_none());

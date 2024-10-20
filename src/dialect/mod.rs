@@ -562,7 +562,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect supports treating the equals operator `=` within a [`SelectItem`]
+    /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
     /// as an alias assignment operator, rather than a boolean expression.
     /// For example: the following statements are equivalent for such a dialect:
     /// ```sql

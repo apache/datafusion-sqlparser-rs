@@ -7619,6 +7619,30 @@ fn parse_set_variable() {
 }
 
 #[test]
+fn parse_set_role_as_variable() {
+    match verified_stmt("SET role = 'foobar'") {
+        Statement::SetVariable {
+            local,
+            hivevar,
+            variables,
+            value,
+        } => {
+            assert!(!local);
+            assert!(!hivevar);
+            assert_eq!(
+                variables,
+                OneOrManyWithParens::One(ObjectName(vec!["role".into()]))
+            );
+            assert_eq!(
+                value,
+                vec![Expr::Value(Value::SingleQuotedString("foobar".into()))]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_double_colon_cast_at_timezone() {
     let sql = "SELECT '2001-01-01T00:00:00.000Z'::TIMESTAMP AT TIME ZONE 'Europe/Brussels' FROM t";
     let select = verified_only_select(sql);

@@ -9400,27 +9400,35 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a `SET ROLE` statement. Expects SET to be consumed already.
+    fn parse_set_role(&mut self, modifier: Option<Keyword>) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::ROLE)?;
+        let context_modifier = match modifier {
+            Some(Keyword::LOCAL) => ContextModifier::Local,
+            Some(Keyword::SESSION) => ContextModifier::Session,
+            _ => ContextModifier::None,
+        };
+
+        let role_name = if self.parse_keyword(Keyword::NONE) {
+            None
+        } else {
+            Some(self.parse_identifier(false)?)
+        };
+        Ok(Statement::SetRole {
+            context_modifier,
+            role_name,
+        })
+    }
+
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
         let modifier =
             self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
         if let Some(Keyword::HIVEVAR) = modifier {
             self.expect_token(&Token::Colon)?;
-        } else if self.parse_keyword(Keyword::ROLE) {
-            let context_modifier = match modifier {
-                Some(Keyword::LOCAL) => ContextModifier::Local,
-                Some(Keyword::SESSION) => ContextModifier::Session,
-                _ => ContextModifier::None,
-            };
-
-            let role_name = if self.parse_keyword(Keyword::NONE) {
-                None
-            } else {
-                Some(self.parse_identifier(false)?)
-            };
-            return Ok(Statement::SetRole {
-                context_modifier,
-                role_name,
-            });
+        } else if let Some(set_role_stmt) =
+            self.maybe_parse(|parser| parser.parse_set_role(modifier))?
+        {
+            return Ok(set_role_stmt);
         }
 
         let variables = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {

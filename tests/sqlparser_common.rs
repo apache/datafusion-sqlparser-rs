@@ -11452,6 +11452,11 @@ fn test_alias_equal_expr() {
 
 #[test]
 fn test_try_convert() {
-    let dialects = all_dialects_where(|d| d.supports_try_convert());
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && d.convert_type_before_value());
     dialects.verified_expr("TRY_CONVERT(VARCHAR(MAX), 'foo')");
+
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && !d.convert_type_before_value());
+    dialects.verified_expr("TRY_CONVERT('foo', VARCHAR(MAX))");
 }

@@ -5774,7 +5774,19 @@ impl<'a> Parser<'a> {
         let clustered_by = self.parse_optional_clustered_by()?;
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
-        let with_options = self.parse_options(Keyword::WITH)?;
+        let mut with_options: Vec<SqlOption> = vec![];
+        let mut order_exprs: Vec<Vec<OrderByExpr>> = vec![];
+        if self.dialect.supports_with_order_expr()
+            && self.parse_keywords(&[Keyword::WITH, Keyword::ORDER])
+        {
+            self.expect_token(&Token::LParen)?;
+            let order_by = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+            order_exprs.push(order_by);
+            self.expect_token(&Token::RParen)?;
+        } else {
+            with_options = self.parse_options(Keyword::WITH)?;
+        }
+
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {
@@ -5919,6 +5931,7 @@ impl<'a> Parser<'a> {
             .cluster_by(create_table_config.cluster_by)
             .options(create_table_config.options)
             .primary_key(primary_key)
+            .with_order(order_exprs)
             .strict(strict)
             .build())
     }

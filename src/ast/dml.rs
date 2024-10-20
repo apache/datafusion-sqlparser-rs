@@ -134,6 +134,9 @@ pub struct CreateTable {
     pub default_charset: Option<String>,
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
+    /// Datafusion "WITH ORDER" clause
+    /// <https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table/>
+    pub with_order: Vec<Vec<OrderByExpr>>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
     pub on_cluster: Option<Ident>,
@@ -417,6 +420,14 @@ impl Display for CreateTable {
 
         if let Some(with_aggregation_policy) = &self.with_aggregation_policy {
             write!(f, " WITH AGGREGATION POLICY {with_aggregation_policy}",)?;
+        }
+
+        if !self.with_order.is_empty() {
+            write!(f, " WITH ORDER (")?;
+            for order_by in &self.with_order {
+                write!(f, "{}", display_comma_separated(order_by))?;
+            }
+            write!(f, ")")?;
         }
 
         if let Some(row_access_policy) = &self.with_row_access_policy {

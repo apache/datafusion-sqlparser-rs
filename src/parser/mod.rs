@@ -6065,7 +6065,7 @@ impl<'a> Parser<'a> {
                 }
             } else if let Some(option) = self.parse_optional_column_option()? {
                 options.push(ColumnOptionDef { name: None, option });
-            } else if dialect_of!(self is MySqlDialect | GenericDialect)
+            } else if dialect_of!(self is MySqlDialect | SnowflakeDialect | GenericDialect)
                 && self.parse_keyword(Keyword::COLLATE)
             {
                 collation = Some(self.parse_object_name(false)?);
@@ -6105,6 +6105,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_optional_column_option(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if let Some(option) = self.dialect.parse_column_option(self) {
+            return option;
+        }
+
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -6232,17 +6236,24 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::IDENTITY)
             && dialect_of!(self is MsSqlDialect | GenericDialect)
         {
-            let property = if self.consume_token(&Token::LParen) {
+            let parameters = if self.consume_token(&Token::LParen) {
                 let seed = self.parse_number()?;
                 self.expect_token(&Token::Comma)?;
                 let increment = self.parse_number()?;
                 self.expect_token(&Token::RParen)?;
 
-                Some(IdentityProperty { seed, increment })
+                Some(IdentityPropertyFormatKind::FunctionCall(
+                    IdentityParameters { seed, increment },
+                ))
             } else {
                 None
             };
-            Ok(Some(ColumnOption::Identity(property)))
+            Ok(Some(ColumnOption::Identity(
+                IdentityPropertyKind::Identity(IdentityProperty {
+                    parameters,
+                    order: None,
+                }),
+            )))
         } else if dialect_of!(self is SQLiteDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::ON, Keyword::CONFLICT])
         {
@@ -6260,6 +6271,15 @@ impl<'a> Parser<'a> {
             Ok(None)
         }
     }
+
+    pub(crate) fn parse_tag(&mut self) -> Result<Tag, ParserError> {
+        let name = self.parse_identifier(false)?;
+        self.expect_token(&Token::Eq)?;
+        let value = self.parse_literal_string()?;
+
+        Ok(Tag::new(name, value))
+    }
+
     fn parse_optional_column_option_generated(
         &mut self,
     ) -> Result<Option<ColumnOption>, ParserError> {

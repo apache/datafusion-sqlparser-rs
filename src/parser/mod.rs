@@ -11181,6 +11181,24 @@ impl<'a> Parser<'a> {
                     self.peek_token().location
                 )
             }
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right,
+            } if self.dialect.supports_eq_alias_assigment()
+                && matches!(left.as_ref(), Expr::Identifier(_)) =>
+            {
+                let Expr::Identifier(alias) = *left else {
+                    return parser_err!(
+                        "BUG: expected identifier expression as alias",
+                        self.peek_token().location
+                    );
+                };
+                Ok(SelectItem::ExprWithAlias {
+                    expr: *right,
+                    alias,
+                })
+            }
             expr => self
                 .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
                 .map(|alias| match alias {

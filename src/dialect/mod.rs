@@ -561,6 +561,17 @@ pub trait Dialect: Debug + Any {
     fn supports_asc_desc_in_column_definition(&self) -> bool {
         false
     }
+
+    /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
+    /// as an alias assignment operator, rather than a boolean expression.
+    /// For example: the following statements are equivalent for such a dialect:
+    /// ```sql
+    ///  SELECT col_alias = col FROM tbl;
+    ///  SELECT col_alias AS col FROM tbl;
+    /// ```
+    fn supports_eq_alias_assigment(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

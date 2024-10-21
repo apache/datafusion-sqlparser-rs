@@ -40,10 +40,10 @@ fn parse_literal_string() {
         r#""""triple-double\"escaped""", "#,
         r#""""triple-double"unescaped""""#,
     );
-    let dialect = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect {})],
-        options: Some(ParserOptions::new().with_unescape(false)),
-    };
+    let dialect = TestedDialects::new_with_options(
+        vec![Box::new(BigQueryDialect {})],
+        ParserOptions::new().with_unescape(false),
+    );
     let select = dialect.verified_only_select(sql);
     assert_eq!(10, select.projection.len());
     assert_eq!(
@@ -1936,17 +1936,14 @@ fn parse_big_query_declare() {
 }
 
 fn bigquery() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(BigQueryDialect {})])
 }
 
 fn bigquery_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(BigQueryDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }
 
 #[test]

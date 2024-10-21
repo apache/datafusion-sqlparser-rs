@@ -529,14 +529,13 @@ fn parse_start_transaction_with_modifier() {
     sqlite_and_generic().one_statement_parses_to("BEGIN IMMEDIATE", "BEGIN IMMEDIATE TRANSACTION");
     sqlite_and_generic().one_statement_parses_to("BEGIN EXCLUSIVE", "BEGIN EXCLUSIVE TRANSACTION");
 
-    let unsupported_dialects = TestedDialects {
-        dialects: all_dialects()
+    let unsupported_dialects = TestedDialects::new(
+        all_dialects()
             .dialects
             .into_iter()
             .filter(|x| !(x.is::<SQLiteDialect>() || x.is::<GenericDialect>()))
             .collect(),
-        options: None,
-    };
+    );
     let res = unsupported_dialects.parse_sql_statements("BEGIN DEFERRED");
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: DEFERRED".to_string()),
@@ -571,22 +570,16 @@ fn test_dollar_identifier_as_placeholder() {
 }
 
 fn sqlite() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(SQLiteDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(SQLiteDialect {})])
 }
 
 fn sqlite_with_options(options: ParserOptions) -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(SQLiteDialect {})],
-        options: Some(options),
-    }
+    TestedDialects::new_with_options(vec![Box::new(SQLiteDialect {})], options)
 }
 
 fn sqlite_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(SQLiteDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(SQLiteDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }

@@ -2521,6 +2521,26 @@ fn parse_create_table_with_index_definition() {
     );
 
     mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, KEY (id) USING HASH)",
+        "CREATE TABLE tb (id INT, KEY USING HASH (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, KEY (id, id2) USING HASH)",
+        "CREATE TABLE tb (id INT, KEY USING HASH (id, id2))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, KEY (id DESC) USING HASH)",
+        "CREATE TABLE tb (id INT, KEY USING HASH (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, KEY (id ASC) USING HASH)",
+        "CREATE TABLE tb (id INT, KEY USING HASH (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
         "CREATE TABLE tb (id INT, key index (id))",
         "CREATE TABLE tb (id INT, KEY index (id))",
     );

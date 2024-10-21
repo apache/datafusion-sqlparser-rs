@@ -18,6 +18,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::tokenizer::{Span, Token, TokenWithLocation};
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -262,21 +263,17 @@ fn test_select_union_by_name() {
             op: SetOperator::Union,
             set_quantifier: *expected_quantifier,
             left: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
-                    opt_ilike: None,
-                    opt_exclude: None,
-                    opt_except: None,
-                    opt_rename: None,
-                    opt_replace: None,
-                })],
+                projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 into: None,
                 from: vec![TableWithJoins {
                     relation: TableFactor::Table {
                         name: ObjectName(vec![Ident {
                             value: "capitals".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         }]),
                         alias: None,
                         args: None,
@@ -302,21 +299,17 @@ fn test_select_union_by_name() {
                 connect_by: None,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
-                    opt_ilike: None,
-                    opt_exclude: None,
-                    opt_except: None,
-                    opt_rename: None,
-                    opt_replace: None,
-                })],
+                projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
                 into: None,
                 from: vec![TableWithJoins {
                     relation: TableFactor::Table {
                         name: ObjectName(vec![Ident {
                             value: "weather".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         }]),
                         alias: None,
                         args: None,
@@ -354,7 +347,8 @@ fn test_duckdb_install() {
         Statement::Install {
             extension_name: Ident {
                 value: "tpch".to_string(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty()
             }
         }
     );
@@ -367,7 +361,8 @@ fn test_duckdb_load_extension() {
         Statement::Load {
             extension_name: Ident {
                 value: "my_extension".to_string(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty()
             }
         },
         stmt

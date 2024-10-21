@@ -40,11 +40,12 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue, Use};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ConstraintCharacteristics, Deduplicate,
-    DeferrableInitial, GeneratedAs, GeneratedExpressionMode, IdentityProperty, IndexOption,
-    IndexType, KeyOrIndexDisplay, Owner, Partition, ProcedureParam, ReferentialAction,
-    TableConstraint, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
-    ViewColumnDef,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
+    ConstraintCharacteristics, Deduplicate, DeferrableInitial, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay, Owner,
+    Partition, ProcedureParam, ReferentialAction, TableConstraint, TagsColumnOption,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -668,6 +669,9 @@ pub enum Expr {
     },
     /// CONVERT a value to a different data type or character encoding. e.g. `CONVERT(foo USING utf8mb4)`
     Convert {
+        /// CONVERT (false) or TRY_CONVERT (true)
+        /// <https://learn.microsoft.com/en-us/sql/t-sql/functions/try-convert-transact-sql?view=sql-server-ver16>
+        is_try: bool,
         /// The expression to convert
         expr: Box<Expr>,
         /// The target data type
@@ -1370,13 +1374,14 @@ impl fmt::Display for Expr {
                 }
             }
             Expr::Convert {
+                is_try,
                 expr,
                 target_before_value,
                 data_type,
                 charset,
                 styles,
             } => {
-                write!(f, "CONVERT(")?;
+                write!(f, "{}CONVERT(", if *is_try { "TRY_" } else { "" })?;
                 if let Some(data_type) = data_type {
                     if let Some(charset) = charset {
                         write!(f, "{expr}, {data_type} CHARACTER SET {charset}")

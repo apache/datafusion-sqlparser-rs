@@ -464,6 +464,7 @@ fn parse_cast_varchar_max() {
 fn parse_convert() {
     let sql = "CONVERT(INT, 1, 2, 3, NULL)";
     let Expr::Convert {
+        is_try,
         expr,
         data_type,
         charset,
@@ -473,6 +474,7 @@ fn parse_convert() {
     else {
         unreachable!()
     };
+    assert!(!is_try);
     assert_eq!(Expr::Value(number("1")), *expr);
     assert_eq!(Some(DataType::Int(None)), data_type);
     assert!(charset.is_none());
@@ -921,7 +923,12 @@ fn parse_create_table_with_identity_column() {
             vec![
                 ColumnOptionDef {
                     name: None,
-                    option: ColumnOption::Identity(None),
+                    option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                        IdentityProperty {
+                            parameters: None,
+                            order: None,
+                        },
+                    )),
                 },
                 ColumnOptionDef {
                     name: None,
@@ -934,19 +941,17 @@ fn parse_create_table_with_identity_column() {
             vec![
                 ColumnOptionDef {
                     name: None,
-                    #[cfg(not(feature = "bigdecimal"))]
-                    option: ColumnOption::Identity(Some(IdentityProperty {
-                        seed: Expr::Value(Value::Number("1".to_string(), false)),
-                        increment: Expr::Value(Value::Number("1".to_string(), false)),
-                    })),
-                    #[cfg(feature = "bigdecimal")]
-                    option: ColumnOption::Identity(Some(IdentityProperty {
-                        seed: Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1), false)),
-                        increment: Expr::Value(Value::Number(
-                            bigdecimal::BigDecimal::from(1),
-                            false,
-                        )),
-                    })),
+                    option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                        IdentityProperty {
+                            parameters: Some(IdentityPropertyFormatKind::FunctionCall(
+                                IdentityParameters {
+                                    seed: Expr::Value(number("1")),
+                                    increment: Expr::Value(number("1")),
+                                },
+                            )),
+                            order: None,
+                        },
+                    )),
                 },
                 ColumnOptionDef {
                     name: None,

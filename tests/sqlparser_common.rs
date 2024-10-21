@@ -11350,3 +11350,31 @@ fn test_any_some_all_comparison() {
     verified_stmt("SELECT c1 FROM tbl WHERE c1 <> SOME(SELECT c2 FROM tbl)");
     verified_stmt("SELECT 1 = ANY(WITH x AS (SELECT 1) SELECT * FROM x)");
 }
+
+#[test]
+fn test_alias_equal_expr() {
+    let dialects = all_dialects_where(|d| d.supports_eq_alias_assigment());
+    let sql = r#"SELECT some_alias = some_column FROM some_table"#;
+    let expected = r#"SELECT some_column AS some_alias FROM some_table"#;
+    let _ = dialects.one_statement_parses_to(sql, expected);
+
+    let sql = r#"SELECT some_alias = (a*b) FROM some_table"#;
+    let expected = r#"SELECT (a * b) AS some_alias FROM some_table"#;
+    let _ = dialects.one_statement_parses_to(sql, expected);
+
+    let dialects = all_dialects_where(|d| !d.supports_eq_alias_assigment());
+    let sql = r#"SELECT x = (a * b) FROM some_table"#;
+    let expected = r#"SELECT x = (a * b) FROM some_table"#;
+    let _ = dialects.one_statement_parses_to(sql, expected);
+}
+
+#[test]
+fn test_try_convert() {
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && d.convert_type_before_value());
+    dialects.verified_expr("TRY_CONVERT(VARCHAR(MAX), 'foo')");
+
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && !d.convert_type_before_value());
+    dialects.verified_expr("TRY_CONVERT('foo', VARCHAR(MAX))");
+}

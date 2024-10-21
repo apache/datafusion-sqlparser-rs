@@ -1023,7 +1023,8 @@ impl<'a> Parser<'a> {
                     self.parse_time_functions(ObjectName(vec![w.to_ident()]))
                 }
                 Keyword::CASE => self.parse_case_expr(),
-                Keyword::CONVERT => self.parse_convert_expr(),
+                Keyword::CONVERT => self.parse_convert_expr(false),
+                Keyword::TRY_CONVERT if self.dialect.supports_try_convert() => self.parse_convert_expr(true),
                 Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
                 Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
                 Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
@@ -1614,7 +1615,7 @@ impl<'a> Parser<'a> {
     }
 
     /// mssql-like convert function
-    fn parse_mssql_convert(&mut self) -> Result<Expr, ParserError> {
+    fn parse_mssql_convert(&mut self, is_try: bool) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::Comma)?;
@@ -1626,6 +1627,7 @@ impl<'a> Parser<'a> {
         };
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Convert {
+            is_try,
             expr: Box::new(expr),
             data_type: Some(data_type),
             charset: None,
@@ -1638,9 +1640,9 @@ impl<'a> Parser<'a> {
     ///  - `CONVERT('héhé' USING utf8mb4)` (MySQL)
     ///  - `CONVERT('héhé', CHAR CHARACTER SET utf8mb4)` (MySQL)
     ///  - `CONVERT(DECIMAL(10, 5), 42)` (MSSQL) - the type comes first
-    pub fn parse_convert_expr(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_convert_expr(&mut self, is_try: bool) -> Result<Expr, ParserError> {
         if self.dialect.convert_type_before_value() {
-            return self.parse_mssql_convert();
+            return self.parse_mssql_convert(is_try);
         }
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
@@ -1648,6 +1650,7 @@ impl<'a> Parser<'a> {
             let charset = self.parse_object_name(false)?;
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::Convert {
+                is_try,
                 expr: Box::new(expr),
                 data_type: None,
                 charset: Some(charset),
@@ -1664,6 +1667,7 @@ impl<'a> Parser<'a> {
         };
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Convert {
+            is_try,
             expr: Box::new(expr),
             data_type: Some(data_type),
             charset,
@@ -6067,7 +6071,7 @@ impl<'a> Parser<'a> {
                 }
             } else if let Some(option) = self.parse_optional_column_option()? {
                 options.push(ColumnOptionDef { name: None, option });
-            } else if dialect_of!(self is MySqlDialect | GenericDialect)
+            } else if dialect_of!(self is MySqlDialect | SnowflakeDialect | GenericDialect)
                 && self.parse_keyword(Keyword::COLLATE)
             {
                 collation = Some(self.parse_object_name(false)?);
@@ -6107,6 +6111,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_optional_column_option(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if let Some(option) = self.dialect.parse_column_option(self)? {
+            return option;
+        }
+
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -6234,17 +6242,24 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::IDENTITY)
             && dialect_of!(self is MsSqlDialect | GenericDialect)
         {
-            let property = if self.consume_token(&Token::LParen) {
+            let parameters = if self.consume_token(&Token::LParen) {
                 let seed = self.parse_number()?;
                 self.expect_token(&Token::Comma)?;
                 let increment = self.parse_number()?;
                 self.expect_token(&Token::RParen)?;
 
-                Some(IdentityProperty { seed, increment })
+                Some(IdentityPropertyFormatKind::FunctionCall(
+                    IdentityParameters { seed, increment },
+                ))
             } else {
                 None
             };
-            Ok(Some(ColumnOption::Identity(property)))
+            Ok(Some(ColumnOption::Identity(
+                IdentityPropertyKind::Identity(IdentityProperty {
+                    parameters,
+                    order: None,
+                }),
+            )))
         } else if dialect_of!(self is SQLiteDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::ON, Keyword::CONFLICT])
         {
@@ -6262,6 +6277,15 @@ impl<'a> Parser<'a> {
             Ok(None)
         }
     }
+
+    pub(crate) fn parse_tag(&mut self) -> Result<Tag, ParserError> {
+        let name = self.parse_identifier(false)?;
+        self.expect_token(&Token::Eq)?;
+        let value = self.parse_literal_string()?;
+
+        Ok(Tag::new(name, value))
+    }
+
     fn parse_optional_column_option_generated(
         &mut self,
     ) -> Result<Option<ColumnOption>, ParserError> {
@@ -11164,6 +11188,24 @@ impl<'a> Parser<'a> {
                     format!("Expected an expression, found: {}", v),
                     self.peek_token().location
                 )
+            }
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right,
+            } if self.dialect.supports_eq_alias_assigment()
+                && matches!(left.as_ref(), Expr::Identifier(_)) =>
+            {
+                let Expr::Identifier(alias) = *left else {
+                    return parser_err!(
+                        "BUG: expected identifier expression as alias",
+                        self.peek_token().location
+                    );
+                };
+                Ok(SelectItem::ExprWithAlias {
+                    expr: *right,
+                    alias,
+                })
             }
             expr => self
                 .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)

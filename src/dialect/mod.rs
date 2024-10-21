@@ -49,7 +49,7 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
-use crate::ast::{Expr, Statement};
+use crate::ast::{ColumnOption, Expr, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -478,6 +478,19 @@ pub trait Dialect: Debug + Any {
         None
     }
 
+    /// Dialect-specific column option parser override
+    ///
+    /// This method is called to parse the next column option.
+    ///
+    /// If `None` is returned, falls back to the default behavior.
+    fn parse_column_option(
+        &self,
+        _parser: &mut Parser,
+    ) -> Option<Result<Option<ColumnOption>, ParserError>> {
+        // return None to fall back to the default behavior
+        None
+    }
+
     /// Decide the lexical Precedence of operators.
     ///
     /// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
@@ -555,6 +568,26 @@ pub trait Dialect: Debug + Any {
     }
 
     fn supports_explain_with_utility_options(&self) -> bool {
+        false
+    }
+
+    fn supports_asc_desc_in_column_definition(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
+    /// as an alias assignment operator, rather than a boolean expression.
+    /// For example: the following statements are equivalent for such a dialect:
+    /// ```sql
+    ///  SELECT col_alias = col FROM tbl;
+    ///  SELECT col_alias AS col FROM tbl;
+    /// ```
+    fn supports_eq_alias_assigment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `TRY_CONVERT` function
+    fn supports_try_convert(&self) -> bool {
         false
     }
 }

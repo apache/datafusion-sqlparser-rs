@@ -40,11 +40,12 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue, Use};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ConstraintCharacteristics, Deduplicate,
-    DeferrableInitial, GeneratedAs, GeneratedExpressionMode, IdentityProperty, IndexOption,
-    IndexType, KeyOrIndexDisplay, Owner, Partition, ProcedureParam, ReferentialAction,
-    TableConstraint, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
-    ViewColumnDef,
+    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
+    ConstraintCharacteristics, Deduplicate, DeferrableInitial, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay, Owner,
+    Partition, ProcedureParam, ReferentialAction, TableConstraint, TagsColumnOption,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -646,12 +647,16 @@ pub enum Expr {
         regexp: bool,
     },
     /// `ANY` operation e.g. `foo > ANY(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
+    /// <https://docs.snowflake.com/en/sql-reference/operators-subquery#all-any>
     AnyOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,
         right: Box<Expr>,
+        // ANY and SOME are synonymous: https://docs.cloudera.com/cdw-runtime/cloud/using-hiveql/topics/hive_comparison_predicates.html
+        is_some: bool,
     },
     /// `ALL` operation e.g. `foo > ALL(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
+    /// <https://docs.snowflake.com/en/sql-reference/operators-subquery#all-any>
     AllOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,
@@ -664,6 +669,9 @@ pub enum Expr {
     },
     /// CONVERT a value to a different data type or character encoding. e.g. `CONVERT(foo USING utf8mb4)`
     Convert {
+        /// CONVERT (false) or TRY_CONVERT (true)
+        /// <https://learn.microsoft.com/en-us/sql/t-sql/functions/try-convert-transact-sql?view=sql-server-ver16>
+        is_try: bool,
         /// The expression to convert
         expr: Box<Expr>,
         /// The target data type
@@ -1332,12 +1340,30 @@ impl fmt::Display for Expr {
                 left,
                 compare_op,
                 right,
-            } => write!(f, "{left} {compare_op} ANY({right})"),
+                is_some,
+            } => {
+                let add_parens = !matches!(right.as_ref(), Expr::Subquery(_));
+                write!(
+                    f,
+                    "{left} {compare_op} {}{}{right}{}",
+                    if *is_some { "SOME" } else { "ANY" },
+                    if add_parens { "(" } else { "" },
+                    if add_parens { ")" } else { "" },
+                )
+            }
             Expr::AllOp {
                 left,
                 compare_op,
                 right,
-            } => write!(f, "{left} {compare_op} ALL({right})"),
+            } => {
+                let add_parens = !matches!(right.as_ref(), Expr::Subquery(_));
+                write!(
+                    f,
+                    "{left} {compare_op} ALL{}{right}{}",
+                    if add_parens { "(" } else { "" },
+                    if add_parens { ")" } else { "" },
+                )
+            }
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{expr}{op}")
@@ -1348,13 +1374,14 @@ impl fmt::Display for Expr {
                 }
             }
             Expr::Convert {
+                is_try,
                 expr,
                 target_before_value,
                 data_type,
                 charset,
                 styles,
             } => {
-                write!(f, "CONVERT(")?;
+                write!(f, "{}CONVERT(", if *is_try { "TRY_" } else { "" })?;
                 if let Some(data_type) = data_type {
                     if let Some(charset) = charset {
                         write!(f, "{expr}, {data_type} CHARACTER SET {charset}")
@@ -3123,6 +3150,11 @@ pub enum Statement {
         analyze: bool,
         // Display additional information regarding the plan.
         verbose: bool,
+        /// `EXPLAIN QUERY PLAN`
+        /// Display the query plan without running the query.
+        ///
+        /// [SQLite](https://sqlite.org/lang_explain.html)
+        query_plan: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
         /// Optional output format of explain
@@ -3314,12 +3346,16 @@ impl fmt::Display for Statement {
                 describe_alias,
                 verbose,
                 analyze,
+                query_plan,
                 statement,
                 format,
                 options,
             } => {
                 write!(f, "{describe_alias} ")?;
 
+                if *query_plan {
+                    write!(f, "QUERY PLAN ")?;
+                }
                 if *analyze {
                     write!(f, "ANALYZE ")?;
                 }
@@ -3818,18 +3854,18 @@ impl fmt::Display for Statement {
                         .map(|to| format!(" TO {to}"))
                         .unwrap_or_default()
                 )?;
+                if !columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                if matches!(options, CreateTableOptions::With(_)) {
+                    write!(f, " {options}")?;
+                }
                 if let Some(comment) = comment {
                     write!(
                         f,
                         " COMMENT = '{}'",
                         value::escape_single_quote_string(comment)
                     )?;
-                }
-                if matches!(options, CreateTableOptions::With(_)) {
-                    write!(f, " {options}")?;
-                }
-                if !columns.is_empty() {
-                    write!(f, " ({})", display_comma_separated(columns))?;
                 }
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
@@ -5615,6 +5651,7 @@ pub enum ObjectType {
     Role,
     Sequence,
     Stage,
+    Type,
 }
 
 impl fmt::Display for ObjectType {
@@ -5628,6 +5665,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Role => "ROLE",
             ObjectType::Sequence => "SEQUENCE",
             ObjectType::Stage => "STAGE",
+            ObjectType::Type => "TYPE",
         })
     }
 }

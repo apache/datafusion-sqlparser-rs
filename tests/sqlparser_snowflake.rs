@@ -526,6 +526,321 @@ fn test_snowflake_single_line_tokenize() {
 }
 
 #[test]
+fn test_snowflake_create_table_with_autoincrement_columns() {
+    let sql = concat!(
+        "CREATE TABLE my_table (",
+        "a INT AUTOINCREMENT ORDER, ",
+        "b INT AUTOINCREMENT(100, 1) NOORDER, ",
+        "c INT IDENTITY, ",
+        "d INT IDENTITY START 100 INCREMENT 1 ORDER",
+        ")"
+    );
+    // it is a snowflake specific options (AUTOINCREMENT/IDENTITY)
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "a".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
+                                IdentityProperty {
+                                    parameters: None,
+                                    order: Some(IdentityPropertyOrder::Order),
+                                }
+                            ))
+                        }]
+                    },
+                    ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
+                                IdentityProperty {
+                                    parameters: Some(IdentityPropertyFormatKind::FunctionCall(
+                                        IdentityParameters {
+                                            seed: Expr::Value(number("100")),
+                                            increment: Expr::Value(number("1")),
+                                        }
+                                    )),
+                                    order: Some(IdentityPropertyOrder::NoOrder),
+                                }
+                            ))
+                        }]
+                    },
+                    ColumnDef {
+                        name: "c".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                                IdentityProperty {
+                                    parameters: None,
+                                    order: None,
+                                }
+                            ))
+                        }]
+                    },
+                    ColumnDef {
+                        name: "d".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                                IdentityProperty {
+                                    parameters: Some(
+                                        IdentityPropertyFormatKind::StartAndIncrement(
+                                            IdentityParameters {
+                                                seed: Expr::Value(number("100")),
+                                                increment: Expr::Value(number("1")),
+                                            }
+                                        )
+                                    ),
+                                    order: Some(IdentityPropertyOrder::Order),
+                                }
+                            ))
+                        }]
+                    },
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_with_collated_column() {
+    match snowflake_and_generic().verified_stmt("CREATE TABLE my_table (a TEXT COLLATE 'de_DE')") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "a".into(),
+                    data_type: DataType::Text,
+                    collation: Some(ObjectName(vec![Ident::with_quote('\'', "de_DE")])),
+                    options: vec![]
+                },]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_with_columns_masking_policy() {
+    for (sql, with, using_columns) in [
+        (
+            "CREATE TABLE my_table (a INT WITH MASKING POLICY p)",
+            true,
+            None,
+        ),
+        (
+            "CREATE TABLE my_table (a INT MASKING POLICY p)",
+            false,
+            None,
+        ),
+        (
+            "CREATE TABLE my_table (a INT WITH MASKING POLICY p USING (a, b))",
+            true,
+            Some(vec!["a".into(), "b".into()]),
+        ),
+        (
+            "CREATE TABLE my_table (a INT MASKING POLICY p USING (a, b))",
+            false,
+            Some(vec!["a".into(), "b".into()]),
+        ),
+    ] {
+        match snowflake().verified_stmt(sql) {
+            Statement::CreateTable(CreateTable { columns, .. }) => {
+                assert_eq!(
+                    columns,
+                    vec![ColumnDef {
+                        name: "a".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
+                                ColumnPolicyProperty {
+                                    with,
+                                    policy_name: "p".into(),
+                                    using_columns,
+                                }
+                            ))
+                        }],
+                    },]
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_with_columns_projection_policy() {
+    for (sql, with) in [
+        (
+            "CREATE TABLE my_table (a INT WITH PROJECTION POLICY p)",
+            true,
+        ),
+        ("CREATE TABLE my_table (a INT PROJECTION POLICY p)", false),
+    ] {
+        match snowflake().verified_stmt(sql) {
+            Statement::CreateTable(CreateTable { columns, .. }) => {
+                assert_eq!(
+                    columns,
+                    vec![ColumnDef {
+                        name: "a".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
+                                ColumnPolicyProperty {
+                                    with,
+                                    policy_name: "p".into(),
+                                    using_columns: None,
+                                }
+                            ))
+                        }],
+                    },]
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_with_columns_tags() {
+    for (sql, with) in [
+        (
+            "CREATE TABLE my_table (a INT WITH TAG (A='TAG A', B='TAG B'))",
+            true,
+        ),
+        (
+            "CREATE TABLE my_table (a INT TAG (A='TAG A', B='TAG B'))",
+            false,
+        ),
+    ] {
+        match snowflake().verified_stmt(sql) {
+            Statement::CreateTable(CreateTable { columns, .. }) => {
+                assert_eq!(
+                    columns,
+                    vec![ColumnDef {
+                        name: "a".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Tags(TagsColumnOption {
+                                with,
+                                tags: vec![
+                                    Tag::new("A".into(), "TAG A".into()),
+                                    Tag::new("B".into(), "TAG B".into()),
+                                ]
+                            }),
+                        }],
+                    },]
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn test_snowflake_create_table_with_several_column_options() {
+    let sql = concat!(
+        "CREATE TABLE my_table (",
+        "a INT IDENTITY WITH MASKING POLICY p1 USING (a, b) WITH TAG (A='TAG A', B='TAG B'), ",
+        "b TEXT COLLATE 'de_DE' PROJECTION POLICY p2 TAG (C='TAG C', D='TAG D')",
+        ")"
+    );
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "a".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                                    IdentityProperty {
+                                        parameters: None,
+                                        order: None
+                                    }
+                                )),
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
+                                    ColumnPolicyProperty {
+                                        with: true,
+                                        policy_name: "p1".into(),
+                                        using_columns: Some(vec!["a".into(), "b".into()]),
+                                    }
+                                )),
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Tags(TagsColumnOption {
+                                    with: true,
+                                    tags: vec![
+                                        Tag::new("A".into(), "TAG A".into()),
+                                        Tag::new("B".into(), "TAG B".into()),
+                                    ]
+                                }),
+                            }
+                        ],
+                    },
+                    ColumnDef {
+                        name: "b".into(),
+                        data_type: DataType::Text,
+                        collation: Some(ObjectName(vec![Ident::with_quote('\'', "de_DE")])),
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
+                                    ColumnPolicyProperty {
+                                        with: false,
+                                        policy_name: "p2".into(),
+                                        using_columns: None,
+                                    }
+                                )),
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Tags(TagsColumnOption {
+                                    with: false,
+                                    tags: vec![
+                                        Tag::new("C".into(), "TAG C".into()),
+                                        Tag::new("D".into(), "TAG D".into()),
+                                    ]
+                                }),
+                            }
+                        ],
+                    },
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
     assert!(snowflake_and_generic()
         .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1")
@@ -2404,4 +2719,43 @@ fn parse_use() {
             ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
         );
     }
+}
+
+#[test]
+fn view_comment_option_should_be_after_column_list() {
+    for sql in [
+        "CREATE OR REPLACE VIEW v (a) COMMENT = 'Comment' AS SELECT a FROM t",
+        "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') COMMENT = 'Comment' AS SELECT a FROM t",
+        "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') WITH (foo = bar) COMMENT = 'Comment' AS SELECT a FROM t",
+    ] {
+        snowflake_and_generic()
+            .verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_view_column_descriptions() {
+    let sql = "CREATE OR REPLACE VIEW v (a COMMENT 'Comment', b) AS SELECT a, b FROM table1";
+
+    match snowflake_and_generic().verified_stmt(sql) {
+        Statement::CreateView { name, columns, .. } => {
+            assert_eq!(name.to_string(), "v");
+            assert_eq!(
+                columns,
+                vec![
+                    ViewColumnDef {
+                        name: Ident::new("a"),
+                        data_type: None,
+                        options: Some(vec![ColumnOption::Comment("Comment".to_string())]),
+                    },
+                    ViewColumnDef {
+                        name: Ident::new("b"),
+                        data_type: None,
+                        options: None,
+                    }
+                ]
+            );
+        }
+        _ => unreachable!(),
+    };
 }

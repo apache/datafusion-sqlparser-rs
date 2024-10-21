@@ -103,4 +103,12 @@ impl Dialect for GenericDialect {
     fn supports_limit_comma(&self) -> bool {
         true
     }
+
+    fn supports_asc_desc_in_column_definition(&self) -> bool {
+        true
+    }
+
+    fn supports_try_convert(&self) -> bool {
+        true
+    }
 }

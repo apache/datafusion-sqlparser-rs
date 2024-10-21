@@ -1907,6 +1907,7 @@ fn parse_binary_any() {
             left: Box::new(Expr::Identifier(Ident::new("a"))),
             compare_op: BinaryOperator::Eq,
             right: Box::new(Expr::Identifier(Ident::new("b"))),
+            is_some: false,
         }),
         select.projection[0]
     );
@@ -4295,6 +4296,7 @@ fn run_explain_analyze(
             describe_alias: _,
             analyze,
             verbose,
+            query_plan,
             statement,
             format,
             options,
@@ -4303,6 +4305,7 @@ fn run_explain_analyze(
             assert_eq!(analyze, expected_analyze);
             assert_eq!(format, expected_format);
             assert_eq!(options, exepcted_options);
+            assert!(!query_plan);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
         }
         _ => panic!("Unexpected Statement, must be Explain"),
@@ -4414,6 +4417,36 @@ fn parse_explain_analyze_with_simple_select() {
         false,
         Some(AnalyzeFormat::TEXT),
         None,
+    );
+}
+
+#[test]
+fn parse_explain_query_plan() {
+    match all_dialects().verified_stmt("EXPLAIN QUERY PLAN SELECT sqrt(id) FROM foo") {
+        Statement::Explain {
+            query_plan,
+            analyze,
+            verbose,
+            statement,
+            ..
+        } => {
+            assert!(query_plan);
+            assert!(!analyze);
+            assert!(!verbose);
+            assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    // omit QUERY PLAN should be good
+    all_dialects().verified_stmt("EXPLAIN SELECT sqrt(id) FROM foo");
+
+    // missing PLAN keyword should return error
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: SELECT".to_string()),
+        all_dialects()
+            .parse_sql_statements("EXPLAIN QUERY SELECT sqrt(id) FROM foo")
+            .unwrap_err()
     );
 }
 
@@ -7633,6 +7666,30 @@ fn parse_set_variable() {
 }
 
 #[test]
+fn parse_set_role_as_variable() {
+    match verified_stmt("SET role = 'foobar'") {
+        Statement::SetVariable {
+            local,
+            hivevar,
+            variables,
+            value,
+        } => {
+            assert!(!local);
+            assert!(!hivevar);
+            assert_eq!(
+                variables,
+                OneOrManyWithParens::One(ObjectName(vec!["role".into()]))
+            );
+            assert_eq!(
+                value,
+                vec![Expr::Value(Value::SingleQuotedString("foobar".into()))]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_double_colon_cast_at_timezone() {
     let sql = "SELECT '2001-01-01T00:00:00.000Z'::TIMESTAMP AT TIME ZONE 'Europe/Brussels' FROM t";
     let select = verified_only_select(sql);
@@ -9659,6 +9716,60 @@ fn parse_create_type() {
 }
 
 #[test]
+fn parse_drop_type() {
+    let sql = "DROP TYPE abc";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            cascade,
+            ..
+        } => {
+            assert_eq_vec(&["abc"], &names);
+            assert_eq!(ObjectType::Type, object_type);
+            assert!(!if_exists);
+            assert!(!cascade);
+        }
+        _ => unreachable!(),
+    };
+
+    let sql = "DROP TYPE IF EXISTS def, magician, quaternion";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            cascade,
+            ..
+        } => {
+            assert_eq_vec(&["def", "magician", "quaternion"], &names);
+            assert_eq!(ObjectType::Type, object_type);
+            assert!(if_exists);
+            assert!(!cascade);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "DROP TYPE IF EXISTS my_type CASCADE";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            cascade,
+            ..
+        } => {
+            assert_eq_vec(&["my_type"], &names);
+            assert_eq!(ObjectType::Type, object_type);
+            assert!(if_exists);
+            assert!(cascade);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_call() {
     all_dialects().verified_stmt("CALL my_procedure()");
     all_dialects().verified_stmt("CALL my_procedure(1, 'a')");
@@ -9836,7 +9947,11 @@ fn test_release_savepoint() {
 #[test]
 fn test_comment_hash_syntax() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect {}), Box::new(SnowflakeDialect {})],
+        dialects: vec![
+            Box::new(BigQueryDialect {}),
+            Box::new(SnowflakeDialect {}),
+            Box::new(MySqlDialect {}),
+        ],
         options: None,
     };
     let sql = r#"
@@ -11308,4 +11423,40 @@ fn test_select_where_with_like_or_ilike_any() {
     verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY '%abc%'"#);
     verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY ('%Jo%oe%', 'T%e')"#);
     verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY ('%Jo%oe%', 'T%e')"#);
+}
+
+#[test]
+fn test_any_some_all_comparison() {
+    verified_stmt("SELECT c1 FROM tbl WHERE c1 = ANY(SELECT c2 FROM tbl)");
+    verified_stmt("SELECT c1 FROM tbl WHERE c1 >= ALL(SELECT c2 FROM tbl)");
+    verified_stmt("SELECT c1 FROM tbl WHERE c1 <> SOME(SELECT c2 FROM tbl)");
+    verified_stmt("SELECT 1 = ANY(WITH x AS (SELECT 1) SELECT * FROM x)");
+}
+
+#[test]
+fn test_alias_equal_expr() {
+    let dialects = all_dialects_where(|d| d.supports_eq_alias_assigment());
+    let sql = r#"SELECT some_alias = some_column FROM some_table"#;
+    let expected = r#"SELECT some_column AS some_alias FROM some_table"#;
+    let _ = dialects.one_statement_parses_to(sql, expected);
+
+    let sql = r#"SELECT some_alias = (a*b) FROM some_table"#;
+    let expected = r#"SELECT (a * b) AS some_alias FROM some_table"#;
+    let _ = dialects.one_statement_parses_to(sql, expected);
+
+    let dialects = all_dialects_where(|d| !d.supports_eq_alias_assigment());
+    let sql = r#"SELECT x = (a * b) FROM some_table"#;
+    let expected = r#"SELECT x = (a * b) FROM some_table"#;
+    let _ = dialects.one_statement_parses_to(sql, expected);
+}
+
+#[test]
+fn test_try_convert() {
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && d.convert_type_before_value());
+    dialects.verified_expr("TRY_CONVERT(VARCHAR(MAX), 'foo')");
+
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && !d.convert_type_before_value());
+    dialects.verified_expr("TRY_CONVERT('foo', VARCHAR(MAX))");
 }

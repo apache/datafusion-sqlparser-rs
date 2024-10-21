@@ -22,6 +22,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::keywords::Keyword;
 use test_utils::*;
 
 use sqlparser::ast::SelectItem::UnnamedExpr;
@@ -238,6 +239,43 @@ fn parse_create_table_auto_increment() {
 }
 
 #[test]
+fn parse_create_table_primary_key_asc_desc() {
+    let expected_column_def = |kind| ColumnDef {
+        name: "bar".into(),
+        data_type: DataType::Int(None),
+        collation: None,
+        options: vec![
+            ColumnOptionDef {
+                name: None,
+                option: ColumnOption::Unique {
+                    is_primary: true,
+                    characteristics: None,
+                },
+            },
+            ColumnOptionDef {
+                name: None,
+                option: ColumnOption::DialectSpecific(vec![Token::make_keyword(kind)]),
+            },
+        ],
+    };
+
+    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY ASC)";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(vec![expected_column_def("ASC")], columns);
+        }
+        _ => unreachable!(),
+    }
+    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY DESC)";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(vec![expected_column_def("DESC")], columns);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_sqlite_quote() {
     let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INT, [INDEX] INT)";
     match sqlite().verified_stmt(sql) {
@@ -279,6 +317,46 @@ fn parse_create_table_gencol() {
     sqlite_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2))");
     sqlite_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2) VIRTUAL)");
     sqlite_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2) STORED)");
+}
+
+#[test]
+fn parse_create_table_on_conflict_col() {
+    for keyword in [
+        Keyword::ROLLBACK,
+        Keyword::ABORT,
+        Keyword::FAIL,
+        Keyword::IGNORE,
+        Keyword::REPLACE,
+    ] {
+        let sql = format!("CREATE TABLE t1 (a INT, b INT ON CONFLICT {:?})", keyword);
+        match sqlite_and_generic().verified_stmt(&sql) {
+            Statement::CreateTable(CreateTable { columns, .. }) => {
+                assert_eq!(
+                    vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::OnConflict(keyword),
+                    }],
+                    columns[1].options
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn test_parse_create_table_on_conflict_col_err() {
+    let sql_err = "CREATE TABLE t1 (a INT, b INT ON CONFLICT BOH)";
+    let err = sqlite_and_generic()
+        .parse_sql_statements(sql_err)
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ParserError::ParserError(
+            "Expected: one of ROLLBACK or ABORT or FAIL or IGNORE or REPLACE, found: BOH"
+                .to_string()
+        )
+    );
 }
 
 #[test]

@@ -65,6 +65,14 @@ mod recursion {
 
     use super::ParserError;
 
+    /// try to grow stack
+    fn maybe_grow() {
+        #[cfg(debug_assertions)]
+        stacker::maybe_grow(512 << 10, 8 << 20, || {});
+        #[cfg(not(debug_assertions))]
+        stacker::maybe_grow(128 << 10, 2 << 20, || {});
+    }
+
     /// Tracks remaining recursion depth. This value is decremented on
     /// each call to [`RecursionCounter::try_decrease()`], when it reaches 0 an error will
     /// be returned.
@@ -93,10 +101,12 @@ mod recursion {
         /// remaining depth upon drop;
         pub fn try_decrease(&self) -> Result<DepthGuard, ParserError> {
             let old_value = self.remaining_depth.get();
-            // ran out of space
+
             if old_value == 0 {
                 Err(ParserError::RecursionLimitExceeded)
             } else {
+                maybe_grow();
+
                 self.remaining_depth.set(old_value - 1);
                 Ok(DepthGuard::new(Rc::clone(&self.remaining_depth)))
             }

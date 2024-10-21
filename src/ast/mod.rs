@@ -2176,6 +2176,18 @@ pub enum FromTable {
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#delete_statement>
     WithoutKeyword(Vec<TableWithJoins>),
 }
+impl Display for FromTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FromTable::WithFromKeyword(tables) => {
+                write!(f, "FROM {}", display_comma_separated(tables))
+            }
+            FromTable::WithoutKeyword(tables) => {
+                write!(f, "{}", display_comma_separated(tables))
+            }
+        }
+    }
+}
 
 /// Policy type for a `CREATE POLICY` statement.
 /// ```sql
@@ -3533,93 +3545,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Insert(insert) => {
-                let Insert {
-                    or,
-                    ignore,
-                    into,
-                    table_name,
-                    table_alias,
-                    overwrite,
-                    partitioned,
-                    columns,
-                    after_columns,
-                    source,
-                    table,
-                    on,
-                    returning,
-                    replace_into,
-                    priority,
-                    insert_alias,
-                } = insert;
-                let table_name = if let Some(alias) = table_alias {
-                    format!("{table_name} AS {alias}")
-                } else {
-                    table_name.to_string()
-                };
-
-                if let Some(action) = or {
-                    write!(f, "INSERT OR {action} INTO {table_name} ")?;
-                } else {
-                    write!(
-                        f,
-                        "{start}",
-                        start = if *replace_into { "REPLACE" } else { "INSERT" },
-                    )?;
-                    if let Some(priority) = priority {
-                        write!(f, " {priority}",)?;
-                    }
-
-                    write!(
-                        f,
-                        "{ignore}{over}{int}{tbl} {table_name} ",
-                        table_name = table_name,
-                        ignore = if *ignore { " IGNORE" } else { "" },
-                        over = if *overwrite { " OVERWRITE" } else { "" },
-                        int = if *into { " INTO" } else { "" },
-                        tbl = if *table { " TABLE" } else { "" },
-                    )?;
-                }
-                if !columns.is_empty() {
-                    write!(f, "({}) ", display_comma_separated(columns))?;
-                }
-                if let Some(ref parts) = partitioned {
-                    if !parts.is_empty() {
-                        write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
-                    }
-                }
-                if !after_columns.is_empty() {
-                    write!(f, "({}) ", display_comma_separated(after_columns))?;
-                }
-
-                if let Some(source) = source {
-                    write!(f, "{source}")?;
-                }
-
-                if source.is_none() && columns.is_empty() {
-                    write!(f, "DEFAULT VALUES")?;
-                }
-
-                if let Some(insert_alias) = insert_alias {
-                    write!(f, " AS {0}", insert_alias.row_alias)?;
-
-                    if let Some(col_aliases) = &insert_alias.col_aliases {
-                        if !col_aliases.is_empty() {
-                            write!(f, " ({})", display_comma_separated(col_aliases))?;
-                        }
-                    }
-                }
-
-                if let Some(on) = on {
-                    write!(f, "{on}")?;
-                }
-
-                if let Some(returning) = returning {
-                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
-                }
-
-                Ok(())
-            }
+            Statement::Insert(insert) => write!(f, "{insert}"),
             Statement::Install {
                 extension_name: name,
             } => write!(f, "INSTALL {name}"),
@@ -3696,45 +3622,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Delete(delete) => {
-                let Delete {
-                    tables,
-                    from,
-                    using,
-                    selection,
-                    returning,
-                    order_by,
-                    limit,
-                } = delete;
-                write!(f, "DELETE ")?;
-                if !tables.is_empty() {
-                    write!(f, "{} ", display_comma_separated(tables))?;
-                }
-                match from {
-                    FromTable::WithFromKeyword(from) => {
-                        write!(f, "FROM {}", display_comma_separated(from))?;
-                    }
-                    FromTable::WithoutKeyword(from) => {
-                        write!(f, "{}", display_comma_separated(from))?;
-                    }
-                }
-                if let Some(using) = using {
-                    write!(f, " USING {}", display_comma_separated(using))?;
-                }
-                if let Some(selection) = selection {
-                    write!(f, " WHERE {selection}")?;
-                }
-                if let Some(returning) = returning {
-                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
-                }
-                if !order_by.is_empty() {
-                    write!(f, " ORDER BY {}", display_comma_separated(order_by))?;
-                }
-                if let Some(limit) = limit {
-                    write!(f, " LIMIT {limit}")?;
-                }
-                Ok(())
-            }
+            Statement::Delete(delete) => write!(f, "{delete}"),
             Statement::Close { cursor } => {
                 write!(f, "CLOSE {cursor}")?;
 

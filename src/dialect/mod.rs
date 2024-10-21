@@ -486,9 +486,9 @@ pub trait Dialect: Debug + Any {
     fn parse_column_option(
         &self,
         _parser: &mut Parser,
-    ) -> Option<Result<Option<ColumnOption>, ParserError>> {
+    ) -> Result<Option<Result<Option<ColumnOption>, ParserError>>, ParserError> {
         // return None to fall back to the default behavior
-        None
+        Ok(None)
     }
 
     /// Decide the lexical Precedence of operators.

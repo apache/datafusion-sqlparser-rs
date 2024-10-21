@@ -24,17 +24,14 @@ use sqlparser::ast::*;
 use sqlparser::dialect::{DuckDbDialect, GenericDialect};
 
 fn duckdb() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(DuckDbDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(DuckDbDialect {})])
 }
 
 fn duckdb_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(DuckDbDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(DuckDbDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }
 
 #[test]
@@ -242,7 +239,7 @@ fn test_create_table_macro() {
             MacroArg::new("col1_value"),
             MacroArg::new("col2_value"),
         ]),
-        definition: MacroDefinition::Table(duckdb().verified_query(query)),
+        definition: MacroDefinition::Table(duckdb().verified_query(query).into()),
     };
     assert_eq!(expected, macro_);
 }

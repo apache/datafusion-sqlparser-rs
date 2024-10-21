@@ -944,11 +944,7 @@ fn parse_quote_identifiers() {
 fn parse_escaped_quote_identifiers_with_escape() {
     let sql = "SELECT `quoted `` identifier`";
     assert_eq!(
-        TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
-            options: None,
-        }
-        .verified_stmt(sql),
+        TestedDialects::new(vec![Box::new(MySqlDialect {})]).verified_stmt(sql),
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
@@ -991,13 +987,13 @@ fn parse_escaped_quote_identifiers_with_escape() {
 fn parse_escaped_quote_identifiers_with_no_escape() {
     let sql = "SELECT `quoted `` identifier`";
     assert_eq!(
-        TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
-            options: Some(ParserOptions {
+        TestedDialects::new_with_options(
+            vec![Box::new(MySqlDialect {})],
+            ParserOptions {
                 trailing_commas: false,
                 unescape: false,
-            }),
-        }
+            }
+        )
         .verified_stmt(sql),
         Statement::Query(Box::new(Query {
             with: None,
@@ -1041,11 +1037,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
 fn parse_escaped_backticks_with_escape() {
     let sql = "SELECT ```quoted identifier```";
     assert_eq!(
-        TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
-            options: None,
-        }
-        .verified_stmt(sql),
+        TestedDialects::new(vec![Box::new(MySqlDialect {})]).verified_stmt(sql),
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
@@ -1088,10 +1080,10 @@ fn parse_escaped_backticks_with_escape() {
 fn parse_escaped_backticks_with_no_escape() {
     let sql = "SELECT ```quoted identifier```";
     assert_eq!(
-        TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
-            options: Some(ParserOptions::new().with_unescape(false)),
-        }
+        TestedDialects::new_with_options(
+            vec![Box::new(MySqlDialect {})],
+            ParserOptions::new().with_unescape(false)
+        )
         .verified_stmt(sql),
         Statement::Query(Box::new(Query {
             with: None,
@@ -1144,55 +1136,26 @@ fn parse_unterminated_escape() {
 
 #[test]
 fn check_roundtrip_of_escaped_string() {
-    let options = Some(ParserOptions::new().with_unescape(false));
+    let options = ParserOptions::new().with_unescape(false);
 
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options: options.clone(),
-    }
-    .verified_stmt(r"SELECT 'I\'m fine'");
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options: options.clone(),
-    }
-    .verified_stmt(r#"SELECT 'I''m fine'"#);
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options: options.clone(),
-    }
-    .verified_stmt(r"SELECT 'I\\\'m fine'");
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options: options.clone(),
-    }
-    .verified_stmt(r"SELECT 'I\\\'m fine'");
-
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options: options.clone(),
-    }
-    .verified_stmt(r#"SELECT "I\"m fine""#);
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options: options.clone(),
-    }
-    .verified_stmt(r#"SELECT "I""m fine""#);
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options: options.clone(),
-    }
-    .verified_stmt(r#"SELECT "I\\\"m fine""#);
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options: options.clone(),
-    }
-    .verified_stmt(r#"SELECT "I\\\"m fine""#);
-
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options,
-    }
-    .verified_stmt(r#"SELECT "I'm ''fine''""#);
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r"SELECT 'I\'m fine'");
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r#"SELECT 'I''m fine'"#);
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r"SELECT 'I\\\'m fine'");
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r"SELECT 'I\\\'m fine'");
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r#"SELECT "I\"m fine""#);
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r#"SELECT "I""m fine""#);
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r#"SELECT "I\\\"m fine""#);
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r#"SELECT "I\\\"m fine""#);
+    TestedDialects::new_with_options(vec![Box::new(MySqlDialect {})], options.clone())
+        .verified_stmt(r#"SELECT "I'm ''fine''""#);
 }
 
 #[test]
@@ -2624,17 +2587,11 @@ fn parse_create_table_with_fulltext_definition_should_not_accept_constraint_name
 }
 
 fn mysql() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(MySqlDialect {})])
 }
 
 fn mysql_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})])
 }
 
 #[test]

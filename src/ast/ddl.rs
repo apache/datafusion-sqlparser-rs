@@ -1706,6 +1706,8 @@ pub enum UserDefinedTypeRepresentation {
     Composite {
         attributes: Vec<UserDefinedTypeCompositeAttributeDef>,
     },
+    /// Note: this is PostgreSQL-specific. See <https://www.postgresql.org/docs/current/sql-createtype.html>
+    Enum { labels: Vec<Ident> },
 }
 
 impl fmt::Display for UserDefinedTypeRepresentation {
@@ -1713,6 +1715,9 @@ impl fmt::Display for UserDefinedTypeRepresentation {
         match self {
             UserDefinedTypeRepresentation::Composite { attributes } => {
                 write!(f, "({})", display_comma_separated(attributes))
+            }
+            UserDefinedTypeRepresentation::Enum { labels } => {
+                write!(f, "ENUM ({})", display_comma_separated(labels))
             }
         }
     }

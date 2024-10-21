@@ -28,7 +28,7 @@
 // limitations under the License.
 use log::debug;
 
-use crate::ast::{CommentObject, Statement};
+use crate::ast::{CommentObject, ObjectName, Statement, UserDefinedTypeRepresentation};
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -138,6 +138,9 @@ impl Dialect for PostgreSqlDialect {
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::COMMENT) {
             Some(parse_comment(parser))
+        } else if parser.parse_keyword(Keyword::CREATE) {
+            parser.prev_token(); // unconsume the CREATE in case we don't end up parsing anything
+            parse_create(parser)
         } else {
             None
         }
@@ -223,5 +226,35 @@ pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {
         object_name,
         comment,
         if_exists,
+    })
+}
+
+pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+    let name = parser.maybe_parse(|parser| -> Result<ObjectName, ParserError> {
+        parser.expect_keyword(Keyword::CREATE)?;
+        parser.expect_keyword(Keyword::TYPE)?;
+        let name = parser.parse_object_name(false)?;
+        parser.expect_keyword(Keyword::AS)?;
+        parser.expect_keyword(Keyword::ENUM)?;
+        Ok(name)
+    });
+    name.map(|name| parse_create_type_as_enum(parser, name))
+}
+
+// https://www.postgresql.org/docs/current/sql-createtype.html
+pub fn parse_create_type_as_enum(
+    parser: &mut Parser,
+    name: ObjectName,
+) -> Result<Statement, ParserError> {
+    if !parser.consume_token(&Token::LParen) {
+        return parser.expected("'(' after CREATE TYPE AS ENUM", parser.peek_token());
+    }
+
+    let labels = parser.parse_comma_separated0(|p| p.parse_identifier(false), Token::RParen)?;
+    parser.expect_token(&Token::RParen)?;
+
+    Ok(Statement::CreateType {
+        name,
+        representation: UserDefinedTypeRepresentation::Enum { labels },
     })
 }

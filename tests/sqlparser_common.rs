@@ -11435,7 +11435,7 @@ fn test_any_some_all_comparison() {
 
 #[test]
 fn test_alias_equal_expr() {
-    let dialects = all_dialects_where(|d| d.supports_eq_alias_assigment());
+    let dialects = all_dialects_where(|d| d.supports_eq_alias_assignment());
     let sql = r#"SELECT some_alias = some_column FROM some_table"#;
     let expected = r#"SELECT some_column AS some_alias FROM some_table"#;
     let _ = dialects.one_statement_parses_to(sql, expected);
@@ -11444,7 +11444,7 @@ fn test_alias_equal_expr() {
     let expected = r#"SELECT (a * b) AS some_alias FROM some_table"#;
     let _ = dialects.one_statement_parses_to(sql, expected);
 
-    let dialects = all_dialects_where(|d| !d.supports_eq_alias_assigment());
+    let dialects = all_dialects_where(|d| !d.supports_eq_alias_assignment());
     let sql = r#"SELECT x = (a * b) FROM some_table"#;
     let expected = r#"SELECT x = (a * b) FROM some_table"#;
     let _ = dialects.one_statement_parses_to(sql, expected);

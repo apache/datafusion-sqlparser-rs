@@ -1,0 +1,5 @@
+# Files to exclude from the Apache Rat (license) check
+.gitignore
+.tool-versions
+dev/release/rat_exclude_files.txt
+

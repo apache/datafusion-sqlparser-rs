@@ -11209,7 +11209,7 @@ impl<'a> Parser<'a> {
                 left,
                 op: BinaryOperator::Eq,
                 right,
-            } if self.dialect.supports_eq_alias_assigment()
+            } if self.dialect.supports_eq_alias_assignment()
                 && matches!(left.as_ref(), Expr::Identifier(_)) =>
             {
                 let Expr::Identifier(alias) = *left else {

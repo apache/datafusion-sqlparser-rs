@@ -582,7 +582,7 @@ pub trait Dialect: Debug + Any {
     ///  SELECT col_alias = col FROM tbl;
     ///  SELECT col_alias AS col FROM tbl;
     /// ```
-    fn supports_eq_alias_assigment(&self) -> bool {
+    fn supports_eq_alias_assignment(&self) -> bool {
         false
     }
 

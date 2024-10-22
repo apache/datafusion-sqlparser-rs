@@ -113,7 +113,10 @@ impl TestedDialects {
         F: Fn(&mut Parser) -> T,
     {
         self.one_of_identical_results(|dialect| {
-            let mut parser = self.new_parser(dialect).try_with_sql(sql).unwrap();
+            let mut parser = self
+                .new_parser(dialect)
+                .try_with_sql_no_locations(sql)
+                .unwrap();
             f(&mut parser)
         })
     }
@@ -331,14 +334,14 @@ pub fn number(n: &str) -> Value {
 
 pub fn table_alias(name: impl Into<String>) -> Option<TableAlias> {
     Some(TableAlias {
-        name: Ident::new(name),
+        name: Ident::new(name).empty_span(),
         columns: vec![],
     })
 }
 
 pub fn table(name: impl Into<String>) -> TableFactor {
     TableFactor::Table {
-        name: ObjectName(vec![Ident::new(name.into())]),
+        name: ObjectName(vec![Ident::new(name.into()).empty_span()]),
         alias: None,
         args: None,
         with_hints: vec![],
@@ -350,9 +353,9 @@ pub fn table(name: impl Into<String>) -> TableFactor {
 
 pub fn table_with_alias(name: impl Into<String>, alias: impl Into<String>) -> TableFactor {
     TableFactor::Table {
-        name: ObjectName(vec![Ident::new(name)]),
+        name: ObjectName(vec![Ident::new(name).empty_span()]),
         alias: Some(TableAlias {
-            name: Ident::new(alias),
+            name: Ident::new(alias).empty_span(),
             columns: vec![],
         }),
         args: None,
@@ -373,7 +376,7 @@ pub fn join(relation: TableFactor) -> Join {
 
 pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
     Expr::Function(Function {
-        name: ObjectName(vec![Ident::new(function)]),
+        name: ObjectName(vec![Ident::new(function).empty_span()]),
         parameters: FunctionArguments::None,
         args: FunctionArguments::List(FunctionArgumentList {
             duplicate_treatment: None,

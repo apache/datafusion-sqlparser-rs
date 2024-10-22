@@ -29,7 +29,7 @@ use core::fmt::Formatter;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ast::Ident;
+use crate::ast::{Ident, WithSpan};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -73,10 +73,10 @@ pub struct DataLoadingOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct StageLoadSelectItem {
-    pub alias: Option<Ident>,
+    pub alias: Option<WithSpan<Ident>>,
     pub file_col_num: i32,
-    pub element: Option<Ident>,
-    pub item_as: Option<Ident>,
+    pub element: Option<WithSpan<Ident>>,
+    pub item_as: Option<WithSpan<Ident>>,
 }
 
 impl fmt::Display for StageParamsObject {

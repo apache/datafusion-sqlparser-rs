@@ -150,7 +150,10 @@ fn parse_create_virtual_table() {
             module_name,
             module_args,
         } => {
-            let args = vec![Ident::new("arg1"), Ident::new("arg2")];
+            let args = vec![
+                Ident::new("arg1").empty_span(),
+                Ident::new("arg2").empty_span(),
+            ];
             assert_eq!("t", name.to_string());
             assert_eq!("module_name", module_name.to_string());
             assert_eq!(args, module_args);
@@ -212,7 +215,7 @@ fn parse_create_table_auto_increment() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: "bar".into(),
+                    name: Ident::new("bar").empty_span(),
                     data_type: DataType::Int(None),
                     collation: None,
                     options: vec![
@@ -241,7 +244,7 @@ fn parse_create_table_auto_increment() {
 #[test]
 fn parse_create_table_primary_key_asc_desc() {
     let expected_column_def = |kind| ColumnDef {
-        name: "bar".into(),
+        name: Ident::new("bar").empty_span(),
         data_type: DataType::Int(None),
         collation: None,
         options: vec![
@@ -284,13 +287,13 @@ fn parse_create_sqlite_quote() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::with_quote('"', "KEY"),
+                        name: Ident::with_quote('"', "KEY").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::with_quote('[', "INDEX"),
+                        name: Ident::with_quote('[', "INDEX").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
@@ -373,7 +376,7 @@ fn test_placeholder() {
     let ast = sqlite().verified_only_select(sql);
     assert_eq!(
         ast.projection[0],
-        UnnamedExpr(Expr::Value(Value::Placeholder("@xxx".into()))),
+        UnnamedExpr(Expr::Value(Value::Placeholder("@xxx".into()))).empty_span(),
     );
 }
 
@@ -418,12 +421,12 @@ fn parse_window_function_with_filter() {
         assert_eq!(
             select.projection,
             vec![SelectItem::UnnamedExpr(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new(func_name)]),
+                name: ObjectName(vec![Ident::new(func_name).empty_span()]),
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("x"))
+                        Expr::Identifier(Ident::new("x").empty_span())
                     ))],
                     clauses: vec![],
                 }),
@@ -434,9 +437,10 @@ fn parse_window_function_with_filter() {
                     order_by: vec![],
                     window_frame: None,
                 })),
-                filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),
+                filter: Some(Box::new(Expr::Identifier(Ident::new("y").empty_span()))),
                 within_group: vec![],
-            }))]
+            }))
+            .empty_span()]
         );
     }
 }
@@ -467,8 +471,8 @@ fn parse_update_tuple_row_values() {
         Statement::Update {
             assignments: vec![Assignment {
                 target: AssignmentTarget::Tuple(vec![
-                    ObjectName(vec![Ident::new("a"),]),
-                    ObjectName(vec![Ident::new("b"),]),
+                    ObjectName(vec![Ident::new("a").empty_span()]),
+                    ObjectName(vec![Ident::new("b").empty_span()]),
                 ]),
                 value: Expr::Tuple(vec![
                     Expr::Value(Value::Number("1".parse().unwrap(), false)),
@@ -478,7 +482,7 @@ fn parse_update_tuple_row_values() {
             selection: None,
             table: TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("x")]),
+                    name: ObjectName(vec![Ident::new("x").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -498,7 +502,7 @@ fn parse_update_tuple_row_values() {
 fn parse_where_in_empty_list() {
     let sql = "SELECT * FROM t1 WHERE a IN ()";
     let select = sqlite().verified_only_select(sql);
-    if let Expr::InList { list, .. } = select.selection.as_ref().unwrap() {
+    if let Expr::InList { list, .. } = select.selection.as_ref().unwrap().clone().unwrap() {
         assert_eq!(list.len(), 0);
     } else {
         unreachable!()
@@ -562,7 +566,10 @@ fn test_dollar_identifier_as_placeholder() {
     match sqlite().verified_expr("id = $id") {
         Expr::BinaryOp { op, left, right } => {
             assert_eq!(op, BinaryOperator::Eq);
-            assert_eq!(left, Box::new(Expr::Identifier(Ident::new("id"))));
+            assert_eq!(
+                left,
+                Box::new(Expr::Identifier(Ident::new("id").empty_span()))
+            );
             assert_eq!(right, Box::new(Expr::Value(Placeholder("$id".to_string()))));
         }
         _ => unreachable!(),

@@ -1009,7 +1009,8 @@ fn parse_semi_structured_data_traversal() {
                     quoted: false
                 }]
             },
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -1025,7 +1026,8 @@ fn parse_semi_structured_data_traversal() {
                     quoted: true
                 }]
             },
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -1044,7 +1046,8 @@ fn parse_semi_structured_data_traversal() {
                     },
                 }]
             },
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -1063,7 +1066,8 @@ fn parse_semi_structured_data_traversal() {
                         quoted: false
                     }]
                 },
-            }),
+            })
+            .empty_span(),
             SelectItem::UnnamedExpr(Expr::JsonAccess {
                 value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                 path: JsonPath {
@@ -1073,6 +1077,7 @@ fn parse_semi_structured_data_traversal() {
                     }]
                 },
             })
+            .empty_span()
         ],
         select.projection
     );
@@ -1100,7 +1105,8 @@ fn parse_semi_structured_data_traversal() {
                     }
                 ]
             },
-        })],
+        })
+        .empty_span()],
         select.projection
     );
 
@@ -1126,7 +1132,8 @@ fn parse_semi_structured_data_traversal() {
                     }
                 ]
             },
-        })],
+        })
+        .empty_span()],
         select.projection
     );
 
@@ -1152,7 +1159,8 @@ fn parse_semi_structured_data_traversal() {
                     }
                 ]
             },
-        })],
+        })
+        .empty_span()],
         select.projection
     );
 
@@ -1240,7 +1248,7 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match &select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
                 &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
@@ -1296,7 +1304,8 @@ fn test_select_wildcard_with_exclude() {
             Ident::new("col_a").empty_span()
         ])),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = snowflake_and_generic()
@@ -1309,7 +1318,8 @@ fn test_select_wildcard_with_exclude() {
             )),
             ..Default::default()
         },
-    );
+    )
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = snowflake_and_generic()
@@ -1320,7 +1330,8 @@ fn test_select_wildcard_with_exclude() {
             Ident::new("employee_id").empty_span(),
         ])),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -1334,7 +1345,8 @@ fn test_select_wildcard_with_rename() {
             alias: Ident::new("col_b").empty_span(),
         })),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = snowflake_and_generic().verified_only_select(
@@ -1355,7 +1367,8 @@ fn test_select_wildcard_with_rename() {
             ])),
             ..Default::default()
         },
-    );
+    )
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -1381,7 +1394,8 @@ fn test_select_wildcard_with_replace_and_rename() {
             alias: Ident::new("col_zz").empty_span(),
         }])),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     // rename cannot precede replace
@@ -1408,7 +1422,8 @@ fn test_select_wildcard_with_exclude_and_rename() {
             alias: Ident::new("col_b").empty_span(),
         })),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     // rename cannot precede exclude
@@ -1467,7 +1482,7 @@ fn parse_snowflake_declare_cursor() {
             "DECLARE c1 CURSOR FOR SELECT id, price FROM invoices",
             "c1",
             None,
-            Some(vec!["id", "price"]),
+            Some(vec!["id".to_string(), "price".to_string()]),
         ),
         (
             "DECLARE c1 CURSOR FOR res",
@@ -1500,9 +1515,10 @@ fn parse_snowflake_declare_cursor() {
                             SetExpr::Select(q) => q
                                 .projection
                                 .iter()
-                                .map(|item| match item {
+                                .cloned()
+                                .map(|item| match item.unwrap() {
                                     SelectItem::UnnamedExpr(Expr::Identifier(ident)) => {
-                                        ident.value.as_str()
+                                        ident.value.clone()
                                     }
                                     _ => unreachable!(),
                                 })
@@ -2501,7 +2517,8 @@ fn test_select_wildcard_with_ilike() {
             pattern: "%id%".to_owned(),
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 

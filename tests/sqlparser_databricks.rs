@@ -40,6 +40,7 @@ fn test_databricks_identifiers() {
     assert_eq!(
         databricks().verified_only_select("SELECT `Ä`").projection[0],
         SelectItem::UnnamedExpr(Expr::Identifier(Ident::with_quote('`', "Ä").empty_span()))
+            .empty_span()
     );
 
     // double quotes produce string literals, not delimited identifiers
@@ -48,6 +49,7 @@ fn test_databricks_identifiers() {
             .verified_only_select(r#"SELECT "Ä""#)
             .projection[0],
         SelectItem::UnnamedExpr(Expr::Value(Value::DoubleQuotedString("Ä".to_owned())))
+            .empty_span()
     );
 }
 
@@ -141,7 +143,8 @@ fn test_databricks_lambdas() {
                     })
                 })
             ]
-        )),
+        ))
+        .empty_span(),
         databricks().verified_only_select(sql).projection[0]
     );
 

@@ -58,7 +58,8 @@ fn parse_map_access_expr() {
                     ),
                     syntax: MapAccessSyntax::Bracket
                 }],
-            })],
+            })
+            .empty_span()],
             into: None,
             from: vec![TableWithJoins {
                 relation: Table {
@@ -211,7 +212,7 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match &select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
                 &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
@@ -319,8 +320,8 @@ fn parse_alter_table_add_projection() {
                     name: Ident::new("my_name").empty_span(),
                     select: ProjectionSelect {
                         projection: vec![
-                            UnnamedExpr(Identifier(Ident::new("a").empty_span())),
-                            UnnamedExpr(Identifier(Ident::new("b").empty_span())),
+                            UnnamedExpr(Identifier(Ident::new("a").empty_span())).empty_span(),
+                            UnnamedExpr(Identifier(Ident::new("b").empty_span())).empty_span(),
                         ],
                         group_by: Some(GroupByExpr::Expressions(
                             vec![Identifier(Ident::new("a").empty_span())],
@@ -1006,9 +1007,10 @@ fn parse_select_star_except() {
 fn parse_select_parametric_function() {
     match clickhouse_and_generic().verified_stmt("SELECT HISTOGRAM(0.5, 0.6)(x, y) FROM t") {
         Statement::Query(query) => {
-            let projection: &Vec<SelectItem> = query.body.as_select().unwrap().projection.as_ref();
+            let projection: &Vec<WithSpan<SelectItem>> =
+                query.body.as_select().unwrap().projection.as_ref();
             assert_eq!(projection.len(), 1);
-            match &projection[0] {
+            match projection[0].clone().unwrap() {
                 UnnamedExpr(Expr::Function(f)) => {
                     let args = match &f.args {
                         FunctionArguments::List(ref args) => args,
@@ -1433,10 +1435,10 @@ fn parse_create_table_on_commit_and_as_query() {
             assert_eq!(on_commit, Some(OnCommit::PreserveRows));
             assert_eq!(
                 query.unwrap().body.as_select().unwrap().projection,
-                vec![UnnamedExpr(Expr::Value(Value::Number(
-                    "1".parse().unwrap(),
-                    false
-                )))]
+                vec![
+                    UnnamedExpr(Expr::Value(Value::Number("1".parse().unwrap(), false)))
+                        .empty_span()
+                ]
             );
         }
         _ => unreachable!(),

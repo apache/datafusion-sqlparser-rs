@@ -155,7 +155,7 @@ fn test_select_wildcard_with_exclude() {
         ])),
         ..Default::default()
     });
-    assert_eq!(expected, select.projection[0]);
+    assert_eq!(expected, select.projection[0].clone().unwrap());
 
     let select =
         duckdb().verified_only_select("SELECT name.* EXCLUDE department_id FROM employee_table");
@@ -167,7 +167,8 @@ fn test_select_wildcard_with_exclude() {
             )),
             ..Default::default()
         },
-    );
+    )
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = duckdb()
@@ -178,7 +179,8 @@ fn test_select_wildcard_with_exclude() {
             Ident::new("employee_id").empty_span(),
         ])),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -274,7 +276,8 @@ fn test_select_union_by_name() {
                     opt_except: None,
                     opt_rename: None,
                     opt_replace: None,
-                })],
+                })
+                .empty_span()],
                 into: None,
                 from: vec![TableWithJoins {
                     relation: TableFactor::Table {
@@ -315,7 +318,8 @@ fn test_select_union_by_name() {
                     opt_except: None,
                     opt_rename: None,
                     opt_replace: None,
-                })],
+                })
+                .empty_span()],
                 into: None,
                 from: vec![TableWithJoins {
                     relation: TableFactor::Table {
@@ -654,12 +658,12 @@ fn test_array_index() {
     let select = duckdb().verified_only_select(sql);
     let projection = &select.projection;
     assert_eq!(1, projection.len());
-    let expr = match &projection[0] {
+    let expr = match projection[0].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, .. } => expr,
         _ => panic!("Expected an expression with alias"),
     };
     assert_eq!(
-        &Expr::Subscript {
+        Expr::Subscript {
             expr: Box::new(Expr::Array(Array {
                 elem: vec![
                     Expr::Value(Value::SingleQuotedString("a".to_owned())),

@@ -409,10 +409,12 @@ fn parse_update_set_from() {
                             projection: vec![
                                 SelectItem::UnnamedExpr(Expr::Identifier(
                                     Ident::new("name").empty_span()
-                                )),
+                                ))
+                                .empty_span(),
                                 SelectItem::UnnamedExpr(Expr::Identifier(
                                     Ident::new("id").empty_span()
-                                )),
+                                ))
+                                .empty_span(),
                             ],
                             into: None,
                             from: vec![TableWithJoins {
@@ -550,9 +552,9 @@ fn parse_select_with_table_alias() {
     assert_eq!(
         select.projection,
         vec![
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("a").empty_span()),),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("b").empty_span()),),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("c").empty_span()),),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("a").empty_span()),).empty_span(),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("b").empty_span()),).empty_span(),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("c").empty_span()),).empty_span(),
         ]
     );
     assert_eq!(
@@ -912,7 +914,7 @@ fn parse_select_distinct() {
     let select = verified_only_select(sql);
     assert!(select.distinct.is_some());
     assert_eq!(
-        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name").empty_span())),
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name").empty_span())).empty_span(),
         only(&select.projection)
     );
 }
@@ -923,11 +925,11 @@ fn parse_select_distinct_two_fields() {
     let select = verified_only_select(sql);
     assert!(select.distinct.is_some());
     assert_eq!(
-        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name").empty_span())),
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name").empty_span())).empty_span(),
         &select.projection[0]
     );
     assert_eq!(
-        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id").empty_span())),
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id").empty_span())).empty_span(),
         &select.projection[1]
     );
 }
@@ -940,7 +942,8 @@ fn parse_select_distinct_tuple() {
         &vec![SelectItem::UnnamedExpr(Expr::Tuple(vec![
             Expr::Identifier(Ident::new("name").empty_span()),
             Expr::Identifier(Ident::new("id").empty_span()),
-        ]))],
+        ]))
+        .empty_span()],
         &select.projection
     );
 }
@@ -1029,7 +1032,7 @@ fn parse_select_wildcard() {
     let sql = "SELECT * FROM foo";
     let select = verified_only_select(sql);
     assert_eq!(
-        &SelectItem::Wildcard(WildcardAdditionalOptions::default()),
+        &SelectItem::Wildcard(WildcardAdditionalOptions::default()).empty_span(),
         only(&select.projection)
     );
 
@@ -1039,7 +1042,8 @@ fn parse_select_wildcard() {
         &SelectItem::QualifiedWildcard(
             ObjectName(vec![Ident::new("foo").empty_span()]),
             WildcardAdditionalOptions::default()
-        ),
+        )
+        .empty_span(),
         only(&select.projection)
     );
 
@@ -1052,7 +1056,8 @@ fn parse_select_wildcard() {
                 Ident::new("mytable").empty_span(),
             ]),
             WildcardAdditionalOptions::default(),
-        ),
+        )
+        .empty_span(),
         only(&select.projection)
     );
 
@@ -1082,7 +1087,7 @@ fn parse_column_aliases() {
             ref op, ref right, ..
         },
         ref alias,
-    } = only(&select.projection)
+    } = only(&select.projection).clone().unwrap()
     {
         assert_eq!(&BinaryOperator::Plus, op);
         assert_eq!(&Expr::Value(number("1")), right.as_ref());
@@ -1198,7 +1203,9 @@ fn parse_invalid_infix_not() {
 fn parse_collate() {
     let sql = "SELECT name COLLATE \"de_DE\" FROM customer";
     assert_matches!(
-        only(&all_dialects().verified_only_select(sql).projection),
+        only(&all_dialects().verified_only_select(sql).projection)
+            .clone()
+            .unwrap(),
         SelectItem::UnnamedExpr(Expr::Collate { .. })
     );
 }
@@ -1207,7 +1214,9 @@ fn parse_collate() {
 fn parse_collate_after_parens() {
     let sql = "SELECT (name) COLLATE \"de_DE\" FROM customer";
     assert_matches!(
-        only(&all_dialects().verified_only_select(sql).projection),
+        only(&all_dialects().verified_only_select(sql).projection)
+            .clone()
+            .unwrap(),
         SelectItem::UnnamedExpr(Expr::Collate { .. })
     );
 }
@@ -1268,18 +1277,20 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
 
     assert_eq!(
         &vec![
-            SelectItem::UnnamedExpr(Expr::Value(number("10e-20"))),
-            SelectItem::UnnamedExpr(Expr::Value(number("1e3"))),
-            SelectItem::UnnamedExpr(Expr::Value(number("1e+3"))),
+            SelectItem::UnnamedExpr(Expr::Value(number("10e-20"))).empty_span(),
+            SelectItem::UnnamedExpr(Expr::Value(number("1e3"))).empty_span(),
+            SelectItem::UnnamedExpr(Expr::Value(number("1e+3"))).empty_span(),
             SelectItem::ExprWithAlias {
                 expr: Expr::Value(number("1e3")),
                 alias: Ident::new("a").empty_span(),
-            },
+            }
+            .empty_span(),
             SelectItem::ExprWithAlias {
                 expr: Expr::Value(number("1")),
                 alias: Ident::new("e").empty_span(),
-            },
-            SelectItem::UnnamedExpr(Expr::Value(number("0.5e2"))),
+            }
+            .empty_span(),
+            SelectItem::UnnamedExpr(Expr::Value(number("0.5e2"))).empty_span(),
         ],
         &select.projection
     );
@@ -1488,7 +1499,8 @@ fn parse_json_ops_without_colon() {
                 left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                 op,
                 right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
-            }),
+            })
+            .empty_span(),
             select.projection[0]
         );
     }
@@ -1647,7 +1659,8 @@ fn parse_null_like() {
                 quote_style: None,
             }
             .empty_span(),
-        },
+        }
+        .empty_span(),
         select.projection[0]
     );
     assert_eq!(
@@ -1664,7 +1677,8 @@ fn parse_null_like() {
                 quote_style: None,
             }
             .empty_span(),
-        },
+        }
+        .empty_span(),
         select.projection[1]
     );
 }
@@ -1919,7 +1933,8 @@ fn parse_string_agg() {
             left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             op: BinaryOperator::StringConcat,
             right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 }
@@ -1950,7 +1965,8 @@ fn parse_bitwise_ops() {
                 left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                 op: op.clone(),
                 right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
-            }),
+            })
+            .empty_span(),
             select.projection[0]
         );
     }
@@ -1965,7 +1981,8 @@ fn parse_binary_any() {
             compare_op: BinaryOperator::Eq,
             right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
             is_some: false,
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 }
@@ -1978,7 +1995,8 @@ fn parse_binary_all() {
             left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             compare_op: BinaryOperator::Eq,
             right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 }
@@ -1992,7 +2010,8 @@ fn parse_logical_xor() {
             left: Box::new(Expr::Value(Value::Boolean(true))),
             op: BinaryOperator::Xor,
             right: Box::new(Expr::Value(Value::Boolean(true))),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
     assert_eq!(
@@ -2000,7 +2019,8 @@ fn parse_logical_xor() {
             left: Box::new(Expr::Value(Value::Boolean(false))),
             op: BinaryOperator::Xor,
             right: Box::new(Expr::Value(Value::Boolean(false))),
-        }),
+        })
+        .empty_span(),
         select.projection[1]
     );
     assert_eq!(
@@ -2008,7 +2028,8 @@ fn parse_logical_xor() {
             left: Box::new(Expr::Value(Value::Boolean(true))),
             op: BinaryOperator::Xor,
             right: Box::new(Expr::Value(Value::Boolean(false))),
-        }),
+        })
+        .empty_span(),
         select.projection[2]
     );
     assert_eq!(
@@ -2016,7 +2037,8 @@ fn parse_logical_xor() {
             left: Box::new(Expr::Value(Value::Boolean(false))),
             op: BinaryOperator::Xor,
             right: Box::new(Expr::Value(Value::Boolean(true))),
-        }),
+        })
+        .empty_span(),
         select.projection[3]
     );
 }
@@ -2100,13 +2122,15 @@ fn parse_tuples() {
             SelectItem::UnnamedExpr(Expr::Tuple(vec![
                 Expr::Value(number("1")),
                 Expr::Value(number("2")),
-            ])),
-            SelectItem::UnnamedExpr(Expr::Nested(Box::new(Expr::Value(number("1"))))),
+            ]))
+            .empty_span(),
+            SelectItem::UnnamedExpr(Expr::Nested(Box::new(Expr::Value(number("1"))))).empty_span(),
             SelectItem::UnnamedExpr(Expr::Tuple(vec![
                 Expr::Value(Value::SingleQuotedString("foo".into())),
                 Expr::Value(number("3")),
                 Expr::Identifier(Ident::new("baz").empty_span()),
-            ])),
+            ]))
+            .empty_span(),
         ],
         select.projection
     );
@@ -2845,7 +2869,8 @@ fn parse_window_function_null_treatment_arg() {
     .into_iter()
     .enumerate()
     {
-        let SelectItem::UnnamedExpr(Expr::Function(actual)) = &projection[i] else {
+        let SelectItem::UnnamedExpr(Expr::Function(actual)) = &projection[i].clone().unwrap()
+        else {
             unreachable!()
         };
         assert_eq!(
@@ -4788,7 +4813,8 @@ fn test_parse_named_window() {
                     quote_style: None,
                 }
                 .empty_span(),
-            },
+            }
+            .empty_span(),
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
                     name: ObjectName(vec![Ident {
@@ -4826,7 +4852,8 @@ fn test_parse_named_window() {
                     quote_style: None,
                 }
                 .empty_span(),
-            },
+            }
+            .empty_span(),
         ],
         into: None,
         from: vec![TableWithJoins {
@@ -5424,7 +5451,8 @@ fn parse_interval_and_or_xor() {
                     quote_style: None,
                 }
                 .empty_span(),
-            ))],
+            ))
+            .empty_span()],
             into: None,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
@@ -5584,7 +5612,8 @@ fn parse_at_timezone() {
                 quote_style: Some('"'),
             }
             .empty_span(),
-        },
+        }
+        .empty_span(),
         only(&select.projection),
     );
 }
@@ -7527,7 +7556,8 @@ fn lateral_function() {
             opt_except: None,
             opt_rename: None,
             opt_replace: None,
-        })],
+        })
+        .empty_span()],
         into: None,
         from: vec![TableWithJoins {
             relation: TableFactor::Table {
@@ -8380,7 +8410,8 @@ fn parse_merge() {
                             top: None,
                             projection: vec![SelectItem::Wildcard(
                                 WildcardAdditionalOptions::default()
-                            )],
+                            )
+                            .empty_span()],
                             into: None,
                             from: vec![TableWithJoins {
                                 relation: TableFactor::Table {
@@ -8776,9 +8807,9 @@ fn test_placeholder() {
     assert_eq!(
         ast.projection,
         vec![
-            UnnamedExpr(Expr::Value(Value::Placeholder("$fromage_français".into()))),
-            UnnamedExpr(Expr::Value(Value::Placeholder(":x".into()))),
-            UnnamedExpr(Expr::Value(Value::Placeholder("?123".into()))),
+            UnnamedExpr(Expr::Value(Value::Placeholder("$fromage_français".into()))).empty_span(),
+            UnnamedExpr(Expr::Value(Value::Placeholder(":x".into()))).empty_span(),
+            UnnamedExpr(Expr::Value(Value::Placeholder("?123".into()))).empty_span(),
         ]
     );
 }
@@ -10000,7 +10031,8 @@ fn parse_unload() {
                     top: None,
                     projection: vec![UnnamedExpr(Expr::Identifier(
                         Ident::new("cola").empty_span()
-                    )),],
+                    ))
+                    .empty_span()],
                     into: None,
                     from: vec![TableWithJoins {
                         relation: TableFactor::Table {
@@ -10178,9 +10210,12 @@ fn parse_connect_by() {
         distinct: None,
         top: None,
         projection: vec![
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id").empty_span())),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id").empty_span())),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title").empty_span())),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id").empty_span()))
+                .empty_span(),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id").empty_span()))
+                .empty_span(),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title").empty_span()))
+                .empty_span(),
         ],
         from: vec![TableWithJoins {
             relation: TableFactor::Table {
@@ -10264,9 +10299,12 @@ fn parse_connect_by() {
             distinct: None,
             top: None,
             projection: vec![
-                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id").empty_span())),
-                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id").empty_span())),
-                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title").empty_span())),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id").empty_span()))
+                    .empty_span(),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id").empty_span()))
+                    .empty_span(),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title").empty_span()))
+                    .empty_span(),
             ],
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
@@ -10333,9 +10371,10 @@ fn parse_connect_by() {
         all_dialects()
             .verified_only_select("SELECT prior FROM some_table")
             .projection,
-        vec![SelectItem::UnnamedExpr(Expr::Identifier(
-            Ident::new("prior").empty_span()
-        ))]
+        vec![
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("prior").empty_span()))
+                .empty_span()
+        ]
     );
 }
 
@@ -10368,7 +10407,8 @@ fn test_selective_aggregation() {
                 over: None,
                 within_group: vec![],
                 null_treatment: None
-            })),
+            }))
+            .empty_span(),
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
                     name: ObjectName(vec![Ident::new("ARRAY_AGG").empty_span()]),
@@ -10392,7 +10432,8 @@ fn test_selective_aggregation() {
                     within_group: vec![]
                 }),
                 alias: Ident::new("agg2").empty_span(),
-            },
+            }
+            .empty_span(),
         ]
     )
 }
@@ -10776,7 +10817,8 @@ fn test_select_wildcard_with_replace() {
             })],
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select =
@@ -10790,7 +10832,8 @@ fn test_select_wildcard_with_replace() {
             })],
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = dialects.verified_only_select(
@@ -10816,7 +10859,8 @@ fn test_select_wildcard_with_replace() {
             ],
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -11062,7 +11106,8 @@ fn parse_select_wildcard_with_except() {
             additional_elements: vec![],
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = dialects
@@ -11073,7 +11118,8 @@ fn parse_select_wildcard_with_except() {
             additional_elements: vec![Ident::new("employee_id").empty_span()],
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     assert_eq!(

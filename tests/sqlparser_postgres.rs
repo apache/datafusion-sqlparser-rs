@@ -1180,7 +1180,8 @@ fn parse_copy_to() {
                                 quote_style: None,
                             }
                             .empty_span(),
-                        },
+                        }
+                        .empty_span(),
                         SelectItem::ExprWithAlias {
                             expr: Expr::Value(Value::SingleQuotedString("hello".into())),
                             alias: Ident {
@@ -1189,6 +1190,7 @@ fn parse_copy_to() {
                             }
                             .empty_span(),
                         }
+                        .empty_span(),
                     ],
                     into: None,
                     from: vec![],
@@ -1884,7 +1886,8 @@ fn parse_pg_returning() {
             assert_eq!(
                 Some(vec![SelectItem::UnnamedExpr(Expr::Identifier(
                     Ident::new("did").empty_span()
-                )),]),
+                ))
+                .empty_span(),]),
                 returning
             );
         }
@@ -1903,12 +1906,15 @@ fn parse_pg_returning() {
                     SelectItem::ExprWithAlias {
                         expr: Expr::Identifier(Ident::new("temp_lo").empty_span()),
                         alias: Ident::new("lo").empty_span()
-                    },
+                    }
+                    .empty_span(),
                     SelectItem::ExprWithAlias {
                         expr: Expr::Identifier(Ident::new("temp_hi").empty_span()),
                         alias: Ident::new("hi").empty_span()
-                    },
-                    SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("prcp").empty_span())),
+                    }
+                    .empty_span(),
+                    SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("prcp").empty_span()))
+                        .empty_span(),
                 ]),
                 returning
             );
@@ -1922,7 +1928,8 @@ fn parse_pg_returning() {
             assert_eq!(
                 Some(vec![SelectItem::Wildcard(
                     WildcardAdditionalOptions::default()
-                ),]),
+                )
+                .empty_span(),]),
                 returning
             );
         }
@@ -2049,7 +2056,8 @@ fn parse_pg_unary_ops() {
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
                 expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            }),
+            })
+            .empty_span(),
             select.projection[0]
         );
     }
@@ -2065,7 +2073,8 @@ fn parse_pg_postfix_factorial() {
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
                 expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            }),
+            })
+            .empty_span(),
             select.projection[0]
         );
     }
@@ -2087,7 +2096,8 @@ fn parse_pg_regex_match_ops() {
                 left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
                 op: op.clone(),
                 right: Box::new(Expr::Value(Value::SingleQuotedString("^a".into()))),
-            }),
+            })
+            .empty_span(),
             select.projection[0]
         );
     }
@@ -2109,7 +2119,8 @@ fn parse_pg_like_match_ops() {
                 left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
                 op: op.clone(),
                 right: Box::new(Expr::Value(Value::SingleQuotedString("a_c%".into()))),
-            }),
+            })
+            .empty_span(),
             select.projection[0]
         );
     }
@@ -2577,7 +2588,9 @@ fn parse_array_subquery_expr() {
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: None,
                         top: None,
-                        projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
+                        projection: vec![
+                            SelectItem::UnnamedExpr(Expr::Value(number("1"))).empty_span()
+                        ],
                         into: None,
                         from: vec![],
                         lateral_views: vec![],
@@ -2597,7 +2610,9 @@ fn parse_array_subquery_expr() {
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: None,
                         top: None,
-                        projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("2")))],
+                        projection: vec![
+                            SelectItem::UnnamedExpr(Expr::Value(number("2"))).empty_span()
+                        ],
                         into: None,
                         from: vec![],
                         lateral_views: vec![],
@@ -2669,7 +2684,8 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::new("params").empty_span())),
             op: BinaryOperator::LongArrow,
             right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -2680,7 +2696,8 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::new("params").empty_span())),
             op: BinaryOperator::Arrow,
             right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -2697,7 +2714,8 @@ fn test_json() {
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "product".to_string()
             ))),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -2709,7 +2727,8 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::new("obj").empty_span())),
             op: BinaryOperator::Arrow,
             right: Box::new(Expr::Value(number("42"))),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -2721,7 +2740,8 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::new("obj").empty_span())),
             op: BinaryOperator::Arrow,
             right: Box::new(Expr::Identifier(Ident::new("key").empty_span())),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -2737,7 +2757,8 @@ fn test_json() {
                 op: BinaryOperator::Multiply,
                 right: Box::new(Expr::Value(number("2"))),
             }),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -2750,7 +2771,8 @@ fn test_json() {
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{a,b,c}".to_string()
             ))),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -2763,7 +2785,8 @@ fn test_json() {
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{a,b,c}".to_string()
             ))),
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -2806,7 +2829,8 @@ fn test_json() {
                 ],
                 named: true,
             })),
-        }),
+        })
+        .empty_span(),
         select.projection[0],
     );
 
@@ -2904,7 +2928,8 @@ fn test_composite_value() {
                 Ident::new("on_hand").empty_span(),
                 Ident::new("item").empty_span(),
             ]))))
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 
@@ -2952,7 +2977,8 @@ fn test_composite_value() {
                 over: None,
                 within_group: vec![],
             }))))
-        }),
+        })
+        .empty_span(),
         select.projection[0]
     );
 }
@@ -3704,7 +3730,7 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match &select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
                 &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
@@ -4035,6 +4061,7 @@ fn parse_dollar_quoted_string() {
             }
             .empty_span(),
         }
+        .empty_span()
     );
 
     assert_eq!(

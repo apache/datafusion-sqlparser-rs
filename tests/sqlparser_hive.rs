@@ -494,13 +494,13 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
-                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
                 expr
             );
-            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
+            assert_eq!(Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected: ExprWithAlias"),
     }

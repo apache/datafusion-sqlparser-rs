@@ -1580,6 +1580,7 @@ fn parse_hyphenated_table_identifiers() {
                 Ident::new("x").empty_span(),
             ]))
         })
+        .empty_span()
     );
 
     let error_sql = "select foo-bar.* from foo-bar";

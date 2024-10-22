@@ -35,7 +35,8 @@ fn test_square_brackets_over_db_schema_table_name() {
                 quote_style: Some('[')
             }
             .empty_span()
-        )),
+        ))
+        .empty_span(),
     );
     assert_eq!(
         select.from[0],
@@ -87,7 +88,8 @@ fn test_double_quotes_over_db_schema_table_name() {
                 quote_style: Some('"')
             }
             .empty_span()
-        )),
+        ))
+        .empty_span(),
     );
     assert_eq!(
         select.from[0],
@@ -170,13 +172,13 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
-                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
                 expr
             );
-            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
+            assert_eq!(Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }
@@ -203,7 +205,7 @@ fn test_sharp() {
     let select = redshift().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values").empty_span())),
-        select.projection[0]
+        select.projection[0].clone().unwrap()
     );
 }
 

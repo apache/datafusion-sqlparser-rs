@@ -489,7 +489,7 @@ pub struct Insert {
     pub table: bool,
     pub on: Option<OnInsert>,
     /// RETURNING
-    pub returning: Option<Vec<SelectItem>>,
+    pub returning: Option<Vec<WithSpan<SelectItem>>>,
     /// Only for mysql
     pub replace_into: bool,
     /// Only for mysql
@@ -587,7 +587,7 @@ pub struct Delete {
     /// WHERE
     pub selection: Option<Expr>,
     /// RETURNING
-    pub returning: Option<Vec<SelectItem>>,
+    pub returning: Option<Vec<WithSpan<SelectItem>>>,
     /// ORDER BY (MySQL)
     pub order_by: Vec<OrderByExpr>,
     /// LIMIT (MySQL)

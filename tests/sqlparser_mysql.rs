@@ -873,7 +873,7 @@ fn parse_create_table_both_options_and_as_query() {
             assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
             assert_eq!(
                 query.unwrap().body.as_select().unwrap().projection,
-                vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))]
+                vec![SelectItem::UnnamedExpr(Expr::Value(number("1"))).empty_span()]
             );
         }
         _ => unreachable!(),
@@ -976,7 +976,8 @@ fn parse_escaped_quote_identifiers_with_escape() {
                         quote_style: Some('`'),
                     }
                     .empty_span()
-                ))],
+                ))
+                .empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1029,7 +1030,8 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                         quote_style: Some('`'),
                     }
                     .empty_span()
-                ))],
+                ))
+                .empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1075,7 +1077,8 @@ fn parse_escaped_backticks_with_escape() {
                         quote_style: Some('`'),
                     }
                     .empty_span()
-                ))],
+                ))
+                .empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1125,7 +1128,8 @@ fn parse_escaped_backticks_with_no_escape() {
                         quote_style: Some('`'),
                     }
                     .empty_span()
-                ))],
+                ))
+                .empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1836,7 +1840,8 @@ fn parse_select_with_numeric_prefix_column_name() {
                     top: None,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
                         Ident::new("123col_$@123abc").empty_span()
-                    ))],
+                    ))
+                    .empty_span()],
                     into: None,
                     from: vec![TableWithJoins {
                         relation: TableFactor::Table {
@@ -1889,10 +1894,11 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     distinct: None,
                     top: None,
                     projection: vec![
-                        SelectItem::UnnamedExpr(Expr::Value(number("123e4"))),
+                        SelectItem::UnnamedExpr(Expr::Value(number("123e4"))).empty_span(),
                         SelectItem::UnnamedExpr(Expr::Identifier(
                             Ident::new("123col_$@123abc").empty_span()
                         ))
+                        .empty_span(),
                     ],
                     into: None,
                     from: vec![TableWithJoins {
@@ -2425,7 +2431,8 @@ fn parse_substring_in_select() {
                             substring_from: Some(Box::new(Expr::Value(number("0")))),
                             substring_for: Some(Box::new(Expr::Value(number("1")))),
                             special: true,
-                        })],
+                        })
+                        .empty_span()],
                         into: None,
                         from: vec![TableWithJoins {
                             relation: TableFactor::Table {
@@ -2742,7 +2749,8 @@ fn parse_hex_string_introducer() {
                 projection: vec![SelectItem::UnnamedExpr(Expr::IntroducedString {
                     introducer: "_latin1".to_string(),
                     value: Value::HexStringLiteral("4D7953514C".to_string())
-                })],
+                })
+                .empty_span()],
                 from: vec![],
                 lateral_views: vec![],
                 prewhere: None,

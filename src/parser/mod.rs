@@ -183,7 +183,7 @@ impl fmt::Display for ParserError {
 impl std::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
-const DEFAULT_REMAINING_DEPTH: usize = 50;
+const DEFAULT_REMAINING_DEPTH: usize = 48;
 
 /// Composite types declarations using angle brackets syntax can be arbitrary
 /// nested such that the following declaration is possible:
@@ -3400,7 +3400,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a comma-separated list of 1+ SelectItem
-    pub fn parse_projection(&mut self) -> Result<Vec<SelectItem>, ParserError> {
+    pub fn parse_projection(&mut self) -> Result<Vec<WithSpan<SelectItem>>, ParserError> {
         // BigQuery and Snowflake allow trailing commas, but only in project lists
         // e.g. `SELECT 1, 2, FROM t`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#trailing_commas
@@ -8287,7 +8287,7 @@ impl<'a> Parser<'a> {
     /// use sqlparser::parser::Parser;
     ///
     /// let dialect = GenericDialect {};
-    /// let expected = vec![Ident::new("one"), Ident::new("two")];
+    /// let expected = vec![Ident::new("one").empty_span(), Ident::new("two").empty_span()];
     ///
     /// // expected usage
     /// let sql = "one.two";
@@ -11209,15 +11209,18 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a comma-delimited list of projections after SELECT
-    pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
+    pub fn parse_select_item(&mut self) -> Result<WithSpan<SelectItem>, ParserError> {
+        let start_span = self.index;
         match self.parse_wildcard_expr()? {
             Expr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(
                 prefix,
                 self.parse_wildcard_additional_options()?,
-            )),
-            Expr::Wildcard => Ok(SelectItem::Wildcard(
-                self.parse_wildcard_additional_options()?,
-            )),
+            )
+            .spanning(self.span_from_index(start_span))),
+            Expr::Wildcard => Ok(
+                SelectItem::Wildcard(self.parse_wildcard_additional_options()?)
+                    .spanning(self.span_from_index(start_span)),
+            ),
             Expr::Identifier(v) if v.value.to_lowercase() == "from" && v.quote_style.is_none() => {
                 parser_err!(
                     format!("Expected an expression, found: {}", v),
@@ -11240,13 +11243,17 @@ impl<'a> Parser<'a> {
                 Ok(SelectItem::ExprWithAlias {
                     expr: *right,
                     alias,
-                })
+                }
+                .spanning(self.span_from_index(start_span)))
             }
             expr => self
                 .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
                 .map(|alias| match alias {
-                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
-                    None => SelectItem::UnnamedExpr(expr),
+                    Some(alias) => SelectItem::ExprWithAlias { expr, alias }
+                        .spanning(self.span_from_index(start_span)),
+                    None => {
+                        SelectItem::UnnamedExpr(expr).spanning(self.span_from_index(start_span))
+                    }
                 }),
         }
     }
@@ -12247,6 +12254,57 @@ impl<'a> Parser<'a> {
     /// Consume the parser and return its underlying token buffer
     pub fn into_tokens(self) -> Vec<TokenWithLocation> {
         self.tokens
+    }
+
+    fn span_from_index(&mut self, mut start_index: usize) -> Span {
+        let mut start_token = &self.tokens[start_index];
+        loop {
+            match start_token {
+                TokenWithLocation {
+                    token: Token::Whitespace(_),
+                    span: _,
+                } => {
+                    start_index += 1;
+                    start_token = &self.tokens[start_index];
+                    continue;
+                }
+                _ => break,
+            }
+        }
+        let start_span = start_token.span;
+
+        let mut idx = self.index.max(start_index).min(self.tokens.len() - 1);
+        loop {
+            if idx <= start_index || idx >= self.tokens.len() {
+                break;
+            }
+            let curr_token = &self.tokens[idx];
+            match curr_token {
+                TokenWithLocation {
+                    token: Token::Whitespace(_),
+                    span: _,
+                } => {
+                    idx -= 1;
+                    continue;
+                }
+                TokenWithLocation {
+                    token: Token::Comma,
+                    span: _,
+                } => {
+                    idx -= 1;
+                    continue;
+                }
+                TokenWithLocation {
+                    token: Token::Word(word),
+                    span: _,
+                } if word.keyword != Keyword::NoKeyword => {
+                    idx -= 1;
+                    continue;
+                }
+                non_whitespace => return non_whitespace.span.union(start_span),
+            }
+        }
+        start_span
     }
 
     /// Returns true if the next keyword indicates a sub query, i.e. SELECT or WITH

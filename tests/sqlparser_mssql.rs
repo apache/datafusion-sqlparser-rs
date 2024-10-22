@@ -114,7 +114,7 @@ fn parse_create_procedure() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1"))).empty_span()],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -390,7 +390,7 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match &select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
                 &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
@@ -541,7 +541,8 @@ fn parse_substring_in_select() {
                             substring_from: Some(Box::new(Expr::Value(number("0")))),
                             substring_for: Some(Box::new(Expr::Value(number("1")))),
                             special: true,
-                        })],
+                        })
+                        .empty_span()],
                         into: None,
                         from: vec![TableWithJoins {
                             relation: TableFactor::Table {

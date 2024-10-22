@@ -112,7 +112,7 @@ impl fmt::Display for Query {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ProjectionSelect {
-    pub projection: Vec<SelectItem>,
+    pub projection: Vec<WithSpan<SelectItem>>,
     pub order_by: Option<OrderBy>,
     pub group_by: Option<GroupByExpr>,
 }
@@ -280,7 +280,7 @@ pub struct Select {
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
     /// projection expressions
-    pub projection: Vec<SelectItem>,
+    pub projection: Vec<WithSpan<SelectItem>>,
     /// INTO
     pub into: Option<SelectInto>,
     /// FROM

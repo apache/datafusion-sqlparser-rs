@@ -15,26 +15,24 @@
 # specific language governing permissions and limitations
 # under the License.
 
-[package]
-name = "sqlparser_derive"
-description = "proc macro for sqlparser"
-version = "0.2.2"
-authors = ["sqlparser-rs authors"]
-homepage = "https://github.com/sqlparser-rs/sqlparser-rs"
-documentation = "https://docs.rs/sqlparser_derive/"
-keywords = ["ansi", "sql", "lexer", "parser"]
-repository = "https://github.com/sqlparser-rs/sqlparser-rs"
-license = "Apache-2.0"
-include = [
-    "src/**/*.rs",
-    "Cargo.toml",
-]
-edition = "2021"
+# This file controls the settings of this repository
+#
+# See more details at
+# https://cwiki.apache.org/confluence/display/INFRA/Git+-+.asf.yaml+features
 
-[lib]
-proc-macro = true
-
-[dependencies]
-syn = { version = "2.0", default-features = false, features = ["printing", "parsing", "derive", "proc-macro"] }
-proc-macro2 = "1.0"
-quote = "1.0"
+notifications:
+  commits: commits@datafusion.apache.org
+  issues: github@datafusion.apache.org
+  pullrequests: github@datafusion.apache.org
+github:
+  description: "Extensible SQL Lexer and Parser for Rust"
+  labels:
+    - big-data
+    - rust
+    - sql
+  enabled_merge_buttons:
+    squash: true
+    merge: false
+    rebase: false
+  features:
+    issues: true

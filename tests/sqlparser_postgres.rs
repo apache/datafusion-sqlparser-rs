@@ -1,14 +1,19 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 #![warn(clippy::all)]
 //! Test SQL syntax specific to PostgreSQL. The parser based on the
@@ -2912,6 +2917,21 @@ fn parse_comments() {
         _ => unreachable!(),
     }
 
+    match pg().verified_stmt("COMMENT ON EXTENSION plpgsql IS 'comment'") {
+        Statement::Comment {
+            object_type,
+            object_name,
+            comment: Some(comment),
+            if_exists,
+        } => {
+            assert_eq!("comment", comment);
+            assert_eq!("plpgsql", object_name.to_string());
+            assert_eq!(CommentObject::Extension, object_type);
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    }
+
     match pg().verified_stmt("COMMENT ON TABLE public.tab IS 'comment'") {
         Statement::Comment {
             object_type,
@@ -2968,17 +2988,14 @@ fn parse_on_commit() {
 }
 
 fn pg() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(PostgreSqlDialect {})])
 }
 
 fn pg_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }
 
 #[test]
@@ -4056,6 +4073,7 @@ fn parse_truncate() {
             only: false,
             identity: None,
             cascade: None,
+            on_cluster: None,
         },
         truncate
     );
@@ -4078,7 +4096,8 @@ fn parse_truncate_with_options() {
             table: true,
             only: true,
             identity: Some(TruncateIdentityOption::Restart),
-            cascade: Some(TruncateCascadeOption::Cascade)
+            cascade: Some(TruncateCascadeOption::Cascade),
+            on_cluster: None,
         },
         truncate
     );
@@ -4109,7 +4128,8 @@ fn parse_truncate_with_table_list() {
             table: true,
             only: false,
             identity: Some(TruncateIdentityOption::Restart),
-            cascade: Some(TruncateCascadeOption::Cascade)
+            cascade: Some(TruncateCascadeOption::Cascade),
+            on_cluster: None,
         },
         truncate
     );
@@ -5162,4 +5182,33 @@ fn arrow_cast_precedence() {
             }),
         }
     )
+}
+
+#[test]
+fn parse_create_type_as_enum() {
+    let statement = pg().one_statement_parses_to(
+        r#"CREATE TYPE public.my_type AS ENUM (
+            'label1',
+            'label2',
+            'label3',
+            'label4'
+        );"#,
+        "CREATE TYPE public.my_type AS ENUM ('label1', 'label2', 'label3', 'label4')",
+    );
+    match statement {
+        Statement::CreateType {
+            name,
+            representation: UserDefinedTypeRepresentation::Enum { labels },
+        } => {
+            assert_eq!("public.my_type", name.to_string());
+            assert_eq!(
+                vec!["label1", "label2", "label3", "label4"]
+                    .into_iter()
+                    .map(|l| Ident::with_quote('\'', l))
+                    .collect::<Vec<Ident>>(),
+                labels
+            );
+        }
+        _ => unreachable!(),
+    }
 }

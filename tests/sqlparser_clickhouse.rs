@@ -1,14 +1,19 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 #![warn(clippy::all)]
 //! Test SQL syntax specific to ClickHouse.
@@ -279,13 +284,13 @@ fn parse_alter_table_attach_and_detach_partition() {
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {operation} PARTITION").as_str())
                 .unwrap_err(),
-            ParserError("Expected: an expression:, found: EOF".to_string())
+            ParserError("Expected: an expression, found: EOF".to_string())
         );
         assert_eq!(
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {operation} PART").as_str())
                 .unwrap_err(),
-            ParserError("Expected: an expression:, found: EOF".to_string())
+            ParserError("Expected: an expression, found: EOF".to_string())
         );
     }
 }
@@ -358,7 +363,7 @@ fn parse_alter_table_add_projection() {
         clickhouse_and_generic()
             .parse_sql_statements("ALTER TABLE t0 ADD PROJECTION my_name (SELECT)")
             .unwrap_err(),
-        ParserError("Expected: an expression:, found: )".to_string())
+        ParserError("Expected: an expression, found: )".to_string())
     );
 }
 
@@ -501,13 +506,13 @@ fn parse_optimize_table() {
         clickhouse_and_generic()
             .parse_sql_statements("OPTIMIZE TABLE t0 DEDUPLICATE BY")
             .unwrap_err(),
-        ParserError("Expected: an expression:, found: EOF".to_string())
+        ParserError("Expected: an expression, found: EOF".to_string())
     );
     assert_eq!(
         clickhouse_and_generic()
             .parse_sql_statements("OPTIMIZE TABLE t0 PARTITION")
             .unwrap_err(),
-        ParserError("Expected: an expression:, found: EOF".to_string())
+        ParserError("Expected: an expression, found: EOF".to_string())
     );
     assert_eq!(
         clickhouse_and_generic()
@@ -1484,7 +1489,7 @@ fn parse_freeze_and_unfreeze_partition() {
             clickhouse_and_generic()
                 .parse_sql_statements(format!("ALTER TABLE t0 {operation_name} PARTITION").as_str())
                 .unwrap_err(),
-            ParserError("Expected: an expression:, found: EOF".to_string())
+            ParserError("Expected: an expression, found: EOF".to_string())
         );
         assert_eq!(
             clickhouse_and_generic()
@@ -1613,15 +1618,12 @@ fn parse_explain_table() {
 }
 
 fn clickhouse() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(ClickHouseDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }
 
 fn clickhouse_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(ClickHouseDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(ClickHouseDialect {}),
+        Box::new(GenericDialect {}),
+    ])
 }

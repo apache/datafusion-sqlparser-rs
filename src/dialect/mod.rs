@@ -1,14 +1,19 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 mod ansi;
 mod bigquery;
@@ -44,7 +49,7 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
-use crate::ast::{Expr, Statement};
+use crate::ast::{ColumnOption, Expr, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -55,7 +60,14 @@ use alloc::boxed::Box;
 
 /// Convenience check if a [`Parser`] uses a certain dialect.
 ///
-/// `dialect_of!(parser Is SQLiteDialect |  GenericDialect)` evaluates
+/// Note: when possible please the new style, adding a method to the [`Dialect`]
+/// trait rather than using this macro.
+///
+/// The benefits of adding a method on `Dialect` over this macro are:
+/// 1. user defined [`Dialect`]s can customize the parsing behavior
+/// 2. The differences between dialects can be clearly documented in the trait
+///
+/// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the [`Dialect`]s specified.
 macro_rules! dialect_of {
     ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {
@@ -311,6 +323,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect support parsing `LIMIT 1, 2` as `LIMIT 2 OFFSET 1`?
+    fn supports_limit_comma(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support trailing commas in the projection list?
     fn supports_projection_trailing_commas(&self) -> bool {
         self.supports_trailing_commas()
@@ -461,6 +478,19 @@ pub trait Dialect: Debug + Any {
         None
     }
 
+    /// Dialect-specific column option parser override
+    ///
+    /// This method is called to parse the next column option.
+    ///
+    /// If `None` is returned, falls back to the default behavior.
+    fn parse_column_option(
+        &self,
+        _parser: &mut Parser,
+    ) -> Result<Option<Result<Option<ColumnOption>, ParserError>>, ParserError> {
+        // return None to fall back to the default behavior
+        Ok(None)
+    }
+
     /// Decide the lexical Precedence of operators.
     ///
     /// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
@@ -534,6 +564,30 @@ pub trait Dialect: Debug + Any {
     /// * `INTERVAL '1' DAY` is VALID — unit is not required, but still allowed
     /// * `INTERVAL 1 + 1 DAY` is INVALID
     fn require_interval_qualifier(&self) -> bool {
+        false
+    }
+
+    fn supports_explain_with_utility_options(&self) -> bool {
+        false
+    }
+
+    fn supports_asc_desc_in_column_definition(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
+    /// as an alias assignment operator, rather than a boolean expression.
+    /// For example: the following statements are equivalent for such a dialect:
+    /// ```sql
+    ///  SELECT col_alias = col FROM tbl;
+    ///  SELECT col_alias AS col FROM tbl;
+    /// ```
+    fn supports_eq_alias_assigment(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `TRY_CONVERT` function
+    fn supports_try_convert(&self) -> bool {
         false
     }
 }

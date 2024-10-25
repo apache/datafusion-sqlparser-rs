@@ -1,14 +1,19 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 /// This module contains internal utilities used for testing the library.
 /// While technically public, the library's users are not supposed to rely
@@ -39,16 +44,47 @@ use pretty_assertions::assert_eq;
 pub struct TestedDialects {
     pub dialects: Vec<Box<dyn Dialect>>,
     pub options: Option<ParserOptions>,
+    pub recursion_limit: Option<usize>,
 }
 
 impl TestedDialects {
+    /// Create a TestedDialects with default options and the given dialects.
+    pub fn new(dialects: Vec<Box<dyn Dialect>>) -> Self {
+        Self {
+            dialects,
+            options: None,
+            recursion_limit: None,
+        }
+    }
+
+    pub fn new_with_options(dialects: Vec<Box<dyn Dialect>>, options: ParserOptions) -> Self {
+        Self {
+            dialects,
+            options: Some(options),
+            recursion_limit: None,
+        }
+    }
+
+    pub fn with_recursion_limit(mut self, recursion_limit: usize) -> Self {
+        self.recursion_limit = Some(recursion_limit);
+        self
+    }
+
     fn new_parser<'a>(&self, dialect: &'a dyn Dialect) -> Parser<'a> {
         let parser = Parser::new(dialect);
-        if let Some(options) = &self.options {
+        let parser = if let Some(options) = &self.options {
             parser.with_options(options.clone())
         } else {
             parser
-        }
+        };
+
+        let parser = if let Some(recursion_limit) = &self.recursion_limit {
+            parser.with_recursion_limit(*recursion_limit)
+        } else {
+            parser
+        };
+
+        parser
     }
 
     /// Run the given function for all of `self.dialects`, assert that they
@@ -206,24 +242,21 @@ impl TestedDialects {
 
 /// Returns all available dialects.
 pub fn all_dialects() -> TestedDialects {
-    let all_dialects = vec![
-        Box::new(GenericDialect {}) as Box<dyn Dialect>,
-        Box::new(PostgreSqlDialect {}) as Box<dyn Dialect>,
-        Box::new(MsSqlDialect {}) as Box<dyn Dialect>,
-        Box::new(AnsiDialect {}) as Box<dyn Dialect>,
-        Box::new(SnowflakeDialect {}) as Box<dyn Dialect>,
-        Box::new(HiveDialect {}) as Box<dyn Dialect>,
-        Box::new(RedshiftSqlDialect {}) as Box<dyn Dialect>,
-        Box::new(MySqlDialect {}) as Box<dyn Dialect>,
-        Box::new(BigQueryDialect {}) as Box<dyn Dialect>,
-        Box::new(SQLiteDialect {}) as Box<dyn Dialect>,
-        Box::new(DuckDbDialect {}) as Box<dyn Dialect>,
-        Box::new(DatabricksDialect {}) as Box<dyn Dialect>,
-    ];
-    TestedDialects {
-        dialects: all_dialects,
-        options: None,
-    }
+    TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(PostgreSqlDialect {}),
+        Box::new(MsSqlDialect {}),
+        Box::new(AnsiDialect {}),
+        Box::new(SnowflakeDialect {}),
+        Box::new(HiveDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(MySqlDialect {}),
+        Box::new(BigQueryDialect {}),
+        Box::new(SQLiteDialect {}),
+        Box::new(DuckDbDialect {}),
+        Box::new(DatabricksDialect {}),
+        Box::new(ClickHouseDialect {}),
+    ])
 }
 
 /// Returns all dialects matching the given predicate.

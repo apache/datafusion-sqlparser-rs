@@ -1,14 +1,19 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 //! AST types specific to CREATE/ALTER variants of [`Statement`](crate::ast::Statement)
 //! (commonly referred to as Data Definition Language, or DDL)
@@ -26,8 +31,9 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, DataType, Expr, Ident, MySQLColumnPosition,
-    ObjectName, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Value,
+    ObjectName, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
 };
+use crate::keywords::Keyword;
 use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
@@ -227,6 +233,49 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
     OwnerTo { new_owner: Owner },
+}
+
+/// An `ALTER Policy` (`Statement::AlterPolicy`) operation
+///
+/// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-altertable.html)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterPolicyOperation {
+    Rename {
+        new_name: Ident,
+    },
+    Apply {
+        to: Option<Vec<Owner>>,
+        using: Option<Expr>,
+        with_check: Option<Expr>,
+    },
+}
+
+impl fmt::Display for AlterPolicyOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterPolicyOperation::Rename { new_name } => {
+                write!(f, " RENAME TO {new_name}")
+            }
+            AlterPolicyOperation::Apply {
+                to,
+                using,
+                with_check,
+            } => {
+                if let Some(to) = to {
+                    write!(f, " TO {}", display_comma_separated(to))?;
+                }
+                if let Some(using) = using {
+                    write!(f, " USING ({using})")?;
+                }
+                if let Some(with_check) = with_check {
+                    write!(f, " WITH CHECK ({with_check})")?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -992,6 +1041,7 @@ impl fmt::Display for ColumnDef {
 /// ```sql
 /// name
 /// age OPTIONS(description = "age column", tag = "prod")
+/// amount COMMENT 'The total amount for the order line'
 /// created_at DateTime64
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1000,7 +1050,7 @@ impl fmt::Display for ColumnDef {
 pub struct ViewColumnDef {
     pub name: Ident,
     pub data_type: Option<DataType>,
-    pub options: Option<Vec<SqlOption>>,
+    pub options: Option<Vec<ColumnOption>>,
 }
 
 impl fmt::Display for ViewColumnDef {
@@ -1010,11 +1060,7 @@ impl fmt::Display for ViewColumnDef {
             write!(f, " {}", data_type)?;
         }
         if let Some(options) = self.options.as_ref() {
-            write!(
-                f,
-                " OPTIONS({})",
-                display_comma_separated(options.as_slice())
-            )?;
+            write!(f, " {}", display_comma_separated(options.as_slice()))?;
         }
         Ok(())
     }
@@ -1047,6 +1093,224 @@ pub struct ColumnOptionDef {
 impl fmt::Display for ColumnOptionDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}{}", display_constraint_name(&self.name), self.option)
+    }
+}
+
+/// Identity is a column option for defining an identity or autoincrement column in a `CREATE TABLE` statement.
+/// Syntax
+/// ```sql
+/// { IDENTITY | AUTOINCREMENT } [ (seed , increment) | START num INCREMENT num ] [ ORDER | NOORDER ]
+/// ```
+/// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IdentityPropertyKind {
+    /// An identity property declared via the `AUTOINCREMENT` key word
+    /// Example:
+    /// ```sql
+    ///  AUTOINCREMENT(100, 1) NOORDER
+    ///  AUTOINCREMENT START 100 INCREMENT 1 ORDER
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    Autoincrement(IdentityProperty),
+    /// An identity property declared via the `IDENTITY` key word
+    /// Example, [MS SQL Server] or [Snowflake]:
+    /// ```sql
+    ///  IDENTITY(100, 1)
+    /// ```
+    /// [Snowflake]
+    /// ```sql
+    ///  IDENTITY(100, 1) ORDER
+    ///  IDENTITY START 100 INCREMENT 1 NOORDER
+    /// ```
+    /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    Identity(IdentityProperty),
+}
+
+impl fmt::Display for IdentityPropertyKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (command, property) = match self {
+            IdentityPropertyKind::Identity(property) => ("IDENTITY", property),
+            IdentityPropertyKind::Autoincrement(property) => ("AUTOINCREMENT", property),
+        };
+        write!(f, "{command}")?;
+        if let Some(parameters) = &property.parameters {
+            write!(f, "{parameters}")?;
+        }
+        if let Some(order) = &property.order {
+            write!(f, "{order}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IdentityProperty {
+    pub parameters: Option<IdentityPropertyFormatKind>,
+    pub order: Option<IdentityPropertyOrder>,
+}
+
+/// A format of parameters of identity column.
+///
+/// It is [Snowflake] specific.
+/// Syntax
+/// ```sql
+/// (seed , increment) | START num INCREMENT num
+/// ```
+/// [MS SQL Server] uses one way of representing these parameters.
+/// Syntax
+/// ```sql
+/// (seed , increment)
+/// ```
+/// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IdentityPropertyFormatKind {
+    /// A parameters of identity column declared like parameters of function call
+    /// Example:
+    /// ```sql
+    ///  (100, 1)
+    /// ```
+    /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    FunctionCall(IdentityParameters),
+    /// A parameters of identity column declared with keywords `START` and `INCREMENT`
+    /// Example:
+    /// ```sql
+    ///  START 100 INCREMENT 1
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    StartAndIncrement(IdentityParameters),
+}
+
+impl fmt::Display for IdentityPropertyFormatKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IdentityPropertyFormatKind::FunctionCall(parameters) => {
+                write!(f, "({}, {})", parameters.seed, parameters.increment)
+            }
+            IdentityPropertyFormatKind::StartAndIncrement(parameters) => {
+                write!(
+                    f,
+                    " START {} INCREMENT {}",
+                    parameters.seed, parameters.increment
+                )
+            }
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IdentityParameters {
+    pub seed: Expr,
+    pub increment: Expr,
+}
+
+/// The identity column option specifies how values are generated for the auto-incremented column, either in increasing or decreasing order.
+/// Syntax
+/// ```sql
+/// ORDER | NOORDER
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IdentityPropertyOrder {
+    Order,
+    NoOrder,
+}
+
+impl fmt::Display for IdentityPropertyOrder {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IdentityPropertyOrder::Order => write!(f, " ORDER"),
+            IdentityPropertyOrder::NoOrder => write!(f, " NOORDER"),
+        }
+    }
+}
+
+/// Column policy that identify a security policy of access to a column.
+/// Syntax
+/// ```sql
+/// [ WITH ] MASKING POLICY <policy_name> [ USING ( <col_name> , <cond_col1> , ... ) ]
+/// [ WITH ] PROJECTION POLICY <policy_name>
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ColumnPolicy {
+    MaskingPolicy(ColumnPolicyProperty),
+    ProjectionPolicy(ColumnPolicyProperty),
+}
+
+impl fmt::Display for ColumnPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (command, property) = match self {
+            ColumnPolicy::MaskingPolicy(property) => ("MASKING POLICY", property),
+            ColumnPolicy::ProjectionPolicy(property) => ("PROJECTION POLICY", property),
+        };
+        if property.with {
+            write!(f, "WITH ")?;
+        }
+        write!(f, "{command} {}", property.policy_name)?;
+        if let Some(using_columns) = &property.using_columns {
+            write!(f, " USING ({})", display_comma_separated(using_columns))?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ColumnPolicyProperty {
+    /// This flag indicates that the column policy option is declared using the `WITH` prefix.
+    /// Example
+    /// ```sql
+    /// WITH PROJECTION POLICY sample_policy
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    pub with: bool,
+    pub policy_name: Ident,
+    pub using_columns: Option<Vec<Ident>>,
+}
+
+/// Tags option of column
+/// Syntax
+/// ```sql
+/// [ WITH ] TAG ( <tag_name> = '<tag_value>' [ , <tag_name> = '<tag_value>' , ... ] )
+/// ```
+/// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TagsColumnOption {
+    /// This flag indicates that the tags option is declared using the `WITH` prefix.
+    /// Example:
+    /// ```sql
+    /// WITH TAG (A = 'Tag A')
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    pub with: bool,
+    pub tags: Vec<Tag>,
+}
+
+impl fmt::Display for TagsColumnOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.with {
+            write!(f, "WITH ")?;
+        }
+        write!(f, "TAG ({})", display_comma_separated(&self.tags))?;
+        Ok(())
     }
 }
 
@@ -1120,6 +1384,32 @@ pub enum ColumnOption {
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
     /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
     Options(Vec<SqlOption>),
+    /// Creates an identity or an autoincrement column in a table.
+    /// Syntax
+    /// ```sql
+    /// { IDENTITY | AUTOINCREMENT } [ (seed , increment) | START num INCREMENT num ] [ ORDER | NOORDER ]
+    /// ```
+    /// [MS SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    Identity(IdentityPropertyKind),
+    /// SQLite specific: ON CONFLICT option on column definition
+    /// <https://www.sqlite.org/lang_conflict.html>
+    OnConflict(Keyword),
+    /// Snowflake specific: an option of specifying security masking or projection policy to set on a column.
+    /// Syntax:
+    /// ```sql
+    /// [ WITH ] MASKING POLICY <policy_name> [ USING ( <col_name> , <cond_col1> , ... ) ]
+    /// [ WITH ] PROJECTION POLICY <policy_name>
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    Policy(ColumnPolicy),
+    /// Snowflake specific: Specifies the tag name and the tag string value.
+    /// Syntax:
+    /// ```sql
+    /// [ WITH ] TAG ( <tag_name> = '<tag_value>' [ , <tag_name> = '<tag_value>' , ... ] )
+    /// ```
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
+    Tags(TagsColumnOption),
 }
 
 impl fmt::Display for ColumnOption {
@@ -1220,6 +1510,19 @@ impl fmt::Display for ColumnOption {
             }
             Options(options) => {
                 write!(f, "OPTIONS({})", display_comma_separated(options))
+            }
+            Identity(parameters) => {
+                write!(f, "{parameters}")
+            }
+            OnConflict(keyword) => {
+                write!(f, "ON CONFLICT {:?}", keyword)?;
+                Ok(())
+            }
+            Policy(parameters) => {
+                write!(f, "{parameters}")
+            }
+            Tags(tags) => {
+                write!(f, "{tags}")
             }
         }
     }
@@ -1403,6 +1706,8 @@ pub enum UserDefinedTypeRepresentation {
     Composite {
         attributes: Vec<UserDefinedTypeCompositeAttributeDef>,
     },
+    /// Note: this is PostgreSQL-specific. See <https://www.postgresql.org/docs/current/sql-createtype.html>
+    Enum { labels: Vec<Ident> },
 }
 
 impl fmt::Display for UserDefinedTypeRepresentation {
@@ -1410,6 +1715,9 @@ impl fmt::Display for UserDefinedTypeRepresentation {
         match self {
             UserDefinedTypeRepresentation::Composite { attributes } => {
                 write!(f, "({})", display_comma_separated(attributes))
+            }
+            UserDefinedTypeRepresentation::Enum { labels } => {
+                write!(f, "ENUM ({})", display_comma_separated(labels))
             }
         }
     }

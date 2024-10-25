@@ -1,17 +1,27 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use core::fmt::{self, Display};
 #[cfg(feature = "serde")]
@@ -487,6 +497,81 @@ pub struct Insert {
     pub insert_alias: Option<InsertAliases>,
 }
 
+impl Display for Insert {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let table_name = if let Some(alias) = &self.table_alias {
+            format!("{0} AS {alias}", self.table_name)
+        } else {
+            self.table_name.to_string()
+        };
+
+        if let Some(action) = self.or {
+            write!(f, "INSERT OR {action} INTO {table_name} ")?;
+        } else {
+            write!(
+                f,
+                "{start}",
+                start = if self.replace_into {
+                    "REPLACE"
+                } else {
+                    "INSERT"
+                },
+            )?;
+            if let Some(priority) = self.priority {
+                write!(f, " {priority}",)?;
+            }
+
+            write!(
+                f,
+                "{ignore}{over}{int}{tbl} {table_name} ",
+                table_name = table_name,
+                ignore = if self.ignore { " IGNORE" } else { "" },
+                over = if self.overwrite { " OVERWRITE" } else { "" },
+                int = if self.into { " INTO" } else { "" },
+                tbl = if self.table { " TABLE" } else { "" },
+            )?;
+        }
+        if !self.columns.is_empty() {
+            write!(f, "({}) ", display_comma_separated(&self.columns))?;
+        }
+        if let Some(ref parts) = self.partitioned {
+            if !parts.is_empty() {
+                write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
+            }
+        }
+        if !self.after_columns.is_empty() {
+            write!(f, "({}) ", display_comma_separated(&self.after_columns))?;
+        }
+
+        if let Some(source) = &self.source {
+            write!(f, "{source}")?;
+        }
+
+        if self.source.is_none() && self.columns.is_empty() {
+            write!(f, "DEFAULT VALUES")?;
+        }
+
+        if let Some(insert_alias) = &self.insert_alias {
+            write!(f, " AS {0}", insert_alias.row_alias)?;
+
+            if let Some(col_aliases) = &insert_alias.col_aliases {
+                if !col_aliases.is_empty() {
+                    write!(f, " ({})", display_comma_separated(col_aliases))?;
+                }
+            }
+        }
+
+        if let Some(on) = &self.on {
+            write!(f, "{on}")?;
+        }
+
+        if let Some(returning) = &self.returning {
+            write!(f, " RETURNING {}", display_comma_separated(returning))?;
+        }
+        Ok(())
+    }
+}
+
 /// DELETE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -506,4 +591,37 @@ pub struct Delete {
     pub order_by: Vec<OrderByExpr>,
     /// LIMIT (MySQL)
     pub limit: Option<Expr>,
+}
+
+impl Display for Delete {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "DELETE ")?;
+        if !self.tables.is_empty() {
+            write!(f, "{} ", display_comma_separated(&self.tables))?;
+        }
+        match &self.from {
+            FromTable::WithFromKeyword(from) => {
+                write!(f, "FROM {}", display_comma_separated(from))?;
+            }
+            FromTable::WithoutKeyword(from) => {
+                write!(f, "{}", display_comma_separated(from))?;
+            }
+        }
+        if let Some(using) = &self.using {
+            write!(f, " USING {}", display_comma_separated(using))?;
+        }
+        if let Some(selection) = &self.selection {
+            write!(f, " WHERE {selection}")?;
+        }
+        if let Some(returning) = &self.returning {
+            write!(f, " RETURNING {}", display_comma_separated(returning))?;
+        }
+        if !self.order_by.is_empty() {
+            write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
+        Ok(())
+    }
 }

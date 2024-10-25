@@ -1,14 +1,19 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 #![warn(clippy::all)]
 //! Test SQL syntax specific to Microsoft's T-SQL. The parser based on the
@@ -471,6 +476,7 @@ fn parse_cast_varchar_max() {
 fn parse_convert() {
     let sql = "CONVERT(INT, 1, 2, 3, NULL)";
     let Expr::Convert {
+        is_try,
         expr,
         data_type,
         charset,
@@ -480,6 +486,7 @@ fn parse_convert() {
     else {
         unreachable!()
     };
+    assert!(!is_try);
     assert_eq!(Expr::Value(number("1")), *expr);
     assert_eq!(Some(DataType::Int(None)), data_type);
     assert!(charset.is_none());
@@ -499,7 +506,7 @@ fn parse_convert() {
 
     let error_sql = "SELECT CONVERT(INT, 'foo',) FROM T";
     assert_eq!(
-        ParserError::ParserError("Expected: an expression:, found: )".to_owned()),
+        ParserError::ParserError("Expected: an expression, found: )".to_owned()),
         ms().parse_sql_statements(error_sql).unwrap_err()
     );
 }
@@ -939,15 +946,123 @@ fn parse_create_table_with_invalid_options() {
     }
 }
 
-fn ms() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {})],
-        options: None,
+#[test]
+fn parse_create_table_with_identity_column() {
+    let with_column_options = [
+        (
+            r#"CREATE TABLE mytable (columnA INT IDENTITY NOT NULL)"#,
+            vec![
+                ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                        IdentityProperty {
+                            parameters: None,
+                            order: None,
+                        },
+                    )),
+                },
+                ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::NotNull,
+                },
+            ],
+        ),
+        (
+            r#"CREATE TABLE mytable (columnA INT IDENTITY(1, 1) NOT NULL)"#,
+            vec![
+                ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::Identity(IdentityPropertyKind::Identity(
+                        IdentityProperty {
+                            parameters: Some(IdentityPropertyFormatKind::FunctionCall(
+                                IdentityParameters {
+                                    seed: Expr::Value(number("1")),
+                                    increment: Expr::Value(number("1")),
+                                },
+                            )),
+                            order: None,
+                        },
+                    )),
+                },
+                ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::NotNull,
+                },
+            ],
+        ),
+    ];
+
+    for (sql, column_options) in with_column_options {
+        assert_eq!(
+            ms_and_generic().verified_stmt(sql),
+            Statement::CreateTable(CreateTable {
+                or_replace: false,
+                temporary: false,
+                external: false,
+                global: None,
+                if_not_exists: false,
+                transient: false,
+                volatile: false,
+                name: ObjectName(vec![Ident {
+                    value: "mytable".to_string(),
+                    quote_style: None,
+                },],),
+                columns: vec![ColumnDef {
+                    name: Ident {
+                        value: "columnA".to_string(),
+                        quote_style: None,
+                    },
+                    data_type: Int(None,),
+                    collation: None,
+                    options: column_options,
+                },],
+                constraints: vec![],
+                hive_distribution: HiveDistributionStyle::NONE,
+                hive_formats: Some(HiveFormat {
+                    row_format: None,
+                    serde_properties: None,
+                    storage: None,
+                    location: None,
+                },),
+                table_properties: vec![],
+                with_options: vec![],
+                file_format: None,
+                location: None,
+                query: None,
+                without_rowid: false,
+                like: None,
+                clone: None,
+                engine: None,
+                comment: None,
+                auto_increment_offset: None,
+                default_charset: None,
+                collation: None,
+                on_commit: None,
+                on_cluster: None,
+                primary_key: None,
+                order_by: None,
+                partition_by: None,
+                cluster_by: None,
+                clustered_by: None,
+                options: None,
+                strict: false,
+                copy_grants: false,
+                enable_schema_evolution: None,
+                change_tracking: None,
+                data_retention_time_in_days: None,
+                max_data_extension_time_in_days: None,
+                default_ddl_collation: None,
+                with_aggregation_policy: None,
+                with_row_access_policy: None,
+                with_tags: None,
+            }),
+        );
     }
 }
+
+fn ms() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MsSqlDialect {})])
+}
 fn ms_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})],
-        options: None,
-    }
+    TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
 }

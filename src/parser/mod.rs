@@ -9040,10 +9040,10 @@ impl<'a> Parser<'a> {
                 }
             }
             self.expect_token(&Token::LParen)?;
-          
+
             let query = self.parse_query()?;
             let closing_paren_token = self.expect_token(&Token::RParen)?;
-          
+
             let alias = TableAlias {
                 name,
                 columns: vec![],

@@ -2803,3 +2803,11 @@ fn test_group_concat() {
     mysql_and_generic()
         .verified_expr("GROUP_CONCAT(DISTINCT test_score ORDER BY test_score DESC SEPARATOR ' ')");
 }
+
+#[test]
+fn parse_select_distinctrow() {
+    mysql().one_statement_parses_to(
+        "SELECT DISTINCTROW a FROM tbl", 
+        "SELECT DISTINCT a FROM tbl"
+    );
+}

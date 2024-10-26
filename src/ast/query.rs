@@ -327,12 +327,20 @@ impl fmt::Display for Select {
             write!(f, " {value_table_mode}")?;
         }
 
+        if let Some(ref top) = self.top {
+            if top.is_before_distinct {
+                write!(f, " {top}")?;
+            }
+        }
         if let Some(ref distinct) = self.distinct {
             write!(f, " {distinct}")?;
         }
         if let Some(ref top) = self.top {
-            write!(f, " {top}")?;
+            if !top.is_before_distinct {
+                write!(f, " {top}")?;
+            }
         }
+
         write!(f, " {}", display_comma_separated(&self.projection))?;
 
         if let Some(ref into) = self.into {
@@ -1996,6 +2004,9 @@ pub struct Top {
     /// MSSQL only.
     pub percent: bool,
     pub quantity: Option<TopQuantity>,
+    // Whether this option was parsed before `ALL`/`DISTINCT`
+    // See `Dialect::expects_top_before_distinct`
+    pub is_before_distinct: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

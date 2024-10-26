@@ -600,6 +600,12 @@ pub trait Dialect: Debug + Any {
     fn supports_notify(&self) -> bool {
         false
     }
+
+    /// Returns true if this dialect expects the the `TOP` option
+    /// before the `ALL`/`DISTINCT` options
+    fn expects_top_before_distinct(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

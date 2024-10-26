@@ -3553,7 +3553,9 @@ impl<'a> Parser<'a> {
     pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
         let loc = self.peek_token().location;
         let all = self.parse_keyword(Keyword::ALL);
-        let distinct = self.parse_keyword(Keyword::DISTINCT);
+        let distinct = self
+            .parse_one_of_keywords(&[Keyword::DISTINCT, Keyword::DISTINCTROW])
+            .is_some();
         if !distinct {
             return Ok(None);
         }
@@ -9193,12 +9195,14 @@ impl<'a> Parser<'a> {
                 None
             };
 
-        let distinct = self.parse_all_or_distinct()?;
-
-        let top = if self.parse_keyword(Keyword::TOP) {
-            Some(self.parse_top()?)
+        let (distinct, top) = if self.dialect.expects_top_before_distinct() {
+            let top = self.maybe_parse_top(true)?;
+            let distinct = self.parse_all_or_distinct()?;
+            (distinct, top)
         } else {
-            None
+            let distinct = self.parse_all_or_distinct()?;
+            let top = self.maybe_parse_top(false)?;
+            (distinct, top)
         };
 
         let projection = self.parse_projection()?;
@@ -11552,7 +11556,14 @@ impl<'a> Parser<'a> {
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,
     /// that follows after `SELECT [DISTINCT]`.
-    pub fn parse_top(&mut self) -> Result<Top, ParserError> {
+    pub fn maybe_parse_top(
+        &mut self,
+        is_before_distinct: bool,
+    ) -> Result<Option<Top>, ParserError> {
+        if !self.parse_keyword(Keyword::TOP) {
+            return Ok(None);
+        }
+
         let quantity = if self.consume_token(&Token::LParen) {
             let quantity = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
@@ -11570,11 +11581,12 @@ impl<'a> Parser<'a> {
 
         let with_ties = self.parse_keywords(&[Keyword::WITH, Keyword::TIES]);
 
-        Ok(Top {
+        Ok(Some(Top {
             with_ties,
             percent,
             quantity,
-        })
+            is_before_distinct,
+        }))
     }
 
     /// Parse a LIMIT clause

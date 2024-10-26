@@ -73,8 +73,9 @@ pub use self::value::{
     TrimWhereField, Value,
 };
 
-use crate::ast::helpers::stmt_data_loading::{
-    DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
+use crate::{
+    ast::helpers::stmt_data_loading::{DataLoadingOptions, StageLoadSelectItem, StageParamsObject},
+    keywords::Keyword,
 };
 #[cfg(feature = "visitor")]
 pub use visitor::*;
@@ -2782,12 +2783,30 @@ pub enum Statement {
         filter: Option<ShowStatementFilter>,
     },
     /// ```sql
+    /// SHOW DATABASES [LIKE 'pattern']
+    /// ```
+    ShowDatabases { pattern: Option<String> },
+    /// ```sql
+    /// SHOW SCHEMAS [LIKE 'pattern']
+    /// ```
+    ShowSchemas { pattern: Option<String> },
+    /// ```sql
     /// SHOW TABLES
     /// ```
-    /// Note: this is a MySQL-specific statement.
     ShowTables {
         extended: bool,
         full: bool,
+        // The keyword used to indicate the DB name (IN/FROM)
+        db_name_keyword: Option<Keyword>,
+        db_name: Option<Ident>,
+        filter: Option<ShowStatementFilter>,
+    },
+    /// ```sql
+    /// SHOW VIEWS
+    /// ```
+    ShowViews {
+        // The keyword used to indicate the DB name (IN/FROM)
+        db_name_keyword: Option<Keyword>,
         db_name: Option<Ident>,
         filter: Option<ShowStatementFilter>,
     },
@@ -4363,9 +4382,24 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::ShowDatabases { pattern } => {
+                write!(f, "SHOW DATABASES")?;
+                if let Some(pattern) = pattern {
+                    write!(f, " LIKE '{}'", pattern)?;
+                }
+                Ok(())
+            }
+            Statement::ShowSchemas { pattern } => {
+                write!(f, "SHOW SCHEMAS")?;
+                if let Some(pattern) = pattern {
+                    write!(f, " LIKE '{}'", pattern)?;
+                }
+                Ok(())
+            }
             Statement::ShowTables {
                 extended,
                 full,
+                db_name_keyword,
                 db_name,
                 filter,
             } => {
@@ -4376,7 +4410,31 @@ impl fmt::Display for Statement {
                     full = if *full { "FULL " } else { "" },
                 )?;
                 if let Some(db_name) = db_name {
-                    write!(f, " FROM {db_name}")?;
+                    let keyword = match &db_name_keyword {
+                        Some(Keyword::FROM) => "FROM",
+                        Some(Keyword::IN) => "IN",
+                        _ => "", // unexpected
+                    };
+                    write!(f, " {} {db_name}", keyword)?;
+                }
+                if let Some(filter) = filter {
+                    write!(f, " {filter}")?;
+                }
+                Ok(())
+            }
+            Statement::ShowViews { 
+                db_name_keyword, 
+                db_name, 
+                filter 
+            } => {
+                write!(f, "SHOW VIEWS")?;
+                if let Some(db_name) = db_name {
+                    let keyword = match &db_name_keyword {
+                        Some(Keyword::FROM) => "FROM",
+                        Some(Keyword::IN) => "IN",
+                        _ => "", // unexpected
+                    };
+                    write!(f, " {} {db_name}", keyword)?;
                 }
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -6057,6 +6115,7 @@ pub enum ShowStatementFilter {
     Like(String),
     ILike(String),
     Where(Expr),
+    NoKeyword(String),
 }
 
 impl fmt::Display for ShowStatementFilter {
@@ -6066,6 +6125,7 @@ impl fmt::Display for ShowStatementFilter {
             Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern)),
             ILike(pattern) => write!(f, "ILIKE {}", value::escape_single_quote_string(pattern)),
             Where(expr) => write!(f, "WHERE {expr}"),
+            NoKeyword(pattern) => write!(f, "'{}'", value::escape_single_quote_string(pattern)),
         }
     }
 }

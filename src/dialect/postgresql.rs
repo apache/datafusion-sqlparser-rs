@@ -230,15 +230,18 @@ pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {
 }
 
 pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-    let name = parser.maybe_parse(|parser| -> Result<ObjectName, ParserError> {
+    if let Ok(name) = parser.maybe_parse(|parser| -> Result<ObjectName, ParserError> {
         parser.expect_keyword(Keyword::CREATE)?;
         parser.expect_keyword(Keyword::TYPE)?;
         let name = parser.parse_object_name(false)?;
         parser.expect_keyword(Keyword::AS)?;
         parser.expect_keyword(Keyword::ENUM)?;
         Ok(name)
-    });
-    name.map(|name| parse_create_type_as_enum(parser, name))
+    }) {
+        return name.map(|name| parse_create_type_as_enum(parser, name));
+    }
+
+    None
 }
 
 // https://www.postgresql.org/docs/current/sql-createtype.html

@@ -238,7 +238,11 @@ pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError
         parser.expect_keyword(Keyword::ENUM)?;
         Ok(name)
     });
-    name.map(|name| parse_create_type_as_enum(parser, name))
+    match name {
+        Ok(Some(name)) => Some(parse_create_type_as_enum(parser, name)),
+        Ok(None) => None,
+        Err(e) => Some(Err(e)),
+    }
 }
 
 // https://www.postgresql.org/docs/current/sql-createtype.html

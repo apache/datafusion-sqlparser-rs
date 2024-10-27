@@ -51,4 +51,8 @@ impl Dialect for HiveDialect {
     fn require_interval_qualifier(&self) -> bool {
         true
     }
+
+    fn supports_bang_not_operator(&self) -> bool {
+        true
+    }
 }

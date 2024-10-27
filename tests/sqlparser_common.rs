@@ -11532,3 +11532,49 @@ fn test_select_top() {
     dialects.verified_stmt("SELECT TOP 3 DISTINCT * FROM tbl");
     dialects.verified_stmt("SELECT TOP 3 DISTINCT a, b, c FROM tbl");
 }
+
+#[test]
+fn parse_bang_not() {
+    let dialects = all_dialects_where(|d| d.supports_bang_not_operator());
+    let sql = "SELECT !a, !(b > 3)";
+    let Select { projection, .. } = dialects.verified_only_select(sql);
+
+    for (i, (op, expr)) in [
+        (
+            UnaryOperator::BangNot,
+            Box::new(Expr::Identifier(Ident::new("a"))),
+        ),
+        (
+            UnaryOperator::BangNot,
+            Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("b"))),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Value(Value::Number("3".parse().unwrap(), false))),
+            }))),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp { op: op, expr }),
+            projection[i]
+        )
+    }
+
+    let sql = "SELECT a!";
+    assert_eq!(
+        dialects.parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError(
+            "current dialect support bang not operator, but with wrong synx".to_string()
+        )
+    );
+
+    let sql = "SELECT !a";
+    assert_eq!(
+        all_dialects_where(|d| !d.supports_bang_not_operator())
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: !".to_string())
+    );
+}

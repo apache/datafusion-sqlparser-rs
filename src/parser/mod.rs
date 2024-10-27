@@ -1194,6 +1194,14 @@ impl<'a> Parser<'a> {
                     ),
                 })
             }
+            Token::ExclamationMark if self.dialect.supports_bang_not_operator() => {
+                Ok(Expr::UnaryOp {
+                    op: UnaryOperator::BangNot,
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?,
+                    ),
+                })
+            }
             tok @ Token::DoubleExclamationMark
             | tok @ Token::PGSquareRoot
             | tok @ Token::PGCubeRoot
@@ -1287,7 +1295,6 @@ impl<'a> Parser<'a> {
             }
             _ => self.expected("an expression", next_token),
         }?;
-
         if self.parse_keyword(Keyword::COLLATE) {
             Ok(Expr::Collate {
                 expr: Box::new(expr),
@@ -2045,6 +2052,13 @@ impl<'a> Parser<'a> {
                 expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
             }),
         }
+    }
+
+    pub fn parse_bang_not(&mut self) -> Result<Expr, ParserError> {
+        Ok(Expr::UnaryOp {
+            op: UnaryOperator::BangNot,
+            expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
+        })
     }
 
     /// Parses fulltext expressions [`sqlparser::ast::Expr::MatchAgainst`]
@@ -2819,11 +2833,40 @@ impl<'a> Parser<'a> {
                 format: None,
             })
         } else if Token::ExclamationMark == tok {
-            // PostgreSQL factorial operation
-            Ok(Expr::UnaryOp {
-                op: UnaryOperator::PGPostfixFactorial,
-                expr: Box::new(expr),
-            })
+            if self.dialect.supports_factorial_operator() {
+                match expr {
+                    Expr::Value(_) | Expr::Identifier(_) | Expr::Nested(_) | Expr::BinaryOp{..} => Ok(Expr::UnaryOp {
+                        op: UnaryOperator::PGPostfixFactorial,
+                        expr: Box::new(expr),
+                    }),
+                    _ => {
+                        self.expected(
+                            "Value or Identifier or  Nested or BinaryOp struct before factorial operator(!)", self.peek_token())
+                    },
+                }
+            } else if self.dialect.supports_bang_not_operator() {
+                let token = self.next_token();
+                match token.token {
+                    Token::Word(_) | Token::Number(..) => Ok(Expr::UnaryOp {
+                        op: UnaryOperator::BangNot,
+                        expr: Box::new(expr),
+                    }),
+                    _ => {
+                        parser_err!(
+                            "current dialect support bang not operator, but with wrong synx",
+                            tok.location
+                        )
+                    }
+                }
+            } else {
+                parser_err!(
+                    format!(
+                        "current dialect: {:?} does not support factorial operator or bang not operator",
+                        self.dialect
+                    ),
+                    self.peek_token().location
+                )
+            }
         } else if Token::LBracket == tok {
             if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
                 self.parse_subscript(expr)

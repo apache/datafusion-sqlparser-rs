@@ -52,6 +52,7 @@ impl Dialect for HiveDialect {
         true
     }
 
+    /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362061#Tutorial-BuiltInOperators>
     fn supports_bang_not_operator(&self) -> bool {
         true
     }

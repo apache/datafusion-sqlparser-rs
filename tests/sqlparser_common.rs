@@ -11562,19 +11562,24 @@ fn parse_bang_not() {
         )
     }
 
-    let sql = "SELECT a!";
-    assert_eq!(
-        dialects.parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError(
-            "current dialect support bang not operator, but with wrong synx".to_string()
-        )
-    );
+    let sql_statements = ["SELECT a!", "SELECT a ! b", "SELECT a ! as b"];
 
-    let sql = "SELECT !a";
-    assert_eq!(
-        all_dialects_where(|d| !d.supports_bang_not_operator())
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError("Expected: an expression, found: !".to_string())
-    );
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError(
+                "current dialect support bang not operator, but with wrong syntax".to_string()
+            )
+        );
+    }
+
+    let sql_statements = ["SELECT !a", "SELECT !a b", "SELECT !a as b"];
+    let dialects = all_dialects_where(|d| !d.supports_bang_not_operator());
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an expression, found: !".to_string())
+        );
+    }
 }

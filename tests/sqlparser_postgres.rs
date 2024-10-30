@@ -1538,8 +1538,9 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: ObjectName(vec!["a".into()]),
             parameters: vec![],
+            has_parentheses: false,
             using: vec![]
         }
     );
@@ -1548,11 +1549,12 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: ObjectName(vec!["a".into()]),
             parameters: vec![
                 Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
             ],
+            has_parentheses: true,
             using: vec![]
         }
     );
@@ -1562,8 +1564,9 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: ObjectName(vec!["a".into()]),
             parameters: vec![],
+            has_parentheses: false,
             using: vec![
                 Expr::Cast {
                     kind: CastKind::Cast,

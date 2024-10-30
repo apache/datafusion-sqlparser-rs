@@ -571,6 +571,41 @@ fn parse_substring_in_select() {
 }
 
 #[test]
+fn parse_mssql_execute_stored_procedure() {
+    let expected = Statement::Execute {
+        name: ObjectName(vec![
+            Ident {
+                value: "my_schema".to_string(),
+                quote_style: None,
+            },
+            Ident {
+                value: "my_stored_procedure".to_string(),
+                quote_style: None,
+            },
+        ]),
+        parameters: vec![
+            Expr::Value(Value::NationalStringLiteral("param1".to_string())),
+            Expr::Value(Value::NationalStringLiteral("param2".to_string())),
+        ],
+        has_parentheses: false,
+        using: vec![],
+    };
+    assert_eq!(
+        ms().verified_stmt("EXECUTE my_schema.my_stored_procedure N'param1', N'param2'"),
+        expected
+    );
+    assert_eq!(
+        Parser::parse_sql(
+            &MsSqlDialect {},
+            "EXEC my_schema.my_stored_procedure N'param1', N'param2';"
+        )
+        .unwrap()[0],
+        expected,
+        "EXEC should be parsed the same as EXECUTE"
+    );
+}
+
+#[test]
 fn parse_mssql_declare() {
     let sql = "DECLARE @foo CURSOR, @bar INT, @baz AS TEXT = 'foobar';";
     let ast = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();

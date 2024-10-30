@@ -388,7 +388,7 @@ fn parse_show_tables() {
         }
     );
     mysql_and_generic().verified_stmt("SHOW TABLES IN mydb");
-    mysql_and_generic().verified_stmt( "SHOW TABLES FROM mydb");
+    mysql_and_generic().verified_stmt("SHOW TABLES FROM mydb");
 }
 
 #[test]

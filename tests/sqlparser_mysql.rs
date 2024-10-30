@@ -2758,6 +2758,9 @@ fn parse_json_table() {
         r#"SELECT * FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(x INT PATH '$' ERROR ON EMPTY)) AS t"#,
     );
     mysql().verified_only_select(r#"SELECT * FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(x INT PATH '$' ERROR ON EMPTY DEFAULT '0' ON ERROR)) AS t"#);
+    mysql().verified_only_select(
+        r#"SELECT jt.* FROM JSON_TABLE('["Alice", "Bob", "Charlie"]', '$[*]' COLUMNS(row_num FOR ORDINALITY, name VARCHAR(50) PATH '$')) AS jt"#,
+    );
     assert_eq!(
         mysql()
             .verified_only_select(
@@ -2769,14 +2772,14 @@ fn parse_json_table() {
             json_expr: Expr::Value(Value::SingleQuotedString("[1,2]".to_string())),
             json_path: Value::SingleQuotedString("$[*]".to_string()),
             columns: vec![
-                JsonTableColumn {
+                JsonTableColumn::Named(JsonTableNamedColumn {
                     name: Ident::new("x"),
                     r#type: DataType::Int(None),
                     path: Value::SingleQuotedString("$".to_string()),
                     exists: false,
                     on_empty: Some(JsonTableColumnErrorHandling::Default(Value::SingleQuotedString("0".to_string()))),
                     on_error: Some(JsonTableColumnErrorHandling::Null),
-                },
+                }),
             ],
             alias: Some(TableAlias {
                 name: Ident::new("t"),

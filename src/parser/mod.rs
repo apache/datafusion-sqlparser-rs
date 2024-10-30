@@ -10402,6 +10402,10 @@ impl<'a> Parser<'a> {
     /// For example: `id INT EXISTS PATH '$' DEFAULT '0' ON EMPTY ERROR ON ERROR`
     pub fn parse_json_table_column_def(&mut self) -> Result<JsonTableColumn, ParserError> {
         let name = self.parse_identifier(false)?;
+        if self.parse_keyword(Keyword::FOR) {
+            self.expect_keyword(Keyword::ORDINALITY)?;
+            return Ok(JsonTableColumn::ForOrdinality(name));
+        }
         let r#type = self.parse_data_type()?;
         let exists = self.parse_keyword(Keyword::EXISTS);
         self.expect_keyword(Keyword::PATH)?;
@@ -10416,14 +10420,14 @@ impl<'a> Parser<'a> {
                 on_error = Some(error_handling);
             }
         }
-        Ok(JsonTableColumn {
+        Ok(JsonTableColumn::Named(JsonTableNamedColumn {
             name,
             r#type,
             path,
             exists,
             on_empty,
             on_error,
-        })
+        }))
     }
 
     fn parse_json_table_column_error_handling(

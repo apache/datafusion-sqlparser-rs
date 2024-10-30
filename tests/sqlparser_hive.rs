@@ -536,16 +536,16 @@ fn parse_use() {
 
 #[test]
 fn test_show() {
-    hive().verified_stmt("SHOW DATABASES");
-    hive().verified_stmt("SHOW DATABASES LIKE '%abc'");
-    hive().verified_stmt("SHOW SCHEMAS");
-    hive().verified_stmt("SHOW SCHEMAS LIKE '%abc'");
-    hive().verified_stmt("SHOW TABLES");
-    hive().verified_stmt("SHOW TABLES IN db1");
-    hive().verified_stmt("SHOW TABLES IN db1 'abc'");
-    hive().verified_stmt("SHOW VIEWS");
-    hive().verified_stmt("SHOW VIEWS IN db1");
-    hive().verified_stmt("SHOW VIEWS IN db1 'abc'");
+    hive_and_generic().verified_stmt("SHOW DATABASES");
+    hive_and_generic().verified_stmt("SHOW DATABASES LIKE '%abc'");
+    hive_and_generic().verified_stmt("SHOW SCHEMAS");
+    hive_and_generic().verified_stmt("SHOW SCHEMAS LIKE '%abc'");
+    hive_and_generic().verified_stmt("SHOW TABLES");
+    hive_and_generic().verified_stmt("SHOW TABLES IN db1");
+    hive_and_generic().verified_stmt("SHOW TABLES IN db1 'abc'");
+    hive_and_generic().verified_stmt("SHOW VIEWS");
+    hive_and_generic().verified_stmt("SHOW VIEWS IN db1");
+    hive_and_generic().verified_stmt("SHOW VIEWS IN db1 'abc'");
 }
 
 fn hive() -> TestedDialects {

@@ -4413,7 +4413,7 @@ impl fmt::Display for Statement {
                     let keyword = match &db_name_keyword {
                         Some(Keyword::FROM) => "FROM",
                         Some(Keyword::IN) => "IN",
-                        _ => "", // unexpected
+                        _ => unreachable!(),
                     };
                     write!(f, " {} {db_name}", keyword)?;
                 }
@@ -4422,17 +4422,17 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowViews { 
-                db_name_keyword, 
-                db_name, 
-                filter 
+            Statement::ShowViews {
+                db_name_keyword,
+                db_name,
+                filter,
             } => {
                 write!(f, "SHOW VIEWS")?;
                 if let Some(db_name) = db_name {
                     let keyword = match &db_name_keyword {
                         Some(Keyword::FROM) => "FROM",
                         Some(Keyword::IN) => "IN",
-                        _ => "", // unexpected
+                        _ => unreachable!(),
                     };
                     write!(f, " {} {db_name}", keyword)?;
                 }

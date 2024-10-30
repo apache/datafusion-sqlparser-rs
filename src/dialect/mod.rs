@@ -596,7 +596,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports `!a` expressions
+    /// Returns true if the dialect supports `!a` syntax for boolean `NOT` expressions.
     fn supports_bang_not_operator(&self) -> bool {
         false
     }

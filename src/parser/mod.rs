@@ -9744,12 +9744,12 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::WHERE) {
             Ok(Some(ShowStatementFilter::Where(self.parse_expr()?)))
         } else {
-            match self.peek_token().token {
-                Token::SingleQuotedString(_) | Token::DoubleQuotedString(_) => Ok(Some(
-                    ShowStatementFilter::NoKeyword(self.parse_literal_string()?),
-                )),
-                _ => Ok(None),
-            }
+            self.maybe_parse(|parser| -> Result<String, ParserError> {
+                parser.parse_literal_string()
+            })?
+            .map_or(Ok(None), |filter| {
+                Ok(Some(ShowStatementFilter::NoKeyword(filter)))
+            })
         }
     }
 

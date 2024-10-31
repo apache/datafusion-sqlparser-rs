@@ -2276,6 +2276,12 @@ impl fmt::Display for ForJson {
 }
 
 /// A single column definition in MySQL's `JSON_TABLE` table valued function.
+///
+/// See
+/// - [MySQL's JSON_TABLE documentation](https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table)
+/// - [Oracle's JSON_TABLE documentation](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/JSON_TABLE.html)
+/// - [MariaDB's JSON_TABLE documentation](https://mariadb.com/kb/en/json_table/)
+///
 /// ```sql
 /// SELECT *
 /// FROM JSON_TABLE(
@@ -2293,8 +2299,11 @@ impl fmt::Display for ForJson {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JsonTableColumn {
+    /// A named column with a JSON path
     Named(JsonTableNamedColumn),
+    /// The FOR ORDINALITY column, which is a special column that returns the index of the current row in a JSON array.
     ForOrdinality(Ident),
+    /// A set of nested columns, which extracts data from a nested JSON array.
     Nested(JsonTableNestedColumn),
 }
 
@@ -2313,6 +2322,8 @@ impl fmt::Display for JsonTableColumn {
 }
 
 /// A nested column in a JSON_TABLE column list
+///
+/// See <https://mariadb.com/kb/en/json_table/#nested-paths>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -2333,6 +2344,9 @@ impl fmt::Display for JsonTableNestedColumn {
 }
 
 /// A single column definition in MySQL's `JSON_TABLE` table valued function.
+///
+/// See <https://mariadb.com/kb/en/json_table/#path-columns>
+///
 /// ```sql
 ///         value VARCHAR(20) PATH '$'
 /// ```

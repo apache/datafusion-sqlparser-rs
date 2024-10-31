@@ -73,9 +73,8 @@ pub use self::value::{
     TrimWhereField, Value,
 };
 
-use crate::{
-    ast::helpers::stmt_data_loading::{DataLoadingOptions, StageLoadSelectItem, StageParamsObject},
-    keywords::Keyword,
+use crate::ast::helpers::stmt_data_loading::{
+    DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
 };
 #[cfg(feature = "visitor")]
 pub use visitor::*;
@@ -2785,19 +2784,18 @@ pub enum Statement {
     /// ```sql
     /// SHOW DATABASES [LIKE 'pattern']
     /// ```
-    ShowDatabases { pattern: Option<String> },
+    ShowDatabases { filter: Option<ShowStatementFilter> },
     /// ```sql
     /// SHOW SCHEMAS [LIKE 'pattern']
     /// ```
-    ShowSchemas { pattern: Option<String> },
+    ShowSchemas { filter: Option<ShowStatementFilter> },
     /// ```sql
     /// SHOW TABLES
     /// ```
     ShowTables {
         extended: bool,
         full: bool,
-        // The keyword used to indicate the DB name (IN/FROM)
-        db_name_keyword: Option<Keyword>,
+        clause: Option<ShowClause>,
         db_name: Option<Ident>,
         filter: Option<ShowStatementFilter>,
     },
@@ -2805,8 +2803,8 @@ pub enum Statement {
     /// SHOW VIEWS
     /// ```
     ShowViews {
-        // The keyword used to indicate the DB name (IN/FROM)
-        db_name_keyword: Option<Keyword>,
+        materialized: bool,
+        clause: Option<ShowClause>,
         db_name: Option<Ident>,
         filter: Option<ShowStatementFilter>,
     },
@@ -4382,24 +4380,24 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowDatabases { pattern } => {
+            Statement::ShowDatabases { filter } => {
                 write!(f, "SHOW DATABASES")?;
-                if let Some(pattern) = pattern {
-                    write!(f, " LIKE '{}'", pattern)?;
+                if let Some(filter) = filter {
+                    write!(f, " {filter}")?;
                 }
                 Ok(())
             }
-            Statement::ShowSchemas { pattern } => {
+            Statement::ShowSchemas { filter } => {
                 write!(f, "SHOW SCHEMAS")?;
-                if let Some(pattern) = pattern {
-                    write!(f, " LIKE '{}'", pattern)?;
+                if let Some(filter) = filter {
+                    write!(f, " {filter}")?;
                 }
                 Ok(())
             }
             Statement::ShowTables {
                 extended,
                 full,
-                db_name_keyword,
+                clause: show_clause,
                 db_name,
                 filter,
             } => {
@@ -4409,13 +4407,11 @@ impl fmt::Display for Statement {
                     extended = if *extended { "EXTENDED " } else { "" },
                     full = if *full { "FULL " } else { "" },
                 )?;
+                if let Some(show_clause) = show_clause {
+                    write!(f, " {show_clause}")?;
+                }
                 if let Some(db_name) = db_name {
-                    let keyword = match &db_name_keyword {
-                        Some(Keyword::FROM) => "FROM",
-                        Some(Keyword::IN) => "IN",
-                        _ => unreachable!(),
-                    };
-                    write!(f, " {} {db_name}", keyword)?;
+                    write!(f, " {db_name}")?;
                 }
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -4423,18 +4419,17 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::ShowViews {
-                db_name_keyword,
+                materialized,
+                clause: show_clause,
                 db_name,
                 filter,
             } => {
-                write!(f, "SHOW VIEWS")?;
+                write!(f, "SHOW {}VIEWS", if *materialized { "MATERIALIZED " } else { "" })?;
+                if let Some(show_clause) = show_clause {
+                    write!(f, " {show_clause}")?;
+                }
                 if let Some(db_name) = db_name {
-                    let keyword = match &db_name_keyword {
-                        Some(Keyword::FROM) => "FROM",
-                        Some(Keyword::IN) => "IN",
-                        _ => unreachable!(),
-                    };
-                    write!(f, " {} {db_name}", keyword)?;
+                    write!(f, " {db_name}")?;
                 }
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -6126,6 +6121,24 @@ impl fmt::Display for ShowStatementFilter {
             ILike(pattern) => write!(f, "ILIKE {}", value::escape_single_quote_string(pattern)),
             Where(expr) => write!(f, "WHERE {expr}"),
             NoKeyword(pattern) => write!(f, "'{}'", value::escape_single_quote_string(pattern)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ShowClause {
+    IN,
+    FROM,
+}
+
+impl fmt::Display for ShowClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ShowClause::*;
+        match self {
+            FROM => write!(f, "FROM"),
+            IN => write!(f, "IN"),
         }
     }
 }

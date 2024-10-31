@@ -24,7 +24,6 @@ use matches::assert_matches;
 use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
-use sqlparser::keywords::Keyword;
 use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Token;
 use test_utils::*;
@@ -330,7 +329,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: false,
-            db_name_keyword: None,
+            clause: None,
             db_name: None,
             filter: None,
         }
@@ -340,7 +339,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: false,
-            db_name_keyword: Some(Keyword::FROM),
+            clause: Some(ShowClause::FROM),
             db_name: Some(Ident::new("mydb")),
             filter: None,
         }
@@ -350,7 +349,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: true,
             full: false,
-            db_name_keyword: None,
+            clause: None,
             db_name: None,
             filter: None,
         }
@@ -360,7 +359,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: true,
-            db_name_keyword: None,
+            clause: None,
             db_name: None,
             filter: None,
         }
@@ -370,7 +369,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: false,
-            db_name_keyword: None,
+            clause: None,
             db_name: None,
             filter: Some(ShowStatementFilter::Like("pattern".into())),
         }
@@ -380,7 +379,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: false,
-            db_name_keyword: None,
+            clause: None,
             db_name: None,
             filter: Some(ShowStatementFilter::Where(
                 mysql_and_generic().verified_expr("1 = 2")

@@ -534,20 +534,6 @@ fn parse_use() {
     );
 }
 
-#[test]
-fn test_show() {
-    hive_and_generic().verified_stmt("SHOW DATABASES");
-    hive_and_generic().verified_stmt("SHOW DATABASES LIKE '%abc'");
-    hive_and_generic().verified_stmt("SHOW SCHEMAS");
-    hive_and_generic().verified_stmt("SHOW SCHEMAS LIKE '%abc'");
-    hive_and_generic().verified_stmt("SHOW TABLES");
-    hive_and_generic().verified_stmt("SHOW TABLES IN db1");
-    hive_and_generic().verified_stmt("SHOW TABLES IN db1 'abc'");
-    hive_and_generic().verified_stmt("SHOW VIEWS");
-    hive_and_generic().verified_stmt("SHOW VIEWS IN db1");
-    hive_and_generic().verified_stmt("SHOW VIEWS IN db1 'abc'");
-}
-
 fn hive() -> TestedDialects {
     TestedDialects::new(vec![Box::new(HiveDialect {})])
 }

@@ -11378,3 +11378,24 @@ fn test_try_convert() {
         all_dialects_where(|d| d.supports_try_convert() && !d.convert_type_before_value());
     dialects.verified_expr("TRY_CONVERT('foo', VARCHAR(MAX))");
 }
+
+#[test]
+fn test_show_dbs_schemas_tables_views() {
+    verified_stmt("SHOW DATABASES");
+    verified_stmt("SHOW DATABASES LIKE '%abc'");
+    verified_stmt("SHOW SCHEMAS");
+    verified_stmt("SHOW SCHEMAS LIKE '%abc'");
+    verified_stmt("SHOW TABLES");
+    verified_stmt("SHOW TABLES IN db1");
+    verified_stmt("SHOW TABLES IN db1 'abc'");
+    verified_stmt("SHOW VIEWS");
+    verified_stmt("SHOW VIEWS IN db1");
+    verified_stmt("SHOW VIEWS IN db1 'abc'");
+    verified_stmt("SHOW VIEWS FROM db1");
+    verified_stmt("SHOW VIEWS FROM db1 'abc'");
+    verified_stmt("SHOW MATERIALIZED VIEWS");
+    verified_stmt("SHOW MATERIALIZED VIEWS IN db1");
+    verified_stmt("SHOW MATERIALIZED VIEWS IN db1 'abc'");
+    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1");
+    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1 'abc'");
+}

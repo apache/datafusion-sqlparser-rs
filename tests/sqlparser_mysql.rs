@@ -2807,7 +2807,7 @@ fn test_group_concat() {
 #[test]
 fn parse_select_distinctrow() {
     mysql().one_statement_parses_to(
-        "SELECT DISTINCTROW a FROM tbl", 
-        "SELECT DISTINCT a FROM tbl"
+        "SELECT DISTINCTROW a FROM tbl",
+        "SELECT DISTINCT a FROM tbl",
     );
 }

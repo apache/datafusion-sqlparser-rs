@@ -4424,7 +4424,11 @@ impl fmt::Display for Statement {
                 db_name,
                 filter,
             } => {
-                write!(f, "SHOW {}VIEWS", if *materialized { "MATERIALIZED " } else { "" })?;
+                write!(
+                    f,
+                    "SHOW {}VIEWS",
+                    if *materialized { "MATERIALIZED " } else { "" }
+                )?;
                 if let Some(show_clause) = show_clause {
                     write!(f, " {show_clause}")?;
                 }

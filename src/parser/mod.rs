@@ -9687,8 +9687,7 @@ impl<'a> Parser<'a> {
         extended: bool,
         full: bool,
     ) -> Result<Statement, ParserError> {
-        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN])
-        {
+        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
             Some(Keyword::FROM) => (Some(ShowClause::FROM), Some(self.parse_identifier(false)?)),
             Some(Keyword::IN) => (Some(ShowClause::IN), Some(self.parse_identifier(false)?)),
             _ => (None, None),
@@ -9704,8 +9703,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_show_views(&mut self, materialized: bool) -> Result<Statement, ParserError> {
-        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN])
-        {
+        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
             Some(Keyword::FROM) => (Some(ShowClause::FROM), Some(self.parse_identifier(false)?)),
             Some(Keyword::IN) => (Some(ShowClause::IN), Some(self.parse_identifier(false)?)),
             _ => (None, None),

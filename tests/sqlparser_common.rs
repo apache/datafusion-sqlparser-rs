@@ -1395,6 +1395,10 @@ fn pg_and_generic() -> TestedDialects {
     ])
 }
 
+fn ms_and_generic() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
+}
+
 #[test]
 fn parse_json_ops_without_colon() {
     use self::BinaryOperator::*;
@@ -9727,6 +9731,41 @@ fn parse_call() {
             over: None,
             within_group: vec![],
         })
+    );
+}
+
+#[test]
+fn parse_execute_stored_procedure() {
+    let expected = Statement::Execute {
+        name: ObjectName(vec![
+            Ident {
+                value: "my_schema".to_string(),
+                quote_style: None,
+            },
+            Ident {
+                value: "my_stored_procedure".to_string(),
+                quote_style: None,
+            },
+        ]),
+        parameters: vec![
+            Expr::Value(Value::NationalStringLiteral("param1".to_string())),
+            Expr::Value(Value::NationalStringLiteral("param2".to_string())),
+        ],
+        has_parentheses: false,
+        using: vec![],
+    };
+    assert_eq!(
+        // Microsoft SQL Server does not use parentheses around arguments for EXECUTE
+        ms_and_generic()
+            .verified_stmt("EXECUTE my_schema.my_stored_procedure N'param1', N'param2'"),
+        expected
+    );
+    assert_eq!(
+        ms_and_generic().one_statement_parses_to(
+            "EXEC my_schema.my_stored_procedure N'param1', N'param2';",
+            "EXECUTE my_schema.my_stored_procedure N'param1', N'param2'",
+        ),
+        expected
     );
 }
 

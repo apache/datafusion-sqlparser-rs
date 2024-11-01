@@ -434,6 +434,16 @@ impl<'a> Parser<'a> {
             let statement = self.parse_statement()?;
             stmts.push(statement);
             expecting_statement_delimiter = true;
+            if self.peek_token().token != Token::SemiColon {
+                // If the next valid character is not a semicolon,
+                // check whether the previous valid character is a semicolon.
+                // If it is, revert to the previous valid character (i.e., the semicolon);
+                // otherwise, do nothing.
+                self.prev_token();
+                if self.peek_token().token != Token::SemiColon {
+                    self.next_token();
+                }
+            };
         }
         Ok(stmts)
     }

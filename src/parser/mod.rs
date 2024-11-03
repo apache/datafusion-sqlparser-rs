@@ -9579,6 +9579,10 @@ impl<'a> Parser<'a> {
             Ok(self.parse_show_columns(extended, full)?)
         } else if self.parse_keyword(Keyword::TABLES) {
             Ok(self.parse_show_tables(extended, full)?)
+        } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEWS]) {
+            Ok(self.parse_show_views(true)?)
+        } else if self.parse_keyword(Keyword::VIEWS) {
+            Ok(self.parse_show_views(false)?)
         } else if self.parse_keyword(Keyword::FUNCTIONS) {
             Ok(self.parse_show_functions()?)
         } else if extended || full {
@@ -9605,11 +9609,27 @@ impl<'a> Parser<'a> {
                 session,
                 global,
             })
+        } else if self.parse_keyword(Keyword::DATABASES) {
+            self.parse_show_databases()
+        } else if self.parse_keyword(Keyword::SCHEMAS) {
+            self.parse_show_schemas()
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
             })
         }
+    }
+
+    fn parse_show_databases(&mut self) -> Result<Statement, ParserError> {
+        Ok(Statement::ShowDatabases {
+            filter: self.parse_show_statement_filter()?,
+        })
+    }
+
+    fn parse_show_schemas(&mut self) -> Result<Statement, ParserError> {
+        Ok(Statement::ShowSchemas {
+            filter: self.parse_show_statement_filter()?,
+        })
     }
 
     pub fn parse_show_create(&mut self) -> Result<Statement, ParserError> {
@@ -9667,14 +9687,31 @@ impl<'a> Parser<'a> {
         extended: bool,
         full: bool,
     ) -> Result<Statement, ParserError> {
-        let db_name = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
-            Some(_) => Some(self.parse_identifier(false)?),
-            None => None,
+        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
+            Some(Keyword::FROM) => (Some(ShowClause::FROM), Some(self.parse_identifier(false)?)),
+            Some(Keyword::IN) => (Some(ShowClause::IN), Some(self.parse_identifier(false)?)),
+            _ => (None, None),
         };
         let filter = self.parse_show_statement_filter()?;
         Ok(Statement::ShowTables {
             extended,
             full,
+            clause,
+            db_name,
+            filter,
+        })
+    }
+
+    fn parse_show_views(&mut self, materialized: bool) -> Result<Statement, ParserError> {
+        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
+            Some(Keyword::FROM) => (Some(ShowClause::FROM), Some(self.parse_identifier(false)?)),
+            Some(Keyword::IN) => (Some(ShowClause::IN), Some(self.parse_identifier(false)?)),
+            _ => (None, None),
+        };
+        let filter = self.parse_show_statement_filter()?;
+        Ok(Statement::ShowViews {
+            materialized,
+            clause,
             db_name,
             filter,
         })
@@ -9704,7 +9741,12 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::WHERE) {
             Ok(Some(ShowStatementFilter::Where(self.parse_expr()?)))
         } else {
-            Ok(None)
+            self.maybe_parse(|parser| -> Result<String, ParserError> {
+                parser.parse_literal_string()
+            })?
+            .map_or(Ok(None), |filter| {
+                Ok(Some(ShowStatementFilter::NoKeyword(filter)))
+            })
         }
     }
 

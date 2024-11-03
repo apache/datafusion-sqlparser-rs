@@ -329,6 +329,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: false,
+            clause: None,
             db_name: None,
             filter: None,
         }
@@ -338,6 +339,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: false,
+            clause: Some(ShowClause::FROM),
             db_name: Some(Ident::new("mydb")),
             filter: None,
         }
@@ -347,6 +349,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: true,
             full: false,
+            clause: None,
             db_name: None,
             filter: None,
         }
@@ -356,6 +359,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: true,
+            clause: None,
             db_name: None,
             filter: None,
         }
@@ -365,6 +369,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: false,
+            clause: None,
             db_name: None,
             filter: Some(ShowStatementFilter::Like("pattern".into())),
         }
@@ -374,13 +379,15 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: false,
+            clause: None,
             db_name: None,
             filter: Some(ShowStatementFilter::Where(
                 mysql_and_generic().verified_expr("1 = 2")
             )),
         }
     );
-    mysql_and_generic().one_statement_parses_to("SHOW TABLES IN mydb", "SHOW TABLES FROM mydb");
+    mysql_and_generic().verified_stmt("SHOW TABLES IN mydb");
+    mysql_and_generic().verified_stmt("SHOW TABLES FROM mydb");
 }
 
 #[test]

@@ -71,7 +71,7 @@ impl Dialect for RedshiftSqlDialect {
 
     /// Redshift expects the `TOP` option before the `ALL/DISTINCT` option:
     /// <https://docs.aws.amazon.com/redshift/latest/dg/r_SELECT_list.html#r_SELECT_list-parameters>
-    fn expects_top_before_distinct(&self) -> bool {
+    fn supports_top_before_distinct(&self) -> bool {
         true
     }
 }

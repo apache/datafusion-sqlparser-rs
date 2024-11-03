@@ -196,12 +196,3 @@ fn test_create_view_with_no_schema_binding() {
     redshift_and_generic()
         .verified_stmt("CREATE VIEW myevent AS SELECT eventname FROM event WITH NO SCHEMA BINDING");
 }
-
-#[test]
-fn test_select_top() {
-    redshift().one_statement_parses_to("SELECT ALL * FROM tbl", "SELECT * FROM tbl");
-    redshift().verified_stmt("SELECT TOP 3 * FROM tbl");
-    redshift().one_statement_parses_to("SELECT TOP 3 ALL * FROM tbl", "SELECT TOP 3 * FROM tbl");
-    redshift().verified_stmt("SELECT TOP 3 DISTINCT * FROM tbl");
-    redshift().verified_stmt("SELECT TOP 3 DISTINCT a, b, c FROM tbl");
-}

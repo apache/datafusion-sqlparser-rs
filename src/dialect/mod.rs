@@ -602,8 +602,8 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if this dialect expects the the `TOP` option
-    /// before the `ALL`/`DISTINCT` options
-    fn expects_top_before_distinct(&self) -> bool {
+    /// before the `ALL`/`DISTINCT` options in a `SELECT` statement.
+    fn supports_top_before_distinct(&self) -> bool {
         false
     }
 }

@@ -279,6 +279,8 @@ pub struct Select {
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
+    /// Whether the top was located before `ALL`/`DISTINCT`
+    pub top_before_distinct: bool,
     /// projection expressions
     pub projection: Vec<SelectItem>,
     /// INTO
@@ -328,7 +330,7 @@ impl fmt::Display for Select {
         }
 
         if let Some(ref top) = self.top {
-            if top.is_before_distinct {
+            if self.top_before_distinct {
                 write!(f, " {top}")?;
             }
         }
@@ -336,7 +338,7 @@ impl fmt::Display for Select {
             write!(f, " {distinct}")?;
         }
         if let Some(ref top) = self.top {
-            if !top.is_before_distinct {
+            if !self.top_before_distinct {
                 write!(f, " {top}")?;
             }
         }
@@ -2004,9 +2006,6 @@ pub struct Top {
     /// MSSQL only.
     pub percent: bool,
     pub quantity: Option<TopQuantity>,
-    // Whether this option was parsed before `ALL`/`DISTINCT`
-    // See `Dialect::expects_top_before_distinct`
-    pub is_before_distinct: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

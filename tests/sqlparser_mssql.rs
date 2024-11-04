@@ -193,6 +193,35 @@ fn parse_mssql_apply_join() {
 }
 
 #[test]
+fn parse_mssql_cross_apply_json() {
+    let _ = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param, '$.config') WITH (kind VARCHAR(20) '$.kind', [id_list] NVARCHAR(MAX) '$.id_list' AS JSON) AS B",
+    );
+    let _ = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param) WITH (kind VARCHAR(20) '$.kind', [id_list] NVARCHAR(MAX) '$.id_list' AS JSON) AS B",
+    );
+    let _ = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param) WITH (kind VARCHAR(20), [id_list] NVARCHAR(MAX) AS JSON) AS B",
+    );
+    let _ = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param, '$.config') AS B",
+    );
+    let _ = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param) AS B",
+    );
+}
+
+#[test]
 fn parse_mssql_top_paren() {
     let sql = "SELECT TOP (5) * FROM foo";
     let select = ms_and_generic().verified_only_select(sql);

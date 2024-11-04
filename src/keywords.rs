@@ -535,6 +535,7 @@ define_keywords!(
     ONE,
     ONLY,
     OPEN,
+    OPENJSON,
     OPERATOR,
     OPTIMIZE,
     OPTIMIZER_COSTS,

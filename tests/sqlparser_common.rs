@@ -11564,9 +11564,7 @@ fn parse_bang_not() {
     for &sql in &sql_statements {
         assert_eq!(
             dialects.parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError(
-                "current dialect support bang not operator, but with wrong syntax".to_string()
-            )
+            ParserError::ParserError("No infix parser for token ExclamationMark".to_string())
         );
     }
 
@@ -11620,7 +11618,7 @@ fn parse_factorial_operator() {
 
     // Due to the exclamation mark, which is both part of the `bang not` operator
     // and the `factorial` operator,  additional filtering not supports
-    // `bang not` operator  is required here.
+    // `bang not` operator is required here.
     let dialects =
         all_dialects_where(|d| !d.supports_factorial_operator() && !d.supports_bang_not_operator());
 
@@ -11633,16 +11631,14 @@ fn parse_factorial_operator() {
 
     // Due to the exclamation mark, which is both part of the `bang not` operator
     // and the `factorial` operator,  additional filtering supports
-    // `bang not` operator  is required here.
+    // `bang not` operator is required here.
     let dialects =
         all_dialects_where(|d| !d.supports_factorial_operator() && d.supports_bang_not_operator());
 
     for &sql in &sql_statements {
         assert_eq!(
             dialects.parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError(
-                "current dialect support bang not operator, but with wrong syntax".to_string()
-            )
+            ParserError::ParserError("No infix parser for token ExclamationMark".to_string())
         );
     }
 }

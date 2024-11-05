@@ -2830,28 +2830,6 @@ impl<'a> Parser<'a> {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),
             })
-        } else if Token::ExclamationMark == tok && self.dialect.supports_bang_not_operator() {
-            let token = self.next_token();
-            match token.token {
-                Token::Word(_) | Token::Number(..)
-                    if !matches!(
-                        expr,
-                        Expr::Value(_)
-                            | Expr::Identifier(_)
-                            | Expr::Nested(_)
-                            | Expr::BinaryOp { .. }
-                    ) =>
-                {
-                    Ok(Expr::UnaryOp {
-                        op: UnaryOperator::BangNot,
-                        expr: Box::new(expr),
-                    })
-                }
-                _ => parser_err!(
-                    "current dialect support bang not operator, but with wrong syntax",
-                    tok.location
-                ),
-            }
         } else if Token::LBracket == tok {
             if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
                 self.parse_subscript(expr)

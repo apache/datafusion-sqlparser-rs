@@ -11399,3 +11399,79 @@ fn test_show_dbs_schemas_tables_views() {
     verified_stmt("SHOW MATERIALIZED VIEWS FROM db1");
     verified_stmt("SHOW MATERIALIZED VIEWS FROM db1 'abc'");
 }
+
+#[test]
+fn parse_listen_channel() {
+    let dialects = all_dialects_where(|d| d.supports_listen());
+
+    match dialects.verified_stmt("LISTEN test1") {
+        Statement::LISTEN { channel } => {
+            assert_eq!(Ident::new("test1"), channel);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        dialects.parse_sql_statements("LISTEN *").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: *".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_listen());
+
+    assert_eq!(
+        dialects.parse_sql_statements("LISTEN test1").unwrap_err(),
+        ParserError::ParserError("Expected: an SQL statement, found: LISTEN".to_string())
+    );
+}
+
+#[test]
+fn parse_notify_channel() {
+    let dialects = all_dialects_where(|d| d.supports_notify());
+
+    match dialects.verified_stmt("NOTIFY test1") {
+        Statement::NOTIFY { channel, payload } => {
+            assert_eq!(Ident::new("test1"), channel);
+            assert_eq!(payload, None);
+        }
+        _ => unreachable!(),
+    };
+
+    match dialects.verified_stmt("NOTIFY test1, 'this is a test notification'") {
+        Statement::NOTIFY {
+            channel,
+            payload: Some(payload),
+        } => {
+            assert_eq!(Ident::new("test1"), channel);
+            assert_eq!("this is a test notification", payload);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        dialects.parse_sql_statements("NOTIFY *").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: *".to_string())
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("NOTIFY test1, *")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: literal string, found: *".to_string())
+    );
+
+    let sql_statements = [
+        "NOTIFY test1",
+        "NOTIFY test1, 'this is a test notification'",
+    ];
+    let dialects = all_dialects_where(|d| !d.supports_notify());
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an SQL statement, found: NOTIFY".to_string())
+        );
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an SQL statement, found: NOTIFY".to_string())
+        );
+    }
+}

@@ -590,6 +590,16 @@ pub trait Dialect: Debug + Any {
     fn supports_try_convert(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports the `LISTEN` statement
+    fn supports_listen(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `NOTIFY` statement
+    fn supports_notify(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

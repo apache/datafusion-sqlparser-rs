@@ -29,7 +29,7 @@ use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::ParserError;
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -575,7 +575,7 @@ fn parse_substring_in_select() {
 #[test]
 fn parse_mssql_declare() {
     let sql = "DECLARE @foo CURSOR, @bar INT, @baz AS TEXT = 'foobar';";
-    let ast = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();
+    let ast = ms().parse_sql_statements(sql).unwrap();
 
     assert_eq!(
         vec![Statement::Declare {
@@ -630,7 +630,7 @@ fn parse_mssql_declare() {
     );
 
     let sql = "DECLARE @bar INT;SET @bar = 2;SELECT @bar * 4";
-    let ast = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();
+    let ast = ms().parse_sql_statements(sql).unwrap();
     assert_eq!(
         vec![
             Statement::Declare {

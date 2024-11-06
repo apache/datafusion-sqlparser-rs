@@ -279,6 +279,8 @@ pub struct Select {
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
+    /// Whether the top was located before `ALL`/`DISTINCT`
+    pub top_before_distinct: bool,
     /// projection expressions
     pub projection: Vec<SelectItem>,
     /// INTO
@@ -327,12 +329,20 @@ impl fmt::Display for Select {
             write!(f, " {value_table_mode}")?;
         }
 
+        if let Some(ref top) = self.top {
+            if self.top_before_distinct {
+                write!(f, " {top}")?;
+            }
+        }
         if let Some(ref distinct) = self.distinct {
             write!(f, " {distinct}")?;
         }
         if let Some(ref top) = self.top {
-            write!(f, " {top}")?;
+            if !self.top_before_distinct {
+                write!(f, " {top}")?;
+            }
         }
+
         write!(f, " {}", display_comma_separated(&self.projection))?;
 
         if let Some(ref into) = self.into {

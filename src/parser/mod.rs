@@ -9193,13 +9193,16 @@ impl<'a> Parser<'a> {
                 None
             };
 
+        let mut top_before_distinct = false;
+        let mut top = None;
+        if self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
+            top = Some(self.parse_top()?);
+            top_before_distinct = true;
+        }
         let distinct = self.parse_all_or_distinct()?;
-
-        let top = if self.parse_keyword(Keyword::TOP) {
-            Some(self.parse_top()?)
-        } else {
-            None
-        };
+        if !self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
+            top = Some(self.parse_top()?);
+        }
 
         let projection = self.parse_projection()?;
 
@@ -9342,6 +9345,7 @@ impl<'a> Parser<'a> {
         Ok(Select {
             distinct,
             top,
+            top_before_distinct,
             projection,
             into,
             from,

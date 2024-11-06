@@ -379,6 +379,7 @@ fn parse_update_set_from() {
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             distinct: None,
                             top: None,
+                            top_before_distinct: false,
                             projection: vec![
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
@@ -4649,6 +4650,7 @@ fn test_parse_named_window() {
     let expected = Select {
         distinct: None,
         top: None,
+        top_before_distinct: false,
         projection: vec![
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
@@ -5289,6 +5291,7 @@ fn parse_interval_and_or_xor() {
         body: Box::new(SetExpr::Select(Box::new(Select {
             distinct: None,
             top: None,
+            top_before_distinct: false,
             projection: vec![UnnamedExpr(Expr::Identifier(Ident {
                 value: "col".to_string(),
                 quote_style: None,
@@ -7367,6 +7370,7 @@ fn lateral_function() {
     let expected = Select {
         distinct: None,
         top: None,
+        top_before_distinct: false,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
             opt_ilike: None,
             opt_exclude: None,
@@ -8215,6 +8219,7 @@ fn parse_merge() {
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             distinct: None,
                             top: None,
+                            top_before_distinct: false,
                             projection: vec![SelectItem::Wildcard(
                                 WildcardAdditionalOptions::default()
                             )],
@@ -9803,6 +9808,7 @@ fn parse_unload() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
                     into: None,
                     from: vec![TableWithJoins {
@@ -9978,6 +9984,7 @@ fn parse_connect_by() {
     let expect_query = Select {
         distinct: None,
         top: None,
+        top_before_distinct: false,
         projection: vec![
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
@@ -10064,6 +10071,7 @@ fn parse_connect_by() {
         Select {
             distinct: None,
             top: None,
+            top_before_distinct: false,
             projection: vec![
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
@@ -11474,4 +11482,14 @@ fn parse_notify_channel() {
             ParserError::ParserError("Expected: an SQL statement, found: NOTIFY".to_string())
         );
     }
+}
+
+#[test]
+fn test_select_top() {
+    let dialects = all_dialects_where(|d| d.supports_top_before_distinct());
+    dialects.one_statement_parses_to("SELECT ALL * FROM tbl", "SELECT * FROM tbl");
+    dialects.verified_stmt("SELECT TOP 3 * FROM tbl");
+    dialects.one_statement_parses_to("SELECT TOP 3 ALL * FROM tbl", "SELECT TOP 3 * FROM tbl");
+    dialects.verified_stmt("SELECT TOP 3 DISTINCT * FROM tbl");
+    dialects.verified_stmt("SELECT TOP 3 DISTINCT a, b, c FROM tbl");
 }

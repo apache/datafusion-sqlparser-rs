@@ -261,6 +261,7 @@ fn test_select_union_by_name() {
             left: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
+                top_before_distinct: false,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
                     opt_ilike: None,
                     opt_exclude: None,
@@ -301,6 +302,7 @@ fn test_select_union_by_name() {
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
+                top_before_distinct: false,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
                     opt_ilike: None,
                     opt_exclude: None,

@@ -1165,6 +1165,7 @@ fn parse_copy_to() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![
                         SelectItem::ExprWithAlias {
                             expr: Expr::Value(number("42")),
@@ -2505,6 +2506,7 @@ fn parse_array_subquery_expr() {
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: None,
                         top: None,
+                        top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
                         into: None,
                         from: vec![],
@@ -2525,6 +2527,7 @@ fn parse_array_subquery_expr() {
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: None,
                         top: None,
+                        top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("2")))],
                         into: None,
                         from: vec![],

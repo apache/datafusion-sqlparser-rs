@@ -255,7 +255,6 @@ define_keywords!(
     DISCARD,
     DISCONNECT,
     DISTINCT,
-    DISTINCTROW,
     DISTRIBUTE,
     DIV,
     DO,

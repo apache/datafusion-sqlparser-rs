@@ -3553,9 +3553,7 @@ impl<'a> Parser<'a> {
     pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
         let loc = self.peek_token().location;
         let all = self.parse_keyword(Keyword::ALL);
-        let distinct = self
-            .parse_one_of_keywords(&[Keyword::DISTINCT, Keyword::DISTINCTROW])
-            .is_some();
+        let distinct = self.parse_keyword(Keyword::DISTINCT);
         if !distinct {
             return Ok(None);
         }

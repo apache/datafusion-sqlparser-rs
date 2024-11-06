@@ -1269,6 +1269,50 @@ impl<'a> Parser<'a> {
             _ => self.expected("an expression", next_token),
         }?;
 
+        if dialect_of!(self is MsSqlDialect) {
+            // Convert `CompositeAccess` to `CompositeFunction` (MSSQL doesn't support `CompositeAccess` syntax)
+            // ```sql
+            // SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')
+            // ```
+            if let Expr::CompositeAccess { expr, key } = expr {
+                self.expect_token(&Token::LParen)?;
+                let args = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                return Ok(Expr::CompositeFunction {
+                    expr: expr,
+                    name: key,
+                    args,
+                });
+            }
+            // ```sql
+            // SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)')
+            // ```
+            else if matches!(
+                expr,
+                Expr::Cast { .. } | Expr::Convert { .. } | Expr::Function(_)
+            ) && self.consume_token(&Token::Period)
+            {
+                let tok = self.next_token();
+                let name = match tok.token {
+                    Token::Word(word) => word.to_ident(),
+                    _ => {
+                        return parser_err!(
+                            format!("Expected identifier, found: {tok}"),
+                            tok.location
+                        )
+                    }
+                };
+                self.expect_token(&Token::LParen)?;
+                let args = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                return Ok(Expr::CompositeFunction {
+                    expr: Box::new(expr),
+                    name,
+                    args,
+                });
+            }
+        }
+
         if self.parse_keyword(Keyword::COLLATE) {
             Ok(Expr::Collate {
                 expr: Box::new(expr),

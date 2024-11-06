@@ -1029,6 +1029,16 @@ fn parse_create_table_with_identity_column() {
     }
 }
 
+#[test]
+fn parse_mssql_xquery() {
+    let sql = "SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T";
+    let _ = ms().verified_query(sql);
+    let sql = "SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T";
+    let _ = ms().verified_query(sql);
+    let sql = "SELECT CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)') AS T";
+    let _ = ms().verified_query(sql);
+}
+
 fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }

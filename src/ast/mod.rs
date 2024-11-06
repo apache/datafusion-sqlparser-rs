@@ -560,6 +560,13 @@ pub enum Expr {
         expr: Box<Expr>,
         key: Ident,
     },
+    /// CompositeFunction (mssql) e.g. SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/xml/xml-data-type-methods?view=sql-server-ver16>
+    CompositeFunction {
+        expr: Box<Expr>,
+        name: Ident,
+        args: Vec<Expr>,
+    },
     /// `IS FALSE` operator
     IsFalse(Box<Expr>),
     /// `IS NOT FALSE` operator
@@ -1628,6 +1635,9 @@ impl fmt::Display for Expr {
             }
             Expr::CompositeAccess { expr, key } => {
                 write!(f, "{expr}.{key}")
+            }
+            Expr::CompositeFunction { expr, name, args } => {
+                write!(f, "{expr}.{name}({})", display_comma_separated(args))
             }
             Expr::AtTimeZone {
                 timestamp,

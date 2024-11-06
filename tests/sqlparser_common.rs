@@ -11399,19 +11399,43 @@ fn test_show_dbs_schemas_tables_views() {
     verified_stmt("SHOW DATABASES LIKE '%abc'");
     verified_stmt("SHOW SCHEMAS");
     verified_stmt("SHOW SCHEMAS LIKE '%abc'");
-    verified_stmt("SHOW TABLES");
-    verified_stmt("SHOW TABLES IN db1");
-    verified_stmt("SHOW TABLES IN db1 'abc'");
-    verified_stmt("SHOW VIEWS");
-    verified_stmt("SHOW VIEWS IN db1");
-    verified_stmt("SHOW VIEWS IN db1 'abc'");
-    verified_stmt("SHOW VIEWS FROM db1");
-    verified_stmt("SHOW VIEWS FROM db1 'abc'");
-    verified_stmt("SHOW MATERIALIZED VIEWS");
-    verified_stmt("SHOW MATERIALIZED VIEWS IN db1");
-    verified_stmt("SHOW MATERIALIZED VIEWS IN db1 'abc'");
-    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1");
-    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1 'abc'");
+
+    // SHOW is parsed the same by all dialects except the position of the LIKE option
+    all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt("SHOW TABLES");
+    all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt("SHOW TABLES");
+    all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt("SHOW TABLES IN db1");
+    all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt("SHOW TABLES IN db1");
+    all_dialects_where(|d| !d.supports_show_like_before_in())
+        .verified_stmt("SHOW TABLES IN db1 'abc'");
+
+    all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt("SHOW VIEWS");
+    all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt("SHOW VIEWS");
+    all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt("SHOW VIEWS IN db1");
+    all_dialects_where(|d| !d.supports_show_like_before_in())
+        .verified_stmt("SHOW VIEWS IN db1 'abc'");
+    all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt("SHOW VIEWS FROM db1");
+    all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt("SHOW VIEWS FROM db1");
+    all_dialects_where(|d| !d.supports_show_like_before_in())
+        .verified_stmt("SHOW VIEWS FROM db1 'abc'");
+
+    all_dialects_where(|d| d.supports_show_like_before_in())
+        .verified_stmt("SHOW MATERIALIZED VIEWS");
+    all_dialects_where(|d| !d.supports_show_like_before_in())
+        .verified_stmt("SHOW MATERIALIZED VIEWS");
+    all_dialects_where(|d| d.supports_show_like_before_in())
+        .verified_stmt("SHOW MATERIALIZED VIEWS IN db1");
+    all_dialects_where(|d| !d.supports_show_like_before_in())
+        .verified_stmt("SHOW MATERIALIZED VIEWS IN db1");
+    all_dialects_where(|d| d.supports_show_like_before_in())
+        .verified_stmt("SHOW MATERIALIZED VIEWS FROM db1");
+    all_dialects_where(|d| !d.supports_show_like_before_in())
+        .verified_stmt("SHOW MATERIALIZED VIEWS FROM db1");
+    all_dialects_where(|d| !d.supports_show_like_before_in())
+        .verified_stmt("SHOW MATERIALIZED VIEWS IN db1 'abc'");
+    all_dialects_where(|d| !d.supports_show_like_before_in())
+        .verified_stmt("SHOW MATERIALIZED VIEWS FROM db1");
+    all_dialects_where(|d| !d.supports_show_like_before_in())
+        .verified_stmt("SHOW MATERIALIZED VIEWS FROM db1 'abc'");
 }
 
 #[test]

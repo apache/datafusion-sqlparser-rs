@@ -223,14 +223,18 @@ fn parse_flush() {
 
 #[test]
 fn parse_show_columns() {
-    let table_name = ObjectName(vec![Ident::new("mytable")]);
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),
         Statement::ShowColumns {
             extended: false,
             full: false,
-            table_name: table_name.clone(),
+            show_in: Some(ShowStatementIn {
+                clause: ShowStatementInClause::FROM,
+                parent_type: None,
+                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+            }),
             filter: None,
+            filter_position: ShowStatementFilterPosition::AtTheEnd,
         }
     );
     assert_eq!(
@@ -238,8 +242,13 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            table_name: ObjectName(vec![Ident::new("mydb"), Ident::new("mytable")]),
+            show_in: Some(ShowStatementIn {
+                clause: ShowStatementInClause::FROM,
+                parent_type: None,
+                parent_name: Some(ObjectName(vec![Ident::new("mydb"), Ident::new("mytable")])),
+            }),
             filter: None,
+            filter_position: ShowStatementFilterPosition::AtTheEnd,
         }
     );
     assert_eq!(
@@ -247,8 +256,13 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: true,
             full: false,
-            table_name: table_name.clone(),
+            show_in: Some(ShowStatementIn {
+                clause: ShowStatementInClause::FROM,
+                parent_type: None,
+                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+            }),
             filter: None,
+            filter_position: ShowStatementFilterPosition::AtTheEnd,
         }
     );
     assert_eq!(
@@ -256,8 +270,13 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: true,
-            table_name: table_name.clone(),
+            show_in: Some(ShowStatementIn {
+                clause: ShowStatementInClause::FROM,
+                parent_type: None,
+                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+            }),
             filter: None,
+            filter_position: ShowStatementFilterPosition::AtTheEnd,
         }
     );
     assert_eq!(
@@ -265,8 +284,13 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            table_name: table_name.clone(),
+            show_in: Some(ShowStatementIn {
+                clause: ShowStatementInClause::FROM,
+                parent_type: None,
+                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+            }),
             filter: Some(ShowStatementFilter::Like("pattern".into())),
+            filter_position: ShowStatementFilterPosition::AtTheEnd,
         }
     );
     assert_eq!(
@@ -274,18 +298,23 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            table_name,
+            show_in: Some(ShowStatementIn {
+                clause: ShowStatementInClause::FROM,
+                parent_type: None,
+                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+            }),
             filter: Some(ShowStatementFilter::Where(
                 mysql_and_generic().verified_expr("1 = 2")
             )),
+            filter_position: ShowStatementFilterPosition::AtTheEnd,
         }
     );
     mysql_and_generic()
         .one_statement_parses_to("SHOW FIELDS FROM mytable", "SHOW COLUMNS FROM mytable");
     mysql_and_generic()
-        .one_statement_parses_to("SHOW COLUMNS IN mytable", "SHOW COLUMNS FROM mytable");
+        .one_statement_parses_to("SHOW COLUMNS IN mytable", "SHOW COLUMNS IN mytable");
     mysql_and_generic()
-        .one_statement_parses_to("SHOW FIELDS IN mytable", "SHOW COLUMNS FROM mytable");
+        .one_statement_parses_to("SHOW FIELDS IN mytable", "SHOW COLUMNS IN mytable");
     mysql_and_generic().one_statement_parses_to(
         "SHOW COLUMNS FROM mytable FROM mydb",
         "SHOW COLUMNS FROM mydb.mytable",
@@ -327,63 +356,103 @@ fn parse_show_tables() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW TABLES"),
         Statement::ShowTables {
+            terse: false,
+            history: false,
             extended: false,
             full: false,
-            clause: None,
-            db_name: None,
+            external: false,
+            starts_with: None,
+            limit: None,
+            from: None,
+            show_in: None,
             filter: None,
+            filter_position: ShowStatementFilterPosition::AtTheEnd
         }
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW TABLES FROM mydb"),
         Statement::ShowTables {
+            terse: false,
+            history: false,
             extended: false,
             full: false,
-            clause: Some(ShowClause::FROM),
-            db_name: Some(Ident::new("mydb")),
+            external: false,
+            starts_with: None,
+            limit: None,
+            from: None,
+            show_in: Some(ShowStatementIn {
+                clause: ShowStatementInClause::FROM,
+                parent_type: None,
+                parent_name: Some(ObjectName(vec![Ident::new("mydb")])),
+            }),
             filter: None,
+            filter_position: ShowStatementFilterPosition::AtTheEnd
         }
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW EXTENDED TABLES"),
         Statement::ShowTables {
+            terse: false,
+            history: false,
             extended: true,
             full: false,
-            clause: None,
-            db_name: None,
+            external: false,
+            starts_with: None,
+            limit: None,
+            from: None,
+            show_in: None,
             filter: None,
+            filter_position: ShowStatementFilterPosition::AtTheEnd
         }
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW FULL TABLES"),
         Statement::ShowTables {
+            terse: false,
+            history: false,
             extended: false,
             full: true,
-            clause: None,
-            db_name: None,
+            external: false,
+            starts_with: None,
+            limit: None,
+            from: None,
+            show_in: None,
             filter: None,
+            filter_position: ShowStatementFilterPosition::AtTheEnd
         }
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW TABLES LIKE 'pattern'"),
         Statement::ShowTables {
+            terse: false,
+            history: false,
             extended: false,
             full: false,
-            clause: None,
-            db_name: None,
+            external: false,
+            starts_with: None,
+            limit: None,
+            from: None,
+            show_in: None,
             filter: Some(ShowStatementFilter::Like("pattern".into())),
+            filter_position: ShowStatementFilterPosition::AtTheEnd
         }
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW TABLES WHERE 1 = 2"),
         Statement::ShowTables {
+            terse: false,
+            history: false,
             extended: false,
             full: false,
-            clause: None,
-            db_name: None,
+            external: false,
+            starts_with: None,
+            limit: None,
+            from: None,
+            show_in: None,
             filter: Some(ShowStatementFilter::Where(
                 mysql_and_generic().verified_expr("1 = 2")
             )),
+            filter_position: ShowStatementFilterPosition::AtTheEnd
         }
     );
     mysql_and_generic().verified_stmt("SHOW TABLES IN mydb");

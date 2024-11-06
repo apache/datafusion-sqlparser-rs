@@ -49,7 +49,7 @@ SOURCE_TOP_DIR="$(cd "${SOURCE_DIR}/../../" && pwd)"
 
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <version> <rc>"
-    echo "ex. $0 4.1.0 2"
+    echo "ex. $0 0.52.0 2"
     exit
 fi
 
@@ -60,7 +60,7 @@ fi
 
 version=$1
 rc=$2
-tag="${version}-rc${rc}"
+tag="v${version}-rc${rc}"
 
 echo "Attempting to create ${tarball} from tag ${tag}"
 release_hash=$(cd "${SOURCE_TOP_DIR}" && git rev-list --max-count=1 ${tag})

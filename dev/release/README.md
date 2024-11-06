@@ -90,11 +90,13 @@ tag the commit it was created for convenience and code archaeology.
 
 Using a string such as `v0.52.0` as the `<version>`, create and push the tag by running these commands:
 
+For example to tag version `0.52.0`
+
 ```shell
 git fetch apache
-git tag <version> apache/main
+git tag v0.52.0-rc1 apache/main
 # push tag to Github remote
-git push apache <version>
+git push apache v0.52.0-rc1
 ```
 
 ### Create, sign, and upload artifacts

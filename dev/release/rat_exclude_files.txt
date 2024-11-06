@@ -2,4 +2,5 @@
 .gitignore
 .tool-versions
 dev/release/rat_exclude_files.txt
+fuzz/.gitignore
 

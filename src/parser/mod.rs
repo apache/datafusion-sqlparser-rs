@@ -5311,55 +5311,61 @@ impl<'a> Parser<'a> {
     /// ```
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/declare-local-variable-transact-sql?view=sql-server-ver16
     pub fn parse_mssql_declare(&mut self) -> Result<Statement, ParserError> {
-        let mut stmts = vec![];
-
-        loop {
-            let name = {
-                let ident = self.parse_identifier(false)?;
-                if !ident.value.starts_with('@') {
-                    Err(ParserError::TokenizerError(
-                        "Invalid MsSql variable declaration.".to_string(),
-                    ))
-                } else {
-                    Ok(ident)
-                }
-            }?;
-
-            let (declare_type, data_type) = match self.peek_token().token {
-                Token::Word(w) => match w.keyword {
-                    Keyword::CURSOR => {
-                        self.next_token();
-                        (Some(DeclareType::Cursor), None)
-                    }
-                    Keyword::AS => {
-                        self.next_token();
-                        (None, Some(self.parse_data_type()?))
-                    }
-                    _ => (None, Some(self.parse_data_type()?)),
-                },
-                _ => (None, Some(self.parse_data_type()?)),
-            };
-
-            let assignment = self.parse_mssql_variable_declaration_expression()?;
-
-            stmts.push(Declare {
-                names: vec![name],
-                data_type,
-                assignment,
-                declare_type,
-                binary: None,
-                sensitive: None,
-                scroll: None,
-                hold: None,
-                for_query: None,
-            });
-
-            if self.peek_token().token == Token::SemiColon || self.next_token() != Token::Comma {
-                break;
-            }
-        }
+        let stmts = self.parse_comma_separated(Parser::parse_mssql_declare_stmt)?;
 
         Ok(Statement::Declare { stmts })
+    }
+
+    /// Parse the body of a [MsSql] `DECLARE`statement.
+    ///
+    /// Syntax:
+    /// ```text
+    // {
+    //   { @local_variable [AS] data_type [ = value ] }
+    //   | { @cursor_variable_name CURSOR }
+    // } [ ,...n ]
+    /// ```
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/declare-local-variable-transact-sql?view=sql-server-ver16
+    pub fn parse_mssql_declare_stmt(&mut self) -> Result<Declare, ParserError> {
+        let name = {
+            let ident = self.parse_identifier(false)?;
+            if !ident.value.starts_with('@') {
+                Err(ParserError::TokenizerError(
+                    "Invalid MsSql variable declaration.".to_string(),
+                ))
+            } else {
+                Ok(ident)
+            }
+        }?;
+
+        let (declare_type, data_type) = match self.peek_token().token {
+            Token::Word(w) => match w.keyword {
+                Keyword::CURSOR => {
+                    self.next_token();
+                    (Some(DeclareType::Cursor), None)
+                }
+                Keyword::AS => {
+                    self.next_token();
+                    (None, Some(self.parse_data_type()?))
+                }
+                _ => (None, Some(self.parse_data_type()?)),
+            },
+            _ => (None, Some(self.parse_data_type()?)),
+        };
+
+        let assignment = self.parse_mssql_variable_declaration_expression()?;
+
+        Ok(Declare {
+            names: vec![name],
+            data_type,
+            assignment,
+            declare_type,
+            binary: None,
+            sensitive: None,
+            scroll: None,
+            hold: None,
+            for_query: None,
+        })
     }
 
     /// Parses the assigned expression in a variable declaration.

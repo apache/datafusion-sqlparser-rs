@@ -11410,6 +11410,7 @@ fn parse_composite_function() {
                                             Select {
                                                 distinct: None,
                                                 top: None,
+                                                top_before_distinct: false,
                                                 projection: vec![SelectItem::UnnamedExpr(
                                                     Expr::BinaryOp {
                                                         left: Expr::Value(

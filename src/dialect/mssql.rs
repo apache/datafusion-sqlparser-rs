@@ -50,7 +50,7 @@ impl Dialect for MsSqlDialect {
         true
     }
 
-    fn supports_eq_alias_assigment(&self) -> bool {
+    fn supports_eq_alias_assignment(&self) -> bool {
         true
     }
 

@@ -957,6 +957,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
+                top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "quoted ` identifier".into(),
                     quote_style: Some('`'),
@@ -1007,6 +1008,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
+                top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "quoted `` identifier".into(),
                     quote_style: Some('`'),
@@ -1050,6 +1052,7 @@ fn parse_escaped_backticks_with_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
+                top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "`quoted identifier`".into(),
                     quote_style: Some('`'),
@@ -1097,6 +1100,7 @@ fn parse_escaped_backticks_with_no_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
+                top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "``quoted identifier``".into(),
                     quote_style: Some('`'),
@@ -1741,6 +1745,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                 Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
                         "123col_$@123abc"
                     )))],
@@ -1795,6 +1800,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                 Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![
                         SelectItem::UnnamedExpr(Expr::Value(number("123e4"))),
                         SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
@@ -2295,6 +2301,7 @@ fn parse_substring_in_select() {
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: Some(Distinct::Distinct),
                         top: None,
+                        top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
                             expr: Box::new(Expr::Identifier(Ident {
                                 value: "description".to_string(),
@@ -2616,6 +2623,7 @@ fn parse_hex_string_introducer() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
+                top_before_distinct: false,
                 projection: vec![SelectItem::UnnamedExpr(Expr::IntroducedString {
                     introducer: "_latin1".to_string(),
                     value: Value::HexStringLiteral("4D7953514C".to_string())
@@ -2765,6 +2773,12 @@ fn parse_json_table() {
         r#"SELECT * FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(x INT PATH '$' ERROR ON EMPTY)) AS t"#,
     );
     mysql().verified_only_select(r#"SELECT * FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(x INT PATH '$' ERROR ON EMPTY DEFAULT '0' ON ERROR)) AS t"#);
+    mysql().verified_only_select(
+        r#"SELECT jt.* FROM JSON_TABLE('["Alice", "Bob", "Charlie"]', '$[*]' COLUMNS(row_num FOR ORDINALITY, name VARCHAR(50) PATH '$')) AS jt"#,
+    );
+    mysql().verified_only_select(
+        r#"SELECT * FROM JSON_TABLE('[ {"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS(a INT PATH '$.a', NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) AS jt"#,
+    );
     assert_eq!(
         mysql()
             .verified_only_select(
@@ -2776,14 +2790,14 @@ fn parse_json_table() {
             json_expr: Expr::Value(Value::SingleQuotedString("[1,2]".to_string())),
             json_path: Value::SingleQuotedString("$[*]".to_string()),
             columns: vec![
-                JsonTableColumn {
+                JsonTableColumn::Named(JsonTableNamedColumn {
                     name: Ident::new("x"),
                     r#type: DataType::Int(None),
                     path: Value::SingleQuotedString("$".to_string()),
                     exists: false,
                     on_empty: Some(JsonTableColumnErrorHandling::Default(Value::SingleQuotedString("0".to_string()))),
                     on_error: Some(JsonTableColumnErrorHandling::Null),
-                },
+                }),
             ],
             alias: Some(TableAlias {
                 name: Ident::new("t"),

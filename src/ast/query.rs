@@ -2402,7 +2402,7 @@ pub struct OpenJsonTableColumn {
     /// The type of the column to be extracted.
     pub r#type: DataType,
     /// The path to the column to be extracted. Must be a literal string.
-    pub path: Option<Value>,
+    pub path: Option<String>,
     /// The `AS JSON` option.
     pub as_json: bool,
 }
@@ -2411,7 +2411,7 @@ impl fmt::Display for OpenJsonTableColumn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.name, self.r#type)?;
         if let Some(path) = &self.path {
-            write!(f, " {}", path)?;
+            write!(f, " '{}'", value::escape_single_quote_string(path))?;
         }
         if self.as_json {
             write!(f, " AS JSON")?;

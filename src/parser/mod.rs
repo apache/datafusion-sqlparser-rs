@@ -10000,7 +10000,7 @@ impl<'a> Parser<'a> {
                     table_with_joins: Box::new(table_and_joins),
                     alias,
                 })
-            } else if dialect_of!(self is SnowflakeDialect | GenericDialect | MsSqlDialect) {
+            } else if dialect_of!(self is SnowflakeDialect | GenericDialect) {
                 // Dialect-specific behavior: Snowflake diverges from the
                 // standard and from most of the other implementations by
                 // allowing extra parentheses not only around a join (B), but
@@ -10135,29 +10135,8 @@ impl<'a> Parser<'a> {
                 alias,
             })
         } else if self.parse_keyword_with_tokens(Keyword::OPENJSON, &[Token::LParen]) {
-            let json_expr = self.parse_expr()?;
-            let json_path = if self.consume_token(&Token::Comma) {
-                Some(self.parse_value()?)
-            } else {
-                None
-            };
-            self.expect_token(&Token::RParen)?;
-            let columns = if self.parse_keyword(Keyword::WITH) {
-                self.expect_token(&Token::LParen)?;
-                let columns =
-                    self.parse_comma_separated(Parser::parse_openjson_table_column_def)?;
-                self.expect_token(&Token::RParen)?;
-                columns
-            } else {
-                Vec::new()
-            };
-            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-            Ok(TableFactor::OpenJsonTable {
-                json_expr,
-                json_path,
-                columns,
-                alias,
-            })
+            self.prev_token();
+            self.parse_open_json_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
 
@@ -10221,6 +10200,34 @@ impl<'a> Parser<'a> {
 
             Ok(table)
         }
+    }
+
+    /// Parses `OPENJSON( jsonExpression [ , path ] )  [ <with_clause> ]` clause,
+    /// assuming the `OPENJSON` keyword was already consumed.
+    fn parse_open_json_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let json_expr = self.parse_expr()?;
+        let json_path = if self.consume_token(&Token::Comma) {
+            Some(self.parse_value()?)
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        let columns = if self.parse_keyword(Keyword::WITH) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(Parser::parse_openjson_table_column_def)?;
+            self.expect_token(&Token::RParen)?;
+            columns
+        } else {
+            Vec::new()
+        };
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        Ok(TableFactor::OpenJsonTable {
+            json_expr,
+            json_path,
+            columns,
+            alias,
+        })
     }
 
     fn parse_match_recognize(&mut self, table: TableFactor) -> Result<TableFactor, ParserError> {
@@ -10505,7 +10512,7 @@ impl<'a> Parser<'a> {
         let r#type = self.parse_data_type()?;
         let path = if let Token::SingleQuotedString(path) = self.peek_token().token {
             self.next_token();
-            Some(Value::SingleQuotedString(path))
+            Some(path)
         } else {
             None
         };

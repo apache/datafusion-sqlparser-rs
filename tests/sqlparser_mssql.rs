@@ -193,31 +193,337 @@ fn parse_mssql_apply_join() {
 }
 
 #[test]
-fn parse_mssql_cross_apply_json() {
-    let _ = ms().verified_only_select(
+fn parse_mssql_openjson() {
+    let select = ms().verified_only_select(
         "SELECT B.kind, B.id_list \
         FROM t_test_table AS A \
         CROSS APPLY OPENJSON(A.param, '$.config') WITH (kind VARCHAR(20) '$.kind', [id_list] NVARCHAR(MAX) '$.id_list' AS JSON) AS B",
     );
-    let _ = ms().verified_only_select(
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    columns: vec![
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "kind".into(),
+                                quote_style: None,
+                            },
+                            r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                                length: 20,
+                                unit: None
+                            })),
+                            path: Some("$.kind".into()),
+                            as_json: false
+                        },
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "id_list".into(),
+                                quote_style: Some('['),
+                            },
+                            r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
+                            path: Some("$.id_list".into()),
+                            as_json: true
+                        }
+                    ],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms().verified_only_select(
         "SELECT B.kind, B.id_list \
         FROM t_test_table AS A \
         CROSS APPLY OPENJSON(A.param) WITH (kind VARCHAR(20) '$.kind', [id_list] NVARCHAR(MAX) '$.id_list' AS JSON) AS B",
     );
-    let _ = ms().verified_only_select(
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: None,
+                    columns: vec![
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "kind".into(),
+                                quote_style: None,
+                            },
+                            r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                                length: 20,
+                                unit: None
+                            })),
+                            path: Some("$.kind".into()),
+                            as_json: false
+                        },
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "id_list".into(),
+                                quote_style: Some('['),
+                            },
+                            r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
+                            path: Some("$.id_list".into()),
+                            as_json: true
+                        }
+                    ],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms().verified_only_select(
         "SELECT B.kind, B.id_list \
         FROM t_test_table AS A \
-        CROSS APPLY OPENJSON(A.param) WITH (kind VARCHAR(20), [id_list] NVARCHAR(MAX) AS JSON) AS B",
+        CROSS APPLY OPENJSON(A.param) WITH (kind VARCHAR(20), [id_list] NVARCHAR(MAX)) AS B",
     );
-    let _ = ms().verified_only_select(
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: None,
+                    columns: vec![
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "kind".into(),
+                                quote_style: None,
+                            },
+                            r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                                length: 20,
+                                unit: None
+                            })),
+                            path: None,
+                            as_json: false
+                        },
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "id_list".into(),
+                                quote_style: Some('['),
+                            },
+                            r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
+                            path: None,
+                            as_json: false
+                        }
+                    ],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms_and_generic().verified_only_select(
         "SELECT B.kind, B.id_list \
         FROM t_test_table AS A \
         CROSS APPLY OPENJSON(A.param, '$.config') AS B",
     );
-    let _ = ms().verified_only_select(
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    columns: vec![],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms_and_generic().verified_only_select(
         "SELECT B.kind, B.id_list \
         FROM t_test_table AS A \
         CROSS APPLY OPENJSON(A.param) AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: None,
+                    columns: vec![],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
     );
 }
 

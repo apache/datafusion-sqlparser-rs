@@ -993,7 +993,7 @@ impl<'a> Parser<'a> {
         }
 
         let next_token = self.next_token();
-        let expr = match next_token.token {
+        let mut expr = match next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE | Keyword::FALSE | Keyword::NULL => {
                     self.prev_token();
@@ -1252,10 +1252,22 @@ impl<'a> Parser<'a> {
                             )
                         }
                     };
-                    Ok(Expr::CompositeAccess {
-                        expr: Box::new(expr),
-                        key,
-                    })
+                    if self.consume_token(&Token::LParen) {
+                        self.prev_token();
+                        let func = match self.parse_function(ObjectName(vec![key]))? {
+                            Expr::Function(func) => func,
+                            _ => unreachable!(),
+                        };
+                        Ok(Expr::CompositeFunction(CompositeFunction {
+                            left: Box::new(expr),
+                            right: func,
+                        }))
+                    } else {
+                        Ok(Expr::CompositeAccess {
+                            expr: Box::new(expr),
+                            key,
+                        })
+                    }
                 }
             }
             Token::Placeholder(_) | Token::Colon | Token::AtSign => {
@@ -1269,46 +1281,31 @@ impl<'a> Parser<'a> {
             _ => self.expected("an expression", next_token),
         }?;
 
-        if dialect_of!(self is MsSqlDialect) {
-            // Convert `CompositeAccess` to `CompositeFunction` (MSSQL doesn't support `CompositeAccess` syntax)
-            // ```sql
-            // SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')
-            // ```
-            if let Expr::CompositeAccess { expr, key } = expr {
-                self.expect_token(&Token::LParen)?;
-                let args = self.parse_comma_separated(Parser::parse_expr)?;
-                self.expect_token(&Token::RParen)?;
-                return Ok(Expr::CompositeFunction {
-                    expr: expr,
-                    name: key,
-                    args,
-                });
-            }
-            // ```sql
-            // SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)')
-            // ```
-            else if matches!(
-                expr,
-                Expr::Cast { .. } | Expr::Convert { .. } | Expr::Function(_)
-            ) && self.consume_token(&Token::Period)
-            {
-                let tok = self.next_token();
-                let name = match tok.token {
-                    Token::Word(word) => word.to_ident(),
-                    _ => {
-                        return parser_err!(
-                            format!("Expected identifier, found: {tok}"),
-                            tok.location
-                        )
-                    }
+        // Composite function chain
+        while matches!(
+            expr,
+            Expr::Function(_)
+                | Expr::CompositeFunction { .. }
+                | Expr::Cast { .. }
+                | Expr::Convert { .. }
+        ) && self.consume_token(&Token::Period)
+        {
+            let tok = self.next_token();
+            let name = match tok.token {
+                Token::Word(word) => word.to_ident(),
+                _ => {
+                    return parser_err!(format!("Expected identifier, found: {tok}"), tok.location)
+                }
+            };
+            if self.consume_token(&Token::LParen) {
+                self.prev_token();
+                let func = match self.parse_function(ObjectName(vec![name]))? {
+                    Expr::Function(func) => func,
+                    _ => unreachable!(),
                 };
-                self.expect_token(&Token::LParen)?;
-                let args = self.parse_comma_separated(Parser::parse_expr)?;
-                self.expect_token(&Token::RParen)?;
-                return Ok(Expr::CompositeFunction {
-                    expr: Box::new(expr),
-                    name,
-                    args,
+                expr = Expr::CompositeFunction(CompositeFunction {
+                    left: Box::new(expr),
+                    right: func,
                 });
             }
         }

@@ -560,17 +560,6 @@ pub enum Expr {
         expr: Box<Expr>,
         key: Ident,
     },
-    /// CompositeFunction [mssql]
-    /// Example:
-    /// ```sql
-    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
-    /// ```
-    /// [mssql]: https://learn.microsoft.com/en-us/sql/t-sql/xml/xml-data-type-methods?view=sql-server-ver16
-    CompositeFunction {
-        expr: Box<Expr>,
-        name: Ident,
-        args: Vec<Expr>,
-    },
     /// `IS FALSE` operator
     IsFalse(Box<Expr>),
     /// `IS NOT FALSE` operator
@@ -818,6 +807,21 @@ pub enum Expr {
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
+    /// CompositeFunction (function chain)
+    ///
+    /// Syntax:
+    ///
+    /// `<arbitrary-expr>.<arbitrary-expr>.<arbitrary-expr>...`
+    ///
+    /// > `arbitrary-expr` can be any expression including a function call.
+    ///
+    /// Example:
+    ///
+    /// ```sql
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
+    /// SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)')
+    /// ```
+    CompositeFunction(CompositeFunction),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -1474,6 +1478,7 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{fun}"),
+            Expr::CompositeFunction(fun) => write!(f, "{fun}"),
             Expr::Case {
                 operand,
                 conditions,
@@ -1639,9 +1644,6 @@ impl fmt::Display for Expr {
             }
             Expr::CompositeAccess { expr, key } => {
                 write!(f, "{expr}.{key}")
-            }
-            Expr::CompositeFunction { expr, name, args } => {
-                write!(f, "{expr}.{name}({})", display_comma_separated(args))
             }
             Expr::AtTimeZone {
                 timestamp,
@@ -5575,6 +5577,21 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
             FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
         }
+    }
+}
+
+/// A composite function call
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CompositeFunction {
+    pub left: Box<Expr>,
+    pub right: Function,
+}
+
+impl fmt::Display for CompositeFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}.{}", self.left, self.right,)
     }
 }
 

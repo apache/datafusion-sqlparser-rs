@@ -54,14 +54,14 @@ pub use self::query::{
     ExceptSelectItem, ExcludeSelectItem, ExprWithAlias, Fetch, ForClause, ForJson, ForXml,
     FormatClause, GroupByExpr, GroupByWithModifier, IdentWithAlias, IlikeSelectItem, Interpolate,
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonTableColumn,
-    JsonTableColumnErrorHandling, LateralView, LockClause, LockType, MatchRecognizePattern,
-    MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset,
-    OffsetRows, OpenJsonTableColumn, OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect,
-    Query, RenameSelectItem, RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem,
-    RowsPerMatch, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting,
-    SymbolDefinition, Table, TableAlias, TableFactor, TableFunctionArgs, TableVersion,
-    TableWithJoins, Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With,
-    WithFill,
+    JsonTableColumnErrorHandling, JsonTableNamedColumn, JsonTableNestedColumn, LateralView,
+    LockClause, LockType, MatchRecognizePattern, MatchRecognizeSymbol, Measure,
+    NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset, OffsetRows, OrderBy, OrderByExpr,
+    PivotValueSource, ProjectionSelect, Query, RenameSelectItem, RepetitionQuantifier,
+    ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select, SelectInto, SelectItem, SetExpr,
+    SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableFactor,
+    TableFunctionArgs, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode, Values,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 pub use self::trigger::{
@@ -3296,6 +3296,23 @@ pub enum Statement {
         include_final: bool,
         deduplicate: Option<Deduplicate>,
     },
+    /// ```sql
+    /// LISTEN
+    /// ```
+    /// listen for a notification channel
+    ///
+    /// See Postgres <https://www.postgresql.org/docs/current/sql-listen.html>
+    LISTEN { channel: Ident },
+    /// ```sql
+    /// NOTIFY channel [ , payload ]
+    /// ```
+    /// send a notification event together with an optional “payload” string to channel
+    ///
+    /// See Postgres <https://www.postgresql.org/docs/current/sql-notify.html>
+    NOTIFY {
+        channel: Ident,
+        payload: Option<String>,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -4837,6 +4854,17 @@ impl fmt::Display for Statement {
                 }
                 if let Some(deduplicate) = deduplicate {
                     write!(f, " {deduplicate}")?;
+                }
+                Ok(())
+            }
+            Statement::LISTEN { channel } => {
+                write!(f, "LISTEN {channel}")?;
+                Ok(())
+            }
+            Statement::NOTIFY { channel, payload } => {
+                write!(f, "NOTIFY {channel}")?;
+                if let Some(payload) = payload {
+                    write!(f, ", '{payload}'")?;
                 }
                 Ok(())
             }

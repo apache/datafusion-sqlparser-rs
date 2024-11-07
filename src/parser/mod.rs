@@ -532,6 +532,10 @@ impl<'a> Parser<'a> {
                 Keyword::EXECUTE => self.parse_execute(),
                 Keyword::PREPARE => self.parse_prepare(),
                 Keyword::MERGE => self.parse_merge(),
+                // `LISTEN` and `NOTIFY` are Postgres-specific
+                // syntaxes. They are used for Postgres statement.
+                Keyword::LISTEN if self.dialect.supports_listen() => self.parse_listen(),
+                Keyword::NOTIFY if self.dialect.supports_notify() => self.parse_notify(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),
@@ -944,6 +948,21 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier(false)?;
 
         Ok(Statement::ReleaseSavepoint { name })
+    }
+
+    pub fn parse_listen(&mut self) -> Result<Statement, ParserError> {
+        let channel = self.parse_identifier(false)?;
+        Ok(Statement::LISTEN { channel })
+    }
+
+    pub fn parse_notify(&mut self) -> Result<Statement, ParserError> {
+        let channel = self.parse_identifier(false)?;
+        let payload = if self.consume_token(&Token::Comma) {
+            Some(self.parse_literal_string()?)
+        } else {
+            None
+        };
+        Ok(Statement::NOTIFY { channel, payload })
     }
 
     /// Parse an expression prefix.
@@ -9174,13 +9193,16 @@ impl<'a> Parser<'a> {
                 None
             };
 
+        let mut top_before_distinct = false;
+        let mut top = None;
+        if self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
+            top = Some(self.parse_top()?);
+            top_before_distinct = true;
+        }
         let distinct = self.parse_all_or_distinct()?;
-
-        let top = if self.parse_keyword(Keyword::TOP) {
-            Some(self.parse_top()?)
-        } else {
-            None
-        };
+        if !self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
+            top = Some(self.parse_top()?);
+        }
 
         let projection = self.parse_projection()?;
 
@@ -9323,6 +9345,7 @@ impl<'a> Parser<'a> {
         Ok(Select {
             distinct,
             top,
+            top_before_distinct,
             projection,
             into,
             from,
@@ -10475,7 +10498,23 @@ impl<'a> Parser<'a> {
     /// Parses MySQL's JSON_TABLE column definition.
     /// For example: `id INT EXISTS PATH '$' DEFAULT '0' ON EMPTY ERROR ON ERROR`
     pub fn parse_json_table_column_def(&mut self) -> Result<JsonTableColumn, ParserError> {
+        if self.parse_keyword(Keyword::NESTED) {
+            let _has_path_keyword = self.parse_keyword(Keyword::PATH);
+            let path = self.parse_value()?;
+            self.expect_keyword(Keyword::COLUMNS)?;
+            let columns = self.parse_parenthesized(|p| {
+                p.parse_comma_separated(Self::parse_json_table_column_def)
+            })?;
+            return Ok(JsonTableColumn::Nested(JsonTableNestedColumn {
+                path,
+                columns,
+            }));
+        }
         let name = self.parse_identifier(false)?;
+        if self.parse_keyword(Keyword::FOR) {
+            self.expect_keyword(Keyword::ORDINALITY)?;
+            return Ok(JsonTableColumn::ForOrdinality(name));
+        }
         let r#type = self.parse_data_type()?;
         let exists = self.parse_keyword(Keyword::EXISTS);
         self.expect_keyword(Keyword::PATH)?;
@@ -10490,14 +10529,14 @@ impl<'a> Parser<'a> {
                 on_error = Some(error_handling);
             }
         }
-        Ok(JsonTableColumn {
+        Ok(JsonTableColumn::Named(JsonTableNamedColumn {
             name,
             r#type,
             path,
             exists,
             on_empty,
             on_error,
-        })
+        }))
     }
 
     /// Parses MSSQL's `OPENJSON WITH` column definition.
@@ -11295,7 +11334,7 @@ impl<'a> Parser<'a> {
                 left,
                 op: BinaryOperator::Eq,
                 right,
-            } if self.dialect.supports_eq_alias_assigment()
+            } if self.dialect.supports_eq_alias_assignment()
                 && matches!(left.as_ref(), Expr::Identifier(_)) =>
             {
                 let Expr::Identifier(alias) = *left else {

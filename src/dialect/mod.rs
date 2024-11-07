@@ -582,12 +582,28 @@ pub trait Dialect: Debug + Any {
     ///  SELECT col_alias = col FROM tbl;
     ///  SELECT col_alias AS col FROM tbl;
     /// ```
-    fn supports_eq_alias_assigment(&self) -> bool {
+    fn supports_eq_alias_assignment(&self) -> bool {
         false
     }
 
     /// Returns true if this dialect supports the `TRY_CONVERT` function
     fn supports_try_convert(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `LISTEN` statement
+    fn supports_listen(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `NOTIFY` statement
+    fn supports_notify(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect expects the the `TOP` option
+    /// before the `ALL`/`DISTINCT` options in a `SELECT` statement.
+    fn supports_top_before_distinct(&self) -> bool {
         false
     }
 }

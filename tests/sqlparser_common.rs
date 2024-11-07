@@ -11655,6 +11655,93 @@ fn parse_composite_function() {
         }],
         sql.projection
     );
+    let sql = dialects.verified_only_select(
+        "SELECT LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T",
+    );
+    assert_eq!(
+        vec![SelectItem::ExprWithAlias {
+            expr: Expr::CompositeFunction(CompositeFunction {
+                left: Expr::CompositeFunction(CompositeFunction {
+                    left: Expr::Function(Function {
+                        name: ObjectName(vec![Ident {
+                            value: "LEFT".into(),
+                            quote_style: None
+                        }]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                    Value::SingleQuotedString("abc".into())
+                                ))),
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number(
+                                    "1"
+                                )))),
+                            ],
+                            clauses: vec![]
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![]
+                    })
+                    .into(),
+                    right: Function {
+                        name: ObjectName(vec![Ident {
+                            value: "value".into(),
+                            quote_style: None
+                        }]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                    Value::SingleQuotedString(".".into())
+                                ))),
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                    Value::SingleQuotedString("NVARCHAR(MAX)".into())
+                                )))
+                            ],
+                            clauses: vec![]
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![]
+                    }
+                })
+                .into(),
+                right: Function {
+                    name: ObjectName(vec![Ident {
+                        value: "value".into(),
+                        quote_style: None
+                    }]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString(".".into())
+                            ))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
+                            )))
+                        ],
+                        clauses: vec![]
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![]
+                }
+            }),
+            alias: Ident {
+                value: "T".into(),
+                quote_style: None
+            }
+        }],
+        sql.projection
+    );
 }
 
 #[test]

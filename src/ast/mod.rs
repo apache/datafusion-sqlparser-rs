@@ -560,8 +560,12 @@ pub enum Expr {
         expr: Box<Expr>,
         key: Ident,
     },
-    /// CompositeFunction (mssql) e.g. SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
-    /// <https://learn.microsoft.com/en-us/sql/t-sql/xml/xml-data-type-methods?view=sql-server-ver16>
+    /// CompositeFunction [mssql]
+    /// Example:
+    /// ```sql
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
+    /// ```
+    /// [mssql]: https://learn.microsoft.com/en-us/sql/t-sql/xml/xml-data-type-methods?view=sql-server-ver16
     CompositeFunction {
         expr: Box<Expr>,
         name: Ident,

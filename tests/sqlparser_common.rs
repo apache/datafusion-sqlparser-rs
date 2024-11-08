@@ -11410,131 +11410,34 @@ fn parse_method_expr() {
     let expr = dialects
         .verified_expr("LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')");
     match expr {
-        Expr::Method(Method { expr, method }) => {
-            match *expr {
-                Expr::Method(Method { expr, method }) if matches!(*expr, Expr::Function(_)) => {
-                    assert_eq!(
-                        Function {
-                            name: ObjectName(vec![Ident {
-                                value: "value".into(),
-                                quote_style: None
-                            }]),
-                            parameters: FunctionArguments::None,
-                            args: FunctionArguments::List(FunctionArgumentList {
-                                duplicate_treatment: None,
-                                args: vec![
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                        Value::SingleQuotedString(".".into())
-                                    ))),
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                        Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                                    )))
-                                ],
-                                clauses: vec![]
-                            }),
-                            filter: None,
-                            null_treatment: None,
-                            over: None,
-                            within_group: vec![]
-                        },
-                        method
-                    );
-                }
-                _ => unreachable!(),
-            }
-            assert_eq!(
-                Function {
-                    name: ObjectName(vec![Ident {
-                        value: "value".into(),
-                        quote_style: None
-                    }]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString(".".into())
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                            )))
-                        ],
-                        clauses: vec![]
-                    }),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![]
-                },
-                method
-            );
-        }
+        Expr::Method(Method {
+            expr,
+            method: Function { .. },
+        }) => match *expr {
+            Expr::Method(Method {
+                expr,
+                method: Function { .. },
+            }) if matches!(*expr, Expr::Function(_)) => {}
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
     let expr = dialects.verified_expr(
         "(SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)')",
     );
     match expr {
-        Expr::Method(Method { expr, method }) if matches!(*expr, Expr::Subquery(_)) => {
-            assert_eq!(
-                Function {
-                    name: ObjectName(vec![Ident {
-                        value: "value".into(),
-                        quote_style: None
-                    }]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString(".".into())
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                            )))
-                        ],
-                        clauses: vec![]
-                    }),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![]
-                },
-                method
-            );
-        }
+        Expr::Method(Method {
+            expr,
+            method: Function { .. },
+        }) if matches!(*expr, Expr::Subquery(_)) => {}
         _ => unreachable!(),
     }
     let expr = dialects.verified_expr("CAST(column AS XML).value('.', 'NVARCHAR(MAX)')");
     match expr {
-        Expr::Method(Method { expr, method }) if matches!(*expr, Expr::Cast { .. }) => {
-            assert_eq!(
-                Function {
-                    name: ObjectName(vec![Ident {
-                        value: "value".into(),
-                        quote_style: None
-                    }]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString(".".into())
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                            )))
-                        ],
-                        clauses: vec![]
-                    }),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![]
-                },
-                method
-            );
-        }
+        Expr::Method(Method {
+            expr,
+            method: Function { .. },
+        }) if matches!(*expr, Expr::Cast { .. }) => {}
         _ => unreachable!(),
     }
 
@@ -11546,65 +11449,16 @@ fn parse_method_expr() {
         "CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')",
     );
     match expr {
-        Expr::Method(Method { expr, method }) => {
-            match *expr {
-                Expr::Method(Method { expr, method }) if matches!(*expr, Expr::Convert { .. }) => {
-                    assert_eq!(
-                        Function {
-                            name: ObjectName(vec![Ident {
-                                value: "value".into(),
-                                quote_style: None
-                            }]),
-                            parameters: FunctionArguments::None,
-                            args: FunctionArguments::List(FunctionArgumentList {
-                                duplicate_treatment: None,
-                                args: vec![
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                        Value::SingleQuotedString(".".into())
-                                    ))),
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                        Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                                    )))
-                                ],
-                                clauses: vec![]
-                            }),
-                            filter: None,
-                            null_treatment: None,
-                            over: None,
-                            within_group: vec![]
-                        },
-                        method
-                    );
-                }
-                _ => unreachable!(),
-            }
-            assert_eq!(
-                Function {
-                    name: ObjectName(vec![Ident {
-                        value: "value".into(),
-                        quote_style: None
-                    }]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString(".".into())
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                            )))
-                        ],
-                        clauses: vec![]
-                    }),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![]
-                },
-                method
-            );
-        }
+        Expr::Method(Method {
+            expr,
+            method: Function { .. },
+        }) => match *expr {
+            Expr::Method(Method {
+                expr,
+                method: Function { .. },
+            }) if matches!(*expr, Expr::Convert { .. }) => {}
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
 }

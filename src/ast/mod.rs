@@ -1479,7 +1479,7 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{fun}"),
-            Expr::Method(fun) => write!(f, "{fun}"),
+            Expr::Method(method) => write!(f, "{method}"),
             Expr::Case {
                 operand,
                 conditions,

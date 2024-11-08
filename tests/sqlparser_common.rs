@@ -11388,339 +11388,62 @@ fn test_try_convert() {
 }
 
 #[test]
-fn parse_composite_function() {
-    let sql = all_dialects().verified_only_select("SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T");
-    assert_eq!(
-        vec![SelectItem::ExprWithAlias {
-            expr: Expr::Function(Function {
-                name: ObjectName(vec![Ident {
-                    value: "STUFF".into(),
-                    quote_style: None
-                }]),
-                parameters: FunctionArguments::None,
-                args: FunctionArguments::List(FunctionArgumentList {
-                    duplicate_treatment: None,
-                    args: vec![
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompositeFunction(
-                            CompositeFunction {
-                                left: Expr::Subquery(
-                                    Query {
-                                        with: None,
-                                        body: SetExpr::Select(
-                                            Select {
-                                                distinct: None,
-                                                top: None,
-                                                top_before_distinct: false,
-                                                projection: vec![SelectItem::UnnamedExpr(
-                                                    Expr::BinaryOp {
-                                                        left: Expr::Value(
-                                                            Value::SingleQuotedString(",".into())
-                                                        )
-                                                        .into(),
-                                                        op: BinaryOperator::Plus,
-                                                        right: Expr::Identifier(Ident {
-                                                            value: "name".into(),
-                                                            quote_style: None
-                                                        })
-                                                        .into()
-                                                    }
-                                                )],
-                                                into: None,
-                                                from: vec![TableWithJoins {
-                                                    relation: TableFactor::Table {
-                                                        name: ObjectName(vec![
-                                                            Ident {
-                                                                value: "sys".into(),
-                                                                quote_style: None,
-                                                            },
-                                                            Ident {
-                                                                value: "objects".into(),
-                                                                quote_style: None,
-                                                            }
-                                                        ]),
-                                                        alias: None,
-                                                        args: None,
-                                                        with_hints: vec![],
-                                                        version: None,
-                                                        with_ordinality: false,
-                                                        partitions: vec![]
-                                                    },
-                                                    joins: vec![]
-                                                }],
-                                                lateral_views: vec![],
-                                                prewhere: None,
-                                                selection: None,
-                                                group_by: GroupByExpr::Expressions(vec![], vec![]),
-                                                cluster_by: vec![],
-                                                distribute_by: vec![],
-                                                sort_by: vec![],
-                                                having: None,
-                                                named_window: vec![],
-                                                qualify: None,
-                                                window_before_qualify: false,
-                                                value_table_mode: None,
-                                                connect_by: None,
-                                            }
-                                            .into()
-                                        )
-                                        .into(),
-                                        order_by: None,
-                                        limit: None,
-                                        limit_by: vec![],
-                                        offset: None,
-                                        fetch: None,
-                                        locks: vec![],
-                                        for_clause: Some(ForClause::Xml {
-                                            for_xml: ForXml::Path(Some("".into())),
-                                            elements: false,
-                                            binary_base64: false,
-                                            root: None,
-                                            r#type: true
-                                        }),
-                                        settings: None,
-                                        format_clause: None,
-                                    }
-                                    .into()
-                                )
-                                .into(),
-                                right: Function {
-                                    name: ObjectName(vec![Ident {
-                                        value: "value".into(),
-                                        quote_style: None
-                                    }]),
-                                    parameters: FunctionArguments::None,
-                                    args: FunctionArguments::List(FunctionArgumentList {
-                                        duplicate_treatment: None,
-                                        args: vec![
-                                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                                Expr::Value(Value::SingleQuotedString(".".into()))
-                                            )),
-                                            FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                                Expr::Value(Value::SingleQuotedString(
-                                                    "NVARCHAR(MAX)".into()
-                                                ))
-                                            ))
-                                        ],
-                                        clauses: vec![]
-                                    }),
-                                    filter: None,
-                                    null_treatment: None,
-                                    over: None,
-                                    within_group: vec![]
-                                }
-                            }
-                        ))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            Value::SingleQuotedString("".into())
-                        )))
-                    ],
-                    clauses: vec![]
-                }),
-                filter: None,
-                null_treatment: None,
-                over: None,
-                within_group: vec![]
-            })
-            .into(),
-            alias: Ident {
-                value: "T".into(),
-                quote_style: None
-            }
-        }],
-        sql.projection
-    );
-    let sql = all_dialects()
-        .verified_only_select("SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T");
-    assert_eq!(
-        vec![SelectItem::ExprWithAlias {
-            expr: Expr::CompositeFunction(CompositeFunction {
-                left: Expr::Cast {
-                    kind: CastKind::Cast,
-                    expr: Expr::Identifier(Ident {
-                        value: "column".into(),
-                        quote_style: None
-                    })
-                    .into(),
-                    data_type: DataType::Custom(
-                        ObjectName(vec![Ident {
-                            value: "XML".into(),
-                            quote_style: None
-                        }]),
-                        vec![]
-                    ),
-                    format: None
-                }
-                .into(),
-                right: Function {
-                    name: ObjectName(vec![Ident {
-                        value: "value".into(),
-                        quote_style: None
-                    }]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString(".".into())
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                            )))
-                        ],
-                        clauses: vec![]
-                    }),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![]
-                }
-            })
-            .into(),
-            alias: Ident {
-                value: "T".into(),
-                quote_style: None
-            }
-        }],
-        sql.projection
-    );
-    let dialects =
-        all_dialects_where(|d| d.supports_try_convert() && d.convert_type_before_value());
-    let sql = dialects.verified_only_select("SELECT CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T");
-    assert_eq!(
-        vec![SelectItem::ExprWithAlias {
-            expr: Expr::CompositeFunction(CompositeFunction {
-                left: Expr::CompositeFunction(CompositeFunction {
-                    left: Expr::Convert {
-                        expr: Expr::Value(Value::SingleQuotedString("<Book>abc</Book>".into()))
-                            .into(),
-                        is_try: false,
-                        data_type: Some(DataType::Custom(
-                            ObjectName(vec![Ident {
-                                value: "XML".into(),
-                                quote_style: None
-                            }]),
-                            vec![]
-                        )),
-                        charset: None,
-                        target_before_value: true,
-                        styles: vec![]
-                    }
-                    .into(),
-                    right: Function {
-                        name: ObjectName(vec![Ident {
-                            value: "value".into(),
-                            quote_style: None
-                        }]),
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            duplicate_treatment: None,
-                            args: vec![
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                    Value::SingleQuotedString(".".into())
-                                ))),
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                    Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                                )))
-                            ],
-                            clauses: vec![]
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![]
-                    }
-                })
-                .into(),
-                right: Function {
-                    name: ObjectName(vec![Ident {
-                        value: "value".into(),
-                        quote_style: None
-                    }]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString(".".into())
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                            )))
-                        ],
-                        clauses: vec![]
-                    }),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![]
-                }
-            }),
-            alias: Ident {
-                value: "T".into(),
-                quote_style: None
-            }
-        }],
-        sql.projection
-    );
-    let sql = dialects.verified_only_select(
+fn parse_method_select() {
+    let dialects = all_dialects_where(|d| d.supports_methods());
+    let _ = dialects.verified_only_select(
         "SELECT LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T",
     );
-    assert_eq!(
-        vec![SelectItem::ExprWithAlias {
-            expr: Expr::CompositeFunction(CompositeFunction {
-                left: Expr::CompositeFunction(CompositeFunction {
-                    left: Expr::Function(Function {
-                        name: ObjectName(vec![Ident {
-                            value: "LEFT".into(),
-                            quote_style: None
-                        }]),
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            duplicate_treatment: None,
-                            args: vec![
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                    Value::SingleQuotedString("abc".into())
-                                ))),
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number(
-                                    "1"
-                                )))),
-                            ],
-                            clauses: vec![]
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![]
-                    })
-                    .into(),
-                    right: Function {
-                        name: ObjectName(vec![Ident {
-                            value: "value".into(),
-                            quote_style: None
-                        }]),
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::List(FunctionArgumentList {
-                            duplicate_treatment: None,
-                            args: vec![
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                    Value::SingleQuotedString(".".into())
-                                ))),
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                    Value::SingleQuotedString("NVARCHAR(MAX)".into())
-                                )))
-                            ],
-                            clauses: vec![]
-                        }),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![]
-                    }
-                })
-                .into(),
-                right: Function {
+    let _ = dialects.verified_only_select("SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T");
+    let _ = dialects
+        .verified_only_select("SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T");
+
+    // `CONVERT` support
+    let dialects = all_dialects_where(|d| {
+        d.supports_methods() && d.supports_try_convert() && d.convert_type_before_value()
+    });
+    let _ = dialects.verified_only_select("SELECT CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T");
+}
+
+#[test]
+fn parse_method_expr() {
+    let dialects = all_dialects_where(|d| d.supports_methods());
+    let expr = dialects
+        .verified_expr("LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')");
+    match expr {
+        Expr::Method(Method { expr, method }) => {
+            match *expr {
+                Expr::Method(Method { expr, method }) if matches!(*expr, Expr::Function(_)) => {
+                    assert_eq!(
+                        Function {
+                            name: ObjectName(vec![Ident {
+                                value: "value".into(),
+                                quote_style: None
+                            }]),
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                duplicate_treatment: None,
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                        Value::SingleQuotedString(".".into())
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                        Value::SingleQuotedString("NVARCHAR(MAX)".into())
+                                    )))
+                                ],
+                                clauses: vec![]
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![]
+                        },
+                        method
+                    );
+                }
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                Function {
                     name: ObjectName(vec![Ident {
                         value: "value".into(),
                         quote_style: None
@@ -11742,15 +11465,148 @@ fn parse_composite_function() {
                     null_treatment: None,
                     over: None,
                     within_group: vec![]
-                }
-            }),
-            alias: Ident {
-                value: "T".into(),
-                quote_style: None
-            }
-        }],
-        sql.projection
+                },
+                method
+            );
+        }
+        _ => unreachable!(),
+    }
+    let expr = dialects.verified_expr(
+        "(SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)')",
     );
+    match expr {
+        Expr::Method(Method { expr, method }) if matches!(*expr, Expr::Subquery(_)) => {
+            assert_eq!(
+                Function {
+                    name: ObjectName(vec![Ident {
+                        value: "value".into(),
+                        quote_style: None
+                    }]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString(".".into())
+                            ))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
+                            )))
+                        ],
+                        clauses: vec![]
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![]
+                },
+                method
+            );
+        }
+        _ => unreachable!(),
+    }
+    let expr = dialects.verified_expr("CAST(column AS XML).value('.', 'NVARCHAR(MAX)')");
+    match expr {
+        Expr::Method(Method { expr, method }) if matches!(*expr, Expr::Cast { .. }) => {
+            assert_eq!(
+                Function {
+                    name: ObjectName(vec![Ident {
+                        value: "value".into(),
+                        quote_style: None
+                    }]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString(".".into())
+                            ))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
+                            )))
+                        ],
+                        clauses: vec![]
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![]
+                },
+                method
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // `CONVERT` support
+    let dialects = all_dialects_where(|d| {
+        d.supports_methods() && d.supports_try_convert() && d.convert_type_before_value()
+    });
+    let expr = dialects.verified_expr(
+        "CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')",
+    );
+    match expr {
+        Expr::Method(Method { expr, method }) => {
+            match *expr {
+                Expr::Method(Method { expr, method }) if matches!(*expr, Expr::Convert { .. }) => {
+                    assert_eq!(
+                        Function {
+                            name: ObjectName(vec![Ident {
+                                value: "value".into(),
+                                quote_style: None
+                            }]),
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                duplicate_treatment: None,
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                        Value::SingleQuotedString(".".into())
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                        Value::SingleQuotedString("NVARCHAR(MAX)".into())
+                                    )))
+                                ],
+                                clauses: vec![]
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![]
+                        },
+                        method
+                    );
+                }
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                Function {
+                    name: ObjectName(vec![Ident {
+                        value: "value".into(),
+                        quote_style: None
+                    }]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString(".".into())
+                            ))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString("NVARCHAR(MAX)".into())
+                            )))
+                        ],
+                        clauses: vec![]
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![]
+                },
+                method
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

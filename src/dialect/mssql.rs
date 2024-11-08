@@ -57,4 +57,8 @@ impl Dialect for MsSqlDialect {
     fn supports_try_convert(&self) -> bool {
         true
     }
+
+    fn supports_methods(&self) -> bool {
+        true
+    }
 }

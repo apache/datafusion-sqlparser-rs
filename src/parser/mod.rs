@@ -1258,30 +1258,22 @@ impl<'a> Parser<'a> {
                     }
                 };
                 self.expect_token(&Token::RParen)?;
-                if !self.consume_token(&Token::Period) {
+                if let Some(expr) = self.try_parse_method(&expr)? {
                     Ok(expr)
                 } else {
-                    let tok = self.next_token();
-                    let key = match tok.token {
-                        Token::Word(word) => word.to_ident(),
-                        _ => {
-                            return parser_err!(
-                                format!("Expected identifier, found: {tok}"),
-                                tok.location
-                            )
-                        }
-                    };
-                    if self.consume_token(&Token::LParen) {
-                        self.prev_token();
-                        let func = match self.parse_function(ObjectName(vec![key]))? {
-                            Expr::Function(func) => func,
-                            _ => unreachable!(),
-                        };
-                        Ok(Expr::CompositeFunction(CompositeFunction {
-                            left: Box::new(expr),
-                            right: func,
-                        }))
+                    if !self.consume_token(&Token::Period) {
+                        Ok(expr)
                     } else {
+                        let tok = self.next_token();
+                        let key = match tok.token {
+                            Token::Word(word) => word.to_ident(),
+                            _ => {
+                                return parser_err!(
+                                    format!("Expected identifier, found: {tok}"),
+                                    tok.location
+                                )
+                            }
+                        };
                         Ok(Expr::CompositeAccess {
                             expr: Box::new(expr),
                             key,
@@ -1300,33 +1292,9 @@ impl<'a> Parser<'a> {
             _ => self.expected("an expression", next_token),
         }?;
 
-        // Composite function chain
-        while matches!(
-            expr,
-            Expr::Function(_)
-                | Expr::CompositeFunction { .. }
-                | Expr::Cast { .. }
-                | Expr::Convert { .. }
-        ) && self.consume_token(&Token::Period)
-        {
-            let tok = self.next_token();
-            let name = match tok.token {
-                Token::Word(word) => word.to_ident(),
-                _ => {
-                    return parser_err!(format!("Expected identifier, found: {tok}"), tok.location)
-                }
-            };
-            if self.consume_token(&Token::LParen) {
-                self.prev_token();
-                let func = match self.parse_function(ObjectName(vec![name]))? {
-                    Expr::Function(func) => func,
-                    _ => unreachable!(),
-                };
-                expr = Expr::CompositeFunction(CompositeFunction {
-                    left: Box::new(expr),
-                    right: func,
-                });
-            }
+        // parse method calls
+        if let Some(method) = self.try_parse_method(&expr)? {
+            expr = method;
         }
 
         if self.parse_keyword(Keyword::COLLATE) {
@@ -1383,6 +1351,45 @@ impl<'a> Parser<'a> {
                 params: OneOrManyWithParens::Many(params),
                 body: Box::new(expr),
             }))
+        })
+    }
+
+    fn try_parse_method(&mut self, expr: &Expr) -> Result<Option<Expr>, ParserError> {
+        if !self.dialect.supports_methods() {
+            return Ok(None);
+        }
+        self.maybe_parse(|p| {
+            let mut method = None;
+            while p.consume_token(&Token::Period) {
+                let tok = p.next_token();
+                let name = match tok.token {
+                    Token::Word(word) => word.to_ident(),
+                    _ => return p.expected("identifier", tok),
+                };
+                let func = match p.parse_function(ObjectName(vec![name]))? {
+                    Expr::Function(func) => func,
+                    _ => return p.expected("function", p.peek_token()),
+                };
+                match method.take() {
+                    Some(expr) => {
+                        method = Some(Expr::Method(Method {
+                            expr: Box::new(expr),
+                            method: func,
+                        }));
+                    }
+                    None => {
+                        method = Some(Expr::Method(Method {
+                            expr: Box::new(expr.clone()),
+                            method: func,
+                        }))
+                    }
+                }
+            }
+            if let Some(method) = method {
+                Ok(method)
+            } else {
+                p.expected("method", p.peek_token())
+            }
         })
     }
 
@@ -3573,9 +3580,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Run a parser method `f`, reverting back to the current position if unsuccessful.
-    pub fn maybe_parse<T, F>(&mut self, mut f: F) -> Result<Option<T>, ParserError>
+    pub fn maybe_parse<T, F>(&mut self, f: F) -> Result<Option<T>, ParserError>
     where
-        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+        F: FnOnce(&mut Parser) -> Result<T, ParserError>,
     {
         let index = self.index;
         match f(self) {

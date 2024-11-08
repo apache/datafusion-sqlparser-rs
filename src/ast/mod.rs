@@ -808,7 +808,7 @@ pub enum Expr {
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
-    /// CompositeFunction (function chain)
+    /// Arbitrary expr method call
     ///
     /// Syntax:
     ///
@@ -820,9 +820,9 @@ pub enum Expr {
     ///
     /// ```sql
     /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
-    /// SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)')
+    /// SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)').value('.','NVARCHAR(MAX)')
     /// ```
-    CompositeFunction(CompositeFunction),
+    Method(Method),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -1479,7 +1479,7 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{fun}"),
-            Expr::CompositeFunction(fun) => write!(f, "{fun}"),
+            Expr::Method(fun) => write!(f, "{fun}"),
             Expr::Case {
                 operand,
                 conditions,
@@ -5609,18 +5609,18 @@ impl fmt::Display for FunctionArgumentClause {
     }
 }
 
-/// A composite function call
+/// A method call
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CompositeFunction {
-    pub left: Box<Expr>,
-    pub right: Function,
+pub struct Method {
+    pub expr: Box<Expr>,
+    pub method: Function,
 }
 
-impl fmt::Display for CompositeFunction {
+impl fmt::Display for Method {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}.{}", self.left, self.right,)
+        write!(f, "{}.{}", self.expr, self.method,)
     }
 }
 

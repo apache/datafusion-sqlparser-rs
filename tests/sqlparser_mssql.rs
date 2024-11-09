@@ -669,6 +669,7 @@ fn parse_mssql_declare() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("@bar"))),
                         op: BinaryOperator::Multiply,

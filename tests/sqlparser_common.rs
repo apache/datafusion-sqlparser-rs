@@ -11410,34 +11410,31 @@ fn parse_method_expr() {
     let expr = dialects
         .verified_expr("LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')");
     match expr {
-        Expr::Method(Method {
-            expr,
-            method: Function { .. },
-        }) => match *expr {
-            Expr::Method(Method {
-                expr,
-                method: Function { .. },
-            }) if matches!(*expr, Expr::Function(_)) => {}
-            _ => unreachable!(),
-        },
+        Expr::Method(Method { expr, method_chain }) => {
+            assert!(matches!(*expr, Expr::Function(_)));
+            assert!(matches!(
+                method_chain[..],
+                [Function { .. }, Function { .. }]
+            ));
+        }
         _ => unreachable!(),
     }
     let expr = dialects.verified_expr(
         "(SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)')",
     );
     match expr {
-        Expr::Method(Method {
-            expr,
-            method: Function { .. },
-        }) if matches!(*expr, Expr::Subquery(_)) => {}
+        Expr::Method(Method { expr, method_chain }) => {
+            assert!(matches!(*expr, Expr::Subquery(_)));
+            assert!(matches!(method_chain[..], [Function { .. }]));
+        }
         _ => unreachable!(),
     }
     let expr = dialects.verified_expr("CAST(column AS XML).value('.', 'NVARCHAR(MAX)')");
     match expr {
-        Expr::Method(Method {
-            expr,
-            method: Function { .. },
-        }) if matches!(*expr, Expr::Cast { .. }) => {}
+        Expr::Method(Method { expr, method_chain }) => {
+            assert!(matches!(*expr, Expr::Cast { .. }));
+            assert!(matches!(method_chain[..], [Function { .. }]));
+        }
         _ => unreachable!(),
     }
 
@@ -11449,16 +11446,13 @@ fn parse_method_expr() {
         "CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')",
     );
     match expr {
-        Expr::Method(Method {
-            expr,
-            method: Function { .. },
-        }) => match *expr {
-            Expr::Method(Method {
-                expr,
-                method: Function { .. },
-            }) if matches!(*expr, Expr::Convert { .. }) => {}
-            _ => unreachable!(),
-        },
+        Expr::Method(Method { expr, method_chain }) => {
+            assert!(matches!(*expr, Expr::Convert { .. }));
+            assert!(matches!(
+                method_chain[..],
+                [Function { .. }, Function { .. }]
+            ));
+        }
         _ => unreachable!(),
     }
 }

@@ -812,7 +812,7 @@ pub enum Expr {
     ///
     /// Syntax:
     ///
-    /// `<arbitrary-expr>.<arbitrary-expr>.<arbitrary-expr>...`
+    /// `<arbitrary-expr>.<function-call>.<function-call-expr>...`
     ///
     /// > `arbitrary-expr` can be any expression including a function call.
     ///
@@ -5615,12 +5615,18 @@ impl fmt::Display for FunctionArgumentClause {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Method {
     pub expr: Box<Expr>,
-    pub method: Function,
+    // always non-empty
+    pub method_chain: Vec<Function>,
 }
 
 impl fmt::Display for Method {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}.{}", self.expr, self.method,)
+        write!(
+            f,
+            "{}.{}",
+            self.expr,
+            display_separated(&self.method_chain, ".")
+        )
     }
 }
 

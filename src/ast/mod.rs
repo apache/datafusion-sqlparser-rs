@@ -3113,10 +3113,14 @@ pub enum Statement {
     /// EXECUTE name [ ( parameter [, ...] ) ] [USING <expr>]
     /// ```
     ///
-    /// Note: this is a PostgreSQL-specific statement.
+    /// Note: this statement is supported by Postgres and MSSQL, with slight differences in syntax.
+    ///
+    /// Postgres: <https://www.postgresql.org/docs/current/sql-execute.html>
+    /// MSSQL: <https://learn.microsoft.com/en-us/sql/relational-databases/stored-procedures/execute-a-stored-procedure>
     Execute {
-        name: Ident,
+        name: ObjectName,
         parameters: Vec<Expr>,
+        has_parentheses: bool,
         using: Vec<Expr>,
     },
     /// ```sql
@@ -4585,12 +4589,19 @@ impl fmt::Display for Statement {
             Statement::Execute {
                 name,
                 parameters,
+                has_parentheses,
                 using,
             } => {
-                write!(f, "EXECUTE {name}")?;
-                if !parameters.is_empty() {
-                    write!(f, "({})", display_comma_separated(parameters))?;
-                }
+                let (open, close) = if *has_parentheses {
+                    ("(", ")")
+                } else {
+                    (if parameters.is_empty() { "" } else { " " }, "")
+                };
+                write!(
+                    f,
+                    "EXECUTE {name}{open}{}{close}",
+                    display_comma_separated(parameters),
+                )?;
                 if !using.is_empty() {
                     write!(f, " USING {}", display_comma_separated(using))?;
                 };

@@ -1258,28 +1258,24 @@ impl<'a> Parser<'a> {
                     }
                 };
                 self.expect_token(&Token::RParen)?;
-                match self.try_parse_method(expr)? {
-                    Ok(expr) => Ok(expr),
-                    Err(expr) => {
-                        if !self.consume_token(&Token::Period) {
-                            Ok(expr)
-                        } else {
-                            let tok = self.next_token();
-                            let key = match tok.token {
-                                Token::Word(word) => word.to_ident(),
-                                _ => {
-                                    return parser_err!(
-                                        format!("Expected identifier, found: {tok}"),
-                                        tok.location
-                                    )
-                                }
-                            };
-                            Ok(Expr::CompositeAccess {
-                                expr: Box::new(expr),
-                                key,
-                            })
+                let expr = self.try_parse_method(expr)?;
+                if !self.consume_token(&Token::Period) {
+                    Ok(expr)
+                } else {
+                    let tok = self.next_token();
+                    let key = match tok.token {
+                        Token::Word(word) => word.to_ident(),
+                        _ => {
+                            return parser_err!(
+                                format!("Expected identifier, found: {tok}"),
+                                tok.location
+                            )
                         }
-                    }
+                    };
+                    Ok(Expr::CompositeAccess {
+                        expr: Box::new(expr),
+                        key,
+                    })
                 }
             }
             Token::Placeholder(_) | Token::Colon | Token::AtSign => {
@@ -1293,18 +1289,15 @@ impl<'a> Parser<'a> {
             _ => self.expected("an expression", next_token),
         }?;
 
-        match self.try_parse_method(expr)? {
-            Ok(expr) => Ok(expr),
-            Err(expr) => {
-                if self.parse_keyword(Keyword::COLLATE) {
-                    Ok(Expr::Collate {
-                        expr: Box::new(expr),
-                        collation: self.parse_object_name(false)?,
-                    })
-                } else {
-                    Ok(expr)
-                }
-            }
+        let expr = self.try_parse_method(expr)?;
+
+        if self.parse_keyword(Keyword::COLLATE) {
+            Ok(Expr::Collate {
+                expr: Box::new(expr),
+                collation: self.parse_object_name(false)?,
+            })
+        } else {
+            Ok(expr)
         }
     }
 
@@ -1356,11 +1349,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses method call expression
-    ///
-    /// Returns `Result<{parsed method-call-expr},{orig_expr}>`
-    fn try_parse_method(&mut self, orig_expr: Expr) -> Result<Result<Expr, Expr>, ParserError> {
+    fn try_parse_method(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         if !self.dialect.supports_methods() {
-            return Ok(Err(orig_expr));
+            return Ok(expr);
         }
         let method_chain = self.maybe_parse(|p| {
             let mut method_chain = Vec::new();
@@ -1379,11 +1370,11 @@ impl<'a> Parser<'a> {
             Ok(method_chain)
         })?;
         match method_chain {
-            Some(method_chain) if !method_chain.is_empty() => Ok(Ok(Expr::Method(Method {
-                expr: Box::new(orig_expr),
+            Some(method_chain) if !method_chain.is_empty() => Ok(Expr::Method(Method {
+                expr: Box::new(expr),
                 method_chain,
-            }))),
-            _ => Ok(Err(orig_expr)),
+            })),
+            _ => Ok(expr),
         }
     }
 

@@ -74,6 +74,7 @@ macro_rules! define_keywords {
 define_keywords!(
     ABORT,
     ABS,
+    ABSENT,
     ABSOLUTE,
     ACCESS,
     ACTION,
@@ -419,6 +420,8 @@ define_keywords!(
     JSON,
     JSONB,
     JSONFILE,
+    JSON_ARRAY,
+    JSON_OBJECT,
     JSON_TABLE,
     JULIAN,
     KEY,

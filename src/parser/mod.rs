@@ -991,7 +991,7 @@ impl<'a> Parser<'a> {
         if let Some(expr) = opt_expr {
             return Ok(expr);
         }
-
+        
         let next_token = self.next_token();
         let expr = match next_token.token {
             Token::Word(w) => match w.keyword {
@@ -1028,6 +1028,11 @@ impl<'a> Parser<'a> {
                 Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
                 Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
                 Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
+                Keyword::JSON_ARRAY 
+                    if self.peek_token() == Token::LParen
+                        && dialect_of!(self is MsSqlDialect) => self.parse_json_array(),
+                Keyword::JSON_OBJECT if self.peek_token() == Token::LParen
+                       && dialect_of!(self is MsSqlDialect) => self.parse_json_object(),
                 Keyword::EXISTS
                     // Support parsing Databricks has a function named `exists`.
                     if !dialect_of!(self is DatabricksDialect)
@@ -3011,6 +3016,70 @@ impl<'a> Parser<'a> {
             column: Box::new(expr),
             keys,
         })
+    }
+
+    /// Parses MSSQL's `JSON_ARRAY` constructor function
+    pub fn parse_json_array(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mut args = Vec::new();
+        let mut null_clause = None;
+        loop {
+            // JSON_ARRAY()
+            if self.consume_token(&Token::RParen) {
+                self.prev_token();
+                break;
+            }
+            // JSON_ARRAY(NULL ON NULL)
+            else if self.parse_keywords(&[Keyword::NULL, Keyword::ON, Keyword::NULL]) {
+                null_clause = Some(JsonNullClause::NullOnNull);
+                break;
+            } 
+            // JSON_ARRAY(ABSENT ON NULL)
+            else if self.parse_keywords(&[Keyword::ABSENT, Keyword::ON, Keyword::NULL]) {
+                null_clause = Some(JsonNullClause::AbsentOnNull);
+                break;
+            } else if !args.is_empty() && !self.consume_token(&Token::Comma) {
+                break;
+            }
+            args.push(self.parse_expr()?);
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::JsonArray(JsonArray { args, null_clause }))
+    }
+
+    /// Parses MSSQL's `JSON_OBJECT` constructor function
+    pub fn parse_json_object(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mut key_values = Vec::new();
+        let mut null_clause = None;
+        loop {
+            // JSON_OBJECT()
+            if self.consume_token(&Token::RParen) {
+                self.prev_token();
+                break;
+            }
+            // JSON_OBJECT(NULL ON NULL)
+            else if self.parse_keywords(&[Keyword::NULL, Keyword::ON, Keyword::NULL]) {
+                null_clause = Some(JsonNullClause::NullOnNull);
+                break;
+            } 
+            // JSON_OBJECT(ABSENT ON NULL)
+            else if self.parse_keywords(&[Keyword::ABSENT, Keyword::ON, Keyword::NULL]) {
+                null_clause = Some(JsonNullClause::AbsentOnNull);
+                break;
+            } else if !key_values.is_empty() && !self.consume_token(&Token::Comma) {
+                break;
+            }
+            let key = self.parse_expr()?;
+            self.expect_token(&Token::Colon)?;
+            let value = self.parse_expr()?;
+            key_values.push(JsonKeyValue {
+                key,
+                value
+            });
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::JsonObject(JsonObject { key_values, null_clause }))
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator.

@@ -955,7 +955,7 @@ pub enum Expr {
     ///
     /// Reference: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16>
     JsonArray(JsonArray),
-    /// MSSQL's `JSON_OBJECT` function for construct JSON-OBJECT object
+    /// MSSQL's `JSON_OBJECT` function to construct a `JSON-OBJECT` object
     ///
     /// Syntax:
     ///

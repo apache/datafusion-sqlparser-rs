@@ -228,13 +228,17 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            show_in: Some(ShowStatementIn {
-                clause: ShowStatementInClause::FROM,
-                parent_type: None,
-                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
-            }),
-            filter: None,
-            filter_position: ShowStatementFilterPosition::AtTheEnd,
+            show_options: ShowStatementOptions {
+                show_in: Some(ShowStatementIn {
+                    clause: ShowStatementInClause::FROM,
+                    parent_type: None,
+                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                }),
+                filter_position: None,
+                limit_from: None,
+                limit: None,
+                starts_with: None,
+            }
         }
     );
     assert_eq!(
@@ -242,13 +246,17 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            show_in: Some(ShowStatementIn {
-                clause: ShowStatementInClause::FROM,
-                parent_type: None,
-                parent_name: Some(ObjectName(vec![Ident::new("mydb"), Ident::new("mytable")])),
-            }),
-            filter: None,
-            filter_position: ShowStatementFilterPosition::AtTheEnd,
+            show_options: ShowStatementOptions {
+                show_in: Some(ShowStatementIn {
+                    clause: ShowStatementInClause::FROM,
+                    parent_type: None,
+                    parent_name: Some(ObjectName(vec![Ident::new("mydb"), Ident::new("mytable")])),
+                }),
+                filter_position: None,
+                limit_from: None,
+                limit: None,
+                starts_with: None,
+            }
         }
     );
     assert_eq!(
@@ -256,13 +264,17 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: true,
             full: false,
-            show_in: Some(ShowStatementIn {
-                clause: ShowStatementInClause::FROM,
-                parent_type: None,
-                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
-            }),
-            filter: None,
-            filter_position: ShowStatementFilterPosition::AtTheEnd,
+            show_options: ShowStatementOptions {
+                show_in: Some(ShowStatementIn {
+                    clause: ShowStatementInClause::FROM,
+                    parent_type: None,
+                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                }),
+                filter_position: None,
+                limit_from: None,
+                limit: None,
+                starts_with: None,
+            }
         }
     );
     assert_eq!(
@@ -270,13 +282,17 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: true,
-            show_in: Some(ShowStatementIn {
-                clause: ShowStatementInClause::FROM,
-                parent_type: None,
-                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
-            }),
-            filter: None,
-            filter_position: ShowStatementFilterPosition::AtTheEnd,
+            show_options: ShowStatementOptions {
+                show_in: Some(ShowStatementIn {
+                    clause: ShowStatementInClause::FROM,
+                    parent_type: None,
+                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                }),
+                filter_position: None,
+                limit_from: None,
+                limit: None,
+                starts_with: None,
+            }
         }
     );
     assert_eq!(
@@ -284,13 +300,19 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            show_in: Some(ShowStatementIn {
-                clause: ShowStatementInClause::FROM,
-                parent_type: None,
-                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
-            }),
-            filter: Some(ShowStatementFilter::Like("pattern".into())),
-            filter_position: ShowStatementFilterPosition::AtTheEnd,
+            show_options: ShowStatementOptions {
+                show_in: Some(ShowStatementIn {
+                    clause: ShowStatementInClause::FROM,
+                    parent_type: None,
+                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                }),
+                filter_position: Some(ShowStatementFilterPosition::Suffix(
+                    ShowStatementFilter::Like("pattern".into())
+                )),
+                limit_from: None,
+                limit: None,
+                starts_with: None,
+            }
         }
     );
     assert_eq!(
@@ -298,15 +320,19 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            show_in: Some(ShowStatementIn {
-                clause: ShowStatementInClause::FROM,
-                parent_type: None,
-                parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
-            }),
-            filter: Some(ShowStatementFilter::Where(
-                mysql_and_generic().verified_expr("1 = 2")
-            )),
-            filter_position: ShowStatementFilterPosition::AtTheEnd,
+            show_options: ShowStatementOptions {
+                show_in: Some(ShowStatementIn {
+                    clause: ShowStatementInClause::FROM,
+                    parent_type: None,
+                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                }),
+                filter_position: Some(ShowStatementFilterPosition::Suffix(
+                    ShowStatementFilter::Where(mysql_and_generic().verified_expr("1 = 2"))
+                )),
+                limit_from: None,
+                limit: None,
+                starts_with: None,
+            }
         }
     );
     mysql_and_generic()
@@ -361,12 +387,13 @@ fn parse_show_tables() {
             extended: false,
             full: false,
             external: false,
-            starts_with: None,
-            limit: None,
-            from: None,
-            show_in: None,
-            filter: None,
-            filter_position: ShowStatementFilterPosition::AtTheEnd
+            show_options: ShowStatementOptions {
+                starts_with: None,
+                limit: None,
+                limit_from: None,
+                show_in: None,
+                filter_position: None
+            }
         }
     );
     assert_eq!(
@@ -377,16 +404,17 @@ fn parse_show_tables() {
             extended: false,
             full: false,
             external: false,
-            starts_with: None,
-            limit: None,
-            from: None,
-            show_in: Some(ShowStatementIn {
-                clause: ShowStatementInClause::FROM,
-                parent_type: None,
-                parent_name: Some(ObjectName(vec![Ident::new("mydb")])),
-            }),
-            filter: None,
-            filter_position: ShowStatementFilterPosition::AtTheEnd
+            show_options: ShowStatementOptions {
+                starts_with: None,
+                limit: None,
+                limit_from: None,
+                show_in: Some(ShowStatementIn {
+                    clause: ShowStatementInClause::FROM,
+                    parent_type: None,
+                    parent_name: Some(ObjectName(vec![Ident::new("mydb")])),
+                }),
+                filter_position: None
+            }
         }
     );
     assert_eq!(
@@ -397,12 +425,13 @@ fn parse_show_tables() {
             extended: true,
             full: false,
             external: false,
-            starts_with: None,
-            limit: None,
-            from: None,
-            show_in: None,
-            filter: None,
-            filter_position: ShowStatementFilterPosition::AtTheEnd
+            show_options: ShowStatementOptions {
+                starts_with: None,
+                limit: None,
+                limit_from: None,
+                show_in: None,
+                filter_position: None
+            }
         }
     );
     assert_eq!(
@@ -413,12 +442,13 @@ fn parse_show_tables() {
             extended: false,
             full: true,
             external: false,
-            starts_with: None,
-            limit: None,
-            from: None,
-            show_in: None,
-            filter: None,
-            filter_position: ShowStatementFilterPosition::AtTheEnd
+            show_options: ShowStatementOptions {
+                starts_with: None,
+                limit: None,
+                limit_from: None,
+                show_in: None,
+                filter_position: None
+            }
         }
     );
     assert_eq!(
@@ -429,12 +459,15 @@ fn parse_show_tables() {
             extended: false,
             full: false,
             external: false,
-            starts_with: None,
-            limit: None,
-            from: None,
-            show_in: None,
-            filter: Some(ShowStatementFilter::Like("pattern".into())),
-            filter_position: ShowStatementFilterPosition::AtTheEnd
+            show_options: ShowStatementOptions {
+                starts_with: None,
+                limit: None,
+                limit_from: None,
+                show_in: None,
+                filter_position: Some(ShowStatementFilterPosition::Suffix(
+                    ShowStatementFilter::Like("pattern".into())
+                ))
+            }
         }
     );
     assert_eq!(
@@ -445,14 +478,15 @@ fn parse_show_tables() {
             extended: false,
             full: false,
             external: false,
-            starts_with: None,
-            limit: None,
-            from: None,
-            show_in: None,
-            filter: Some(ShowStatementFilter::Where(
-                mysql_and_generic().verified_expr("1 = 2")
-            )),
-            filter_position: ShowStatementFilterPosition::AtTheEnd
+            show_options: ShowStatementOptions {
+                starts_with: None,
+                limit: None,
+                limit_from: None,
+                show_in: None,
+                filter_position: Some(ShowStatementFilterPosition::Suffix(
+                    ShowStatementFilter::Where(mysql_and_generic().verified_expr("1 = 2"))
+                ))
+            }
         }
     );
     mysql_and_generic().verified_stmt("SHOW TABLES IN mydb");

@@ -9661,37 +9661,21 @@ impl<'a> Parser<'a> {
 
     fn parse_show_databases(&mut self, terse: bool) -> Result<Statement, ParserError> {
         let history = self.parse_keyword(Keyword::HISTORY);
-        let filter = self.parse_show_statement_filter()?;
-        let show_in = self.parse_show_opt_in()?;
-        let starts_with = self.parse_show_opt_starts_with()?;
-        let limit = self.parse_show_opt_limit()?;
-        let from = self.parse_show_opt_from()?;
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowDatabases {
             terse,
             history,
-            filter,
-            show_in,
-            starts_with,
-            limit,
-            from,
+            show_options,
         })
     }
 
     fn parse_show_schemas(&mut self, terse: bool) -> Result<Statement, ParserError> {
         let history = self.parse_keyword(Keyword::HISTORY);
-        let filter = self.parse_show_statement_filter()?;
-        let show_in = self.parse_show_opt_in()?;
-        let starts_with = self.parse_show_opt_starts_with()?;
-        let limit = self.parse_show_opt_limit()?;
-        let from = self.parse_show_opt_from()?;
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowSchemas {
             terse,
             history,
-            filter,
-            show_in,
-            starts_with,
-            limit,
-            from,
+            show_options,
         })
     }
 
@@ -9725,24 +9709,11 @@ impl<'a> Parser<'a> {
         extended: bool,
         full: bool,
     ) -> Result<Statement, ParserError> {
-        let filter;
-        let filter_position;
-        let show_in;
-        if self.dialect.supports_show_like_before_in() {
-            filter = self.parse_show_statement_filter()?;
-            filter_position = ShowStatementFilterPosition::InTheMiddle;
-            show_in = self.parse_show_opt_in()?;
-        } else {
-            show_in = self.parse_show_opt_in()?;
-            filter = self.parse_show_statement_filter()?;
-            filter_position = ShowStatementFilterPosition::AtTheEnd;
-        }
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowColumns {
             extended,
             full,
-            show_in,
-            filter,
-            filter_position,
+            show_options,
         })
     }
 
@@ -9754,34 +9725,14 @@ impl<'a> Parser<'a> {
         external: bool,
     ) -> Result<Statement, ParserError> {
         let history = !external && self.parse_keyword(Keyword::HISTORY);
-        let filter;
-        let show_in;
-        let filter_position;
-        if self.dialect.supports_show_like_before_in() {
-            filter = self.parse_show_statement_filter()?;
-            //YOAV: here we have a problem, the hint is DB-dependent (table in a schemas or some other object)
-            show_in = self.parse_show_opt_in()?;
-            filter_position = ShowStatementFilterPosition::InTheMiddle;
-        } else {
-            show_in = self.parse_show_opt_in()?;
-            filter = self.parse_show_statement_filter()?;
-            filter_position = ShowStatementFilterPosition::AtTheEnd;
-        }
-        let starts_with = self.parse_show_opt_starts_with()?;
-        let limit = self.parse_show_opt_limit()?;
-        let from = self.parse_show_opt_from()?;
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowTables {
             terse,
             history,
             extended,
             full,
             external,
-            filter,
-            show_in,
-            starts_with,
-            limit,
-            from,
-            filter_position,
+            show_options,
         })
     }
 
@@ -9790,30 +9741,11 @@ impl<'a> Parser<'a> {
         terse: bool,
         materialized: bool,
     ) -> Result<Statement, ParserError> {
-        let filter;
-        let show_in;
-        let filter_position;
-        if self.dialect.supports_show_like_before_in() {
-            filter = self.parse_show_statement_filter()?;
-            show_in = self.parse_show_opt_in()?;
-            filter_position = ShowStatementFilterPosition::InTheMiddle;
-        } else {
-            show_in = self.parse_show_opt_in()?;
-            filter = self.parse_show_statement_filter()?;
-            filter_position = ShowStatementFilterPosition::AtTheEnd;
-        }
-        let starts_with = self.parse_show_opt_starts_with()?;
-        let limit = self.parse_show_opt_limit()?;
-        let from = self.parse_show_opt_from()?;
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowViews {
             materialized,
             terse,
-            filter,
-            filter_position,
-            show_in,
-            starts_with,
-            limit,
-            from,
+            show_options,
         })
     }
 
@@ -12453,134 +12385,121 @@ impl<'a> Parser<'a> {
         false
     }
 
-    /// Look for an expected keyword, without consuming it
-    fn peek_keyword(&self, expected: Keyword) -> bool {
-        match self.peek_token().token {
-            Token::Word(w) => expected == w.keyword,
-            _ => false,
-        }
-    }
-
-    /// Look for one of expected keyword, without consuming it
-    fn peek_keywords(&self, expected: &[Keyword]) -> bool {
+    /// Look for all of the expected keywords in sequence, without consuming them
+    fn peek_keywords(&mut self, expected: &[Keyword]) -> bool {
+        let index = self.index;
         for kw in expected {
-            if self.peek_keyword(*kw) {
-                return true;
+            if !self.parse_keyword(*kw) {
+                self.index = index;
+                return false;
             }
         }
-        false
+        self.index = index;
+        true
     }
 
-    fn parse_show_opt_in(&mut self) -> Result<Option<ShowStatementIn>, ParserError> {
+    fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {
+        let show_in;
+        let mut filter_position = None;
+        if self.dialect.supports_show_like_before_in() {
+            if let Some(filter) = self.parse_show_statement_filter()? {
+                filter_position = Some(ShowStatementFilterPosition::Infix(filter));
+            }
+            show_in = self.maybe_parse_show_stmt_in()?;
+        } else {
+            show_in = self.maybe_parse_show_stmt_in()?;
+            if let Some(filter) = self.parse_show_statement_filter()? {
+                filter_position = Some(ShowStatementFilterPosition::Suffix(filter));
+            }
+        }
+        let starts_with = self.maybe_parse_show_stmt_starts_with()?;
+        let limit = self.maybe_parse_show_stmt_limit()?;
+        let from = self.maybe_parse_show_stmt_from()?;
+        Ok(ShowStatementOptions {
+            filter_position,
+            show_in,
+            starts_with,
+            limit,
+            limit_from: from,
+        })
+    }
+
+    fn maybe_parse_show_stmt_in(&mut self) -> Result<Option<ShowStatementIn>, ParserError> {
         let clause = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
             Some(Keyword::FROM) => ShowStatementInClause::FROM,
             Some(Keyword::IN) => ShowStatementInClause::IN,
             _ => return Ok(None),
         };
 
-        if self.parse_keyword(Keyword::DATABASE) {
-            if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH]) {
-                Ok(Some(ShowStatementIn {
-                    clause,
-                    parent_type: Some(ShowStatementInParentType::Database),
-                    parent_name: None,
-                }))
-            } else {
+        let (parent_type, parent_name) = match self.parse_one_of_keywords(&[
+            Keyword::ACCOUNT,
+            Keyword::DATABASE,
+            Keyword::SCHEMA,
+            Keyword::TABLE,
+            Keyword::VIEW,
+        ]) {
+            Some(Keyword::DATABASE) if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH]) => {
+                (Some(ShowStatementInParentType::Database), None)
+            }
+            Some(Keyword::SCHEMA) if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH]) => {
+                (Some(ShowStatementInParentType::Schema), None)
+            }
+            Some(parent_kw) => {
                 let parent_name = match self.parse_object_name(false) {
                     Ok(n) => Some(n),
-                    Err(_) => None,
+                    _ => None,
                 };
-                Ok(Some(ShowStatementIn {
-                    clause,
-                    parent_type: Some(ShowStatementInParentType::Database),
-                    parent_name,
-                }))
+                match parent_kw {
+                    Keyword::ACCOUNT => (Some(ShowStatementInParentType::Account), parent_name),
+                    Keyword::DATABASE => (Some(ShowStatementInParentType::Database), parent_name),
+                    Keyword::SCHEMA => (Some(ShowStatementInParentType::Schema), parent_name),
+                    Keyword::TABLE => (Some(ShowStatementInParentType::Table), parent_name),
+                    Keyword::VIEW => (Some(ShowStatementInParentType::View), parent_name),
+                    _ => unreachable!(),
+                }
             }
-        } else if self.parse_keyword(Keyword::SCHEMA) {
-            if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH]) {
-                Ok(Some(ShowStatementIn {
-                    clause,
-                    parent_type: Some(ShowStatementInParentType::Schema),
-                    parent_name: None,
-                }))
-            } else {
-                let parent_name = match self.parse_object_name(false) {
-                    Ok(n) => Some(n),
-                    Err(_) => None,
-                };
-                Ok(Some(ShowStatementIn {
-                    clause,
-                    parent_type: Some(ShowStatementInParentType::Schema),
-                    parent_name,
-                }))
+            None => {
+                // Parsing MySQL style FROM tbl_name FROM db_name
+                // which is equivalent to FROM tbl_name.db_name
+                let mut parent_name = self.parse_object_name(false)?;
+                if self
+                    .parse_one_of_keywords(&[Keyword::FROM, Keyword::IN])
+                    .is_some()
+                {
+                    parent_name.0.insert(0, self.parse_identifier(false)?);
+                }
+                (None, Some(parent_name))
             }
-        } else if self.parse_keyword(Keyword::ACCOUNT) {
-            let parent_name = match self.parse_object_name(false) {
-                Ok(n) => Some(n),
-                Err(_) => None,
-            };
-            Ok(Some(ShowStatementIn {
-                clause,
-                parent_type: Some(ShowStatementInParentType::Account),
-                parent_name,
-            }))
-        } else if self.parse_keyword(Keyword::TABLE) {
-            let parent_name = match self.parse_object_name(false) {
-                Ok(n) => Some(n),
-                Err(_) => None,
-            };
-            Ok(Some(ShowStatementIn {
-                clause,
-                parent_type: Some(ShowStatementInParentType::Table),
-                parent_name,
-            }))
-        } else if self.parse_keyword(Keyword::VIEW) {
-            let parent_name = match self.parse_object_name(false) {
-                Ok(n) => Some(n),
-                Err(_) => None,
-            };
-            Ok(Some(ShowStatementIn {
-                clause,
-                parent_type: Some(ShowStatementInParentType::View),
-                parent_name,
-            }))
+        };
+
+        Ok(Some(ShowStatementIn {
+            clause,
+            parent_type,
+            parent_name,
+        }))
+    }
+
+    fn maybe_parse_show_stmt_starts_with(&mut self) -> Result<Option<Value>, ParserError> {
+        if self.parse_keywords(&[Keyword::STARTS, Keyword::WITH]) {
+            Ok(Some(self.parse_value()?))
         } else {
-            // Parsing MySQL style FROM tbl_name FROM db_name
-            // which is equivalent to FROM tbl_name.db_name
-            let mut parent_name = self.parse_object_name(false)?;
-            if self
-                .parse_one_of_keywords(&[Keyword::FROM, Keyword::IN])
-                .is_some()
-            {
-                parent_name.0.insert(0, self.parse_identifier(false)?);
-            }
-
-            Ok(Some(ShowStatementIn {
-                clause,
-                parent_type: None,
-                parent_name: Some(parent_name),
-            }))
+            Ok(None)
         }
     }
 
-    fn parse_show_opt_starts_with(&mut self) -> Result<Option<Value>, ParserError> {
-        match self.parse_keywords(&[Keyword::STARTS, Keyword::WITH]) {
-            true => Ok(Some(self.parse_value()?)),
-            false => Ok(None),
+    fn maybe_parse_show_stmt_limit(&mut self) -> Result<Option<Expr>, ParserError> {
+        if self.parse_keyword(Keyword::LIMIT) {
+            Ok(self.parse_limit()?)
+        } else {
+            Ok(None)
         }
     }
 
-    fn parse_show_opt_limit(&mut self) -> Result<Option<Expr>, ParserError> {
-        match self.parse_keyword(Keyword::LIMIT) {
-            true => Ok(self.parse_limit()?),
-            false => Ok(None),
-        }
-    }
-
-    fn parse_show_opt_from(&mut self) -> Result<Option<Value>, ParserError> {
-        match self.parse_keyword(Keyword::FROM) {
-            true => Ok(Some(self.parse_value()?)),
-            false => Ok(None),
+    fn maybe_parse_show_stmt_from(&mut self) -> Result<Option<Value>, ParserError> {
+        if self.parse_keyword(Keyword::FROM) {
+            Ok(Some(self.parse_value()?))
+        } else {
+            Ok(None)
         }
     }
 }

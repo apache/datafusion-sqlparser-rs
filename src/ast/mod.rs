@@ -2776,9 +2776,7 @@ pub enum Statement {
     ShowColumns {
         extended: bool,
         full: bool,
-        show_in: Option<ShowStatementIn>,
-        filter: Option<ShowStatementFilter>,
-        filter_position: ShowStatementFilterPosition,
+        show_options: ShowStatementOptions,
     },
     /// ```sql
     /// SHOW DATABASES
@@ -2786,11 +2784,7 @@ pub enum Statement {
     ShowDatabases {
         terse: bool,
         history: bool,
-        filter: Option<ShowStatementFilter>,
-        show_in: Option<ShowStatementIn>,
-        starts_with: Option<Value>,
-        limit: Option<Expr>,
-        from: Option<Value>,
+        show_options: ShowStatementOptions,
     },
     /// ```sql
     /// SHOW SCHEMAS
@@ -2798,11 +2792,7 @@ pub enum Statement {
     ShowSchemas {
         terse: bool,
         history: bool,
-        filter: Option<ShowStatementFilter>,
-        show_in: Option<ShowStatementIn>,
-        starts_with: Option<Value>,
-        limit: Option<Expr>,
-        from: Option<Value>,
+        show_options: ShowStatementOptions,
     },
     /// ```sql
     /// SHOW TABLES
@@ -2813,12 +2803,7 @@ pub enum Statement {
         extended: bool,
         full: bool,
         external: bool,
-        filter: Option<ShowStatementFilter>,
-        show_in: Option<ShowStatementIn>,
-        starts_with: Option<Value>,
-        limit: Option<Expr>,
-        from: Option<Value>,
-        filter_position: ShowStatementFilterPosition,
+        show_options: ShowStatementOptions,
     },
     /// ```sql
     /// SHOW VIEWS
@@ -2826,12 +2811,7 @@ pub enum Statement {
     ShowViews {
         terse: bool,
         materialized: bool,
-        filter: Option<ShowStatementFilter>,
-        show_in: Option<ShowStatementIn>,
-        starts_with: Option<Value>,
-        limit: Option<Expr>,
-        from: Option<Value>,
-        filter_position: ShowStatementFilterPosition,
+        show_options: ShowStatementOptions,
     },
     /// ```sql
     /// SHOW COLLATION
@@ -4411,113 +4391,39 @@ impl fmt::Display for Statement {
             Statement::ShowColumns {
                 extended,
                 full,
-                show_in,
-                filter,
-                filter_position,
+                show_options,
             } => {
                 write!(
                     f,
-                    "SHOW {extended}{full}COLUMNS",
+                    "SHOW {extended}{full}COLUMNS{show_options}",
                     extended = if *extended { "EXTENDED " } else { "" },
                     full = if *full { "FULL " } else { "" },
                 )?;
-                if filter_position == &ShowStatementFilterPosition::InTheMiddle {
-                    if let Some(filter) = filter {
-                        write!(f, " {filter}")?;
-                    }
-                    if let Some(show_in) = show_in {
-                        write!(f, " {show_in}")?;
-                    }
-                }
-                if filter_position == &ShowStatementFilterPosition::AtTheEnd {
-                    if let Some(show_in) = show_in {
-                        write!(f, " {show_in}")?;
-                    }
-                    if let Some(filter) = filter {
-                        write!(f, " {filter}")?;
-                    }
-                }
                 Ok(())
             }
             Statement::ShowDatabases {
                 terse,
                 history,
-                filter,
-                show_in,
-                starts_with,
-                limit,
-                from,
+                show_options,
             } => {
                 write!(
                     f,
-                    "SHOW {terse}DATABASES",
-                    terse = if *terse { "TERSE " } else { "" }
-                )?;
-                write!(
-                    f,
-                    "{history}{filter}{show_in}{starts_with}{limit}{from}",
+                    "SHOW {terse}DATABASES{history}{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
                     history = if *history { " HISTORY" } else { "" },
-                    filter = match filter.as_ref() {
-                        Some(l) => format!(" {l}"),
-                        None => String::new(),
-                    },
-                    show_in = match show_in {
-                        Some(i) => format!(" {i}"),
-                        None => String::new(),
-                    },
-                    starts_with = match starts_with.as_ref() {
-                        Some(s) => format!(" STARTS WITH {s}"),
-                        None => String::new(),
-                    },
-                    limit = match limit.as_ref() {
-                        Some(l) => format!(" LIMIT {l}"),
-                        None => String::new(),
-                    },
-                    from = match from.as_ref() {
-                        Some(f) => format!(" FROM {f}"),
-                        None => String::new(),
-                    }
                 )?;
                 Ok(())
             }
             Statement::ShowSchemas {
                 terse,
                 history,
-                filter,
-                show_in,
-                starts_with,
-                limit,
-                from,
+                show_options,
             } => {
                 write!(
                     f,
-                    "SHOW {terse}SCHEMAS",
-                    terse = if *terse { "TERSE " } else { "" }
-                )?;
-                write!(
-                    f,
-                    "{history}{filter}{show_in}{starts_with}{limit}{from}",
+                    "SHOW {terse}SCHEMAS{history}{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
                     history = if *history { " HISTORY" } else { "" },
-                    filter = match filter.as_ref() {
-                        Some(l) => format!(" {l}"),
-                        None => String::new(),
-                    },
-                    show_in = match show_in {
-                        Some(i) => format!(" {i}"),
-                        None => String::new(),
-                    },
-                    starts_with = match starts_with.as_ref() {
-                        Some(s) => format!(" STARTS WITH {s}"),
-                        None => String::new(),
-                    },
-                    limit = match limit.as_ref() {
-                        Some(l) => format!(" LIMIT {l}"),
-                        None => String::new(),
-                    },
-                    from = match from.as_ref() {
-                        Some(f) => format!(" FROM {f}"),
-                        None => String::new(),
-                    }
                 )?;
                 Ok(())
             }
@@ -4527,109 +4433,29 @@ impl fmt::Display for Statement {
                 extended,
                 full,
                 external,
-                filter,
-                show_in,
-                starts_with,
-                limit,
-                from,
-                filter_position,
+                show_options,
             } => {
                 write!(
                     f,
-                    "SHOW {terse}{extended}{full}{external}TABLES",
+                    "SHOW {terse}{extended}{full}{external}TABLES{history}{show_options}",
                     terse = if *terse { "TERSE " } else { "" },
                     extended = if *extended { "EXTENDED " } else { "" },
                     full = if *full { "FULL " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
-                )?;
-                write!(
-                    f,
-                    "{history}{like_in_the_middle}{show_in}{starts_with}{limit}{from}{like_at_the_end}",
                     history = if *history { " HISTORY" } else { "" },
-                    like_in_the_middle = if *filter_position
-                        == ShowStatementFilterPosition::InTheMiddle
-                        && filter.is_some()
-                    {
-                        format!(" {}", filter.as_ref().unwrap())
-                    } else {
-                        String::new()
-                    },
-                    show_in = match show_in {
-                        Some(i) => format!(" {i}"),
-                        None => String::new(),
-                    },
-                    starts_with = match starts_with.as_ref() {
-                        Some(s) => format!(" STARTS WITH {s}"),
-                        None => String::new(),
-                    },
-                    limit = match limit.as_ref() {
-                        Some(l) => format!(" LIMIT {l}"),
-                        None => String::new(),
-                    },
-                    from = match from.as_ref() {
-                        Some(f) => format!(" FROM {f}"),
-                        None => String::new(),
-                    },
-                    like_at_the_end = if *filter_position
-                        == ShowStatementFilterPosition::AtTheEnd
-                        && filter.is_some()
-                    {
-                        format!(" {}", filter.as_ref().unwrap())
-                    } else {
-                        String::new()
-                    },
-                )
+                )?;
+                Ok(())
             }
             Statement::ShowViews {
                 terse,
                 materialized,
-                filter,
-                show_in,
-                starts_with,
-                limit,
-                from,
-                filter_position,
+                show_options,
             } => {
                 write!(
                     f,
-                    "SHOW {terse}{materialized}VIEWS",
+                    "SHOW {terse}{materialized}VIEWS{show_options}",
                     terse = if *terse { "TERSE " } else { "" },
                     materialized = if *materialized { "MATERIALIZED " } else { "" }
-                )?;
-                write!(
-                    f,
-                    "{like_in_the_middle}{show_in}{starts_with}{limit}{from}{like_at_the_end}",
-                    like_in_the_middle = if *filter_position
-                        == ShowStatementFilterPosition::InTheMiddle
-                        && filter.is_some()
-                    {
-                        format!(" {}", filter.as_ref().unwrap())
-                    } else {
-                        String::new()
-                    },
-                    show_in = match show_in {
-                        Some(i) => format!(" {i}"),
-                        None => String::new(),
-                    },
-                    starts_with = match starts_with.as_ref() {
-                        Some(s) => format!(" STARTS WITH {s}"),
-                        None => String::new(),
-                    },
-                    limit = match limit.as_ref() {
-                        Some(l) => format!(" LIMIT {l}"),
-                        None => String::new(),
-                    },
-                    from = match from.as_ref() {
-                        Some(f) => format!(" FROM {f}"),
-                        None => String::new(),
-                    },
-                    like_at_the_end = if *filter_position == ShowStatementFilterPosition::AtTheEnd
-                        && filter.is_some()
-                    {
-                        format!(" {}", filter.as_ref().unwrap())
-                    } else {
-                        String::new()
-                    }
                 )?;
                 Ok(())
             }
@@ -7529,9 +7355,53 @@ impl Display for UtilityOption {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+pub struct ShowStatementOptions {
+    pub show_in: Option<ShowStatementIn>,
+    pub starts_with: Option<Value>,
+    pub limit: Option<Expr>,
+    pub limit_from: Option<Value>,
+    pub filter_position: Option<ShowStatementFilterPosition>,
+}
+
+impl Display for ShowStatementOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (life_in_infix, like_in_suffix) = match &self.filter_position {
+            Some(ShowStatementFilterPosition::Infix(filter)) => {
+                (format!(" {filter}"), "".to_string())
+            }
+            Some(ShowStatementFilterPosition::Suffix(filter)) => {
+                ("".to_string(), format!(" {filter}"))
+            }
+            None => ("".to_string(), "".to_string()),
+        };
+        write!(
+            f,
+            "{life_in_infix}{show_in}{starts_with}{limit}{from}{like_in_suffix}",
+            show_in = match &self.show_in {
+                Some(i) => format!(" {i}"),
+                None => String::new(),
+            },
+            starts_with = match &self.starts_with {
+                Some(s) => format!(" STARTS WITH {s}"),
+                None => String::new(),
+            },
+            limit = match &self.limit {
+                Some(l) => format!(" LIMIT {l}"),
+                None => String::new(),
+            },
+            from = match &self.limit_from {
+                Some(f) => format!(" FROM {f}"),
+                None => String::new(),
+            }
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum ShowStatementFilterPosition {
-    InTheMiddle, // Snowflake like
-    AtTheEnd,    // MySQL like
+    Infix(ShowStatementFilter), // For example: SHOW COLUMNS LIKE '%name%' IN TABLE tbl
+    Suffix(ShowStatementFilter), // For example: SHOW COLUMNS IN tbl LIKE '%name%'
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

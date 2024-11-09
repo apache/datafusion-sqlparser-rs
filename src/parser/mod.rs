@@ -1367,14 +1367,19 @@ impl<'a> Parser<'a> {
                 };
                 method_chain.push(func);
             }
-            Ok(method_chain)
+            if !method_chain.is_empty() {
+                Ok(method_chain)
+            } else {
+                p.expected("function", p.peek_token())
+            }
         })?;
-        match method_chain {
-            Some(method_chain) if !method_chain.is_empty() => Ok(Expr::Method(Method {
+        if let Some(method_chain) = method_chain {
+            Ok(Expr::Method(Method {
                 expr: Box::new(expr),
                 method_chain,
-            })),
-            _ => Ok(expr),
+            }))
+        } else {
+            Ok(expr)
         }
     }
 

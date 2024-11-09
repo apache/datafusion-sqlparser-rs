@@ -972,9 +972,9 @@ pub enum Expr {
     /// Example:
     ///
     /// ```sql
-    /// SELECT JSON_OBJECT('name':'value', 'type':1) --{"name":"value","type":1}
-    /// SELECT JSON_OBJECT('name':'value', 'type':NULL ABSENT ON NULL) --{"name":"value"}
-    /// SELECT JSON_OBJECT('name':'value', 'type':JSON_ARRAY(1, 2)) --{"name":"value","type":[1,2]}
+    /// SELECT JSON_OBJECT('name':'value', 'type':1)
+    /// SELECT JSON_OBJECT('name':'value', 'type':NULL ABSENT ON NULL)
+    /// SELECT JSON_OBJECT('name':'value', 'type':JSON_ARRAY(1, 2))
     /// ```
     ///
     /// Reference: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16>

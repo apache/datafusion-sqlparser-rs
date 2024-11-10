@@ -7354,6 +7354,9 @@ impl Display for UtilityOption {
     }
 }
 
+/// Represents the different options available for a SHOW <OBJECT>
+/// statement to filter the results. Example from Snowflake:
+/// https://docs.snowflake.com/en/sql-reference/sql/show-tables
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct ShowStatementOptions {
     pub show_in: Option<ShowStatementIn>,
@@ -7365,7 +7368,7 @@ pub struct ShowStatementOptions {
 
 impl Display for ShowStatementOptions {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (life_in_infix, like_in_suffix) = match &self.filter_position {
+        let (like_in_infix, like_in_suffix) = match &self.filter_position {
             Some(ShowStatementFilterPosition::Infix(filter)) => {
                 (format!(" {filter}"), "".to_string())
             }
@@ -7376,7 +7379,7 @@ impl Display for ShowStatementOptions {
         };
         write!(
             f,
-            "{life_in_infix}{show_in}{starts_with}{limit}{from}{like_in_suffix}",
+            "{like_in_infix}{show_in}{starts_with}{limit}{from}{like_in_suffix}",
             show_in = match &self.show_in {
                 Some(i) => format!(" {i}"),
                 None => String::new(),

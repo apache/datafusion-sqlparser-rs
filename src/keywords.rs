@@ -92,6 +92,7 @@ define_keywords!(
     AND,
     ANTI,
     ANY,
+    APPLICATION,
     APPLY,
     ARCHIVE,
     ARE,

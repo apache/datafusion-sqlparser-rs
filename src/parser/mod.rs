@@ -3205,6 +3205,22 @@ impl<'a> Parser<'a> {
             })
     }
 
+    /// Look for all of the expected keywords in sequence, without consuming them
+    fn peek_keyword(&mut self, expected: Keyword) -> bool {
+        let index = self.index;
+        let matched = self.parse_keyword(expected);
+        self.index = index;
+        matched
+    }
+
+    /// Look for all of the expected keywords in sequence, without consuming them
+    fn peek_keywords(&mut self, expected: &[Keyword]) -> bool {
+        let index = self.index;
+        let matched = self.parse_keywords(expected);
+        self.index = index;
+        matched
+    }
+
     /// Return the first non-whitespace token that has not yet been processed
     /// (or None if reached end-of-file) and mark it as processed. OK to call
     /// repeatedly after reaching EOF.
@@ -12385,19 +12401,6 @@ impl<'a> Parser<'a> {
         false
     }
 
-    /// Look for all of the expected keywords in sequence, without consuming them
-    fn peek_keywords(&mut self, expected: &[Keyword]) -> bool {
-        let index = self.index;
-        for kw in expected {
-            if !self.parse_keyword(*kw) {
-                self.index = index;
-                return false;
-            }
-        }
-        self.index = index;
-        true
-    }
-
     fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {
         let show_in;
         let mut filter_position = None;
@@ -12428,7 +12431,8 @@ impl<'a> Parser<'a> {
         let clause = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
             Some(Keyword::FROM) => ShowStatementInClause::FROM,
             Some(Keyword::IN) => ShowStatementInClause::IN,
-            _ => return Ok(None),
+            None => return Ok(None),
+            _ => return self.expected("FROM or IN", self.peek_token()),
         };
 
         let (parent_type, parent_name) = match self.parse_one_of_keywords(&[
@@ -12438,13 +12442,23 @@ impl<'a> Parser<'a> {
             Keyword::TABLE,
             Keyword::VIEW,
         ]) {
-            Some(Keyword::DATABASE) if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH]) => {
+            // If we see these next keywords it means we don't have a parent name
+            Some(Keyword::DATABASE)
+                if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH])
+                    | self.peek_keyword(Keyword::LIMIT) =>
+            {
                 (Some(ShowStatementInParentType::Database), None)
             }
-            Some(Keyword::SCHEMA) if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH]) => {
+            Some(Keyword::SCHEMA)
+                if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH])
+                    | self.peek_keyword(Keyword::LIMIT) =>
+            {
                 (Some(ShowStatementInParentType::Schema), None)
             }
             Some(parent_kw) => {
+                // The parent name here is still optional, for example: 
+                // SHOW TABLES IN ACCOUNT, so parsing the object name 
+                // may fail because the statement ends.
                 let parent_name = match self.parse_object_name(false) {
                     Ok(n) => Some(n),
                     _ => None,
@@ -12455,7 +12469,12 @@ impl<'a> Parser<'a> {
                     Keyword::SCHEMA => (Some(ShowStatementInParentType::Schema), parent_name),
                     Keyword::TABLE => (Some(ShowStatementInParentType::Table), parent_name),
                     Keyword::VIEW => (Some(ShowStatementInParentType::View), parent_name),
-                    _ => unreachable!(),
+                    _ => {
+                        return self.expected(
+                            "one of ACCOUNT, DATABASE, SCHEMA, TABLE or VIEW",
+                            self.peek_token(),
+                        )
+                    }
                 }
             }
             None => {

@@ -2842,7 +2842,7 @@ fn test_show_views() {
 
 #[test]
 fn test_parse_show_columns_sql() {
+    snowflake().verified_stmt("SHOW COLUMNS IN TABLE");
     snowflake().verified_stmt("SHOW COLUMNS IN TABLE abc");
     snowflake().verified_stmt("SHOW COLUMNS LIKE '%xyz%' IN TABLE abc");
-    snowflake().verified_stmt("SHOW COLUMNS IN TABLE");
 }

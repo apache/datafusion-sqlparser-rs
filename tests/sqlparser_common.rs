@@ -4113,14 +4113,14 @@ fn parse_alter_table_alter_column() {
     );
 
     match alter_table_op(verified_stmt(&format!(
-        "{alter_stmt} ALTER COLUMN is_active SET DEFAULT false"
+        "{alter_stmt} ALTER COLUMN is_active SET DEFAULT 0"
     ))) {
         AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
             assert_eq!(
                 op,
                 AlterColumnOperation::SetDefault {
-                    value: Expr::Value(Value::Boolean(false))
+                    value: Expr::Value(Value::Number("0".to_string(), false))
                 }
             );
         }

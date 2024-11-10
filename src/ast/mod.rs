@@ -7330,6 +7330,14 @@ impl Display for UtilityOption {
 }
 
 /// MSSQL's json null clause
+///
+/// ```plaintext
+/// <json_null_clause> ::=
+///       NULL ON NULL
+///     | ABSENT ON NULL
+/// ```
+///
+/// <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16#json_null_clause>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

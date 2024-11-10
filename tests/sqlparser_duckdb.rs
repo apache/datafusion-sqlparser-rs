@@ -611,14 +611,14 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
                 duplicate_treatment: None,
                 args: vec![
                     FunctionArg::Named {
-                        name: Ident::new("a"),
+                        name: Expr::Identifier(Ident::new("a")),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "1".to_owned()
                         ))),
                         operator: FunctionArgOperator::Assignment
                     },
                     FunctionArg::Named {
-                        name: Ident::new("b"),
+                        name: Expr::Identifier(Ident::new("b")),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "2".to_owned()
                         ))),

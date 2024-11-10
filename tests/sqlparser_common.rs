@@ -4421,14 +4421,14 @@ fn parse_named_argument_function() {
                 duplicate_treatment: None,
                 args: vec![
                     FunctionArg::Named {
-                        name: Ident::new("a"),
+                        name: Expr::Identifier(Ident::new("a")),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "1".to_owned()
                         ))),
                         operator: FunctionArgOperator::RightArrow
                     },
                     FunctionArg::Named {
-                        name: Ident::new("b"),
+                        name: Expr::Identifier(Ident::new("b")),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "2".to_owned()
                         ))),
@@ -4460,14 +4460,14 @@ fn parse_named_argument_function_with_eq_operator() {
                 duplicate_treatment: None,
                 args: vec![
                     FunctionArg::Named {
-                        name: Ident::new("a"),
+                        name: Expr::Identifier(Ident::new("a")),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "1".to_owned()
                         ))),
                         operator: FunctionArgOperator::Equals
                     },
                     FunctionArg::Named {
-                        name: Ident::new("b"),
+                        name: Expr::Identifier(Ident::new("b")),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "2".to_owned()
                         ))),

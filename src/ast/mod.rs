@@ -931,54 +931,6 @@ pub enum Expr {
     ///
     /// See <https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html>.
     Lambda(LambdaFunction),
-    /// MSSQL's `JSON_ARRAY` function for construct JSON-ARRAY object
-    ///
-    /// Syntax:
-    ///
-    /// ```plaintext
-    /// JSON_ARRAY ( [ <json_array_value> [,...n] ] [ <json_null_clause> ]  )  
-    ///
-    /// <json_array_value> ::= value_expression
-    ///
-    /// <json_null_clause> ::=
-    ///       NULL ON NULL
-    ///     | ABSENT ON NULL
-    /// ```
-    ///
-    /// Example:
-    ///
-    /// ```sql
-    /// SELECT JSON_ARRAY('a', 1, 'b', 2) --["a",1,"b",2]
-    /// SELECT JSON_ARRAY('a', 1, NULL, 2 NULL ON NULL) --["a",1,null,2]
-    /// SELECT JSON_ARRAY('a', JSON_OBJECT('name':'value', 'type':1), JSON_ARRAY(1, null, 2 NULL ON NULL)) --["a",{"name":"value","type":1},[1,null,2]]
-    /// ```
-    ///
-    /// Reference: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16>
-    JsonArray(JsonArray),
-    /// MSSQL's `JSON_OBJECT` function to construct a `JSON-OBJECT` object
-    ///
-    /// Syntax:
-    ///
-    /// ```plaintext
-    /// JSON_OBJECT ( [ <json_key_value> [,...n] ] [ json_null_clause ] )
-    ///
-    /// <json_key_value> ::= json_key_name : value_expression
-    ///
-    /// <json_null_clause> ::=
-    ///       NULL ON NULL
-    ///     | ABSENT ON NULL
-    /// ```
-    ///
-    /// Example:
-    ///
-    /// ```sql
-    /// SELECT JSON_OBJECT('name':'value', 'type':1)
-    /// SELECT JSON_OBJECT('name':'value', 'type':NULL ABSENT ON NULL)
-    /// SELECT JSON_OBJECT('name':'value', 'type':JSON_ARRAY(1, 2))
-    /// ```
-    ///
-    /// Reference: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16>
-    JsonObject(JsonObject),
 }
 
 /// The contents inside the `[` and `]` in a subscript expression.
@@ -1706,8 +1658,6 @@ impl fmt::Display for Expr {
             }
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
-            Expr::JsonArray(json_array) => write!(f, "{json_array}"),
-            Expr::JsonObject(json_object) => write!(f, "{json_object}"),
         }
     }
 }
@@ -5383,6 +5333,8 @@ pub enum FunctionArgOperator {
     RightArrow,
     /// function(arg1 := value1)
     Assignment,
+    /// function(arg1 : value1)
+    Colon,
 }
 
 impl fmt::Display for FunctionArgOperator {
@@ -5391,6 +5343,7 @@ impl fmt::Display for FunctionArgOperator {
             FunctionArgOperator::Equals => f.write_str("="),
             FunctionArgOperator::RightArrow => f.write_str("=>"),
             FunctionArgOperator::Assignment => f.write_str(":="),
+            FunctionArgOperator::Colon => f.write_str(":"),
         }
     }
 }
@@ -5400,7 +5353,7 @@ impl fmt::Display for FunctionArgOperator {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionArg {
     Named {
-        name: Ident,
+        name: Expr,
         arg: FunctionArgExpr,
         operator: FunctionArgOperator,
     },
@@ -5553,7 +5506,10 @@ impl fmt::Display for FunctionArgumentList {
         }
         write!(f, "{}", display_comma_separated(&self.args))?;
         if !self.clauses.is_empty() {
-            write!(f, " {}", display_separated(&self.clauses, " "))?;
+            if !self.args.is_empty() {
+                write!(f, " ")?;
+            }
+            write!(f, "{}", display_separated(&self.clauses, " "))?;
         }
         Ok(())
     }
@@ -5595,6 +5551,11 @@ pub enum FunctionArgumentClause {
     ///
     /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
     Separator(Value),
+    /// The json-null-clause to the [`JSON_ARRAY`]/[`JSON_OBJECT`] function in MSSQL.
+    ///
+    /// [`JSON_ARRAY`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16>
+    /// [`JSON_OBJECT`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16>
+    JsonNullClause(JsonNullClause),
 }
 
 impl fmt::Display for FunctionArgumentClause {
@@ -5610,6 +5571,7 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
             FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
             FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
+            FunctionArgumentClause::JsonNullClause(null_clause) => write!(f, "{null_clause}"),
         }
     }
 }
@@ -7364,69 +7326,6 @@ impl Display for UtilityOption {
         } else {
             write!(f, "{}", self.name)
         }
-    }
-}
-
-/// MSSQL's `JSON_ARRAY` constructor function
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct JsonArray {
-    pub args: Vec<Expr>,
-    pub null_clause: Option<JsonNullClause>,
-}
-
-impl Display for JsonArray {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "JSON_ARRAY({}", display_comma_separated(&self.args))?;
-        if let Some(null_clause) = &self.null_clause {
-            if !self.args.is_empty() {
-                write!(f, " ")?;
-            }
-            write!(f, "{null_clause}")?;
-        }
-        write!(f, ")")
-    }
-}
-
-/// MSSQL's `JSON_OBJECT` constructor function
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct JsonObject {
-    pub key_values: Vec<JsonKeyValue>,
-    pub null_clause: Option<JsonNullClause>,
-}
-
-impl Display for JsonObject {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "JSON_OBJECT({}",
-            display_comma_separated(&self.key_values)
-        )?;
-        if let Some(null_clause) = &self.null_clause {
-            if !self.key_values.is_empty() {
-                write!(f, " ")?;
-            }
-            write!(f, "{null_clause}")?;
-        }
-        write!(f, ")")
-    }
-}
-
-/// A key-value pair of MSSQL's `JSON_OBJECT`
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct JsonKeyValue {
-    pub key: Expr,
-    pub value: Expr,
-}
-
-impl Display for JsonKeyValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.key, self.value)
     }
 }
 

@@ -420,8 +420,6 @@ define_keywords!(
     JSON,
     JSONB,
     JSONFILE,
-    JSON_ARRAY,
-    JSON_OBJECT,
     JSON_TABLE,
     JULIAN,
     KEY,

@@ -606,6 +606,12 @@ pub trait Dialect: Debug + Any {
     fn supports_top_before_distinct(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports boolean literals (`true` and `false`).
+    /// For example, in MSSQL these are treated as identifiers rather than boolean literals.
+    fn supports_boolean_literals(&self) -> bool {
+        true
+    }
 }
 
 /// This represents the operators for which precedence must be defined

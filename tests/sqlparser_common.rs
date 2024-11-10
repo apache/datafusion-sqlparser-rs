@@ -7321,7 +7321,7 @@ fn lateral_derived() {
         let lateral_str = if lateral_in { "LATERAL " } else { "" };
         let sql = format!(
             "SELECT * FROM customer LEFT JOIN {lateral_str}\
-             (SELECT * FROM order WHERE order.customer = customer.id LIMIT 3) AS order ON true"
+             (SELECT * FROM orders WHERE orders.customer = customer.id LIMIT 3) AS orders ON 1"
         );
         let select = verified_only_select(&sql);
         let from = only(select.from);
@@ -7329,7 +7329,10 @@ fn lateral_derived() {
         let join = &from.joins[0];
         assert_eq!(
             join.join_operator,
-            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(Value::Boolean(true))))
+            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(Value::Number(
+                "1".to_string(),
+                false
+            ))))
         );
         if let TableFactor::Derived {
             lateral,
@@ -7338,10 +7341,10 @@ fn lateral_derived() {
         } = join.relation
         {
             assert_eq!(lateral_in, lateral);
-            assert_eq!(Ident::new("order"), alias.name);
+            assert_eq!(Ident::new("orders"), alias.name);
             assert_eq!(
                 subquery.to_string(),
-                "SELECT * FROM order WHERE order.customer = customer.id LIMIT 3"
+                "SELECT * FROM orders WHERE orders.customer = customer.id LIMIT 3"
             );
         } else {
             unreachable!()

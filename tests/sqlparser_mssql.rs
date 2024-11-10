@@ -1031,6 +1031,18 @@ fn parse_create_table_with_identity_column() {
     }
 }
 
+#[test]
+fn parse_true_false_as_identifiers() {
+    assert_eq!(
+        ms().verified_expr("true"),
+        Expr::Identifier(Ident::new("true"))
+    );
+    assert_eq!(
+        ms().verified_expr("false"),
+        Expr::Identifier(Ident::new("false"))
+    );
+}
+
 fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }

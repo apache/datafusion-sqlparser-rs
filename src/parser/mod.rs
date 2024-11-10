@@ -11096,21 +11096,20 @@ impl<'a> Parser<'a> {
                 arg,
                 operator: FunctionArgOperator::Assignment,
             })
-        } else if dialect_of!(self is MsSqlDialect) {
-            // FUNC(<expr> : <expr>)
-            let name = self.parse_wildcard_expr()?;
-            if self.consume_token(&Token::Colon) {
-                let arg = self.parse_expr()?.into();
-                Ok(FunctionArg::Named {
-                    name,
-                    arg,
-                    operator: FunctionArgOperator::Colon,
-                })
-            } else {
-                Ok(FunctionArg::Unnamed(name.into()))
-            }
         } else {
-            Ok(FunctionArg::Unnamed(self.parse_wildcard_expr()?.into()))
+            let name = self.parse_wildcard_expr()?;
+            if dialect_of!(self is MsSqlDialect) {
+                // FUNC(<expr> : <expr>)
+                if self.consume_token(&Token::Colon) {
+                    let arg = self.parse_expr()?.into();
+                    return Ok(FunctionArg::Named {
+                        name,
+                        arg,
+                        operator: FunctionArgOperator::Colon,
+                    });
+                }
+            }
+            Ok(FunctionArg::Unnamed(name.into()))
         }
     }
 

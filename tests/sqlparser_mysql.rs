@@ -2817,3 +2817,42 @@ fn test_group_concat() {
     mysql_and_generic()
         .verified_expr("GROUP_CONCAT(DISTINCT test_score ORDER BY test_score DESC SEPARATOR ' ')");
 }
+
+/// The XOR binary operator is only supported in MySQL
+#[test]
+fn parse_logical_xor() {
+    let sql = "SELECT true XOR true, false XOR false, true XOR false, false XOR true";
+    let select = mysql_and_generic().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(true))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(true))),
+        }),
+        select.projection[0]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(false))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(false))),
+        }),
+        select.projection[1]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(true))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(false))),
+        }),
+        select.projection[2]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(false))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(true))),
+        }),
+        select.projection[3]
+    );
+}

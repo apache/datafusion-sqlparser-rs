@@ -820,7 +820,7 @@ fn parse_top_level() {
     verified_stmt("(SELECT 1)");
     verified_stmt("((SELECT 1))");
     verified_stmt("VALUES (1)");
-    verified_stmt("VALUES ROW(1, true, 'a'), ROW(2, false, 'b')");
+    verified_stmt("VALUES ROW(1, NULL, 'a'), ROW(2, NULL, 'b')");
 }
 
 #[test]

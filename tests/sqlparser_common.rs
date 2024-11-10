@@ -1499,7 +1499,7 @@ fn parse_is_not_distinct_from() {
 #[test]
 fn parse_not_precedence() {
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
-    let sql = "NOT true OR true";
+    let sql = "NOT 1 OR 1";
     assert_matches!(
         verified_expr(sql),
         Expr::BinaryOp {

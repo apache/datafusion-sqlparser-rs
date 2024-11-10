@@ -11163,13 +11163,11 @@ fn parse_explain_with_option_list() {
 
 #[test]
 fn test_create_policy() {
-    let sql = concat!(
-        "CREATE POLICY my_policy ON my_table ",
-        "AS PERMISSIVE FOR SELECT ",
-        "TO my_role, CURRENT_USER ",
-        "USING (c0 = 1) ",
-        "WITH CHECK (true)"
-    );
+    let sql: &str = "CREATE POLICY my_policy ON my_table \
+               AS PERMISSIVE FOR SELECT \
+               TO my_role, CURRENT_USER \
+               USING (c0 = 1) \
+               WITH CHECK (1 = 1)";
 
     match all_dialects().verified_stmt(sql) {
         Statement::CreatePolicy {
@@ -11197,7 +11195,14 @@ fn test_create_policy() {
                     right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
                 })
             );
-            assert_eq!(with_check, Some(Expr::Value(Value::Boolean(true))));
+            assert_eq!(
+                with_check,
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                })
+            );
         }
         _ => unreachable!(),
     }
@@ -11208,7 +11213,7 @@ fn test_create_policy() {
         "AS PERMISSIVE FOR SELECT ",
         "TO my_role, CURRENT_USER ",
         "USING (c0 IN (SELECT column FROM t0)) ",
-        "WITH CHECK (true)"
+        "WITH CHECK (1 = 1)"
     ));
     // omit AS / FOR / TO / USING / WITH CHECK clauses is allowed
     all_dialects().verified_stmt("CREATE POLICY my_policy ON my_table");

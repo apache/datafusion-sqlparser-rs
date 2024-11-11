@@ -1884,6 +1884,10 @@ pub enum CommentObject {
     Column,
     Table,
     Extension,
+    Schema,
+    Database,
+    User,
+    Role,
 }
 
 impl fmt::Display for CommentObject {
@@ -1892,6 +1896,10 @@ impl fmt::Display for CommentObject {
             CommentObject::Column => f.write_str("COLUMN"),
             CommentObject::Table => f.write_str("TABLE"),
             CommentObject::Extension => f.write_str("EXTENSION"),
+            CommentObject::Schema => f.write_str("SCHEMA"),
+            CommentObject::Database => f.write_str("DATABASE"),
+            CommentObject::User => f.write_str("USER"),
+            CommentObject::Role => f.write_str("ROLE"),
         }
     }
 }

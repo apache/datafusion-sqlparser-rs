@@ -11629,3 +11629,91 @@ fn parse_factorial_operator() {
         );
     }
 }
+
+#[test]
+fn parse_comments() {
+    match all_dialects_where(|d| d.supports_comment_on())
+        .verified_stmt("COMMENT ON COLUMN tab.name IS 'comment'")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            comment: Some(comment),
+            if_exists,
+        } => {
+            assert_eq!("comment", comment);
+            assert_eq!("tab.name", object_name.to_string());
+            assert_eq!(CommentObject::Column, object_type);
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    }
+
+    let object_types = [
+        ("COLUMN", CommentObject::Column),
+        ("EXTENSION", CommentObject::Extension),
+        ("TABLE", CommentObject::Table),
+        ("SCHEMA", CommentObject::Schema),
+        ("DATABASE", CommentObject::Database),
+        ("USER", CommentObject::User),
+        ("ROLE", CommentObject::Role),
+    ];
+    for (keyword, expected_object_type) in object_types.iter() {
+        match all_dialects_where(|d| d.supports_comment_on())
+            .verified_stmt(format!("COMMENT IF EXISTS ON {keyword} db.t0 IS 'comment'").as_str())
+        {
+            Statement::Comment {
+                object_type,
+                object_name,
+                comment: Some(comment),
+                if_exists,
+            } => {
+                assert_eq!("comment", comment);
+                assert_eq!("db.t0", object_name.to_string());
+                assert_eq!(*expected_object_type, object_type);
+                assert!(if_exists);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    match all_dialects_where(|d| d.supports_comment_on())
+        .verified_stmt("COMMENT IF EXISTS ON TABLE public.tab IS NULL")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            comment: None,
+            if_exists,
+        } => {
+            assert_eq!("public.tab", object_name.to_string());
+            assert_eq!(CommentObject::Table, object_type);
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+
+    // missing IS statement
+    assert_eq!(
+        all_dialects_where(|d| d.supports_comment_on())
+            .parse_sql_statements("COMMENT ON TABLE t0")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: IS, found: EOF".to_string())
+    );
+
+    // missing comment literal
+    assert_eq!(
+        all_dialects_where(|d| d.supports_comment_on())
+            .parse_sql_statements("COMMENT ON TABLE t0 IS")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: literal string, found: EOF".to_string())
+    );
+
+    // unknown object type
+    assert_eq!(
+        all_dialects_where(|d| d.supports_comment_on())
+            .parse_sql_statements("COMMENT ON UNKNOWN t0 IS 'comment'")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: comment object_type, found: UNKNOWN".to_string())
+    );
+}

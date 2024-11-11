@@ -45,6 +45,9 @@ pub enum ParserError {
     TokenizerError(String),
     ParserError(String),
     RecursionLimitExceeded,
+    /// Error indicating that the parsing branch taken
+    /// did not yield a meaningful result
+    BranchAbandoned,
 }
 
 // avoid clippy type_complexity warnings
@@ -174,6 +177,7 @@ impl fmt::Display for ParserError {
                 ParserError::TokenizerError(s) => s,
                 ParserError::ParserError(s) => s,
                 ParserError::RecursionLimitExceeded => "recursion limit exceeded",
+                ParserError::BranchAbandoned => "branch abandoned",
             }
         )
     }
@@ -1025,6 +1029,178 @@ impl<'a> Parser<'a> {
         Ok(Statement::NOTIFY { channel, payload })
     }
 
+    fn parse_expr_by_keyword(&mut self, w: &Word) -> Result<Expr, ParserError> {
+        match w.keyword {
+            Keyword::TRUE | Keyword::FALSE if self.dialect.supports_boolean_literals() => {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
+            Keyword::NULL => {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
+            Keyword::CURRENT_CATALOG
+            | Keyword::CURRENT_USER
+            | Keyword::SESSION_USER
+            | Keyword::USER
+                if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+            {
+                Ok(Expr::Function(Function {
+                    name: ObjectName(vec![w.to_ident()]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::None,
+                    null_treatment: None,
+                    filter: None,
+                    over: None,
+                    within_group: vec![],
+                }))
+            }
+            Keyword::CURRENT_TIMESTAMP
+            | Keyword::CURRENT_TIME
+            | Keyword::CURRENT_DATE
+            | Keyword::LOCALTIME
+            | Keyword::LOCALTIMESTAMP => {
+                self.parse_time_functions(ObjectName(vec![w.to_ident()]))
+            }
+            Keyword::CASE => self.parse_case_expr(),
+            Keyword::CONVERT => self.parse_convert_expr(false),
+            Keyword::TRY_CONVERT if self.dialect.supports_try_convert() => self.parse_convert_expr(true),
+            Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
+            Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
+            Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
+            Keyword::EXISTS
+                // Support parsing Databricks has a function named `exists`.
+                if !dialect_of!(self is DatabricksDialect)
+                    || matches!(
+                        self.peek_nth_token(1).token,
+                        Token::Word(Word {
+                            keyword: Keyword::SELECT | Keyword::WITH,
+                            ..
+                        })
+                    ) =>
+            {
+                self.parse_exists_expr(false)
+            }
+            Keyword::EXTRACT => self.parse_extract_expr(),
+            Keyword::CEIL => self.parse_ceil_floor_expr(true),
+            Keyword::FLOOR => self.parse_ceil_floor_expr(false),
+            Keyword::POSITION if self.peek_token().token == Token::LParen => {
+                self.parse_position_expr(w.to_ident())
+            }
+            Keyword::SUBSTRING => self.parse_substring_expr(),
+            Keyword::OVERLAY => self.parse_overlay_expr(),
+            Keyword::TRIM => self.parse_trim_expr(),
+            Keyword::INTERVAL => self.parse_interval(),
+            // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
+            Keyword::ARRAY if self.peek_token() == Token::LBracket => {
+                self.expect_token(&Token::LBracket)?;
+                self.parse_array_expr(true)
+            }
+            Keyword::ARRAY
+                if self.peek_token() == Token::LParen
+                    && !dialect_of!(self is ClickHouseDialect | DatabricksDialect) =>
+            {
+                self.expect_token(&Token::LParen)?;
+                let query = self.parse_query()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Function(Function {
+                    name: ObjectName(vec![w.to_ident()]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::Subquery(query),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                }))
+            }
+            Keyword::NOT => self.parse_not(),
+            Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
+                self.parse_match_against()
+            }
+            Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                self.prev_token();
+                self.parse_bigquery_struct_literal()
+            }
+            Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
+                let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
+                Ok(Expr::Prior(Box::new(expr)))
+            }
+            Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
+                self.parse_duckdb_map_literal()
+            }
+            Keyword::DEFAULT => Ok(Expr::Default),
+            _ => Err(ParserError::BranchAbandoned)
+        }
+    }
+
+    fn parse_ident_expr(&mut self, w: &Word) -> Result<Expr, ParserError> {
+        match self.peek_token().token {
+            Token::LParen | Token::Period => {
+                let mut id_parts: Vec<Ident> = vec![w.to_ident()];
+                let mut ends_with_wildcard = false;
+                while self.consume_token(&Token::Period) {
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Word(w) => id_parts.push(w.to_ident()),
+                        Token::Mul => {
+                            // Postgres explicitly allows funcnm(tablenm.*) and the
+                            // function array_agg traverses this control flow
+                            if dialect_of!(self is PostgreSqlDialect) {
+                                ends_with_wildcard = true;
+                                break;
+                            } else {
+                                return self.expected("an identifier after '.'", next_token);
+                            }
+                        }
+                        Token::SingleQuotedString(s) => id_parts.push(Ident::with_quote('\'', s)),
+                        _ => {
+                            return self.expected("an identifier or a '*' after '.'", next_token);
+                        }
+                    }
+                }
+
+                if ends_with_wildcard {
+                    Ok(Expr::QualifiedWildcard(ObjectName(id_parts)))
+                } else if self.consume_token(&Token::LParen) {
+                    if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
+                        && self.consume_tokens(&[Token::Plus, Token::RParen])
+                    {
+                        Ok(Expr::OuterJoin(Box::new(
+                            match <[Ident; 1]>::try_from(id_parts) {
+                                Ok([ident]) => Expr::Identifier(ident),
+                                Err(parts) => Expr::CompoundIdentifier(parts),
+                            },
+                        )))
+                    } else {
+                        self.prev_token();
+                        self.parse_function(ObjectName(id_parts))
+                    }
+                } else {
+                    Ok(Expr::CompoundIdentifier(id_parts))
+                }
+            }
+            // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
+            Token::SingleQuotedString(_)
+            | Token::DoubleQuotedString(_)
+            | Token::HexStringLiteral(_)
+                if w.value.starts_with('_') =>
+            {
+                Ok(Expr::IntroducedString {
+                    introducer: w.value.clone(),
+                    value: self.parse_introduced_string_value()?,
+                })
+            }
+            Token::Arrow if self.dialect.supports_lambda_functions() => {
+                self.expect_token(&Token::Arrow)?;
+                Ok(Expr::Lambda(LambdaFunction {
+                    params: OneOrManyWithParens::One(w.to_ident()),
+                    body: Box::new(self.parse_expr()?),
+                }))
+            }
+            _ => Ok(Expr::Identifier(w.to_ident())),
+        }
+    }
+
     /// Parse an expression prefix.
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
@@ -1073,175 +1249,22 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         let expr = match next_token.token {
-            Token::Word(w) => match w.keyword {
-                Keyword::TRUE | Keyword::FALSE if self.dialect.supports_boolean_literals() => {
-                    self.prev_token();
-                    Ok(Expr::Value(self.parse_value()?))
-                }
-                Keyword::NULL => {
-                    self.prev_token();
-                    Ok(Expr::Value(self.parse_value()?))
-                }
-                Keyword::CURRENT_CATALOG
-                | Keyword::CURRENT_USER
-                | Keyword::SESSION_USER
-                | Keyword::USER
-                    if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
-                {
-                    Ok(Expr::Function(Function {
-                        name: ObjectName(vec![w.to_ident()]),
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::None,
-                        null_treatment: None,
-                        filter: None,
-                        over: None,
-                        within_group: vec![],
-                    }))
-                }
-                Keyword::CURRENT_TIMESTAMP
-                | Keyword::CURRENT_TIME
-                | Keyword::CURRENT_DATE
-                | Keyword::LOCALTIME
-                | Keyword::LOCALTIMESTAMP => {
-                    self.parse_time_functions(ObjectName(vec![w.to_ident()]))
-                }
-                Keyword::CASE => self.parse_case_expr(),
-                Keyword::CONVERT => self.parse_convert_expr(false),
-                Keyword::TRY_CONVERT if self.dialect.supports_try_convert() => self.parse_convert_expr(true),
-                Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
-                Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
-                Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
-                Keyword::EXISTS
-                    // Support parsing Databricks has a function named `exists`.
-                    if !dialect_of!(self is DatabricksDialect)
-                        || matches!(
-                            self.peek_nth_token(1).token,
-                            Token::Word(Word {
-                                keyword: Keyword::SELECT | Keyword::WITH,
-                                ..
-                            })
-                        ) =>
-                {
-                    self.parse_exists_expr(false)
-                }
-                Keyword::EXTRACT => self.parse_extract_expr(),
-                Keyword::CEIL => self.parse_ceil_floor_expr(true),
-                Keyword::FLOOR => self.parse_ceil_floor_expr(false),
-                Keyword::POSITION if self.peek_token().token == Token::LParen => {
-                    self.parse_position_expr(w.to_ident())
-                }
-                Keyword::SUBSTRING => self.parse_substring_expr(),
-                Keyword::OVERLAY => self.parse_overlay_expr(),
-                Keyword::TRIM => self.parse_trim_expr(),
-                Keyword::INTERVAL => self.parse_interval(),
-                // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
-                Keyword::ARRAY if self.peek_token() == Token::LBracket => {
-                    self.expect_token(&Token::LBracket)?;
-                    self.parse_array_expr(true)
-                }
-                Keyword::ARRAY
-                    if self.peek_token() == Token::LParen
-                        && !dialect_of!(self is ClickHouseDialect | DatabricksDialect) =>
-                {
-                    self.expect_token(&Token::LParen)?;
-                    let query = self.parse_query()?;
-                    self.expect_token(&Token::RParen)?;
-                    Ok(Expr::Function(Function {
-                        name: ObjectName(vec![w.to_ident()]),
-                        parameters: FunctionArguments::None,
-                        args: FunctionArguments::Subquery(query),
-                        filter: None,
-                        null_treatment: None,
-                        over: None,
-                        within_group: vec![],
-                    }))
-                }
-                Keyword::NOT => self.parse_not(),
-                Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
-                    self.parse_match_against()
-                }
-                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
-                    self.prev_token();
-                    self.parse_bigquery_struct_literal()
-                }
-                Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
-                    let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
-                    Ok(Expr::Prior(Box::new(expr)))
-                }
-                Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
-                    self.parse_duckdb_map_literal()
-                }
-                // Here `w` is a word, check if it's a part of a multipart
-                // identifier, a function call, or a simple identifier:
-                _ => match self.peek_token().token {
-                    Token::LParen | Token::Period => {
-                        let mut id_parts: Vec<Ident> = vec![w.to_ident()];
-                        let mut ends_with_wildcard = false;
-                        while self.consume_token(&Token::Period) {
-                            let next_token = self.next_token();
-                            match next_token.token {
-                                Token::Word(w) => id_parts.push(w.to_ident()),
-                                Token::Mul => {
-                                    // Postgres explicitly allows funcnm(tablenm.*) and the
-                                    // function array_agg traverses this control flow
-                                    if dialect_of!(self is PostgreSqlDialect) {
-                                        ends_with_wildcard = true;
-                                        break;
-                                    } else {
-                                        return self
-                                            .expected("an identifier after '.'", next_token);
-                                    }
-                                }
-                                Token::SingleQuotedString(s) => {
-                                    id_parts.push(Ident::with_quote('\'', s))
-                                }
-                                _ => {
-                                    return self
-                                        .expected("an identifier or a '*' after '.'", next_token);
-                                }
-                            }
-                        }
-
-                        if ends_with_wildcard {
-                            Ok(Expr::QualifiedWildcard(ObjectName(id_parts)))
-                        } else if self.consume_token(&Token::LParen) {
-                            if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
-                                && self.consume_tokens(&[Token::Plus, Token::RParen])
-                            {
-                                Ok(Expr::OuterJoin(Box::new(
-                                    match <[Ident; 1]>::try_from(id_parts) {
-                                        Ok([ident]) => Expr::Identifier(ident),
-                                        Err(parts) => Expr::CompoundIdentifier(parts),
-                                    },
-                                )))
-                            } else {
-                                self.prev_token();
-                                self.parse_function(ObjectName(id_parts))
-                            }
-                        } else {
-                            Ok(Expr::CompoundIdentifier(id_parts))
+            // We first try to parse the word as the prefix of an expression.
+            // For example, the word INTERVAL in: SELECT INTERVAL '7' DAY
+            Token::Word(w) => match self.try_parse(|parser| parser.parse_expr_by_keyword(&w)) {
+                Ok(expr) => Ok(expr),
+                // Word does not indicate the start of a complex expression, try to parse as identifier
+                Err(ParserError::BranchAbandoned) => Ok(self.parse_ident_expr(&w)?),
+                // Word indicates the start of a complex expression, try to parse as identifier if the
+                // dialect does not reserve it, otherwise return the original error
+                Err(e) => {
+                    if !self.dialect.is_reserved_for_identifier(w.keyword) {
+                        if let Ok(expr) = self.try_parse(|parser| parser.parse_ident_expr(&w)) {
+                            return Ok(expr);
                         }
                     }
-                    // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
-                    Token::SingleQuotedString(_)
-                    | Token::DoubleQuotedString(_)
-                    | Token::HexStringLiteral(_)
-                        if w.value.starts_with('_') =>
-                    {
-                        Ok(Expr::IntroducedString {
-                            introducer: w.value,
-                            value: self.parse_introduced_string_value()?,
-                        })
-                    }
-                    Token::Arrow if self.dialect.supports_lambda_functions() => {
-                        self.expect_token(&Token::Arrow)?;
-                        return Ok(Expr::Lambda(LambdaFunction {
-                            params: OneOrManyWithParens::One(w.to_ident()),
-                            body: Box::new(self.parse_expr()?),
-                        }));
-                    }
-                    _ => Ok(Expr::Identifier(w.to_ident())),
-                },
+                    return Err(e);
+                }
             }, // End of Token::Word
             // array `[1, 2, 3]`
             Token::LBracket => self.parse_array_expr(false),
@@ -3689,6 +3712,24 @@ impl<'a> Parser<'a> {
             Err(_) => {
                 self.index = index;
                 Ok(None)
+            }
+        }
+    }
+
+    /// Run a parser method `f`, reverting back to the current position if unsuccessful
+    /// but retaining the error message if such was raised by `f`
+    pub fn try_parse<T, F>(&mut self, mut f: F) -> Result<T, ParserError>
+    where
+        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+    {
+        let index = self.index;
+        match f(self) {
+            Ok(t) => Ok(t),
+            // Unwind stack if limit exceeded
+            Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
+            Err(e) => {
+                self.index = index;
+                Err(e)
             }
         }
     }

@@ -1749,10 +1749,7 @@ fn parse_merge() {
                             columns: vec![Ident::new("a"), Ident::new("b"),],
                             kind: MergeInsertKind::Values(Values {
                                 explicit_row: false,
-                                rows: vec![vec![
-                                    Expr::Value(number("1")),
-                                    Expr::Identifier(Ident::new("DEFAULT")),
-                                ]]
+                                rows: vec![vec![Expr::Value(number("1")), Expr::Default,]]
                             })
                         })
                     },
@@ -1763,10 +1760,7 @@ fn parse_merge() {
                             columns: vec![],
                             kind: MergeInsertKind::Values(Values {
                                 explicit_row: false,
-                                rows: vec![vec![
-                                    Expr::Value(number("1")),
-                                    Expr::Identifier(Ident::new("DEFAULT")),
-                                ]]
+                                rows: vec![vec![Expr::Value(number("1")), Expr::Default,]]
                             })
                         })
                     },

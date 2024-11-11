@@ -695,6 +695,8 @@ pub enum Expr {
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
         format: Option<CastFormat>,
     },
+    /// `DEFAULT` value of a column e.g. INSERT INTO tbl (a, b) VALUES ('foo', DEFAULT)
+    Default,
     /// AT a timestamp to a different timezone e.g. `FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00'`
     AtTimeZone {
         timestamp: Box<Expr>,
@@ -1449,6 +1451,7 @@ impl fmt::Display for Expr {
                     write!(f, "{expr}::{data_type}")
                 }
             },
+            Expr::Default => write!(f, "DEFAULT"),
             Expr::Extract {
                 field,
                 syntax,

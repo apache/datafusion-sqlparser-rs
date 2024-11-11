@@ -42,6 +42,7 @@ fn parse_map_access_expr() {
             distinct: None,
             select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
             top: None,
+            top_before_distinct: false,
             projection: vec![UnnamedExpr(MapAccess {
                 column: Box::new(Identifier(Ident {
                     value: "string_values".to_string(),

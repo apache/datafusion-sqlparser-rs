@@ -1167,6 +1167,7 @@ fn parse_copy_to() {
                     select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![
                         SelectItem::ExprWithAlias {
                             expr: Expr::Value(number("42")),
@@ -1547,8 +1548,9 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: ObjectName(vec!["a".into()]),
             parameters: vec![],
+            has_parentheses: false,
             using: vec![]
         }
     );
@@ -1557,11 +1559,12 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: ObjectName(vec!["a".into()]),
             parameters: vec![
                 Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
             ],
+            has_parentheses: true,
             using: vec![]
         }
     );
@@ -1571,8 +1574,9 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: ObjectName(vec!["a".into()]),
             parameters: vec![],
+            has_parentheses: false,
             using: vec![
                 Expr::Cast {
                     kind: CastKind::Cast,
@@ -2519,6 +2523,7 @@ fn parse_array_subquery_expr() {
                         select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                         distinct: None,
                         top: None,
+                        top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
                         into: None,
                         from: vec![],
@@ -2540,6 +2545,7 @@ fn parse_array_subquery_expr() {
                         select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                         distinct: None,
                         top: None,
+                        top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("2")))],
                         into: None,
                         from: vec![],

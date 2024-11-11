@@ -116,6 +116,7 @@ fn parse_create_procedure() {
                     select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
                     into: None,
                     from: vec![],
@@ -527,6 +528,7 @@ fn parse_substring_in_select() {
                         select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                         distinct: Some(Distinct::Distinct),
                         top: None,
+                        top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
                             expr: Box::new(Expr::Identifier(Ident {
                                 value: "description".to_string(),
@@ -1006,11 +1008,13 @@ fn parse_create_table_with_identity_column() {
                 name: ObjectName(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
+                    span: Span::empty(),
                 },],),
                 columns: vec![ColumnDef {
                     name: Ident {
                         value: "columnA".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                     data_type: Int(None,),
                     collation: None,

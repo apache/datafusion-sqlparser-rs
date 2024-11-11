@@ -56,13 +56,14 @@ pub use self::query::{
     ExceptSelectItem, ExcludeSelectItem, ExprWithAlias, Fetch, ForClause, ForJson, ForXml,
     FormatClause, GroupByExpr, GroupByWithModifier, IdentWithAlias, IlikeSelectItem, Interpolate,
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonTableColumn,
-    JsonTableColumnErrorHandling, LateralView, LockClause, LockType, MatchRecognizePattern,
-    MatchRecognizeSymbol, Measure, NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset,
-    OffsetRows, OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
-    RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
-    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
-    TableAlias, TableFactor, TableFunctionArgs, TableVersion, TableWithJoins, Top, TopQuantity,
-    ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
+    JsonTableColumnErrorHandling, JsonTableNamedColumn, JsonTableNestedColumn, LateralView,
+    LockClause, LockType, MatchRecognizePattern, MatchRecognizeSymbol, Measure,
+    NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset, OffsetRows, OrderBy, OrderByExpr,
+    PivotValueSource, ProjectionSelect, Query, RenameSelectItem, RepetitionQuantifier,
+    ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select, SelectInto, SelectItem, SetExpr,
+    SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableFactor,
+    TableFunctionArgs, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode, Values,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 pub use self::trigger::{
@@ -2844,12 +2845,29 @@ pub enum Statement {
         filter: Option<ShowStatementFilter>,
     },
     /// ```sql
+    /// SHOW DATABASES [LIKE 'pattern']
+    /// ```
+    ShowDatabases { filter: Option<ShowStatementFilter> },
+    /// ```sql
+    /// SHOW SCHEMAS [LIKE 'pattern']
+    /// ```
+    ShowSchemas { filter: Option<ShowStatementFilter> },
+    /// ```sql
     /// SHOW TABLES
     /// ```
-    /// Note: this is a MySQL-specific statement.
     ShowTables {
         extended: bool,
         full: bool,
+        clause: Option<ShowClause>,
+        db_name: Option<Ident>,
+        filter: Option<ShowStatementFilter>,
+    },
+    /// ```sql
+    /// SHOW VIEWS
+    /// ```
+    ShowViews {
+        materialized: bool,
+        clause: Option<ShowClause>,
         db_name: Option<Ident>,
         filter: Option<ShowStatementFilter>,
     },
@@ -3157,10 +3175,14 @@ pub enum Statement {
     /// EXECUTE name [ ( parameter [, ...] ) ] [USING <expr>]
     /// ```
     ///
-    /// Note: this is a PostgreSQL-specific statement.
+    /// Note: this statement is supported by Postgres and MSSQL, with slight differences in syntax.
+    ///
+    /// Postgres: <https://www.postgresql.org/docs/current/sql-execute.html>
+    /// MSSQL: <https://learn.microsoft.com/en-us/sql/relational-databases/stored-procedures/execute-a-stored-procedure>
     Execute {
-        name: Ident,
+        name: ObjectName,
         parameters: Vec<Expr>,
+        has_parentheses: bool,
         using: Vec<Expr>,
     },
     /// ```sql
@@ -3339,6 +3361,23 @@ pub enum Statement {
         partition: Option<Partition>,
         include_final: bool,
         deduplicate: Option<Deduplicate>,
+    },
+    /// ```sql
+    /// LISTEN
+    /// ```
+    /// listen for a notification channel
+    ///
+    /// See Postgres <https://www.postgresql.org/docs/current/sql-listen.html>
+    LISTEN { channel: Ident },
+    /// ```sql
+    /// NOTIFY channel [ , payload ]
+    /// ```
+    /// send a notification event together with an optional “payload” string to channel
+    ///
+    /// See Postgres <https://www.postgresql.org/docs/current/sql-notify.html>
+    NOTIFY {
+        channel: Ident,
+        payload: Option<String>,
     },
 }
 
@@ -4425,9 +4464,24 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::ShowDatabases { filter } => {
+                write!(f, "SHOW DATABASES")?;
+                if let Some(filter) = filter {
+                    write!(f, " {filter}")?;
+                }
+                Ok(())
+            }
+            Statement::ShowSchemas { filter } => {
+                write!(f, "SHOW SCHEMAS")?;
+                if let Some(filter) = filter {
+                    write!(f, " {filter}")?;
+                }
+                Ok(())
+            }
             Statement::ShowTables {
                 extended,
                 full,
+                clause: show_clause,
                 db_name,
                 filter,
             } => {
@@ -4437,8 +4491,33 @@ impl fmt::Display for Statement {
                     extended = if *extended { "EXTENDED " } else { "" },
                     full = if *full { "FULL " } else { "" },
                 )?;
+                if let Some(show_clause) = show_clause {
+                    write!(f, " {show_clause}")?;
+                }
                 if let Some(db_name) = db_name {
-                    write!(f, " FROM {db_name}")?;
+                    write!(f, " {db_name}")?;
+                }
+                if let Some(filter) = filter {
+                    write!(f, " {filter}")?;
+                }
+                Ok(())
+            }
+            Statement::ShowViews {
+                materialized,
+                clause: show_clause,
+                db_name,
+                filter,
+            } => {
+                write!(
+                    f,
+                    "SHOW {}VIEWS",
+                    if *materialized { "MATERIALIZED " } else { "" }
+                )?;
+                if let Some(show_clause) = show_clause {
+                    write!(f, " {show_clause}")?;
+                }
+                if let Some(db_name) = db_name {
+                    write!(f, " {db_name}")?;
                 }
                 if let Some(filter) = filter {
                     write!(f, " {filter}")?;
@@ -4572,12 +4651,19 @@ impl fmt::Display for Statement {
             Statement::Execute {
                 name,
                 parameters,
+                has_parentheses,
                 using,
             } => {
-                write!(f, "EXECUTE {name}")?;
-                if !parameters.is_empty() {
-                    write!(f, "({})", display_comma_separated(parameters))?;
-                }
+                let (open, close) = if *has_parentheses {
+                    ("(", ")")
+                } else {
+                    (if parameters.is_empty() { "" } else { " " }, "")
+                };
+                write!(
+                    f,
+                    "EXECUTE {name}{open}{}{close}",
+                    display_comma_separated(parameters),
+                )?;
                 if !using.is_empty() {
                     write!(f, " USING {}", display_comma_separated(using))?;
                 };
@@ -4841,6 +4927,17 @@ impl fmt::Display for Statement {
                 }
                 if let Some(deduplicate) = deduplicate {
                     write!(f, " {deduplicate}")?;
+                }
+                Ok(())
+            }
+            Statement::LISTEN { channel } => {
+                write!(f, "LISTEN {channel}")?;
+                Ok(())
+            }
+            Statement::NOTIFY { channel, payload } => {
+                write!(f, "NOTIFY {channel}")?;
+                if let Some(payload) = payload {
+                    write!(f, ", '{payload}'")?;
                 }
                 Ok(())
             }
@@ -6119,6 +6216,7 @@ pub enum ShowStatementFilter {
     Like(String),
     ILike(String),
     Where(Expr),
+    NoKeyword(String),
 }
 
 impl fmt::Display for ShowStatementFilter {
@@ -6128,6 +6226,25 @@ impl fmt::Display for ShowStatementFilter {
             Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern)),
             ILike(pattern) => write!(f, "ILIKE {}", value::escape_single_quote_string(pattern)),
             Where(expr) => write!(f, "WHERE {expr}"),
+            NoKeyword(pattern) => write!(f, "'{}'", value::escape_single_quote_string(pattern)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ShowClause {
+    IN,
+    FROM,
+}
+
+impl fmt::Display for ShowClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ShowClause::*;
+        match self {
+            FROM => write!(f, "FROM"),
+            IN => write!(f, "IN"),
         }
     }
 }

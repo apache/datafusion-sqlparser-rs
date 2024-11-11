@@ -529,9 +529,13 @@ impl<'a> Parser<'a> {
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
                 // syntaxes. They are used for Postgres prepared statement.
                 Keyword::DEALLOCATE => self.parse_deallocate(),
-                Keyword::EXECUTE => self.parse_execute(),
+                Keyword::EXECUTE | Keyword::EXEC => self.parse_execute(),
                 Keyword::PREPARE => self.parse_prepare(),
                 Keyword::MERGE => self.parse_merge(),
+                // `LISTEN` and `NOTIFY` are Postgres-specific
+                // syntaxes. They are used for Postgres statement.
+                Keyword::LISTEN if self.dialect.supports_listen() => self.parse_listen(),
+                Keyword::NOTIFY if self.dialect.supports_notify() => self.parse_notify(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),
@@ -947,6 +951,21 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier(false)?;
 
         Ok(Statement::ReleaseSavepoint { name })
+    }
+
+    pub fn parse_listen(&mut self) -> Result<Statement, ParserError> {
+        let channel = self.parse_identifier(false)?;
+        Ok(Statement::LISTEN { channel })
+    }
+
+    pub fn parse_notify(&mut self) -> Result<Statement, ParserError> {
+        let channel = self.parse_identifier(false)?;
+        let payload = if self.consume_token(&Token::Comma) {
+            Some(self.parse_literal_string()?)
+        } else {
+            None
+        };
+        Ok(Statement::NOTIFY { channel, payload })
     }
 
     /// Parse an expression prefix.
@@ -9203,13 +9222,16 @@ impl<'a> Parser<'a> {
                 None
             };
 
+        let mut top_before_distinct = false;
+        let mut top = None;
+        if self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
+            top = Some(self.parse_top()?);
+            top_before_distinct = true;
+        }
         let distinct = self.parse_all_or_distinct()?;
-
-        let top = if self.parse_keyword(Keyword::TOP) {
-            Some(self.parse_top()?)
-        } else {
-            None
-        };
+        if !self.dialect.supports_top_before_distinct() && self.parse_keyword(Keyword::TOP) {
+            top = Some(self.parse_top()?);
+        }
 
         let projection = self.parse_projection()?;
 
@@ -9353,6 +9375,7 @@ impl<'a> Parser<'a> {
             select_token,
             distinct,
             top,
+            top_before_distinct,
             projection,
             into,
             from,
@@ -9609,6 +9632,10 @@ impl<'a> Parser<'a> {
             Ok(self.parse_show_columns(extended, full)?)
         } else if self.parse_keyword(Keyword::TABLES) {
             Ok(self.parse_show_tables(extended, full)?)
+        } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEWS]) {
+            Ok(self.parse_show_views(true)?)
+        } else if self.parse_keyword(Keyword::VIEWS) {
+            Ok(self.parse_show_views(false)?)
         } else if self.parse_keyword(Keyword::FUNCTIONS) {
             Ok(self.parse_show_functions()?)
         } else if extended || full {
@@ -9635,11 +9662,27 @@ impl<'a> Parser<'a> {
                 session,
                 global,
             })
+        } else if self.parse_keyword(Keyword::DATABASES) {
+            self.parse_show_databases()
+        } else if self.parse_keyword(Keyword::SCHEMAS) {
+            self.parse_show_schemas()
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
             })
         }
+    }
+
+    fn parse_show_databases(&mut self) -> Result<Statement, ParserError> {
+        Ok(Statement::ShowDatabases {
+            filter: self.parse_show_statement_filter()?,
+        })
+    }
+
+    fn parse_show_schemas(&mut self) -> Result<Statement, ParserError> {
+        Ok(Statement::ShowSchemas {
+            filter: self.parse_show_statement_filter()?,
+        })
     }
 
     pub fn parse_show_create(&mut self) -> Result<Statement, ParserError> {
@@ -9697,14 +9740,31 @@ impl<'a> Parser<'a> {
         extended: bool,
         full: bool,
     ) -> Result<Statement, ParserError> {
-        let db_name = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
-            Some(_) => Some(self.parse_identifier(false)?),
-            None => None,
+        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
+            Some(Keyword::FROM) => (Some(ShowClause::FROM), Some(self.parse_identifier(false)?)),
+            Some(Keyword::IN) => (Some(ShowClause::IN), Some(self.parse_identifier(false)?)),
+            _ => (None, None),
         };
         let filter = self.parse_show_statement_filter()?;
         Ok(Statement::ShowTables {
             extended,
             full,
+            clause,
+            db_name,
+            filter,
+        })
+    }
+
+    fn parse_show_views(&mut self, materialized: bool) -> Result<Statement, ParserError> {
+        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
+            Some(Keyword::FROM) => (Some(ShowClause::FROM), Some(self.parse_identifier(false)?)),
+            Some(Keyword::IN) => (Some(ShowClause::IN), Some(self.parse_identifier(false)?)),
+            _ => (None, None),
+        };
+        let filter = self.parse_show_statement_filter()?;
+        Ok(Statement::ShowViews {
+            materialized,
+            clause,
             db_name,
             filter,
         })
@@ -9734,7 +9794,12 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::WHERE) {
             Ok(Some(ShowStatementFilter::Where(self.parse_expr()?)))
         } else {
-            Ok(None)
+            self.maybe_parse(|parser| -> Result<String, ParserError> {
+                parser.parse_literal_string()
+            })?
+            .map_or(Ok(None), |filter| {
+                Ok(Some(ShowStatementFilter::NoKeyword(filter)))
+            })
         }
     }
 
@@ -10431,7 +10496,23 @@ impl<'a> Parser<'a> {
     /// Parses MySQL's JSON_TABLE column definition.
     /// For example: `id INT EXISTS PATH '$' DEFAULT '0' ON EMPTY ERROR ON ERROR`
     pub fn parse_json_table_column_def(&mut self) -> Result<JsonTableColumn, ParserError> {
+        if self.parse_keyword(Keyword::NESTED) {
+            let _has_path_keyword = self.parse_keyword(Keyword::PATH);
+            let path = self.parse_value()?;
+            self.expect_keyword(Keyword::COLUMNS)?;
+            let columns = self.parse_parenthesized(|p| {
+                p.parse_comma_separated(Self::parse_json_table_column_def)
+            })?;
+            return Ok(JsonTableColumn::Nested(JsonTableNestedColumn {
+                path,
+                columns,
+            }));
+        }
         let name = self.parse_identifier(false)?;
+        if self.parse_keyword(Keyword::FOR) {
+            self.expect_keyword(Keyword::ORDINALITY)?;
+            return Ok(JsonTableColumn::ForOrdinality(name));
+        }
         let r#type = self.parse_data_type()?;
         let exists = self.parse_keyword(Keyword::EXISTS);
         self.expect_keyword(Keyword::PATH)?;
@@ -10446,14 +10527,14 @@ impl<'a> Parser<'a> {
                 on_error = Some(error_handling);
             }
         }
-        Ok(JsonTableColumn {
+        Ok(JsonTableColumn::Named(JsonTableNamedColumn {
             name,
             r#type,
             path,
             exists,
             on_empty,
             on_error,
-        })
+        }))
     }
 
     fn parse_json_table_column_error_handling(
@@ -11226,13 +11307,13 @@ impl<'a> Parser<'a> {
                 left,
                 op: BinaryOperator::Eq,
                 right,
-            } if self.dialect.supports_eq_alias_assigment()
+            } if self.dialect.supports_eq_alias_assignment()
                 && matches!(left.as_ref(), Expr::Identifier(_)) =>
             {
                 let Expr::Identifier(alias) = *left else {
                     return parser_err!(
                         "BUG: expected identifier expression as alias",
-                        self.peek_token().location
+                        self.peek_token().span.start
                     );
                 };
                 Ok(SelectItem::ExprWithAlias {
@@ -11761,11 +11842,20 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_execute(&mut self) -> Result<Statement, ParserError> {
-        let name = self.parse_identifier(false)?;
+        let name = self.parse_object_name(false)?;
 
-        let mut parameters = vec![];
-        if self.consume_token(&Token::LParen) {
-            parameters = self.parse_comma_separated(Parser::parse_expr)?;
+        let has_parentheses = self.consume_token(&Token::LParen);
+
+        let end_token = match (has_parentheses, self.peek_token().token) {
+            (true, _) => Token::RParen,
+            (false, Token::EOF) => Token::EOF,
+            (false, Token::Word(w)) if w.keyword == Keyword::USING => Token::Word(w),
+            (false, _) => Token::SemiColon,
+        };
+
+        let parameters = self.parse_comma_separated0(Parser::parse_expr, end_token)?;
+
+        if has_parentheses {
             self.expect_token(&Token::RParen)?;
         }
 
@@ -11781,6 +11871,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Execute {
             name,
             parameters,
+            has_parentheses,
             using,
         })
     }

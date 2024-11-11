@@ -284,6 +284,8 @@ pub struct Select {
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
+    /// Whether the top was located before `ALL`/`DISTINCT`
+    pub top_before_distinct: bool,
     /// projection expressions
     pub projection: Vec<SelectItem>,
     /// INTO
@@ -332,12 +334,20 @@ impl fmt::Display for Select {
             write!(f, " {value_table_mode}")?;
         }
 
+        if let Some(ref top) = self.top {
+            if self.top_before_distinct {
+                write!(f, " {top}")?;
+            }
+        }
         if let Some(ref distinct) = self.distinct {
             write!(f, " {distinct}")?;
         }
         if let Some(ref top) = self.top {
-            write!(f, " {top}")?;
+            if !self.top_before_distinct {
+                write!(f, " {top}")?;
+            }
         }
+
         write!(f, " {}", display_comma_separated(&self.projection))?;
 
         if let Some(ref into) = self.into {
@@ -2298,19 +2308,84 @@ impl fmt::Display for ForJson {
 }
 
 /// A single column definition in MySQL's `JSON_TABLE` table valued function.
+///
+/// See
+/// - [MySQL's JSON_TABLE documentation](https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table)
+/// - [Oracle's JSON_TABLE documentation](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/JSON_TABLE.html)
+/// - [MariaDB's JSON_TABLE documentation](https://mariadb.com/kb/en/json_table/)
+///
 /// ```sql
 /// SELECT *
 /// FROM JSON_TABLE(
 ///     '["a", "b"]',
 ///     '$[*]' COLUMNS (
-///         value VARCHAR(20) PATH '$'
+///         name FOR ORDINALITY,
+///         value VARCHAR(20) PATH '$',
+///         NESTED PATH '$[*]' COLUMNS (
+///             value VARCHAR(20) PATH '$'
+///         )
 ///     )
 /// ) AS jt;
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct JsonTableColumn {
+pub enum JsonTableColumn {
+    /// A named column with a JSON path
+    Named(JsonTableNamedColumn),
+    /// The FOR ORDINALITY column, which is a special column that returns the index of the current row in a JSON array.
+    ForOrdinality(Ident),
+    /// A set of nested columns, which extracts data from a nested JSON array.
+    Nested(JsonTableNestedColumn),
+}
+
+impl fmt::Display for JsonTableColumn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonTableColumn::Named(json_table_named_column) => {
+                write!(f, "{json_table_named_column}")
+            }
+            JsonTableColumn::ForOrdinality(ident) => write!(f, "{} FOR ORDINALITY", ident),
+            JsonTableColumn::Nested(json_table_nested_column) => {
+                write!(f, "{json_table_nested_column}")
+            }
+        }
+    }
+}
+
+/// A nested column in a JSON_TABLE column list
+///
+/// See <https://mariadb.com/kb/en/json_table/#nested-paths>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct JsonTableNestedColumn {
+    pub path: Value,
+    pub columns: Vec<JsonTableColumn>,
+}
+
+impl fmt::Display for JsonTableNestedColumn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "NESTED PATH {} COLUMNS ({})",
+            self.path,
+            display_comma_separated(&self.columns)
+        )
+    }
+}
+
+/// A single column definition in MySQL's `JSON_TABLE` table valued function.
+///
+/// See <https://mariadb.com/kb/en/json_table/#path-columns>
+///
+/// ```sql
+///         value VARCHAR(20) PATH '$'
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct JsonTableNamedColumn {
     /// The name of the column to be extracted.
     pub name: Ident,
     /// The type of the column to be extracted.
@@ -2325,7 +2400,7 @@ pub struct JsonTableColumn {
     pub on_error: Option<JsonTableColumnErrorHandling>,
 }
 
-impl fmt::Display for JsonTableColumn {
+impl fmt::Display for JsonTableNamedColumn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,

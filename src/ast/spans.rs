@@ -249,6 +249,7 @@ impl Spanned for Statement {
                 only: _,
                 identity: _,
                 cascade: _,
+                on_cluster: _,
             } => union_spans(
                 table_names
                     .iter()
@@ -430,6 +431,14 @@ impl Spanned for Statement {
             Statement::UnlockTables => Span::empty(),
             Statement::Unload { .. } => Span::empty(),
             Statement::OptimizeTable { .. } => Span::empty(),
+            Statement::CreatePolicy { .. } => Span::empty(),
+            Statement::AlterPolicy { .. } => Span::empty(),
+            Statement::DropPolicy { .. } => Span::empty(),
+            Statement::ShowDatabases { .. } => Span::empty(),
+            Statement::ShowSchemas { .. } => Span::empty(),
+            Statement::ShowViews { .. } => Span::empty(),
+            Statement::LISTEN { .. } => Span::empty(),
+            Statement::NOTIFY { .. } => Span::empty(),
         }
     }
 }
@@ -679,6 +688,10 @@ impl Spanned for ColumnOption {
             ColumnOption::OnUpdate(expr) => expr.span(),
             ColumnOption::Generated { .. } => Span::empty(),
             ColumnOption::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
+            ColumnOption::Identity(..) => Span::empty(),
+            ColumnOption::OnConflict(..) => Span::empty(),
+            ColumnOption::Policy(..) => Span::empty(),
+            ColumnOption::Tags(..) => Span::empty(),
         }
     }
 }
@@ -1225,12 +1238,14 @@ impl Spanned for Expr {
                 expr,
                 pattern,
                 escape_char: _,
+                any: _,
             } => expr.span().union(&pattern.span()),
             Expr::ILike {
                 negated: _,
                 expr,
                 pattern,
                 escape_char: _,
+                any: _,
             } => expr.span().union(&pattern.span()),
             Expr::SimilarTo {
                 negated: _,
@@ -1275,6 +1290,7 @@ impl Spanned for Expr {
                 left,
                 compare_op: _,
                 right,
+                is_some: _,
             } => left.span().union(&right.span()),
             Expr::AllOp {
                 left,
@@ -1288,6 +1304,7 @@ impl Spanned for Expr {
                 charset,
                 target_before_value: _,
                 styles,
+                is_try: _,
             } => union_spans(
                 core::iter::once(expr.span())
                     .chain(charset.as_ref().map(|i| i.span()))
@@ -1918,6 +1935,7 @@ impl Spanned for Select {
             window_before_qualify: _, // bool
             value_table_mode: _,      // todo, BigQuery specific
             connect_by,
+            top_before_distinct: _,
         } = self;
 
         union_spans(

@@ -381,6 +381,7 @@ fn parse_update_set_from() {
                             select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                             distinct: None,
                             top: None,
+                            top_before_distinct: false,
                             projection: vec![
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
@@ -1396,6 +1397,10 @@ fn pg_and_generic() -> TestedDialects {
         Box::new(PostgreSqlDialect {}),
         Box::new(GenericDialect {}),
     ])
+}
+
+fn ms_and_generic() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
 }
 
 #[test]
@@ -4658,6 +4663,7 @@ fn test_parse_named_window() {
         select_token: TokenWithLocation::wrap(Token::make_keyword("SELECTI")),
         distinct: None,
         top: None,
+        top_before_distinct: false,
         projection: vec![
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
@@ -5313,6 +5319,7 @@ fn parse_interval_and_or_xor() {
             select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
             distinct: None,
             top: None,
+            top_before_distinct: false,
             projection: vec![UnnamedExpr(Expr::Identifier(Ident {
                 value: "col".to_string(),
                 quote_style: None,
@@ -7403,6 +7410,7 @@ fn lateral_function() {
         distinct: None,
         top: None,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+        top_before_distinct: false,
         into: None,
         from: vec![TableWithJoins {
             relation: TableFactor::Table {
@@ -8248,6 +8256,7 @@ fn parse_merge() {
                             select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                             distinct: None,
                             top: None,
+                            top_before_distinct: false,
                             projection: vec![SelectItem::Wildcard(
                                 WildcardAdditionalOptions::default()
                             )],
@@ -9776,6 +9785,43 @@ fn parse_call() {
 }
 
 #[test]
+fn parse_execute_stored_procedure() {
+    let expected = Statement::Execute {
+        name: ObjectName(vec![
+            Ident {
+                value: "my_schema".to_string(),
+                quote_style: None,
+                span: Span::empty(),
+            },
+            Ident {
+                value: "my_stored_procedure".to_string(),
+                quote_style: None,
+                span: Span::empty(),
+            },
+        ]),
+        parameters: vec![
+            Expr::Value(Value::NationalStringLiteral("param1".to_string())),
+            Expr::Value(Value::NationalStringLiteral("param2".to_string())),
+        ],
+        has_parentheses: false,
+        using: vec![],
+    };
+    assert_eq!(
+        // Microsoft SQL Server does not use parentheses around arguments for EXECUTE
+        ms_and_generic()
+            .verified_stmt("EXECUTE my_schema.my_stored_procedure N'param1', N'param2'"),
+        expected
+    );
+    assert_eq!(
+        ms_and_generic().one_statement_parses_to(
+            "EXEC my_schema.my_stored_procedure N'param1', N'param2';",
+            "EXECUTE my_schema.my_stored_procedure N'param1', N'param2'",
+        ),
+        expected
+    );
+}
+
+#[test]
 fn parse_create_table_collate() {
     pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
 }
@@ -9849,6 +9895,7 @@ fn parse_unload() {
                     select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
                     into: None,
                     from: vec![TableWithJoins {
@@ -10027,6 +10074,7 @@ fn parse_connect_by() {
         select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
         distinct: None,
         top: None,
+        top_before_distinct: false,
         projection: vec![
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
@@ -10114,6 +10162,7 @@ fn parse_connect_by() {
             select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
             distinct: None,
             top: None,
+            top_before_distinct: false,
             projection: vec![
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
@@ -11405,7 +11454,7 @@ fn test_any_some_all_comparison() {
 
 #[test]
 fn test_alias_equal_expr() {
-    let dialects = all_dialects_where(|d| d.supports_eq_alias_assigment());
+    let dialects = all_dialects_where(|d| d.supports_eq_alias_assignment());
     let sql = r#"SELECT some_alias = some_column FROM some_table"#;
     let expected = r#"SELECT some_column AS some_alias FROM some_table"#;
     let _ = dialects.one_statement_parses_to(sql, expected);
@@ -11414,7 +11463,7 @@ fn test_alias_equal_expr() {
     let expected = r#"SELECT (a * b) AS some_alias FROM some_table"#;
     let _ = dialects.one_statement_parses_to(sql, expected);
 
-    let dialects = all_dialects_where(|d| !d.supports_eq_alias_assigment());
+    let dialects = all_dialects_where(|d| !d.supports_eq_alias_assignment());
     let sql = r#"SELECT x = (a * b) FROM some_table"#;
     let expected = r#"SELECT x = (a * b) FROM some_table"#;
     let _ = dialects.one_statement_parses_to(sql, expected);
@@ -11429,4 +11478,111 @@ fn test_try_convert() {
     let dialects =
         all_dialects_where(|d| d.supports_try_convert() && !d.convert_type_before_value());
     dialects.verified_expr("TRY_CONVERT('foo', VARCHAR(MAX))");
+}
+
+#[test]
+fn test_show_dbs_schemas_tables_views() {
+    verified_stmt("SHOW DATABASES");
+    verified_stmt("SHOW DATABASES LIKE '%abc'");
+    verified_stmt("SHOW SCHEMAS");
+    verified_stmt("SHOW SCHEMAS LIKE '%abc'");
+    verified_stmt("SHOW TABLES");
+    verified_stmt("SHOW TABLES IN db1");
+    verified_stmt("SHOW TABLES IN db1 'abc'");
+    verified_stmt("SHOW VIEWS");
+    verified_stmt("SHOW VIEWS IN db1");
+    verified_stmt("SHOW VIEWS IN db1 'abc'");
+    verified_stmt("SHOW VIEWS FROM db1");
+    verified_stmt("SHOW VIEWS FROM db1 'abc'");
+    verified_stmt("SHOW MATERIALIZED VIEWS");
+    verified_stmt("SHOW MATERIALIZED VIEWS IN db1");
+    verified_stmt("SHOW MATERIALIZED VIEWS IN db1 'abc'");
+    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1");
+    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1 'abc'");
+}
+
+#[test]
+fn parse_listen_channel() {
+    let dialects = all_dialects_where(|d| d.supports_listen());
+
+    match dialects.verified_stmt("LISTEN test1") {
+        Statement::LISTEN { channel } => {
+            assert_eq!(Ident::new("test1"), channel);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        dialects.parse_sql_statements("LISTEN *").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: *".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_listen());
+
+    assert_eq!(
+        dialects.parse_sql_statements("LISTEN test1").unwrap_err(),
+        ParserError::ParserError("Expected: an SQL statement, found: LISTEN".to_string())
+    );
+}
+
+#[test]
+fn parse_notify_channel() {
+    let dialects = all_dialects_where(|d| d.supports_notify());
+
+    match dialects.verified_stmt("NOTIFY test1") {
+        Statement::NOTIFY { channel, payload } => {
+            assert_eq!(Ident::new("test1"), channel);
+            assert_eq!(payload, None);
+        }
+        _ => unreachable!(),
+    };
+
+    match dialects.verified_stmt("NOTIFY test1, 'this is a test notification'") {
+        Statement::NOTIFY {
+            channel,
+            payload: Some(payload),
+        } => {
+            assert_eq!(Ident::new("test1"), channel);
+            assert_eq!("this is a test notification", payload);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        dialects.parse_sql_statements("NOTIFY *").unwrap_err(),
+        ParserError::ParserError("Expected: identifier, found: *".to_string())
+    );
+    assert_eq!(
+        dialects
+            .parse_sql_statements("NOTIFY test1, *")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: literal string, found: *".to_string())
+    );
+
+    let sql_statements = [
+        "NOTIFY test1",
+        "NOTIFY test1, 'this is a test notification'",
+    ];
+    let dialects = all_dialects_where(|d| !d.supports_notify());
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an SQL statement, found: NOTIFY".to_string())
+        );
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an SQL statement, found: NOTIFY".to_string())
+        );
+    }
+}
+
+#[test]
+fn test_select_top() {
+    let dialects = all_dialects_where(|d| d.supports_top_before_distinct());
+    dialects.one_statement_parses_to("SELECT ALL * FROM tbl", "SELECT * FROM tbl");
+    dialects.verified_stmt("SELECT TOP 3 * FROM tbl");
+    dialects.one_statement_parses_to("SELECT TOP 3 ALL * FROM tbl", "SELECT TOP 3 * FROM tbl");
+    dialects.verified_stmt("SELECT TOP 3 DISTINCT * FROM tbl");
+    dialects.verified_stmt("SELECT TOP 3 DISTINCT a, b, c FROM tbl");
 }

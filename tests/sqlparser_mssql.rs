@@ -113,7 +113,7 @@ fn parse_create_procedure() {
                 settings: None,
                 format_clause: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
-                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -525,7 +525,7 @@ fn parse_substring_in_select() {
                     with: None,
 
                     body: Box::new(SetExpr::Select(Box::new(Select {
-                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         top_before_distinct: false,

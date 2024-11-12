@@ -24,6 +24,7 @@ use core::{
     fmt::{self, Display},
     str::FromStr,
 };
+use helpers::ignore_field::IgnoreField;
 
 use log::debug;
 
@@ -9369,7 +9370,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Select {
-            select_token,
+            select_token: IgnoreField(select_token),
             distinct,
             top,
             top_before_distinct,

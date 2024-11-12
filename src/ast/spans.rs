@@ -1939,7 +1939,7 @@ impl Spanned for Select {
         } = self;
 
         union_spans(
-            core::iter::once(select_token.span)
+            core::iter::once(select_token.0.span)
                 .chain(projection.iter().map(|item| item.span()))
                 .chain(into.iter().map(|item| item.span()))
                 .chain(from.iter().map(|item| item.span()))

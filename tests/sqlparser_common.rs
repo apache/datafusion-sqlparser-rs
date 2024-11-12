@@ -378,7 +378,8 @@ fn parse_update_set_from() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
-                            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT"))
+                                .into(),
                             distinct: None,
                             top: None,
                             top_before_distinct: false,
@@ -4660,7 +4661,7 @@ fn test_parse_named_window() {
     ORDER BY C3";
     let actual_select_only = verified_only_select(sql);
     let expected = Select {
-        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECTI")),
+        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECTI")).into(),
         distinct: None,
         top: None,
         top_before_distinct: false,
@@ -5316,7 +5317,7 @@ fn parse_interval_and_or_xor() {
     let expected_ast = vec![Statement::Query(Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
-            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
             distinct: None,
             top: None,
             top_before_distinct: false,
@@ -7406,7 +7407,7 @@ fn lateral_function() {
     let sql = "SELECT * FROM customer LEFT JOIN LATERAL generate_series(1, customer.id)";
     let actual_select_only = verified_only_select(sql);
     let expected = Select {
-        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
         distinct: None,
         top: None,
         projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
@@ -8253,7 +8254,8 @@ fn parse_merge() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
-                            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT"))
+                                .into(),
                             distinct: None,
                             top: None,
                             top_before_distinct: false,
@@ -9892,7 +9894,7 @@ fn parse_unload() {
         Statement::Unload {
             query: Box::new(Query {
                 body: Box::new(SetExpr::Select(Box::new(Select {
-                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -10071,7 +10073,7 @@ fn parse_map_access_expr() {
 #[test]
 fn parse_connect_by() {
     let expect_query = Select {
-        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
         distinct: None,
         top: None,
         top_before_distinct: false,
@@ -10159,7 +10161,7 @@ fn parse_connect_by() {
     assert_eq!(
         all_dialects_where(|d| d.supports_connect_by()).verified_only_select(connect_by_3),
         Select {
-            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
             distinct: None,
             top: None,
             top_before_distinct: false,

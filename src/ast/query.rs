@@ -18,6 +18,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec::Vec};
 
+use helpers::ignore_field::IgnoreField;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -280,7 +281,7 @@ impl fmt::Display for Table {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Select {
     /// SELECT
-    pub select_token: TokenWithLocation,
+    pub select_token: IgnoreField<TokenWithLocation>,
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,

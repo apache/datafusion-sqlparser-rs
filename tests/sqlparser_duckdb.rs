@@ -260,7 +260,7 @@ fn test_select_union_by_name() {
             op: SetOperator::Union,
             set_quantifier: *expected_quantifier,
             left: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
-                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                 distinct: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
@@ -297,7 +297,7 @@ fn test_select_union_by_name() {
                 connect_by: None,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
-                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                 distinct: None,
                 top: None,
                 projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],

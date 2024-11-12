@@ -1164,7 +1164,7 @@ fn parse_copy_to() {
             source: CopySource::Query(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
-                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -2520,7 +2520,7 @@ fn parse_array_subquery_expr() {
                     op: SetOperator::Union,
                     set_quantifier: SetQuantifier::None,
                     left: Box::new(SetExpr::Select(Box::new(Select {
-                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                         distinct: None,
                         top: None,
                         top_before_distinct: false,
@@ -2542,7 +2542,7 @@ fn parse_array_subquery_expr() {
                         connect_by: None,
                     }))),
                     right: Box::new(SetExpr::Select(Box::new(Select {
-                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                         distinct: None,
                         top: None,
                         top_before_distinct: false,

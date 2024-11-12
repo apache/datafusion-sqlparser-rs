@@ -14,5 +14,6 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+pub mod ignore_field;
 pub mod stmt_create_table;
 pub mod stmt_data_loading;

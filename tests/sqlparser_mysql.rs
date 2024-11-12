@@ -966,7 +966,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
@@ -1019,7 +1019,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
 
                 distinct: None,
                 top: None,
@@ -1066,7 +1066,7 @@ fn parse_escaped_backticks_with_escape() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
 
                 distinct: None,
                 top: None,
@@ -1117,7 +1117,7 @@ fn parse_escaped_backticks_with_no_escape() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
 
                 distinct: None,
                 top: None,
@@ -1765,7 +1765,7 @@ fn parse_select_with_numeric_prefix_column_name() {
             assert_eq!(
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
-                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
 
                     distinct: None,
                     top: None,
@@ -1822,7 +1822,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
             assert_eq!(
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
-                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
 
                     distinct: None,
                     top: None,
@@ -2334,7 +2334,7 @@ fn parse_substring_in_select() {
                 Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Select(Box::new(Select {
-                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
+                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         top_before_distinct: false,
@@ -2659,8 +2659,7 @@ fn parse_hex_string_introducer() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")),
-
+                select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
                 distinct: None,
                 top: None,
                 top_before_distinct: false,

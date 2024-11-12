@@ -24,8 +24,11 @@ use alloc::{
     vec::Vec,
 };
 
-use core::fmt::{self, Display};
 use core::ops::Deref;
+use core::{
+    fmt::{self, Display},
+    hash,
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -163,7 +166,7 @@ impl PartialEq for Ident {
 }
 
 impl core::hash::Hash for Ident {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         let Ident {
             value,
             quote_style,

@@ -29,10 +29,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::iter::Peekable;
 use core::num::NonZeroU8;
 use core::str::Chars;
 use core::{cmp, fmt};
+use core::{hash, iter::Peekable};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -424,6 +424,7 @@ impl fmt::Display for Whitespace {
 /// Location in input string
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Location {
     /// Line number, starting from 1
     pub line: u64,
@@ -431,7 +432,7 @@ pub struct Location {
     pub column: u64,
 }
 
-impl std::fmt::Display for Location {
+impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.line == 0 {
             return Ok(());
@@ -440,7 +441,7 @@ impl std::fmt::Display for Location {
     }
 }
 
-impl std::fmt::Debug for Location {
+impl fmt::Debug for Location {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Location({},{})", self.line, self.column)
     }
@@ -465,12 +466,13 @@ impl From<(u64, u64)> for Location {
 /// A span of source code locations (start, end)
 #[derive(Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Span {
     pub start: Location,
     pub end: Location,
 }
 
-impl std::fmt::Debug for Span {
+impl fmt::Debug for Span {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Span({:?}..{:?})", self.start, self.end)
     }
@@ -522,6 +524,7 @@ impl Span {
 /// A [Token] with [Location] attached to it
 #[derive(Debug, Eq, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TokenWithLocation {
     pub token: Token,
     pub span: Span,
@@ -542,7 +545,7 @@ impl TokenWithLocation {
 }
 
 impl core::hash::Hash for TokenWithLocation {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         let TokenWithLocation { token, span: _ } = self;
 
         token.hash(state);
@@ -558,13 +561,13 @@ impl PartialEq<TokenWithLocation> for TokenWithLocation {
 }
 
 impl PartialOrd<TokenWithLocation> for TokenWithLocation {
-    fn partial_cmp(&self, other: &TokenWithLocation) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &TokenWithLocation) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for TokenWithLocation {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
         let TokenWithLocation { token, span: _ } = self;
         token.cmp(&other.token)
     }
@@ -2799,7 +2802,7 @@ mod tests {
         compare(expected, tokens);
     }
 
-    fn compare<T: PartialEq + std::fmt::Debug>(expected: Vec<T>, actual: Vec<T>) {
+    fn compare<T: PartialEq + fmt::Debug>(expected: Vec<T>, actual: Vec<T>) {
         //println!("------------------------------");
         //println!("tokens   = {:?}", actual);
         //println!("expected = {:?}", expected);

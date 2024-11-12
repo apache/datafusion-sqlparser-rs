@@ -3270,10 +3270,7 @@ impl<'a> Parser<'a> {
 
     #[must_use]
     pub fn peek_keyword(&mut self, expected: Keyword) -> bool {
-        match self.peek_token().token {
-            Token::Word(w) if expected == w.keyword => true,
-            _ => false,
-        }
+        matches!(self.peek_token().token, Token::Word(w) if expected == w.keyword)
     }
 
     /// If the current token is the `expected` keyword followed by

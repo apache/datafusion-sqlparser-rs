@@ -6444,7 +6444,7 @@ fn parse_recursive_cte() {
         query: Box::new(cte_query),
         from: None,
         materialized: None,
-        closing_paren_token: TokenWithLocation::wrap(Token::RParen),
+        closing_paren_token: TokenWithLocation::wrap(Token::RParen).into(),
     };
     assert_eq!(with.cte_tables.first().unwrap(), &expected);
 }

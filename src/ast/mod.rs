@@ -3329,6 +3329,22 @@ pub enum Statement {
         channel: Ident,
         payload: Option<String>,
     },
+    /// ```sql
+    /// LOAD DATA [LOCAL] INPATH 'filepath' [OVERWRITE] INTO TABLE tablename
+    /// [PARTITION (partcol1=val1, partcol2=val2 ...)]
+    /// [INPUTFORMAT 'inputformat' SERDE 'serde']
+    /// ```
+    /// Loading files into tables
+    ///
+    /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
+    LoadData {
+        local: bool,
+        inpath: String,
+        overwrite: bool,
+        table_name: ObjectName,
+        partitioned: Option<Vec<Expr>>,
+        table_format: Option<HiveLoadDataOption>,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -3931,6 +3947,36 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateTable(create_table) => create_table.fmt(f),
+            Statement::LoadData {
+                local,
+                inpath,
+                overwrite,
+                table_name,
+                partitioned,
+                table_format,
+            } => {
+                write!(
+                    f,
+                    "LOAD DATA {local}INPATH '{inpath}' {overwrite}INTO TABLE {table_name}",
+                    local = if *local { "LOCAL " } else { "" },
+                    inpath = inpath,
+                    overwrite = if *overwrite { "OVERWRITE " } else { "" },
+                    table_name = table_name,
+                )?;
+                if let Some(ref parts) = &partitioned {
+                    if !parts.is_empty() {
+                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                    }
+                }
+                if let Some(HiveLoadDataOption {
+                    serde,
+                    input_format,
+                }) = &table_format
+                {
+                    write!(f, " INPUTFORMAT {input_format} SERDE {serde}")?;
+                }
+                Ok(())
+            }
             Statement::CreateVirtualTable {
                 name,
                 if_not_exists,
@@ -5814,6 +5860,14 @@ pub enum HiveDistributionStyle {
 pub enum HiveRowFormat {
     SERDE { class: String },
     DELIMITED { delimiters: Vec<HiveRowDelimiter> },
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct HiveLoadDataOption {
+    pub serde: Expr,
+    pub input_format: Expr,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

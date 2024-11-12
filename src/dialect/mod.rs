@@ -611,6 +611,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `LOAD DATA` statement
+    fn supports_load_data(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `LOAD extension` statement
+    fn supports_load_extension(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect expects the `TOP` option
     /// before the `ALL`/`DISTINCT` options in a `SELECT` statement.
     fn supports_top_before_distinct(&self) -> bool {

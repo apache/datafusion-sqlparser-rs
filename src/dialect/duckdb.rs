@@ -66,4 +66,9 @@ impl Dialect for DuckDbDialect {
     fn supports_explain_with_utility_options(&self) -> bool {
         true
     }
+
+    /// See DuckDB <https://duckdb.org/docs/sql/statements/load_and_install.html#load>
+    fn supports_load_extension(&self) -> bool {
+        true
+    }
 }

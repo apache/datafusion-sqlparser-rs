@@ -543,10 +543,7 @@ impl<'a> Parser<'a> {
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     self.parse_install()
                 }
-                // `LOAD` is duckdb specific https://duckdb.org/docs/extensions/overview
-                Keyword::LOAD if dialect_of!(self is DuckDbDialect | GenericDialect) => {
-                    self.parse_load()
-                }
+                Keyword::LOAD => self.parse_load(),
                 // `OPTIMIZE` is clickhouse specific https://clickhouse.tech/docs/en/sql-reference/statements/optimize/
                 Keyword::OPTIMIZE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
                     self.parse_optimize_table()
@@ -11178,6 +11175,22 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_load_data_table_format(
+        &mut self,
+    ) -> Result<Option<HiveLoadDataOption>, ParserError> {
+        if self.parse_keyword(Keyword::INPUTFORMAT) {
+            let input_format = self.parse_expr()?;
+            self.expect_keyword(Keyword::SERDE)?;
+            let serde = self.parse_expr()?;
+            Ok(Some(HiveLoadDataOption {
+                input_format,
+                serde,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Parse an UPDATE statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds
@@ -12180,10 +12193,35 @@ impl<'a> Parser<'a> {
         Ok(Statement::Install { extension_name })
     }
 
-    /// `LOAD [extension_name]`
+    /// Parse a SQL LOAD statement
     pub fn parse_load(&mut self) -> Result<Statement, ParserError> {
-        let extension_name = self.parse_identifier(false)?;
-        Ok(Statement::Load { extension_name })
+        if self.dialect.supports_load_extension() {
+            let extension_name = self.parse_identifier(false)?;
+            Ok(Statement::Load { extension_name })
+        } else if self.parse_keyword(Keyword::DATA) && self.dialect.supports_load_data() {
+            let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
+            self.expect_keyword(Keyword::INPATH)?;
+            let inpath = self.parse_literal_string()?;
+            let overwrite = self.parse_one_of_keywords(&[Keyword::OVERWRITE]).is_some();
+            self.expect_keyword(Keyword::INTO)?;
+            self.expect_keyword(Keyword::TABLE)?;
+            let table_name = self.parse_object_name(false)?;
+            let partitioned = self.parse_insert_partition()?;
+            let table_format = self.parse_load_data_table_format()?;
+            Ok(Statement::LoadData {
+                local,
+                inpath,
+                overwrite,
+                table_name,
+                partitioned,
+                table_format,
+            })
+        } else {
+            self.expected(
+                "Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements",
+                self.peek_token(),
+            )
+        }
     }
 
     /// ```sql

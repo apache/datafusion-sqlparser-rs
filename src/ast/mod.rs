@@ -7358,6 +7358,8 @@ impl Display for UtilityOption {
 /// statement to filter the results. Example from Snowflake:
 /// https://docs.snowflake.com/en/sql-reference/sql/show-tables
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ShowStatementOptions {
     pub show_in: Option<ShowStatementIn>,
     pub starts_with: Option<Value>,

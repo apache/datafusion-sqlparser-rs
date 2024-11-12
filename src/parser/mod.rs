@@ -12456,13 +12456,10 @@ impl<'a> Parser<'a> {
                 (Some(ShowStatementInParentType::Schema), None)
             }
             Some(parent_kw) => {
-                // The parent name here is still optional, for example: 
-                // SHOW TABLES IN ACCOUNT, so parsing the object name 
+                // The parent name here is still optional, for example:
+                // SHOW TABLES IN ACCOUNT, so parsing the object name
                 // may fail because the statement ends.
-                let parent_name = match self.parse_object_name(false) {
-                    Ok(n) => Some(n),
-                    _ => None,
-                };
+                let parent_name = self.maybe_parse(|p| p.parse_object_name(false))?;
                 match parent_kw {
                     Keyword::ACCOUNT => (Some(ShowStatementInParentType::Account), parent_name),
                     Keyword::DATABASE => (Some(ShowStatementInParentType::Database), parent_name),

@@ -11509,10 +11509,13 @@ fn parse_notify_channel() {
 #[test]
 fn parse_load_data() {
     let dialects = all_dialects_where(|d| d.supports_load_data());
+    let only_supports_load_extension_dialects =
+        all_dialects_where(|d| !d.supports_load_data() && d.supports_load_extension());
+    let not_supports_load_dialects =
+        all_dialects_where(|d| !d.supports_load_data() && !d.supports_load_extension());
 
-    match dialects
-        .verified_stmt("LOAD DATA INPATH '/local/path/to/data.txt' INTO TABLE test.my_table")
-    {
+    let sql = "LOAD DATA INPATH '/local/path/to/data.txt' INTO TABLE test.my_table";
+    match dialects.verified_stmt(sql) {
         Statement::LoadData {
             local,
             inpath,
@@ -11535,9 +11538,8 @@ fn parse_load_data() {
     };
 
     // with OVERWRITE keyword
-    match dialects
-        .verified_stmt("LOAD DATA INPATH '/local/path/to/data.txt' OVERWRITE INTO TABLE my_table")
-    {
+    let sql = "LOAD DATA INPATH '/local/path/to/data.txt' OVERWRITE INTO TABLE my_table";
+    match dialects.verified_stmt(sql) {
         Statement::LoadData {
             local,
             inpath,
@@ -11556,10 +11558,19 @@ fn parse_load_data() {
         _ => unreachable!(),
     };
 
+    assert_eq!(
+        only_supports_load_extension_dialects
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: INPATH".to_string())
+    );
+    assert_eq!( not_supports_load_dialects.parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: INPATH".to_string())
+    );
+
     // with LOCAL keyword
-    match dialects
-        .verified_stmt("LOAD DATA LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table")
-    {
+    let sql = "LOAD DATA LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table";
+    match dialects.verified_stmt(sql) {
         Statement::LoadData {
             local,
             inpath,
@@ -11581,93 +11592,108 @@ fn parse_load_data() {
         _ => unreachable!(),
     };
 
+    assert_eq!(
+        only_supports_load_extension_dialects
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: LOCAL".to_string())
+    );
+    assert_eq!(
+        not_supports_load_dialects.parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: LOCAL".to_string())
+    );
+
     // with PARTITION  clause
-    match dialects.verified_stmt("LOAD DATA LOCAL INPATH '/local/path/to/data.txt' INTO TABLE my_table PARTITION (year = 2024, month = 11)") {
-        Statement::LoadData {local, inpath, overwrite, table_name, partitioned, table_format} => {
+    let sql = "LOAD DATA LOCAL INPATH '/local/path/to/data.txt' INTO TABLE my_table PARTITION (year = 2024, month = 11)";
+    match dialects.verified_stmt(sql) {
+        Statement::LoadData {
+            local,
+            inpath,
+            overwrite,
+            table_name,
+            partitioned,
+            table_format,
+        } => {
             assert_eq!(true, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
             assert_eq!(ObjectName(vec![Ident::new("my_table")]), table_name);
-            assert_eq!(Some(vec![
-                Expr::BinaryOp{
-                    left: Box::new(Expr::Identifier(Ident::new("year"))),
-                    op: BinaryOperator::Eq,
-                    right:  Box::new(Expr::Value(Value::Number("2024".parse().unwrap(), false))),
-                },
-                Expr::BinaryOp{
-                    left: Box::new(Expr::Identifier(Ident::new("month"))),
-                    op: BinaryOperator::Eq,
-                    right:  Box::new(Expr::Value(Value::Number("11".parse().unwrap(), false))),
-                }]), partitioned);
+            assert_eq!(
+                Some(vec![
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("year"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("2024".parse().unwrap(), false))),
+                    },
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("month"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::Number("11".parse().unwrap(), false))),
+                    }
+                ]),
+                partitioned
+            );
             assert_eq!(None, table_format);
         }
         _ => unreachable!(),
     };
 
     // with PARTITION  clause
-    match dialects.verified_stmt("LOAD DATA LOCAL INPATH '/local/path/to/data.txt' OVERWRITE INTO TABLE good.my_table PARTITION (year = 2024, month = 11) INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat' SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'") {
-            Statement::LoadData {local, inpath, overwrite, table_name, partitioned, table_format} => {
-                assert_eq!(true, local);
-                assert_eq!("/local/path/to/data.txt", inpath);
-                assert_eq!(true, overwrite);
-                assert_eq!(ObjectName(vec![Ident::new("good"), Ident::new("my_table")]), table_name);
-                assert_eq!(Some(vec![
-                    Expr::BinaryOp{
+    let sql = "LOAD DATA LOCAL INPATH '/local/path/to/data.txt' OVERWRITE INTO TABLE good.my_table PARTITION (year = 2024, month = 11) INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat' SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'";
+    match dialects.verified_stmt(sql) {
+        Statement::LoadData {
+            local,
+            inpath,
+            overwrite,
+            table_name,
+            partitioned,
+            table_format,
+        } => {
+            assert_eq!(true, local);
+            assert_eq!("/local/path/to/data.txt", inpath);
+            assert_eq!(true, overwrite);
+            assert_eq!(
+                ObjectName(vec![Ident::new("good"), Ident::new("my_table")]),
+                table_name
+            );
+            assert_eq!(
+                Some(vec![
+                    Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("year"))),
                         op: BinaryOperator::Eq,
-                        right:  Box::new(Expr::Value(Value::Number("2024".parse().unwrap(), false))),
+                        right: Box::new(Expr::Value(Value::Number("2024".parse().unwrap(), false))),
                     },
-                    Expr::BinaryOp{
+                    Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("month"))),
                         op: BinaryOperator::Eq,
-                        right:  Box::new(Expr::Value(Value::Number("11".parse().unwrap(), false))),
-                    }]), partitioned);
-                assert_eq!(Some(HiveLoadDataFormat {serde: Expr::Value(Value::SingleQuotedString("org.apache.hadoop.hive.serde2.OpenCSVSerde".to_string())), input_format: Expr::Value(Value::SingleQuotedString("org.apache.hadoop.mapred.TextInputFormat".to_string()))}), table_format);
-            }
-            _ => unreachable!(),
-        };
+                        right: Box::new(Expr::Value(Value::Number("11".parse().unwrap(), false))),
+                    }
+                ]),
+                partitioned
+            );
+            assert_eq!(
+                Some(HiveLoadDataFormat {
+                    serde: Expr::Value(Value::SingleQuotedString(
+                        "org.apache.hadoop.hive.serde2.OpenCSVSerde".to_string()
+                    )),
+                    input_format: Expr::Value(Value::SingleQuotedString(
+                        "org.apache.hadoop.mapred.TextInputFormat".to_string()
+                    ))
+                }),
+                table_format
+            );
+        }
+        _ => unreachable!(),
+    };
 
     // negative test case
+    let sql = "LOAD DATA2 LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table";
     assert_eq!(
             dialects
-                .parse_sql_statements(
-                    "LOAD DATA2 LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table"
-                )
+                .parse_sql_statements(sql)
                 .unwrap_err(),
             ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: DATA2".to_string())
         );
-
-    let dialects = all_dialects_where(|d| !d.supports_load_data() && d.supports_load_extension());
-
-    assert_eq!(
-        dialects
-            .parse_sql_statements(
-                "LOAD DATA LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table"
-            )
-            .unwrap_err(),
-        ParserError::ParserError("Expected: end of statement, found: LOCAL".to_string())
-    );
-
-    assert_eq!(
-        dialects
-            .parse_sql_statements(
-                "LOAD DATA INPATH '/local/path/to/data.txt' INTO TABLE test.my_table"
-            )
-            .unwrap_err(),
-        ParserError::ParserError("Expected: end of statement, found: INPATH".to_string())
-    );
-
-    let dialects = all_dialects_where(|d| !d.supports_load_data() && !d.supports_load_extension());
-
-    assert_eq!(
-        dialects.parse_sql_statements("LOAD DATA LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table").unwrap_err(),
-        ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: LOCAL".to_string())
-    );
-
-    assert_eq!(
-        dialects.parse_sql_statements("LOAD DATA INPATH '/local/path/to/data.txt' INTO TABLE test.my_table").unwrap_err(),
-        ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: INPATH".to_string())
-    );
 }
 
 #[test]

@@ -511,7 +511,7 @@ impl fmt::Display for NamedWindowDefinition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct With {
-    pub with_token: TokenWithLocation,
+    pub with_token: IgnoreField<TokenWithLocation>,
     pub recursive: bool,
     pub cte_tables: Vec<Cte>,
 }
@@ -564,7 +564,7 @@ pub struct Cte {
     pub from: Option<Ident>,
     pub materialized: Option<CteAsMaterialized>,
     // needed for accurate span reporting
-    pub closing_paren_token: TokenWithLocation,
+    pub closing_paren_token: IgnoreField<TokenWithLocation>,
 }
 
 impl fmt::Display for Cte {
@@ -620,7 +620,7 @@ impl fmt::Display for IdentWithAlias {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WildcardAdditionalOptions {
-    pub wildcard_token: TokenWithLocation,
+    pub wildcard_token: IgnoreField<TokenWithLocation>,
     /// `[ILIKE...]`.
     ///  Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
     pub opt_ilike: Option<IlikeSelectItem>,
@@ -641,7 +641,7 @@ pub struct WildcardAdditionalOptions {
 impl Default for WildcardAdditionalOptions {
     fn default() -> Self {
         Self {
-            wildcard_token: TokenWithLocation::wrap(Token::Mul),
+            wildcard_token: TokenWithLocation::wrap(Token::Mul).into(),
             opt_ilike: None,
             opt_exclude: None,
             opt_except: None,

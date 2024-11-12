@@ -100,6 +100,23 @@ similar semantics are represented with the same AST. We welcome PRs to fix such
 issues and distinguish different syntaxes in the AST.
 
 
+## WIP: Extracting source locations from AST nodes
+
+This crate allows recovering source locations from AST nodes via the [Spanned](https://docs.rs/sqlparser/latest/sqlparser/ast/trait.Spanned.html) trait, which can be used for advanced diagnostics tooling. Node that this feature is a work in progress and many nodes report missing or inaccurate spans. Please see [this document](./docs/source_spans.md#source-span-contributing-guidelines) for information on how to contribute missing improvements.
+
+```rust
+use sqlparser::ast::Spanned;
+
+// Parse SQL
+let ast = Parser::parse_sql(&GenericDialect, "SELECT A FROM B").unwrap();
+
+// The source span can be retrieved with start and end locations
+assert_eq!(ast[0].span(), Span {
+  start: Location::of(1, 1),
+  end: Location::of(1, 16),
+});
+```
+
 ## SQL compliance
 
 SQL was first standardized in 1987, and revisions of the standard have been

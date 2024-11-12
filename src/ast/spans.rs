@@ -100,7 +100,7 @@ impl Spanned for With {
         } = self;
 
         union_spans(
-            core::iter::once(with_token.span).chain(cte_tables.iter().map(|item| item.span())),
+            core::iter::once(with_token.0.span).chain(cte_tables.iter().map(|item| item.span())),
         )
     }
 }
@@ -119,7 +119,7 @@ impl Spanned for Cte {
             core::iter::once(alias.span())
                 .chain(core::iter::once(query.span()))
                 .chain(from.iter().map(|item| item.span))
-                .chain(core::iter::once(closing_paren_token.span)),
+                .chain(core::iter::once(closing_paren_token.0.span)),
         )
     }
 }
@@ -1547,7 +1547,7 @@ impl Spanned for WildcardAdditionalOptions {
         } = self;
 
         union_spans(
-            core::iter::once(wildcard_token.span)
+            core::iter::once(wildcard_token.0.span)
                 .chain(opt_ilike.as_ref().map(|i| i.span()))
                 .chain(opt_exclude.as_ref().map(|i| i.span()))
                 .chain(opt_rename.as_ref().map(|i| i.span()))

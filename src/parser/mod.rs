@@ -8799,7 +8799,7 @@ impl<'a> Parser<'a> {
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if let Some(with_token) = self.parse_keyword_token(Keyword::WITH) {
             Some(With {
-                with_token,
+                with_token: with_token.into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
                 cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
             })
@@ -9070,7 +9070,7 @@ impl<'a> Parser<'a> {
                 query,
                 from: None,
                 materialized: is_materialized,
-                closing_paren_token,
+                closing_paren_token: closing_paren_token.into(),
             }
         } else {
             let columns = self.parse_parenthesized_column_list(Optional, false)?;
@@ -9094,7 +9094,7 @@ impl<'a> Parser<'a> {
                 query,
                 from: None,
                 materialized: is_materialized,
-                closing_paren_token,
+                closing_paren_token: closing_paren_token.into(),
             }
         };
         if self.parse_keyword(Keyword::FROM) {
@@ -11365,7 +11365,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(WildcardAdditionalOptions {
-            wildcard_token,
+            wildcard_token: wildcard_token.into(),
             opt_ilike,
             opt_exclude,
             opt_except,

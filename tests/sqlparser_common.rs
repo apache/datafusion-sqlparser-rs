@@ -11503,10 +11503,6 @@ fn parse_notify_channel() {
             dialects.parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError("Expected: an SQL statement, found: NOTIFY".to_string())
         );
-        assert_eq!(
-            dialects.parse_sql_statements(sql).unwrap_err(),
-            ParserError::ParserError("Expected: an SQL statement, found: NOTIFY".to_string())
-        );
     }
 }
 
@@ -11626,10 +11622,20 @@ fn parse_load_data() {
                         op: BinaryOperator::Eq,
                         right:  Box::new(Expr::Value(Value::Number("11".parse().unwrap(), false))),
                     }]), partitioned);
-                assert_eq!(Some(HiveLoadDataOption {serde: Expr::Value(Value::SingleQuotedString("org.apache.hadoop.hive.serde2.OpenCSVSerde".to_string())), input_format: Expr::Value(Value::SingleQuotedString("org.apache.hadoop.mapred.TextInputFormat".to_string()))}), table_format);
+                assert_eq!(Some(HiveLoadDataFormat {serde: Expr::Value(Value::SingleQuotedString("org.apache.hadoop.hive.serde2.OpenCSVSerde".to_string())), input_format: Expr::Value(Value::SingleQuotedString("org.apache.hadoop.mapred.TextInputFormat".to_string()))}), table_format);
             }
             _ => unreachable!(),
         };
+
+    // negative test case
+    assert_eq!(
+            dialects
+                .parse_sql_statements(
+                    "LOAD DATA2 LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table"
+                )
+                .unwrap_err(),
+            ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: DATA2".to_string())
+        );
 
     let dialects = all_dialects_where(|d| !d.supports_load_data() && d.supports_load_extension());
 
@@ -11655,12 +11661,12 @@ fn parse_load_data() {
 
     assert_eq!(
         dialects.parse_sql_statements("LOAD DATA LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table").unwrap_err(),
-        ParserError::ParserError("Expected: Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: LOCAL".to_string())
+        ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: LOCAL".to_string())
     );
 
     assert_eq!(
         dialects.parse_sql_statements("LOAD DATA INPATH '/local/path/to/data.txt' INTO TABLE test.my_table").unwrap_err(),
-        ParserError::ParserError("Expected: Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: INPATH".to_string())
+        ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: INPATH".to_string())
     );
 }
 

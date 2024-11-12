@@ -3343,7 +3343,7 @@ pub enum Statement {
         overwrite: bool,
         table_name: ObjectName,
         partitioned: Option<Vec<Expr>>,
-        table_format: Option<HiveLoadDataOption>,
+        table_format: Option<HiveLoadDataFormat>,
     },
 }
 
@@ -3968,7 +3968,7 @@ impl fmt::Display for Statement {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
                     }
                 }
-                if let Some(HiveLoadDataOption {
+                if let Some(HiveLoadDataFormat {
                     serde,
                     input_format,
                 }) = &table_format
@@ -5865,7 +5865,7 @@ pub enum HiveRowFormat {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct HiveLoadDataOption {
+pub struct HiveLoadDataFormat {
     pub serde: Expr,
     pub input_format: Expr,
 }

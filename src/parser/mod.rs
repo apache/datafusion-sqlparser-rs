@@ -11177,12 +11177,12 @@ impl<'a> Parser<'a> {
 
     pub fn parse_load_data_table_format(
         &mut self,
-    ) -> Result<Option<HiveLoadDataOption>, ParserError> {
+    ) -> Result<Option<HiveLoadDataFormat>, ParserError> {
         if self.parse_keyword(Keyword::INPUTFORMAT) {
             let input_format = self.parse_expr()?;
             self.expect_keyword(Keyword::SERDE)?;
             let serde = self.parse_expr()?;
-            Ok(Some(HiveLoadDataOption {
+            Ok(Some(HiveLoadDataFormat {
                 input_format,
                 serde,
             }))
@@ -12218,7 +12218,7 @@ impl<'a> Parser<'a> {
             })
         } else {
             self.expected(
-                "Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements",
+                "dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements",
                 self.peek_token(),
             )
         }

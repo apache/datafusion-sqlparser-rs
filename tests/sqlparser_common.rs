@@ -11395,23 +11395,43 @@ fn test_try_convert() {
 
 #[test]
 fn test_show_dbs_schemas_tables_views() {
-    verified_stmt("SHOW DATABASES");
-    verified_stmt("SHOW DATABASES LIKE '%abc'");
-    verified_stmt("SHOW SCHEMAS");
-    verified_stmt("SHOW SCHEMAS LIKE '%abc'");
-    verified_stmt("SHOW TABLES");
-    verified_stmt("SHOW TABLES IN db1");
-    verified_stmt("SHOW TABLES IN db1 'abc'");
-    verified_stmt("SHOW VIEWS");
-    verified_stmt("SHOW VIEWS IN db1");
-    verified_stmt("SHOW VIEWS IN db1 'abc'");
-    verified_stmt("SHOW VIEWS FROM db1");
-    verified_stmt("SHOW VIEWS FROM db1 'abc'");
-    verified_stmt("SHOW MATERIALIZED VIEWS");
-    verified_stmt("SHOW MATERIALIZED VIEWS IN db1");
-    verified_stmt("SHOW MATERIALIZED VIEWS IN db1 'abc'");
-    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1");
-    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1 'abc'");
+    // These statements are parsed the same by all dialects
+    let stmts = vec![
+        "SHOW DATABASES",
+        "SHOW SCHEMAS",
+        "SHOW TABLES",
+        "SHOW VIEWS",
+        "SHOW TABLES IN db1",
+        "SHOW VIEWS FROM db1",
+        "SHOW MATERIALIZED VIEWS",
+        "SHOW MATERIALIZED VIEWS IN db1",
+        "SHOW MATERIALIZED VIEWS FROM db1",
+    ];
+    for stmt in stmts {
+        verified_stmt(stmt);
+    }
+
+    // These statements are parsed the same by all dialects
+    // except for how the parser interprets the location of
+    // LIKE option (infix/suffix)
+    let stmts = vec!["SHOW DATABASES LIKE '%abc'", "SHOW SCHEMAS LIKE '%abc'"];
+    for stmt in stmts {
+        all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt(stmt);
+        all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt(stmt);
+    }
+
+    // These statements are only parsed by dialects that
+    // support the LIKE option in the suffix
+    let stmts = vec![
+        "SHOW TABLES IN db1 'abc'",
+        "SHOW VIEWS IN db1 'abc'",
+        "SHOW VIEWS FROM db1 'abc'",
+        "SHOW MATERIALIZED VIEWS IN db1 'abc'",
+        "SHOW MATERIALIZED VIEWS FROM db1 'abc'",
+    ];
+    for stmt in stmts {
+        all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt(stmt);
+    }
 }
 
 #[test]

@@ -622,6 +622,12 @@ pub trait Dialect: Debug + Any {
     fn supports_boolean_literals(&self) -> bool {
         true
     }
+
+    /// Returns true if this dialect supports the `LIKE 'pattern'` option in
+    /// a `SHOW` statement before the `IN` option
+    fn supports_show_like_before_in(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

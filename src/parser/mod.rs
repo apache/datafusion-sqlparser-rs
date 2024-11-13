@@ -3205,6 +3205,22 @@ impl<'a> Parser<'a> {
             })
     }
 
+    /// Look for all of the expected keywords in sequence, without consuming them
+    fn peek_keyword(&mut self, expected: Keyword) -> bool {
+        let index = self.index;
+        let matched = self.parse_keyword(expected);
+        self.index = index;
+        matched
+    }
+
+    /// Look for all of the expected keywords in sequence, without consuming them
+    fn peek_keywords(&mut self, expected: &[Keyword]) -> bool {
+        let index = self.index;
+        let matched = self.parse_keywords(expected);
+        self.index = index;
+        matched
+    }
+
     /// Return the first non-whitespace token that has not yet been processed
     /// (or None if reached end-of-file) and mark it as processed. OK to call
     /// repeatedly after reaching EOF.
@@ -9611,21 +9627,23 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
+        let terse = self.parse_keyword(Keyword::TERSE);
         let extended = self.parse_keyword(Keyword::EXTENDED);
         let full = self.parse_keyword(Keyword::FULL);
         let session = self.parse_keyword(Keyword::SESSION);
         let global = self.parse_keyword(Keyword::GLOBAL);
+        let external = self.parse_keyword(Keyword::EXTERNAL);
         if self
             .parse_one_of_keywords(&[Keyword::COLUMNS, Keyword::FIELDS])
             .is_some()
         {
             Ok(self.parse_show_columns(extended, full)?)
         } else if self.parse_keyword(Keyword::TABLES) {
-            Ok(self.parse_show_tables(extended, full)?)
+            Ok(self.parse_show_tables(terse, extended, full, external)?)
         } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEWS]) {
-            Ok(self.parse_show_views(true)?)
+            Ok(self.parse_show_views(terse, true)?)
         } else if self.parse_keyword(Keyword::VIEWS) {
-            Ok(self.parse_show_views(false)?)
+            Ok(self.parse_show_views(terse, false)?)
         } else if self.parse_keyword(Keyword::FUNCTIONS) {
             Ok(self.parse_show_functions()?)
         } else if extended || full {
@@ -9653,9 +9671,9 @@ impl<'a> Parser<'a> {
                 global,
             })
         } else if self.parse_keyword(Keyword::DATABASES) {
-            self.parse_show_databases()
+            self.parse_show_databases(terse)
         } else if self.parse_keyword(Keyword::SCHEMAS) {
-            self.parse_show_schemas()
+            self.parse_show_schemas(terse)
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
@@ -9663,15 +9681,23 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_show_databases(&mut self) -> Result<Statement, ParserError> {
+    fn parse_show_databases(&mut self, terse: bool) -> Result<Statement, ParserError> {
+        let history = self.parse_keyword(Keyword::HISTORY);
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowDatabases {
-            filter: self.parse_show_statement_filter()?,
+            terse,
+            history,
+            show_options,
         })
     }
 
-    fn parse_show_schemas(&mut self) -> Result<Statement, ParserError> {
+    fn parse_show_schemas(&mut self, terse: bool) -> Result<Statement, ParserError> {
+        let history = self.parse_keyword(Keyword::HISTORY);
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowSchemas {
-            filter: self.parse_show_statement_filter()?,
+            terse,
+            history,
+            show_options,
         })
     }
 
@@ -9705,58 +9731,43 @@ impl<'a> Parser<'a> {
         extended: bool,
         full: bool,
     ) -> Result<Statement, ParserError> {
-        self.expect_one_of_keywords(&[Keyword::FROM, Keyword::IN])?;
-        let object_name = self.parse_object_name(false)?;
-        let table_name = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
-            Some(_) => {
-                let db_name = vec![self.parse_identifier(false)?];
-                let ObjectName(table_name) = object_name;
-                let object_name = db_name.into_iter().chain(table_name).collect();
-                ObjectName(object_name)
-            }
-            None => object_name,
-        };
-        let filter = self.parse_show_statement_filter()?;
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowColumns {
             extended,
             full,
-            table_name,
-            filter,
+            show_options,
         })
     }
 
-    pub fn parse_show_tables(
+    fn parse_show_tables(
         &mut self,
+        terse: bool,
         extended: bool,
         full: bool,
+        external: bool,
     ) -> Result<Statement, ParserError> {
-        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
-            Some(Keyword::FROM) => (Some(ShowClause::FROM), Some(self.parse_identifier(false)?)),
-            Some(Keyword::IN) => (Some(ShowClause::IN), Some(self.parse_identifier(false)?)),
-            _ => (None, None),
-        };
-        let filter = self.parse_show_statement_filter()?;
+        let history = !external && self.parse_keyword(Keyword::HISTORY);
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowTables {
+            terse,
+            history,
             extended,
             full,
-            clause,
-            db_name,
-            filter,
+            external,
+            show_options,
         })
     }
 
-    fn parse_show_views(&mut self, materialized: bool) -> Result<Statement, ParserError> {
-        let (clause, db_name) = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
-            Some(Keyword::FROM) => (Some(ShowClause::FROM), Some(self.parse_identifier(false)?)),
-            Some(Keyword::IN) => (Some(ShowClause::IN), Some(self.parse_identifier(false)?)),
-            _ => (None, None),
-        };
-        let filter = self.parse_show_statement_filter()?;
+    fn parse_show_views(
+        &mut self,
+        terse: bool,
+        materialized: bool,
+    ) -> Result<Statement, ParserError> {
+        let show_options = self.parse_show_stmt_options()?;
         Ok(Statement::ShowViews {
             materialized,
-            clause,
-            db_name,
-            filter,
+            terse,
+            show_options,
         })
     }
 
@@ -12394,6 +12405,124 @@ impl<'a> Parser<'a> {
             return true;
         }
         false
+    }
+
+    fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {
+        let show_in;
+        let mut filter_position = None;
+        if self.dialect.supports_show_like_before_in() {
+            if let Some(filter) = self.parse_show_statement_filter()? {
+                filter_position = Some(ShowStatementFilterPosition::Infix(filter));
+            }
+            show_in = self.maybe_parse_show_stmt_in()?;
+        } else {
+            show_in = self.maybe_parse_show_stmt_in()?;
+            if let Some(filter) = self.parse_show_statement_filter()? {
+                filter_position = Some(ShowStatementFilterPosition::Suffix(filter));
+            }
+        }
+        let starts_with = self.maybe_parse_show_stmt_starts_with()?;
+        let limit = self.maybe_parse_show_stmt_limit()?;
+        let from = self.maybe_parse_show_stmt_from()?;
+        Ok(ShowStatementOptions {
+            filter_position,
+            show_in,
+            starts_with,
+            limit,
+            limit_from: from,
+        })
+    }
+
+    fn maybe_parse_show_stmt_in(&mut self) -> Result<Option<ShowStatementIn>, ParserError> {
+        let clause = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
+            Some(Keyword::FROM) => ShowStatementInClause::FROM,
+            Some(Keyword::IN) => ShowStatementInClause::IN,
+            None => return Ok(None),
+            _ => return self.expected("FROM or IN", self.peek_token()),
+        };
+
+        let (parent_type, parent_name) = match self.parse_one_of_keywords(&[
+            Keyword::ACCOUNT,
+            Keyword::DATABASE,
+            Keyword::SCHEMA,
+            Keyword::TABLE,
+            Keyword::VIEW,
+        ]) {
+            // If we see these next keywords it means we don't have a parent name
+            Some(Keyword::DATABASE)
+                if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH])
+                    | self.peek_keyword(Keyword::LIMIT) =>
+            {
+                (Some(ShowStatementInParentType::Database), None)
+            }
+            Some(Keyword::SCHEMA)
+                if self.peek_keywords(&[Keyword::STARTS, Keyword::WITH])
+                    | self.peek_keyword(Keyword::LIMIT) =>
+            {
+                (Some(ShowStatementInParentType::Schema), None)
+            }
+            Some(parent_kw) => {
+                // The parent name here is still optional, for example:
+                // SHOW TABLES IN ACCOUNT, so parsing the object name
+                // may fail because the statement ends.
+                let parent_name = self.maybe_parse(|p| p.parse_object_name(false))?;
+                match parent_kw {
+                    Keyword::ACCOUNT => (Some(ShowStatementInParentType::Account), parent_name),
+                    Keyword::DATABASE => (Some(ShowStatementInParentType::Database), parent_name),
+                    Keyword::SCHEMA => (Some(ShowStatementInParentType::Schema), parent_name),
+                    Keyword::TABLE => (Some(ShowStatementInParentType::Table), parent_name),
+                    Keyword::VIEW => (Some(ShowStatementInParentType::View), parent_name),
+                    _ => {
+                        return self.expected(
+                            "one of ACCOUNT, DATABASE, SCHEMA, TABLE or VIEW",
+                            self.peek_token(),
+                        )
+                    }
+                }
+            }
+            None => {
+                // Parsing MySQL style FROM tbl_name FROM db_name
+                // which is equivalent to FROM tbl_name.db_name
+                let mut parent_name = self.parse_object_name(false)?;
+                if self
+                    .parse_one_of_keywords(&[Keyword::FROM, Keyword::IN])
+                    .is_some()
+                {
+                    parent_name.0.insert(0, self.parse_identifier(false)?);
+                }
+                (None, Some(parent_name))
+            }
+        };
+
+        Ok(Some(ShowStatementIn {
+            clause,
+            parent_type,
+            parent_name,
+        }))
+    }
+
+    fn maybe_parse_show_stmt_starts_with(&mut self) -> Result<Option<Value>, ParserError> {
+        if self.parse_keywords(&[Keyword::STARTS, Keyword::WITH]) {
+            Ok(Some(self.parse_value()?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn maybe_parse_show_stmt_limit(&mut self) -> Result<Option<Expr>, ParserError> {
+        if self.parse_keyword(Keyword::LIMIT) {
+            Ok(self.parse_limit()?)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn maybe_parse_show_stmt_from(&mut self) -> Result<Option<Value>, ParserError> {
+        if self.parse_keyword(Keyword::FROM) {
+            Ok(Some(self.parse_value()?))
+        } else {
+            Ok(None)
+        }
     }
 }
 

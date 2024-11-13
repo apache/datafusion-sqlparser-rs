@@ -5990,6 +5990,11 @@ impl<'a> Parser<'a> {
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_query()?)
+        } else if self.dialect.supports_create_table_select() && self.parse_keyword(Keyword::SELECT)
+        {
+            // rewind the SELECT keyword
+            self.prev_token();
+            Some(self.parse_query()?)
         } else {
             None
         };

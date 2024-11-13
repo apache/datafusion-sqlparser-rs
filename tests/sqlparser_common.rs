@@ -6501,7 +6501,17 @@ fn parse_multiple_statements() {
     );
     test_with("DELETE FROM foo", "SELECT", " bar");
     test_with("INSERT INTO foo VALUES (1)", "SELECT", " bar");
-    test_with("CREATE TABLE foo (baz INT)", "SELECT", " bar");
+    // Since MySQL supports the `CREATE TABLE SELECT` syntax, this needs to be handled separately
+    let res = parse_sql_statements("CREATE TABLE foo (baz INT); SELECT bar");
+    assert_eq!(
+        vec![
+            one_statement_parses_to("CREATE TABLE foo (baz INT)", ""),
+            one_statement_parses_to("SELECT bar", ""),
+        ],
+        res.unwrap()
+    );
+    // Check that extra semicolon at the end is stripped by normalization:
+    one_statement_parses_to("CREATE TABLE foo (baz INT);", "CREATE TABLE foo (baz INT)");
     // Make sure that empty statements do not cause an error:
     let res = parse_sql_statements(";;");
     assert_eq!(0, res.unwrap().len());
@@ -11716,4 +11726,25 @@ fn parse_comments() {
             .unwrap_err(),
         ParserError::ParserError("Expected: comment object_type, found: UNKNOWN".to_string())
     );
+}
+
+#[test]
+fn parse_create_table_select() {
+    let dialects = all_dialects_where(|d| d.supports_create_table_select());
+    let sql_1 = r#"CREATE TABLE foo (baz INT) SELECT bar"#;
+    let expected = r#"CREATE TABLE foo (baz INT) AS SELECT bar"#;
+    let _ = dialects.one_statement_parses_to(sql_1, expected);
+
+    let sql_2 = r#"CREATE TABLE foo (baz INT, name STRING) SELECT bar, oth_name FROM test.table_a"#;
+    let expected =
+        r#"CREATE TABLE foo (baz INT, name STRING) AS SELECT bar, oth_name FROM test.table_a"#;
+    let _ = dialects.one_statement_parses_to(sql_2, expected);
+
+    let dialects = all_dialects_where(|d| !d.supports_create_table_select());
+    for sql in [sql_1, sql_2] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: end of statement, found: SELECT".to_string())
+        );
+    }
 }

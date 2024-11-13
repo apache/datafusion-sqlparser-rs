@@ -97,6 +97,11 @@ impl Dialect for MySqlDialect {
     fn supports_limit_comma(&self) -> bool {
         true
     }
+
+    /// see <https://dev.mysql.com/doc/refman/8.4/en/create-table-select.html>
+    fn supports_create_table_select(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

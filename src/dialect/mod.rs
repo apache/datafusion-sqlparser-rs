@@ -633,6 +633,11 @@ pub trait Dialect: Debug + Any {
     fn supports_comment_on(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports the `CREATE TABLE SELECT` statement
+    fn supports_create_table_select(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

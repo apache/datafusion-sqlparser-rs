@@ -11743,7 +11743,7 @@ fn parse_create_table_select() {
     let dialects = all_dialects_where(|d| !d.supports_create_table_select());
     for sql in [sql_1, sql_2] {
         assert_eq!(
-            dialects.parse_sql_statements(&sql).unwrap_err(),
+            dialects.parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError("Expected: end of statement, found: SELECT".to_string())
         );
     }

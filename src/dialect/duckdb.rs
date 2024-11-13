@@ -47,6 +47,10 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
+        true
+    }
+
     // DuckDB uses this syntax for `STRUCT`s.
     //
     // https://duckdb.org/docs/sql/data_types/struct.html#creating-structs

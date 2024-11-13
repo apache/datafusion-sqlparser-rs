@@ -111,4 +111,8 @@ impl Dialect for GenericDialect {
     fn supports_try_convert(&self) -> bool {
         true
     }
+
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
+        true
+    }
 }

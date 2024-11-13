@@ -231,8 +231,29 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
+    /// Returns true if the dialect supports named arguments of the form `FUN(a = '1', b = '2')`.
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a : '1', b : '2')`.
+    fn supports_named_fn_args_with_colon_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a := '1', b := '2')`.
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a => '1', b => '2')`.
+    fn supports_named_fn_args_with_rarrow_operator(&self) -> bool {
+        true //for compatible
+    }
+
+    /// Returns true if dialect supports argument name as arbitrary expression (`FUN(<arbitrary-expr>:<arbitrary-expr>,...)`),and will use the `FunctionArg::ExprNamed` variant,
+    /// otherwise use the `FunctionArg::Named` variant (compatible reason).
+    fn supports_named_fn_args_with_expr_name(&self) -> bool {
         false
     }
 

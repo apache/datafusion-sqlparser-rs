@@ -611,7 +611,7 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect expects the the `TOP` option
+    /// Returns true if this dialect expects the `TOP` option
     /// before the `ALL`/`DISTINCT` options in a `SELECT` statement.
     fn supports_top_before_distinct(&self) -> bool {
         false
@@ -626,6 +626,11 @@ pub trait Dialect: Debug + Any {
     /// Returns true if this dialect supports the `LIKE 'pattern'` option in
     /// a `SHOW` statement before the `IN` option
     fn supports_show_like_before_in(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `COMMENT` statement
+    fn supports_comment_on(&self) -> bool {
         false
     }
 }

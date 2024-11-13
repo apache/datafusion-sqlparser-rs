@@ -96,6 +96,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/sql/comment)
+    fn supports_comment_on(&self) -> bool {
+        true
+    }
+
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE

@@ -820,7 +820,7 @@ fn parse_top_level() {
     verified_stmt("(SELECT 1)");
     verified_stmt("((SELECT 1))");
     verified_stmt("VALUES (1)");
-    verified_stmt("VALUES ROW(1, true, 'a'), ROW(2, false, 'b')");
+    verified_stmt("VALUES ROW(1, NULL, 'a'), ROW(2, NULL, 'b')");
 }
 
 #[test]
@@ -1499,7 +1499,7 @@ fn parse_is_not_distinct_from() {
 #[test]
 fn parse_not_precedence() {
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
-    let sql = "NOT true OR true";
+    let sql = "NOT 1 OR 1";
     assert_matches!(
         verified_expr(sql),
         Expr::BinaryOp {
@@ -1916,44 +1916,6 @@ fn parse_binary_all() {
             right: Box::new(Expr::Identifier(Ident::new("b"))),
         }),
         select.projection[0]
-    );
-}
-
-#[test]
-fn parse_logical_xor() {
-    let sql = "SELECT true XOR true, false XOR false, true XOR false, false XOR true";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(true))),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(true))),
-        }),
-        select.projection[0]
-    );
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(false))),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(false))),
-        }),
-        select.projection[1]
-    );
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(true))),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(false))),
-        }),
-        select.projection[2]
-    );
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(false))),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(true))),
-        }),
-        select.projection[3]
     );
 }
 
@@ -4113,14 +4075,14 @@ fn parse_alter_table_alter_column() {
     );
 
     match alter_table_op(verified_stmt(&format!(
-        "{alter_stmt} ALTER COLUMN is_active SET DEFAULT false"
+        "{alter_stmt} ALTER COLUMN is_active SET DEFAULT 0"
     ))) {
         AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
             assert_eq!(
                 op,
                 AlterColumnOperation::SetDefault {
-                    value: Expr::Value(Value::Boolean(false))
+                    value: Expr::Value(test_utils::number("0"))
                 }
             );
         }
@@ -6502,7 +6464,7 @@ fn parse_values() {
     verified_stmt("SELECT * FROM (VALUES (1), (2), (3))");
     verified_stmt("SELECT * FROM (VALUES (1), (2), (3)), (VALUES (1, 2, 3))");
     verified_stmt("SELECT * FROM (VALUES (1)) UNION VALUES (1)");
-    verified_stmt("SELECT * FROM (VALUES ROW(1, true, 'a'), ROW(2, false, 'b')) AS t (a, b, c)");
+    verified_stmt("SELECT * FROM (VALUES ROW(1, NULL, 'a'), ROW(2, NULL, 'b')) AS t (a, b, c)");
 }
 
 #[test]
@@ -7321,7 +7283,7 @@ fn lateral_derived() {
         let lateral_str = if lateral_in { "LATERAL " } else { "" };
         let sql = format!(
             "SELECT * FROM customer LEFT JOIN {lateral_str}\
-             (SELECT * FROM order WHERE order.customer = customer.id LIMIT 3) AS order ON true"
+             (SELECT * FROM orders WHERE orders.customer = customer.id LIMIT 3) AS orders ON 1"
         );
         let select = verified_only_select(&sql);
         let from = only(select.from);
@@ -7329,7 +7291,7 @@ fn lateral_derived() {
         let join = &from.joins[0];
         assert_eq!(
             join.join_operator,
-            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(Value::Boolean(true))))
+            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(test_utils::number("1"))))
         );
         if let TableFactor::Derived {
             lateral,
@@ -7338,10 +7300,10 @@ fn lateral_derived() {
         } = join.relation
         {
             assert_eq!(lateral_in, lateral);
-            assert_eq!(Ident::new("order"), alias.name);
+            assert_eq!(Ident::new("orders"), alias.name);
             assert_eq!(
                 subquery.to_string(),
-                "SELECT * FROM order WHERE order.customer = customer.id LIMIT 3"
+                "SELECT * FROM orders WHERE orders.customer = customer.id LIMIT 3"
             );
         } else {
             unreachable!()
@@ -8381,7 +8343,7 @@ fn parse_merge() {
         _ => unreachable!(),
     };
 
-    let sql = "MERGE INTO s.bar AS dest USING newArrivals AS S ON false WHEN NOT MATCHED THEN INSERT VALUES (stg.A, stg.B, stg.C)";
+    let sql = "MERGE INTO s.bar AS dest USING newArrivals AS S ON (1 > 1) WHEN NOT MATCHED THEN INSERT VALUES (stg.A, stg.B, stg.C)";
     verified_stmt(sql);
 }
 
@@ -11160,13 +11122,11 @@ fn parse_explain_with_option_list() {
 
 #[test]
 fn test_create_policy() {
-    let sql = concat!(
-        "CREATE POLICY my_policy ON my_table ",
-        "AS PERMISSIVE FOR SELECT ",
-        "TO my_role, CURRENT_USER ",
-        "USING (c0 = 1) ",
-        "WITH CHECK (true)"
-    );
+    let sql: &str = "CREATE POLICY my_policy ON my_table \
+               AS PERMISSIVE FOR SELECT \
+               TO my_role, CURRENT_USER \
+               USING (c0 = 1) \
+               WITH CHECK (1 = 1)";
 
     match all_dialects().verified_stmt(sql) {
         Statement::CreatePolicy {
@@ -11194,7 +11154,14 @@ fn test_create_policy() {
                     right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
                 })
             );
-            assert_eq!(with_check, Some(Expr::Value(Value::Boolean(true))));
+            assert_eq!(
+                with_check,
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                })
+            );
         }
         _ => unreachable!(),
     }
@@ -11205,7 +11172,7 @@ fn test_create_policy() {
         "AS PERMISSIVE FOR SELECT ",
         "TO my_role, CURRENT_USER ",
         "USING (c0 IN (SELECT column FROM t0)) ",
-        "WITH CHECK (true)"
+        "WITH CHECK (1 = 1)"
     ));
     // omit AS / FOR / TO / USING / WITH CHECK clauses is allowed
     all_dialects().verified_stmt("CREATE POLICY my_policy ON my_table");

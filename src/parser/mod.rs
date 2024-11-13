@@ -1014,7 +1014,11 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         let expr = match next_token.token {
             Token::Word(w) => match w.keyword {
-                Keyword::TRUE | Keyword::FALSE | Keyword::NULL => {
+                Keyword::TRUE | Keyword::FALSE if self.dialect.supports_boolean_literals() => {
+                    self.prev_token();
+                    Ok(Expr::Value(self.parse_value()?))
+                }
+                Keyword::NULL => {
                     self.prev_token();
                     Ok(Expr::Value(self.parse_value()?))
                 }
@@ -7577,8 +7581,12 @@ impl<'a> Parser<'a> {
         let location = next_token.location;
         match next_token.token {
             Token::Word(w) => match w.keyword {
-                Keyword::TRUE => Ok(Value::Boolean(true)),
-                Keyword::FALSE => Ok(Value::Boolean(false)),
+                Keyword::TRUE if self.dialect.supports_boolean_literals() => {
+                    Ok(Value::Boolean(true))
+                }
+                Keyword::FALSE if self.dialect.supports_boolean_literals() => {
+                    Ok(Value::Boolean(false))
+                }
                 Keyword::NULL => Ok(Value::Null),
                 Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
                     Some('"') => Ok(Value::DoubleQuotedString(w.value)),

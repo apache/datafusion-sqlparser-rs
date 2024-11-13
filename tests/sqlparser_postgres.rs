@@ -4289,10 +4289,7 @@ fn test_simple_postgres_insert_with_alias() {
                 body: Box::new(SetExpr::Values(Values {
                     explicit_row: false,
                     rows: vec![vec![
-                        Expr::Identifier(Ident {
-                            value: "DEFAULT".to_string(),
-                            quote_style: None
-                        }),
+                        Expr::Default,
                         Expr::Value(Value::Number(
                             bigdecimal::BigDecimal::new(123.into(), 0),
                             false

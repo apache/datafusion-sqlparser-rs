@@ -3138,7 +3138,7 @@ impl<'a> Parser<'a> {
 
     /// Return nth non-whitespace token that has not yet been processed
     pub fn peek_nth_token(&self, mut n: usize) -> TokenWithLocation {
-        let mut index: usize = self.index;
+        let mut index = self.index;
         loop {
             index += 1;
             match self.tokens.get(index - 1) {

@@ -1396,6 +1396,10 @@ fn pg_and_generic() -> TestedDialects {
     ])
 }
 
+fn ms_and_generic() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
+}
+
 #[test]
 fn parse_json_ops_without_colon() {
     use self::BinaryOperator::*;
@@ -9736,6 +9740,41 @@ fn parse_call() {
 }
 
 #[test]
+fn parse_execute_stored_procedure() {
+    let expected = Statement::Execute {
+        name: ObjectName(vec![
+            Ident {
+                value: "my_schema".to_string(),
+                quote_style: None,
+            },
+            Ident {
+                value: "my_stored_procedure".to_string(),
+                quote_style: None,
+            },
+        ]),
+        parameters: vec![
+            Expr::Value(Value::NationalStringLiteral("param1".to_string())),
+            Expr::Value(Value::NationalStringLiteral("param2".to_string())),
+        ],
+        has_parentheses: false,
+        using: vec![],
+    };
+    assert_eq!(
+        // Microsoft SQL Server does not use parentheses around arguments for EXECUTE
+        ms_and_generic()
+            .verified_stmt("EXECUTE my_schema.my_stored_procedure N'param1', N'param2'"),
+        expected
+    );
+    assert_eq!(
+        ms_and_generic().one_statement_parses_to(
+            "EXEC my_schema.my_stored_procedure N'param1', N'param2';",
+            "EXECUTE my_schema.my_stored_procedure N'param1', N'param2'",
+        ),
+        expected
+    );
+}
+
+#[test]
 fn parse_create_table_collate() {
     pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
 }
@@ -11562,4 +11601,114 @@ fn test_select_top() {
     dialects.one_statement_parses_to("SELECT TOP 3 ALL * FROM tbl", "SELECT TOP 3 * FROM tbl");
     dialects.verified_stmt("SELECT TOP 3 DISTINCT * FROM tbl");
     dialects.verified_stmt("SELECT TOP 3 DISTINCT a, b, c FROM tbl");
+}
+
+#[test]
+fn parse_bang_not() {
+    let dialects = all_dialects_where(|d| d.supports_bang_not_operator());
+    let sql = "SELECT !a, !(b > 3)";
+    let Select { projection, .. } = dialects.verified_only_select(sql);
+
+    for (i, expr) in [
+        Box::new(Expr::Identifier(Ident::new("a"))),
+        Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("b"))),
+            op: BinaryOperator::Gt,
+            right: Box::new(Expr::Value(Value::Number("3".parse().unwrap(), false))),
+        }))),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: UnaryOperator::BangNot,
+                expr
+            }),
+            projection[i]
+        )
+    }
+
+    let sql_statements = ["SELECT a!", "SELECT a ! b", "SELECT a ! as b"];
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("No infix parser for token ExclamationMark".to_string())
+        );
+    }
+
+    let sql_statements = ["SELECT !a", "SELECT !a b", "SELECT !a as b"];
+    let dialects = all_dialects_where(|d| !d.supports_bang_not_operator());
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an expression, found: !".to_string())
+        );
+    }
+}
+
+#[test]
+fn parse_factorial_operator() {
+    let dialects = all_dialects_where(|d| d.supports_factorial_operator());
+    let sql = "SELECT a!, (b + c)!";
+    let Select { projection, .. } = dialects.verified_only_select(sql);
+
+    for (i, expr) in [
+        Box::new(Expr::Identifier(Ident::new("a"))),
+        Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("b"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(Expr::Identifier(Ident::new("c"))),
+        }))),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: UnaryOperator::PGPostfixFactorial,
+                expr
+            }),
+            projection[i]
+        )
+    }
+
+    let sql_statements = ["SELECT !a", "SELECT !a b", "SELECT !a as b"];
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an expression, found: !".to_string())
+        );
+    }
+
+    let sql_statements = ["SELECT a!", "SELECT a ! b", "SELECT a ! as b"];
+
+    // Due to the exclamation mark, which is both part of the `bang not` operator
+    // and the `factorial` operator,  additional filtering not supports
+    // `bang not` operator is required here.
+    let dialects =
+        all_dialects_where(|d| !d.supports_factorial_operator() && !d.supports_bang_not_operator());
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("No infix parser for token ExclamationMark".to_string())
+        );
+    }
+
+    // Due to the exclamation mark, which is both part of the `bang not` operator
+    // and the `factorial` operator,  additional filtering supports
+    // `bang not` operator is required here.
+    let dialects =
+        all_dialects_where(|d| !d.supports_factorial_operator() && d.supports_bang_not_operator());
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("No infix parser for token ExclamationMark".to_string())
+        );
+    }
 }

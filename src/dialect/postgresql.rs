@@ -201,6 +201,11 @@ impl Dialect for PostgreSqlDialect {
     fn supports_notify(&self) -> bool {
         true
     }
+
+    /// see <https://www.postgresql.org/docs/13/functions-math.html>
+    fn supports_factorial_operator(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {

@@ -529,7 +529,7 @@ impl<'a> Parser<'a> {
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
                 // syntaxes. They are used for Postgres prepared statement.
                 Keyword::DEALLOCATE => self.parse_deallocate(),
-                Keyword::EXECUTE => self.parse_execute(),
+                Keyword::EXECUTE | Keyword::EXEC => self.parse_execute(),
                 Keyword::PREPARE => self.parse_prepare(),
                 Keyword::MERGE => self.parse_merge(),
                 // `LISTEN` and `NOTIFY` are Postgres-specific
@@ -1191,6 +1191,14 @@ impl<'a> Parser<'a> {
                     op,
                     expr: Box::new(
                         self.parse_subexpr(self.dialect.prec_value(Precedence::MulDivModOp))?,
+                    ),
+                })
+            }
+            Token::ExclamationMark if self.dialect.supports_bang_not_operator() => {
+                Ok(Expr::UnaryOp {
+                    op: UnaryOperator::BangNot,
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?,
                     ),
                 })
             }
@@ -2856,8 +2864,7 @@ impl<'a> Parser<'a> {
                 data_type: self.parse_data_type()?,
                 format: None,
             })
-        } else if Token::ExclamationMark == tok {
-            // PostgreSQL factorial operation
+        } else if Token::ExclamationMark == tok && self.dialect.supports_factorial_operator() {
             Ok(Expr::UnaryOp {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),
@@ -10081,6 +10088,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::Function { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::JsonTable { alias, .. }
+                        | TableFactor::OpenJsonTable { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::Pivot { alias, .. }
                         | TableFactor::Unpivot { alias, .. }
@@ -10194,6 +10202,9 @@ impl<'a> Parser<'a> {
                 columns,
                 alias,
             })
+        } else if self.parse_keyword_with_tokens(Keyword::OPENJSON, &[Token::LParen]) {
+            self.prev_token();
+            self.parse_open_json_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
 
@@ -10257,6 +10268,34 @@ impl<'a> Parser<'a> {
 
             Ok(table)
         }
+    }
+
+    /// Parses `OPENJSON( jsonExpression [ , path ] )  [ <with_clause> ]` clause,
+    /// assuming the `OPENJSON` keyword was already consumed.
+    fn parse_open_json_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let json_expr = self.parse_expr()?;
+        let json_path = if self.consume_token(&Token::Comma) {
+            Some(self.parse_value()?)
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        let columns = if self.parse_keyword(Keyword::WITH) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(Parser::parse_openjson_table_column_def)?;
+            self.expect_token(&Token::RParen)?;
+            columns
+        } else {
+            Vec::new()
+        };
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        Ok(TableFactor::OpenJsonTable {
+            json_expr,
+            json_path,
+            columns,
+            alias,
+        })
     }
 
     fn parse_match_recognize(&mut self, table: TableFactor) -> Result<TableFactor, ParserError> {
@@ -10543,6 +10582,34 @@ impl<'a> Parser<'a> {
             on_empty,
             on_error,
         }))
+    }
+
+    /// Parses MSSQL's `OPENJSON WITH` column definition.
+    ///
+    /// ```sql
+    /// colName type [ column_path ] [ AS JSON ]
+    /// ```
+    ///
+    /// Reference: <https://learn.microsoft.com/en-us/sql/t-sql/functions/openjson-transact-sql?view=sql-server-ver16#syntax>
+    pub fn parse_openjson_table_column_def(&mut self) -> Result<OpenJsonTableColumn, ParserError> {
+        let name = self.parse_identifier(false)?;
+        let r#type = self.parse_data_type()?;
+        let path = if let Token::SingleQuotedString(path) = self.peek_token().token {
+            self.next_token();
+            Some(path)
+        } else {
+            None
+        };
+        let as_json = self.parse_keyword(Keyword::AS);
+        if as_json {
+            self.expect_keyword(Keyword::JSON)?;
+        }
+        Ok(OpenJsonTableColumn {
+            name,
+            r#type,
+            path,
+            as_json,
+        })
     }
 
     fn parse_json_table_column_error_handling(
@@ -11845,11 +11912,20 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_execute(&mut self) -> Result<Statement, ParserError> {
-        let name = self.parse_identifier(false)?;
+        let name = self.parse_object_name(false)?;
 
-        let mut parameters = vec![];
-        if self.consume_token(&Token::LParen) {
-            parameters = self.parse_comma_separated(Parser::parse_expr)?;
+        let has_parentheses = self.consume_token(&Token::LParen);
+
+        let end_token = match (has_parentheses, self.peek_token().token) {
+            (true, _) => Token::RParen,
+            (false, Token::EOF) => Token::EOF,
+            (false, Token::Word(w)) if w.keyword == Keyword::USING => Token::Word(w),
+            (false, _) => Token::SemiColon,
+        };
+
+        let parameters = self.parse_comma_separated0(Parser::parse_expr, end_token)?;
+
+        if has_parentheses {
             self.expect_token(&Token::RParen)?;
         }
 
@@ -11865,6 +11941,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Execute {
             name,
             parameters,
+            has_parentheses,
             using,
         })
     }

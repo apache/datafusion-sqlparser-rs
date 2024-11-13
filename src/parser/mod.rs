@@ -12218,7 +12218,7 @@ impl<'a> Parser<'a> {
             })
         } else {
             self.expected(
-                " DATA` or an extension name after `LOAD`",
+                "`DATA` or an extension name after `LOAD`",
                 self.peek_token(),
             )
         }

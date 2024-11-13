@@ -11564,8 +11564,13 @@ fn parse_load_data() {
             .unwrap_err(),
         ParserError::ParserError("Expected: end of statement, found: INPATH".to_string())
     );
-    assert_eq!( not_supports_load_dialects.parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: INPATH".to_string())
+    assert_eq!(
+        not_supports_load_dialects
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: `DATA` or an extension name after `LOAD`, found: INPATH".to_string()
+        )
     );
 
     // with LOCAL keyword
@@ -11599,8 +11604,12 @@ fn parse_load_data() {
         ParserError::ParserError("Expected: end of statement, found: LOCAL".to_string())
     );
     assert_eq!(
-        not_supports_load_dialects.parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: LOCAL".to_string())
+        not_supports_load_dialects
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: `DATA` or an extension name after `LOAD`, found: LOCAL".to_string()
+        )
     );
 
     // with PARTITION  clause
@@ -11689,11 +11698,11 @@ fn parse_load_data() {
     // negative test case
     let sql = "LOAD DATA2 LOCAL INPATH '/local/path/to/data.txt' INTO TABLE test.my_table";
     assert_eq!(
-            dialects
-                .parse_sql_statements(sql)
-                .unwrap_err(),
-            ParserError::ParserError("Expected: dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements, found: DATA2".to_string())
-        );
+        dialects.parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError(
+            "Expected: `DATA` or an extension name after `LOAD`, found: DATA2".to_string()
+        )
+    );
 }
 
 #[test]

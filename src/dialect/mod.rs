@@ -575,6 +575,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `a!` expressions
+    fn supports_factorial_operator(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
     /// as an alias assignment operator, rather than a boolean expression.
     /// For example: the following statements are equivalent for such a dialect:
@@ -588,6 +593,11 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if this dialect supports the `TRY_CONVERT` function
     fn supports_try_convert(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `!a` syntax for boolean `NOT` expressions.
+    fn supports_bang_not_operator(&self) -> bool {
         false
     }
 

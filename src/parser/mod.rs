@@ -1194,6 +1194,14 @@ impl<'a> Parser<'a> {
                     ),
                 })
             }
+            Token::ExclamationMark if self.dialect.supports_bang_not_operator() => {
+                Ok(Expr::UnaryOp {
+                    op: UnaryOperator::BangNot,
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?,
+                    ),
+                })
+            }
             tok @ Token::DoubleExclamationMark
             | tok @ Token::PGSquareRoot
             | tok @ Token::PGCubeRoot
@@ -1287,7 +1295,6 @@ impl<'a> Parser<'a> {
             }
             _ => self.expected("an expression", next_token),
         }?;
-
         if self.parse_keyword(Keyword::COLLATE) {
             Ok(Expr::Collate {
                 expr: Box::new(expr),
@@ -2818,8 +2825,7 @@ impl<'a> Parser<'a> {
                 data_type: self.parse_data_type()?,
                 format: None,
             })
-        } else if Token::ExclamationMark == tok {
-            // PostgreSQL factorial operation
+        } else if Token::ExclamationMark == tok && self.dialect.supports_factorial_operator() {
             Ok(Expr::UnaryOp {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),

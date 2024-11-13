@@ -7354,9 +7354,9 @@ impl Display for UtilityOption {
     }
 }
 
-/// Represents the different options available for a SHOW <OBJECT>
-/// statement to filter the results. Example from Snowflake:
-/// https://docs.snowflake.com/en/sql-reference/sql/show-tables
+/// Represents the different options available for `SHOW` 
+/// statements to filter the results. Example from Snowflake:
+/// <https://docs.snowflake.com/en/sql-reference/sql/show-tables>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -7404,6 +7404,8 @@ impl Display for ShowStatementOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ShowStatementFilterPosition {
     Infix(ShowStatementFilter), // For example: SHOW COLUMNS LIKE '%name%' IN TABLE tbl
     Suffix(ShowStatementFilter), // For example: SHOW COLUMNS IN tbl LIKE '%name%'
@@ -7411,6 +7413,7 @@ pub enum ShowStatementFilterPosition {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ShowStatementInParentType {
     Account,
     Database,
@@ -7433,6 +7436,7 @@ impl fmt::Display for ShowStatementInParentType {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ShowStatementIn {
     pub clause: ShowStatementInClause,
     pub parent_type: Option<ShowStatementInParentType>,

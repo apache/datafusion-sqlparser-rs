@@ -205,7 +205,7 @@ impl Dialect for SnowflakeDialect {
     }
 
     /// Snowflake expects the `LIKE` option before the `IN` option,
-    /// for example: https://docs.snowflake.com/en/sql-reference/sql/show-views#syntax
+    /// for example: <https://docs.snowflake.com/en/sql-reference/sql/show-views#syntax>
     fn supports_show_like_before_in(&self) -> bool {
         true
     }

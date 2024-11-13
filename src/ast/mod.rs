@@ -7354,7 +7354,7 @@ impl Display for UtilityOption {
     }
 }
 
-/// Represents the different options available for `SHOW` 
+/// Represents the different options available for `SHOW`
 /// statements to filter the results. Example from Snowflake:
 /// <https://docs.snowflake.com/en/sql-reference/sql/show-tables>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

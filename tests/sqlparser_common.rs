@@ -4082,7 +4082,7 @@ fn parse_alter_table_alter_column() {
             assert_eq!(
                 op,
                 AlterColumnOperation::SetDefault {
-                    value: Expr::Value(Value::Number("0".to_string(), false))
+                    value: Expr::Value(test_utils::number("0"))
                 }
             );
         }
@@ -7291,10 +7291,7 @@ fn lateral_derived() {
         let join = &from.joins[0];
         assert_eq!(
             join.join_operator,
-            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(Value::Number(
-                "1".to_string(),
-                false
-            ))))
+            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(test_utils::number("1"))))
         );
         if let TableFactor::Derived {
             lateral,

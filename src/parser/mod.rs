@@ -10049,6 +10049,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::Function { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::JsonTable { alias, .. }
+                        | TableFactor::OpenJsonTable { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::Pivot { alias, .. }
                         | TableFactor::Unpivot { alias, .. }
@@ -10162,6 +10163,9 @@ impl<'a> Parser<'a> {
                 columns,
                 alias,
             })
+        } else if self.parse_keyword_with_tokens(Keyword::OPENJSON, &[Token::LParen]) {
+            self.prev_token();
+            self.parse_open_json_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
 
@@ -10225,6 +10229,34 @@ impl<'a> Parser<'a> {
 
             Ok(table)
         }
+    }
+
+    /// Parses `OPENJSON( jsonExpression [ , path ] )  [ <with_clause> ]` clause,
+    /// assuming the `OPENJSON` keyword was already consumed.
+    fn parse_open_json_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let json_expr = self.parse_expr()?;
+        let json_path = if self.consume_token(&Token::Comma) {
+            Some(self.parse_value()?)
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        let columns = if self.parse_keyword(Keyword::WITH) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(Parser::parse_openjson_table_column_def)?;
+            self.expect_token(&Token::RParen)?;
+            columns
+        } else {
+            Vec::new()
+        };
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        Ok(TableFactor::OpenJsonTable {
+            json_expr,
+            json_path,
+            columns,
+            alias,
+        })
     }
 
     fn parse_match_recognize(&mut self, table: TableFactor) -> Result<TableFactor, ParserError> {
@@ -10511,6 +10543,34 @@ impl<'a> Parser<'a> {
             on_empty,
             on_error,
         }))
+    }
+
+    /// Parses MSSQL's `OPENJSON WITH` column definition.
+    ///
+    /// ```sql
+    /// colName type [ column_path ] [ AS JSON ]
+    /// ```
+    ///
+    /// Reference: <https://learn.microsoft.com/en-us/sql/t-sql/functions/openjson-transact-sql?view=sql-server-ver16#syntax>
+    pub fn parse_openjson_table_column_def(&mut self) -> Result<OpenJsonTableColumn, ParserError> {
+        let name = self.parse_identifier(false)?;
+        let r#type = self.parse_data_type()?;
+        let path = if let Token::SingleQuotedString(path) = self.peek_token().token {
+            self.next_token();
+            Some(path)
+        } else {
+            None
+        };
+        let as_json = self.parse_keyword(Keyword::AS);
+        if as_json {
+            self.expect_keyword(Keyword::JSON)?;
+        }
+        Ok(OpenJsonTableColumn {
+            name,
+            r#type,
+            path,
+            as_json,
+        })
     }
 
     fn parse_json_table_column_error_handling(

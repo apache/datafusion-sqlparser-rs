@@ -56,12 +56,12 @@ pub use self::query::{
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonTableColumn,
     JsonTableColumnErrorHandling, JsonTableNamedColumn, JsonTableNestedColumn, LateralView,
     LockClause, LockType, MatchRecognizePattern, MatchRecognizeSymbol, Measure,
-    NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset, OffsetRows, OrderBy, OrderByExpr,
-    PivotValueSource, ProjectionSelect, Query, RenameSelectItem, RepetitionQuantifier,
-    ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select, SelectInto, SelectItem, SetExpr,
-    SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableFactor,
-    TableFunctionArgs, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode, Values,
-    WildcardAdditionalOptions, With, WithFill,
+    NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset, OffsetRows, OpenJsonTableColumn,
+    OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
+    RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
+    TableAlias, TableFactor, TableFunctionArgs, TableVersion, TableWithJoins, Top, TopQuantity,
+    ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
 };
 
 pub use self::trigger::{

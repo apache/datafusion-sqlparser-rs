@@ -12218,7 +12218,7 @@ impl<'a> Parser<'a> {
             })
         } else {
             self.expected(
-                "dialect supports `LOAD DATA` or `LOAD extension` to parse `LOAD` statements",
+                " DATA` or an extension name after `LOAD`",
                 self.peek_token(),
             )
         }

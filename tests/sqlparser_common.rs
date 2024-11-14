@@ -820,7 +820,7 @@ fn parse_top_level() {
     verified_stmt("(SELECT 1)");
     verified_stmt("((SELECT 1))");
     verified_stmt("VALUES (1)");
-    verified_stmt("VALUES ROW(1, true, 'a'), ROW(2, false, 'b')");
+    verified_stmt("VALUES ROW(1, NULL, 'a'), ROW(2, NULL, 'b')");
 }
 
 #[test]
@@ -1499,7 +1499,7 @@ fn parse_is_not_distinct_from() {
 #[test]
 fn parse_not_precedence() {
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
-    let sql = "NOT true OR true";
+    let sql = "NOT 1 OR 1";
     assert_matches!(
         verified_expr(sql),
         Expr::BinaryOp {
@@ -1916,44 +1916,6 @@ fn parse_binary_all() {
             right: Box::new(Expr::Identifier(Ident::new("b"))),
         }),
         select.projection[0]
-    );
-}
-
-#[test]
-fn parse_logical_xor() {
-    let sql = "SELECT true XOR true, false XOR false, true XOR false, false XOR true";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(true))),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(true))),
-        }),
-        select.projection[0]
-    );
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(false))),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(false))),
-        }),
-        select.projection[1]
-    );
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(true))),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(false))),
-        }),
-        select.projection[2]
-    );
-    assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(false))),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(true))),
-        }),
-        select.projection[3]
     );
 }
 
@@ -4113,14 +4075,14 @@ fn parse_alter_table_alter_column() {
     );
 
     match alter_table_op(verified_stmt(&format!(
-        "{alter_stmt} ALTER COLUMN is_active SET DEFAULT false"
+        "{alter_stmt} ALTER COLUMN is_active SET DEFAULT 0"
     ))) {
         AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
             assert_eq!(
                 op,
                 AlterColumnOperation::SetDefault {
-                    value: Expr::Value(Value::Boolean(false))
+                    value: Expr::Value(test_utils::number("0"))
                 }
             );
         }
@@ -6502,7 +6464,7 @@ fn parse_values() {
     verified_stmt("SELECT * FROM (VALUES (1), (2), (3))");
     verified_stmt("SELECT * FROM (VALUES (1), (2), (3)), (VALUES (1, 2, 3))");
     verified_stmt("SELECT * FROM (VALUES (1)) UNION VALUES (1)");
-    verified_stmt("SELECT * FROM (VALUES ROW(1, true, 'a'), ROW(2, false, 'b')) AS t (a, b, c)");
+    verified_stmt("SELECT * FROM (VALUES ROW(1, NULL, 'a'), ROW(2, NULL, 'b')) AS t (a, b, c)");
 }
 
 #[test]
@@ -6539,7 +6501,17 @@ fn parse_multiple_statements() {
     );
     test_with("DELETE FROM foo", "SELECT", " bar");
     test_with("INSERT INTO foo VALUES (1)", "SELECT", " bar");
-    test_with("CREATE TABLE foo (baz INT)", "SELECT", " bar");
+    // Since MySQL supports the `CREATE TABLE SELECT` syntax, this needs to be handled separately
+    let res = parse_sql_statements("CREATE TABLE foo (baz INT); SELECT bar");
+    assert_eq!(
+        vec![
+            one_statement_parses_to("CREATE TABLE foo (baz INT)", ""),
+            one_statement_parses_to("SELECT bar", ""),
+        ],
+        res.unwrap()
+    );
+    // Check that extra semicolon at the end is stripped by normalization:
+    one_statement_parses_to("CREATE TABLE foo (baz INT);", "CREATE TABLE foo (baz INT)");
     // Make sure that empty statements do not cause an error:
     let res = parse_sql_statements(";;");
     assert_eq!(0, res.unwrap().len());
@@ -7321,7 +7293,7 @@ fn lateral_derived() {
         let lateral_str = if lateral_in { "LATERAL " } else { "" };
         let sql = format!(
             "SELECT * FROM customer LEFT JOIN {lateral_str}\
-             (SELECT * FROM order WHERE order.customer = customer.id LIMIT 3) AS order ON true"
+             (SELECT * FROM orders WHERE orders.customer = customer.id LIMIT 3) AS orders ON 1"
         );
         let select = verified_only_select(&sql);
         let from = only(select.from);
@@ -7329,7 +7301,7 @@ fn lateral_derived() {
         let join = &from.joins[0];
         assert_eq!(
             join.join_operator,
-            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(Value::Boolean(true))))
+            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(test_utils::number("1"))))
         );
         if let TableFactor::Derived {
             lateral,
@@ -7338,10 +7310,10 @@ fn lateral_derived() {
         } = join.relation
         {
             assert_eq!(lateral_in, lateral);
-            assert_eq!(Ident::new("order"), alias.name);
+            assert_eq!(Ident::new("orders"), alias.name);
             assert_eq!(
                 subquery.to_string(),
-                "SELECT * FROM order WHERE order.customer = customer.id LIMIT 3"
+                "SELECT * FROM orders WHERE orders.customer = customer.id LIMIT 3"
             );
         } else {
             unreachable!()
@@ -8381,7 +8353,7 @@ fn parse_merge() {
         _ => unreachable!(),
     };
 
-    let sql = "MERGE INTO s.bar AS dest USING newArrivals AS S ON false WHEN NOT MATCHED THEN INSERT VALUES (stg.A, stg.B, stg.C)";
+    let sql = "MERGE INTO s.bar AS dest USING newArrivals AS S ON (1 > 1) WHEN NOT MATCHED THEN INSERT VALUES (stg.A, stg.B, stg.C)";
     verified_stmt(sql);
 }
 
@@ -11160,13 +11132,11 @@ fn parse_explain_with_option_list() {
 
 #[test]
 fn test_create_policy() {
-    let sql = concat!(
-        "CREATE POLICY my_policy ON my_table ",
-        "AS PERMISSIVE FOR SELECT ",
-        "TO my_role, CURRENT_USER ",
-        "USING (c0 = 1) ",
-        "WITH CHECK (true)"
-    );
+    let sql: &str = "CREATE POLICY my_policy ON my_table \
+               AS PERMISSIVE FOR SELECT \
+               TO my_role, CURRENT_USER \
+               USING (c0 = 1) \
+               WITH CHECK (1 = 1)";
 
     match all_dialects().verified_stmt(sql) {
         Statement::CreatePolicy {
@@ -11194,7 +11164,14 @@ fn test_create_policy() {
                     right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
                 })
             );
-            assert_eq!(with_check, Some(Expr::Value(Value::Boolean(true))));
+            assert_eq!(
+                with_check,
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                })
+            );
         }
         _ => unreachable!(),
     }
@@ -11205,7 +11182,7 @@ fn test_create_policy() {
         "AS PERMISSIVE FOR SELECT ",
         "TO my_role, CURRENT_USER ",
         "USING (c0 IN (SELECT column FROM t0)) ",
-        "WITH CHECK (true)"
+        "WITH CHECK (1 = 1)"
     ));
     // omit AS / FOR / TO / USING / WITH CHECK clauses is allowed
     all_dialects().verified_stmt("CREATE POLICY my_policy ON my_table");
@@ -11428,23 +11405,43 @@ fn test_try_convert() {
 
 #[test]
 fn test_show_dbs_schemas_tables_views() {
-    verified_stmt("SHOW DATABASES");
-    verified_stmt("SHOW DATABASES LIKE '%abc'");
-    verified_stmt("SHOW SCHEMAS");
-    verified_stmt("SHOW SCHEMAS LIKE '%abc'");
-    verified_stmt("SHOW TABLES");
-    verified_stmt("SHOW TABLES IN db1");
-    verified_stmt("SHOW TABLES IN db1 'abc'");
-    verified_stmt("SHOW VIEWS");
-    verified_stmt("SHOW VIEWS IN db1");
-    verified_stmt("SHOW VIEWS IN db1 'abc'");
-    verified_stmt("SHOW VIEWS FROM db1");
-    verified_stmt("SHOW VIEWS FROM db1 'abc'");
-    verified_stmt("SHOW MATERIALIZED VIEWS");
-    verified_stmt("SHOW MATERIALIZED VIEWS IN db1");
-    verified_stmt("SHOW MATERIALIZED VIEWS IN db1 'abc'");
-    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1");
-    verified_stmt("SHOW MATERIALIZED VIEWS FROM db1 'abc'");
+    // These statements are parsed the same by all dialects
+    let stmts = vec![
+        "SHOW DATABASES",
+        "SHOW SCHEMAS",
+        "SHOW TABLES",
+        "SHOW VIEWS",
+        "SHOW TABLES IN db1",
+        "SHOW VIEWS FROM db1",
+        "SHOW MATERIALIZED VIEWS",
+        "SHOW MATERIALIZED VIEWS IN db1",
+        "SHOW MATERIALIZED VIEWS FROM db1",
+    ];
+    for stmt in stmts {
+        verified_stmt(stmt);
+    }
+
+    // These statements are parsed the same by all dialects
+    // except for how the parser interprets the location of
+    // LIKE option (infix/suffix)
+    let stmts = vec!["SHOW DATABASES LIKE '%abc'", "SHOW SCHEMAS LIKE '%abc'"];
+    for stmt in stmts {
+        all_dialects_where(|d| d.supports_show_like_before_in()).verified_stmt(stmt);
+        all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt(stmt);
+    }
+
+    // These statements are only parsed by dialects that
+    // support the LIKE option in the suffix
+    let stmts = vec![
+        "SHOW TABLES IN db1 'abc'",
+        "SHOW VIEWS IN db1 'abc'",
+        "SHOW VIEWS FROM db1 'abc'",
+        "SHOW MATERIALIZED VIEWS IN db1 'abc'",
+        "SHOW MATERIALIZED VIEWS FROM db1 'abc'",
+    ];
+    for stmt in stmts {
+        all_dialects_where(|d| !d.supports_show_like_before_in()).verified_stmt(stmt);
+    }
 }
 
 #[test]
@@ -11531,4 +11528,223 @@ fn test_select_top() {
     dialects.one_statement_parses_to("SELECT TOP 3 ALL * FROM tbl", "SELECT TOP 3 * FROM tbl");
     dialects.verified_stmt("SELECT TOP 3 DISTINCT * FROM tbl");
     dialects.verified_stmt("SELECT TOP 3 DISTINCT a, b, c FROM tbl");
+}
+
+#[test]
+fn parse_bang_not() {
+    let dialects = all_dialects_where(|d| d.supports_bang_not_operator());
+    let sql = "SELECT !a, !(b > 3)";
+    let Select { projection, .. } = dialects.verified_only_select(sql);
+
+    for (i, expr) in [
+        Box::new(Expr::Identifier(Ident::new("a"))),
+        Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("b"))),
+            op: BinaryOperator::Gt,
+            right: Box::new(Expr::Value(Value::Number("3".parse().unwrap(), false))),
+        }))),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: UnaryOperator::BangNot,
+                expr
+            }),
+            projection[i]
+        )
+    }
+
+    let sql_statements = ["SELECT a!", "SELECT a ! b", "SELECT a ! as b"];
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("No infix parser for token ExclamationMark".to_string())
+        );
+    }
+
+    let sql_statements = ["SELECT !a", "SELECT !a b", "SELECT !a as b"];
+    let dialects = all_dialects_where(|d| !d.supports_bang_not_operator());
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an expression, found: !".to_string())
+        );
+    }
+}
+
+#[test]
+fn parse_factorial_operator() {
+    let dialects = all_dialects_where(|d| d.supports_factorial_operator());
+    let sql = "SELECT a!, (b + c)!";
+    let Select { projection, .. } = dialects.verified_only_select(sql);
+
+    for (i, expr) in [
+        Box::new(Expr::Identifier(Ident::new("a"))),
+        Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("b"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(Expr::Identifier(Ident::new("c"))),
+        }))),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: UnaryOperator::PGPostfixFactorial,
+                expr
+            }),
+            projection[i]
+        )
+    }
+
+    let sql_statements = ["SELECT !a", "SELECT !a b", "SELECT !a as b"];
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: an expression, found: !".to_string())
+        );
+    }
+
+    let sql_statements = ["SELECT a!", "SELECT a ! b", "SELECT a ! as b"];
+
+    // Due to the exclamation mark, which is both part of the `bang not` operator
+    // and the `factorial` operator,  additional filtering not supports
+    // `bang not` operator is required here.
+    let dialects =
+        all_dialects_where(|d| !d.supports_factorial_operator() && !d.supports_bang_not_operator());
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("No infix parser for token ExclamationMark".to_string())
+        );
+    }
+
+    // Due to the exclamation mark, which is both part of the `bang not` operator
+    // and the `factorial` operator,  additional filtering supports
+    // `bang not` operator is required here.
+    let dialects =
+        all_dialects_where(|d| !d.supports_factorial_operator() && d.supports_bang_not_operator());
+
+    for &sql in &sql_statements {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("No infix parser for token ExclamationMark".to_string())
+        );
+    }
+}
+
+#[test]
+fn parse_comments() {
+    match all_dialects_where(|d| d.supports_comment_on())
+        .verified_stmt("COMMENT ON COLUMN tab.name IS 'comment'")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            comment: Some(comment),
+            if_exists,
+        } => {
+            assert_eq!("comment", comment);
+            assert_eq!("tab.name", object_name.to_string());
+            assert_eq!(CommentObject::Column, object_type);
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    }
+
+    let object_types = [
+        ("COLUMN", CommentObject::Column),
+        ("EXTENSION", CommentObject::Extension),
+        ("TABLE", CommentObject::Table),
+        ("SCHEMA", CommentObject::Schema),
+        ("DATABASE", CommentObject::Database),
+        ("USER", CommentObject::User),
+        ("ROLE", CommentObject::Role),
+    ];
+    for (keyword, expected_object_type) in object_types.iter() {
+        match all_dialects_where(|d| d.supports_comment_on())
+            .verified_stmt(format!("COMMENT IF EXISTS ON {keyword} db.t0 IS 'comment'").as_str())
+        {
+            Statement::Comment {
+                object_type,
+                object_name,
+                comment: Some(comment),
+                if_exists,
+            } => {
+                assert_eq!("comment", comment);
+                assert_eq!("db.t0", object_name.to_string());
+                assert_eq!(*expected_object_type, object_type);
+                assert!(if_exists);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    match all_dialects_where(|d| d.supports_comment_on())
+        .verified_stmt("COMMENT IF EXISTS ON TABLE public.tab IS NULL")
+    {
+        Statement::Comment {
+            object_type,
+            object_name,
+            comment: None,
+            if_exists,
+        } => {
+            assert_eq!("public.tab", object_name.to_string());
+            assert_eq!(CommentObject::Table, object_type);
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+
+    // missing IS statement
+    assert_eq!(
+        all_dialects_where(|d| d.supports_comment_on())
+            .parse_sql_statements("COMMENT ON TABLE t0")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: IS, found: EOF".to_string())
+    );
+
+    // missing comment literal
+    assert_eq!(
+        all_dialects_where(|d| d.supports_comment_on())
+            .parse_sql_statements("COMMENT ON TABLE t0 IS")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: literal string, found: EOF".to_string())
+    );
+
+    // unknown object type
+    assert_eq!(
+        all_dialects_where(|d| d.supports_comment_on())
+            .parse_sql_statements("COMMENT ON UNKNOWN t0 IS 'comment'")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: comment object_type, found: UNKNOWN".to_string())
+    );
+}
+
+#[test]
+fn parse_create_table_select() {
+    let dialects = all_dialects_where(|d| d.supports_create_table_select());
+    let sql_1 = r#"CREATE TABLE foo (baz INT) SELECT bar"#;
+    let expected = r#"CREATE TABLE foo (baz INT) AS SELECT bar"#;
+    let _ = dialects.one_statement_parses_to(sql_1, expected);
+
+    let sql_2 = r#"CREATE TABLE foo (baz INT, name STRING) SELECT bar, oth_name FROM test.table_a"#;
+    let expected =
+        r#"CREATE TABLE foo (baz INT, name STRING) AS SELECT bar, oth_name FROM test.table_a"#;
+    let _ = dialects.one_statement_parses_to(sql_2, expected);
+
+    let dialects = all_dialects_where(|d| !d.supports_create_table_select());
+    for sql in [sql_1, sql_2] {
+        assert_eq!(
+            dialects.parse_sql_statements(sql).unwrap_err(),
+            ParserError::ParserError("Expected: end of statement, found: SELECT".to_string())
+        );
+    }
 }

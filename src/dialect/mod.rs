@@ -248,7 +248,7 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports named arguments of the form `FUN(a => '1', b => '2')`.
     fn supports_named_fn_args_with_rarrow_operator(&self) -> bool {
-        true //for compatible
+        true
     }
 
     /// Returns true if dialect supports argument name as arbitrary expression.

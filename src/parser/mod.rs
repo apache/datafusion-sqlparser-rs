@@ -11411,13 +11411,16 @@ impl<'a> Parser<'a> {
         if !dialect_of!(self is MsSqlDialect) {
             return None;
         }
-        if self.parse_keywords(&[Keyword::ABSENT, Keyword::ON, Keyword::NULL]) {
-            Some(JsonNullClause::AbsentOnNull)
-        } else if self.parse_keywords(&[Keyword::NULL, Keyword::ON, Keyword::NULL]) {
-            Some(JsonNullClause::NullOnNull)
-        } else {
-            None
+        if let Some(kw) = self.parse_one_of_keywords(&[Keyword::ABSENT, Keyword::NULL]) {
+            if self.parse_keywords(&[Keyword::ON, Keyword::NULL]) {
+                if kw == Keyword::ABSENT {
+                    return Some(JsonNullClause::AbsentOnNull);
+                } else if kw == Keyword::NULL {
+                    return Some(JsonNullClause::NullOnNull);
+                }
+            }
         }
+        None
     }
 
     fn parse_duplicate_treatment(&mut self) -> Result<Option<DuplicateTreatment>, ParserError> {

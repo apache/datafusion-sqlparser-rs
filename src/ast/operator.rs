@@ -51,6 +51,8 @@ pub enum UnaryOperator {
     PGPrefixFactorial,
     /// Absolute value, e.g. `@ -9` (PostgreSQL-specific)
     PGAbs,
+    /// Unary logical not operator: e.g. `! false` (Hive-specific)
+    BangNot,
 }
 
 impl fmt::Display for UnaryOperator {
@@ -65,6 +67,7 @@ impl fmt::Display for UnaryOperator {
             UnaryOperator::PGPostfixFactorial => "!",
             UnaryOperator::PGPrefixFactorial => "!!",
             UnaryOperator::PGAbs => "@",
+            UnaryOperator::BangNot => "!",
         })
     }
 }

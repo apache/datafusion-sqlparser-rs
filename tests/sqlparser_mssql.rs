@@ -29,7 +29,7 @@ use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::ParserError;
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -114,6 +114,7 @@ fn parse_create_procedure() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
                     into: None,
                     from: vec![],
@@ -189,6 +190,341 @@ fn parse_mssql_apply_join() {
     let _ = ms_and_generic().verified_only_select(
         "SELECT * FROM foo \
          OUTER APPLY (SELECT foo.x + 1) AS bar",
+    );
+}
+
+#[test]
+fn parse_mssql_openjson() {
+    let select = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param, '$.config') WITH (kind VARCHAR(20) '$.kind', [id_list] NVARCHAR(MAX) '$.id_list' AS JSON) AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    columns: vec![
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "kind".into(),
+                                quote_style: None,
+                            },
+                            r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                                length: 20,
+                                unit: None
+                            })),
+                            path: Some("$.kind".into()),
+                            as_json: false
+                        },
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "id_list".into(),
+                                quote_style: Some('['),
+                            },
+                            r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
+                            path: Some("$.id_list".into()),
+                            as_json: true
+                        }
+                    ],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param) WITH (kind VARCHAR(20) '$.kind', [id_list] NVARCHAR(MAX) '$.id_list' AS JSON) AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: None,
+                    columns: vec![
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "kind".into(),
+                                quote_style: None,
+                            },
+                            r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                                length: 20,
+                                unit: None
+                            })),
+                            path: Some("$.kind".into()),
+                            as_json: false
+                        },
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "id_list".into(),
+                                quote_style: Some('['),
+                            },
+                            r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
+                            path: Some("$.id_list".into()),
+                            as_json: true
+                        }
+                    ],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param) WITH (kind VARCHAR(20), [id_list] NVARCHAR(MAX)) AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: None,
+                    columns: vec![
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "kind".into(),
+                                quote_style: None,
+                            },
+                            r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                                length: 20,
+                                unit: None
+                            })),
+                            path: None,
+                            as_json: false
+                        },
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "id_list".into(),
+                                quote_style: Some('['),
+                            },
+                            r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
+                            path: None,
+                            as_json: false
+                        }
+                    ],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms_and_generic().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param, '$.config') AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    columns: vec![],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms_and_generic().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param) AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "t_test_table".into(),
+                    quote_style: None,
+                },]),
+                alias: Some(TableAlias {
+                    name: Ident {
+                        value: "A".into(),
+                        quote_style: None
+                    },
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(vec![
+                        Ident {
+                            value: "A".into(),
+                            quote_style: None,
+                        },
+                        Ident {
+                            value: "param".into(),
+                            quote_style: None,
+                        }
+                    ]),
+                    json_path: None,
+                    columns: vec![],
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "B".into(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
     );
 }
 
@@ -955,6 +1291,7 @@ fn parse_substring_in_select() {
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: Some(Distinct::Distinct),
                         top: None,
+                        top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
                             expr: Box::new(Expr::Identifier(Ident {
                                 value: "description".to_string(),
@@ -1014,7 +1351,7 @@ fn parse_substring_in_select() {
 #[test]
 fn parse_mssql_declare() {
     let sql = "DECLARE @foo CURSOR, @bar INT, @baz AS TEXT = 'foobar';";
-    let ast = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();
+    let ast = ms().parse_sql_statements(sql).unwrap();
 
     assert_eq!(
         vec![Statement::Declare {
@@ -1065,6 +1402,73 @@ fn parse_mssql_declare() {
                 }
             ]
         }],
+        ast
+    );
+
+    let sql = "DECLARE @bar INT;SET @bar = 2;SELECT @bar * 4";
+    let ast = ms().parse_sql_statements(sql).unwrap();
+    assert_eq!(
+        vec![
+            Statement::Declare {
+                stmts: vec![Declare {
+                    names: vec![Ident {
+                        value: "@bar".to_string(),
+                        quote_style: None
+                    }],
+                    data_type: Some(Int(None)),
+                    assignment: None,
+                    declare_type: None,
+                    binary: None,
+                    sensitive: None,
+                    scroll: None,
+                    hold: None,
+                    for_query: None
+                }]
+            },
+            Statement::SetVariable {
+                local: false,
+                hivevar: false,
+                variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("@bar")])),
+                value: vec![Expr::Value(Value::Number("2".parse().unwrap(), false))],
+            },
+            Statement::Query(Box::new(Query {
+                with: None,
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                order_by: None,
+                settings: None,
+                format_clause: None,
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("@bar"))),
+                        op: BinaryOperator::Multiply,
+                        right: Box::new(Expr::Value(Value::Number("4".parse().unwrap(), false))),
+                    })],
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    window_before_qualify: false,
+                    qualify: None,
+                    value_table_mode: None,
+                    connect_by: None,
+                })))
+            }))
+        ],
         ast
     );
 }
@@ -1468,6 +1872,18 @@ fn parse_create_table_with_identity_column() {
             }),
         );
     }
+}
+
+#[test]
+fn parse_true_false_as_identifiers() {
+    assert_eq!(
+        ms().verified_expr("true"),
+        Expr::Identifier(Ident::new("true"))
+    );
+    assert_eq!(
+        ms().verified_expr("false"),
+        Expr::Identifier(Ident::new("false"))
+    );
 }
 
 fn ms() -> TestedDialects {

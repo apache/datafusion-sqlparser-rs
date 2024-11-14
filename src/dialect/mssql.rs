@@ -50,12 +50,17 @@ impl Dialect for MsSqlDialect {
         true
     }
 
-    fn supports_eq_alias_assigment(&self) -> bool {
+    fn supports_eq_alias_assignment(&self) -> bool {
         true
     }
 
     fn supports_try_convert(&self) -> bool {
         true
+    }
+
+    /// In MSSQL, there is no boolean type, and `true` and `false` are valid column names
+    fn supports_boolean_literals(&self) -> bool {
+        false
     }
 
     fn supports_named_fn_args_with_colon_operator(&self) -> bool {

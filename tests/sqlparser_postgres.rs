@@ -1165,6 +1165,7 @@ fn parse_copy_to() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
+                    top_before_distinct: false,
                     projection: vec![
                         SelectItem::ExprWithAlias {
                             expr: Expr::Value(number("42")),
@@ -1538,8 +1539,9 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: ObjectName(vec!["a".into()]),
             parameters: vec![],
+            has_parentheses: false,
             using: vec![]
         }
     );
@@ -1548,11 +1550,12 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: ObjectName(vec!["a".into()]),
             parameters: vec![
                 Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
             ],
+            has_parentheses: true,
             using: vec![]
         }
     );
@@ -1562,8 +1565,9 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: ObjectName(vec!["a".into()]),
             parameters: vec![],
+            has_parentheses: false,
             using: vec![
                 Expr::Cast {
                     kind: CastKind::Cast,
@@ -2505,6 +2509,7 @@ fn parse_array_subquery_expr() {
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: None,
                         top: None,
+                        top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
                         into: None,
                         from: vec![],
@@ -2525,6 +2530,7 @@ fn parse_array_subquery_expr() {
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: None,
                         top: None,
+                        top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("2")))],
                         into: None,
                         from: vec![],
@@ -2883,68 +2889,6 @@ fn test_composite_value() {
         }),
         select.projection[0]
     );
-}
-
-#[test]
-fn parse_comments() {
-    match pg().verified_stmt("COMMENT ON COLUMN tab.name IS 'comment'") {
-        Statement::Comment {
-            object_type,
-            object_name,
-            comment: Some(comment),
-            if_exists,
-        } => {
-            assert_eq!("comment", comment);
-            assert_eq!("tab.name", object_name.to_string());
-            assert_eq!(CommentObject::Column, object_type);
-            assert!(!if_exists);
-        }
-        _ => unreachable!(),
-    }
-
-    match pg().verified_stmt("COMMENT ON EXTENSION plpgsql IS 'comment'") {
-        Statement::Comment {
-            object_type,
-            object_name,
-            comment: Some(comment),
-            if_exists,
-        } => {
-            assert_eq!("comment", comment);
-            assert_eq!("plpgsql", object_name.to_string());
-            assert_eq!(CommentObject::Extension, object_type);
-            assert!(!if_exists);
-        }
-        _ => unreachable!(),
-    }
-
-    match pg().verified_stmt("COMMENT ON TABLE public.tab IS 'comment'") {
-        Statement::Comment {
-            object_type,
-            object_name,
-            comment: Some(comment),
-            if_exists,
-        } => {
-            assert_eq!("comment", comment);
-            assert_eq!("public.tab", object_name.to_string());
-            assert_eq!(CommentObject::Table, object_type);
-            assert!(!if_exists);
-        }
-        _ => unreachable!(),
-    }
-
-    match pg().verified_stmt("COMMENT IF EXISTS ON TABLE public.tab IS NULL") {
-        Statement::Comment {
-            object_type,
-            object_name,
-            comment: None,
-            if_exists,
-        } => {
-            assert_eq!("public.tab", object_name.to_string());
-            assert_eq!(CommentObject::Table, object_type);
-            assert!(if_exists);
-        }
-        _ => unreachable!(),
-    }
 }
 
 #[test]

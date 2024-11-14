@@ -884,4 +884,30 @@ mod tests {
             assert_eq!(actual, expected)
         }
     }
+
+
+    struct QuickVisitor; // [`TestVisitor`] is too slow to iterate over thousands of nodes
+
+    impl Visitor for QuickVisitor {
+        type Break = ();
+    }
+
+    #[test]
+    fn overflow() {
+        let cond = (0..1000)
+            .map(|n| format!("X = {}", n))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let sql = format!("SELECT x where {0}", cond);
+
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, sql.as_str()).tokenize().unwrap();
+        let s = Parser::new(&dialect)
+            .with_tokens(tokens)
+            .parse_statement()
+            .unwrap();
+
+        let mut visitor = QuickVisitor {} ;
+        s.visit(&mut visitor);
+    }
 }

@@ -78,6 +78,7 @@ fn derive_visit(input: proc_macro::TokenStream, visit_type: &VisitType) -> proc_
     let expanded = quote! {
         // The generated impl.
         impl #impl_generics sqlparser::ast::#visit_trait for #name #ty_generics #where_clause {
+             #[cfg_attr(feature = "std", recursive::recursive)]
             fn visit<V: sqlparser::ast::#visitor_trait>(
                 &#modifier self,
                 visitor: &mut V

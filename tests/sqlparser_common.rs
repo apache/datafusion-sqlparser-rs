@@ -11748,3 +11748,13 @@ fn parse_create_table_select() {
         );
     }
 }
+
+#[test]
+fn overflow() {
+    let expr = std::iter::repeat("1").take(1000).collect::<Vec<_>>().join(" + ");
+    let sql = format!("SELECT {}", expr);
+
+    let mut statements = Parser::parse_sql(&GenericDialect {}, sql.as_str()).unwrap();
+    let statement = statements.pop().unwrap();
+    assert_eq!(statement.to_string(), sql);
+}

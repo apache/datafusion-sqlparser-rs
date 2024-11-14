@@ -29,7 +29,7 @@ use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::ParserError;
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -910,7 +910,7 @@ fn parse_substring_in_select() {
 #[test]
 fn parse_mssql_declare() {
     let sql = "DECLARE @foo CURSOR, @bar INT, @baz AS TEXT = 'foobar';";
-    let ast = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();
+    let ast = ms().parse_sql_statements(sql).unwrap();
 
     assert_eq!(
         vec![Statement::Declare {
@@ -961,6 +961,73 @@ fn parse_mssql_declare() {
                 }
             ]
         }],
+        ast
+    );
+
+    let sql = "DECLARE @bar INT;SET @bar = 2;SELECT @bar * 4";
+    let ast = ms().parse_sql_statements(sql).unwrap();
+    assert_eq!(
+        vec![
+            Statement::Declare {
+                stmts: vec![Declare {
+                    names: vec![Ident {
+                        value: "@bar".to_string(),
+                        quote_style: None
+                    }],
+                    data_type: Some(Int(None)),
+                    assignment: None,
+                    declare_type: None,
+                    binary: None,
+                    sensitive: None,
+                    scroll: None,
+                    hold: None,
+                    for_query: None
+                }]
+            },
+            Statement::SetVariable {
+                local: false,
+                hivevar: false,
+                variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("@bar")])),
+                value: vec![Expr::Value(Value::Number("2".parse().unwrap(), false))],
+            },
+            Statement::Query(Box::new(Query {
+                with: None,
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                order_by: None,
+                settings: None,
+                format_clause: None,
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("@bar"))),
+                        op: BinaryOperator::Multiply,
+                        right: Box::new(Expr::Value(Value::Number("4".parse().unwrap(), false))),
+                    })],
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    window_before_qualify: false,
+                    qualify: None,
+                    value_table_mode: None,
+                    connect_by: None,
+                })))
+            }))
+        ],
         ast
     );
 }
@@ -1364,6 +1431,18 @@ fn parse_create_table_with_identity_column() {
             }),
         );
     }
+}
+
+#[test]
+fn parse_true_false_as_identifiers() {
+    assert_eq!(
+        ms().verified_expr("true"),
+        Expr::Identifier(Ident::new("true"))
+    );
+    assert_eq!(
+        ms().verified_expr("false"),
+        Expr::Identifier(Ident::new("false"))
+    );
 }
 
 fn ms() -> TestedDialects {

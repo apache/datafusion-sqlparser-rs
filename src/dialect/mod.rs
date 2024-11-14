@@ -620,9 +620,31 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect expects the the `TOP` option
+    /// Returns true if this dialect expects the `TOP` option
     /// before the `ALL`/`DISTINCT` options in a `SELECT` statement.
     fn supports_top_before_distinct(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports boolean literals (`true` and `false`).
+    /// For example, in MSSQL these are treated as identifiers rather than boolean literals.
+    fn supports_boolean_literals(&self) -> bool {
+        true
+    }
+
+    /// Returns true if this dialect supports the `LIKE 'pattern'` option in
+    /// a `SHOW` statement before the `IN` option
+    fn supports_show_like_before_in(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `COMMENT` statement
+    fn supports_comment_on(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `CREATE TABLE SELECT` statement
+    fn supports_create_table_select(&self) -> bool {
         false
     }
 }

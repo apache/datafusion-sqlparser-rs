@@ -96,6 +96,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See [doc](https://docs.snowflake.com/en/sql-reference/sql/comment)
+    fn supports_comment_on(&self) -> bool {
+        true
+    }
+
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE
@@ -201,6 +206,12 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn allow_extract_single_quotes(&self) -> bool {
+        true
+    }
+
+    /// Snowflake expects the `LIKE` option before the `IN` option,
+    /// for example: <https://docs.snowflake.com/en/sql-reference/sql/show-views#syntax>
+    fn supports_show_like_before_in(&self) -> bool {
         true
     }
 }

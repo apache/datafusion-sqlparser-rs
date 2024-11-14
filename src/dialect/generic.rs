@@ -111,4 +111,8 @@ impl Dialect for GenericDialect {
     fn supports_try_convert(&self) -> bool {
         true
     }
+
+    fn supports_comment_on(&self) -> bool {
+        true
+    }
 }

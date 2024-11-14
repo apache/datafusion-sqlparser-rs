@@ -251,7 +251,9 @@ pub trait Dialect: Debug + Any {
         true //for compatible
     }
 
-    /// Returns true if dialect supports argument name as arbitrary expression (`FUN(<arbitrary-expr>:<arbitrary-expr>,...)`),and will use the `FunctionArg::ExprNamed` variant,
+    /// Returns true if dialect supports argument name as arbitrary expression.
+    /// e.g. `FUN(LOWER('a'):'1',  b:'2')`
+    /// Such function arguments are represented in the AST by the `FunctionArg::ExprNamed` variant,
     /// otherwise use the `FunctionArg::Named` variant (compatible reason).
     fn supports_named_fn_args_with_expr_name(&self) -> bool {
         false

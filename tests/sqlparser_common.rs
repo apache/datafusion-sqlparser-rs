@@ -11404,6 +11404,76 @@ fn test_try_convert() {
 }
 
 #[test]
+fn parse_method_select() {
+    let dialects = all_dialects_where(|d| d.supports_methods());
+    let _ = dialects.verified_only_select(
+        "SELECT LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T",
+    );
+    let _ = dialects.verified_only_select("SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T");
+    let _ = dialects
+        .verified_only_select("SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T");
+
+    // `CONVERT` support
+    let dialects = all_dialects_where(|d| {
+        d.supports_methods() && d.supports_try_convert() && d.convert_type_before_value()
+    });
+    let _ = dialects.verified_only_select("SELECT CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T");
+}
+
+#[test]
+fn parse_method_expr() {
+    let dialects = all_dialects_where(|d| d.supports_methods());
+    let expr = dialects
+        .verified_expr("LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')");
+    match expr {
+        Expr::Method(Method { expr, method_chain }) => {
+            assert!(matches!(*expr, Expr::Function(_)));
+            assert!(matches!(
+                method_chain[..],
+                [Function { .. }, Function { .. }]
+            ));
+        }
+        _ => unreachable!(),
+    }
+    let expr = dialects.verified_expr(
+        "(SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)')",
+    );
+    match expr {
+        Expr::Method(Method { expr, method_chain }) => {
+            assert!(matches!(*expr, Expr::Subquery(_)));
+            assert!(matches!(method_chain[..], [Function { .. }]));
+        }
+        _ => unreachable!(),
+    }
+    let expr = dialects.verified_expr("CAST(column AS XML).value('.', 'NVARCHAR(MAX)')");
+    match expr {
+        Expr::Method(Method { expr, method_chain }) => {
+            assert!(matches!(*expr, Expr::Cast { .. }));
+            assert!(matches!(method_chain[..], [Function { .. }]));
+        }
+        _ => unreachable!(),
+    }
+
+    // `CONVERT` support
+    let dialects = all_dialects_where(|d| {
+        d.supports_methods() && d.supports_try_convert() && d.convert_type_before_value()
+    });
+    let expr = dialects.verified_expr(
+        "CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')",
+    );
+    match expr {
+        Expr::Method(Method { expr, method_chain }) => {
+            assert!(matches!(*expr, Expr::Convert { .. }));
+            assert!(matches!(
+                method_chain[..],
+                [Function { .. }, Function { .. }]
+            ));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_show_dbs_schemas_tables_views() {
     // These statements are parsed the same by all dialects
     let stmts = vec![

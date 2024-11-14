@@ -62,4 +62,8 @@ impl Dialect for MsSqlDialect {
     fn supports_boolean_literals(&self) -> bool {
         false
     }
+
+    fn supports_methods(&self) -> bool {
+        true
+    }
 }

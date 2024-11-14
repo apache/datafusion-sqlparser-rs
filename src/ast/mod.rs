@@ -808,6 +808,23 @@ pub enum Expr {
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
+    /// Arbitrary expr method call
+    ///
+    /// Syntax:
+    ///
+    /// `<arbitrary-expr>.<function-call>.<function-call-expr>...`
+    ///
+    /// > `arbitrary-expr` can be any expression including a function call.
+    ///
+    /// Example:
+    ///
+    /// ```sql
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
+    /// SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)').value('.','NVARCHAR(MAX)')
+    /// ```
+    ///
+    /// (mssql): <https://learn.microsoft.com/en-us/sql/t-sql/xml/xml-data-type-methods?view=sql-server-ver16>
+    Method(Method),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -1464,6 +1481,7 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{fun}"),
+            Expr::Method(method) => write!(f, "{method}"),
             Expr::Case {
                 operand,
                 conditions,
@@ -5606,6 +5624,27 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
             FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
         }
+    }
+}
+
+/// A method call
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Method {
+    pub expr: Box<Expr>,
+    // always non-empty
+    pub method_chain: Vec<Function>,
+}
+
+impl fmt::Display for Method {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}.{}",
+            self.expr,
+            display_separated(&self.method_chain, ".")
+        )
     }
 }
 

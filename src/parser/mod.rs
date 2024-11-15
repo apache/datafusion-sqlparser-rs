@@ -1317,6 +1317,7 @@ impl<'a> Parser<'a> {
                     }
                 };
                 self.expect_token(&Token::RParen)?;
+                let expr = self.try_parse_method(expr)?;
                 if !self.consume_token(&Token::Period) {
                     Ok(expr)
                 } else {
@@ -1346,6 +1347,9 @@ impl<'a> Parser<'a> {
             }
             _ => self.expected("an expression", next_token),
         }?;
+
+        let expr = self.try_parse_method(expr)?;
+
         if self.parse_keyword(Keyword::COLLATE) {
             Ok(Expr::Collate {
                 expr: Box::new(expr),
@@ -1401,6 +1405,41 @@ impl<'a> Parser<'a> {
                 body: Box::new(expr),
             }))
         })
+    }
+
+    /// Parses method call expression
+    fn try_parse_method(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        if !self.dialect.supports_methods() {
+            return Ok(expr);
+        }
+        let method_chain = self.maybe_parse(|p| {
+            let mut method_chain = Vec::new();
+            while p.consume_token(&Token::Period) {
+                let tok = p.next_token();
+                let name = match tok.token {
+                    Token::Word(word) => word.to_ident(),
+                    _ => return p.expected("identifier", tok),
+                };
+                let func = match p.parse_function(ObjectName(vec![name]))? {
+                    Expr::Function(func) => func,
+                    _ => return p.expected("function", p.peek_token()),
+                };
+                method_chain.push(func);
+            }
+            if !method_chain.is_empty() {
+                Ok(method_chain)
+            } else {
+                p.expected("function", p.peek_token())
+            }
+        })?;
+        if let Some(method_chain) = method_chain {
+            Ok(Expr::Method(Method {
+                expr: Box::new(expr),
+                method_chain,
+            }))
+        } else {
+            Ok(expr)
+        }
     }
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {

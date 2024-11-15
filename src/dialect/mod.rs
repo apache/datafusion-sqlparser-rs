@@ -302,6 +302,15 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports method calls, for example:
+    ///
+    /// ```sql
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')
+    /// ```
+    fn supports_methods(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports multiple variable assignment
     /// using parentheses in a `SET` variable declaration.
     ///

@@ -43,7 +43,7 @@ fn basic_queries(c: &mut Criterion) {
         b.iter(|| Parser::parse_sql(&dialect, with_query));
     });
 
-    let complex_sql = {
+    let large_statement = {
         let expressions = (0..1000)
             .map(|n| format!("FN_{}(COL_{})", n, n))
             .collect::<Vec<_>>()
@@ -67,19 +67,19 @@ fn basic_queries(c: &mut Criterion) {
         )
     };
 
-    group.bench_function("parse_large_query", |b| {
-        b.iter(|| Parser::parse_sql(&dialect, criterion::black_box(complex_sql.as_str())));
+    group.bench_function("parse_large_statement", |b| {
+        b.iter(|| Parser::parse_sql(&dialect, criterion::black_box(large_statement.as_str())));
     });
 
-    let complex_query = Parser::parse_sql(&dialect, complex_sql.as_str())
+    let large_statement = Parser::parse_sql(&dialect, large_statement.as_str())
         .unwrap()
         .pop()
         .unwrap();
 
-    group.bench_function("format_large_query", |b| {
+    group.bench_function("format_large_statement", |b| {
         b.iter(|| {
-            let formatted_query = complex_query.to_string();
-            assert_eq!(formatted_query, complex_sql);
+            let formatted_query = large_statement.to_string();
+            assert_eq!(formatted_query, large_statement);
         });
     });
 }

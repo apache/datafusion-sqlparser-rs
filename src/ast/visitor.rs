@@ -885,7 +885,6 @@ mod tests {
         }
     }
 
-
     struct QuickVisitor; // [`TestVisitor`] is too slow to iterate over thousands of nodes
 
     impl Visitor for QuickVisitor {
@@ -907,7 +906,7 @@ mod tests {
             .parse_statement()
             .unwrap();
 
-        let mut visitor = QuickVisitor {} ;
+        let mut visitor = QuickVisitor {};
         s.visit(&mut visitor);
     }
 }

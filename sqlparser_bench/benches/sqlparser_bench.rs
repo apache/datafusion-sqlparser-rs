@@ -42,6 +42,46 @@ fn basic_queries(c: &mut Criterion) {
     group.bench_function("sqlparser::with_select", |b| {
         b.iter(|| Parser::parse_sql(&dialect, with_query));
     });
+
+    let complex_sql = {
+        let expressions = (0..1000)
+            .map(|n| format!("FN_{}(COL_{})", n, n))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let tables = (0..1000)
+            .map(|n| format!("TABLE_{}", n))
+            .collect::<Vec<_>>()
+            .join(" JOIN ");
+        let where_condition = (0..1000)
+            .map(|n| format!("COL_{} = {}", n, n))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let order_condition = (0..1000)
+            .map(|n| format!("COL_{} DESC", n))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        format!(
+            "SELECT {} FROM {} WHERE {} ORDER BY {}",
+            expressions, tables, where_condition, order_condition
+        )
+    };
+
+    group.bench_function("parse_large_query", |b| {
+        b.iter(|| Parser::parse_sql(&dialect, criterion::black_box(complex_sql.as_str())));
+    });
+
+    let complex_query = Parser::parse_sql(&dialect, complex_sql.as_str())
+        .unwrap()
+        .pop()
+        .unwrap();
+
+    group.bench_function("format_large_query", |b| {
+        b.iter(|| {
+            let formatted_query = complex_query.to_string();
+            assert_eq!(formatted_query, complex_sql);
+        });
+    });
 }
 
 criterion_group!(benches, basic_queries);

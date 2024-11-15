@@ -532,7 +532,11 @@ fn parse_select_with_table_alias() {
                 name: ObjectName(vec![Ident::new("lineitem")]),
                 alias: Some(TableAlias {
                     name: Ident::new("l"),
-                    columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C"),],
+                    columns: vec![
+                        TableAliasColumnDef::from_column_name("A"),
+                        TableAliasColumnDef::from_column_name("B"),
+                        TableAliasColumnDef::from_column_name("C"),
+                    ],
                 }),
                 args: None,
                 with_hints: vec![],
@@ -5577,6 +5581,40 @@ fn parse_table_function() {
 }
 
 #[test]
+fn parse_table_valued_function_with_alias_and_column_defs() {
+    let sql = r#"SELECT * FROM jsonb_to_record('{"a": "x", "b": 2}'::JSONB) AS x (a TEXT, b INT)"#;
+    let select = verified_only_select(sql);
+
+    match only(&select.from) {
+        TableWithJoins {
+            relation: TableFactor::Table {
+                alias: Some(alias), ..
+            },
+            ..
+        } => {
+            assert_eq!(alias.name.value, "x");
+            assert_eq!(
+                alias.columns,
+                vec![
+                    TableAliasColumnDef {
+                        name: Ident::new("a"),
+                        data_type: Some(DataType::Text),
+                    },
+                    TableAliasColumnDef {
+                        name: Ident::new("b"),
+                        data_type: Some(DataType::Int(None)),
+                    },
+                ]
+            );
+        }
+        _ => unreachable!(
+            "Expecting only TableWithJoins with TableFactor::Table, got {:#?}",
+            select.from
+        ),
+    }
+}
+
+#[test]
 fn parse_unnest() {
     let sql = "SELECT UNNEST(make_array(1, 2, 3))";
     one_statement_parses_to(sql, sql);
@@ -6335,7 +6373,10 @@ fn parse_cte_renamed_columns() {
     let sql = "WITH cte (col1, col2) AS (SELECT foo, bar FROM baz) SELECT * FROM cte";
     let query = all_dialects().verified_query(sql);
     assert_eq!(
-        vec![Ident::new("col1"), Ident::new("col2")],
+        vec![
+            TableAliasColumnDef::from_column_name("col1"),
+            TableAliasColumnDef::from_column_name("col2")
+        ],
         query
             .with
             .unwrap()
@@ -6364,10 +6405,7 @@ fn parse_recursive_cte() {
                 value: "nums".to_string(),
                 quote_style: None,
             },
-            columns: vec![Ident {
-                value: "val".to_string(),
-                quote_style: None,
-            }],
+            columns: vec![TableAliasColumnDef::from_column_name("val")],
         },
         query: Box::new(cte_query),
         from: None,
@@ -9310,7 +9348,10 @@ fn parse_pivot_table() {
                     value: "p".to_string(),
                     quote_style: None
                 },
-                columns: vec![Ident::new("c"), Ident::new("d")],
+                columns: vec![
+                    TableAliasColumnDef::from_column_name("c"),
+                    TableAliasColumnDef::from_column_name("d"),
+                ],
             }),
         }
     );
@@ -9371,8 +9412,8 @@ fn parse_unpivot_table() {
                 name: Ident::new("u"),
                 columns: ["product", "quarter", "quantity"]
                     .into_iter()
-                    .map(Ident::new)
-                    .collect()
+                    .map(TableAliasColumnDef::from_column_name)
+                    .collect(),
             }),
         }
     );

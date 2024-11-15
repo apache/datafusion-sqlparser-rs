@@ -389,6 +389,7 @@ define_keywords!(
     INITIALLY,
     INNER,
     INOUT,
+    INPATH,
     INPUT,
     INPUTFORMAT,
     INSENSITIVE,

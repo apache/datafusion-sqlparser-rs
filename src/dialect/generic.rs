@@ -115,4 +115,8 @@ impl Dialect for GenericDialect {
     fn supports_comment_on(&self) -> bool {
         true
     }
+
+    fn supports_load_extension(&self) -> bool {
+        true
+    }
 }

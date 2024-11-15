@@ -11408,9 +11408,6 @@ impl<'a> Parser<'a> {
 
     /// Parses MSSQL's json-null-clause
     fn parse_json_null_clause(&mut self) -> Option<JsonNullClause> {
-        if !dialect_of!(self is MsSqlDialect) {
-            return None;
-        }
         if self.parse_keywords(&[Keyword::ABSENT, Keyword::ON, Keyword::NULL]) {
             Some(JsonNullClause::AbsentOnNull)
         } else if self.parse_keywords(&[Keyword::NULL, Keyword::ON, Keyword::NULL]) {

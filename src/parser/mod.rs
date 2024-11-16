@@ -8607,10 +8607,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a parenthesized comma-separated list of unqualified, possibly quoted identifiers
-    pub fn parse_table_alias_column_defs(
-        &mut self,
-    ) -> Result<Vec<TableAliasColumnDef>, ParserError> {
+    /// Parse a parenthesized comma-separated list of table alias column definitions.
+    fn parse_table_alias_column_defs(&mut self) -> Result<Vec<TableAliasColumnDef>, ParserError> {
         if self.consume_token(&Token::LParen) {
             let cols = self.parse_comma_separated(|p| {
                 let name = p.parse_identifier(false)?;

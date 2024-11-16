@@ -5581,7 +5581,7 @@ fn parse_table_function() {
 }
 
 #[test]
-fn parse_table_valued_function_with_alias_and_column_defs() {
+fn parse_select_with_alias_and_column_defs() {
     let sql = r#"SELECT * FROM jsonb_to_record('{"a": "x", "b": 2}'::JSONB) AS x (a TEXT, b INT)"#;
     let select = verified_only_select(sql);
 

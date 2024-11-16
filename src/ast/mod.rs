@@ -6311,11 +6311,11 @@ impl fmt::Display for SqliteOnConflict {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use SqliteOnConflict::*;
         match self {
-            Rollback => write!(f, "ROLLBACK"),
-            Abort => write!(f, "ABORT"),
-            Fail => write!(f, "FAIL"),
-            Ignore => write!(f, "IGNORE"),
-            Replace => write!(f, "REPLACE"),
+            Rollback => write!(f, "OR ROLLBACK"),
+            Abort => write!(f, "OR ABORT"),
+            Fail => write!(f, "OR FAIL"),
+            Ignore => write!(f, "OR IGNORE"),
+            Replace => write!(f, "OR REPLACE"),
         }
     }
 }

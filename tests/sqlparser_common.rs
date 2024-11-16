@@ -509,33 +509,21 @@ fn parse_update_with_table_alias() {
 
 #[test]
 fn parse_update_or() {
-    let dialect = SQLiteDialect {};
-
-    let check = |sql: &str, expected_action: Option<SqliteOnConflict>| match Parser::parse_sql(
-        &dialect, sql,
-    )
-    .unwrap()
-    .pop()
-    .unwrap()
-    {
-        Statement::Update { or, .. } => assert_eq!(or, expected_action),
-        _ => panic!("{}", sql),
+    let expect_or_clause = |sql: &str, expected_action: SqliteOnConflict| match verified_stmt(sql) {
+        Statement::Update { or, .. } => assert_eq!(or, Some(expected_action)),
+        other => unreachable!("Expected update with or, got {:?}", other),
     };
-
-    let sql = "UPDATE OR REPLACE t SET n = n + 1";
-    check(sql, Some(SqliteOnConflict::Replace));
-
-    let sql = "UPDATE OR ROLLBACK t SET n = n + 1";
-    check(sql, Some(SqliteOnConflict::Rollback));
-
-    let sql = "UPDATE OR ABORT t SET n = n + 1";
-    check(sql, Some(SqliteOnConflict::Abort));
-
-    let sql = "UPDATE OR FAIL t SET n = n + 1";
-    check(sql, Some(SqliteOnConflict::Fail));
-
-    let sql = "UPDATE OR IGNORE t SET n = n + 1";
-    check(sql, Some(SqliteOnConflict::Ignore));
+    expect_or_clause(
+        "UPDATE OR REPLACE t SET n = n + 1",
+        SqliteOnConflict::Replace,
+    );
+    expect_or_clause(
+        "UPDATE OR ROLLBACK t SET n = n + 1",
+        SqliteOnConflict::Rollback,
+    );
+    expect_or_clause("UPDATE OR ABORT t SET n = n + 1", SqliteOnConflict::Abort);
+    expect_or_clause("UPDATE OR FAIL t SET n = n + 1", SqliteOnConflict::Fail);
+    expect_or_clause("UPDATE OR IGNORE t SET n = n + 1", SqliteOnConflict::Ignore);
 }
 
 #[test]

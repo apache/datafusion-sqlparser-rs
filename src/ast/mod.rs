@@ -2396,6 +2396,8 @@ pub enum Statement {
         selection: Option<Expr>,
         /// RETURNING
         returning: Option<Vec<SelectItem>>,
+        /// SQLite-specific conflict resolution clause
+        or: Option<SqliteOnConflict>,
     },
     /// ```sql
     /// DELETE
@@ -3691,8 +3693,13 @@ impl fmt::Display for Statement {
                 from,
                 selection,
                 returning,
+                or,
             } => {
-                write!(f, "UPDATE {table}")?;
+                write!(f, "UPDATE ")?;
+                if let Some(or) = or {
+                    write!(f, "{or} ")?;
+                }
+                write!(f, "{table}")?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }

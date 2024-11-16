@@ -1970,6 +1970,7 @@ fn parse_update_with_joins() {
             from: _from,
             selection,
             returning,
+            or: None,
         } => {
             assert_eq!(
                 TableWithJoins {

@@ -443,6 +443,7 @@ fn parse_update_set_from() {
                 ])),
             }),
             returning: None,
+            or: None,
         }
     );
 }
@@ -457,6 +458,7 @@ fn parse_update_with_table_alias() {
             from: _from,
             selection,
             returning,
+            or: None,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -503,6 +505,37 @@ fn parse_update_with_table_alias() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_update_or() {
+    let dialect = SQLiteDialect {};
+
+    let check = |sql: &str, expected_action: Option<SqliteOnConflict>| match Parser::parse_sql(
+        &dialect, sql,
+    )
+    .unwrap()
+    .pop()
+    .unwrap()
+    {
+        Statement::Update { or, .. } => assert_eq!(or, expected_action),
+        _ => panic!("{}", sql),
+    };
+
+    let sql = "UPDATE OR REPLACE t SET n = n + 1";
+    check(sql, Some(SqliteOnConflict::Replace));
+
+    let sql = "UPDATE OR ROLLBACK t SET n = n + 1";
+    check(sql, Some(SqliteOnConflict::Rollback));
+
+    let sql = "UPDATE OR ABORT t SET n = n + 1";
+    check(sql, Some(SqliteOnConflict::Abort));
+
+    let sql = "UPDATE OR FAIL t SET n = n + 1";
+    check(sql, Some(SqliteOnConflict::Fail));
+
+    let sql = "UPDATE OR IGNORE t SET n = n + 1";
+    check(sql, Some(SqliteOnConflict::Ignore));
 }
 
 #[test]

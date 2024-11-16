@@ -1694,6 +1694,13 @@ impl fmt::Display for Join {
                 suffix(constraint)
             ),
             JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
+            JoinOperator::Semi(constraint) => write!(
+                f,
+                " {}SEMI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
             JoinOperator::LeftSemi(constraint) => write!(
                 f,
                 " {}LEFT SEMI JOIN {}{}",
@@ -1753,6 +1760,8 @@ pub enum JoinOperator {
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
     CrossJoin,
+    /// SEMI (non-standard)
+    Semi(JoinConstraint),
     /// LEFT SEMI (non-standard)
     LeftSemi(JoinConstraint),
     /// RIGHT SEMI (non-standard)

@@ -10025,6 +10025,11 @@ impl<'a> Parser<'a> {
                             }
                         }
                     }
+                    Keyword::ANTI => {
+                        let _ = self.next_token(); // consume ANTI
+                        self.expect_keyword(Keyword::JOIN)?;
+                        JoinOperator::Anti
+                    }
                     Keyword::FULL => {
                         let _ = self.next_token(); // consume FULL
                         let _ = self.parse_keyword(Keyword::OUTER); // [ OUTER ]

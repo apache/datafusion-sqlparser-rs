@@ -1708,6 +1708,13 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             ),
+            JoinOperator::Anti(constraint) => write!(
+                f,
+                " {}ANTI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
             JoinOperator::LeftAnti(constraint) => write!(
                 f,
                 " {}LEFT ANTI JOIN {}{}",
@@ -1750,6 +1757,8 @@ pub enum JoinOperator {
     LeftSemi(JoinConstraint),
     /// RIGHT SEMI (non-standard)
     RightSemi(JoinConstraint),
+    /// ANTI (non-standard)
+    Anti(JoinConstraint),
     /// LEFT ANTI (non-standard)
     LeftAnti(JoinConstraint),
     /// RIGHT ANTI (non-standard)

@@ -6032,6 +6032,10 @@ fn parse_joins_on() {
         )]
     );
     assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, false, JoinOperator::Anti)]
+    );
+    assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint(
             "t2",
@@ -6124,6 +6128,10 @@ fn parse_joins_using() {
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT SEMI JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightSemi)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 ANTI JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Anti)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 USING(c1)").from).joins,

@@ -1627,7 +1627,7 @@ pub struct TableAliasColumnDef {
 
 impl TableAliasColumnDef {
     /// Create a new table alias column definition with only a name and no type
-    pub fn from_column_name(name: &str) -> Self {
+    pub fn from_name<S: Into<String>>(name: S) -> Self {
         TableAliasColumnDef {
             name: Ident::new(name),
             data_type: None,

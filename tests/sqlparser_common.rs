@@ -533,9 +533,9 @@ fn parse_select_with_table_alias() {
                 alias: Some(TableAlias {
                     name: Ident::new("l"),
                     columns: vec![
-                        TableAliasColumnDef::from_column_name("A"),
-                        TableAliasColumnDef::from_column_name("B"),
-                        TableAliasColumnDef::from_column_name("C"),
+                        TableAliasColumnDef::from_name("A"),
+                        TableAliasColumnDef::from_name("B"),
+                        TableAliasColumnDef::from_name("C"),
                     ],
                 }),
                 args: None,
@@ -6374,8 +6374,8 @@ fn parse_cte_renamed_columns() {
     let query = all_dialects().verified_query(sql);
     assert_eq!(
         vec![
-            TableAliasColumnDef::from_column_name("col1"),
-            TableAliasColumnDef::from_column_name("col2")
+            TableAliasColumnDef::from_name("col1"),
+            TableAliasColumnDef::from_name("col2")
         ],
         query
             .with
@@ -6405,7 +6405,7 @@ fn parse_recursive_cte() {
                 value: "nums".to_string(),
                 quote_style: None,
             },
-            columns: vec![TableAliasColumnDef::from_column_name("val")],
+            columns: vec![TableAliasColumnDef::from_name("val")],
         },
         query: Box::new(cte_query),
         from: None,
@@ -9349,8 +9349,8 @@ fn parse_pivot_table() {
                     quote_style: None
                 },
                 columns: vec![
-                    TableAliasColumnDef::from_column_name("c"),
-                    TableAliasColumnDef::from_column_name("d"),
+                    TableAliasColumnDef::from_name("c"),
+                    TableAliasColumnDef::from_name("d"),
                 ],
             }),
         }
@@ -9412,7 +9412,7 @@ fn parse_unpivot_table() {
                 name: Ident::new("u"),
                 columns: ["product", "quarter", "quantity"]
                     .into_iter()
-                    .map(TableAliasColumnDef::from_column_name)
+                    .map(TableAliasColumnDef::from_name)
                     .collect(),
             }),
         }

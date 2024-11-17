@@ -56,4 +56,9 @@ impl Dialect for HiveDialect {
     fn supports_bang_not_operator(&self) -> bool {
         true
     }
+
+    /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
+    fn supports_load_data(&self) -> bool {
+        true
+    }
 }

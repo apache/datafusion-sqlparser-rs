@@ -3167,7 +3167,7 @@ pub enum Statement {
     /// KILL [CONNECTION | QUERY | MUTATION]
     /// ```
     ///
-    /// See <https://clickhouse.com/docs/ru/sql-reference/statements/kill/>
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/kill/>
     /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
     Kill {
         modifier: Option<KillType>,

@@ -3340,6 +3340,13 @@ pub enum Statement {
     /// See Postgres <https://www.postgresql.org/docs/current/sql-listen.html>
     LISTEN { channel: Ident },
     /// ```sql
+    /// UNLISTEN
+    /// ```
+    /// stop listening for a notification
+    ///
+    /// See Postgres <https://www.postgresql.org/docs/current/sql-unlisten.html>
+    UNLISTEN { channel: Ident },
+    /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
     /// send a notification event together with an optional “payload” string to channel
@@ -4946,6 +4953,10 @@ impl fmt::Display for Statement {
             }
             Statement::LISTEN { channel } => {
                 write!(f, "LISTEN {channel}")?;
+                Ok(())
+            }
+            Statement::UNLISTEN { channel } => {
+                write!(f, "UNLISTEN {channel}")?;
                 Ok(())
             }
             Statement::NOTIFY { channel, payload } => {

@@ -638,6 +638,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `UNLISTEN` statement
+    fn supports_unlisten(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `NOTIFY` statement
     fn supports_notify(&self) -> bool {
         false

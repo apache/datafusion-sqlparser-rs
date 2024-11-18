@@ -11618,6 +11618,37 @@ fn parse_listen_channel() {
 }
 
 #[test]
+fn parse_unlisten_channel() {
+    let dialects = all_dialects_where(|d| d.supports_unlisten());
+
+    match dialects.verified_stmt("UNLISTEN test1") {
+        Statement::UNLISTEN { channel } => {
+            assert_eq!(Ident::new("test1"), channel);
+        }
+        _ => unreachable!(),
+    };
+
+    match dialects.verified_stmt("UNLISTEN *") {
+        Statement::UNLISTEN { channel } => {
+            assert_eq!(Ident::new("*"), channel);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        dialects.parse_sql_statements("UNLISTEN +").unwrap_err(),
+        ParserError::ParserError("Expected: wildcard or identent, found: +".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_listen());
+
+    assert_eq!(
+        dialects.parse_sql_statements("UNLISTEN test1").unwrap_err(),
+        ParserError::ParserError("Expected: an SQL statement, found: UNLISTEN".to_string())
+    );
+}
+
+#[test]
 fn parse_notify_channel() {
     let dialects = all_dialects_where(|d| d.supports_notify());
 

@@ -1025,6 +1025,8 @@ impl<'a> Parser<'a> {
         Ok(Statement::NOTIFY { channel, payload })
     }
 
+    // Tries to parse an expression by matching the specified word to known keywords that have a special meaning in the dialect.
+    // Returns `None if no match is found.
     fn parse_expr_prefix_by_reserved_word(
         &mut self,
         w: &Word,
@@ -1131,7 +1133,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expr_prefix_by_nonreserved_word(&mut self, w: &Word) -> Result<Expr, ParserError> {
+    // Tries to parse an expression by a word that is not known to have a special meaning in the dialect.
+    fn parse_expr_prefix_by_unnreserved_word(&mut self, w: &Word) -> Result<Expr, ParserError> {
         match self.peek_token().token {
             Token::LParen | Token::Period => {
                 let mut id_parts: Vec<Ident> = vec![w.to_ident()];
@@ -1248,24 +1251,249 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         let expr = match next_token.token {
             Token::Word(w) => {
-                // Save the parser index so we can rollback
-                let index_before = self.index;
-                // We first try to parse the word as the prefix of an expression.
-                // For example, the word INTERVAL in: SELECT INTERVAL '7' DAY
-                match self.parse_expr_prefix_by_reserved_word(&w) {
-                    // No expression prefix associated with this word
-                    Ok(None) => Ok(self.parse_expr_prefix_by_nonreserved_word(&w)?),
+                // The word we consumed may fall into one of two cases: it has a special meaning, or not.
+                // For example, in Snowflake, the word `interval` may have two meanings depending on the context:
+                // `SELECT CURRENT_DATE() + INTERVAL '1 DAY', MAX(interval) FROM tbl;`
+                //                          ^^^^^^^^^^^^^^^^      ^^^^^^^^
+                //                         interval expression   identifier
+                //
+                // We first try to parse the word and following tokens as a special expression, and if that fails,
+                // we rollback and try to parse it as an identifier.
+                match self
+                    .maybe_parse_internal(|parser| parser.parse_expr_prefix_by_reserved_word(&w))
+                {
                     // This word indicated an expression prefix and parsing was successful
                     Ok(Some(expr)) => Ok(expr),
-                    // This word indicated an expression prefix but parsing failed. Two options:
-                    // 1. Malformed statement
-                    // 2. The dialect may allow this word as identifier as well as indicating an expression
+
+                    // No expression prefix associated with this word
+                    Ok(None) => Ok(self.parse_expr_prefix_by_unnreserved_word(&w)?),
+
+                    // If parsing of the word as a special expression failed, we are facing two options:
+                    // 1. The statement is malformed, e.g. `SELECT INTERVAL '1 DAI`
+                    // 2. The word is used as an identifier, e.g. `SELECT MAX(interval) FROM tbl`
+                    // We first try to parse the word as an identifier and if that fails
+                    // we rollback and return the parsing error we got from trying to parse a
+                    // special expression (to maintain backwards compatibility of parsing errors).
+                    Err(e) => {
+                        if !self.dialect.is_reserved_for_identifier(w.keyword) {
+                            if let Ok(expr) = self.maybe_parse_internal(|parser| {
+                                parser.parse_expr_prefix_by_unnreserved_word(&w)
+                            }) {
+                                return Ok(expr);
+                            }
+                        }
+                        return Err(e);
+                    }
+                }
+            } // End of Token::Word
+            // array `[1, 2, 3]`
+            Token::LBracket => self.parse_array_expr(false),
+            tok @ Token::Minus | tok @ Token::Plus => {
+                let op = if tok == Token::Plus {
+                    UnaryOperator::Plus
+                } else {
+                    UnaryOperator::Minus
+                };
+                Ok(Expr::UnaryOp {
+                    op,
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::MulDivModOp))?,
+                    ),
+                })
+            }
+            Token::ExclamationMark if self.dialect.supports_bang_not_operator() => {
+                Ok(Expr::UnaryOp {
+                    op: UnaryOperator::BangNot,
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?,
+                    ),
+                })
+            }
+            tok @ Token::DoubleExclamationMark
+            | tok @ Token::PGSquareRoot
+            | tok @ Token::PGCubeRoot
+            | tok @ Token::AtSign
+            | tok @ Token::Tilde
+                if dialect_of!(self is PostgreSqlDialect) =>
+            {
+                let op = match tok {
+                    Token::DoubleExclamationMark => UnaryOperator::PGPrefixFactorial,
+                    Token::PGSquareRoot => UnaryOperator::PGSquareRoot,
+                    Token::PGCubeRoot => UnaryOperator::PGCubeRoot,
+                    Token::AtSign => UnaryOperator::PGAbs,
+                    Token::Tilde => UnaryOperator::PGBitwiseNot,
+                    _ => unreachable!(),
+                };
+                Ok(Expr::UnaryOp {
+                    op,
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?,
+                    ),
+                })
+            }
+            Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+            {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
+            Token::UnicodeStringLiteral(_) => {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
+            Token::Number(_, _)
+            | Token::SingleQuotedString(_)
+            | Token::DoubleQuotedString(_)
+            | Token::TripleSingleQuotedString(_)
+            | Token::TripleDoubleQuotedString(_)
+            | Token::DollarQuotedString(_)
+            | Token::SingleQuotedByteStringLiteral(_)
+            | Token::DoubleQuotedByteStringLiteral(_)
+            | Token::TripleSingleQuotedByteStringLiteral(_)
+            | Token::TripleDoubleQuotedByteStringLiteral(_)
+            | Token::SingleQuotedRawStringLiteral(_)
+            | Token::DoubleQuotedRawStringLiteral(_)
+            | Token::TripleSingleQuotedRawStringLiteral(_)
+            | Token::TripleDoubleQuotedRawStringLiteral(_)
+            | Token::NationalStringLiteral(_)
+            | Token::HexStringLiteral(_) => {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
+            Token::LParen => {
+                let expr = if let Some(expr) = self.try_parse_expr_sub_query()? {
+                    expr
+                } else if let Some(lambda) = self.try_parse_lambda()? {
+                    return Ok(lambda);
+                } else {
+                    let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+                    match exprs.len() {
+                        0 => unreachable!(), // parse_comma_separated ensures 1 or more
+                        1 => Expr::Nested(Box::new(exprs.into_iter().next().unwrap())),
+                        _ => Expr::Tuple(exprs),
+                    }
+                };
+                self.expect_token(&Token::RParen)?;
+                let expr = self.try_parse_method(expr)?;
+                if !self.consume_token(&Token::Period) {
+                    Ok(expr)
+                } else {
+                    let tok = self.next_token();
+                    let key = match tok.token {
+                        Token::Word(word) => word.to_ident(),
+                        _ => {
+                            return parser_err!(
+                                format!("Expected identifier, found: {tok}"),
+                                tok.location
+                            )
+                        }
+                    };
+                    Ok(Expr::CompositeAccess {
+                        expr: Box::new(expr),
+                        key,
+                    })
+                }
+            }
+            Token::Placeholder(_) | Token::Colon | Token::AtSign => {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
+            Token::LBrace if self.dialect.supports_dictionary_syntax() => {
+                self.prev_token();
+                self.parse_duckdb_struct_literal()
+            }
+            _ => self.expected("an expression", next_token),
+        }?;
+
+        let expr = self.try_parse_method(expr)?;
+
+        if self.parse_keyword(Keyword::COLLATE) {
+            Ok(Expr::Collate {
+                expr: Box::new(expr),
+                collation: self.parse_object_name(false)?,
+            })
+        } else {
+            Ok(expr)
+        }
+    }
+
+    /// Parse an expression prefix.
+    pub fn parse_prefix2(&mut self) -> Result<Expr, ParserError> {
+        // allow the dialect to override prefix parsing
+        if let Some(prefix) = self.dialect.parse_prefix(self) {
+            return prefix;
+        }
+
+        // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
+        // string literal represents a literal of that type. Some examples:
+        //
+        //      DATE '2020-05-20'
+        //      TIMESTAMP WITH TIME ZONE '2020-05-20 7:43:54'
+        //      BOOL 'true'
+        //
+        // The first two are standard SQL, while the latter is a PostgreSQL extension. Complicating
+        // matters is the fact that INTERVAL string literals may optionally be followed by special
+        // keywords, e.g.:
+        //
+        //      INTERVAL '7' DAY
+        //
+        // Note also that naively `SELECT date` looks like a syntax error because the `date` type
+        // name is not followed by a string literal, but in fact in PostgreSQL it is a valid
+        // expression that should parse as the column name "date".
+        let loc = self.peek_token().location;
+        let opt_expr = self.maybe_parse(|parser| {
+            match parser.parse_data_type()? {
+                DataType::Interval => parser.parse_interval(),
+                // PostgreSQL allows almost any identifier to be used as custom data type name,
+                // and we support that in `parse_data_type()`. But unlike Postgres we don't
+                // have a list of globally reserved keywords (since they vary across dialects),
+                // so given `NOT 'a' LIKE 'b'`, we'd accept `NOT` as a possible custom data type
+                // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
+                // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
+                // `type 'string'` syntax for the custom data types at all.
+                DataType::Custom(..) => parser_err!("dummy", loc),
+                data_type => Ok(Expr::TypedString {
+                    data_type,
+                    value: parser.parse_literal_string()?,
+                }),
+            }
+        })?;
+
+        if let Some(expr) = opt_expr {
+            return Ok(expr);
+        }
+
+        let next_token = self.next_token();
+        let expr = match next_token.token {
+            Token::Word(w) => {
+                // Save the parser index so we can rollback
+                let index_before = self.index;
+                // The word we consumed may fall into one of two cases: it's a reserved word in the dialect
+                // and has a special meaning, or not. For example, in Snowflake, the word `interval` may have
+                // two meanings depending on the context:
+                // `SELECT CURRENT_DATE() + INTERVAL '1 DAY', MAX(interval) FROM test;`
+                // In its first occurrence it's part of an interval expression and in the second it's an identifier.
+
+                // We first try to parse the word and following tokens as a special expression, and if that fails,
+                // we rollback and try to parse it as an identifier.
+                match self.parse_expr_prefix_by_reserved_word(&w) {
+                    // No expression prefix associated with this word
+                    Ok(None) => Ok(self.parse_expr_prefix_by_unnreserved_word(&w)?),
+                    // This word indicated an expression prefix and parsing was successful
+                    Ok(Some(expr)) => Ok(expr),
+                    // If parsing of the word as a special expression failed, we are facing two options:
+                    // 1. The statement is malformed, e.g. `SELECT INTERVAL '1 DAI`
+                    // 2. The word is used as an identifier, e.g. `SELECT MAX(interval) FROM tbl`
+
+                    // We first try to parse the word as an identifier and if that fails
+                    // we rollback to the original position in the token stream and return parsing error
+                    // we got from trying to parse a special expression (to maintain backwards
+                    // compatibility of parsing errors).
                     Err(e) => {
                         let index_after_error = self.index;
                         if !self.dialect.is_reserved_for_identifier(w.keyword) {
                             // Rollback before trying to parse using a different approach
                             self.index = index_before;
-                            if let Ok(expr) = self.parse_expr_prefix_by_nonreserved_word(&w) {
+                            if let Ok(expr) = self.parse_expr_prefix_by_unnreserved_word(&w) {
                                 return Ok(expr);
                             }
                         }
@@ -3708,18 +3936,30 @@ impl<'a> Parser<'a> {
     }
 
     /// Run a parser method `f`, reverting back to the current position if unsuccessful.
-    pub fn maybe_parse<T, F>(&mut self, mut f: F) -> Result<Option<T>, ParserError>
+    /// Returns `None` if `f` returns an error
+    pub fn maybe_parse<T, F>(&mut self, f: F) -> Result<Option<T>, ParserError>
+    where
+        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+    {
+        match self.maybe_parse_internal(f) {
+            Ok(t) => Ok(Some(t)),
+            Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
+            _ => Ok(None),
+        }
+    }
+
+    /// Run a parser method `f`, reverting back to the current position if unsuccessful.
+    pub fn maybe_parse_internal<T, F>(&mut self, mut f: F) -> Result<T, ParserError>
     where
         F: FnMut(&mut Parser) -> Result<T, ParserError>,
     {
         let index = self.index;
         match f(self) {
-            Ok(t) => Ok(Some(t)),
-            // Unwind stack if limit exceeded
-            Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
-            Err(_) => {
+            Ok(t) => Ok(t),
+            Err(e) => {
+                // Unwind stack if limit exceeded
                 self.index = index;
-                Ok(None)
+                Err(e)
             }
         }
     }

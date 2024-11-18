@@ -1597,7 +1597,7 @@ impl fmt::Display for TableFactor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAlias {
     pub name: Ident,
-    pub columns: Vec<Ident>,
+    pub columns: Vec<TableAliasColumnDef>,
 }
 
 impl fmt::Display for TableAlias {
@@ -1605,6 +1605,41 @@ impl fmt::Display for TableAlias {
         write!(f, "{}", self.name)?;
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        Ok(())
+    }
+}
+
+/// SQL column definition in a table expression alias.
+/// Most of the time, the data type is not specified.
+/// But some table-valued functions do require specifying the data type.
+///
+/// See <https://www.postgresql.org/docs/17/queries-table-expressions.html#QUERIES-TABLEFUNCTIONS>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableAliasColumnDef {
+    /// Column name alias
+    pub name: Ident,
+    /// Some table-valued functions require specifying the data type in the alias.
+    pub data_type: Option<DataType>,
+}
+
+impl TableAliasColumnDef {
+    /// Create a new table alias column definition with only a name and no type
+    pub fn from_name<S: Into<String>>(name: S) -> Self {
+        TableAliasColumnDef {
+            name: Ident::new(name),
+            data_type: None,
+        }
+    }
+}
+
+impl fmt::Display for TableAliasColumnDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(ref data_type) = self.data_type {
+            write!(f, " {}", data_type)?;
         }
         Ok(())
     }

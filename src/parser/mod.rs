@@ -8270,7 +8270,7 @@ impl<'a> Parser<'a> {
     ) -> Result<Option<TableAlias>, ParserError> {
         match self.parse_optional_alias(reserved_kwds)? {
             Some(name) => {
-                let columns = self.parse_parenthesized_column_list(Optional, false)?;
+                let columns = self.parse_table_alias_column_defs()?;
                 Ok(Some(TableAlias { name, columns }))
             }
             None => Ok(None),
@@ -8604,6 +8604,21 @@ impl<'a> Parser<'a> {
             Ok(vec![])
         } else {
             self.expected("a list of columns in parentheses", self.peek_token())
+        }
+    }
+
+    /// Parse a parenthesized comma-separated list of table alias column definitions.
+    fn parse_table_alias_column_defs(&mut self) -> Result<Vec<TableAliasColumnDef>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let cols = self.parse_comma_separated(|p| {
+                let name = p.parse_identifier(false)?;
+                let data_type = p.maybe_parse(|p| p.parse_data_type())?;
+                Ok(TableAliasColumnDef { name, data_type })
+            })?;
+            self.expect_token(&Token::RParen)?;
+            Ok(cols)
+        } else {
+            Ok(vec![])
         }
     }
 
@@ -9174,7 +9189,7 @@ impl<'a> Parser<'a> {
                 materialized: is_materialized,
             }
         } else {
-            let columns = self.parse_parenthesized_column_list(Optional, false)?;
+            let columns = self.parse_table_alias_column_defs()?;
             self.expect_keyword(Keyword::AS)?;
             let mut is_materialized = None;
             if dialect_of!(self is PostgreSqlDialect) {

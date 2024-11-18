@@ -74,6 +74,7 @@ macro_rules! define_keywords {
 define_keywords!(
     ABORT,
     ABS,
+    ABSENT,
     ABSOLUTE,
     ACCESS,
     ACCOUNT,

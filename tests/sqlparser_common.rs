@@ -4402,8 +4402,9 @@ fn parse_explain_query_plan() {
 
 #[test]
 fn parse_named_argument_function() {
+    let dialects = all_dialects_where(|d| d.supports_named_fn_args_with_rarrow_operator());
     let sql = "SELECT FUN(a => '1', b => '2') FROM foo";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
 
     assert_eq!(
         &Expr::Function(Function {

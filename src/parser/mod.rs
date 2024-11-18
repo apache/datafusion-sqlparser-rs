@@ -11321,45 +11321,58 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
-        if self.peek_nth_token(1) == Token::RArrow {
-            let name = self.parse_identifier(false)?;
-
-            self.expect_token(&Token::RArrow)?;
-            let arg = self.parse_wildcard_expr()?.into();
-
-            Ok(FunctionArg::Named {
-                name,
-                arg,
-                operator: FunctionArgOperator::RightArrow,
-            })
-        } else if self.dialect.supports_named_fn_args_with_eq_operator()
-            && self.peek_nth_token(1) == Token::Eq
-        {
-            let name = self.parse_identifier(false)?;
-
-            self.expect_token(&Token::Eq)?;
-            let arg = self.parse_wildcard_expr()?.into();
-
-            Ok(FunctionArg::Named {
-                name,
-                arg,
-                operator: FunctionArgOperator::Equals,
-            })
-        } else if dialect_of!(self is DuckDbDialect | GenericDialect)
-            && self.peek_nth_token(1) == Token::Assignment
-        {
-            let name = self.parse_identifier(false)?;
-
-            self.expect_token(&Token::Assignment)?;
-            let arg = self.parse_expr()?.into();
-
-            Ok(FunctionArg::Named {
-                name,
-                arg,
-                operator: FunctionArgOperator::Assignment,
-            })
+        let arg = if self.dialect.supports_named_fn_args_with_expr_name() {
+            self.maybe_parse(|p| {
+                let name = p.parse_expr()?;
+                let operator = p.parse_function_named_arg_operator()?;
+                let arg = p.parse_wildcard_expr()?.into();
+                Ok(FunctionArg::ExprNamed {
+                    name,
+                    arg,
+                    operator,
+                })
+            })?
         } else {
-            Ok(FunctionArg::Unnamed(self.parse_wildcard_expr()?.into()))
+            self.maybe_parse(|p| {
+                let name = p.parse_identifier(false)?;
+                let operator = p.parse_function_named_arg_operator()?;
+                let arg = p.parse_wildcard_expr()?.into();
+                Ok(FunctionArg::Named {
+                    name,
+                    arg,
+                    operator,
+                })
+            })?
+        };
+        if let Some(arg) = arg {
+            return Ok(arg);
+        }
+        Ok(FunctionArg::Unnamed(self.parse_wildcard_expr()?.into()))
+    }
+
+    fn parse_function_named_arg_operator(&mut self) -> Result<FunctionArgOperator, ParserError> {
+        let tok = self.next_token();
+        match tok.token {
+            Token::RArrow if self.dialect.supports_named_fn_args_with_rarrow_operator() => {
+                Ok(FunctionArgOperator::RightArrow)
+            }
+            Token::Eq if self.dialect.supports_named_fn_args_with_eq_operator() => {
+                Ok(FunctionArgOperator::Equals)
+            }
+            Token::Assignment
+                if self
+                    .dialect
+                    .supports_named_fn_args_with_assignment_operator() =>
+            {
+                Ok(FunctionArgOperator::Assignment)
+            }
+            Token::Colon if self.dialect.supports_named_fn_args_with_colon_operator() => {
+                Ok(FunctionArgOperator::Colon)
+            }
+            _ => {
+                self.prev_token();
+                self.expected("argument operator", tok)
+            }
         }
     }
 
@@ -11403,18 +11416,23 @@ impl<'a> Parser<'a> {
     /// FIRST_VALUE(x IGNORE NULL);
     /// ```
     fn parse_function_argument_list(&mut self) -> Result<FunctionArgumentList, ParserError> {
+        let mut clauses = vec![];
+
+        // For MSSQL empty argument list with json-null-clause case, e.g. `JSON_ARRAY(NULL ON NULL)`
+        if let Some(null_clause) = self.parse_json_null_clause() {
+            clauses.push(FunctionArgumentClause::JsonNullClause(null_clause));
+        }
+
         if self.consume_token(&Token::RParen) {
             return Ok(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![],
-                clauses: vec![],
+                clauses,
             });
         }
 
         let duplicate_treatment = self.parse_duplicate_treatment()?;
         let args = self.parse_comma_separated(Parser::parse_function_args)?;
-
-        let mut clauses = vec![];
 
         if self.dialect.supports_window_function_null_treatment_arg() {
             if let Some(null_treatment) = self.parse_null_treatment()? {
@@ -11456,12 +11474,27 @@ impl<'a> Parser<'a> {
             clauses.push(FunctionArgumentClause::OnOverflow(on_overflow));
         }
 
+        if let Some(null_clause) = self.parse_json_null_clause() {
+            clauses.push(FunctionArgumentClause::JsonNullClause(null_clause));
+        }
+
         self.expect_token(&Token::RParen)?;
         Ok(FunctionArgumentList {
             duplicate_treatment,
             args,
             clauses,
         })
+    }
+
+    /// Parses MSSQL's json-null-clause
+    fn parse_json_null_clause(&mut self) -> Option<JsonNullClause> {
+        if self.parse_keywords(&[Keyword::ABSENT, Keyword::ON, Keyword::NULL]) {
+            Some(JsonNullClause::AbsentOnNull)
+        } else if self.parse_keywords(&[Keyword::NULL, Keyword::ON, Keyword::NULL]) {
+            Some(JsonNullClause::NullOnNull)
+        } else {
+            None
+        }
     }
 
     fn parse_duplicate_treatment(&mut self) -> Result<Option<DuplicateTreatment>, ParserError> {

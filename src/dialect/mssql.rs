@@ -66,4 +66,16 @@ impl Dialect for MsSqlDialect {
     fn supports_methods(&self) -> bool {
         true
     }
+
+    fn supports_named_fn_args_with_colon_operator(&self) -> bool {
+        true
+    }
+
+    fn supports_named_fn_args_with_expr_name(&self) -> bool {
+        true
+    }
+
+    fn supports_named_fn_args_with_rarrow_operator(&self) -> bool {
+        false
+    }
 }

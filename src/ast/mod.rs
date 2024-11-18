@@ -5449,6 +5449,8 @@ pub enum FunctionArgOperator {
     RightArrow,
     /// function(arg1 := value1)
     Assignment,
+    /// function(arg1 : value1)
+    Colon,
 }
 
 impl fmt::Display for FunctionArgOperator {
@@ -5457,6 +5459,7 @@ impl fmt::Display for FunctionArgOperator {
             FunctionArgOperator::Equals => f.write_str("="),
             FunctionArgOperator::RightArrow => f.write_str("=>"),
             FunctionArgOperator::Assignment => f.write_str(":="),
+            FunctionArgOperator::Colon => f.write_str(":"),
         }
     }
 }
@@ -5465,8 +5468,19 @@ impl fmt::Display for FunctionArgOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionArg {
+    /// `name` is identifier
+    ///
+    /// Enabled when `Dialect::supports_named_fn_args_with_expr_name` returns 'false'
     Named {
         name: Ident,
+        arg: FunctionArgExpr,
+        operator: FunctionArgOperator,
+    },
+    /// `name` is arbitrary expression
+    ///
+    /// Enabled when `Dialect::supports_named_fn_args_with_expr_name` returns 'true'
+    ExprNamed {
+        name: Expr,
         arg: FunctionArgExpr,
         operator: FunctionArgOperator,
     },
@@ -5477,6 +5491,11 @@ impl fmt::Display for FunctionArg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             FunctionArg::Named {
+                name,
+                arg,
+                operator,
+            } => write!(f, "{name} {operator} {arg}"),
+            FunctionArg::ExprNamed {
                 name,
                 arg,
                 operator,
@@ -5619,7 +5638,10 @@ impl fmt::Display for FunctionArgumentList {
         }
         write!(f, "{}", display_comma_separated(&self.args))?;
         if !self.clauses.is_empty() {
-            write!(f, " {}", display_separated(&self.clauses, " "))?;
+            if !self.args.is_empty() {
+                write!(f, " ")?;
+            }
+            write!(f, "{}", display_separated(&self.clauses, " "))?;
         }
         Ok(())
     }
@@ -5661,6 +5683,11 @@ pub enum FunctionArgumentClause {
     ///
     /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
     Separator(Value),
+    /// The json-null-clause to the [`JSON_ARRAY`]/[`JSON_OBJECT`] function in MSSQL.
+    ///
+    /// [`JSON_ARRAY`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16>
+    /// [`JSON_OBJECT`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16>
+    JsonNullClause(JsonNullClause),
 }
 
 impl fmt::Display for FunctionArgumentClause {
@@ -5676,6 +5703,7 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
             FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
             FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
+            FunctionArgumentClause::JsonNullClause(null_clause) => write!(f, "{null_clause}"),
         }
     }
 }
@@ -7561,6 +7589,32 @@ impl fmt::Display for ShowStatementIn {
             write!(f, " {}", parent_name)?;
         }
         Ok(())
+    }
+}
+
+/// MSSQL's json null clause
+///
+/// ```plaintext
+/// <json_null_clause> ::=
+///       NULL ON NULL
+///     | ABSENT ON NULL
+/// ```
+///
+/// <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16#json_null_clause>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonNullClause {
+    NullOnNull,
+    AbsentOnNull,
+}
+
+impl Display for JsonNullClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonNullClause::NullOnNull => write!(f, "NULL ON NULL"),
+            JsonNullClause::AbsentOnNull => write!(f, "ABSENT ON NULL"),
+        }
     }
 }
 

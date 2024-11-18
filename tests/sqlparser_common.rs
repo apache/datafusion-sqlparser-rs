@@ -11896,6 +11896,56 @@ fn parse_load_data() {
 }
 
 #[test]
+fn test_load_extension() {
+    let dialects = all_dialects_where(|d| d.supports_load_extension());
+    let only_supports_load_data_dialects =
+        all_dialects_where(|d| !d.supports_load_extension() && d.supports_load_data());
+    let not_supports_load_dialects =
+        all_dialects_where(|d| !d.supports_load_data() && !d.supports_load_extension());
+    let sql = "LOAD my_extension";
+
+    match dialects.verified_stmt(sql) {
+        Statement::Load { extension_name } => {
+            assert_eq!(Ident::new("my_extension"), extension_name);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        only_supports_load_data_dialects
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: `DATA` or an extension name after `LOAD`, found: my_extension".to_string()
+        )
+    );
+
+    assert_eq!(
+        not_supports_load_dialects
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: `DATA` or an extension name after `LOAD`, found: my_extension".to_string()
+        )
+    );
+
+    let sql = "LOAD 'filename'";
+
+    match dialects.verified_stmt(sql) {
+        Statement::Load { extension_name } => {
+            assert_eq!(
+                Ident {
+                    value: "filename".to_string(),
+                    quote_style: Some('\'')
+                },
+                extension_name
+            );
+        }
+        _ => unreachable!(),
+    };
+}
+
+#[test]
 fn test_select_top() {
     let dialects = all_dialects_where(|d| d.supports_top_before_distinct());
     dialects.one_statement_parses_to("SELECT ALL * FROM tbl", "SELECT * FROM tbl");

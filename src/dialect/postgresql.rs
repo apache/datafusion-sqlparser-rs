@@ -214,6 +214,11 @@ impl Dialect for PostgreSqlDialect {
     fn supports_comment_on(&self) -> bool {
         true
     }
+
+    /// See <https://www.postgresql.org/docs/current/sql-load.html>
+    fn supports_load_extension(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

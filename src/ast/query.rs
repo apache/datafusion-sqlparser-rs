@@ -18,7 +18,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec::Vec};
 
-use helpers::ignore_field::AttachedToken;
+use helpers::attached_token::AttachedToken;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 

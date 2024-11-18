@@ -34,7 +34,7 @@ use sqlparser::dialect::{
     GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect,
     SQLiteDialect, SnowflakeDialect,
 };
-use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
+use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
@@ -5112,10 +5112,7 @@ fn parse_interval_dont_require_unit() {
 
 #[test]
 fn parse_interval_require_unit() {
-    let dialects = all_dialects_where(|d| {
-        d.require_interval_qualifier() && d.is_reserved_for_identifier(Keyword::INTERVAL)
-    });
-
+    let dialects = all_dialects_where(|d| d.require_interval_qualifier());
     let sql = "SELECT INTERVAL '1 DAY'";
     let err = dialects.parse_sql_statements(sql).unwrap_err();
     assert_eq!(

@@ -45,9 +45,6 @@ pub enum ParserError {
     TokenizerError(String),
     ParserError(String),
     RecursionLimitExceeded,
-    /// Error indicating that the parsing branch taken
-    /// did not yield a meaningful result
-    BranchAbandoned,
 }
 
 // avoid clippy type_complexity warnings
@@ -177,7 +174,6 @@ impl fmt::Display for ParserError {
                 ParserError::TokenizerError(s) => s,
                 ParserError::ParserError(s) => s,
                 ParserError::RecursionLimitExceeded => "recursion limit exceeded",
-                ParserError::BranchAbandoned => "branch abandoned",
             }
         )
     }
@@ -1029,15 +1025,18 @@ impl<'a> Parser<'a> {
         Ok(Statement::NOTIFY { channel, payload })
     }
 
-    fn parse_expr_by_keyword(&mut self, w: &Word) -> Result<Expr, ParserError> {
+    fn parse_expr_prefix_by_reserved_word(
+        &mut self,
+        w: &Word,
+    ) -> Result<Option<Expr>, ParserError> {
         match w.keyword {
             Keyword::TRUE | Keyword::FALSE if self.dialect.supports_boolean_literals() => {
                 self.prev_token();
-                Ok(Expr::Value(self.parse_value()?))
+                Ok(Some(Expr::Value(self.parse_value()?)))
             }
             Keyword::NULL => {
                 self.prev_token();
-                Ok(Expr::Value(self.parse_value()?))
+                Ok(Some(Expr::Value(self.parse_value()?)))
             }
             Keyword::CURRENT_CATALOG
             | Keyword::CURRENT_USER
@@ -1045,7 +1044,7 @@ impl<'a> Parser<'a> {
             | Keyword::USER
                 if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
             {
-                Ok(Expr::Function(Function {
+                Ok(Some(Expr::Function(Function {
                     name: ObjectName(vec![w.to_ident()]),
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::None,
@@ -1053,21 +1052,21 @@ impl<'a> Parser<'a> {
                     filter: None,
                     over: None,
                     within_group: vec![],
-                }))
+                })))
             }
             Keyword::CURRENT_TIMESTAMP
             | Keyword::CURRENT_TIME
             | Keyword::CURRENT_DATE
             | Keyword::LOCALTIME
             | Keyword::LOCALTIMESTAMP => {
-                self.parse_time_functions(ObjectName(vec![w.to_ident()]))
+                Ok(Some(self.parse_time_functions(ObjectName(vec![w.to_ident()]))?))
             }
-            Keyword::CASE => self.parse_case_expr(),
-            Keyword::CONVERT => self.parse_convert_expr(false),
-            Keyword::TRY_CONVERT if self.dialect.supports_try_convert() => self.parse_convert_expr(true),
-            Keyword::CAST => self.parse_cast_expr(CastKind::Cast),
-            Keyword::TRY_CAST => self.parse_cast_expr(CastKind::TryCast),
-            Keyword::SAFE_CAST => self.parse_cast_expr(CastKind::SafeCast),
+            Keyword::CASE => Ok(Some(self.parse_case_expr()?)),
+            Keyword::CONVERT => Ok(Some(self.parse_convert_expr(false)?)),
+            Keyword::TRY_CONVERT if self.dialect.supports_try_convert() => Ok(Some(self.parse_convert_expr(true)?)),
+            Keyword::CAST => Ok(Some(self.parse_cast_expr(CastKind::Cast)?)),
+            Keyword::TRY_CAST => Ok(Some(self.parse_cast_expr(CastKind::TryCast)?)),
+            Keyword::SAFE_CAST => Ok(Some(self.parse_cast_expr(CastKind::SafeCast)?)),
             Keyword::EXISTS
                 // Support parsing Databricks has a function named `exists`.
                 if !dialect_of!(self is DatabricksDialect)
@@ -1079,22 +1078,22 @@ impl<'a> Parser<'a> {
                         })
                     ) =>
             {
-                self.parse_exists_expr(false)
+                Ok(Some(self.parse_exists_expr(false)?))
             }
-            Keyword::EXTRACT => self.parse_extract_expr(),
-            Keyword::CEIL => self.parse_ceil_floor_expr(true),
-            Keyword::FLOOR => self.parse_ceil_floor_expr(false),
+            Keyword::EXTRACT => Ok(Some(self.parse_extract_expr()?)),
+            Keyword::CEIL => Ok(Some(self.parse_ceil_floor_expr(true)?)),
+            Keyword::FLOOR => Ok(Some(self.parse_ceil_floor_expr(false)?)),
             Keyword::POSITION if self.peek_token().token == Token::LParen => {
-                self.parse_position_expr(w.to_ident())
+                Ok(Some(self.parse_position_expr(w.to_ident())?))
             }
-            Keyword::SUBSTRING => self.parse_substring_expr(),
-            Keyword::OVERLAY => self.parse_overlay_expr(),
-            Keyword::TRIM => self.parse_trim_expr(),
-            Keyword::INTERVAL => self.parse_interval(),
+            Keyword::SUBSTRING => Ok(Some(self.parse_substring_expr()?)),
+            Keyword::OVERLAY => Ok(Some(self.parse_overlay_expr()?)),
+            Keyword::TRIM => Ok(Some(self.parse_trim_expr()?)),
+            Keyword::INTERVAL => Ok(Some(self.parse_interval()?)),
             // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
             Keyword::ARRAY if self.peek_token() == Token::LBracket => {
                 self.expect_token(&Token::LBracket)?;
-                self.parse_array_expr(true)
+                Ok(Some(self.parse_array_expr(true)?))
             }
             Keyword::ARRAY
                 if self.peek_token() == Token::LParen
@@ -1103,7 +1102,7 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::LParen)?;
                 let query = self.parse_query()?;
                 self.expect_token(&Token::RParen)?;
-                Ok(Expr::Function(Function {
+                Ok(Some(Expr::Function(Function {
                     name: ObjectName(vec![w.to_ident()]),
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::Subquery(query),
@@ -1111,29 +1110,28 @@ impl<'a> Parser<'a> {
                     null_treatment: None,
                     over: None,
                     within_group: vec![],
-                }))
+                })))
             }
-            Keyword::NOT => self.parse_not(),
+            Keyword::NOT => Ok(Some(self.parse_not()?)),
             Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
-                self.parse_match_against()
+                Ok(Some(self.parse_match_against()?))
             }
             Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                 self.prev_token();
-                self.parse_bigquery_struct_literal()
+                Ok(Some(self.parse_bigquery_struct_literal()?))
             }
             Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
                 let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
-                Ok(Expr::Prior(Box::new(expr)))
+                Ok(Some(Expr::Prior(Box::new(expr))))
             }
             Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
-                self.parse_duckdb_map_literal()
+                Ok(Some(self.parse_duckdb_map_literal()?))
             }
-            Keyword::DEFAULT => Ok(Expr::Default),
-            _ => Err(ParserError::BranchAbandoned)
+            _ => Ok(None)
         }
     }
 
-    fn parse_ident_expr(&mut self, w: &Word) -> Result<Expr, ParserError> {
+    fn parse_expr_prefix_by_nonreserved_word(&mut self, w: &Word) -> Result<Expr, ParserError> {
         match self.peek_token().token {
             Token::LParen | Token::Period => {
                 let mut id_parts: Vec<Ident> = vec![w.to_ident()];
@@ -1249,23 +1247,33 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         let expr = match next_token.token {
-            // We first try to parse the word as the prefix of an expression.
-            // For example, the word INTERVAL in: SELECT INTERVAL '7' DAY
-            Token::Word(w) => match self.try_parse(|parser| parser.parse_expr_by_keyword(&w)) {
-                Ok(expr) => Ok(expr),
-                // Word does not indicate the start of a complex expression, try to parse as identifier
-                Err(ParserError::BranchAbandoned) => Ok(self.parse_ident_expr(&w)?),
-                // Word indicates the start of a complex expression, try to parse as identifier if the
-                // dialect does not reserve it, otherwise return the original error
-                Err(e) => {
-                    if !self.dialect.is_reserved_for_identifier(w.keyword) {
-                        if let Ok(expr) = self.try_parse(|parser| parser.parse_ident_expr(&w)) {
-                            return Ok(expr);
+            Token::Word(w) => {
+                // Save the parser index so we can rollback
+                let index_before = self.index;
+                // We first try to parse the word as the prefix of an expression.
+                // For example, the word INTERVAL in: SELECT INTERVAL '7' DAY
+                match self.parse_expr_prefix_by_reserved_word(&w) {
+                    // No expression prefix associated with this word
+                    Ok(None) => Ok(self.parse_expr_prefix_by_nonreserved_word(&w)?),
+                    // This word indicated an expression prefix and parsing was successful
+                    Ok(Some(expr)) => Ok(expr),
+                    // This word indicated an expression prefix but parsing failed. Two options:
+                    // 1. Malformed statement
+                    // 2. The dialect may allow this word as identifier as well as indicating an expression
+                    Err(e) => {
+                        let index_after_error = self.index;
+                        if !self.dialect.is_reserved_for_identifier(w.keyword) {
+                            // Rollback before trying to parse using a different approach
+                            self.index = index_before;
+                            if let Ok(expr) = self.parse_expr_prefix_by_nonreserved_word(&w) {
+                                return Ok(expr);
+                            }
                         }
+                        self.index = index_after_error;
+                        return Err(e);
                     }
-                    return Err(e);
                 }
-            }, // End of Token::Word
+            } // End of Token::Word
             // array `[1, 2, 3]`
             Token::LBracket => self.parse_array_expr(false),
             tok @ Token::Minus | tok @ Token::Plus => {
@@ -3712,24 +3720,6 @@ impl<'a> Parser<'a> {
             Err(_) => {
                 self.index = index;
                 Ok(None)
-            }
-        }
-    }
-
-    /// Run a parser method `f`, reverting back to the current position if unsuccessful
-    /// but retaining the error message if such was raised by `f`
-    pub fn try_parse<T, F>(&mut self, mut f: F) -> Result<T, ParserError>
-    where
-        F: FnMut(&mut Parser) -> Result<T, ParserError>,
-    {
-        let index = self.index;
-        match f(self) {
-            Ok(t) => Ok(t),
-            // Unwind stack if limit exceeded
-            Err(ParserError::RecursionLimitExceeded) => Err(ParserError::RecursionLimitExceeded),
-            Err(e) => {
-                self.index = index;
-                Err(e)
             }
         }
     }

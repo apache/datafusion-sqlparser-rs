@@ -18,7 +18,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec::Vec};
 
-use helpers::ignore_field::IgnoreField;
+use helpers::ignore_field::AttachedToken;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -280,8 +280,8 @@ impl fmt::Display for Table {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Select {
-    /// SELECT
-    pub select_token: IgnoreField<TokenWithLocation>,
+    /// Token for the `SELECT` keyword
+    pub select_token: AttachedToken,
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
@@ -511,7 +511,8 @@ impl fmt::Display for NamedWindowDefinition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct With {
-    pub with_token: IgnoreField<TokenWithLocation>,
+    // Token for the "WITH" keyword
+    pub with_token: AttachedToken,
     pub recursive: bool,
     pub cte_tables: Vec<Cte>,
 }
@@ -563,8 +564,8 @@ pub struct Cte {
     pub query: Box<Query>,
     pub from: Option<Ident>,
     pub materialized: Option<CteAsMaterialized>,
-    // needed for accurate span reporting
-    pub closing_paren_token: IgnoreField<TokenWithLocation>,
+    // Token for the closing parenthesis
+    pub closing_paren_token: AttachedToken,
 }
 
 impl fmt::Display for Cte {
@@ -620,7 +621,8 @@ impl fmt::Display for IdentWithAlias {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WildcardAdditionalOptions {
-    pub wildcard_token: IgnoreField<TokenWithLocation>,
+    /// The wildcard token `*`
+    pub wildcard_token: AttachedToken,
     /// `[ILIKE...]`.
     ///  Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
     pub opt_ilike: Option<IlikeSelectItem>,

@@ -157,7 +157,7 @@ impl PartialEq for Ident {
         let Ident {
             value,
             quote_style,
-            // backwards compat
+            // exhaustiveness check; we ignore spans in comparisons
             span: _,
         } = self;
 
@@ -170,7 +170,7 @@ impl core::hash::Hash for Ident {
         let Ident {
             value,
             quote_style,
-            // backwards compat
+            // exhaustiveness check; we ignore spans in hashes
             span: _,
         } = self;
 

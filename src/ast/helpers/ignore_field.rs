@@ -19,51 +19,50 @@ use core::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use core::fmt::{self, Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
-/// A wrapper type that ignores the field when comparing or hashing.
-pub struct IgnoreField<T>(pub T);
+use crate::tokenizer::TokenWithLocation;
+
+/// A wrapper type for attaching tokens to AST nodes that should be ignored in comparisons and hashing.
+/// This should be used when a token is not relevant for semantics, but is still needed for
+/// accurate source location tracking.
+#[derive(Clone)]
+pub struct AttachedToken(pub TokenWithLocation);
 
 // Conditional Implementations
-impl<T: Debug> Debug for IgnoreField<T> {
+impl Debug for AttachedToken {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl<T: Clone> Clone for IgnoreField<T> {
-    fn clone(&self) -> Self {
-        IgnoreField(self.0.clone())
-    }
-}
-
 // Blanket Implementations
-impl<T> PartialEq for IgnoreField<T> {
+impl PartialEq for AttachedToken {
     fn eq(&self, _: &Self) -> bool {
         true
     }
 }
 
-impl<T> Eq for IgnoreField<T> {}
+impl Eq for AttachedToken {}
 
-impl<T> PartialOrd for IgnoreField<T> {
-    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
-        Some(Ordering::Equal)
+impl PartialOrd for AttachedToken {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
-impl<T: Ord> Ord for IgnoreField<T> {
+impl Ord for AttachedToken {
     fn cmp(&self, _: &Self) -> Ordering {
         Ordering::Equal
     }
 }
 
-impl<T> Hash for IgnoreField<T> {
+impl Hash for AttachedToken {
     fn hash<H: Hasher>(&self, _state: &mut H) {
         // Do nothing
     }
 }
 
-impl<T> From<T> for IgnoreField<T> {
-    fn from(value: T) -> Self {
-        IgnoreField(value)
+impl From<TokenWithLocation> for AttachedToken {
+    fn from(value: TokenWithLocation) -> Self {
+        AttachedToken(value)
     }
 }

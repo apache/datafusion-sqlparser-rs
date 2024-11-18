@@ -11042,24 +11042,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
-        let or = if !dialect_of!(self is SQLiteDialect) {
-            None
-        } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]) {
-            Some(SqliteOnConflict::Replace)
-        } else if self.parse_keywords(&[Keyword::OR, Keyword::ROLLBACK]) {
-            Some(SqliteOnConflict::Rollback)
-        } else if self.parse_keywords(&[Keyword::OR, Keyword::ABORT]) {
-            Some(SqliteOnConflict::Abort)
-        } else if self.parse_keywords(&[Keyword::OR, Keyword::FAIL]) {
-            Some(SqliteOnConflict::Fail)
-        } else if self.parse_keywords(&[Keyword::OR, Keyword::IGNORE]) {
-            Some(SqliteOnConflict::Ignore)
-        } else if self.parse_keyword(Keyword::REPLACE) {
-            Some(SqliteOnConflict::Replace)
-        } else {
-            None
-        };
-
+        let or = self.parse_conflict_clause();
         let priority = if !dialect_of!(self is MySqlDialect | GenericDialect) {
             None
         } else if self.parse_keyword(Keyword::LOW_PRIORITY) {
@@ -11218,6 +11201,24 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_conflict_clause(&mut self) -> Option<SqliteOnConflict> {
+        if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]) {
+            Some(SqliteOnConflict::Replace)
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::ROLLBACK]) {
+            Some(SqliteOnConflict::Rollback)
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::ABORT]) {
+            Some(SqliteOnConflict::Abort)
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::FAIL]) {
+            Some(SqliteOnConflict::Fail)
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::IGNORE]) {
+            Some(SqliteOnConflict::Ignore)
+        } else if self.parse_keyword(Keyword::REPLACE) {
+            Some(SqliteOnConflict::Replace)
+        } else {
+            None
+        }
+    }
+
     pub fn parse_insert_partition(&mut self) -> Result<Option<Vec<Expr>>, ParserError> {
         if self.parse_keyword(Keyword::PARTITION) {
             self.expect_token(&Token::LParen)?;
@@ -11253,6 +11254,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_update(&mut self) -> Result<Statement, ParserError> {
+        let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
@@ -11279,6 +11281,7 @@ impl<'a> Parser<'a> {
             from,
             selection,
             returning,
+            or,
         })
     }
 

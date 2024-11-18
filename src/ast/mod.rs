@@ -2396,6 +2396,8 @@ pub enum Statement {
         selection: Option<Expr>,
         /// RETURNING
         returning: Option<Vec<SelectItem>>,
+        /// SQLite-specific conflict resolution clause
+        or: Option<SqliteOnConflict>,
     },
     /// ```sql
     /// DELETE
@@ -3691,8 +3693,13 @@ impl fmt::Display for Statement {
                 from,
                 selection,
                 returning,
+                or,
             } => {
-                write!(f, "UPDATE {table}")?;
+                write!(f, "UPDATE ")?;
+                if let Some(or) = or {
+                    write!(f, "{or} ")?;
+                }
+                write!(f, "{table}")?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
@@ -6304,11 +6311,11 @@ impl fmt::Display for SqliteOnConflict {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use SqliteOnConflict::*;
         match self {
-            Rollback => write!(f, "ROLLBACK"),
-            Abort => write!(f, "ABORT"),
-            Fail => write!(f, "FAIL"),
-            Ignore => write!(f, "IGNORE"),
-            Replace => write!(f, "REPLACE"),
+            Rollback => write!(f, "OR ROLLBACK"),
+            Abort => write!(f, "OR ABORT"),
+            Fail => write!(f, "OR FAIL"),
+            Ignore => write!(f, "OR IGNORE"),
+            Replace => write!(f, "OR REPLACE"),
         }
     }
 }

@@ -443,6 +443,7 @@ fn parse_update_set_from() {
                 ])),
             }),
             returning: None,
+            or: None,
         }
     );
 }
@@ -457,6 +458,7 @@ fn parse_update_with_table_alias() {
             from: _from,
             selection,
             returning,
+            or: None,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -503,6 +505,25 @@ fn parse_update_with_table_alias() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_update_or() {
+    let expect_or_clause = |sql: &str, expected_action: SqliteOnConflict| match verified_stmt(sql) {
+        Statement::Update { or, .. } => assert_eq!(or, Some(expected_action)),
+        other => unreachable!("Expected update with or, got {:?}", other),
+    };
+    expect_or_clause(
+        "UPDATE OR REPLACE t SET n = n + 1",
+        SqliteOnConflict::Replace,
+    );
+    expect_or_clause(
+        "UPDATE OR ROLLBACK t SET n = n + 1",
+        SqliteOnConflict::Rollback,
+    );
+    expect_or_clause("UPDATE OR ABORT t SET n = n + 1", SqliteOnConflict::Abort);
+    expect_or_clause("UPDATE OR FAIL t SET n = n + 1", SqliteOnConflict::Fail);
+    expect_or_clause("UPDATE OR IGNORE t SET n = n + 1", SqliteOnConflict::Ignore);
 }
 
 #[test]

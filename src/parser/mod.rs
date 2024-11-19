@@ -2936,7 +2936,7 @@ impl<'a> Parser<'a> {
         } else if Token::LBracket == tok {
             if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
                 self.parse_subscript(expr)
-            } else if dialect_of!(self is SnowflakeDialect) {
+            } else if dialect_of!(self is SnowflakeDialect) || self.dialect.supports_partiql() {
                 self.prev_token();
                 self.parse_json_access(expr)
             } else {
@@ -3072,6 +3072,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_json_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let path = self.parse_json_path()?;
+        Ok(Expr::JsonAccess {
+            value: Box::new(expr),
+            path,
+        })
+    }
+
+    fn parse_json_path(&mut self) -> Result<JsonPath, ParserError> {
         let mut path = Vec::new();
         loop {
             match self.next_token().token {
@@ -3095,10 +3103,7 @@ impl<'a> Parser<'a> {
         }
 
         debug_assert!(!path.is_empty());
-        Ok(Expr::JsonAccess {
-            value: Box::new(expr),
-            path: JsonPath { path },
-        })
+        Ok(JsonPath{ path })
     }
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
@@ -10322,7 +10327,12 @@ impl<'a> Parser<'a> {
             self.parse_open_json_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
-
+            
+            let partiql = match self.peek_token().token {
+                Token::LBracket if self.dialect.supports_partiql() => Some(self.parse_json_path()?),
+                _ => None
+            };
+        
             let partitions: Vec<Ident> = if dialect_of!(self is MySqlDialect | GenericDialect)
                 && self.parse_keyword(Keyword::PARTITION)
             {
@@ -10365,6 +10375,7 @@ impl<'a> Parser<'a> {
                 version,
                 partitions,
                 with_ordinality,
+                partiql,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {

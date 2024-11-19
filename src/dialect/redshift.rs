@@ -74,4 +74,9 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_top_before_distinct(&self) -> bool {
         true
     }
+
+    /// Redshift supports PartiQL: <https://docs.aws.amazon.com/redshift/latest/dg/super-overview.html>
+    fn supports_partiql(&self) -> bool {
+        true
+    }
 }

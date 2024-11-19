@@ -345,6 +345,7 @@ pub fn table(name: impl Into<String>) -> TableFactor {
         version: None,
         partitions: vec![],
         with_ordinality: false,
+        partiql: None,
     }
 }
 
@@ -360,6 +361,7 @@ pub fn table_with_alias(name: impl Into<String>, alias: impl Into<String>) -> Ta
         version: None,
         partitions: vec![],
         with_ordinality: false,
+        partiql: None,
     }
 }
 

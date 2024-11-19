@@ -886,7 +886,7 @@ impl<'a> Parser<'a> {
                             Token::Mul => {
                                 return Ok(Expr::QualifiedWildcard(
                                     ObjectName(id_parts),
-                                    next_token,
+                                    AttachedToken(next_token),
                                 ));
                             }
                             _ => {
@@ -898,7 +898,7 @@ impl<'a> Parser<'a> {
                 }
             }
             Token::Mul => {
-                return Ok(Expr::Wildcard(next_token));
+                return Ok(Expr::Wildcard(AttachedToken(next_token)));
             }
             _ => (),
         };
@@ -1143,7 +1143,7 @@ impl<'a> Parser<'a> {
                         }
 
                         if let Some(ending_wildcard_token) = ending_wildcard {
-                            Ok(Expr::QualifiedWildcard(ObjectName(id_parts), ending_wildcard_token))
+                            Ok(Expr::QualifiedWildcard(ObjectName(id_parts), AttachedToken(ending_wildcard_token)))
                         } else if self.consume_token(&Token::LParen) {
                             if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
                                 && self.consume_tokens(&[Token::Plus, Token::RParen])
@@ -9203,8 +9203,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
-    /// assuming the initial `SELECT` was not yet consumed
+    /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`)
     pub fn parse_select(&mut self) -> Result<Select, ParserError> {
         let select_token = self.expect_keyword(Keyword::SELECT)?;
         let value_table_mode =
@@ -11290,10 +11289,10 @@ impl<'a> Parser<'a> {
         match self.parse_wildcard_expr()? {
             Expr::QualifiedWildcard(prefix, token) => Ok(SelectItem::QualifiedWildcard(
                 prefix,
-                self.parse_wildcard_additional_options(token)?,
+                self.parse_wildcard_additional_options(token.0)?,
             )),
             Expr::Wildcard(token) => Ok(SelectItem::Wildcard(
-                self.parse_wildcard_additional_options(token)?,
+                self.parse_wildcard_additional_options(token.0)?,
             )),
             Expr::Identifier(v) if v.value.to_lowercase() == "from" && v.quote_style.is_none() => {
                 parser_err!(

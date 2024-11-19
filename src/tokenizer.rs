@@ -29,10 +29,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use core::iter::Peekable;
 use core::num::NonZeroU8;
 use core::str::Chars;
 use core::{cmp, fmt};
-use core::{hash, iter::Peekable};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -522,7 +522,7 @@ impl Span {
 }
 
 /// A [Token] with [Location] attached to it
-#[derive(Debug, Eq, Clone)]
+#[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TokenWithLocation {
@@ -541,35 +541,6 @@ impl TokenWithLocation {
 
     pub fn at(token: Token, start: Location, end: Location) -> TokenWithLocation {
         TokenWithLocation::new(token, Span::new(start, end))
-    }
-}
-
-impl core::hash::Hash for TokenWithLocation {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        let TokenWithLocation { token, span: _ } = self;
-
-        token.hash(state);
-    }
-}
-
-impl PartialEq<TokenWithLocation> for TokenWithLocation {
-    fn eq(&self, other: &TokenWithLocation) -> bool {
-        let TokenWithLocation { token, span: _ } = self;
-
-        token == &other.token
-    }
-}
-
-impl PartialOrd<TokenWithLocation> for TokenWithLocation {
-    fn partial_cmp(&self, other: &TokenWithLocation) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for TokenWithLocation {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let TokenWithLocation { token, span: _ } = self;
-        token.cmp(&other.token)
     }
 }
 

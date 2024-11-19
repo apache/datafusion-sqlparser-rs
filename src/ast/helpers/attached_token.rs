@@ -21,10 +21,18 @@ use core::hash::{Hash, Hasher};
 
 use crate::tokenizer::TokenWithLocation;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "visitor")]
+use sqlparser_derive::{Visit, VisitMut};
+
 /// A wrapper type for attaching tokens to AST nodes that should be ignored in comparisons and hashing.
 /// This should be used when a token is not relevant for semantics, but is still needed for
 /// accurate source location tracking.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AttachedToken(pub TokenWithLocation);
 
 // Conditional Implementations

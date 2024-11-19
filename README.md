@@ -102,7 +102,7 @@ issues and distinguish different syntaxes in the AST.
 
 ## WIP: Extracting source locations from AST nodes
 
-This crate allows recovering source locations from AST nodes via the [Spanned](https://docs.rs/sqlparser/latest/sqlparser/ast/trait.Spanned.html) trait, which can be used for advanced diagnostics tooling. Node that this feature is a work in progress and many nodes report missing or inaccurate spans. Please see [this document](./docs/source_spans.md#source-span-contributing-guidelines) for information on how to contribute missing improvements.
+This crate allows recovering source locations from AST nodes via the [Spanned](https://docs.rs/sqlparser/latest/sqlparser/ast/trait.Spanned.html) trait, which can be used for advanced diagnostics tooling. Note that this feature is a work in progress and many nodes report missing or inaccurate spans. Please see [this document](./docs/source_spans.md#source-span-contributing-guidelines) for information on how to contribute missing improvements.
 
 ```rust
 use sqlparser::ast::Spanned;

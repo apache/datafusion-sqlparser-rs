@@ -1372,13 +1372,13 @@ impl Spanned for Expr {
             Expr::Map(_) => Span::empty(),
             Expr::Subscript { expr, subscript } => expr.span().union(&subscript.span()),
             Expr::Interval(interval) => interval.value.span(),
-            Expr::Wildcard(token) => token.span,
+            Expr::Wildcard(token) => token.0.span,
             Expr::QualifiedWildcard(object_name, token) => union_spans(
                 object_name
                     .0
                     .iter()
                     .map(|i| i.span)
-                    .chain(iter::once(token.span)),
+                    .chain(iter::once(token.0.span)),
             ),
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),

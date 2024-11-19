@@ -23,6 +23,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use helpers::attached_token::AttachedToken;
 
 use core::ops::Deref;
 use core::{
@@ -36,7 +37,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::tokenizer::{Span, TokenWithLocation};
+use crate::tokenizer::Span;
 
 pub use self::data_type::{
     ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, ExactNumberInfo,
@@ -967,10 +968,10 @@ pub enum Expr {
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
-    Wildcard(TokenWithLocation),
+    Wildcard(AttachedToken),
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
     /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
-    QualifiedWildcard(ObjectName, TokenWithLocation),
+    QualifiedWildcard(ObjectName, AttachedToken),
     /// Some dialects support an older syntax for outer joins where columns are
     /// marked with the `(+)` operator in the WHERE clause, for example:
     ///

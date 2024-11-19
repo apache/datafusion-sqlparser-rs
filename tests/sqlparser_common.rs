@@ -11550,6 +11550,14 @@ fn parse_method_expr() {
         }
         _ => unreachable!(),
     }
+    
+    dialects.verified_stmt(
+        "SELECT phone, some_namespace::some_function().method_a(345345) FROM customers"
+    );
+
+    dialects.verified_stmt(
+        "SELECT geography::STGeomFromText('POLYGON((-122.358 47.653, -122.348 47.649, -122.348 47.658, -122.358 47.658, -122.358 47.653))', 4326).STAsText() FROM customers"
+    );
 }
 
 #[test]

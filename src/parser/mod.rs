@@ -1224,6 +1224,17 @@ impl<'a> Parser<'a> {
                             body: Box::new(self.parse_expr()?),
                         }));
                     }
+                    Token::DoubleColon if self.dialect.supports_methods() => {
+                        let namespace = w.value;
+                        self.expect_token(&Token::DoubleColon)?;
+                        let name_with_namespace = match self.next_token().token {
+                            Token::Word(func_name) => {
+                                ObjectName(vec![Ident::new(format!("{}::{}", namespace, func_name.value))])
+                            },
+                            _ => return self.expected("identifier", self.peek_token())
+                        };
+                        Ok(self.parse_function(name_with_namespace)?)
+                    }
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word

@@ -1202,6 +1202,9 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some(' ') => Ok(Some(Token::AtSign)),
+                        Some('\'') => Ok(Some(Token::AtSign)),
+                        Some('\"') => Ok(Some(Token::AtSign)),
+                        Some('`') => Ok(Some(Token::AtSign)),
                         Some(sch) if self.dialect.is_identifier_start('@') => {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
@@ -1229,7 +1232,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 '$' => Ok(Some(self.tokenize_dollar_preceded_value(chars)?)),
 
-                //whitespace check (including unicode chars) should be last as it covers some of the chars above
+                // whitespace check (including unicode chars) should be last as it covers some of the chars above
                 ch if ch.is_whitespace() => {
                     self.consume_and_return(chars, Token::Whitespace(Whitespace::Space))
                 }
@@ -2974,6 +2977,24 @@ mod tests {
         let sql = r#"''''''"#;
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![Token::SingleQuotedString("''".to_string())];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn test_mysql_users_grantees() {
+        let dialect = MySqlDialect {};
+
+        let sql = "CREATE USER 'root'@'localhost'";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("CREATE"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("USER"),
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("root".to_string()),
+            Token::AtSign,
+            Token::SingleQuotedString("localhost".to_string()),
+        ];
         compare(expected, tokens);
     }
 }

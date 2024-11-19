@@ -1008,7 +1008,7 @@ impl<'a> Parser<'a> {
                 Ok(expr) => expr,
                 _ => {
                     self.prev_token();
-                    return self.expected("wildcard or identent", self.peek_token());
+                    return self.expected("wildcard or identifier", self.peek_token());
                 }
             }
         };

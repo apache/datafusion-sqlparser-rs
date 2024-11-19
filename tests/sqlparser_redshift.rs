@@ -206,15 +206,20 @@ fn test_redshift_json_path() {
     let select = redshift().verified_only_select(sql);
 
     assert_eq!(
-        &Expr::JsonAccess{
+        &Expr::JsonAccess {
             value: Box::new(Expr::CompoundIdentifier(vec![
                 Ident::new("cust"),
                 Ident::new("c_orders")
             ])),
-            path: JsonPath{
+            path: JsonPath {
                 path: vec![
-                    JsonPathElem::Bracket{key: Expr::Value(Value::Number("0".to_string(), false))},
-                    JsonPathElem::Dot{key: "o_orderkey".to_string(), quoted: false}
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                    },
+                    JsonPathElem::Dot {
+                        key: "o_orderkey".to_string(),
+                        quoted: false
+                    }
                 ]
             }
         },
@@ -224,15 +229,19 @@ fn test_redshift_json_path() {
     let sql = "SELECT cust.c_orders[0]['id'] FROM customer_orders_lineitem";
     let select = redshift().verified_only_select(sql);
     assert_eq!(
-        &Expr::JsonAccess{
+        &Expr::JsonAccess {
             value: Box::new(Expr::CompoundIdentifier(vec![
                 Ident::new("cust"),
                 Ident::new("c_orders")
             ])),
-            path: JsonPath{
+            path: JsonPath {
                 path: vec![
-                    JsonPathElem::Bracket{key: Expr::Value(Value::Number("0".to_string(), false))},
-                    JsonPathElem::Bracket{key: Expr::Value(Value::SingleQuotedString("id".to_owned()))}
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                    },
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(Value::SingleQuotedString("id".to_owned()))
+                    }
                 ]
             }
         },
@@ -248,10 +257,15 @@ fn test_parse_json_path_from() {
             assert_eq!(name, &ObjectName(vec![Ident::new("src")]));
             assert_eq!(
                 partiql,
-                &Some(JsonPath{
+                &Some(JsonPath {
                     path: vec![
-                        JsonPathElem::Bracket{key: Expr::Value(Value::Number("0".to_string(), false))},
-                        JsonPathElem::Dot{key: "a".to_string(), quoted: false}
+                        JsonPathElem::Bracket {
+                            key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                        },
+                        JsonPathElem::Dot {
+                            key: "a".to_string(),
+                            quoted: false
+                        }
                     ]
                 })
             );
@@ -265,12 +279,22 @@ fn test_parse_json_path_from() {
             assert_eq!(name, &ObjectName(vec![Ident::new("src")]));
             assert_eq!(
                 partiql,
-                &Some(JsonPath{
+                &Some(JsonPath {
                     path: vec![
-                        JsonPathElem::Bracket{key: Expr::Value(Value::Number("0".to_string(), false))},
-                        JsonPathElem::Dot{key: "a".to_string(), quoted: false},
-                        JsonPathElem::Bracket{key: Expr::Value(Value::Number("1".to_string(), false))},
-                        JsonPathElem::Dot{key: "b".to_string(), quoted: false},
+                        JsonPathElem::Bracket {
+                            key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                        },
+                        JsonPathElem::Dot {
+                            key: "a".to_string(),
+                            quoted: false
+                        },
+                        JsonPathElem::Bracket {
+                            key: Expr::Value(Value::Number("1".parse().unwrap(), false))
+                        },
+                        JsonPathElem::Dot {
+                            key: "b".to_string(),
+                            quoted: false
+                        },
                     ]
                 })
             );
@@ -281,10 +305,12 @@ fn test_parse_json_path_from() {
     let select = redshift().verified_only_select("SELECT * FROM src.a.b");
     match &select.from[0].relation {
         TableFactor::Table { name, partiql, .. } => {
-            assert_eq!(name, &ObjectName(vec![Ident::new("src"), Ident::new("a"), Ident::new("b")]));
+            assert_eq!(
+                name,
+                &ObjectName(vec![Ident::new("src"), Ident::new("a"), Ident::new("b")])
+            );
             assert_eq!(partiql, &None);
         }
         _ => panic!(),
     }
-
 }

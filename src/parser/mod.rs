@@ -3103,7 +3103,7 @@ impl<'a> Parser<'a> {
         }
 
         debug_assert!(!path.is_empty());
-        Ok(JsonPath{ path })
+        Ok(JsonPath { path })
     }
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
@@ -10327,12 +10327,12 @@ impl<'a> Parser<'a> {
             self.parse_open_json_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
-            
+
             let partiql = match self.peek_token().token {
                 Token::LBracket if self.dialect.supports_partiql() => Some(self.parse_json_path()?),
-                _ => None
+                _ => None,
             };
-        
+
             let partitions: Vec<Ident> = if dialect_of!(self is MySqlDialect | GenericDialect)
                 && self.parse_keyword(Keyword::PARTITION)
             {

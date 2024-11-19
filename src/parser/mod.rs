@@ -534,9 +534,9 @@ impl<'a> Parser<'a> {
                 Keyword::MERGE => self.parse_merge(),
                 // `LISTEN`, `UNLISTEN` and `NOTIFY` are Postgres-specific
                 // syntaxes. They are used for Postgres statement.
-                Keyword::LISTEN if self.dialect.supports_listen() => self.parse_listen(),
-                Keyword::UNLISTEN if self.dialect.supports_unlisten() => self.parse_unlisten(),
-                Keyword::NOTIFY if self.dialect.supports_notify() => self.parse_notify(),
+                Keyword::LISTEN if self.dialect.supports_listen_notify() => self.parse_listen(),
+                Keyword::UNLISTEN if self.dialect.supports_listen_notify() => self.parse_unlisten(),
+                Keyword::NOTIFY if self.dialect.supports_listen_notify() => self.parse_notify(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),

@@ -11550,9 +11550,9 @@ fn parse_method_expr() {
         }
         _ => unreachable!(),
     }
-    
+
     dialects.verified_stmt(
-        "SELECT phone, some_namespace::some_function().method_a(345345) FROM customers"
+        "SELECT phone, some_namespace::some_function().method_a(345345) FROM customers",
     );
 
     dialects.verified_stmt(

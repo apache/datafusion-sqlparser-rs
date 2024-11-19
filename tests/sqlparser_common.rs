@@ -11637,7 +11637,7 @@ fn parse_unlisten_channel() {
 
     assert_eq!(
         dialects.parse_sql_statements("UNLISTEN +").unwrap_err(),
-        ParserError::ParserError("Expected: wildcard or identent, found: +".to_string())
+        ParserError::ParserError("Expected: wildcard or identifier, found: +".to_string())
     );
 
     let dialects = all_dialects_where(|d| !d.supports_listen());
@@ -11898,10 +11898,7 @@ fn parse_load_data() {
 #[test]
 fn test_load_extension() {
     let dialects = all_dialects_where(|d| d.supports_load_extension());
-    let only_supports_load_data_dialects =
-        all_dialects_where(|d| !d.supports_load_extension() && d.supports_load_data());
-    let not_supports_load_dialects =
-        all_dialects_where(|d| !d.supports_load_data() && !d.supports_load_extension());
+    let not_supports_load_extension_dialects = all_dialects_where(|d| !d.supports_load_extension());
     let sql = "LOAD my_extension";
 
     match dialects.verified_stmt(sql) {
@@ -11912,16 +11909,7 @@ fn test_load_extension() {
     };
 
     assert_eq!(
-        only_supports_load_data_dialects
-            .parse_sql_statements(sql)
-            .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: `DATA` or an extension name after `LOAD`, found: my_extension".to_string()
-        )
-    );
-
-    assert_eq!(
-        not_supports_load_dialects
+        not_supports_load_extension_dialects
             .parse_sql_statements(sql)
             .unwrap_err(),
         ParserError::ParserError(

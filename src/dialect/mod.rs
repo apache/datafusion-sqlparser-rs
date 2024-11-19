@@ -231,8 +231,31 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
+    /// Returns true if the dialect supports named arguments of the form `FUN(a = '1', b = '2')`.
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a : '1', b : '2')`.
+    fn supports_named_fn_args_with_colon_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a := '1', b := '2')`.
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a => '1', b => '2')`.
+    fn supports_named_fn_args_with_rarrow_operator(&self) -> bool {
+        true
+    }
+
+    /// Returns true if dialect supports argument name as arbitrary expression.
+    /// e.g. `FUN(LOWER('a'):'1',  b:'2')`
+    /// Such function arguments are represented in the AST by the `FunctionArg::ExprNamed` variant,
+    /// otherwise use the `FunctionArg::Named` variant (compatible reason).
+    fn supports_named_fn_args_with_expr_name(&self) -> bool {
         false
     }
 
@@ -276,6 +299,15 @@ pub trait Dialect: Debug + Any {
     /// SELECT transform(array(1, 2, 3), x -> x + 1); -- returns [2,3,4]
     /// ```
     fn supports_lambda_functions(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports method calls, for example:
+    ///
+    /// ```sql
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')
+    /// ```
+    fn supports_methods(&self) -> bool {
         false
     }
 
@@ -575,6 +607,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `a!` expressions
+    fn supports_factorial_operator(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
     /// as an alias assignment operator, rather than a boolean expression.
     /// For example: the following statements are equivalent for such a dialect:
@@ -591,6 +628,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `!a` syntax for boolean `NOT` expressions.
+    fn supports_bang_not_operator(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the `LISTEN` statement
     fn supports_listen(&self) -> bool {
         false
@@ -601,9 +643,41 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect expects the the `TOP` option
+    /// Returns true if the dialect supports the `LOAD DATA` statement
+    fn supports_load_data(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `LOAD extension` statement
+    fn supports_load_extension(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect expects the `TOP` option
     /// before the `ALL`/`DISTINCT` options in a `SELECT` statement.
     fn supports_top_before_distinct(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports boolean literals (`true` and `false`).
+    /// For example, in MSSQL these are treated as identifiers rather than boolean literals.
+    fn supports_boolean_literals(&self) -> bool {
+        true
+    }
+
+    /// Returns true if this dialect supports the `LIKE 'pattern'` option in
+    /// a `SHOW` statement before the `IN` option
+    fn supports_show_like_before_in(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `COMMENT` statement
+    fn supports_comment_on(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `CREATE TABLE SELECT` statement
+    fn supports_create_table_select(&self) -> bool {
         false
     }
 }

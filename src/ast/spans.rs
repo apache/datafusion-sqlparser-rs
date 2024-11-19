@@ -14,8 +14,8 @@ use super::{
     ObjectName, Offset, OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, Partition,
     PivotValueSource, ProjectionSelect, Query, ReferentialAction, RenameSelectItem,
     ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
-    Statement, Subscript, SymbolDefinition, TableAlias, TableConstraint, TableFactor,
-    TableOptionsClustered, TableWithJoins, Use, Value, Values, ViewColumnDef,
+    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
+    TableFactor, TableOptionsClustered, TableWithJoins, Use, Value, Values, ViewColumnDef,
     WildcardAdditionalOptions, With, WithFill,
 };
 
@@ -303,6 +303,7 @@ impl Spanned for Statement {
                 from,
                 selection,
                 returning,
+                or: _,
             } => union_spans(
                 core::iter::once(table.span())
                     .chain(assignments.iter().map(|i| i.span()))
@@ -439,6 +440,7 @@ impl Spanned for Statement {
             Statement::ShowViews { .. } => Span::empty(),
             Statement::LISTEN { .. } => Span::empty(),
             Statement::NOTIFY { .. } => Span::empty(),
+            Statement::LoadData { .. } => Span::empty(),
         }
     }
 }
@@ -1383,6 +1385,7 @@ impl Spanned for Expr {
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),
             Expr::Lambda(_) => Span::empty(),
+            Expr::Method(_) => Span::empty(),
         }
     }
 }
@@ -1490,6 +1493,7 @@ impl Spanned for FunctionArgumentClause {
             FunctionArgumentClause::OnOverflow(_) => Span::empty(),
             FunctionArgumentClause::Having(HavingBound(_kind, expr)) => expr.span(),
             FunctionArgumentClause::Separator(value) => value.span(),
+            FunctionArgumentClause::JsonNullClause(_) => Span::empty(),
         }
     }
 }
@@ -1638,7 +1642,8 @@ impl Spanned for TableFactor {
                     .map(|i| i.span)
                     .chain(alias.as_ref().map(|alias| {
                         union_spans(
-                            iter::once(alias.name.span).chain(alias.columns.iter().map(|i| i.span)),
+                            iter::once(alias.name.span)
+                                .chain(alias.columns.iter().map(|i| i.span())),
                         )
                     })),
             ),
@@ -1731,6 +1736,7 @@ impl Spanned for TableFactor {
                     .chain(symbols.iter().map(|i| i.span()))
                     .chain(alias.as_ref().map(|i| i.span())),
             ),
+            TableFactor::OpenJsonTable { .. } => Span::empty(),
         }
     }
 }
@@ -1811,6 +1817,11 @@ impl Spanned for FunctionArg {
                 operator: _,
             } => name.span.union(&arg.span()),
             FunctionArg::Unnamed(arg) => arg.span(),
+            FunctionArg::ExprNamed {
+                name,
+                arg,
+                operator: _,
+            } => name.span().union(&arg.span()),
         }
     }
 }
@@ -1835,7 +1846,15 @@ impl Spanned for TableAlias {
     fn span(&self) -> Span {
         let TableAlias { name, columns } = self;
 
-        union_spans(iter::once(name.span).chain(columns.iter().map(|i| i.span)))
+        union_spans(iter::once(name.span).chain(columns.iter().map(|i| i.span())))
+    }
+}
+
+impl Spanned for TableAliasColumnDef {
+    fn span(&self) -> Span {
+        let TableAliasColumnDef { name, data_type: _ } = self;
+
+        name.span
     }
 }
 
@@ -1885,6 +1904,8 @@ impl Spanned for JoinOperator {
                 match_condition,
                 constraint,
             } => match_condition.span().union(&constraint.span()),
+            JoinOperator::Anti(join_constraint) => join_constraint.span(),
+            JoinOperator::Semi(join_constraint) => join_constraint.span(),
         }
     }
 }

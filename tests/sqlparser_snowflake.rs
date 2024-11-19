@@ -2781,3 +2781,68 @@ fn test_parentheses_overflow() {
         snowflake_with_recursion_limit(max_nesting_level).parse_sql_statements(sql.as_str());
     assert_eq!(parsed.err(), Some(ParserError::RecursionLimitExceeded));
 }
+
+#[test]
+fn test_show_databases() {
+    snowflake().verified_stmt("SHOW DATABASES");
+    snowflake().verified_stmt("SHOW DATABASES HISTORY");
+    snowflake().verified_stmt("SHOW DATABASES LIKE '%abc%'");
+    snowflake().verified_stmt("SHOW DATABASES STARTS WITH 'demo_db'");
+    snowflake().verified_stmt("SHOW DATABASES LIMIT 12");
+    snowflake()
+        .verified_stmt("SHOW DATABASES HISTORY LIKE '%aa' STARTS WITH 'demo' LIMIT 20 FROM 'abc'");
+    snowflake().verified_stmt("SHOW DATABASES IN ACCOUNT abc");
+}
+
+#[test]
+fn test_parse_show_schemas() {
+    snowflake().verified_stmt("SHOW SCHEMAS");
+    snowflake().verified_stmt("SHOW SCHEMAS IN ACCOUNT");
+    snowflake().verified_stmt("SHOW SCHEMAS IN ACCOUNT abc");
+    snowflake().verified_stmt("SHOW SCHEMAS IN DATABASE");
+    snowflake().verified_stmt("SHOW SCHEMAS IN DATABASE xyz");
+    snowflake().verified_stmt("SHOW SCHEMAS HISTORY LIKE '%xa%'");
+    snowflake().verified_stmt("SHOW SCHEMAS STARTS WITH 'abc' LIMIT 20");
+    snowflake().verified_stmt("SHOW SCHEMAS IN DATABASE STARTS WITH 'abc' LIMIT 20 FROM 'xyz'");
+}
+
+#[test]
+fn test_parse_show_tables() {
+    snowflake().verified_stmt("SHOW TABLES");
+    snowflake().verified_stmt("SHOW TABLES IN ACCOUNT");
+    snowflake().verified_stmt("SHOW TABLES IN DATABASE");
+    snowflake().verified_stmt("SHOW TABLES IN DATABASE xyz");
+    snowflake().verified_stmt("SHOW TABLES IN SCHEMA");
+    snowflake().verified_stmt("SHOW TABLES IN SCHEMA xyz");
+    snowflake().verified_stmt("SHOW TABLES HISTORY LIKE '%xa%'");
+    snowflake().verified_stmt("SHOW TABLES STARTS WITH 'abc' LIMIT 20");
+    snowflake().verified_stmt("SHOW TABLES IN SCHEMA STARTS WITH 'abc' LIMIT 20 FROM 'xyz'");
+    snowflake().verified_stmt("SHOW EXTERNAL TABLES");
+    snowflake().verified_stmt("SHOW EXTERNAL TABLES IN ACCOUNT");
+    snowflake().verified_stmt("SHOW EXTERNAL TABLES IN DATABASE");
+    snowflake().verified_stmt("SHOW EXTERNAL TABLES IN DATABASE xyz");
+    snowflake().verified_stmt("SHOW EXTERNAL TABLES IN SCHEMA");
+    snowflake().verified_stmt("SHOW EXTERNAL TABLES IN SCHEMA xyz");
+    snowflake().verified_stmt("SHOW EXTERNAL TABLES STARTS WITH 'abc' LIMIT 20");
+    snowflake()
+        .verified_stmt("SHOW EXTERNAL TABLES IN SCHEMA STARTS WITH 'abc' LIMIT 20 FROM 'xyz'");
+}
+
+#[test]
+fn test_show_views() {
+    snowflake().verified_stmt("SHOW VIEWS");
+    snowflake().verified_stmt("SHOW VIEWS IN ACCOUNT");
+    snowflake().verified_stmt("SHOW VIEWS IN DATABASE");
+    snowflake().verified_stmt("SHOW VIEWS IN DATABASE xyz");
+    snowflake().verified_stmt("SHOW VIEWS IN SCHEMA");
+    snowflake().verified_stmt("SHOW VIEWS IN SCHEMA xyz");
+    snowflake().verified_stmt("SHOW VIEWS STARTS WITH 'abc' LIMIT 20");
+    snowflake().verified_stmt("SHOW VIEWS IN SCHEMA STARTS WITH 'abc' LIMIT 20 FROM 'xyz'");
+}
+
+#[test]
+fn test_parse_show_columns_sql() {
+    snowflake().verified_stmt("SHOW COLUMNS IN TABLE");
+    snowflake().verified_stmt("SHOW COLUMNS IN TABLE abc");
+    snowflake().verified_stmt("SHOW COLUMNS LIKE '%xyz%' IN TABLE abc");
+}

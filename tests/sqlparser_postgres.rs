@@ -2908,68 +2908,6 @@ fn test_composite_value() {
 }
 
 #[test]
-fn parse_comments() {
-    match pg().verified_stmt("COMMENT ON COLUMN tab.name IS 'comment'") {
-        Statement::Comment {
-            object_type,
-            object_name,
-            comment: Some(comment),
-            if_exists,
-        } => {
-            assert_eq!("comment", comment);
-            assert_eq!("tab.name", object_name.to_string());
-            assert_eq!(CommentObject::Column, object_type);
-            assert!(!if_exists);
-        }
-        _ => unreachable!(),
-    }
-
-    match pg().verified_stmt("COMMENT ON EXTENSION plpgsql IS 'comment'") {
-        Statement::Comment {
-            object_type,
-            object_name,
-            comment: Some(comment),
-            if_exists,
-        } => {
-            assert_eq!("comment", comment);
-            assert_eq!("plpgsql", object_name.to_string());
-            assert_eq!(CommentObject::Extension, object_type);
-            assert!(!if_exists);
-        }
-        _ => unreachable!(),
-    }
-
-    match pg().verified_stmt("COMMENT ON TABLE public.tab IS 'comment'") {
-        Statement::Comment {
-            object_type,
-            object_name,
-            comment: Some(comment),
-            if_exists,
-        } => {
-            assert_eq!("comment", comment);
-            assert_eq!("public.tab", object_name.to_string());
-            assert_eq!(CommentObject::Table, object_type);
-            assert!(!if_exists);
-        }
-        _ => unreachable!(),
-    }
-
-    match pg().verified_stmt("COMMENT IF EXISTS ON TABLE public.tab IS NULL") {
-        Statement::Comment {
-            object_type,
-            object_name,
-            comment: None,
-            if_exists,
-        } => {
-            assert_eq!("public.tab", object_name.to_string());
-            assert_eq!(CommentObject::Table, object_type);
-            assert!(if_exists);
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn parse_quoted_identifier() {
     pg_and_generic().verified_stmt(r#"SELECT "quoted "" ident""#);
 }

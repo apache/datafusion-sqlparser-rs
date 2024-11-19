@@ -23,7 +23,7 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::{Span, Token, TokenWithLocation};
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 use sqlparser::ast::DataType::{Int, Text};
@@ -31,7 +31,7 @@ use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::ParserError;
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -196,6 +196,256 @@ fn parse_mssql_apply_join() {
     let _ = ms_and_generic().verified_only_select(
         "SELECT * FROM foo \
          OUTER APPLY (SELECT foo.x + 1) AS bar",
+    );
+}
+
+#[test]
+fn parse_mssql_openjson() {
+    let select = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param, '$.config') WITH (kind VARCHAR(20) '$.kind', [id_list] NVARCHAR(MAX) '$.id_list' AS JSON) AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("t_test_table")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("A"),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
+                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    columns: vec![
+                        OpenJsonTableColumn {
+                            name: Ident::new("kind"),
+                            r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                                length: 20,
+                                unit: None
+                            })),
+                            path: Some("$.kind".into()),
+                            as_json: false
+                        },
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "id_list".into(),
+                                quote_style: Some('['),
+                                span: Span::empty(),
+                            },
+                            r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
+                            path: Some("$.id_list".into()),
+                            as_json: true
+                        }
+                    ],
+                    alias: Some(TableAlias {
+                        name: Ident::new("B"),
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param) WITH (kind VARCHAR(20) '$.kind', [id_list] NVARCHAR(MAX) '$.id_list' AS JSON) AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("t_test_table"),]),
+                alias: Some(TableAlias {
+                    name: Ident::new("A"),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
+                    json_path: None,
+                    columns: vec![
+                        OpenJsonTableColumn {
+                            name: Ident::new("kind"),
+                            r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                                length: 20,
+                                unit: None
+                            })),
+                            path: Some("$.kind".into()),
+                            as_json: false
+                        },
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "id_list".into(),
+                                quote_style: Some('['),
+                                span: Span::empty(),
+                            },
+                            r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
+                            path: Some("$.id_list".into()),
+                            as_json: true
+                        }
+                    ],
+                    alias: Some(TableAlias {
+                        name: Ident::new("B"),
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param) WITH (kind VARCHAR(20), [id_list] NVARCHAR(MAX)) AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("t_test_table")]),
+
+                alias: Some(TableAlias {
+                    name: Ident::new("A"),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
+                    json_path: None,
+                    columns: vec![
+                        OpenJsonTableColumn {
+                            name: Ident::new("kind"),
+                            r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                                length: 20,
+                                unit: None
+                            })),
+                            path: None,
+                            as_json: false
+                        },
+                        OpenJsonTableColumn {
+                            name: Ident {
+                                value: "id_list".into(),
+                                quote_style: Some('['),
+                                span: Span::empty(),
+                            },
+                            r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
+                            path: None,
+                            as_json: false
+                        }
+                    ],
+                    alias: Some(TableAlias {
+                        name: Ident::new("B"),
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms_and_generic().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param, '$.config') AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("t_test_table")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("A"),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
+                    json_path: Some(Value::SingleQuotedString("$.config".into())),
+                    columns: vec![],
+                    alias: Some(TableAlias {
+                        name: Ident::new("B"),
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
+    );
+    let select = ms_and_generic().verified_only_select(
+        "SELECT B.kind, B.id_list \
+        FROM t_test_table AS A \
+        CROSS APPLY OPENJSON(A.param) AS B",
+    );
+    assert_eq!(
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("t_test_table")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("A"),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                with_ordinality: false,
+                partitions: vec![]
+            },
+            joins: vec![Join {
+                relation: TableFactor::OpenJsonTable {
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
+                    json_path: None,
+                    columns: vec![],
+                    alias: Some(TableAlias {
+                        name: Ident::new("B"),
+                        columns: vec![]
+                    })
+                },
+                global: false,
+                join_operator: JoinOperator::CrossApply
+            }]
+        }],
+        select.from
     );
 }
 
@@ -463,6 +713,447 @@ fn parse_for_json_expect_ast() {
 }
 
 #[test]
+fn parse_mssql_json_object() {
+    let select = ms().verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : 1)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => assert_eq!(
+            &[
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("name".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "value".into()
+                    ))),
+                    operator: FunctionArgOperator::Colon
+                },
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("type".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(number("1"))),
+                    operator: FunctionArgOperator::Colon
+                }
+            ],
+            &args[..]
+        ),
+        _ => unreachable!(),
+    }
+    let select = ms()
+        .verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : NULL ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &[
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(Value::SingleQuotedString("name".into())),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "value".into()
+                        ))),
+                        operator: FunctionArgOperator::Colon
+                    },
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(Value::SingleQuotedString("type".into())),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::Null)),
+                        operator: FunctionArgOperator::Colon
+                    }
+                ],
+                &args[..]
+            );
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_OBJECT(NULL ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_OBJECT(ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_ARRAY(1, 2) ABSENT ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("name".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "value".into()
+                    ))),
+                    operator: FunctionArgOperator::Colon
+                },
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_OBJECT('type_id' : 1, 'name' : 'a') NULL ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("name".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "value".into()
+                    ))),
+                    operator: FunctionArgOperator::Colon
+                },
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_OBJECT('user_name' : USER_NAME(), LOWER(@id_key) : @id_value, 'sid' : (SELECT @@SPID) ABSENT ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(matches!(
+                args[0],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Function(_),
+                    arg: FunctionArgExpr::Expr(Expr::Identifier(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Subquery(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT s.session_id, JSON_OBJECT('security_id' : s.security_id, 'login' : s.login_name, 'status' : s.status) AS info \
+        FROM sys.dm_exec_sessions AS s \
+        WHERE s.is_user_process = 1",
+    );
+    match &select.projection[1] {
+        SelectItem::ExprWithAlias {
+            expr:
+                Expr::Function(Function {
+                    args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+                    ..
+                }),
+            ..
+        } => {
+            assert!(matches!(
+                args[0],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_mssql_json_array() {
+    let select = ms().verified_only_select("SELECT JSON_ARRAY('a', 1, NULL, 2 NULL ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &[
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("a".into())
+                    ))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Null))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                ],
+                &args[..]
+            );
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_ARRAY('a', 1, NULL, 2 ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &[
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("a".into())
+                    ))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Null))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                ],
+                &args[..]
+            );
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_ARRAY(NULL ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_ARRAY(ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_ARRAY('a', JSON_OBJECT('name' : 'value', 'type' : 1) NULL ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                    Value::SingleQuotedString("a".into())
+                ))),
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_ARRAY('a', JSON_OBJECT('name' : 'value', 'type' : 1), JSON_ARRAY(1, NULL, 2 NULL ON NULL))",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                    Value::SingleQuotedString("a".into())
+                ))),
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+            ));
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_ARRAY(1, @id_value, (SELECT @@SPID))");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(_)))
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Subquery(_)))
+            ));
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT s.session_id, JSON_ARRAY(s.host_name, s.program_name, s.client_interface_name NULL ON NULL) AS info \
+        FROM sys.dm_exec_sessions AS s \
+        WHERE s.is_user_process = 1",
+    );
+    match &select.projection[1] {
+        SelectItem::ExprWithAlias {
+            expr:
+                Expr::Function(Function {
+                    args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+                    ..
+                }),
+            ..
+        } => {
+            assert!(matches!(
+                args[0],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+            ));
+            assert!(matches!(
+                args[1],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_ampersand_arobase() {
     // In SQL Server, a&@b means (a) & (@b), in PostgreSQL it means (a) &@ (b)
     ms().expr_parses_to("a&@b", "a & @b");
@@ -591,7 +1282,7 @@ fn parse_substring_in_select() {
 #[test]
 fn parse_mssql_declare() {
     let sql = "DECLARE @foo CURSOR, @bar INT, @baz AS TEXT = 'foobar';";
-    let ast = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();
+    let ast = ms().parse_sql_statements(sql).unwrap();
 
     assert_eq!(
         vec![Statement::Declare {
@@ -645,6 +1336,71 @@ fn parse_mssql_declare() {
                 }
             ]
         }],
+        ast
+    );
+
+    let sql = "DECLARE @bar INT;SET @bar = 2;SELECT @bar * 4";
+    let ast = ms().parse_sql_statements(sql).unwrap();
+    assert_eq!(
+        vec![
+            Statement::Declare {
+                stmts: vec![Declare {
+                    names: vec![Ident::new("@bar"),],
+                    data_type: Some(Int(None)),
+                    assignment: None,
+                    declare_type: None,
+                    binary: None,
+                    sensitive: None,
+                    scroll: None,
+                    hold: None,
+                    for_query: None
+                }]
+            },
+            Statement::SetVariable {
+                local: false,
+                hivevar: false,
+                variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("@bar")])),
+                value: vec![Expr::Value(Value::Number("2".parse().unwrap(), false))],
+            },
+            Statement::Query(Box::new(Query {
+                with: None,
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                order_by: None,
+                settings: None,
+                format_clause: None,
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    select_token: AttachedToken::empty(),
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("@bar"))),
+                        op: BinaryOperator::Multiply,
+                        right: Box::new(Expr::Value(Value::Number("4".parse().unwrap(), false))),
+                    })],
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    window_before_qualify: false,
+                    qualify: None,
+                    value_table_mode: None,
+                    connect_by: None,
+                })))
+            }))
+        ],
         ast
     );
 }
@@ -1063,6 +1819,18 @@ fn parse_create_table_with_identity_column() {
             }),
         );
     }
+}
+
+#[test]
+fn parse_true_false_as_identifiers() {
+    assert_eq!(
+        ms().verified_expr("true"),
+        Expr::Identifier(Ident::new("true"))
+    );
+    assert_eq!(
+        ms().verified_expr("false"),
+        Expr::Identifier(Ident::new("false"))
+    );
 }
 
 fn ms() -> TestedDialects {

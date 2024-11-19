@@ -62,12 +62,12 @@ pub use self::query::{
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonTableColumn,
     JsonTableColumnErrorHandling, JsonTableNamedColumn, JsonTableNestedColumn, LateralView,
     LockClause, LockType, MatchRecognizePattern, MatchRecognizeSymbol, Measure,
-    NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset, OffsetRows, OrderBy, OrderByExpr,
-    PivotValueSource, ProjectionSelect, Query, RenameSelectItem, RepetitionQuantifier,
-    ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select, SelectInto, SelectItem, SetExpr,
-    SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableFactor,
-    TableFunctionArgs, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode, Values,
-    WildcardAdditionalOptions, With, WithFill,
+    NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset, OffsetRows, OpenJsonTableColumn,
+    OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
+    RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
+    TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableVersion, TableWithJoins,
+    Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
 };
 
 pub use self::trigger::{
@@ -183,7 +183,7 @@ impl core::hash::Hash for Ident {
 impl Eq for Ident {}
 
 impl Ident {
-    /// Create a new identifier with the given value and no quotes.
+    /// Create a new identifier with the given value and no quotes and an empty span.
     pub fn new<S>(value: S) -> Self
     where
         S: Into<String>,
@@ -874,6 +874,23 @@ pub enum Expr {
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
+    /// Arbitrary expr method call
+    ///
+    /// Syntax:
+    ///
+    /// `<arbitrary-expr>.<function-call>.<function-call-expr>...`
+    ///
+    /// > `arbitrary-expr` can be any expression including a function call.
+    ///
+    /// Example:
+    ///
+    /// ```sql
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
+    /// SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)').value('.','NVARCHAR(MAX)')
+    /// ```
+    ///
+    /// (mssql): <https://learn.microsoft.com/en-us/sql/t-sql/xml/xml-data-type-methods?view=sql-server-ver16>
+    Method(Method),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -1530,6 +1547,7 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{fun}"),
+            Expr::Method(method) => write!(f, "{method}"),
             Expr::Case {
                 operand,
                 conditions,
@@ -1950,6 +1968,10 @@ pub enum CommentObject {
     Column,
     Table,
     Extension,
+    Schema,
+    Database,
+    User,
+    Role,
 }
 
 impl fmt::Display for CommentObject {
@@ -1958,6 +1980,10 @@ impl fmt::Display for CommentObject {
             CommentObject::Column => f.write_str("COLUMN"),
             CommentObject::Table => f.write_str("TABLE"),
             CommentObject::Extension => f.write_str("EXTENSION"),
+            CommentObject::Schema => f.write_str("SCHEMA"),
+            CommentObject::Database => f.write_str("DATABASE"),
+            CommentObject::User => f.write_str("USER"),
+            CommentObject::Role => f.write_str("ROLE"),
         }
     }
 }
@@ -2436,6 +2462,8 @@ pub enum Statement {
         selection: Option<Expr>,
         /// RETURNING
         returning: Option<Vec<SelectItem>>,
+        /// SQLite-specific conflict resolution clause
+        or: Option<SqliteOnConflict>,
     },
     /// ```sql
     /// DELETE
@@ -2839,41 +2867,45 @@ pub enum Statement {
     /// ```sql
     /// SHOW COLUMNS
     /// ```
-    ///
-    /// Note: this is a MySQL-specific statement.
     ShowColumns {
         extended: bool,
         full: bool,
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        filter: Option<ShowStatementFilter>,
+        show_options: ShowStatementOptions,
     },
     /// ```sql
-    /// SHOW DATABASES [LIKE 'pattern']
+    /// SHOW DATABASES
     /// ```
-    ShowDatabases { filter: Option<ShowStatementFilter> },
+    ShowDatabases {
+        terse: bool,
+        history: bool,
+        show_options: ShowStatementOptions,
+    },
     /// ```sql
-    /// SHOW SCHEMAS [LIKE 'pattern']
+    /// SHOW SCHEMAS
     /// ```
-    ShowSchemas { filter: Option<ShowStatementFilter> },
+    ShowSchemas {
+        terse: bool,
+        history: bool,
+        show_options: ShowStatementOptions,
+    },
     /// ```sql
     /// SHOW TABLES
     /// ```
     ShowTables {
+        terse: bool,
+        history: bool,
         extended: bool,
         full: bool,
-        clause: Option<ShowClause>,
-        db_name: Option<Ident>,
-        filter: Option<ShowStatementFilter>,
+        external: bool,
+        show_options: ShowStatementOptions,
     },
     /// ```sql
     /// SHOW VIEWS
     /// ```
     ShowViews {
+        terse: bool,
         materialized: bool,
-        clause: Option<ShowClause>,
-        db_name: Option<Ident>,
-        filter: Option<ShowStatementFilter>,
+        show_options: ShowStatementOptions,
     },
     /// ```sql
     /// SHOW COLLATION
@@ -3203,7 +3235,7 @@ pub enum Statement {
     /// KILL [CONNECTION | QUERY | MUTATION]
     /// ```
     ///
-    /// See <https://clickhouse.com/docs/ru/sql-reference/statements/kill/>
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/kill/>
     /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
     Kill {
         modifier: Option<KillType>,
@@ -3382,6 +3414,22 @@ pub enum Statement {
     NOTIFY {
         channel: Ident,
         payload: Option<String>,
+    },
+    /// ```sql
+    /// LOAD DATA [LOCAL] INPATH 'filepath' [OVERWRITE] INTO TABLE tablename
+    /// [PARTITION (partcol1=val1, partcol2=val2 ...)]
+    /// [INPUTFORMAT 'inputformat' SERDE 'serde']
+    /// ```
+    /// Loading files into tables
+    ///
+    /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
+    LoadData {
+        local: bool,
+        inpath: String,
+        overwrite: bool,
+        table_name: ObjectName,
+        partitioned: Option<Vec<Expr>>,
+        table_format: Option<HiveLoadDataFormat>,
     },
 }
 
@@ -3711,8 +3759,13 @@ impl fmt::Display for Statement {
                 from,
                 selection,
                 returning,
+                or,
             } => {
-                write!(f, "UPDATE {table}")?;
+                write!(f, "UPDATE ")?;
+                if let Some(or) = or {
+                    write!(f, "{or} ")?;
+                }
+                write!(f, "{table}")?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
@@ -3985,6 +4038,36 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateTable(create_table) => create_table.fmt(f),
+            Statement::LoadData {
+                local,
+                inpath,
+                overwrite,
+                table_name,
+                partitioned,
+                table_format,
+            } => {
+                write!(
+                    f,
+                    "LOAD DATA {local}INPATH '{inpath}' {overwrite}INTO TABLE {table_name}",
+                    local = if *local { "LOCAL " } else { "" },
+                    inpath = inpath,
+                    overwrite = if *overwrite { "OVERWRITE " } else { "" },
+                    table_name = table_name,
+                )?;
+                if let Some(ref parts) = &partitioned {
+                    if !parts.is_empty() {
+                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                    }
+                }
+                if let Some(HiveLoadDataFormat {
+                    serde,
+                    input_format,
+                }) = &table_format
+                {
+                    write!(f, " INPUTFORMAT {input_format} SERDE {serde}")?;
+                }
+                Ok(())
+            }
             Statement::CreateVirtualTable {
                 name,
                 if_not_exists,
@@ -4453,79 +4536,72 @@ impl fmt::Display for Statement {
             Statement::ShowColumns {
                 extended,
                 full,
-                table_name,
-                filter,
+                show_options,
             } => {
                 write!(
                     f,
-                    "SHOW {extended}{full}COLUMNS FROM {table_name}",
+                    "SHOW {extended}{full}COLUMNS{show_options}",
                     extended = if *extended { "EXTENDED " } else { "" },
                     full = if *full { "FULL " } else { "" },
-                    table_name = table_name,
                 )?;
-                if let Some(filter) = filter {
-                    write!(f, " {filter}")?;
-                }
                 Ok(())
             }
-            Statement::ShowDatabases { filter } => {
-                write!(f, "SHOW DATABASES")?;
-                if let Some(filter) = filter {
-                    write!(f, " {filter}")?;
-                }
+            Statement::ShowDatabases {
+                terse,
+                history,
+                show_options,
+            } => {
+                write!(
+                    f,
+                    "SHOW {terse}DATABASES{history}{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
+                    history = if *history { " HISTORY" } else { "" },
+                )?;
                 Ok(())
             }
-            Statement::ShowSchemas { filter } => {
-                write!(f, "SHOW SCHEMAS")?;
-                if let Some(filter) = filter {
-                    write!(f, " {filter}")?;
-                }
+            Statement::ShowSchemas {
+                terse,
+                history,
+                show_options,
+            } => {
+                write!(
+                    f,
+                    "SHOW {terse}SCHEMAS{history}{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
+                    history = if *history { " HISTORY" } else { "" },
+                )?;
                 Ok(())
             }
             Statement::ShowTables {
+                terse,
+                history,
                 extended,
                 full,
-                clause: show_clause,
-                db_name,
-                filter,
+                external,
+                show_options,
             } => {
                 write!(
                     f,
-                    "SHOW {extended}{full}TABLES",
+                    "SHOW {terse}{extended}{full}{external}TABLES{history}{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
                     extended = if *extended { "EXTENDED " } else { "" },
                     full = if *full { "FULL " } else { "" },
+                    external = if *external { "EXTERNAL " } else { "" },
+                    history = if *history { " HISTORY" } else { "" },
                 )?;
-                if let Some(show_clause) = show_clause {
-                    write!(f, " {show_clause}")?;
-                }
-                if let Some(db_name) = db_name {
-                    write!(f, " {db_name}")?;
-                }
-                if let Some(filter) = filter {
-                    write!(f, " {filter}")?;
-                }
                 Ok(())
             }
             Statement::ShowViews {
+                terse,
                 materialized,
-                clause: show_clause,
-                db_name,
-                filter,
+                show_options,
             } => {
                 write!(
                     f,
-                    "SHOW {}VIEWS",
-                    if *materialized { "MATERIALIZED " } else { "" }
+                    "SHOW {terse}{materialized}VIEWS{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
+                    materialized = if *materialized { "MATERIALIZED " } else { "" }
                 )?;
-                if let Some(show_clause) = show_clause {
-                    write!(f, " {show_clause}")?;
-                }
-                if let Some(db_name) = db_name {
-                    write!(f, " {db_name}")?;
-                }
-                if let Some(filter) = filter {
-                    write!(f, " {filter}")?;
-                }
                 Ok(())
             }
             Statement::ShowFunctions { filter } => {
@@ -5439,6 +5515,8 @@ pub enum FunctionArgOperator {
     RightArrow,
     /// function(arg1 := value1)
     Assignment,
+    /// function(arg1 : value1)
+    Colon,
 }
 
 impl fmt::Display for FunctionArgOperator {
@@ -5447,6 +5525,7 @@ impl fmt::Display for FunctionArgOperator {
             FunctionArgOperator::Equals => f.write_str("="),
             FunctionArgOperator::RightArrow => f.write_str("=>"),
             FunctionArgOperator::Assignment => f.write_str(":="),
+            FunctionArgOperator::Colon => f.write_str(":"),
         }
     }
 }
@@ -5455,8 +5534,19 @@ impl fmt::Display for FunctionArgOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionArg {
+    /// `name` is identifier
+    ///
+    /// Enabled when `Dialect::supports_named_fn_args_with_expr_name` returns 'false'
     Named {
         name: Ident,
+        arg: FunctionArgExpr,
+        operator: FunctionArgOperator,
+    },
+    /// `name` is arbitrary expression
+    ///
+    /// Enabled when `Dialect::supports_named_fn_args_with_expr_name` returns 'true'
+    ExprNamed {
+        name: Expr,
         arg: FunctionArgExpr,
         operator: FunctionArgOperator,
     },
@@ -5467,6 +5557,11 @@ impl fmt::Display for FunctionArg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             FunctionArg::Named {
+                name,
+                arg,
+                operator,
+            } => write!(f, "{name} {operator} {arg}"),
+            FunctionArg::ExprNamed {
                 name,
                 arg,
                 operator,
@@ -5609,7 +5704,10 @@ impl fmt::Display for FunctionArgumentList {
         }
         write!(f, "{}", display_comma_separated(&self.args))?;
         if !self.clauses.is_empty() {
-            write!(f, " {}", display_separated(&self.clauses, " "))?;
+            if !self.args.is_empty() {
+                write!(f, " ")?;
+            }
+            write!(f, "{}", display_separated(&self.clauses, " "))?;
         }
         Ok(())
     }
@@ -5651,6 +5749,11 @@ pub enum FunctionArgumentClause {
     ///
     /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
     Separator(Value),
+    /// The json-null-clause to the [`JSON_ARRAY`]/[`JSON_OBJECT`] function in MSSQL.
+    ///
+    /// [`JSON_ARRAY`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16>
+    /// [`JSON_OBJECT`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16>
+    JsonNullClause(JsonNullClause),
 }
 
 impl fmt::Display for FunctionArgumentClause {
@@ -5666,7 +5769,29 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
             FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
             FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
+            FunctionArgumentClause::JsonNullClause(null_clause) => write!(f, "{null_clause}"),
         }
+    }
+}
+
+/// A method call
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Method {
+    pub expr: Box<Expr>,
+    // always non-empty
+    pub method_chain: Vec<Function>,
+}
+
+impl fmt::Display for Method {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}.{}",
+            self.expr,
+            display_separated(&self.method_chain, ".")
+        )
     }
 }
 
@@ -5875,6 +6000,14 @@ pub enum HiveDistributionStyle {
 pub enum HiveRowFormat {
     SERDE { class: String },
     DELIMITED { delimiters: Vec<HiveRowDelimiter> },
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct HiveLoadDataFormat {
+    pub serde: Expr,
+    pub input_format: Expr,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -6238,14 +6371,14 @@ impl fmt::Display for ShowStatementFilter {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum ShowClause {
+pub enum ShowStatementInClause {
     IN,
     FROM,
 }
 
-impl fmt::Display for ShowClause {
+impl fmt::Display for ShowStatementInClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use ShowClause::*;
+        use ShowStatementInClause::*;
         match self {
             FROM => write!(f, "FROM"),
             IN => write!(f, "IN"),
@@ -6272,11 +6405,11 @@ impl fmt::Display for SqliteOnConflict {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use SqliteOnConflict::*;
         match self {
-            Rollback => write!(f, "ROLLBACK"),
-            Abort => write!(f, "ABORT"),
-            Fail => write!(f, "FAIL"),
-            Ignore => write!(f, "IGNORE"),
-            Replace => write!(f, "REPLACE"),
+            Rollback => write!(f, "OR ROLLBACK"),
+            Abort => write!(f, "OR ABORT"),
+            Fail => write!(f, "OR FAIL"),
+            Ignore => write!(f, "OR IGNORE"),
+            Replace => write!(f, "OR REPLACE"),
         }
     }
 }
@@ -7419,6 +7552,134 @@ impl Display for UtilityOption {
             write!(f, "{} {}", self.name, arg)
         } else {
             write!(f, "{}", self.name)
+        }
+    }
+}
+
+/// Represents the different options available for `SHOW`
+/// statements to filter the results. Example from Snowflake:
+/// <https://docs.snowflake.com/en/sql-reference/sql/show-tables>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowStatementOptions {
+    pub show_in: Option<ShowStatementIn>,
+    pub starts_with: Option<Value>,
+    pub limit: Option<Expr>,
+    pub limit_from: Option<Value>,
+    pub filter_position: Option<ShowStatementFilterPosition>,
+}
+
+impl Display for ShowStatementOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (like_in_infix, like_in_suffix) = match &self.filter_position {
+            Some(ShowStatementFilterPosition::Infix(filter)) => {
+                (format!(" {filter}"), "".to_string())
+            }
+            Some(ShowStatementFilterPosition::Suffix(filter)) => {
+                ("".to_string(), format!(" {filter}"))
+            }
+            None => ("".to_string(), "".to_string()),
+        };
+        write!(
+            f,
+            "{like_in_infix}{show_in}{starts_with}{limit}{from}{like_in_suffix}",
+            show_in = match &self.show_in {
+                Some(i) => format!(" {i}"),
+                None => String::new(),
+            },
+            starts_with = match &self.starts_with {
+                Some(s) => format!(" STARTS WITH {s}"),
+                None => String::new(),
+            },
+            limit = match &self.limit {
+                Some(l) => format!(" LIMIT {l}"),
+                None => String::new(),
+            },
+            from = match &self.limit_from {
+                Some(f) => format!(" FROM {f}"),
+                None => String::new(),
+            }
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ShowStatementFilterPosition {
+    Infix(ShowStatementFilter), // For example: SHOW COLUMNS LIKE '%name%' IN TABLE tbl
+    Suffix(ShowStatementFilter), // For example: SHOW COLUMNS IN tbl LIKE '%name%'
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ShowStatementInParentType {
+    Account,
+    Database,
+    Schema,
+    Table,
+    View,
+}
+
+impl fmt::Display for ShowStatementInParentType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ShowStatementInParentType::Account => write!(f, "ACCOUNT"),
+            ShowStatementInParentType::Database => write!(f, "DATABASE"),
+            ShowStatementInParentType::Schema => write!(f, "SCHEMA"),
+            ShowStatementInParentType::Table => write!(f, "TABLE"),
+            ShowStatementInParentType::View => write!(f, "VIEW"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowStatementIn {
+    pub clause: ShowStatementInClause,
+    pub parent_type: Option<ShowStatementInParentType>,
+    pub parent_name: Option<ObjectName>,
+}
+
+impl fmt::Display for ShowStatementIn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.clause)?;
+        if let Some(parent_type) = &self.parent_type {
+            write!(f, " {}", parent_type)?;
+        }
+        if let Some(parent_name) = &self.parent_name {
+            write!(f, " {}", parent_name)?;
+        }
+        Ok(())
+    }
+}
+
+/// MSSQL's json null clause
+///
+/// ```plaintext
+/// <json_null_clause> ::=
+///       NULL ON NULL
+///     | ABSENT ON NULL
+/// ```
+///
+/// <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16#json_null_clause>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonNullClause {
+    NullOnNull,
+    AbsentOnNull,
+}
+
+impl Display for JsonNullClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonNullClause::NullOnNull => write!(f, "NULL ON NULL"),
+            JsonNullClause::AbsentOnNull => write!(f, "ABSENT ON NULL"),
         }
     }
 }

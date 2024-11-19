@@ -1061,6 +1061,27 @@ pub enum TableFactor {
         /// The alias for the table.
         alias: Option<TableAlias>,
     },
+    /// The MSSQL's `OPENJSON` table-valued function.
+    ///
+    /// ```sql
+    /// OPENJSON( jsonExpression [ , path ] )  [ <with_clause> ]
+    ///
+    /// <with_clause> ::= WITH ( { colName type [ column_path ] [ AS JSON ] } [ ,...n ] )
+    /// ````
+    ///
+    /// Reference: <https://learn.microsoft.com/en-us/sql/t-sql/functions/openjson-transact-sql?view=sql-server-ver16#syntax>
+    OpenJsonTable {
+        /// The JSON expression to be evaluated. It must evaluate to a json string
+        json_expr: Expr,
+        /// The path to the array or object to be iterated over.
+        /// It must evaluate to a json array or object.
+        json_path: Option<Value>,
+        /// The columns to be extracted from each element of the array or object.
+        /// Each column must have a name and a type.
+        columns: Vec<OpenJsonTableColumn>,
+        /// The alias for the table.
+        alias: Option<TableAlias>,
+    },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
     /// possibly several times.
@@ -1486,6 +1507,25 @@ impl fmt::Display for TableFactor {
                 }
                 Ok(())
             }
+            TableFactor::OpenJsonTable {
+                json_expr,
+                json_path,
+                columns,
+                alias,
+            } => {
+                write!(f, "OPENJSON({json_expr}")?;
+                if let Some(json_path) = json_path {
+                    write!(f, ", {json_path}")?;
+                }
+                write!(f, ")")?;
+                if !columns.is_empty() {
+                    write!(f, " WITH ({})", display_comma_separated(columns))?;
+                }
+                if let Some(alias) = alias {
+                    write!(f, " AS {alias}")?;
+                }
+                Ok(())
+            }
             TableFactor::NestedJoin {
                 table_with_joins,
                 alias,
@@ -1582,7 +1622,7 @@ impl fmt::Display for TableFactor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAlias {
     pub name: Ident,
-    pub columns: Vec<Ident>,
+    pub columns: Vec<TableAliasColumnDef>,
 }
 
 impl fmt::Display for TableAlias {
@@ -1590,6 +1630,41 @@ impl fmt::Display for TableAlias {
         write!(f, "{}", self.name)?;
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        Ok(())
+    }
+}
+
+/// SQL column definition in a table expression alias.
+/// Most of the time, the data type is not specified.
+/// But some table-valued functions do require specifying the data type.
+///
+/// See <https://www.postgresql.org/docs/17/queries-table-expressions.html#QUERIES-TABLEFUNCTIONS>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableAliasColumnDef {
+    /// Column name alias
+    pub name: Ident,
+    /// Some table-valued functions require specifying the data type in the alias.
+    pub data_type: Option<DataType>,
+}
+
+impl TableAliasColumnDef {
+    /// Create a new table alias column definition with only a name and no type
+    pub fn from_name<S: Into<String>>(name: S) -> Self {
+        TableAliasColumnDef {
+            name: Ident::new(name),
+            data_type: None,
+        }
+    }
+}
+
+impl fmt::Display for TableAliasColumnDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(ref data_type) = self.data_type {
+            write!(f, " {}", data_type)?;
         }
         Ok(())
     }
@@ -1679,6 +1754,13 @@ impl fmt::Display for Join {
                 suffix(constraint)
             ),
             JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
+            JoinOperator::Semi(constraint) => write!(
+                f,
+                " {}SEMI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
             JoinOperator::LeftSemi(constraint) => write!(
                 f,
                 " {}LEFT SEMI JOIN {}{}",
@@ -1689,6 +1771,13 @@ impl fmt::Display for Join {
             JoinOperator::RightSemi(constraint) => write!(
                 f,
                 " {}RIGHT SEMI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::Anti(constraint) => write!(
+                f,
+                " {}ANTI JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
@@ -1731,10 +1820,14 @@ pub enum JoinOperator {
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
     CrossJoin,
+    /// SEMI (non-standard)
+    Semi(JoinConstraint),
     /// LEFT SEMI (non-standard)
     LeftSemi(JoinConstraint),
     /// RIGHT SEMI (non-standard)
     RightSemi(JoinConstraint),
+    /// ANTI (non-standard)
+    Anti(JoinConstraint),
     /// LEFT ANTI (non-standard)
     LeftAnti(JoinConstraint),
     /// RIGHT ANTI (non-standard)
@@ -2443,6 +2536,40 @@ impl fmt::Display for JsonTableColumnErrorHandling {
             }
             JsonTableColumnErrorHandling::Error => write!(f, "ERROR"),
         }
+    }
+}
+
+/// A single column definition in MSSQL's `OPENJSON WITH` clause.
+///
+/// ```sql
+/// colName type [ column_path ] [ AS JSON ]
+/// ```
+///
+/// Reference: <https://learn.microsoft.com/en-us/sql/t-sql/functions/openjson-transact-sql?view=sql-server-ver16#syntax>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct OpenJsonTableColumn {
+    /// The name of the column to be extracted.
+    pub name: Ident,
+    /// The type of the column to be extracted.
+    pub r#type: DataType,
+    /// The path to the column to be extracted. Must be a literal string.
+    pub path: Option<String>,
+    /// The `AS JSON` option.
+    pub as_json: bool,
+}
+
+impl fmt::Display for OpenJsonTableColumn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.name, self.r#type)?;
+        if let Some(path) = &self.path {
+            write!(f, " '{}'", value::escape_single_quote_string(path))?;
+        }
+        if self.as_json {
+            write!(f, " AS JSON")?;
+        }
+        Ok(())
     }
 }
 

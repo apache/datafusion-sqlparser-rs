@@ -11595,7 +11595,7 @@ fn test_show_dbs_schemas_tables_views() {
 
 #[test]
 fn parse_listen_channel() {
-    let dialects = all_dialects_where(|d| d.supports_listen());
+    let dialects = all_dialects_where(|d| d.supports_listen_notify());
 
     match dialects.verified_stmt("LISTEN test1") {
         Statement::LISTEN { channel } => {
@@ -11609,7 +11609,7 @@ fn parse_listen_channel() {
         ParserError::ParserError("Expected: identifier, found: *".to_string())
     );
 
-    let dialects = all_dialects_where(|d| !d.supports_listen());
+    let dialects = all_dialects_where(|d| !d.supports_listen_notify());
 
     assert_eq!(
         dialects.parse_sql_statements("LISTEN test1").unwrap_err(),
@@ -11618,8 +11618,39 @@ fn parse_listen_channel() {
 }
 
 #[test]
+fn parse_unlisten_channel() {
+    let dialects = all_dialects_where(|d| d.supports_listen_notify());
+
+    match dialects.verified_stmt("UNLISTEN test1") {
+        Statement::UNLISTEN { channel } => {
+            assert_eq!(Ident::new("test1"), channel);
+        }
+        _ => unreachable!(),
+    };
+
+    match dialects.verified_stmt("UNLISTEN *") {
+        Statement::UNLISTEN { channel } => {
+            assert_eq!(Ident::new("*"), channel);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        dialects.parse_sql_statements("UNLISTEN +").unwrap_err(),
+        ParserError::ParserError("Expected: wildcard or identifier, found: +".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_listen_notify());
+
+    assert_eq!(
+        dialects.parse_sql_statements("UNLISTEN test1").unwrap_err(),
+        ParserError::ParserError("Expected: an SQL statement, found: UNLISTEN".to_string())
+    );
+}
+
+#[test]
 fn parse_notify_channel() {
-    let dialects = all_dialects_where(|d| d.supports_notify());
+    let dialects = all_dialects_where(|d| d.supports_listen_notify());
 
     match dialects.verified_stmt("NOTIFY test1") {
         Statement::NOTIFY { channel, payload } => {
@@ -11655,7 +11686,7 @@ fn parse_notify_channel() {
         "NOTIFY test1",
         "NOTIFY test1, 'this is a test notification'",
     ];
-    let dialects = all_dialects_where(|d| !d.supports_notify());
+    let dialects = all_dialects_where(|d| !d.supports_listen_notify());
 
     for &sql in &sql_statements {
         assert_eq!(
@@ -11862,6 +11893,44 @@ fn parse_load_data() {
             "Expected: `DATA` or an extension name after `LOAD`, found: DATA2".to_string()
         )
     );
+}
+
+#[test]
+fn test_load_extension() {
+    let dialects = all_dialects_where(|d| d.supports_load_extension());
+    let not_supports_load_extension_dialects = all_dialects_where(|d| !d.supports_load_extension());
+    let sql = "LOAD my_extension";
+
+    match dialects.verified_stmt(sql) {
+        Statement::Load { extension_name } => {
+            assert_eq!(Ident::new("my_extension"), extension_name);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        not_supports_load_extension_dialects
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: `DATA` or an extension name after `LOAD`, found: my_extension".to_string()
+        )
+    );
+
+    let sql = "LOAD 'filename'";
+
+    match dialects.verified_stmt(sql) {
+        Statement::Load { extension_name } => {
+            assert_eq!(
+                Ident {
+                    value: "filename".to_string(),
+                    quote_style: Some('\'')
+                },
+                extension_name
+            );
+        }
+        _ => unreachable!(),
+    };
 }
 
 #[test]

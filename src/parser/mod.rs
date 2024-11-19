@@ -532,10 +532,11 @@ impl<'a> Parser<'a> {
                 Keyword::EXECUTE | Keyword::EXEC => self.parse_execute(),
                 Keyword::PREPARE => self.parse_prepare(),
                 Keyword::MERGE => self.parse_merge(),
-                // `LISTEN` and `NOTIFY` are Postgres-specific
+                // `LISTEN`, `UNLISTEN` and `NOTIFY` are Postgres-specific
                 // syntaxes. They are used for Postgres statement.
-                Keyword::LISTEN if self.dialect.supports_listen() => self.parse_listen(),
-                Keyword::NOTIFY if self.dialect.supports_notify() => self.parse_notify(),
+                Keyword::LISTEN if self.dialect.supports_listen_notify() => self.parse_listen(),
+                Keyword::UNLISTEN if self.dialect.supports_listen_notify() => self.parse_unlisten(),
+                Keyword::NOTIFY if self.dialect.supports_listen_notify() => self.parse_notify(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),
@@ -997,6 +998,21 @@ impl<'a> Parser<'a> {
     pub fn parse_listen(&mut self) -> Result<Statement, ParserError> {
         let channel = self.parse_identifier(false)?;
         Ok(Statement::LISTEN { channel })
+    }
+
+    pub fn parse_unlisten(&mut self) -> Result<Statement, ParserError> {
+        let channel = if self.consume_token(&Token::Mul) {
+            Ident::new(Expr::Wildcard.to_string())
+        } else {
+            match self.parse_identifier(false) {
+                Ok(expr) => expr,
+                _ => {
+                    self.prev_token();
+                    return self.expected("wildcard or identifier", self.peek_token());
+                }
+            }
+        };
+        Ok(Statement::UNLISTEN { channel })
     }
 
     pub fn parse_notify(&mut self) -> Result<Statement, ParserError> {

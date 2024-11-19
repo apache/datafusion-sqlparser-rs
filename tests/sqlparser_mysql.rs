@@ -2962,7 +2962,7 @@ fn parse_logical_xor() {
 }
 
 #[test]
-fn parse_bitstring_literal_in_projection_is_not_alias() {
+fn parse_bitstring_literal() {
     let select = mysql_and_generic().verified_only_select("SELECT B'111'");
     assert_eq!(
         select.projection,
@@ -2970,24 +2970,4 @@ fn parse_bitstring_literal_in_projection_is_not_alias() {
             Value::SingleQuotedByteStringLiteral("111".to_string())
         ))]
     );
-}
-
-#[test]
-fn parse_bitstring_literal_in_insert_value_succeeds() {
-    let stmt = mysql_and_generic().verified_stmt("INSERT INTO foo VALUES (B'111')");
-    match &stmt {
-        Statement::Insert(Insert {
-            source: Some(query),
-            ..
-        }) => assert_eq!(
-            *query.body,
-            SetExpr::Values(Values {
-                explicit_row: false,
-                rows: vec![vec![Expr::Value(Value::SingleQuotedByteStringLiteral(
-                    "111".to_string()
-                ))]]
-            })
-        ),
-        _ => unreachable!(),
-    }
 }

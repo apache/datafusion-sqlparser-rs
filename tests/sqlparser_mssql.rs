@@ -22,6 +22,7 @@
 #[macro_use]
 mod test_utils;
 
+use helpers::attached_token::AttachedToken;
 use sqlparser::tokenizer::{Span, Token, TokenWithLocation};
 use test_utils::*;
 
@@ -113,7 +114,7 @@ fn parse_create_procedure() {
                 settings: None,
                 format_clause: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
-                    select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
+                    select_token: AttachedToken::empty(),
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -525,7 +526,7 @@ fn parse_substring_in_select() {
                     with: None,
 
                     body: Box::new(SetExpr::Select(Box::new(Select {
-                        select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
+                        select_token: AttachedToken::empty(),
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         top_before_distinct: false,

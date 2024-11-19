@@ -19,7 +19,7 @@ use core::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use core::fmt::{self, Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
-use crate::tokenizer::TokenWithLocation;
+use crate::tokenizer::{Token, TokenWithLocation};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -34,6 +34,12 @@ use sqlparser_derive::{Visit, VisitMut};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AttachedToken(pub TokenWithLocation);
+
+impl AttachedToken {
+    pub fn empty() -> Self {
+        AttachedToken(TokenWithLocation::wrap(Token::EOF))
+    }
+}
 
 // Conditional Implementations
 impl Debug for AttachedToken {

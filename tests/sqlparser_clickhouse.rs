@@ -21,6 +21,7 @@
 #[macro_use]
 mod test_utils;
 
+use helpers::attached_token::AttachedToken;
 use sqlparser::tokenizer::{Span, Token, TokenWithLocation};
 use test_utils::*;
 
@@ -40,7 +41,7 @@ fn parse_map_access_expr() {
     assert_eq!(
         Select {
             distinct: None,
-            select_token: TokenWithLocation::wrap(Token::make_keyword("SELECT")).into(),
+            select_token: AttachedToken::empty(),
             top: None,
             top_before_distinct: false,
             projection: vec![UnnamedExpr(MapAccess {

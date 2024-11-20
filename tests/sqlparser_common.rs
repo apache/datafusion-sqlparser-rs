@@ -2954,7 +2954,10 @@ fn parse_window_function_null_treatment_arg() {
         let SelectItem::UnnamedExpr(Expr::Function(actual)) = &projection[i] else {
             unreachable!()
         };
-        assert_eq!(ObjectName::from(vec![Ident::new("FIRST_VALUE")]), actual.name);
+        assert_eq!(
+            ObjectName::from(vec![Ident::new("FIRST_VALUE")]),
+            actual.name
+        );
         let FunctionArguments::List(arg_list) = &actual.args else {
             panic!("expected argument list")
         };
@@ -8509,7 +8512,10 @@ fn parse_merge() {
                             into: None,
                             from: vec![TableWithJoins {
                                 relation: TableFactor::Table {
-                                    name: ObjectName::from(vec![Ident::new("s"), Ident::new("foo")]),
+                                    name: ObjectName::from(vec![
+                                        Ident::new("s"),
+                                        Ident::new("foo")
+                                    ]),
                                     alias: None,
                                     args: None,
                                     with_hints: vec![],

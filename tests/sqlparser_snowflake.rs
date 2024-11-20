@@ -1192,7 +1192,10 @@ fn parse_delimited_identifiers() {
             partitions: _,
             json_path: _,
         } => {
-            assert_eq!(ObjectName::from(vec![Ident::with_quote('"', "a table")]), name);
+            assert_eq!(
+                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                name
+            );
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
@@ -2210,7 +2213,10 @@ fn test_snowflake_copy_into() {
         Statement::CopyIntoSnowflake {
             into, from_stage, ..
         } => {
-            assert_eq!(into, ObjectName::from(vec![Ident::new("a"), Ident::new("b")]));
+            assert_eq!(
+                into,
+                ObjectName::from(vec![Ident::new("a"), Ident::new("b")])
+            );
             assert_eq!(
                 from_stage,
                 ObjectName::from(vec![Ident::new("@namespace"), Ident::new("stage_name")])

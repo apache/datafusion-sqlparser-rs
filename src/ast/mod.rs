@@ -7417,7 +7417,7 @@ impl Display for MySQLViewParams {
                 .map(|security| format!("SQL SECURITY {security}")),
         ]
         .into_iter()
-        .flat_map(|part| part)
+        .flatten()
         .collect::<Vec<_>>();
         display_separated(&parts, " ").fmt(f)
     }

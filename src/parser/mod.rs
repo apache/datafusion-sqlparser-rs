@@ -8420,7 +8420,7 @@ impl<'a> Parser<'a> {
         loop {
             let ident = if allow_wildcards && self.consume_token(&Token::Mul) {
                 Ident {
-                    value: "*".to_owned(),
+                    value: Token::Mul.to_string(),
                     quote_style: None,
                 }
             } else {

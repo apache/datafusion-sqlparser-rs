@@ -8382,6 +8382,13 @@ impl<'a> Parser<'a> {
     pub fn parse_object_name(&mut self, in_table_clause: bool) -> Result<ObjectName, ParserError> {
         let mut idents = vec![];
         loop {
+            if self.dialect.supports_object_name_double_dot_notation()
+                && !idents.is_empty()
+                && self.peek_token() == Token::Period
+            {
+                self.next_token();
+                idents.push(Ident::new(""));
+            }
             idents.push(self.parse_identifier(in_table_clause)?);
             if !self.consume_token(&Token::Period) {
                 break;

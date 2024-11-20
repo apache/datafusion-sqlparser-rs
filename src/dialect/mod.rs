@@ -365,6 +365,16 @@ pub trait Dialect: Debug + Any {
         self.supports_trailing_commas()
     }
 
+    /// Returns true if the dialect supports double dot notation for object names
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT * FROM db_name..table_name
+    /// ```
+    fn supports_object_name_double_dot_notation(&self) -> bool {
+        false
+    }
+
     /// Dialect-specific infix parser override
     ///
     /// This method is called to parse the next infix expression.

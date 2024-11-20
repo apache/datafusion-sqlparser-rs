@@ -2821,6 +2821,29 @@ fn parse_window_function_null_treatment_arg() {
 }
 
 #[test]
+fn test_compound_expr() {
+    let supported_dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(DuckDbDialect {}),
+        Box::new(BigQueryDialect {}),
+    ]);
+    let sqls = [
+        "SELECT abc[1].f1 FROM t",
+        "SELECT abc[1].f1.f2 FROM t",
+        "SELECT f1.abc[1] FROM t",
+        "SELECT f1.f2.abc[1] FROM t",
+        "SELECT f1.abc[1].f2 FROM t",
+        "SELECT named_struct('a', 1, 'b', 2).a",
+        "SELECT named_struct('a', 1, 'b', 2).a",
+        "SELECT make_array(1, 2, 3)[1]",
+        "SELECT make_array(named_struct('a', 1))[1].a",
+    ];
+    for sql in sqls {
+        supported_dialects.verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_negative_value() {
     let sql1 = "SELECT -1";
     one_statement_parses_to(sql1, "SELECT -1");

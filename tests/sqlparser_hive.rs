@@ -461,7 +461,10 @@ fn parse_delimited_identifiers() {
             json_path: _,
             sample: _,
         } => {
-            assert_eq!(ObjectName::from(vec![Ident::with_quote('"', "a table")]), name);
+            assert_eq!(
+                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                name
+            );
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());

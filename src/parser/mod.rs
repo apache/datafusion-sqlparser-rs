@@ -14085,7 +14085,9 @@ impl<'a> Parser<'a> {
                     .parse_one_of_keywords(&[Keyword::FROM, Keyword::IN])
                     .is_some()
                 {
-                    parent_name.0.insert(0, self.parse_identifier()?.to_object_name_part());
+                    parent_name
+                        .0
+                        .insert(0, self.parse_identifier()?.to_object_name_part());
                 }
                 (None, Some(parent_name))
             }

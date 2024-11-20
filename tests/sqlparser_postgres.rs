@@ -1793,7 +1793,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec!["dname".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(
+                            vec!["dname".into()]
+                        )),
                         value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
                     },],
                     selection: None
@@ -1824,14 +1826,18 @@ fn parse_pg_on_conflict() {
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
                         Assignment {
-                            target: AssignmentTarget::ColumnName(ObjectName::from(vec!["dname".into()])),
+                            target: AssignmentTarget::ColumnName(ObjectName::from(vec![
+                                "dname".into()
+                            ])),
                             value: Expr::CompoundIdentifier(vec![
                                 "EXCLUDED".into(),
                                 "dname".into()
                             ])
                         },
                         Assignment {
-                            target: AssignmentTarget::ColumnName(ObjectName::from(vec!["area".into()])),
+                            target: AssignmentTarget::ColumnName(ObjectName::from(vec![
+                                "area".into()
+                            ])),
                             value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
                         },
                     ],
@@ -1881,7 +1887,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec!["dname".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(
+                            vec!["dname".into()]
+                        )),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -1915,11 +1923,16 @@ fn parse_pg_on_conflict() {
                 })),
             ..
         }) => {
-            assert_eq!(ObjectName::from(vec![Ident::from("distributors_did_pkey")]), cname);
+            assert_eq!(
+                ObjectName::from(vec![Ident::from("distributors_did_pkey")]),
+                cname
+            );
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(vec!["dname".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(
+                            vec!["dname".into()]
+                        )),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -2963,7 +2976,10 @@ fn parse_json_table_is_not_reserved() {
         TableFactor::Table {
             name: ObjectName(name),
             ..
-        } => assert_eq!(ObjectNamePart::Identifier(Ident::new("JSON_TABLE")), name[0]),
+        } => assert_eq!(
+            ObjectNamePart::Identifier(Ident::new("JSON_TABLE")),
+            name[0]
+        ),
         other => panic!("Expected: JSON_TABLE to be parsed as a table name, but got {other:?}"),
     }
 }
@@ -3679,7 +3695,10 @@ fn parse_delimited_identifiers() {
             version,
             ..
         } => {
-            assert_eq!(ObjectName::from(vec![Ident::with_quote('"', "a table")]), name);
+            assert_eq!(
+                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                name
+            );
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());

@@ -269,7 +269,10 @@ fn parse_show_columns() {
                 show_in: Some(ShowStatementIn {
                     clause: ShowStatementInClause::FROM,
                     parent_type: None,
-                    parent_name: Some(ObjectName::from(vec![Ident::new("mydb"), Ident::new("mytable")])),
+                    parent_name: Some(ObjectName::from(vec![
+                        Ident::new("mydb"),
+                        Ident::new("mytable")
+                    ])),
                 }),
                 filter_position: None,
                 limit_from: None,
@@ -2876,7 +2879,9 @@ fn parse_create_table_with_column_collate() {
                     collation: Some(ObjectName::from(vec![Ident::new("utf8mb4_0900_ai_ci")])),
                     options: vec![ColumnOptionDef {
                         name: None,
-                        option: ColumnOption::CharacterSet(ObjectName::from(vec![Ident::new("utf8mb4")]))
+                        option: ColumnOption::CharacterSet(ObjectName::from(vec![Ident::new(
+                            "utf8mb4"
+                        )]))
                     }],
                 },],
                 columns

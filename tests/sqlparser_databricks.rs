@@ -249,11 +249,15 @@ fn parse_use() {
     // Test single identifier with keyword and no quotes
     assert_eq!(
         databricks().verified_stmt("USE CATALOG my_catalog"),
-        Statement::Use(Use::Catalog(ObjectName::from(vec![Ident::new("my_catalog")])))
+        Statement::Use(Use::Catalog(ObjectName::from(vec![Ident::new(
+            "my_catalog"
+        )])))
     );
     assert_eq!(
         databricks().verified_stmt("USE DATABASE my_schema"),
-        Statement::Use(Use::Database(ObjectName::from(vec![Ident::new("my_schema")])))
+        Statement::Use(Use::Database(ObjectName::from(vec![Ident::new(
+            "my_schema"
+        )])))
     );
     assert_eq!(
         databricks().verified_stmt("USE SCHEMA my_schema"),

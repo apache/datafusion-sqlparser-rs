@@ -5098,3 +5098,14 @@ fn parse_create_type_as_enum() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_bitstring_literal() {
+    let select = pg_and_generic().verified_only_select("SELECT B'111'");
+    assert_eq!(
+        select.projection,
+        vec![SelectItem::UnnamedExpr(Expr::Value(
+            Value::SingleQuotedByteStringLiteral("111".to_string())
+        ))]
+    );
+}

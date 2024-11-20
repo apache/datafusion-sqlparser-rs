@@ -8353,6 +8353,31 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a possibly qualified, possibly quoted identifier, optionally allowing for wildcards,
+    /// e.g. *, `foo`.*, or "foo"."bar"
+    pub fn parse_object_name_with_wildcards(
+        &mut self,
+        in_table_clause: bool,
+        allow_wildcards: bool,
+    ) -> Result<ObjectName, ParserError> {
+        let mut idents = vec![];
+        loop {
+            let ident = if allow_wildcards && self.consume_token(&Token::Mul) {
+                Ident {
+                    value: "*".to_owned(),
+                    quote_style: None,
+                }
+            } else {
+                self.parse_identifier(in_table_clause)?
+            };
+            idents.push(ident);
+            if !self.consume_token(&Token::Period) {
+                break;
+            }
+        }
+        Ok(ObjectName(idents))
+    }
+
     /// Parse a possibly qualified, possibly quoted identifier, e.g.
     /// `foo` or `myschema."table"
     ///
@@ -8360,13 +8385,8 @@ impl<'a> Parser<'a> {
     /// or similar table clause. Currently, this is used only to support unquoted hyphenated identifiers
     /// in this context on BigQuery.
     pub fn parse_object_name(&mut self, in_table_clause: bool) -> Result<ObjectName, ParserError> {
-        let mut idents = vec![];
-        loop {
-            idents.push(self.parse_identifier(in_table_clause)?);
-            if !self.consume_token(&Token::Period) {
-                break;
-            }
-        }
+        let ObjectName(mut idents) =
+            self.parse_object_name_with_wildcards(in_table_clause, false)?;
 
         // BigQuery accepts any number of quoted identifiers of a table name.
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_identifiers
@@ -10897,7 +10917,7 @@ impl<'a> Parser<'a> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
 
         self.expect_keyword(Keyword::TO)?;
-        let grantees = self.parse_comma_separated(|p| p.parse_identifier(false))?;
+        let grantees = self.parse_comma_separated(|p| p.parse_grantee())?;
 
         let with_grant_option =
             self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
@@ -10979,7 +10999,11 @@ impl<'a> Parser<'a> {
         } else {
             let object_type =
                 self.parse_one_of_keywords(&[Keyword::SEQUENCE, Keyword::SCHEMA, Keyword::TABLE]);
-            let objects = self.parse_comma_separated(|p| p.parse_object_name(false));
+            let objects = if dialect_of!(self is MySqlDialect | GenericDialect) {
+                self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true))
+            } else {
+                self.parse_comma_separated(|p| p.parse_object_name(false))
+            };
             match object_type {
                 Some(Keyword::SCHEMA) => GrantObjects::Schemas(objects?),
                 Some(Keyword::SEQUENCE) => GrantObjects::Sequences(objects?),
@@ -11023,23 +11047,43 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_grantee(&mut self) -> Result<Grantee, ParserError> {
+        let user = self.parse_identifier(false)?;
+        if dialect_of!(self is MySqlDialect | GenericDialect) && self.consume_token(&Token::AtSign)
+        {
+            let host = self.parse_identifier(false)?;
+            Ok(Grantee::UserHost { user, host })
+        } else {
+            Ok(Grantee::Ident(user))
+        }
+    }
+
     /// Parse a REVOKE statement
     pub fn parse_revoke(&mut self) -> Result<Statement, ParserError> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
 
         self.expect_keyword(Keyword::FROM)?;
-        let grantees = self.parse_comma_separated(|p| p.parse_identifier(false))?;
+        let grantees = self.parse_comma_separated(|p| p.parse_grantee())?;
 
         let granted_by = self
             .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
             .then(|| self.parse_identifier(false).unwrap());
 
         let loc = self.peek_token().location;
-        let cascade = self.parse_keyword(Keyword::CASCADE);
-        let restrict = self.parse_keyword(Keyword::RESTRICT);
-        if cascade && restrict {
-            return parser_err!("Cannot specify both CASCADE and RESTRICT in REVOKE", loc);
-        }
+        let cascade = if !dialect_of!(self is MySqlDialect) {
+            let cascade = self.parse_keyword(Keyword::CASCADE);
+            let restrict = self.parse_keyword(Keyword::RESTRICT);
+            if cascade && restrict {
+                return parser_err!("Cannot specify both CASCADE and RESTRICT in REVOKE", loc);
+            }
+            if cascade || restrict {
+                Some(cascade)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         Ok(Statement::Revoke {
             privileges,

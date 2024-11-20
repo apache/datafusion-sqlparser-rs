@@ -2971,3 +2971,55 @@ fn parse_bitstring_literal() {
         ))]
     );
 }
+
+#[test]
+fn parse_grant() {
+    let sql = "GRANT ALL ON *.* TO 'jeffrey'@'%'";
+    assert_eq!(
+        mysql().verified_stmt(sql),
+        Statement::Grant {
+            privileges: Privileges::All {
+                with_privileges_keyword: false
+            },
+            objects: GrantObjects::Tables(vec![ObjectName(vec!["*".into(), "*".into()])]),
+            grantees: vec![Grantee::UserHost {
+                user: Ident {
+                    value: "jeffrey".to_owned(),
+                    quote_style: Some('\'')
+                },
+                host: Ident {
+                    value: "%".to_owned(),
+                    quote_style: Some('\'')
+                }
+            }],
+            with_grant_option: false,
+            granted_by: None
+        }
+    )
+}
+
+#[test]
+fn parse_revoke() {
+    let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
+    assert_eq!(
+        mysql().verified_stmt(sql),
+        Statement::Revoke {
+            privileges: Privileges::All {
+                with_privileges_keyword: false
+            },
+            objects: GrantObjects::Tables(vec![ObjectName(vec!["db1".into(), "*".into()])]),
+            grantees: vec![Grantee::UserHost {
+                user: Ident {
+                    value: "jeffrey".to_owned(),
+                    quote_style: Some('\'')
+                },
+                host: Ident {
+                    value: "%".to_owned(),
+                    quote_style: Some('\'')
+                }
+            }],
+            granted_by: None,
+            cascade: None,
+        }
+    )
+}

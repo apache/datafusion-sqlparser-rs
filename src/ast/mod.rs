@@ -3121,7 +3121,7 @@ pub enum Statement {
     Grant {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
+        grantees: Vec<Grantee>,
         with_grant_option: bool,
         granted_by: Option<Ident>,
     },
@@ -3131,9 +3131,9 @@ pub enum Statement {
     Revoke {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
+        grantees: Vec<Grantee>,
         granted_by: Option<Ident>,
-        cascade: bool,
+        cascade: Option<bool>,
     },
     /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
@@ -4660,7 +4660,9 @@ impl fmt::Display for Statement {
                 if let Some(grantor) = granted_by {
                     write!(f, " GRANTED BY {grantor}")?;
                 }
-                write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
+                if let Some(cascade) = cascade {
+                    write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
+                }
                 Ok(())
             }
             Statement::Deallocate { name, prepare } => write!(
@@ -5376,6 +5378,28 @@ impl fmt::Display for GrantObjects {
                     "ALL TABLES IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
+            }
+        }
+    }
+}
+
+/// Users/roles designated in a GRANT/REVOKE
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Grantee {
+    /// A bare identifier
+    Ident(Ident),
+    /// A MySQL user/host pair such as 'root'@'%'
+    UserHost { user: Ident, host: Ident },
+}
+
+impl fmt::Display for Grantee {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Grantee::Ident(ident) => ident.fmt(f),
+            Grantee::UserHost { user, host } => {
+                write!(f, "{}@{}", user, host)
             }
         }
     }

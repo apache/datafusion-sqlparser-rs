@@ -223,7 +223,7 @@ fn parse_delete_statement() {
         }) => {
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                    name: ObjectName::from(vec![Ident::with_quote('"', "table")]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -258,7 +258,7 @@ fn parse_create_view_with_options() {
         } => {
             assert_eq!(
                 name,
-                ObjectName(vec![
+                ObjectName::from(vec![
                     "myproject".into(),
                     "mydataset".into(),
                     "newview".into()
@@ -365,7 +365,7 @@ fn parse_create_table_with_unquoted_hyphen() {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(
                 name,
-                ObjectName(vec![
+                ObjectName::from(vec![
                     "my-pro-ject".into(),
                     "mydataset".into(),
                     "mytable".into()
@@ -406,7 +406,7 @@ fn parse_create_table_with_options() {
         }) => {
             assert_eq!(
                 name,
-                ObjectName(vec!["mydataset".into(), "newtable".into()])
+                ObjectName::from(vec!["mydataset".into(), "newtable".into()])
             );
             assert_eq!(
                 vec![
@@ -489,7 +489,7 @@ fn parse_nested_data_types() {
     let sql = "CREATE TABLE table (x STRUCT<a ARRAY<INT64>, b BYTES(42)>, y ARRAY<STRUCT<INT64>>)";
     match bigquery_and_generic().one_statement_parses_to(sql, sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(name, ObjectName::from(vec!["table".into()]));
             assert_eq!(
                 columns,
                 vec![
@@ -1380,7 +1380,7 @@ fn parse_table_identifiers() {
             select.from,
             vec![TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(expected),
+                    name: ObjectName::from(expected),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -1552,7 +1552,7 @@ fn parse_table_time_travel() {
         select.from,
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("t1")]),
+                name: ObjectName::from(vec![Ident::new("t1")]),
                 alias: None,
                 args: None,
                 with_hints: vec![],
@@ -1630,11 +1630,11 @@ fn parse_merge() {
     let update_action = MergeAction::Update {
         assignments: vec![
             Assignment {
-                target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("a")])),
+                target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("a")])),
                 value: Expr::Value(number("1")),
             },
             Assignment {
-                target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("b")])),
+                target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("b")])),
                 value: Expr::Value(number("2")),
             },
         ],
@@ -1650,7 +1650,7 @@ fn parse_merge() {
             assert!(!into);
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("inventory")]),
+                    name: ObjectName::from(vec![Ident::new("inventory")]),
                     alias: Some(TableAlias {
                         name: Ident::new("T"),
                         columns: vec![],
@@ -1666,7 +1666,7 @@ fn parse_merge() {
             );
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("newArrivals")]),
+                    name: ObjectName::from(vec![Ident::new("newArrivals")]),
                     alias: Some(TableAlias {
                         name: Ident::new("S"),
                         columns: vec![],
@@ -2015,7 +2015,7 @@ fn test_bigquery_create_function() {
             or_replace: true,
             temporary: true,
             if_not_exists: false,
-            name: ObjectName(vec![
+            name: ObjectName::from(vec![
                 Ident::new("project1"),
                 Ident::new("mydataset"),
                 Ident::new("myfunction"),

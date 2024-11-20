@@ -141,7 +141,7 @@ fn parse_flush() {
             read_lock: false,
             export: false,
             tables: vec![
-                ObjectName(vec![
+                ObjectName::from(vec![
                     Ident {
                         value: "mek".to_string(),
                         quote_style: Some('`'),
@@ -153,7 +153,7 @@ fn parse_flush() {
                         span: Span::empty(),
                     }
                 ]),
-                ObjectName(vec![Ident {
+                ObjectName::from(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None,
                     span: Span::empty(),
@@ -181,7 +181,7 @@ fn parse_flush() {
             read_lock: true,
             export: false,
             tables: vec![
-                ObjectName(vec![
+                ObjectName::from(vec![
                     Ident {
                         value: "mek".to_string(),
                         quote_style: Some('`'),
@@ -193,7 +193,7 @@ fn parse_flush() {
                         span: Span::empty(),
                     }
                 ]),
-                ObjectName(vec![Ident {
+                ObjectName::from(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None,
                     span: Span::empty(),
@@ -210,7 +210,7 @@ fn parse_flush() {
             read_lock: false,
             export: true,
             tables: vec![
-                ObjectName(vec![
+                ObjectName::from(vec![
                     Ident {
                         value: "mek".to_string(),
                         quote_style: Some('`'),
@@ -222,7 +222,7 @@ fn parse_flush() {
                         span: Span::empty(),
                     }
                 ]),
-                ObjectName(vec![Ident {
+                ObjectName::from(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None,
                     span: Span::empty(),
@@ -243,7 +243,7 @@ fn parse_show_columns() {
                 show_in: Some(ShowStatementIn {
                     clause: ShowStatementInClause::FROM,
                     parent_type: None,
-                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                    parent_name: Some(ObjectName::from(vec![Ident::new("mytable")])),
                 }),
                 filter_position: None,
                 limit_from: None,
@@ -261,7 +261,7 @@ fn parse_show_columns() {
                 show_in: Some(ShowStatementIn {
                     clause: ShowStatementInClause::FROM,
                     parent_type: None,
-                    parent_name: Some(ObjectName(vec![Ident::new("mydb"), Ident::new("mytable")])),
+                    parent_name: Some(ObjectName::from(vec![Ident::new("mydb"), Ident::new("mytable")])),
                 }),
                 filter_position: None,
                 limit_from: None,
@@ -279,7 +279,7 @@ fn parse_show_columns() {
                 show_in: Some(ShowStatementIn {
                     clause: ShowStatementInClause::FROM,
                     parent_type: None,
-                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                    parent_name: Some(ObjectName::from(vec![Ident::new("mytable")])),
                 }),
                 filter_position: None,
                 limit_from: None,
@@ -297,7 +297,7 @@ fn parse_show_columns() {
                 show_in: Some(ShowStatementIn {
                     clause: ShowStatementInClause::FROM,
                     parent_type: None,
-                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                    parent_name: Some(ObjectName::from(vec![Ident::new("mytable")])),
                 }),
                 filter_position: None,
                 limit_from: None,
@@ -315,7 +315,7 @@ fn parse_show_columns() {
                 show_in: Some(ShowStatementIn {
                     clause: ShowStatementInClause::FROM,
                     parent_type: None,
-                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                    parent_name: Some(ObjectName::from(vec![Ident::new("mytable")])),
                 }),
                 filter_position: Some(ShowStatementFilterPosition::Suffix(
                     ShowStatementFilter::Like("pattern".into())
@@ -335,7 +335,7 @@ fn parse_show_columns() {
                 show_in: Some(ShowStatementIn {
                     clause: ShowStatementInClause::FROM,
                     parent_type: None,
-                    parent_name: Some(ObjectName(vec![Ident::new("mytable")])),
+                    parent_name: Some(ObjectName::from(vec![Ident::new("mytable")])),
                 }),
                 filter_position: Some(ShowStatementFilterPosition::Suffix(
                     ShowStatementFilter::Where(mysql_and_generic().verified_expr("1 = 2"))
@@ -422,7 +422,7 @@ fn parse_show_tables() {
                 show_in: Some(ShowStatementIn {
                     clause: ShowStatementInClause::FROM,
                     parent_type: None,
-                    parent_name: Some(ObjectName(vec![Ident::new("mydb")])),
+                    parent_name: Some(ObjectName::from(vec![Ident::new("mydb")])),
                 }),
                 filter_position: None
             }
@@ -526,7 +526,7 @@ fn parse_show_extended_full() {
 
 #[test]
 fn parse_show_create() {
-    let obj_name = ObjectName(vec![Ident::new("myident")]);
+    let obj_name = ObjectName::from(vec![Ident::new("myident")]);
 
     for obj_type in &[
         ShowCreateObject::Table,
@@ -583,7 +583,7 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             mysql_and_generic().verified_stmt(&format!("USE {}", object_name)),
-            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
         );
@@ -592,7 +592,7 @@ fn parse_use() {
             assert_eq!(
                 mysql_and_generic()
                     .verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
-                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
                 )])))
@@ -609,7 +609,7 @@ fn parse_set_variables() {
         Statement::SetVariable {
             local: true,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName(vec!["autocommit".into()])),
+            variables: OneOrManyWithParens::One(ObjectName::from(vec!["autocommit".into()])),
             value: vec![Expr::Value(number("1"))],
         }
     );
@@ -1002,7 +1002,7 @@ fn parse_create_table_comment_character_set() {
                     options: vec![
                         ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::CharacterSet(ObjectName(vec![Ident::new(
+                            option: ColumnOption::CharacterSet(ObjectName::from(vec![Ident::new(
                                 "utf8mb4"
                             )]))
                         },
@@ -1397,7 +1397,7 @@ fn parse_simple_insert() {
             on,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert_eq!(
@@ -1452,7 +1452,7 @@ fn parse_ignore_insert() {
             ignore,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert!(ignore);
@@ -1496,7 +1496,7 @@ fn parse_priority_insert() {
             priority,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert_eq!(priority, Some(HighPriority));
@@ -1537,7 +1537,7 @@ fn parse_priority_insert() {
             priority,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert_eq!(priority, Some(LowPriority));
@@ -1580,14 +1580,14 @@ fn parse_insert_as() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "table")]),
+                ObjectName::from(vec![Ident::with_quote('`', "table")]),
                 table_name
             );
             assert_eq!(vec![Ident::with_quote('`', "date")], columns);
             let insert_alias = insert_alias.unwrap();
 
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "alias")]),
+                ObjectName::from(vec![Ident::with_quote('`', "alias")]),
                 insert_alias.row_alias
             );
             assert_eq!(Some(vec![]), insert_alias.col_aliases);
@@ -1632,7 +1632,7 @@ fn parse_insert_as() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "table")]),
+                ObjectName::from(vec![Ident::with_quote('`', "table")]),
                 table_name
             );
             assert_eq!(
@@ -1641,7 +1641,7 @@ fn parse_insert_as() {
             );
             let insert_alias = insert_alias.unwrap();
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "alias")]),
+                ObjectName::from(vec![Ident::with_quote('`', "alias")]),
                 insert_alias.row_alias
             );
             assert_eq!(
@@ -1691,7 +1691,7 @@ fn parse_replace_insert() {
             priority,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert!(replace_into);
@@ -1735,7 +1735,7 @@ fn parse_empty_row_insert() {
             on,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tb")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("tb")]), table_name);
             assert!(columns.is_empty());
             assert!(on.is_none());
             assert_eq!(
@@ -1775,7 +1775,7 @@ fn parse_insert_with_on_duplicate_update() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::new("permission_groups")]),
+                ObjectName::from(vec![Ident::new("permission_groups")]),
                 table_name
             );
             assert_eq!(
@@ -1822,31 +1822,31 @@ fn parse_insert_with_on_duplicate_update() {
             assert_eq!(
                 Some(OnInsert::DuplicateKeyUpdate(vec![
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "description".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("description"))]),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_create".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_create"))]),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_read".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_read"))]),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_update".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_update"))]),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_delete".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_delete"))]),
@@ -1878,7 +1878,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     into: None,
                     from: vec![TableWithJoins {
                         relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                            name: ObjectName::from(vec![Ident::with_quote('"', "table")]),
                             alias: None,
                             args: None,
                             with_hints: vec![],
@@ -1937,7 +1937,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     into: None,
                     from: vec![TableWithJoins {
                         relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                            name: ObjectName::from(vec![Ident::with_quote('"', "table")]),
                             alias: None,
                             args: None,
                             with_hints: vec![],
@@ -1978,7 +1978,7 @@ fn parse_insert_with_numeric_prefix_column_name() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::new("s1"), Ident::new("t1")]),
+                ObjectName::from(vec![Ident::new("s1"), Ident::new("t1")]),
                 table_name
             );
             assert_eq!(vec![Ident::new("123col_$@length123")], columns);
@@ -2002,7 +2002,7 @@ fn parse_update_with_joins() {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
-                        name: ObjectName(vec![Ident::new("orders")]),
+                        name: ObjectName::from(vec![Ident::new("orders")]),
                         alias: Some(TableAlias {
                             name: Ident::new("o"),
                             columns: vec![]
@@ -2016,7 +2016,7 @@ fn parse_update_with_joins() {
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::new("customers")]),
+                            name: ObjectName::from(vec![Ident::new("customers")]),
                             alias: Some(TableAlias {
                                 name: Ident::new("c"),
                                 columns: vec![]
@@ -2046,7 +2046,7 @@ fn parse_update_with_joins() {
             );
             assert_eq!(
                 vec![Assignment {
-                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                         Ident::new("o"),
                         Ident::new("completed")
                     ])),
@@ -2234,7 +2234,7 @@ fn parse_alter_table_drop_primary_key() {
 
 #[test]
 fn parse_alter_table_change_column() {
-    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_name = ObjectName::from(vec![Ident::new("orders")]);
     let expected_operation = AlterTableOperation::ChangeColumn {
         old_name: Ident::new("description"),
         new_name: Ident::new("desc"),
@@ -2286,7 +2286,7 @@ fn parse_alter_table_change_column() {
 
 #[test]
 fn parse_alter_table_change_column_with_column_position() {
-    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_name = ObjectName::from(vec![Ident::new("orders")]);
     let expected_operation_first = AlterTableOperation::ChangeColumn {
         old_name: Ident::new("description"),
         new_name: Ident::new("desc"),
@@ -2334,7 +2334,7 @@ fn parse_alter_table_change_column_with_column_position() {
 
 #[test]
 fn parse_alter_table_modify_column() {
-    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_name = ObjectName::from(vec![Ident::new("orders")]);
     let expected_operation = AlterTableOperation::ModifyColumn {
         col_name: Ident::new("description"),
         data_type: DataType::Text,
@@ -2383,7 +2383,7 @@ fn parse_alter_table_modify_column() {
 
 #[test]
 fn parse_alter_table_modify_column_with_column_position() {
-    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_name = ObjectName::from(vec![Ident::new("orders")]);
     let expected_operation_first = AlterTableOperation::ModifyColumn {
         col_name: Ident::new("description"),
         data_type: DataType::Text,
@@ -2458,7 +2458,7 @@ fn parse_substring_in_select() {
                         into: None,
                         from: vec![TableWithJoins {
                             relation: TableFactor::Table {
-                                name: ObjectName(vec![Ident {
+                                name: ObjectName::from(vec![Ident {
                                     value: "test".to_string(),
                                     quote_style: None,
                                     span: Span::empty(),
@@ -2869,10 +2869,10 @@ fn parse_create_table_with_column_collate() {
                 vec![ColumnDef {
                     name: Ident::new("id"),
                     data_type: DataType::Text,
-                    collation: Some(ObjectName(vec![Ident::new("utf8mb4_0900_ai_ci")])),
+                    collation: Some(ObjectName::from(vec![Ident::new("utf8mb4_0900_ai_ci")])),
                     options: vec![ColumnOptionDef {
                         name: None,
-                        option: ColumnOption::CharacterSet(ObjectName(vec![Ident::new("utf8mb4")]))
+                        option: ColumnOption::CharacterSet(ObjectName::from(vec![Ident::new("utf8mb4")]))
                     }],
                 },],
                 columns

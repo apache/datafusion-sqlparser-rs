@@ -930,7 +930,7 @@ impl<'a> Parser<'a> {
                             }
                             Token::Mul => {
                                 return Ok(Expr::QualifiedWildcard(
-                                    ObjectName(id_parts),
+                                    ObjectName::from(id_parts),
                                     AttachedToken(next_token),
                                 ));
                             }
@@ -1052,7 +1052,7 @@ impl<'a> Parser<'a> {
                 if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
             {
                 Ok(Some(Expr::Function(Function {
-                    name: ObjectName(vec![w.to_ident(w_span)]),
+                    name: ObjectName::from(vec![w.to_ident(w_span)]),
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::None,
                     null_treatment: None,
@@ -1066,7 +1066,7 @@ impl<'a> Parser<'a> {
             | Keyword::CURRENT_DATE
             | Keyword::LOCALTIME
             | Keyword::LOCALTIMESTAMP => {
-                Ok(Some(self.parse_time_functions(ObjectName(vec![w.to_ident(w_span)]))?))
+                Ok(Some(self.parse_time_functions(ObjectName::from(vec![w.to_ident(w_span)]))?))
             }
             Keyword::CASE => Ok(Some(self.parse_case_expr()?)),
             Keyword::CONVERT => Ok(Some(self.parse_convert_expr(false)?)),
@@ -1110,7 +1110,7 @@ impl<'a> Parser<'a> {
                 let query = self.parse_query()?;
                 self.expect_token(&Token::RParen)?;
                 Ok(Some(Expr::Function(Function {
-                    name: ObjectName(vec![w.to_ident(w_span)]),
+                    name: ObjectName::from(vec![w.to_ident(w_span)]),
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::Subquery(query),
                     filter: None,
@@ -1171,7 +1171,7 @@ impl<'a> Parser<'a> {
 
                 if let Some(wildcard_token) = ending_wildcard {
                     Ok(Expr::QualifiedWildcard(
-                        ObjectName(id_parts),
+                        ObjectName::from(id_parts),
                         AttachedToken(wildcard_token),
                     ))
                 } else if self.consume_token(&Token::LParen) {
@@ -1186,7 +1186,7 @@ impl<'a> Parser<'a> {
                         )))
                     } else {
                         self.prev_token();
-                        self.parse_function(ObjectName(id_parts))
+                        self.parse_function(ObjectName::from(id_parts))
                     }
                 } else {
                     Ok(Expr::CompoundIdentifier(id_parts))
@@ -1488,7 +1488,7 @@ impl<'a> Parser<'a> {
                     Token::Word(word) => word.to_ident(tok.span),
                     _ => return p.expected("identifier", tok),
                 };
-                let func = match p.parse_function(ObjectName(vec![name]))? {
+                let func = match p.parse_function(ObjectName::from(vec![name]))? {
                     Expr::Function(func) => func,
                     _ => return p.expected("function", p.peek_token()),
                 };
@@ -1966,7 +1966,7 @@ impl<'a> Parser<'a> {
             Some(expr) => Ok(expr),
             // Snowflake supports `position` as an ordinary function call
             // without the special `IN` syntax.
-            None => self.parse_function(ObjectName(vec![ident])),
+            None => self.parse_function(ObjectName::from(vec![ident])),
         }
     }
 
@@ -3682,6 +3682,24 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
+    pub fn parse_period_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
+    where
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+    {
+        let mut values = vec![];
+        loop {
+            values.push(f(self)?);
+            if !self.consume_token(&Token::Period) {
+                break;
+            }
+        }
+        Ok(values)
+    }
+
+    pub fn parse_period_separated_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
+        self.parse_period_separated(|p| p.parse_identifier(false))
+    }
+
     /// Parse a keyword-separated list of 1+ items accepted by `F`
     pub fn parse_keyword_separated<T, F>(
         &mut self,
@@ -4396,7 +4414,10 @@ impl<'a> Parser<'a> {
         let mut data_type = self.parse_data_type()?;
         if let DataType::Custom(n, _) = &data_type {
             // the first token is actually a name
-            name = Some(n.0[0].clone());
+            match n.0[0].clone() {
+                ObjectNamePart::Identifier(ident) => name = Some(ident),
+            }
+            // name = Some(n.0[0].clone());
             data_type = self.parse_data_type()?;
         }
 
@@ -8491,7 +8512,7 @@ impl<'a> Parser<'a> {
                 .collect()
         }
 
-        Ok(ObjectName(idents))
+        Ok(ObjectName::from(idents))
     }
 
     /// Parse identifiers
@@ -9749,7 +9770,7 @@ impl<'a> Parser<'a> {
         }
 
         let variables = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
-            OneOrManyWithParens::One(ObjectName(vec!["TIMEZONE".into()]))
+            OneOrManyWithParens::One(ObjectName::from(vec!["TIMEZONE".into()]))
         } else if self.dialect.supports_parenthesized_set_variables()
             && self.consume_token(&Token::LParen)
         {
@@ -9758,7 +9779,7 @@ impl<'a> Parser<'a> {
                     parser.parse_identifier(false)
                 })?
                 .into_iter()
-                .map(|ident| ObjectName(vec![ident]))
+                .map(|ident| ObjectName::from(vec![ident]))
                 .collect(),
             );
             self.expect_token(&Token::RParen)?;
@@ -10886,7 +10907,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) => Ok(w.value),
             _ => self.expected("a function identifier", self.peek_token()),
         }?;
-        let expr = self.parse_function(ObjectName(vec![Ident::new(function_name)]))?;
+        let expr = self.parse_function(ObjectName::from(vec![Ident::new(function_name)]))?;
         let alias = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_identifier(false)?)
         } else {
@@ -10935,7 +10956,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let aggregate_functions = self.parse_comma_separated(Self::parse_aliased_function_call)?;
         self.expect_keyword(Keyword::FOR)?;
-        let value_column = self.parse_object_name(false)?.0;
+        let value_column = self.parse_period_separated_identifiers()?;
         self.expect_keyword(Keyword::IN)?;
 
         self.expect_token(&Token::LParen)?;
@@ -12530,7 +12551,7 @@ impl<'a> Parser<'a> {
         // [ OWNED BY { table_name.column_name | NONE } ]
         let owned_by = if self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
             if self.parse_keywords(&[Keyword::NONE]) {
-                Some(ObjectName(vec![Ident::new("NONE")]))
+                Some(ObjectName::from(vec![Ident::new("NONE")]))
             } else {
                 Some(self.parse_object_name(false)?)
             }
@@ -12821,7 +12842,7 @@ impl<'a> Parser<'a> {
                     .parse_one_of_keywords(&[Keyword::FROM, Keyword::IN])
                     .is_some()
                 {
-                    parent_name.0.insert(0, self.parse_identifier(false)?);
+                    parent_name.0.insert(0, self.parse_identifier(false)?.to_object_name_part());
                 }
                 (None, Some(parent_name))
             }
@@ -13127,14 +13148,14 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "GEOMETRY",
-                DataType::Custom(ObjectName(vec!["GEOMETRY".into()]), vec![])
+                DataType::Custom(ObjectName::from(vec!["GEOMETRY".into()]), vec![])
             );
 
             test_parse_data_type!(
                 dialect,
                 "GEOMETRY(POINT)",
                 DataType::Custom(
-                    ObjectName(vec!["GEOMETRY".into()]),
+                    ObjectName::from(vec!["GEOMETRY".into()]),
                     vec!["POINT".to_string()]
                 )
             );
@@ -13143,7 +13164,7 @@ mod tests {
                 dialect,
                 "GEOMETRY(POINT, 4326)",
                 DataType::Custom(
-                    ObjectName(vec!["GEOMETRY".into()]),
+                    ObjectName::from(vec!["GEOMETRY".into()]),
                     vec!["POINT".to_string(), "4326".to_string()]
                 )
             );
@@ -13279,7 +13300,7 @@ mod tests {
             }};
         }
 
-        let dummy_name = ObjectName(vec![Ident::new("dummy_name")]);
+        let dummy_name = ObjectName::from(vec![Ident::new("dummy_name")]);
         let dummy_authorization = Ident::new("dummy_authorization");
 
         test_parse_schema_name!(

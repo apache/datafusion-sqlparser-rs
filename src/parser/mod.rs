@@ -4778,7 +4778,6 @@ impl<'a> Parser<'a> {
             match n.0[0].clone() {
                 ObjectNamePart::Identifier(ident) => name = Some(ident),
             }
-            // name = Some(n.0[0].clone());
             data_type = self.parse_data_type()?;
         }
 

@@ -185,7 +185,7 @@ fn test_values_clause() {
         "SELECT * FROM values",
     ));
     assert_eq!(
-        Some(&table_from_name(ObjectName(vec![Ident::new("values")]))),
+        Some(&table_from_name(ObjectName::from(vec![Ident::new("values")]))),
         query
             .body
             .as_select()
@@ -205,7 +205,7 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             databricks().verified_stmt(&format!("USE {}", object_name)),
-            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
         );
@@ -213,7 +213,7 @@ fn parse_use() {
             // Test single identifier with different type of quotes
             assert_eq!(
                 databricks().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
-                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
                 )])))
@@ -225,21 +225,21 @@ fn parse_use() {
         // Test single identifier with keyword and different type of quotes
         assert_eq!(
             databricks().verified_stmt(&format!("USE CATALOG {0}my_catalog{0}", quote)),
-            Statement::Use(Use::Catalog(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Catalog(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_catalog".to_string(),
             )])))
         );
         assert_eq!(
             databricks().verified_stmt(&format!("USE DATABASE {0}my_database{0}", quote)),
-            Statement::Use(Use::Database(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Database(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_database".to_string(),
             )])))
         );
         assert_eq!(
             databricks().verified_stmt(&format!("USE SCHEMA {0}my_schema{0}", quote)),
-            Statement::Use(Use::Schema(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Schema(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_schema".to_string(),
             )])))
@@ -249,15 +249,15 @@ fn parse_use() {
     // Test single identifier with keyword and no quotes
     assert_eq!(
         databricks().verified_stmt("USE CATALOG my_catalog"),
-        Statement::Use(Use::Catalog(ObjectName(vec![Ident::new("my_catalog")])))
+        Statement::Use(Use::Catalog(ObjectName::from(vec![Ident::new("my_catalog")])))
     );
     assert_eq!(
         databricks().verified_stmt("USE DATABASE my_schema"),
-        Statement::Use(Use::Database(ObjectName(vec![Ident::new("my_schema")])))
+        Statement::Use(Use::Database(ObjectName::from(vec![Ident::new("my_schema")])))
     );
     assert_eq!(
         databricks().verified_stmt("USE SCHEMA my_schema"),
-        Statement::Use(Use::Schema(ObjectName(vec![Ident::new("my_schema")])))
+        Statement::Use(Use::Schema(ObjectName::from(vec![Ident::new("my_schema")])))
     );
 
     // Test invalid syntax - missing identifier

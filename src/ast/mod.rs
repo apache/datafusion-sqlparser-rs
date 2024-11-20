@@ -237,6 +237,10 @@ impl Ident {
             span,
         }
     }
+
+    pub fn to_object_name_part(&self) -> ObjectNamePart {
+        ObjectNamePart::Identifier(self.clone())
+    }
 }
 
 impl From<&str> for Ident {
@@ -267,11 +271,33 @@ impl fmt::Display for Ident {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ObjectName(pub Vec<Ident>);
+pub struct ObjectName(pub Vec<ObjectNamePart>);
+
+impl From<Vec<Ident>> for ObjectName {
+    fn from(idents: Vec<Ident>) -> Self {
+        ObjectName(idents.into_iter().map(ObjectNamePart::Identifier).collect())
+    }
+}
 
 impl fmt::Display for ObjectName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", display_separated(&self.0, "."))
+    }
+}
+
+/// A single part of an ObjectName
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ObjectNamePart {
+    Identifier(Ident),
+}
+
+impl fmt::Display for ObjectNamePart {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ObjectNamePart::Identifier(ident) => write!(f, "{}", ident),
+        }
     }
 }
 

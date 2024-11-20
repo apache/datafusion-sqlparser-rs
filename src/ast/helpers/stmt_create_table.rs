@@ -42,7 +42,7 @@ use crate::parser::ParserError;
 /// ```rust
 /// use sqlparser::ast::helpers::stmt_create_table::CreateTableBuilder;
 /// use sqlparser::ast::{ColumnDef, DataType, Ident, ObjectName};
-/// let builder = CreateTableBuilder::new(ObjectName(vec![Ident::new("table_name")]))
+/// let builder = CreateTableBuilder::new(ObjectName::from(vec![Ident::new("table_name")]))
 ///    .if_not_exists(true)
 ///    .columns(vec![ColumnDef {
 ///        name: Ident::new("c1"),
@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     pub fn test_from_valid_statement() {
-        let builder = CreateTableBuilder::new(ObjectName(vec![Ident::new("table_name")]));
+        let builder = CreateTableBuilder::new(ObjectName::from(vec![Ident::new("table_name")]));
 
         let stmt = builder.clone().build();
 

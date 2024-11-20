@@ -39,7 +39,7 @@ fn test_square_brackets_over_db_schema_table_name() {
     assert_eq!(
         select.from[0],
         TableWithJoins {
-            relation: table_from_name(ObjectName(vec![
+            relation: table_from_name(ObjectName::from(vec![
                 Ident {
                     value: "test_schema".to_string(),
                     quote_style: Some('['),
@@ -81,7 +81,7 @@ fn test_double_quotes_over_db_schema_table_name() {
     assert_eq!(
         select.from[0],
         TableWithJoins {
-            relation: table_from_name(ObjectName(vec![
+            relation: table_from_name(ObjectName::from(vec![
                 Ident {
                     value: "test_schema".to_string(),
                     quote_style: Some('"'),
@@ -114,7 +114,7 @@ fn parse_delimited_identifiers() {
             version,
             ..
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
+            assert_eq!(ObjectName::from(vec![Ident::with_quote('"', "a table")]), name);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
@@ -133,7 +133,7 @@ fn parse_delimited_identifiers() {
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {

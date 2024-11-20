@@ -819,7 +819,7 @@ pub enum Expr {
     /// Example:
     ///
     /// ```sql
-    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')
     /// SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)').value('.','NVARCHAR(MAX)')
     /// ```
     ///
@@ -2427,6 +2427,8 @@ pub enum Statement {
         /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
         to: Option<ObjectName>,
+        /// MySQL: Optional parameters for the view algorithm, definer, and security context
+        params: Option<MySQLViewParams>,
     },
     /// ```sql
     /// CREATE TABLE
@@ -3939,11 +3941,19 @@ impl fmt::Display for Statement {
                 if_not_exists,
                 temporary,
                 to,
+                params,
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{materialized}{temporary}VIEW {if_not_exists}{name}{to}",
+                    "CREATE {or_replace}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                )?;
+                if let Some(params) = params {
+                    write!(f, "{params} ")?;
+                }
+                write!(
+                    f,
+                    "{materialized}{temporary}VIEW {if_not_exists}{name}{to}",
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
                     name = name,
                     temporary = if *temporary { "TEMPORARY " } else { "" },
@@ -7335,12 +7345,81 @@ pub enum MySQLColumnPosition {
 impl Display for MySQLColumnPosition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MySQLColumnPosition::First => Ok(write!(f, "FIRST")?),
+            MySQLColumnPosition::First => write!(f, "FIRST"),
             MySQLColumnPosition::After(ident) => {
                 let column_name = &ident.value;
-                Ok(write!(f, "AFTER {column_name}")?)
+                write!(f, "AFTER {column_name}")
             }
         }
+    }
+}
+
+/// MySQL `CREATE VIEW` algorithm parameter: [ALGORITHM = {UNDEFINED | MERGE | TEMPTABLE}]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MySQLViewAlgorithm {
+    Undefined,
+    Merge,
+    TempTable,
+}
+
+impl Display for MySQLViewAlgorithm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MySQLViewAlgorithm::Undefined => write!(f, "UNDEFINED"),
+            MySQLViewAlgorithm::Merge => write!(f, "MERGE"),
+            MySQLViewAlgorithm::TempTable => write!(f, "TEMPTABLE"),
+        }
+    }
+}
+/// MySQL `CREATE VIEW` security parameter: [SQL SECURITY { DEFINER | INVOKER }]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MySQLViewSecurity {
+    Definer,
+    Invoker,
+}
+
+impl Display for MySQLViewSecurity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MySQLViewSecurity::Definer => write!(f, "DEFINER"),
+            MySQLViewSecurity::Invoker => write!(f, "INVOKER"),
+        }
+    }
+}
+
+/// [MySQL] `CREATE VIEW` additional parameters
+///
+/// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/create-view.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MySQLViewParams {
+    pub algorithm: Option<MySQLViewAlgorithm>,
+    pub definer: Option<Grantee>,
+    pub security: Option<MySQLViewSecurity>,
+}
+
+impl Display for MySQLViewParams {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let parts = [
+            self.algorithm
+                .as_ref()
+                .map(|algorithm| format!("ALGORITHM = {algorithm}")),
+            self.definer
+                .as_ref()
+                .map(|definer| format!("DEFINER = {definer}")),
+            self.security
+                .as_ref()
+                .map(|security| format!("SQL SECURITY {security}")),
+        ]
+        .into_iter()
+        .flat_map(|part| part)
+        .collect::<Vec<_>>();
+        display_separated(&parts, " ").fmt(f)
     }
 }
 

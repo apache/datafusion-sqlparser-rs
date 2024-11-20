@@ -31,6 +31,14 @@ use test_utils::*;
 #[macro_use]
 mod test_utils;
 
+fn mysql() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MySqlDialect {})])
+}
+
+fn mysql_and_generic() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})])
+}
+
 #[test]
 fn parse_identifiers() {
     mysql().verified_stmt("SELECT $a$, àà");
@@ -2704,14 +2712,6 @@ fn parse_create_table_with_fulltext_definition_should_not_accept_constraint_name
     mysql_and_generic().verified_stmt("CREATE TABLE tb (c1 INT, CONSTRAINT cons FULLTEXT (c1))");
 }
 
-fn mysql() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(MySqlDialect {})])
-}
-
-fn mysql_and_generic() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})])
-}
-
 #[test]
 fn parse_values() {
     mysql().verified_stmt("VALUES ROW(1, true, 'a')");
@@ -3022,4 +3022,82 @@ fn parse_revoke() {
             cascade: None,
         }
     )
+}
+
+#[test]
+fn parse_create_view_algorithm_param() {
+    let sql = "CREATE ALGORITHM = MERGE VIEW foo AS SELECT 1";
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::CreateView {
+        params:
+            Some(MySQLViewParams {
+                algorithm,
+                definer,
+                security,
+            }),
+        ..
+    } = stmt
+    {
+        assert_eq!(algorithm, Some(MySQLViewAlgorithm::Merge));
+        assert!(definer.is_none());
+        assert!(security.is_none());
+    } else {
+        unreachable!()
+    }
+}
+
+#[test]
+fn parse_create_view_definer_param() {
+    let sql = "CREATE DEFINER = 'jeffrey'@'localhost' VIEW foo AS SELECT 1";
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::CreateView {
+        params:
+            Some(MySQLViewParams {
+                algorithm,
+                definer,
+                security,
+            }),
+        ..
+    } = stmt
+    {
+        assert!(algorithm.is_none());
+        assert_eq!(
+            definer,
+            Some(Grantee::UserHost {
+                user: Ident {
+                    value: "jeffrey".to_owned(),
+                    quote_style: Some('\'')
+                },
+                host: Ident {
+                    value: "localhost".to_owned(),
+                    quote_style: Some('\'')
+                },
+            })
+        );
+        assert!(security.is_none());
+    } else {
+        unreachable!()
+    }
+}
+
+#[test]
+fn parse_create_view_security_param() {
+    let sql = "CREATE SQL SECURITY DEFINER VIEW foo AS SELECT 1";
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::CreateView {
+        params:
+            Some(MySQLViewParams {
+                algorithm,
+                definer,
+                security,
+            }),
+        ..
+    } = stmt
+    {
+        assert!(algorithm.is_none());
+        assert!(definer.is_none());
+        assert_eq!(security, Some(MySQLViewSecurity::Definer));
+    } else {
+        unreachable!()
+    }
 }

@@ -6839,6 +6839,7 @@ fn parse_create_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -6851,7 +6852,8 @@ fn parse_create_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -6899,6 +6901,7 @@ fn parse_create_view_with_columns() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(
@@ -6921,7 +6924,8 @@ fn parse_create_view_with_columns() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -6944,6 +6948,7 @@ fn parse_create_view_temporary() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -6956,7 +6961,8 @@ fn parse_create_view_temporary() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -6979,6 +6985,7 @@ fn parse_create_or_replace_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -6991,7 +6998,8 @@ fn parse_create_or_replace_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7018,6 +7026,7 @@ fn parse_create_or_replace_materialized_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -7030,7 +7039,8 @@ fn parse_create_or_replace_materialized_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7053,6 +7063,7 @@ fn parse_create_materialized_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7065,7 +7076,8 @@ fn parse_create_materialized_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7088,6 +7100,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7100,7 +7113,8 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }

@@ -3720,11 +3720,16 @@ impl<'a> Parser<'a> {
             .is_some();
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
+        let mysql_create_view_params = if dialect_of!(self is MySqlDialect | GenericDialect) {
+            self.parse_mysql_create_view_params()?
+        } else {
+            None
+        };
         if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
-            self.parse_create_view(or_replace, temporary)
+            self.parse_create_view(or_replace, temporary, mysql_create_view_params)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy()
         } else if self.parse_keyword(Keyword::EXTERNAL) {
@@ -4616,6 +4621,7 @@ impl<'a> Parser<'a> {
         &mut self,
         or_replace: bool,
         temporary: bool,
+        mysql_create_view_params: Option<MySQLViewParams>,
     ) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword(Keyword::VIEW)?;
@@ -4693,7 +4699,57 @@ impl<'a> Parser<'a> {
             if_not_exists,
             temporary,
             to,
+            params: mysql_create_view_params,
         })
+    }
+
+    /// Parse optional algorithm, definer, and security context parameters for [MySQL]
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/create-view.html
+    fn parse_mysql_create_view_params(&mut self) -> Result<Option<MySQLViewParams>, ParserError> {
+        let algorithm = if self.parse_keyword(Keyword::ALGORITHM) {
+            self.expect_token(&Token::Eq)?;
+            Some(
+                match self.expect_one_of_keywords(&[
+                    Keyword::UNDEFINED,
+                    Keyword::MERGE,
+                    Keyword::TEMPTABLE,
+                ])? {
+                    Keyword::UNDEFINED => MySQLViewAlgorithm::Undefined,
+                    Keyword::MERGE => MySQLViewAlgorithm::Merge,
+                    Keyword::TEMPTABLE => MySQLViewAlgorithm::TempTable,
+                    _ => unreachable!(),
+                },
+            )
+        } else {
+            None
+        };
+        let definer = if self.parse_keyword(Keyword::DEFINER) {
+            self.expect_token(&Token::Eq)?;
+            Some(self.parse_grantee()?)
+        } else {
+            None
+        };
+        let security = if self.parse_keywords(&[Keyword::SQL, Keyword::SECURITY]) {
+            Some(
+                match self.expect_one_of_keywords(&[Keyword::DEFINER, Keyword::INVOKER])? {
+                    Keyword::DEFINER => MySQLViewSecurity::Definer,
+                    Keyword::INVOKER => MySQLViewSecurity::Invoker,
+                    _ => unreachable!(),
+                },
+            )
+        } else {
+            None
+        };
+        if algorithm.is_some() || definer.is_some() || security.is_some() {
+            Ok(Some(MySQLViewParams {
+                algorithm,
+                definer,
+                security,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn parse_create_role(&mut self) -> Result<Statement, ParserError> {

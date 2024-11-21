@@ -12333,7 +12333,7 @@ fn parse_load_data() {
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
             assert_eq!(
-                ObjectName(vec![Ident::new("test"), Ident::new("my_table")]),
+                ObjectName::from(vec![Ident::new("test"), Ident::new("my_table")]),
                 table_name
             );
             assert_eq!(None, partitioned);
@@ -12356,7 +12356,7 @@ fn parse_load_data() {
             assert_eq!(false, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(true, overwrite);
-            assert_eq!(ObjectName(vec![Ident::new("my_table")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("my_table")]), table_name);
             assert_eq!(None, partitioned);
             assert_eq!(None, table_format);
         }
@@ -12393,7 +12393,7 @@ fn parse_load_data() {
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
             assert_eq!(
-                ObjectName(vec![Ident::new("test"), Ident::new("my_table")]),
+                ObjectName::from(vec![Ident::new("test"), Ident::new("my_table")]),
                 table_name
             );
             assert_eq!(None, partitioned);
@@ -12431,7 +12431,7 @@ fn parse_load_data() {
             assert_eq!(true, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
-            assert_eq!(ObjectName(vec![Ident::new("my_table")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("my_table")]), table_name);
             assert_eq!(
                 Some(vec![
                     Expr::BinaryOp {
@@ -12467,7 +12467,7 @@ fn parse_load_data() {
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(true, overwrite);
             assert_eq!(
-                ObjectName(vec![Ident::new("good"), Ident::new("my_table")]),
+                ObjectName::from(vec![Ident::new("good"), Ident::new("my_table")]),
                 table_name
             );
             assert_eq!(

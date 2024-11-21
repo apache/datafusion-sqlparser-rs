@@ -3047,7 +3047,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse an multi-dimension array accessing like '[1:3][1][1]'
+    /// Parse an multi-dimension array accessing like `[1:3][1][1]`
     ///
     /// Parser is right after the first `[`
     pub fn parse_multi_dim_subscript(&mut self, mut expr: Expr) -> Result<Expr, ParserError> {

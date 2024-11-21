@@ -193,7 +193,7 @@ fn test_values_clause() {
             version: None,
             partitions: vec![],
             with_ordinality: false,
-            partiql: None,
+            json_path: None,
         }),
         query
             .body

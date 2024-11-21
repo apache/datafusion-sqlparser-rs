@@ -975,7 +975,7 @@ pub enum TableFactor {
         /// [Partition selection](https://dev.mysql.com/doc/refman/8.0/en/partitioning-selection.html), supported by MySQL.
         partitions: Vec<Ident>,
         /// Optional PartiQL JsonPath: <https://partiql.org/dql/from.html>
-        partiql: Option<JsonPath>,
+        json_path: Option<JsonPath>,
     },
     Derived {
         lateral: bool,
@@ -1377,11 +1377,11 @@ impl fmt::Display for TableFactor {
                 version,
                 partitions,
                 with_ordinality,
-                partiql,
+                json_path,
             } => {
                 write!(f, "{name}")?;
-                if let Some(partiql) = partiql {
-                    write!(f, "{partiql}")?;
+                if let Some(json_path) = json_path {
+                    write!(f, "{json_path}")?;
                 }
                 if !partitions.is_empty() {
                     write!(f, "PARTITION ({})", display_comma_separated(partitions))?;

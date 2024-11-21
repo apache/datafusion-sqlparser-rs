@@ -10328,7 +10328,7 @@ impl<'a> Parser<'a> {
         } else {
             let name = self.parse_object_name(true)?;
 
-            let partiql = match self.peek_token().token {
+            let json_path = match self.peek_token().token {
                 Token::LBracket if self.dialect.supports_partiql() => Some(self.parse_json_path()?),
                 _ => None,
             };
@@ -10375,7 +10375,7 @@ impl<'a> Parser<'a> {
                 version,
                 partitions,
                 with_ordinality,
-                partiql,
+                json_path,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {

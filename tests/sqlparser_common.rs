@@ -364,7 +364,7 @@ fn parse_update_set_from() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 joins: vec![],
             },
@@ -395,7 +395,7 @@ fn parse_update_set_from() {
                                     version: None,
                                     partitions: vec![],
                                     with_ordinality: false,
-                                    partiql: None,
+                                    json_path: None,
                                 },
                                 joins: vec![],
                             }],
@@ -475,7 +475,7 @@ fn parse_update_with_table_alias() {
                         version: None,
                         partitions: vec![],
                         with_ordinality: false,
-                        partiql: None,
+                        json_path: None,
                     },
                     joins: vec![],
                 },
@@ -567,7 +567,7 @@ fn parse_select_with_table_alias() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             },
             joins: vec![],
         }]
@@ -605,7 +605,7 @@ fn parse_delete_statement() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 from[0].relation
             );
@@ -653,7 +653,7 @@ fn parse_delete_statement_for_multi_tables() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 from[0].relation
             );
@@ -666,7 +666,7 @@ fn parse_delete_statement_for_multi_tables() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 from[0].joins[0].relation
             );
@@ -693,7 +693,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 from[0].relation
             );
@@ -706,7 +706,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 from[1].relation
             );
@@ -719,7 +719,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 using[0].relation
             );
@@ -732,7 +732,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 using[0].joins[0].relation
             );
@@ -764,7 +764,7 @@ fn parse_where_delete_statement() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 from[0].relation,
             );
@@ -810,7 +810,7 @@ fn parse_where_delete_with_alias_statement() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 from[0].relation,
             );
@@ -827,7 +827,7 @@ fn parse_where_delete_with_alias_statement() {
                         version: None,
                         partitions: vec![],
                         with_ordinality: false,
-                        partiql: None,
+                        json_path: None,
                     },
                     joins: vec![],
                 }]),
@@ -4732,7 +4732,7 @@ fn test_parse_named_window() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             },
             joins: vec![],
         }],
@@ -5316,7 +5316,7 @@ fn parse_interval_and_or_xor() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 joins: vec![],
             }],
@@ -5928,7 +5928,7 @@ fn parse_implicit_join() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 joins: vec![],
             },
@@ -5941,7 +5941,7 @@ fn parse_implicit_join() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 joins: vec![],
             },
@@ -5962,7 +5962,7 @@ fn parse_implicit_join() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 joins: vec![Join {
                     relation: TableFactor::Table {
@@ -5973,7 +5973,7 @@ fn parse_implicit_join() {
                         version: None,
                         partitions: vec![],
                         with_ordinality: false,
-                        partiql: None,
+                        json_path: None,
                     },
                     global: false,
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
@@ -5988,7 +5988,7 @@ fn parse_implicit_join() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 joins: vec![Join {
                     relation: TableFactor::Table {
@@ -5999,7 +5999,7 @@ fn parse_implicit_join() {
                         version: None,
                         partitions: vec![],
                         with_ordinality: false,
-                        partiql: None,
+                        json_path: None,
                     },
                     global: false,
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
@@ -6024,7 +6024,7 @@ fn parse_cross_join() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             },
             global: false,
             join_operator: JoinOperator::CrossJoin,
@@ -6050,7 +6050,7 @@ fn parse_joins_on() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -6178,7 +6178,7 @@ fn parse_joins_using() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
@@ -6252,7 +6252,7 @@ fn parse_natural_join() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -6522,7 +6522,7 @@ fn parse_derived_tables() {
                         version: None,
                         partitions: vec![],
                         with_ordinality: false,
-                        partiql: None,
+                        json_path: None,
                     },
                     global: false,
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
@@ -7470,7 +7470,7 @@ fn lateral_function() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             },
             joins: vec![Join {
                 relation: TableFactor::Function {
@@ -8286,7 +8286,7 @@ fn parse_merge() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 }
             );
             assert_eq!(table, table_no_into);
@@ -8314,7 +8314,7 @@ fn parse_merge() {
                                     version: None,
                                     partitions: vec![],
                                     with_ordinality: false,
-                                    partiql: None,
+                                    json_path: None,
                                 },
                                 joins: vec![],
                             }],
@@ -9389,7 +9389,7 @@ fn parse_pivot_table() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -9463,7 +9463,7 @@ fn parse_unpivot_table() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             }),
             value: Ident {
                 value: "quantity".to_string(),
@@ -9531,7 +9531,7 @@ fn parse_pivot_unpivot_table() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 }),
                 value: Ident {
                     value: "population".to_string(),
@@ -9943,7 +9943,7 @@ fn parse_unload() {
                             version: None,
                             partitions: vec![],
                             with_ordinality: false,
-                            partiql: None,
+                            json_path: None,
                         },
                         joins: vec![],
                     }],
@@ -10123,7 +10123,7 @@ fn parse_connect_by() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             },
             joins: vec![],
         }],
@@ -10211,7 +10211,7 @@ fn parse_connect_by() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 joins: vec![],
             }],
@@ -10373,7 +10373,7 @@ fn test_match_recognize() {
         version: None,
         partitions: vec![],
         with_ordinality: false,
-        partiql: None,
+        json_path: None,
     };
 
     fn check(options: &str, expect: TableFactor) {

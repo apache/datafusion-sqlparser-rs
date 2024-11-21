@@ -229,7 +229,7 @@ fn parse_delete_statement() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 from[0].relation
             );
@@ -1374,7 +1374,7 @@ fn parse_table_identifiers() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 joins: vec![]
             },]
@@ -1548,7 +1548,7 @@ fn parse_table_time_travel() {
                 ))),
                 partitions: vec![],
                 with_ordinality: false,
-                partiql: None,
+                json_path: None,
             },
             joins: vec![]
         },]
@@ -1647,7 +1647,7 @@ fn parse_merge() {
                     version: Default::default(),
                     partitions: Default::default(),
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 table
             );
@@ -1663,7 +1663,7 @@ fn parse_merge() {
                     version: Default::default(),
                     partitions: Default::default(),
                     with_ordinality: false,
-                    partiql: None,
+                    json_path: None,
                 },
                 source
             );

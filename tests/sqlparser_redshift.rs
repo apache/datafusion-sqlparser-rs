@@ -279,7 +279,9 @@ fn test_parse_json_path_from() {
     let dialects = all_dialects_where(|d| d.supports_partiql());
     let select = dialects.verified_only_select("SELECT * FROM src[0].a AS a");
     match &select.from[0].relation {
-        TableFactor::Table { name, json_path, .. } => {
+        TableFactor::Table {
+            name, json_path, ..
+        } => {
             assert_eq!(name, &ObjectName(vec![Ident::new("src")]));
             assert_eq!(
                 json_path,
@@ -301,7 +303,9 @@ fn test_parse_json_path_from() {
 
     let select = dialects.verified_only_select("SELECT * FROM src[0].a[1].b AS a");
     match &select.from[0].relation {
-        TableFactor::Table { name, json_path, .. } => {
+        TableFactor::Table {
+            name, json_path, ..
+        } => {
             assert_eq!(name, &ObjectName(vec![Ident::new("src")]));
             assert_eq!(
                 json_path,
@@ -330,7 +334,9 @@ fn test_parse_json_path_from() {
 
     let select = dialects.verified_only_select("SELECT * FROM src.a.b");
     match &select.from[0].relation {
-        TableFactor::Table { name, json_path, .. } => {
+        TableFactor::Table {
+            name, json_path, ..
+        } => {
             assert_eq!(
                 name,
                 &ObjectName(vec![Ident::new("src"), Ident::new("a"), Ident::new("b")])

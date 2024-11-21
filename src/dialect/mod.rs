@@ -680,7 +680,7 @@ pub trait Dialect: Debug + Any {
     ///
     /// Access on BigQuery nested and repeated expressions can
     /// mix notations in the same expression.
-    /// https://cloud.google.com/bigquery/docs/nested-repeated#query_nested_and_repeated_columns
+    /// <https://cloud.google.com/bigquery/docs/nested-repeated#query_nested_and_repeated_columns>
     fn support_period_map_access_key(&self) -> bool {
         false
     }

@@ -2919,12 +2919,23 @@ impl<'a> Parser<'a> {
             })
         } else if Token::LBracket == tok {
             if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
-                self.parse_subscript(expr)
+                let expr = self.parse_multi_dim_subscript(expr)?;
+                if self.dialect.support_period_map_access_key() {
+                    self.parse_map_access(expr, vec![])
+                } else {
+                    Ok(expr)
+                }
             } else if dialect_of!(self is SnowflakeDialect) {
                 self.prev_token();
                 self.parse_json_access(expr)
             } else {
-                self.parse_map_access(expr)
+                let key = self.parse_expr()?;
+                self.expect_token(&Token::RBracket)?;
+                let keys = vec![MapAccessKey {
+                    key,
+                    syntax: MapAccessSyntax::Bracket,
+                }];
+                self.parse_map_access(expr, keys)
             }
         } else if dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == tok {
             self.prev_token();
@@ -3020,6 +3031,19 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse an multi-dimension array accessing like '[1:3][1][1]'
+    ///
+    /// Parser is right after the first `[`
+    pub fn parse_multi_dim_subscript(&mut self, mut expr: Expr) -> Result<Expr, ParserError> {
+        loop {
+            expr = self.parse_subscript(expr)?;
+            if !self.consume_token(&Token::LBracket) {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
     /// Parses an array subscript like `[1:3]`
     ///
     /// Parser is right after `[`
@@ -3085,14 +3109,15 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_expr()?;
-        self.expect_token(&Token::RBracket)?;
-
-        let mut keys = vec![MapAccessKey {
-            key,
-            syntax: MapAccessSyntax::Bracket,
-        }];
+    /// Parse the map access like `[key]` or `.key` if [Dialect::support_period_map_access_key] is true
+    /// It could be an access-chain like `[key1][key2].key3`
+    ///
+    /// The parameter `keys` is an initialized buffer that could contain some keys parsed from other places.
+    pub fn parse_map_access(
+        &mut self,
+        expr: Expr,
+        mut keys: Vec<MapAccessKey>,
+    ) -> Result<Expr, ParserError> {
         loop {
             let key = match self.peek_token().token {
                 Token::LBracket => {
@@ -3104,10 +3129,7 @@ impl<'a> Parser<'a> {
                         syntax: MapAccessSyntax::Bracket,
                     }
                 }
-                // Access on BigQuery nested and repeated expressions can
-                // mix notations in the same expression.
-                // https://cloud.google.com/bigquery/docs/nested-repeated#query_nested_and_repeated_columns
-                Token::Period if dialect_of!(self is BigQueryDialect) => {
+                Token::Period if self.dialect.support_period_map_access_key() => {
                     self.next_token(); // consume `.`
                     MapAccessKey {
                         key: self.parse_expr()?,
@@ -3119,10 +3141,16 @@ impl<'a> Parser<'a> {
             keys.push(key);
         }
 
-        Ok(Expr::MapAccess {
-            column: Box::new(expr),
-            keys,
-        })
+        // If no any key be collected, it means the elements have been parsed to [Subscript]
+        // e.g. `select abc[1]` or `select abc[1][2]`
+        if keys.is_empty() {
+            Ok(expr)
+        } else {
+            Ok(Expr::MapAccess {
+                column: Box::new(expr),
+                keys,
+            })
+        }
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator.

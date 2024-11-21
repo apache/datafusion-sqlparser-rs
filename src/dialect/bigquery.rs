@@ -72,4 +72,8 @@ impl Dialect for BigQueryDialect {
     fn require_interval_qualifier(&self) -> bool {
         true
     }
+
+    fn support_period_map_access_key(&self) -> bool {
+        true
+    }
 }

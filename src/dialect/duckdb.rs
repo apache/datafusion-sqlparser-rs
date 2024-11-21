@@ -71,4 +71,9 @@ impl Dialect for DuckDbDialect {
     fn supports_load_extension(&self) -> bool {
         true
     }
+
+    /// See DuckDB <https://duckdb.org/docs/sql/data_types/struct.html#retrieving-from-structs>
+    fn support_period_map_access_key(&self) -> bool {
+        true
+    }
 }

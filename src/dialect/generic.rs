@@ -119,4 +119,8 @@ impl Dialect for GenericDialect {
     fn supports_load_extension(&self) -> bool {
         true
     }
+
+    fn support_period_map_access_key(&self) -> bool {
+        true
+    }
 }

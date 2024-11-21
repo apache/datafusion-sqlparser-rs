@@ -657,6 +657,15 @@ pub trait Dialect: Debug + Any {
     fn supports_create_table_select(&self) -> bool {
         false
     }
+
+    /// Return true if the dialect supports the period map access key
+    ///
+    /// Access on BigQuery nested and repeated expressions can
+    /// mix notations in the same expression.
+    /// https://cloud.google.com/bigquery/docs/nested-repeated#query_nested_and_repeated_columns
+    fn support_period_map_access_key(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

@@ -2868,7 +2868,7 @@ fn test_projection_with_nested_trailing_commas() {
 #[test]
 fn test_sf_double_dot_notation() {
     snowflake().verified_stmt("SELECT * FROM db_name..table_name");
-    snowflake().verified_stmt("SELECT * FROM x, y..z JOIN a..b as as b ON x.id = b.id");
+    snowflake().verified_stmt("SELECT * FROM x, y..z JOIN a..b AS b ON x.id = b.id");
 }
 
 #[test]

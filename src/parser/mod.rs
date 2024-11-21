@@ -8383,7 +8383,7 @@ impl<'a> Parser<'a> {
         let mut idents = vec![];
         loop {
             if self.dialect.supports_object_name_double_dot_notation()
-                && !idents.is_empty()
+                && idents.len() == 1
                 && self.peek_token() == Token::Period
             {
                 self.next_token();

@@ -74,6 +74,7 @@ macro_rules! define_keywords {
 define_keywords!(
     ABORT,
     ABS,
+    ABSENT,
     ABSOLUTE,
     ACCESS,
     ACCOUNT,
@@ -798,6 +799,7 @@ define_keywords!(
     UNION,
     UNIQUE,
     UNKNOWN,
+    UNLISTEN,
     UNLOAD,
     UNLOCK,
     UNLOGGED,
@@ -892,6 +894,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::CLUSTER,
     Keyword::DISTRIBUTE,
     Keyword::GLOBAL,
+    Keyword::ANTI,
+    Keyword::SEMI,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
     Keyword::OUTER,
     Keyword::SET,

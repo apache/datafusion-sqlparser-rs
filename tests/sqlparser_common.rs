@@ -443,6 +443,7 @@ fn parse_update_set_from() {
                 ])),
             }),
             returning: None,
+            or: None,
         }
     );
 }
@@ -457,6 +458,7 @@ fn parse_update_with_table_alias() {
             from: _from,
             selection,
             returning,
+            or: None,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -506,6 +508,25 @@ fn parse_update_with_table_alias() {
 }
 
 #[test]
+fn parse_update_or() {
+    let expect_or_clause = |sql: &str, expected_action: SqliteOnConflict| match verified_stmt(sql) {
+        Statement::Update { or, .. } => assert_eq!(or, Some(expected_action)),
+        other => unreachable!("Expected update with or, got {:?}", other),
+    };
+    expect_or_clause(
+        "UPDATE OR REPLACE t SET n = n + 1",
+        SqliteOnConflict::Replace,
+    );
+    expect_or_clause(
+        "UPDATE OR ROLLBACK t SET n = n + 1",
+        SqliteOnConflict::Rollback,
+    );
+    expect_or_clause("UPDATE OR ABORT t SET n = n + 1", SqliteOnConflict::Abort);
+    expect_or_clause("UPDATE OR FAIL t SET n = n + 1", SqliteOnConflict::Fail);
+    expect_or_clause("UPDATE OR IGNORE t SET n = n + 1", SqliteOnConflict::Ignore);
+}
+
+#[test]
 fn parse_select_with_table_alias_as() {
     // AS is optional
     one_statement_parses_to(
@@ -532,7 +553,11 @@ fn parse_select_with_table_alias() {
                 name: ObjectName(vec![Ident::new("lineitem")]),
                 alias: Some(TableAlias {
                     name: Ident::new("l"),
-                    columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C"),],
+                    columns: vec![
+                        TableAliasColumnDef::from_name("A"),
+                        TableAliasColumnDef::from_name("B"),
+                        TableAliasColumnDef::from_name("C"),
+                    ],
                 }),
                 args: None,
                 with_hints: vec![],
@@ -4377,8 +4402,9 @@ fn parse_explain_query_plan() {
 
 #[test]
 fn parse_named_argument_function() {
+    let dialects = all_dialects_where(|d| d.supports_named_fn_args_with_rarrow_operator());
     let sql = "SELECT FUN(a => '1', b => '2') FROM foo";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
 
     assert_eq!(
         &Expr::Function(Function {
@@ -5577,6 +5603,40 @@ fn parse_table_function() {
 }
 
 #[test]
+fn parse_select_with_alias_and_column_defs() {
+    let sql = r#"SELECT * FROM jsonb_to_record('{"a": "x", "b": 2}'::JSONB) AS x (a TEXT, b INT)"#;
+    let select = verified_only_select(sql);
+
+    match only(&select.from) {
+        TableWithJoins {
+            relation: TableFactor::Table {
+                alias: Some(alias), ..
+            },
+            ..
+        } => {
+            assert_eq!(alias.name.value, "x");
+            assert_eq!(
+                alias.columns,
+                vec![
+                    TableAliasColumnDef {
+                        name: Ident::new("a"),
+                        data_type: Some(DataType::Text),
+                    },
+                    TableAliasColumnDef {
+                        name: Ident::new("b"),
+                        data_type: Some(DataType::Int(None)),
+                    },
+                ]
+            );
+        }
+        _ => unreachable!(
+            "Expecting only TableWithJoins with TableFactor::Table, got {:#?}",
+            select.from
+        ),
+    }
+}
+
+#[test]
 fn parse_unnest() {
     let sql = "SELECT UNNEST(make_array(1, 2, 3))";
     one_statement_parses_to(sql, sql);
@@ -6014,6 +6074,10 @@ fn parse_joins_on() {
         )]
     );
     assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, false, JoinOperator::Semi)]
+    );
+    assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT SEMI JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint(
             "t2",
@@ -6030,6 +6094,10 @@ fn parse_joins_on() {
             false,
             JoinOperator::RightSemi
         )]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, false, JoinOperator::Anti)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 ON c1 = c2").from).joins,
@@ -6118,12 +6186,20 @@ fn parse_joins_using() {
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 SEMI JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Semi)]
+    );
+    assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT SEMI JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftSemi)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT SEMI JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightSemi)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 ANTI JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Anti)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 USING(c1)").from).joins,
@@ -6335,7 +6411,10 @@ fn parse_cte_renamed_columns() {
     let sql = "WITH cte (col1, col2) AS (SELECT foo, bar FROM baz) SELECT * FROM cte";
     let query = all_dialects().verified_query(sql);
     assert_eq!(
-        vec![Ident::new("col1"), Ident::new("col2")],
+        vec![
+            TableAliasColumnDef::from_name("col1"),
+            TableAliasColumnDef::from_name("col2")
+        ],
         query
             .with
             .unwrap()
@@ -6364,10 +6443,7 @@ fn parse_recursive_cte() {
                 value: "nums".to_string(),
                 quote_style: None,
             },
-            columns: vec![Ident {
-                value: "val".to_string(),
-                quote_style: None,
-            }],
+            columns: vec![TableAliasColumnDef::from_name("val")],
         },
         query: Box::new(cte_query),
         from: None,
@@ -9310,7 +9386,10 @@ fn parse_pivot_table() {
                     value: "p".to_string(),
                     quote_style: None
                 },
-                columns: vec![Ident::new("c"), Ident::new("d")],
+                columns: vec![
+                    TableAliasColumnDef::from_name("c"),
+                    TableAliasColumnDef::from_name("d"),
+                ],
             }),
         }
     );
@@ -9371,8 +9450,8 @@ fn parse_unpivot_table() {
                 name: Ident::new("u"),
                 columns: ["product", "quarter", "quantity"]
                     .into_iter()
-                    .map(Ident::new)
-                    .collect()
+                    .map(TableAliasColumnDef::from_name)
+                    .collect(),
             }),
         }
     );
@@ -11516,7 +11595,7 @@ fn test_show_dbs_schemas_tables_views() {
 
 #[test]
 fn parse_listen_channel() {
-    let dialects = all_dialects_where(|d| d.supports_listen());
+    let dialects = all_dialects_where(|d| d.supports_listen_notify());
 
     match dialects.verified_stmt("LISTEN test1") {
         Statement::LISTEN { channel } => {
@@ -11530,7 +11609,7 @@ fn parse_listen_channel() {
         ParserError::ParserError("Expected: identifier, found: *".to_string())
     );
 
-    let dialects = all_dialects_where(|d| !d.supports_listen());
+    let dialects = all_dialects_where(|d| !d.supports_listen_notify());
 
     assert_eq!(
         dialects.parse_sql_statements("LISTEN test1").unwrap_err(),
@@ -11539,8 +11618,39 @@ fn parse_listen_channel() {
 }
 
 #[test]
+fn parse_unlisten_channel() {
+    let dialects = all_dialects_where(|d| d.supports_listen_notify());
+
+    match dialects.verified_stmt("UNLISTEN test1") {
+        Statement::UNLISTEN { channel } => {
+            assert_eq!(Ident::new("test1"), channel);
+        }
+        _ => unreachable!(),
+    };
+
+    match dialects.verified_stmt("UNLISTEN *") {
+        Statement::UNLISTEN { channel } => {
+            assert_eq!(Ident::new("*"), channel);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        dialects.parse_sql_statements("UNLISTEN +").unwrap_err(),
+        ParserError::ParserError("Expected: wildcard or identifier, found: +".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_listen_notify());
+
+    assert_eq!(
+        dialects.parse_sql_statements("UNLISTEN test1").unwrap_err(),
+        ParserError::ParserError("Expected: an SQL statement, found: UNLISTEN".to_string())
+    );
+}
+
+#[test]
 fn parse_notify_channel() {
-    let dialects = all_dialects_where(|d| d.supports_notify());
+    let dialects = all_dialects_where(|d| d.supports_listen_notify());
 
     match dialects.verified_stmt("NOTIFY test1") {
         Statement::NOTIFY { channel, payload } => {
@@ -11576,7 +11686,7 @@ fn parse_notify_channel() {
         "NOTIFY test1",
         "NOTIFY test1, 'this is a test notification'",
     ];
-    let dialects = all_dialects_where(|d| !d.supports_notify());
+    let dialects = all_dialects_where(|d| !d.supports_listen_notify());
 
     for &sql in &sql_statements {
         assert_eq!(
@@ -11783,6 +11893,44 @@ fn parse_load_data() {
             "Expected: `DATA` or an extension name after `LOAD`, found: DATA2".to_string()
         )
     );
+}
+
+#[test]
+fn test_load_extension() {
+    let dialects = all_dialects_where(|d| d.supports_load_extension());
+    let not_supports_load_extension_dialects = all_dialects_where(|d| !d.supports_load_extension());
+    let sql = "LOAD my_extension";
+
+    match dialects.verified_stmt(sql) {
+        Statement::Load { extension_name } => {
+            assert_eq!(Ident::new("my_extension"), extension_name);
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        not_supports_load_extension_dialects
+            .parse_sql_statements(sql)
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: `DATA` or an extension name after `LOAD`, found: my_extension".to_string()
+        )
+    );
+
+    let sql = "LOAD 'filename'";
+
+    match dialects.verified_stmt(sql) {
+        Statement::Load { extension_name } => {
+            assert_eq!(
+                Ident {
+                    value: "filename".to_string(),
+                    quote_style: Some('\'')
+                },
+                extension_name
+            );
+        }
+        _ => unreachable!(),
+    };
 }
 
 #[test]

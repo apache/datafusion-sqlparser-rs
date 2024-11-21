@@ -191,12 +191,9 @@ impl Dialect for PostgreSqlDialect {
     }
 
     /// see <https://www.postgresql.org/docs/current/sql-listen.html>
-    fn supports_listen(&self) -> bool {
-        true
-    }
-
+    /// see <https://www.postgresql.org/docs/current/sql-unlisten.html>
     /// see <https://www.postgresql.org/docs/current/sql-notify.html>
-    fn supports_notify(&self) -> bool {
+    fn supports_listen_notify(&self) -> bool {
         true
     }
 
@@ -207,6 +204,11 @@ impl Dialect for PostgreSqlDialect {
 
     /// see <https://www.postgresql.org/docs/current/sql-comment.html>
     fn supports_comment_on(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-load.html>
+    fn supports_load_extension(&self) -> bool {
         true
     }
 }

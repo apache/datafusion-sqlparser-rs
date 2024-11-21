@@ -505,8 +505,8 @@ impl Display for Insert {
             self.table_name.to_string()
         };
 
-        if let Some(action) = self.or {
-            write!(f, "INSERT OR {action} INTO {table_name} ")?;
+        if let Some(on_conflict) = self.or {
+            write!(f, "INSERT {on_conflict} INTO {table_name} ")?;
         } else {
             write!(
                 f,

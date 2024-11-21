@@ -360,20 +360,6 @@ fn test_duckdb_install() {
 }
 
 #[test]
-fn test_duckdb_load_extension() {
-    let stmt = duckdb().verified_stmt("LOAD my_extension");
-    assert_eq!(
-        Statement::Load {
-            extension_name: Ident {
-                value: "my_extension".to_string(),
-                quote_style: None
-            }
-        },
-        stmt
-    );
-}
-
-#[test]
 fn test_duckdb_struct_literal() {
     //struct literal syntax https://duckdb.org/docs/sql/data_types/struct#creating-structs
     //syntax: {'field_name': expr1[, ... ]}

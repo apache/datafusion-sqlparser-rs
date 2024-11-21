@@ -1970,6 +1970,7 @@ fn parse_update_with_joins() {
             from: _from,
             selection,
             returning,
+            or: None,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -2957,5 +2958,16 @@ fn parse_logical_xor() {
             right: Box::new(Expr::Value(Value::Boolean(true))),
         }),
         select.projection[3]
+    );
+}
+
+#[test]
+fn parse_bitstring_literal() {
+    let select = mysql_and_generic().verified_only_select("SELECT B'111'");
+    assert_eq!(
+        select.projection,
+        vec![SelectItem::UnnamedExpr(Expr::Value(
+            Value::SingleQuotedByteStringLiteral("111".to_string())
+        ))]
     );
 }

@@ -785,6 +785,447 @@ fn parse_for_json_expect_ast() {
 }
 
 #[test]
+fn parse_mssql_json_object() {
+    let select = ms().verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : 1)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => assert_eq!(
+            &[
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("name".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "value".into()
+                    ))),
+                    operator: FunctionArgOperator::Colon
+                },
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("type".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(number("1"))),
+                    operator: FunctionArgOperator::Colon
+                }
+            ],
+            &args[..]
+        ),
+        _ => unreachable!(),
+    }
+    let select = ms()
+        .verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : NULL ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &[
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(Value::SingleQuotedString("name".into())),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "value".into()
+                        ))),
+                        operator: FunctionArgOperator::Colon
+                    },
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(Value::SingleQuotedString("type".into())),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::Null)),
+                        operator: FunctionArgOperator::Colon
+                    }
+                ],
+                &args[..]
+            );
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_OBJECT(NULL ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_OBJECT(ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_ARRAY(1, 2) ABSENT ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("name".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "value".into()
+                    ))),
+                    operator: FunctionArgOperator::Colon
+                },
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_OBJECT('type_id' : 1, 'name' : 'a') NULL ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("name".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "value".into()
+                    ))),
+                    operator: FunctionArgOperator::Colon
+                },
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_OBJECT('user_name' : USER_NAME(), LOWER(@id_key) : @id_value, 'sid' : (SELECT @@SPID) ABSENT ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(matches!(
+                args[0],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Function(_),
+                    arg: FunctionArgExpr::Expr(Expr::Identifier(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Subquery(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT s.session_id, JSON_OBJECT('security_id' : s.security_id, 'login' : s.login_name, 'status' : s.status) AS info \
+        FROM sys.dm_exec_sessions AS s \
+        WHERE s.is_user_process = 1",
+    );
+    match &select.projection[1] {
+        SelectItem::ExprWithAlias {
+            expr:
+                Expr::Function(Function {
+                    args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+                    ..
+                }),
+            ..
+        } => {
+            assert!(matches!(
+                args[0],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_mssql_json_array() {
+    let select = ms().verified_only_select("SELECT JSON_ARRAY('a', 1, NULL, 2 NULL ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &[
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("a".into())
+                    ))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Null))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                ],
+                &args[..]
+            );
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_ARRAY('a', 1, NULL, 2 ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &[
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("a".into())
+                    ))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Null))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                ],
+                &args[..]
+            );
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_ARRAY(NULL ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_ARRAY(ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_ARRAY('a', JSON_OBJECT('name' : 'value', 'type' : 1) NULL ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                    Value::SingleQuotedString("a".into())
+                ))),
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT JSON_ARRAY('a', JSON_OBJECT('name' : 'value', 'type' : 1), JSON_ARRAY(1, NULL, 2 NULL ON NULL))",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                    Value::SingleQuotedString("a".into())
+                ))),
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+            ));
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select("SELECT JSON_ARRAY(1, @id_value, (SELECT @@SPID))");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(_)))
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Subquery(_)))
+            ));
+        }
+        _ => unreachable!(),
+    }
+    let select = ms().verified_only_select(
+        "SELECT s.session_id, JSON_ARRAY(s.host_name, s.program_name, s.client_interface_name NULL ON NULL) AS info \
+        FROM sys.dm_exec_sessions AS s \
+        WHERE s.is_user_process = 1",
+    );
+    match &select.projection[1] {
+        SelectItem::ExprWithAlias {
+            expr:
+                Expr::Function(Function {
+                    args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+                    ..
+                }),
+            ..
+        } => {
+            assert!(matches!(
+                args[0],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+            ));
+            assert!(matches!(
+                args[1],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+            ));
+            assert!(matches!(
+                args[2],
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_ampersand_arobase() {
     // In SQL Server, a&@b means (a) & (@b), in PostgreSQL it means (a) &@ (b)
     ms().expr_parses_to("a&@b", "a & @b");

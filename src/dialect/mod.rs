@@ -231,8 +231,31 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
+    /// Returns true if the dialect supports named arguments of the form `FUN(a = '1', b = '2')`.
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a : '1', b : '2')`.
+    fn supports_named_fn_args_with_colon_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a := '1', b := '2')`.
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a => '1', b => '2')`.
+    fn supports_named_fn_args_with_rarrow_operator(&self) -> bool {
+        true
+    }
+
+    /// Returns true if dialect supports argument name as arbitrary expression.
+    /// e.g. `FUN(LOWER('a'):'1',  b:'2')`
+    /// Such function arguments are represented in the AST by the `FunctionArg::ExprNamed` variant,
+    /// otherwise use the `FunctionArg::Named` variant (compatible reason).
+    fn supports_named_fn_args_with_expr_name(&self) -> bool {
         false
     }
 
@@ -610,13 +633,8 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports the `LISTEN` statement
-    fn supports_listen(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports the `NOTIFY` statement
-    fn supports_notify(&self) -> bool {
+    /// Returns true if the dialect supports the `LISTEN`, `UNLISTEN` and `NOTIFY` statements
+    fn supports_listen_notify(&self) -> bool {
         false
     }
 

@@ -237,10 +237,6 @@ impl Ident {
             span,
         }
     }
-
-    pub fn to_object_name_part(&self) -> ObjectNamePart {
-        ObjectNamePart::Identifier(self.clone())
-    }
 }
 
 impl From<&str> for Ident {

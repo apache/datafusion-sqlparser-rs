@@ -14086,7 +14086,7 @@ impl<'a> Parser<'a> {
                 {
                     parent_name
                         .0
-                        .insert(0, self.parse_identifier()?.to_object_name_part());
+                        .insert(0, ObjectNamePart::Identifier(self.parse_identifier()?));
                 }
                 (None, Some(parent_name))
             }

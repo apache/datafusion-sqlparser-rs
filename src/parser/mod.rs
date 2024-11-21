@@ -1123,9 +1123,8 @@ impl<'a> Parser<'a> {
             Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                 Ok(Some(self.parse_match_against()?))
             }
-            Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
-                self.prev_token();
-                Ok(Some(self.parse_bigquery_struct_literal()?))
+            Keyword::STRUCT if self.dialect.supports_struct_literal() => {
+                Ok(Some(self.parse_struct_literal()?))
             }
             Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
                 let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
@@ -2383,22 +2382,28 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Bigquery specific: Parse a struct literal
     /// Syntax
     /// ```sql
-    /// -- typed
+    /// -- typed, specific to bigquery
     /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
     /// -- typeless
     /// STRUCT( expr1 [AS field_name] [, ... ])
     /// ```
-    fn parse_bigquery_struct_literal(&mut self) -> Result<Expr, ParserError> {
-        let (fields, trailing_bracket) =
-            self.parse_struct_type_def(Self::parse_struct_field_def)?;
-        if trailing_bracket.0 {
-            return parser_err!(
+    fn parse_struct_literal(&mut self) -> Result<Expr, ParserError> {
+        let mut fields = vec![];
+        // Typed struct syntax is only supported by BigQuery
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typed_struct_syntax
+        if self.dialect.supports_typed_struct_syntax() {
+            self.prev_token();
+            let trailing_bracket;
+            (fields, trailing_bracket) =
+                self.parse_struct_type_def(Self::parse_struct_field_def)?;
+            if trailing_bracket.0 {
+                return parser_err!(
                 "unmatched > in STRUCT literal",
                 self.peek_token().span.start
             );
+            }
         }
 
         self.expect_token(&Token::LParen)?;
@@ -2409,13 +2414,13 @@ impl<'a> Parser<'a> {
         Ok(Expr::Struct { values, fields })
     }
 
-    /// Parse an expression value for a bigquery struct [1]
+    /// Parse an expression value for a struct literal
     /// Syntax
     /// ```sql
     /// expr [AS name]
     /// ```
     ///
-    /// Parameter typed_syntax is set to true if the expression
+    /// For biquery [1], Parameter typed_syntax is set to true if the expression
     /// is to be parsed as a field expression declared using typed
     /// struct syntax [2], and false if using typeless struct syntax [3].
     ///

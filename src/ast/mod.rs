@@ -931,16 +931,16 @@ pub enum Expr {
     Rollup(Vec<Vec<Expr>>),
     /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
     Tuple(Vec<Expr>),
-    /// `BigQuery` specific `Struct` literal expression [1]
+    /// `Struct` literal expression
     /// Syntax:
     /// ```sql
     /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
     /// ```
-    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct {
         /// Struct values.
         values: Vec<Expr>,
-        /// Struct field definitions.
+        /// BigQuery specific: Struct field definitions.
+        /// see https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
         fields: Vec<StructField>,
     },
     /// `BigQuery` specific: An named expression in a typeless struct [1]

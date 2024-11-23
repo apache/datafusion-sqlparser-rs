@@ -54,6 +54,7 @@ fn test_square_brackets_over_db_schema_table_name() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
+                json_path: None,
             },
             joins: vec![],
         }
@@ -101,6 +102,7 @@ fn test_double_quotes_over_db_schema_table_name() {
                 version: None,
                 partitions: vec![],
                 with_ordinality: false,
+                json_path: None,
             },
             joins: vec![],
         }
@@ -123,6 +125,7 @@ fn parse_delimited_identifiers() {
             version,
             with_ordinality: _,
             partitions: _,
+            json_path: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -195,4 +198,151 @@ fn test_sharp() {
 fn test_create_view_with_no_schema_binding() {
     redshift_and_generic()
         .verified_stmt("CREATE VIEW myevent AS SELECT eventname FROM event WITH NO SCHEMA BINDING");
+}
+
+#[test]
+fn test_redshift_json_path() {
+    let dialects = all_dialects_where(|d| d.supports_partiql());
+    let sql = "SELECT cust.c_orders[0].o_orderkey FROM customer_orders_lineitem";
+    let select = dialects.verified_only_select(sql);
+
+    assert_eq!(
+        &Expr::JsonAccess {
+            value: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("cust"),
+                Ident::new("c_orders")
+            ])),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                    },
+                    JsonPathElem::Dot {
+                        key: "o_orderkey".to_string(),
+                        quoted: false
+                    }
+                ]
+            }
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT cust.c_orders[0]['id'] FROM customer_orders_lineitem";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        &Expr::JsonAccess {
+            value: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("cust"),
+                Ident::new("c_orders")
+            ])),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                    },
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(Value::SingleQuotedString("id".to_owned()))
+                    }
+                ]
+            }
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT db1.sc1.tbl1.col1[0]['id'] FROM customer_orders_lineitem";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        &Expr::JsonAccess {
+            value: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("db1"),
+                Ident::new("sc1"),
+                Ident::new("tbl1"),
+                Ident::new("col1")
+            ])),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                    },
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(Value::SingleQuotedString("id".to_owned()))
+                    }
+                ]
+            }
+        },
+        expr_from_projection(only(&select.projection))
+    );
+}
+
+#[test]
+fn test_parse_json_path_from() {
+    let dialects = all_dialects_where(|d| d.supports_partiql());
+    let select = dialects.verified_only_select("SELECT * FROM src[0].a AS a");
+    match &select.from[0].relation {
+        TableFactor::Table {
+            name, json_path, ..
+        } => {
+            assert_eq!(name, &ObjectName(vec![Ident::new("src")]));
+            assert_eq!(
+                json_path,
+                &Some(JsonPath {
+                    path: vec![
+                        JsonPathElem::Bracket {
+                            key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                        },
+                        JsonPathElem::Dot {
+                            key: "a".to_string(),
+                            quoted: false
+                        }
+                    ]
+                })
+            );
+        }
+        _ => panic!(),
+    }
+
+    let select = dialects.verified_only_select("SELECT * FROM src[0].a[1].b AS a");
+    match &select.from[0].relation {
+        TableFactor::Table {
+            name, json_path, ..
+        } => {
+            assert_eq!(name, &ObjectName(vec![Ident::new("src")]));
+            assert_eq!(
+                json_path,
+                &Some(JsonPath {
+                    path: vec![
+                        JsonPathElem::Bracket {
+                            key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                        },
+                        JsonPathElem::Dot {
+                            key: "a".to_string(),
+                            quoted: false
+                        },
+                        JsonPathElem::Bracket {
+                            key: Expr::Value(Value::Number("1".parse().unwrap(), false))
+                        },
+                        JsonPathElem::Dot {
+                            key: "b".to_string(),
+                            quoted: false
+                        },
+                    ]
+                })
+            );
+        }
+        _ => panic!(),
+    }
+
+    let select = dialects.verified_only_select("SELECT * FROM src.a.b");
+    match &select.from[0].relation {
+        TableFactor::Table {
+            name, json_path, ..
+        } => {
+            assert_eq!(
+                name,
+                &ObjectName(vec![Ident::new("src"), Ident::new("a"), Ident::new("b")])
+            );
+            assert_eq!(json_path, &None);
+        }
+        _ => panic!(),
+    }
 }

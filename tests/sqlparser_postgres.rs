@@ -3511,6 +3511,7 @@ fn parse_delimited_identifiers() {
             version,
             with_ordinality: _,
             partitions: _,
+            json_path: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);

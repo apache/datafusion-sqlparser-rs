@@ -385,16 +385,6 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Return true if the dialect supports typed struct syntax
-    ///
-    /// Example for bigquery
-    /// ```sql
-    /// SELECT STRUCT<x int64, y string>(1, 'foo')
-    /// ```
-    fn supports_typed_struct_syntax(&self) -> bool {
-        false
-    }
-
     /// Dialect-specific infix parser override
     ///
     /// This method is called to parse the next infix expression.

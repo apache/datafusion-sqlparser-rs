@@ -77,9 +77,4 @@ impl Dialect for BigQueryDialect {
     fn supports_struct_literal(&self) -> bool {
         true
     }
-
-    // See https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typed_struct_syntax
-    fn supports_typed_struct_syntax(&self) -> bool {
-        true
-    }
 }

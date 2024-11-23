@@ -2384,28 +2384,24 @@ impl<'a> Parser<'a> {
 
     /// Syntax
     /// ```sql
-    /// -- typed, specific to bigquery
+    /// -- typed
     /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
     /// -- typeless
     /// STRUCT( expr1 [AS field_name] [, ... ])
     /// ```
     fn parse_struct_literal(&mut self) -> Result<Expr, ParserError> {
-        let mut fields = vec![];
-        // Typed struct syntax is only supported by BigQuery
-        // https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typed_struct_syntax
-        if self.dialect.supports_typed_struct_syntax() {
-            self.prev_token();
-            let trailing_bracket;
-            (fields, trailing_bracket) =
-                self.parse_struct_type_def(Self::parse_struct_field_def)?;
-            if trailing_bracket.0 {
-                return parser_err!(
+        // Parse the fields definition if exist `<[field_name] field_type, ...>`
+        self.prev_token();
+        let (fields, trailing_bracket) =
+            self.parse_struct_type_def(Self::parse_struct_field_def)?;
+        if trailing_bracket.0 {
+            return parser_err!(
                 "unmatched > in STRUCT literal",
                 self.peek_token().span.start
             );
-            }
         }
 
+        // Parse the struct values `(expr1 [, ... ])`
         self.expect_token(&Token::LParen)?;
         let values = self
             .parse_comma_separated(|parser| parser.parse_struct_field_expr(!fields.is_empty()))?;

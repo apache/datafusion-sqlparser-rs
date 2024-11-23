@@ -282,7 +282,7 @@ fn parse_use() {
 #[test]
 fn parse_databricks_struct_function() {
     assert_eq!(
-        databricks()
+        databricks_and_generic()
             .verified_only_select("SELECT STRUCT(1, 'foo')")
             .projection[0],
         SelectItem::UnnamedExpr(Expr::Struct {
@@ -294,7 +294,7 @@ fn parse_databricks_struct_function() {
         })
     );
     assert_eq!(
-        databricks()
+        databricks_and_generic()
             .verified_only_select("SELECT STRUCT(1 AS one, 'foo' AS foo, false)")
             .projection[0],
         SelectItem::UnnamedExpr(Expr::Struct {
@@ -311,15 +311,5 @@ fn parse_databricks_struct_function() {
             ],
             fields: vec![]
         })
-    );
-}
-
-#[test]
-fn parse_invalid_struct_function() {
-    assert_eq!(
-        databricks()
-            .parse_sql_statements("SELECT STRUCT<INT64>(1)") // This works only in BigQuery
-            .unwrap_err(),
-        ParserError::ParserError("Expected: (, found: <".to_string())
     );
 }

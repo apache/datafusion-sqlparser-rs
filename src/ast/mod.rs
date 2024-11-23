@@ -935,12 +935,14 @@ pub enum Expr {
     /// Syntax:
     /// ```sql
     /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type)
+    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/functions/struct.html)
     /// ```
     Struct {
         /// Struct values.
         values: Vec<Expr>,
-        /// BigQuery specific: Struct field definitions.
-        /// see https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+        /// Struct field definitions.
         fields: Vec<StructField>,
     },
     /// `BigQuery` specific: An named expression in a typeless struct [1]

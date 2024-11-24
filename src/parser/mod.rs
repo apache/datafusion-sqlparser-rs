@@ -4044,7 +4044,8 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
-    pub fn parse_period_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
+    /// Parse a period-separated list of 1+ items accepted by `F`
+    fn parse_period_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
@@ -4056,10 +4057,6 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(values)
-    }
-
-    pub fn parse_period_separated_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
-        self.parse_period_separated(|p| p.parse_identifier(false))
     }
 
     /// Parse a keyword-separated list of 1+ items accepted by `F`
@@ -11831,7 +11828,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let aggregate_functions = self.parse_comma_separated(Self::parse_aliased_function_call)?;
         self.expect_keyword_is(Keyword::FOR)?;
-        let value_column = self.parse_period_separated_identifiers()?;
+        let value_column = self.parse_period_separated(|p| p.parse_identifier(false))?;
         self.expect_keyword_is(Keyword::IN)?;
 
         self.expect_token(&Token::LParen)?;

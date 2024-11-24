@@ -371,6 +371,7 @@ impl Spanned for Statement {
                     .chain(core::iter::once(query.span()))
                     .chain(with_options.iter().map(|i| i.span())),
             ),
+            // These statements need to be implemented
             Statement::AlterRole { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),
             Statement::AttachDuckDBDatabase { .. } => Span::empty(),
@@ -441,6 +442,7 @@ impl Spanned for Statement {
             Statement::LISTEN { .. } => Span::empty(),
             Statement::NOTIFY { .. } => Span::empty(),
             Statement::LoadData { .. } => Span::empty(),
+            Statement::UNLISTEN { .. } => Span::empty(),
         }
     }
 }
@@ -1636,6 +1638,7 @@ impl Spanned for TableFactor {
                 version: _,
                 with_ordinality: _,
                 partitions: _,
+                json_path: _,
             } => union_spans(
                 name.0
                     .iter()

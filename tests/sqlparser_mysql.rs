@@ -28,7 +28,6 @@ use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Span;
 use sqlparser::tokenizer::Token;
-use sqlparser::tokenizer::TokenWithLocation;
 use test_utils::*;
 
 #[macro_use]
@@ -1886,6 +1885,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                             version: None,
                             partitions: vec![],
                             with_ordinality: false,
+                            json_path: None,
                         },
                         joins: vec![]
                     }],
@@ -1944,6 +1944,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                             version: None,
                             partitions: vec![],
                             with_ordinality: false,
+                            json_path: None,
                         },
                         joins: vec![]
                     }],
@@ -2011,6 +2012,7 @@ fn parse_update_with_joins() {
                         version: None,
                         partitions: vec![],
                         with_ordinality: false,
+                        json_path: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -2024,6 +2026,7 @@ fn parse_update_with_joins() {
                             version: None,
                             partitions: vec![],
                             with_ordinality: false,
+                            json_path: None,
                         },
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -2466,6 +2469,7 @@ fn parse_substring_in_select() {
                                 version: None,
                                 partitions: vec![],
                                 with_ordinality: false,
+                                json_path: None,
                             },
                             joins: vec![]
                         }],
@@ -2997,5 +3001,16 @@ fn parse_logical_xor() {
             right: Box::new(Expr::Value(Value::Boolean(true))),
         }),
         select.projection[3]
+    );
+}
+
+#[test]
+fn parse_bitstring_literal() {
+    let select = mysql_and_generic().verified_only_select("SELECT B'111'");
+    assert_eq!(
+        select.projection,
+        vec![SelectItem::UnnamedExpr(Expr::Value(
+            Value::SingleQuotedByteStringLiteral("111".to_string())
+        ))]
     );
 }

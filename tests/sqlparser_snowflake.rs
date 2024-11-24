@@ -1190,6 +1190,7 @@ fn parse_delimited_identifiers() {
             version,
             with_ordinality: _,
             partitions: _,
+            json_path: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -2845,4 +2846,21 @@ fn test_parse_show_columns_sql() {
     snowflake().verified_stmt("SHOW COLUMNS IN TABLE");
     snowflake().verified_stmt("SHOW COLUMNS IN TABLE abc");
     snowflake().verified_stmt("SHOW COLUMNS LIKE '%xyz%' IN TABLE abc");
+}
+
+#[test]
+fn test_projection_with_nested_trailing_commas() {
+    let sql = "SELECT a, FROM b, LATERAL FLATTEN(input => events)";
+    let _ = snowflake().parse_sql_statements(sql).unwrap();
+
+    //Single nesting
+    let sql = "SELECT (SELECT a, FROM b, LATERAL FLATTEN(input => events))";
+    let _ = snowflake().parse_sql_statements(sql).unwrap();
+
+    //Double nesting
+    let sql = "SELECT (SELECT (SELECT a, FROM b, LATERAL FLATTEN(input => events)))";
+    let _ = snowflake().parse_sql_statements(sql).unwrap();
+
+    let sql = "SELECT a, b, FROM c, (SELECT d, e, FROM f, LATERAL FLATTEN(input => events))";
+    let _ = snowflake().parse_sql_statements(sql).unwrap();
 }

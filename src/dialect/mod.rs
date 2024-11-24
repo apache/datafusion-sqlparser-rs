@@ -633,13 +633,8 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports the `LISTEN` statement
-    fn supports_listen(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports the `NOTIFY` statement
-    fn supports_notify(&self) -> bool {
+    /// Returns true if the dialect supports the `LISTEN`, `UNLISTEN` and `NOTIFY` statements
+    fn supports_listen_notify(&self) -> bool {
         false
     }
 
@@ -678,6 +673,12 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if the dialect supports the `CREATE TABLE SELECT` statement
     fn supports_create_table_select(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports PartiQL for querying semi-structured data
+    /// <https://partiql.org/index.html>
+    fn supports_partiql(&self) -> bool {
         false
     }
 }

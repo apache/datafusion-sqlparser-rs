@@ -533,10 +533,11 @@ impl<'a> Parser<'a> {
                 Keyword::EXECUTE | Keyword::EXEC => self.parse_execute(),
                 Keyword::PREPARE => self.parse_prepare(),
                 Keyword::MERGE => self.parse_merge(),
-                // `LISTEN` and `NOTIFY` are Postgres-specific
+                // `LISTEN`, `UNLISTEN` and `NOTIFY` are Postgres-specific
                 // syntaxes. They are used for Postgres statement.
-                Keyword::LISTEN if self.dialect.supports_listen() => self.parse_listen(),
-                Keyword::NOTIFY if self.dialect.supports_notify() => self.parse_notify(),
+                Keyword::LISTEN if self.dialect.supports_listen_notify() => self.parse_listen(),
+                Keyword::UNLISTEN if self.dialect.supports_listen_notify() => self.parse_unlisten(),
+                Keyword::NOTIFY if self.dialect.supports_listen_notify() => self.parse_notify(),
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),
@@ -1001,6 +1002,21 @@ impl<'a> Parser<'a> {
     pub fn parse_listen(&mut self) -> Result<Statement, ParserError> {
         let channel = self.parse_identifier(false)?;
         Ok(Statement::LISTEN { channel })
+    }
+
+    pub fn parse_unlisten(&mut self) -> Result<Statement, ParserError> {
+        let channel = if self.consume_token(&Token::Mul) {
+            Ident::new(Expr::Wildcard(AttachedToken::empty()).to_string())
+        } else {
+            match self.parse_identifier(false) {
+                Ok(expr) => expr,
+                _ => {
+                    self.prev_token();
+                    return self.expected("wildcard or identifier", self.peek_token());
+                }
+            }
+        };
+        Ok(Statement::UNLISTEN { channel })
     }
 
     pub fn parse_notify(&mut self) -> Result<Statement, ParserError> {
@@ -2927,7 +2943,7 @@ impl<'a> Parser<'a> {
         } else if Token::LBracket == tok {
             if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
                 self.parse_subscript(expr)
-            } else if dialect_of!(self is SnowflakeDialect) {
+            } else if dialect_of!(self is SnowflakeDialect) || self.dialect.supports_partiql() {
                 self.prev_token();
                 self.parse_json_access(expr)
             } else {
@@ -3063,6 +3079,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_json_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let path = self.parse_json_path()?;
+        Ok(Expr::JsonAccess {
+            value: Box::new(expr),
+            path,
+        })
+    }
+
+    fn parse_json_path(&mut self) -> Result<JsonPath, ParserError> {
         let mut path = Vec::new();
         loop {
             match self.next_token().token {
@@ -3086,10 +3110,7 @@ impl<'a> Parser<'a> {
         }
 
         debug_assert!(!path.is_empty());
-        Ok(Expr::JsonAccess {
-            value: Box::new(expr),
-            path: JsonPath { path },
-        })
+        Ok(JsonPath { path })
     }
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
@@ -3522,16 +3543,11 @@ impl<'a> Parser<'a> {
         // e.g. `SELECT 1, 2, FROM t`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#trailing_commas
         // https://docs.snowflake.com/en/release-notes/2024/8_11#select-supports-trailing-commas
-        //
-        // This pattern could be captured better with RAII type semantics, but it's quite a bit of
-        // code to add for just one case, so we'll just do it manually here.
-        let old_value = self.options.trailing_commas;
-        self.options.trailing_commas |= self.dialect.supports_projection_trailing_commas();
 
-        let ret = self.parse_comma_separated(|p| p.parse_select_item());
-        self.options.trailing_commas = old_value;
+        let trailing_commas =
+            self.options.trailing_commas | self.dialect.supports_projection_trailing_commas();
 
-        ret
+        self.parse_comma_separated_with_trailing_commas(|p| p.parse_select_item(), trailing_commas)
     }
 
     pub fn parse_actions_list(&mut self) -> Result<Vec<ParsedAction>, ParserError> {
@@ -3558,11 +3574,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the comma of a comma-separated syntax element.
+    /// Allows for control over trailing commas
     /// Returns true if there is a next element
-    fn is_parse_comma_separated_end(&mut self) -> bool {
+    fn is_parse_comma_separated_end_with_trailing_commas(&mut self, trailing_commas: bool) -> bool {
         if !self.consume_token(&Token::Comma) {
             true
-        } else if self.options.trailing_commas {
+        } else if trailing_commas {
             let token = self.peek_token().token;
             match token {
                 Token::Word(ref kw)
@@ -3580,15 +3597,34 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse the comma of a comma-separated syntax element.
+    /// Returns true if there is a next element
+    fn is_parse_comma_separated_end(&mut self) -> bool {
+        self.is_parse_comma_separated_end_with_trailing_commas(self.options.trailing_commas)
+    }
+
     /// Parse a comma-separated list of 1+ items accepted by `F`
-    pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
+    pub fn parse_comma_separated<T, F>(&mut self, f: F) -> Result<Vec<T>, ParserError>
+    where
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+    {
+        self.parse_comma_separated_with_trailing_commas(f, self.options.trailing_commas)
+    }
+
+    /// Parse a comma-separated list of 1+ items accepted by `F`
+    /// Allows for control over trailing commas
+    fn parse_comma_separated_with_trailing_commas<T, F>(
+        &mut self,
+        mut f: F,
+        trailing_commas: bool,
+    ) -> Result<Vec<T>, ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
         let mut values = vec![];
         loop {
             values.push(f(self)?);
-            if self.is_parse_comma_separated_end() {
+            if self.is_parse_comma_separated_end_with_trailing_commas(trailing_commas) {
                 break;
             }
         }
@@ -10326,6 +10362,11 @@ impl<'a> Parser<'a> {
         } else {
             let name = self.parse_object_name(true)?;
 
+            let json_path = match self.peek_token().token {
+                Token::LBracket if self.dialect.supports_partiql() => Some(self.parse_json_path()?),
+                _ => None,
+            };
+
             let partitions: Vec<Ident> = if dialect_of!(self is MySqlDialect | GenericDialect)
                 && self.parse_keyword(Keyword::PARTITION)
             {
@@ -10368,6 +10409,7 @@ impl<'a> Parser<'a> {
                 version,
                 partitions,
                 with_ordinality,
+                json_path,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {

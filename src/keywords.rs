@@ -799,6 +799,7 @@ define_keywords!(
     UNION,
     UNIQUE,
     UNKNOWN,
+    UNLISTEN,
     UNLOAD,
     UNLOCK,
     UNLOGGED,

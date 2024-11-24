@@ -22,7 +22,7 @@
 #[macro_use]
 mod test_utils;
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::{Span, Token, TokenWithLocation};
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -3549,6 +3549,7 @@ fn parse_delimited_identifiers() {
             version,
             with_ordinality: _,
             partitions: _,
+            json_path: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -4324,20 +4325,24 @@ fn test_simple_postgres_insert_with_alias() {
             into: true,
             table_name: ObjectName(vec![Ident {
                 value: "test_tables".to_string(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             }]),
             table_alias: Some(Ident {
                 value: "test_table".to_string(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             }),
             columns: vec![
                 Ident {
                     value: "id".to_string(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 },
                 Ident {
                     value: "a".to_string(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }
             ],
             overwrite: false,
@@ -4348,7 +4353,8 @@ fn test_simple_postgres_insert_with_alias() {
                     rows: vec![vec![
                         Expr::Identifier(Ident {
                             value: "DEFAULT".to_string(),
-                            quote_style: None
+                            quote_style: None,
+                            span: Span::empty(),
                         }),
                         Expr::Value(Value::Number(
                             bigdecimal::BigDecimal::new(123.into(), 0),
@@ -5156,4 +5162,15 @@ fn parse_create_type_as_enum() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_bitstring_literal() {
+    let select = pg_and_generic().verified_only_select("SELECT B'111'");
+    assert_eq!(
+        select.projection,
+        vec![SelectItem::UnnamedExpr(Expr::Value(
+            Value::SingleQuotedByteStringLiteral("111".to_string())
+        ))]
+    );
 }

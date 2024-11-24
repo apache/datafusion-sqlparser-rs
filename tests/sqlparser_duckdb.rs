@@ -19,7 +19,7 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::{Span, Token, TokenWithLocation};
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -280,6 +280,7 @@ fn test_select_union_by_name() {
                         version: None,
                         partitions: vec![],
                         with_ordinality: false,
+                        json_path: None,
                     },
                     joins: vec![],
                 }],
@@ -317,6 +318,7 @@ fn test_select_union_by_name() {
                         version: None,
                         partitions: vec![],
                         with_ordinality: false,
+                        json_path: None,
                     },
                     joins: vec![],
                 }],

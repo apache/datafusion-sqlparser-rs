@@ -786,8 +786,9 @@ impl<'a> Tokenizer<'a> {
                     }
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
-                // BigQuery uses b or B for byte string literal
-                b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                // BigQuery and MySQL use b or B for byte string literal, Postgres for bit strings
+                b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | MySqlDialect | GenericDialect) =>
+                {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('\'') => {

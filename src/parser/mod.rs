@@ -8384,9 +8384,9 @@ impl<'a> Parser<'a> {
         loop {
             if self.dialect.supports_object_name_double_dot_notation()
                 && idents.len() == 1
-                && self.peek_token() == Token::Period
+                && self.consume_token(&Token::Period)
             {
-                self.next_token();
+                // Empty string here means default schema
                 idents.push(Ident::new(""));
             }
             idents.push(self.parse_identifier(in_table_clause)?);

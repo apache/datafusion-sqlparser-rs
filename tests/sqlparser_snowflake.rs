@@ -2869,13 +2869,7 @@ fn test_projection_with_nested_trailing_commas() {
 fn test_sf_double_dot_notation() {
     snowflake().verified_stmt("SELECT * FROM db_name..table_name");
     snowflake().verified_stmt("SELECT * FROM x, y..z JOIN a..b AS b ON x.id = b.id");
-}
 
-#[test]
-fn test_sf_double_dot_notation_wrong_position() {}
-
-#[test]
-fn test_parse_double_dot_notation_wrong_position() {
     assert_eq!(
         snowflake()
             .parse_sql_statements("SELECT * FROM X.Y..")
@@ -2883,7 +2877,13 @@ fn test_parse_double_dot_notation_wrong_position() {
             .to_string(),
         "sql parser error: Expected: identifier, found: ."
     );
-
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("SELECT * FROM X..Y..Z")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: ."
+    );
     assert_eq!(
         // Ensure we don't parse leading token
         snowflake()
@@ -2893,3 +2893,6 @@ fn test_parse_double_dot_notation_wrong_position() {
         "sql parser error: Expected: identifier, found: ."
     );
 }
+
+#[test]
+fn test_parse_double_dot_notation_wrong_position() {}

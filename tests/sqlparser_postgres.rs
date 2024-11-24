@@ -2813,6 +2813,19 @@ fn test_json() {
 }
 
 #[test]
+fn test_json_object() {
+    match pg().verified_expr("JSON_OBJECT('name' VALUE 'value')") {
+        Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, .. }), .. }) => {
+            assert!(matches!(
+                &args[..],
+                &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
+            ));
+        }
+        other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
+    }
+}
+
+#[test]
 fn parse_json_table_is_not_reserved() {
     // JSON_TABLE is not a reserved keyword in PostgreSQL, even though it is in SQL:2023
     // see: https://en.wikipedia.org/wiki/List_of_SQL_reserved_words

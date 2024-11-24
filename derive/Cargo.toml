@@ -28,6 +28,7 @@ license = "Apache-2.0"
 include = [
     "src/**/*.rs",
     "Cargo.toml",
+    "LICENSE.TXT",
 ]
 edition = "2021"
 

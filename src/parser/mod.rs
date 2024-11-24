@@ -11411,7 +11411,9 @@ impl<'a> Parser<'a> {
             Token::Colon if self.dialect.supports_named_fn_args_with_colon_operator() => {
                 Ok(FunctionArgOperator::Colon)
             }
-            Token::Word(w) if w.value.to_uppercase() == "VALUE" => Ok(FunctionArgOperator::Value),
+            Token::Word(w) if w.value.eq_ignore_ascii_case("value") => {
+                Ok(FunctionArgOperator::Value)
+            }
             _ => {
                 self.prev_token();
                 self.expected("argument operator", tok)

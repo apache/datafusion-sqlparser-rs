@@ -2819,7 +2819,7 @@ fn test_json_object() {
             assert!(matches!(
                 &args[..],
                 &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
-            ));
+            ), "Invalid function argument: {:?}", args);
         }
         other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
     }

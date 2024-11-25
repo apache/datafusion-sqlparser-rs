@@ -596,9 +596,21 @@ pub enum CeilFloorKind {
 
 /// An SQL expression of any type.
 ///
+/// # Semantics / Type Checking
+///
 /// The parser does not distinguish between expressions of different types
-/// (e.g. boolean vs string), so the caller must handle expressions of
-/// inappropriate type, like `WHERE 1` or `SELECT 1=1`, as necessary.
+/// (e.g. boolean vs string). The the caller is responsible for detecting and
+/// validating types as necessary (for example  `WHERE 1` vs `SELECT 1=1`)
+/// See the [README.md] for more details.
+///
+/// [README.md]: https://github.com/apache/datafusion-sqlparser-rs/blob/main/README.md#syntax-vs-semantics
+///
+/// # Equality and Hashing Does not Include Source Locations
+///
+/// The `Expr` type implements `PartialEq` and `Eq` based on the semantic value
+/// of the expression (not bitwise comparison). This means that `Expr` instances
+/// that are semantically equivalent but have different spans (locations in the
+/// source tree) will compare as equal.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(

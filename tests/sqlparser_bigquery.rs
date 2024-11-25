@@ -1956,29 +1956,36 @@ fn parse_map_access_expr() {
     let sql = "users[-1][safe_offset(2)].a.b";
     let expr = bigquery().verified_expr(sql);
 
-    fn map_access_key(key: Expr, syntax: MapAccessSyntax) -> MapAccessKey {
-        MapAccessKey { key, syntax }
+    fn composite_access(expr: Expr, key: impl Into<Ident>) -> Expr {
+        Expr::CompositeAccess {
+            expr: Box::new(expr),
+            key: key.into(),
+        }
     }
-    let expected = Expr::MapAccess {
-        column: Expr::Identifier(Ident::new("users")).into(),
-        keys: vec![
-            map_access_key(
-                Expr::UnaryOp {
-                    op: UnaryOperator::Minus,
-                    expr: Expr::Value(number("1")).into(),
-                },
-                MapAccessSyntax::Bracket,
+
+    fn subscript(expr: Expr, index: Expr) -> Expr {
+        Expr::Subscript {
+            expr: Box::new(expr),
+            subscript: Box::new(Subscript::Index { index }),
+        }
+    }
+
+    let expected = composite_access(
+        composite_access(
+            subscript(
+                subscript(
+                    Expr::Identifier("users".into()),
+                    Expr::UnaryOp {
+                        op: UnaryOperator::Minus,
+                        expr: Box::new(Expr::Value(number("1"))),
+                    },
+                ),
+                call("safe_offset", vec![Expr::Value(number("2"))]),
             ),
-            map_access_key(
-                call("safe_offset", [Expr::Value(number("2"))]),
-                MapAccessSyntax::Bracket,
-            ),
-            map_access_key(
-                Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("b")]),
-                MapAccessSyntax::Period,
-            ),
-        ],
-    };
+            "a",
+        ),
+        "b",
+    );
     assert_eq!(expr, expected);
 
     let sql = "SELECT myfunc()[-1].a[SAFE_OFFSET(2)].b";

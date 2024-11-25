@@ -2822,6 +2822,7 @@ fn parse_window_function_null_treatment_arg() {
 
 #[test]
 fn test_compound_expr() {
+    env_logger::init();
     let supported_dialects = TestedDialects::new(vec![
         Box::new(GenericDialect {}),
         Box::new(DuckDbDialect {}),
@@ -2837,6 +2838,8 @@ fn test_compound_expr() {
         "SELECT named_struct('a', 1, 'b', 2).a",
         "SELECT make_array(1, 2, 3)[1]",
         "SELECT make_array(named_struct('a', 1))[1].a",
+        "SELECT abc[1][-1].a.b FROM t",
+        "SELECT abc[1][-1].a.b[1] FROM t",
     ];
     for sql in sqls {
         supported_dialects.verified_stmt(sql);
@@ -10103,21 +10106,19 @@ fn parse_map_access_expr() {
         Box::new(ClickHouseDialect {}),
     ]);
     let expr = dialects.verified_expr(sql);
-    let expected = Expr::MapAccess {
-        column: Expr::Identifier(Ident::new("users")).into(),
-        keys: vec![
-            MapAccessKey {
-                key: Expr::UnaryOp {
+    let expected = Expr::Subscript {
+        expr: Box::new(Expr::Subscript {
+            expr: Box::new(Expr::Identifier(Ident::new("users"))),
+            subscript: Box::new(Subscript::Index {
+                index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
                     expr: Expr::Value(number("1")).into(),
                 },
-                syntax: MapAccessSyntax::Bracket,
-            },
-            MapAccessKey {
-                key: call("safe_offset", [Expr::Value(number("2"))]),
-                syntax: MapAccessSyntax::Bracket,
-            },
-        ],
+            }),
+        }),
+        subscript: Box::new(Subscript::Index {
+            index: call("safe_offset", [Expr::Value(number("2"))]),
+        }),
     };
     assert_eq!(expr, expected);
 

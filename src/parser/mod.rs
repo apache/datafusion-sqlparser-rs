@@ -1353,8 +1353,7 @@ impl<'a> Parser<'a> {
                     let expr = if self.consume_token(&Token::LBracket) {
                         let expr = Expr::Identifier(w.to_ident());
                         self.parse_multi_dim_subscript(expr)?
-                    }
-                    else {
+                    } else {
                         Expr::Identifier(w.to_ident())
                     };
                     expressions.push(expr)

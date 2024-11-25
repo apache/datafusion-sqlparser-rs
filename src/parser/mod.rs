@@ -3200,7 +3200,6 @@ impl<'a> Parser<'a> {
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let key = self.parse_expr()?;
-        dbg!(&key);
         let result = match key {
             Expr::Identifier(ident) => Ok(Expr::CompositeAccess {
                 expr: Box::new(expr),

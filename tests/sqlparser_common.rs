@@ -2822,7 +2822,6 @@ fn parse_window_function_null_treatment_arg() {
 
 #[test]
 fn test_compound_expr() {
-    env_logger::init();
     let supported_dialects = TestedDialects::new(vec![
         Box::new(GenericDialect {}),
         Box::new(DuckDbDialect {}),

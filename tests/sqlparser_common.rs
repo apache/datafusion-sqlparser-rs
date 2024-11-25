@@ -34,7 +34,7 @@ use sqlparser::dialect::{
     GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect,
     SQLiteDialect, SnowflakeDialect,
 };
-use sqlparser::keywords::ALL_KEYWORDS;
+use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
@@ -1468,6 +1468,173 @@ fn parse_json_ops_without_colon() {
             }),
             select.projection[0]
         );
+    }
+}
+
+#[test]
+fn parse_json_object() {
+    let dialects = TestedDialects::new(vec![
+        Box::new(MsSqlDialect {}),
+        Box::new(PostgreSqlDialect {}),
+    ]);
+    let select = dialects.verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : 1)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => assert_eq!(
+            &[
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("name".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "value".into()
+                    ))),
+                    operator: FunctionArgOperator::Colon
+                },
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("type".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(number("1"))),
+                    operator: FunctionArgOperator::Colon
+                }
+            ],
+            &args[..]
+        ),
+        _ => unreachable!(),
+    }
+    let select = dialects
+        .verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : NULL ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &[
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(Value::SingleQuotedString("name".into())),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                            "value".into()
+                        ))),
+                        operator: FunctionArgOperator::Colon
+                    },
+                    FunctionArg::ExprNamed {
+                        name: Expr::Value(Value::SingleQuotedString("type".into())),
+                        arg: FunctionArgExpr::Expr(Expr::Value(Value::Null)),
+                        operator: FunctionArgOperator::Colon
+                    }
+                ],
+                &args[..]
+            );
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = dialects.verified_only_select("SELECT JSON_OBJECT(NULL ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = dialects.verified_only_select("SELECT JSON_OBJECT(ABSENT ON NULL)");
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert!(args.is_empty());
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = dialects.verified_only_select(
+        "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_ARRAY(1, 2) ABSENT ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("name".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "value".into()
+                    ))),
+                    operator: FunctionArgOperator::Colon
+                },
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::AbsentOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
+    }
+    let select = dialects.verified_only_select(
+        "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_OBJECT('type_id' : 1, 'name' : 'a') NULL ON NULL)",
+    );
+    match expr_from_projection(&select.projection[0]) {
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
+            ..
+        }) => {
+            assert_eq!(
+                &FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString("name".into())),
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "value".into()
+                    ))),
+                    operator: FunctionArgOperator::Colon
+                },
+                &args[0]
+            );
+            assert!(matches!(
+                args[1],
+                FunctionArg::ExprNamed {
+                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
+                    operator: FunctionArgOperator::Colon
+                }
+            ));
+            assert_eq!(
+                &[FunctionArgumentClause::JsonNullClause(
+                    JsonNullClause::NullOnNull
+                )],
+                &clauses[..]
+            );
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -4416,7 +4583,10 @@ fn parse_explain_query_plan() {
 
 #[test]
 fn parse_named_argument_function() {
-    let dialects = all_dialects_where(|d| d.supports_named_fn_args_with_rarrow_operator());
+    let dialects = all_dialects_where(|d| {
+        d.supports_named_fn_args_with_rarrow_operator()
+            && !d.supports_named_fn_args_with_expr_name()
+    });
     let sql = "SELECT FUN(a => '1', b => '2') FROM foo";
     let select = dialects.verified_only_select(sql);
 
@@ -5113,7 +5283,6 @@ fn parse_interval_dont_require_unit() {
 #[test]
 fn parse_interval_require_unit() {
     let dialects = all_dialects_where(|d| d.require_interval_qualifier());
-
     let sql = "SELECT INTERVAL '1 DAY'";
     let err = dialects.parse_sql_statements(sql).unwrap_err();
     assert_eq!(
@@ -12240,5 +12409,21 @@ fn parse_no_condition_join_strategy() {
                 )
             );
         }
-    }
+}
+
+fn test_reserved_keywords_for_identifiers() {
+    let dialects = all_dialects_where(|d| d.is_reserved_for_identifier(Keyword::INTERVAL));
+    // Dialects that reserve the word INTERVAL will not allow it as an unquoted identifier
+    let sql = "SELECT MAX(interval) FROM tbl";
+    assert_eq!(
+        dialects.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: )".to_string()
+        ))
+    );
+
+    // Dialects that do not reserve the word INTERVAL will allow it
+    let dialects = all_dialects_where(|d| !d.is_reserved_for_identifier(Keyword::INTERVAL));
+    let sql = "SELECT MAX(interval) FROM tbl";
+    dialects.parse_sql_statements(sql).unwrap();
 }

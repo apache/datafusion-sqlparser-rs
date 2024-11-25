@@ -1352,10 +1352,7 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
-            value: vec![Expr::Identifier(Ident {
-                value: "DEFAULT".into(),
-                quote_style: None
-            })],
+            value: vec![Expr::Identifier(Ident::new("DEFAULT"))],
         }
     );
 
@@ -4229,10 +4226,7 @@ fn test_simple_postgres_insert_with_alias() {
                 body: Box::new(SetExpr::Values(Values {
                     explicit_row: false,
                     rows: vec![vec![
-                        Expr::Identifier(Ident {
-                            value: "DEFAULT".to_string(),
-                            quote_style: None
-                        }),
+                        Expr::Identifier(Ident::new("DEFAULT")),
                         Expr::Value(Value::Number("123".to_string(), false))
                     ]]
                 })),
@@ -4295,10 +4289,7 @@ fn test_simple_postgres_insert_with_alias() {
                 body: Box::new(SetExpr::Values(Values {
                     explicit_row: false,
                     rows: vec![vec![
-                        Expr::Identifier(Ident {
-                            value: "DEFAULT".to_string(),
-                            quote_style: None
-                        }),
+                        Expr::Identifier(Ident::new("DEFAULT")),
                         Expr::Value(Value::Number(
                             bigdecimal::BigDecimal::new(123.into(), 0),
                             false
@@ -4363,10 +4354,7 @@ fn test_simple_insert_with_quoted_alias() {
                 body: Box::new(SetExpr::Values(Values {
                     explicit_row: false,
                     rows: vec![vec![
-                        Expr::Identifier(Ident {
-                            value: "DEFAULT".to_string(),
-                            quote_style: None
-                        }),
+                        Expr::Identifier(Ident::new("DEFAULT")),
                         Expr::Value(Value::SingleQuotedString("0123".to_string()))
                     ]]
                 })),

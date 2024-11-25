@@ -38,6 +38,8 @@ use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec};
 
+use super::keywords::RESERVED_FOR_IDENTIFIER;
+
 /// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
 #[derive(Debug, Default)]
 pub struct SnowflakeDialect;
@@ -213,6 +215,16 @@ impl Dialect for SnowflakeDialect {
     /// for example: <https://docs.snowflake.com/en/sql-reference/sql/show-views#syntax>
     fn supports_show_like_before_in(&self) -> bool {
         true
+    }
+
+    fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
+        // Unreserve some keywords that Snowflake accepts as identifiers
+        // See: https://docs.snowflake.com/en/sql-reference/reserved-keywords
+        if matches!(kw, Keyword::INTERVAL) {
+            false
+        } else {
+            RESERVED_FOR_IDENTIFIER.contains(&kw)
+        }
     }
 }
 

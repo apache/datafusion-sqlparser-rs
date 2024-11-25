@@ -948,3 +948,13 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::INTO,
     Keyword::END,
 ];
+
+/// Global list of reserved keywords that cannot be parsed as identifiers
+/// without special handling like quoting. Parser should call `Dialect::is_reserved_for_identifier`
+/// to allow for each dialect to customize the list.
+pub const RESERVED_FOR_IDENTIFIER: &[Keyword] = &[
+    Keyword::EXISTS,
+    Keyword::INTERVAL,
+    Keyword::STRUCT,
+    Keyword::TRIM,
+];

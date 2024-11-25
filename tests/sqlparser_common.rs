@@ -34,7 +34,7 @@ use sqlparser::dialect::{
     GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect,
     SQLiteDialect, SnowflakeDialect,
 };
-use sqlparser::keywords::ALL_KEYWORDS;
+use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
@@ -5113,7 +5113,6 @@ fn parse_interval_dont_require_unit() {
 #[test]
 fn parse_interval_require_unit() {
     let dialects = all_dialects_where(|d| d.require_interval_qualifier());
-
     let sql = "SELECT INTERVAL '1 DAY'";
     let err = dialects.parse_sql_statements(sql).unwrap_err();
     assert_eq!(
@@ -12197,4 +12196,22 @@ fn parse_create_table_select() {
             ParserError::ParserError("Expected: end of statement, found: SELECT".to_string())
         );
     }
+}
+
+#[test]
+fn test_reserved_keywords_for_identifiers() {
+    let dialects = all_dialects_where(|d| d.is_reserved_for_identifier(Keyword::INTERVAL));
+    // Dialects that reserve the word INTERVAL will not allow it as an unquoted identifier
+    let sql = "SELECT MAX(interval) FROM tbl";
+    assert_eq!(
+        dialects.parse_sql_statements(sql),
+        Err(ParserError::ParserError(
+            "Expected: an expression, found: )".to_string()
+        ))
+    );
+
+    // Dialects that do not reserve the word INTERVAL will allow it
+    let dialects = all_dialects_where(|d| !d.is_reserved_for_identifier(Keyword::INTERVAL));
+    let sql = "SELECT MAX(interval) FROM tbl";
+    dialects.parse_sql_statements(sql).unwrap();
 }

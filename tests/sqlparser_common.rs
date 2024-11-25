@@ -12409,8 +12409,10 @@ fn parse_no_condition_join_strategy() {
                 )
             );
         }
+    }
 }
 
+#[test]
 fn test_reserved_keywords_for_identifiers() {
     let dialects = all_dialects_where(|d| d.is_reserved_for_identifier(Keyword::INTERVAL));
     // Dialects that reserve the word INTERVAL will not allow it as an unquoted identifier

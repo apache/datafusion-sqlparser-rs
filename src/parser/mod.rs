@@ -10102,10 +10102,30 @@ impl<'a> Parser<'a> {
                 };
                 let relation = self.parse_table_factor()?;
                 let join_constraint = self.parse_join_constraint(natural)?;
+                let join_operator = join_operator_type(join_constraint);
+
+                let requires_constraint = match join_operator {
+                    JoinOperator::Inner(JoinConstraint::None)
+                    | JoinOperator::LeftOuter(JoinConstraint::None)
+                    | JoinOperator::RightOuter(JoinConstraint::None)
+                    | JoinOperator::FullOuter(JoinConstraint::None)
+                    | JoinOperator::LeftSemi(JoinConstraint::None)
+                    | JoinOperator::RightSemi(JoinConstraint::None)
+                    | JoinOperator::LeftAnti(JoinConstraint::None)
+                    | JoinOperator::RightAnti(JoinConstraint::None)
+                    | JoinOperator::Semi(JoinConstraint::None)
+                    | JoinOperator::Anti(JoinConstraint::None) => !natural,
+                    _ => false,
+                };
+
+                if requires_constraint {
+                    self.expected("ON, or USING after JOIN", self.peek_token())?
+                }
+
                 Join {
                     relation,
                     global,
-                    join_operator: join_operator_type(join_constraint),
+                    join_operator,
                 }
             };
             joins.push(join);
@@ -10914,7 +10934,6 @@ impl<'a> Parser<'a> {
             Ok(JoinConstraint::Using(columns))
         } else {
             Ok(JoinConstraint::None)
-            //self.expected("ON, or USING after JOIN", self.peek_token())
         }
     }
 

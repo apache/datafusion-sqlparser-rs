@@ -7444,7 +7444,7 @@ fn lateral_derived() {
 
 #[test]
 fn lateral_function() {
-    let sql = "SELECT * FROM customer LEFT JOIN LATERAL generate_series(1, customer.id)";
+    let sql = "SELECT * FROM customer CROSS JOIN LATERAL generate_series(1, customer.id)";
     let actual_select_only = verified_only_select(sql);
     let expected = Select {
         distinct: None,
@@ -7485,7 +7485,7 @@ fn lateral_function() {
                     alias: None,
                 },
                 global: false,
-                join_operator: JoinOperator::LeftOuter(JoinConstraint::None),
+                join_operator: JoinOperator::CrossJoin,
             }],
         }],
         lateral_views: vec![],
@@ -12196,5 +12196,49 @@ fn parse_create_table_select() {
             dialects.parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError("Expected: end of statement, found: SELECT".to_string())
         );
+    }
+}
+
+#[test]
+fn parse_no_condition_join_strategy() {
+    let dialects = all_dialects_where(|d| d.supports_create_table_select());
+
+    let join_types = vec![
+        "JOIN",
+        "INNER JOIN",
+        "LEFT JOIN",
+        "LEFT OUTER JOIN",
+        "RIGHT JOIN",
+        "RIGHT OUTER JOIN",
+        "FULL JOIN",
+        "FULL OUTER JOIN",
+        "CROSS JOIN",
+        "NATURAL JOIN",
+        "LEFT SEMI JOIN",
+        "RIGHT SEMI JOIN",
+        "LEFT ANTI JOIN",
+        "RIGHT ANTI JOIN",
+        "SEMI JOIN",
+        "ANTI JOIN",
+    ];
+
+    for join in join_types {
+        let sql = format!(
+            "SELECT * FROM (SELECT 1 AS id, 'Foo' AS name) AS l {} (SELECT 1 AS id, 'Bar' AS name) AS r",
+            join
+        );
+        let result = dialects.parse_sql_statements(&sql);
+        if join.starts_with("CROSS") || join.starts_with("NATURAL") {
+            // CROSS JOIN and NATURAL JOIN don't require ON or USING clauses
+            assert!(result.is_ok());
+        } else {
+            // Other joins require ON or USING clauses
+            assert_eq!(
+                result.unwrap_err(),
+                ParserError::ParserError(
+                    "Expected: ON, or USING after JOIN, found: EOF".to_string()
+                )
+            );
+        }
     }
 }

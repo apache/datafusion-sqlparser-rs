@@ -734,7 +734,7 @@ mod tests {
 
     #[test]
     fn test_sql() {
-        let tests = vec![
+        let tests: Vec<_> = vec![
             (
                 "SELECT * from table_name as my_table",
                 vec![
@@ -876,7 +876,16 @@ mod tests {
                     "POST: QUERY: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
                     "POST: STATEMENT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
                 ]
-            )
+            ),
+            (
+                "SHOW COLUMNS FROM t1",
+                vec![
+                    "PRE: STATEMENT: SHOW COLUMNS FROM t1",
+                    "PRE: RELATION: t1",
+                    "POST: RELATION: t1",
+                    "POST: STATEMENT: SHOW COLUMNS FROM t1",
+                ],
+            ),
         ];
         for (sql, expected) in tests {
             let actual = do_visit(sql);

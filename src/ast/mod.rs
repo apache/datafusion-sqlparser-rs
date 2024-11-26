@@ -26,7 +26,6 @@ use alloc::{
 
 use core::fmt::{self, Display};
 use core::ops::Deref;
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -7587,6 +7586,7 @@ impl fmt::Display for ShowStatementInParentType {
 pub struct ShowStatementIn {
     pub clause: ShowStatementInClause,
     pub parent_type: Option<ShowStatementInParentType>,
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub parent_name: Option<ObjectName>,
 }
 

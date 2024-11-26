@@ -734,7 +734,7 @@ mod tests {
 
     #[test]
     fn test_sql() {
-        let tests: Vec<_> = vec![
+        let tests = vec![
             (
                 "SELECT * from table_name as my_table",
                 vec![

@@ -22,6 +22,8 @@
 #[macro_use]
 mod test_utils;
 
+use helpers::attached_token::AttachedToken;
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 use sqlparser::ast::DataType::{Int, Text};
@@ -113,6 +115,7 @@ fn parse_create_procedure() {
                 settings: None,
                 format_clause: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
+                    select_token: AttachedToken::empty(),
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -138,14 +141,16 @@ fn parse_create_procedure() {
                 ProcedureParam {
                     name: Ident {
                         value: "@foo".into(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     },
                     data_type: DataType::Int(None)
                 },
                 ProcedureParam {
                     name: Ident {
                         value: "@bar".into(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     },
                     data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                         length: 256,
@@ -155,7 +160,8 @@ fn parse_create_procedure() {
             ]),
             name: ObjectName(vec![Ident {
                 value: "test".into(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             }])
         }
     )
@@ -204,15 +210,9 @@ fn parse_mssql_openjson() {
     assert_eq!(
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident {
-                    value: "t_test_table".into(),
-                    quote_style: None,
-                },]),
+                name: ObjectName(vec![Ident::new("t_test_table")]),
                 alias: Some(TableAlias {
-                    name: Ident {
-                        value: "A".into(),
-                        quote_style: None
-                    },
+                    name: Ident::new("A"),
                     columns: vec![]
                 }),
                 args: None,
@@ -224,23 +224,13 @@ fn parse_mssql_openjson() {
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
-                    json_expr: Expr::CompoundIdentifier(vec![
-                        Ident {
-                            value: "A".into(),
-                            quote_style: None,
-                        },
-                        Ident {
-                            value: "param".into(),
-                            quote_style: None,
-                        }
-                    ]),
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
                     json_path: Some(Value::SingleQuotedString("$.config".into())),
                     columns: vec![
                         OpenJsonTableColumn {
-                            name: Ident {
-                                value: "kind".into(),
-                                quote_style: None,
-                            },
+                            name: Ident::new("kind"),
                             r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                                 length: 20,
                                 unit: None
@@ -252,6 +242,7 @@ fn parse_mssql_openjson() {
                             name: Ident {
                                 value: "id_list".into(),
                                 quote_style: Some('['),
+                                span: Span::empty(),
                             },
                             r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
                             path: Some("$.id_list".into()),
@@ -259,10 +250,7 @@ fn parse_mssql_openjson() {
                         }
                     ],
                     alias: Some(TableAlias {
-                        name: Ident {
-                            value: "B".into(),
-                            quote_style: None
-                        },
+                        name: Ident::new("B"),
                         columns: vec![]
                     })
                 },
@@ -280,15 +268,9 @@ fn parse_mssql_openjson() {
     assert_eq!(
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident {
-                    value: "t_test_table".into(),
-                    quote_style: None,
-                },]),
+                name: ObjectName(vec![Ident::new("t_test_table"),]),
                 alias: Some(TableAlias {
-                    name: Ident {
-                        value: "A".into(),
-                        quote_style: None
-                    },
+                    name: Ident::new("A"),
                     columns: vec![]
                 }),
                 args: None,
@@ -300,23 +282,13 @@ fn parse_mssql_openjson() {
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
-                    json_expr: Expr::CompoundIdentifier(vec![
-                        Ident {
-                            value: "A".into(),
-                            quote_style: None,
-                        },
-                        Ident {
-                            value: "param".into(),
-                            quote_style: None,
-                        }
-                    ]),
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
                     json_path: None,
                     columns: vec![
                         OpenJsonTableColumn {
-                            name: Ident {
-                                value: "kind".into(),
-                                quote_style: None,
-                            },
+                            name: Ident::new("kind"),
                             r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                                 length: 20,
                                 unit: None
@@ -328,6 +300,7 @@ fn parse_mssql_openjson() {
                             name: Ident {
                                 value: "id_list".into(),
                                 quote_style: Some('['),
+                                span: Span::empty(),
                             },
                             r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
                             path: Some("$.id_list".into()),
@@ -335,10 +308,7 @@ fn parse_mssql_openjson() {
                         }
                     ],
                     alias: Some(TableAlias {
-                        name: Ident {
-                            value: "B".into(),
-                            quote_style: None
-                        },
+                        name: Ident::new("B"),
                         columns: vec![]
                     })
                 },
@@ -356,15 +326,10 @@ fn parse_mssql_openjson() {
     assert_eq!(
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident {
-                    value: "t_test_table".into(),
-                    quote_style: None,
-                },]),
+                name: ObjectName(vec![Ident::new("t_test_table")]),
+
                 alias: Some(TableAlias {
-                    name: Ident {
-                        value: "A".into(),
-                        quote_style: None
-                    },
+                    name: Ident::new("A"),
                     columns: vec![]
                 }),
                 args: None,
@@ -376,23 +341,13 @@ fn parse_mssql_openjson() {
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
-                    json_expr: Expr::CompoundIdentifier(vec![
-                        Ident {
-                            value: "A".into(),
-                            quote_style: None,
-                        },
-                        Ident {
-                            value: "param".into(),
-                            quote_style: None,
-                        }
-                    ]),
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
                     json_path: None,
                     columns: vec![
                         OpenJsonTableColumn {
-                            name: Ident {
-                                value: "kind".into(),
-                                quote_style: None,
-                            },
+                            name: Ident::new("kind"),
                             r#type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                                 length: 20,
                                 unit: None
@@ -404,6 +359,7 @@ fn parse_mssql_openjson() {
                             name: Ident {
                                 value: "id_list".into(),
                                 quote_style: Some('['),
+                                span: Span::empty(),
                             },
                             r#type: DataType::Nvarchar(Some(CharacterLength::Max)),
                             path: None,
@@ -411,10 +367,7 @@ fn parse_mssql_openjson() {
                         }
                     ],
                     alias: Some(TableAlias {
-                        name: Ident {
-                            value: "B".into(),
-                            quote_style: None
-                        },
+                        name: Ident::new("B"),
                         columns: vec![]
                     })
                 },
@@ -432,15 +385,9 @@ fn parse_mssql_openjson() {
     assert_eq!(
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident {
-                    value: "t_test_table".into(),
-                    quote_style: None,
-                },]),
+                name: ObjectName(vec![Ident::new("t_test_table")]),
                 alias: Some(TableAlias {
-                    name: Ident {
-                        value: "A".into(),
-                        quote_style: None
-                    },
+                    name: Ident::new("A"),
                     columns: vec![]
                 }),
                 args: None,
@@ -452,23 +399,13 @@ fn parse_mssql_openjson() {
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
-                    json_expr: Expr::CompoundIdentifier(vec![
-                        Ident {
-                            value: "A".into(),
-                            quote_style: None,
-                        },
-                        Ident {
-                            value: "param".into(),
-                            quote_style: None,
-                        }
-                    ]),
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
                     json_path: Some(Value::SingleQuotedString("$.config".into())),
                     columns: vec![],
                     alias: Some(TableAlias {
-                        name: Ident {
-                            value: "B".into(),
-                            quote_style: None
-                        },
+                        name: Ident::new("B"),
                         columns: vec![]
                     })
                 },
@@ -486,15 +423,9 @@ fn parse_mssql_openjson() {
     assert_eq!(
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident {
-                    value: "t_test_table".into(),
-                    quote_style: None,
-                },]),
+                name: ObjectName(vec![Ident::new("t_test_table")]),
                 alias: Some(TableAlias {
-                    name: Ident {
-                        value: "A".into(),
-                        quote_style: None
-                    },
+                    name: Ident::new("A"),
                     columns: vec![]
                 }),
                 args: None,
@@ -506,23 +437,13 @@ fn parse_mssql_openjson() {
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
-                    json_expr: Expr::CompoundIdentifier(vec![
-                        Ident {
-                            value: "A".into(),
-                            quote_style: None,
-                        },
-                        Ident {
-                            value: "param".into(),
-                            quote_style: None,
-                        }
-                    ]),
+                    json_expr: Expr::CompoundIdentifier(
+                        vec![Ident::new("A"), Ident::new("param"),]
+                    ),
                     json_path: None,
                     columns: vec![],
                     alias: Some(TableAlias {
-                        name: Ident {
-                            value: "B".into(),
-                            quote_style: None
-                        },
+                        name: Ident::new("B"),
                         columns: vec![]
                     })
                 },
@@ -607,7 +528,8 @@ fn parse_mssql_create_role() {
                 authorization_owner,
                 Some(ObjectName(vec![Ident {
                     value: "helena".into(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }]))
             );
         }
@@ -623,12 +545,14 @@ fn parse_alter_role() {
         [Statement::AlterRole {
             name: Ident {
                 value: "old_name".into(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             },
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident {
                     value: "new_name".into(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }
             },
         }]
@@ -640,12 +564,14 @@ fn parse_alter_role() {
         Statement::AlterRole {
             name: Ident {
                 value: "role_name".into(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             },
             operation: AlterRoleOperation::AddMember {
                 member_name: Ident {
                     value: "new_member".into(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }
             },
         }
@@ -657,12 +583,14 @@ fn parse_alter_role() {
         Statement::AlterRole {
             name: Ident {
                 value: "role_name".into(),
-                quote_style: None
+                quote_style: None,
+                span: Span::empty(),
             },
             operation: AlterRoleOperation::DropMember {
                 member_name: Ident {
                     value: "old_member".into(),
-                    quote_style: None
+                    quote_style: None,
+                    span: Span::empty(),
                 }
             },
         }
@@ -793,165 +721,6 @@ fn parse_for_json_expect_ast() {
 
 #[test]
 fn parse_mssql_json_object() {
-    let select = ms().verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : 1)");
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
-            ..
-        }) => assert_eq!(
-            &[
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString("name".into())),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "value".into()
-                    ))),
-                    operator: FunctionArgOperator::Colon
-                },
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString("type".into())),
-                    arg: FunctionArgExpr::Expr(Expr::Value(number("1"))),
-                    operator: FunctionArgOperator::Colon
-                }
-            ],
-            &args[..]
-        ),
-        _ => unreachable!(),
-    }
-    let select = ms()
-        .verified_only_select("SELECT JSON_OBJECT('name' : 'value', 'type' : NULL ABSENT ON NULL)");
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert_eq!(
-                &[
-                    FunctionArg::ExprNamed {
-                        name: Expr::Value(Value::SingleQuotedString("name".into())),
-                        arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                            "value".into()
-                        ))),
-                        operator: FunctionArgOperator::Colon
-                    },
-                    FunctionArg::ExprNamed {
-                        name: Expr::Value(Value::SingleQuotedString("type".into())),
-                        arg: FunctionArgExpr::Expr(Expr::Value(Value::Null)),
-                        operator: FunctionArgOperator::Colon
-                    }
-                ],
-                &args[..]
-            );
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::AbsentOnNull
-                )],
-                &clauses[..]
-            );
-        }
-        _ => unreachable!(),
-    }
-    let select = ms().verified_only_select("SELECT JSON_OBJECT(NULL ON NULL)");
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert!(args.is_empty());
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::NullOnNull
-                )],
-                &clauses[..]
-            );
-        }
-        _ => unreachable!(),
-    }
-    let select = ms().verified_only_select("SELECT JSON_OBJECT(ABSENT ON NULL)");
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert!(args.is_empty());
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::AbsentOnNull
-                )],
-                &clauses[..]
-            );
-        }
-        _ => unreachable!(),
-    }
-    let select = ms().verified_only_select(
-        "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_ARRAY(1, 2) ABSENT ON NULL)",
-    );
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert_eq!(
-                &FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString("name".into())),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "value".into()
-                    ))),
-                    operator: FunctionArgOperator::Colon
-                },
-                &args[0]
-            );
-            assert!(matches!(
-                args[1],
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString(_)),
-                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
-                    operator: FunctionArgOperator::Colon
-                }
-            ));
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::AbsentOnNull
-                )],
-                &clauses[..]
-            );
-        }
-        _ => unreachable!(),
-    }
-    let select = ms().verified_only_select(
-        "SELECT JSON_OBJECT('name' : 'value', 'type' : JSON_OBJECT('type_id' : 1, 'name' : 'a') NULL ON NULL)",
-    );
-    match expr_from_projection(&select.projection[0]) {
-        Expr::Function(Function {
-            args: FunctionArguments::List(FunctionArgumentList { args, clauses, .. }),
-            ..
-        }) => {
-            assert_eq!(
-                &FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString("name".into())),
-                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
-                        "value".into()
-                    ))),
-                    operator: FunctionArgOperator::Colon
-                },
-                &args[0]
-            );
-            assert!(matches!(
-                args[1],
-                FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString(_)),
-                    arg: FunctionArgExpr::Expr(Expr::Function(_)),
-                    operator: FunctionArgOperator::Colon
-                }
-            ));
-            assert_eq!(
-                &[FunctionArgumentClause::JsonNullClause(
-                    JsonNullClause::NullOnNull
-                )],
-                &clauses[..]
-            );
-        }
-        _ => unreachable!(),
-    }
     let select = ms().verified_only_select(
         "SELECT JSON_OBJECT('user_name' : USER_NAME(), LOWER(@id_key) : @id_value, 'sid' : (SELECT @@SPID) ABSENT ON NULL)",
     );
@@ -1296,13 +1065,15 @@ fn parse_substring_in_select() {
                     with: None,
 
                     body: Box::new(SetExpr::Select(Box::new(Select {
+                        select_token: AttachedToken::empty(),
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         top_before_distinct: false,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
                             expr: Box::new(Expr::Identifier(Ident {
                                 value: "description".to_string(),
-                                quote_style: None
+                                quote_style: None,
+                                span: Span::empty(),
                             })),
                             substring_from: Some(Box::new(Expr::Value(number("0")))),
                             substring_for: Some(Box::new(Expr::Value(number("1")))),
@@ -1313,7 +1084,8 @@ fn parse_substring_in_select() {
                             relation: TableFactor::Table {
                                 name: ObjectName(vec![Ident {
                                     value: "test".to_string(),
-                                    quote_style: None
+                                    quote_style: None,
+                                    span: Span::empty(),
                                 }]),
                                 alias: None,
                                 args: None,
@@ -1367,7 +1139,8 @@ fn parse_mssql_declare() {
                 Declare {
                     names: vec![Ident {
                         value: "@foo".to_string(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     }],
                     data_type: None,
                     assignment: None,
@@ -1381,7 +1154,8 @@ fn parse_mssql_declare() {
                 Declare {
                     names: vec![Ident {
                         value: "@bar".to_string(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     }],
                     data_type: Some(Int(None)),
                     assignment: None,
@@ -1395,7 +1169,8 @@ fn parse_mssql_declare() {
                 Declare {
                     names: vec![Ident {
                         value: "@baz".to_string(),
-                        quote_style: None
+                        quote_style: None,
+                        span: Span::empty(),
                     }],
                     data_type: Some(Text),
                     assignment: Some(MsSqlAssignment(Box::new(Expr::Value(SingleQuotedString(
@@ -1419,10 +1194,7 @@ fn parse_mssql_declare() {
         vec![
             Statement::Declare {
                 stmts: vec![Declare {
-                    names: vec![Ident {
-                        value: "@bar".to_string(),
-                        quote_style: None
-                    }],
+                    names: vec![Ident::new("@bar"),],
                     data_type: Some(Int(None)),
                     assignment: None,
                     declare_type: None,
@@ -1451,6 +1223,7 @@ fn parse_mssql_declare() {
                 settings: None,
                 format_clause: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
+                    select_token: AttachedToken::empty(),
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
@@ -1523,10 +1296,12 @@ fn parse_create_table_with_valid_options() {
                     key: Ident {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                     value: Expr::Identifier(Ident {
                         value: "ROUND_ROBIN".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     })
                 },
                 SqlOption::Partition {
@@ -1570,6 +1345,7 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_a".to_string(),
                                 quote_style: None,
+                                span: Span::empty(),
                             },
                             asc: Some(true),
                         },
@@ -1577,6 +1353,7 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_b".to_string(),
                                 quote_style: None,
+                                span: Span::empty(),
                             },
                             asc: Some(false),
                         },
@@ -1584,6 +1361,7 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_c".to_string(),
                                 quote_style: None,
+                                span: Span::empty(),
                             },
                             asc: None,
                         },
@@ -1597,6 +1375,7 @@ fn parse_create_table_with_valid_options() {
                     key: Ident {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                     value: Expr::Function(
                         Function {
@@ -1605,6 +1384,7 @@ fn parse_create_table_with_valid_options() {
                                     Ident {
                                         value: "HASH".to_string(),
                                         quote_style: None,
+                                        span: Span::empty(),
                                     },
                                 ],
                             ),
@@ -1619,6 +1399,7 @@ fn parse_create_table_with_valid_options() {
                                                     Ident {
                                                         value: "column_a".to_string(),
                                                         quote_style: None,
+                                                        span: Span::empty(),
                                                     },
                                                 ),
                                             ),
@@ -1629,6 +1410,7 @@ fn parse_create_table_with_valid_options() {
                                                     Ident {
                                                         value: "column_b".to_string(),
                                                         quote_style: None,
+                                                        span: Span::empty(),
                                                     },
                                                 ),
                                             ),
@@ -1663,12 +1445,14 @@ fn parse_create_table_with_valid_options() {
                 name: ObjectName(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
+                    span: Span::empty(),
                 },],),
                 columns: vec![
                     ColumnDef {
                         name: Ident {
                             value: "column_a".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         },
                         data_type: Int(None,),
                         collation: None,
@@ -1678,6 +1462,7 @@ fn parse_create_table_with_valid_options() {
                         name: Ident {
                             value: "column_b".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         },
                         data_type: Int(None,),
                         collation: None,
@@ -1687,6 +1472,7 @@ fn parse_create_table_with_valid_options() {
                         name: Ident {
                             value: "column_c".to_string(),
                             quote_style: None,
+                            span: Span::empty(),
                         },
                         data_type: Int(None,),
                         collation: None,
@@ -1828,11 +1614,13 @@ fn parse_create_table_with_identity_column() {
                 name: ObjectName(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
+                    span: Span::empty(),
                 },],),
                 columns: vec![ColumnDef {
                     name: Ident {
                         value: "columnA".to_string(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                     data_type: Int(None,),
                     collation: None,

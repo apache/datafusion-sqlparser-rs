@@ -17,6 +17,7 @@
 
 [package]
 name = "sqlparser_bench"
+description = "Benchmarks for sqlparser"
 version = "0.1.0"
 authors = ["Dandandan <danielheres@gmail.com>"]
 edition = "2018"

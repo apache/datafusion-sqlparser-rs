@@ -210,6 +210,18 @@ Our goal as maintainers is to facilitate the integration
 of various features from various contributors, but not to provide the
 implementations ourselves, as we simply don't have the resources.
 
+### Benchmarking
+
+There are several micro benchmarks in the `sqlparser_bench` directory. 
+You can run them with:
+
+```
+git checkout main
+cd sqlparser_bench
+cargo bench
+git checkout <your branch>
+cargo bench
+```
 
 ## Licensing
 

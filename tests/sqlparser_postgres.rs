@@ -2813,7 +2813,7 @@ fn test_json() {
 }
 
 #[test]
-fn test_json_object() {
+fn test_fn_arg_with_value_operator() {
     match pg().verified_expr("JSON_OBJECT('name' VALUE 'value')") {
         Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, .. }), .. }) => {
             assert!(matches!(

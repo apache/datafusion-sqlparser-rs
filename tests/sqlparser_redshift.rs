@@ -18,6 +18,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -31,7 +32,8 @@ fn test_square_brackets_over_db_schema_table_name() {
         select.projection[0],
         SelectItem::UnnamedExpr(Expr::Identifier(Ident {
             value: "col1".to_string(),
-            quote_style: Some('[')
+            quote_style: Some('['),
+            span: Span::empty(),
         })),
     );
     assert_eq!(
@@ -41,11 +43,13 @@ fn test_square_brackets_over_db_schema_table_name() {
                 name: ObjectName(vec![
                     Ident {
                         value: "test_schema".to_string(),
-                        quote_style: Some('[')
+                        quote_style: Some('['),
+                        span: Span::empty(),
                     },
                     Ident {
                         value: "test_table".to_string(),
-                        quote_style: Some('[')
+                        quote_style: Some('['),
+                        span: Span::empty(),
                     }
                 ]),
                 alias: None,
@@ -79,7 +83,8 @@ fn test_double_quotes_over_db_schema_table_name() {
         select.projection[0],
         SelectItem::UnnamedExpr(Expr::Identifier(Ident {
             value: "col1".to_string(),
-            quote_style: Some('"')
+            quote_style: Some('"'),
+            span: Span::empty(),
         })),
     );
     assert_eq!(
@@ -89,11 +94,13 @@ fn test_double_quotes_over_db_schema_table_name() {
                 name: ObjectName(vec![
                     Ident {
                         value: "test_schema".to_string(),
-                        quote_style: Some('"')
+                        quote_style: Some('"'),
+                        span: Span::empty(),
                     },
                     Ident {
                         value: "test_table".to_string(),
-                        quote_style: Some('"')
+                        quote_style: Some('"'),
+                        span: Span::empty(),
                     }
                 ]),
                 alias: None,

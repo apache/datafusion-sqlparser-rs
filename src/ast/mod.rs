@@ -23,15 +23,21 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use helpers::attached_token::AttachedToken;
 
-use core::fmt::{self, Display};
 use core::ops::Deref;
+use core::{
+    fmt::{self, Display},
+    hash,
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
+
+use crate::tokenizer::Span;
 
 pub use self::data_type::{
     ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, ExactNumberInfo,
@@ -60,8 +66,8 @@ pub use self::query::{
     OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
     SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
-    TableAlias, TableFactor, TableFunctionArgs, TableVersion, TableWithJoins, Top, TopQuantity,
-    ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
+    TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableVersion, TableWithJoins,
+    Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
 };
 
 pub use self::trigger::{
@@ -87,6 +93,9 @@ mod dml;
 pub mod helpers;
 mod operator;
 mod query;
+mod spans;
+pub use spans::Spanned;
+
 mod trigger;
 mod value;
 
@@ -131,7 +140,7 @@ where
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Ident {
@@ -140,10 +149,41 @@ pub struct Ident {
     /// The starting quote if any. Valid quote characters are the single quote,
     /// double quote, backtick, and opening square bracket.
     pub quote_style: Option<char>,
+    /// The span of the identifier in the original SQL string.
+    pub span: Span,
 }
 
+impl PartialEq for Ident {
+    fn eq(&self, other: &Self) -> bool {
+        let Ident {
+            value,
+            quote_style,
+            // exhaustiveness check; we ignore spans in comparisons
+            span: _,
+        } = self;
+
+        value == &other.value && quote_style == &other.quote_style
+    }
+}
+
+impl core::hash::Hash for Ident {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        let Ident {
+            value,
+            quote_style,
+            // exhaustiveness check; we ignore spans in hashes
+            span: _,
+        } = self;
+
+        value.hash(state);
+        quote_style.hash(state);
+    }
+}
+
+impl Eq for Ident {}
+
 impl Ident {
-    /// Create a new identifier with the given value and no quotes.
+    /// Create a new identifier with the given value and no quotes and an empty span.
     pub fn new<S>(value: S) -> Self
     where
         S: Into<String>,
@@ -151,6 +191,7 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: None,
+            span: Span::empty(),
         }
     }
 
@@ -164,6 +205,30 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: Some(quote),
+            span: Span::empty(),
+        }
+    }
+
+    pub fn with_span<S>(span: Span, value: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Ident {
+            value: value.into(),
+            quote_style: None,
+            span,
+        }
+    }
+
+    pub fn with_quote_and_span<S>(quote: char, span: Span, value: S) -> Self
+    where
+        S: Into<String>,
+    {
+        assert!(quote == '\'' || quote == '"' || quote == '`' || quote == '[');
+        Ident {
+            value: value.into(),
+            quote_style: Some(quote),
+            span,
         }
     }
 }
@@ -173,6 +238,7 @@ impl From<&str> for Ident {
         Ident {
             value: value.to_string(),
             quote_style: None,
+            span: Span::empty(),
         }
     }
 }
@@ -808,6 +874,23 @@ pub enum Expr {
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
+    /// Arbitrary expr method call
+    ///
+    /// Syntax:
+    ///
+    /// `<arbitrary-expr>.<function-call>.<function-call-expr>...`
+    ///
+    /// > `arbitrary-expr` can be any expression including a function call.
+    ///
+    /// Example:
+    ///
+    /// ```sql
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
+    /// SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)').value('.','NVARCHAR(MAX)')
+    /// ```
+    ///
+    /// (mssql): <https://learn.microsoft.com/en-us/sql/t-sql/xml/xml-data-type-methods?view=sql-server-ver16>
+    Method(Method),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -902,10 +985,10 @@ pub enum Expr {
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
-    Wildcard,
+    Wildcard(AttachedToken),
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
     /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
-    QualifiedWildcard(ObjectName),
+    QualifiedWildcard(ObjectName, AttachedToken),
     /// Some dialects support an older syntax for outer joins where columns are
     /// marked with the `(+)` operator in the WHERE clause, for example:
     ///
@@ -1195,8 +1278,8 @@ impl fmt::Display for Expr {
             Expr::MapAccess { column, keys } => {
                 write!(f, "{column}{}", display_separated(keys, ""))
             }
-            Expr::Wildcard => f.write_str("*"),
-            Expr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
+            Expr::Wildcard(_) => f.write_str("*"),
+            Expr::QualifiedWildcard(prefix, _) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsTrue(ast) => write!(f, "{ast} IS TRUE"),
             Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
@@ -1465,6 +1548,7 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{fun}"),
+            Expr::Method(method) => write!(f, "{method}"),
             Expr::Case {
                 operand,
                 conditions,
@@ -2379,6 +2463,8 @@ pub enum Statement {
         selection: Option<Expr>,
         /// RETURNING
         returning: Option<Vec<SelectItem>>,
+        /// SQLite-specific conflict resolution clause
+        or: Option<SqliteOnConflict>,
     },
     /// ```sql
     /// DELETE
@@ -3150,7 +3236,7 @@ pub enum Statement {
     /// KILL [CONNECTION | QUERY | MUTATION]
     /// ```
     ///
-    /// See <https://clickhouse.com/docs/ru/sql-reference/statements/kill/>
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/kill/>
     /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
     Kill {
         modifier: Option<KillType>,
@@ -3321,6 +3407,13 @@ pub enum Statement {
     /// See Postgres <https://www.postgresql.org/docs/current/sql-listen.html>
     LISTEN { channel: Ident },
     /// ```sql
+    /// UNLISTEN
+    /// ```
+    /// stop listening for a notification
+    ///
+    /// See Postgres <https://www.postgresql.org/docs/current/sql-unlisten.html>
+    UNLISTEN { channel: Ident },
+    /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
     /// send a notification event together with an optional “payload” string to channel
@@ -3329,6 +3422,22 @@ pub enum Statement {
     NOTIFY {
         channel: Ident,
         payload: Option<String>,
+    },
+    /// ```sql
+    /// LOAD DATA [LOCAL] INPATH 'filepath' [OVERWRITE] INTO TABLE tablename
+    /// [PARTITION (partcol1=val1, partcol2=val2 ...)]
+    /// [INPUTFORMAT 'inputformat' SERDE 'serde']
+    /// ```
+    /// Loading files into tables
+    ///
+    /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
+    LoadData {
+        local: bool,
+        inpath: String,
+        overwrite: bool,
+        table_name: ObjectName,
+        partitioned: Option<Vec<Expr>>,
+        table_format: Option<HiveLoadDataFormat>,
     },
 }
 
@@ -3658,8 +3767,13 @@ impl fmt::Display for Statement {
                 from,
                 selection,
                 returning,
+                or,
             } => {
-                write!(f, "UPDATE {table}")?;
+                write!(f, "UPDATE ")?;
+                if let Some(or) = or {
+                    write!(f, "{or} ")?;
+                }
+                write!(f, "{table}")?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
@@ -3932,6 +4046,36 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateTable(create_table) => create_table.fmt(f),
+            Statement::LoadData {
+                local,
+                inpath,
+                overwrite,
+                table_name,
+                partitioned,
+                table_format,
+            } => {
+                write!(
+                    f,
+                    "LOAD DATA {local}INPATH '{inpath}' {overwrite}INTO TABLE {table_name}",
+                    local = if *local { "LOCAL " } else { "" },
+                    inpath = inpath,
+                    overwrite = if *overwrite { "OVERWRITE " } else { "" },
+                    table_name = table_name,
+                )?;
+                if let Some(ref parts) = &partitioned {
+                    if !parts.is_empty() {
+                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                    }
+                }
+                if let Some(HiveLoadDataFormat {
+                    serde,
+                    input_format,
+                }) = &table_format
+                {
+                    write!(f, " INPUTFORMAT {input_format} SERDE {serde}")?;
+                }
+                Ok(())
+            }
             Statement::CreateVirtualTable {
                 name,
                 if_not_exists,
@@ -4878,6 +5022,10 @@ impl fmt::Display for Statement {
                 write!(f, "LISTEN {channel}")?;
                 Ok(())
             }
+            Statement::UNLISTEN { channel } => {
+                write!(f, "UNLISTEN {channel}")?;
+                Ok(())
+            }
             Statement::NOTIFY { channel, payload } => {
                 write!(f, "NOTIFY {channel}")?;
                 if let Some(payload) = payload {
@@ -5351,8 +5499,8 @@ pub enum FunctionArgExpr {
 impl From<Expr> for FunctionArgExpr {
     fn from(wildcard_expr: Expr) -> Self {
         match wildcard_expr {
-            Expr::QualifiedWildcard(prefix) => Self::QualifiedWildcard(prefix),
-            Expr::Wildcard => Self::Wildcard,
+            Expr::QualifiedWildcard(prefix, _) => Self::QualifiedWildcard(prefix),
+            Expr::Wildcard(_) => Self::Wildcard,
             expr => Self::Expr(expr),
         }
     }
@@ -5379,6 +5527,8 @@ pub enum FunctionArgOperator {
     RightArrow,
     /// function(arg1 := value1)
     Assignment,
+    /// function(arg1 : value1)
+    Colon,
 }
 
 impl fmt::Display for FunctionArgOperator {
@@ -5387,6 +5537,7 @@ impl fmt::Display for FunctionArgOperator {
             FunctionArgOperator::Equals => f.write_str("="),
             FunctionArgOperator::RightArrow => f.write_str("=>"),
             FunctionArgOperator::Assignment => f.write_str(":="),
+            FunctionArgOperator::Colon => f.write_str(":"),
         }
     }
 }
@@ -5395,8 +5546,19 @@ impl fmt::Display for FunctionArgOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionArg {
+    /// `name` is identifier
+    ///
+    /// Enabled when `Dialect::supports_named_fn_args_with_expr_name` returns 'false'
     Named {
         name: Ident,
+        arg: FunctionArgExpr,
+        operator: FunctionArgOperator,
+    },
+    /// `name` is arbitrary expression
+    ///
+    /// Enabled when `Dialect::supports_named_fn_args_with_expr_name` returns 'true'
+    ExprNamed {
+        name: Expr,
         arg: FunctionArgExpr,
         operator: FunctionArgOperator,
     },
@@ -5407,6 +5569,11 @@ impl fmt::Display for FunctionArg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             FunctionArg::Named {
+                name,
+                arg,
+                operator,
+            } => write!(f, "{name} {operator} {arg}"),
+            FunctionArg::ExprNamed {
                 name,
                 arg,
                 operator,
@@ -5549,7 +5716,10 @@ impl fmt::Display for FunctionArgumentList {
         }
         write!(f, "{}", display_comma_separated(&self.args))?;
         if !self.clauses.is_empty() {
-            write!(f, " {}", display_separated(&self.clauses, " "))?;
+            if !self.args.is_empty() {
+                write!(f, " ")?;
+            }
+            write!(f, "{}", display_separated(&self.clauses, " "))?;
         }
         Ok(())
     }
@@ -5591,6 +5761,11 @@ pub enum FunctionArgumentClause {
     ///
     /// [`GROUP_CONCAT`]: https://dev.mysql.com/doc/refman/8.0/en/aggregate-functions.html#function_group-concat
     Separator(Value),
+    /// The json-null-clause to the [`JSON_ARRAY`]/[`JSON_OBJECT`] function in MSSQL.
+    ///
+    /// [`JSON_ARRAY`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-array-transact-sql?view=sql-server-ver16>
+    /// [`JSON_OBJECT`]: <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16>
+    JsonNullClause(JsonNullClause),
 }
 
 impl fmt::Display for FunctionArgumentClause {
@@ -5606,7 +5781,29 @@ impl fmt::Display for FunctionArgumentClause {
             FunctionArgumentClause::OnOverflow(on_overflow) => write!(f, "{on_overflow}"),
             FunctionArgumentClause::Having(bound) => write!(f, "{bound}"),
             FunctionArgumentClause::Separator(sep) => write!(f, "SEPARATOR {sep}"),
+            FunctionArgumentClause::JsonNullClause(null_clause) => write!(f, "{null_clause}"),
         }
+    }
+}
+
+/// A method call
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Method {
+    pub expr: Box<Expr>,
+    // always non-empty
+    pub method_chain: Vec<Function>,
+}
+
+impl fmt::Display for Method {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}.{}",
+            self.expr,
+            display_separated(&self.method_chain, ".")
+        )
     }
 }
 
@@ -5815,6 +6012,14 @@ pub enum HiveDistributionStyle {
 pub enum HiveRowFormat {
     SERDE { class: String },
     DELIMITED { delimiters: Vec<HiveRowDelimiter> },
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct HiveLoadDataFormat {
+    pub serde: Expr,
+    pub input_format: Expr,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -6212,11 +6417,11 @@ impl fmt::Display for SqliteOnConflict {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use SqliteOnConflict::*;
         match self {
-            Rollback => write!(f, "ROLLBACK"),
-            Abort => write!(f, "ABORT"),
-            Fail => write!(f, "FAIL"),
-            Ignore => write!(f, "IGNORE"),
-            Replace => write!(f, "REPLACE"),
+            Rollback => write!(f, "OR ROLLBACK"),
+            Abort => write!(f, "OR ABORT"),
+            Fail => write!(f, "OR FAIL"),
+            Ignore => write!(f, "OR IGNORE"),
+            Replace => write!(f, "OR REPLACE"),
         }
     }
 }
@@ -7462,6 +7667,32 @@ impl fmt::Display for ShowStatementIn {
             write!(f, " {}", parent_name)?;
         }
         Ok(())
+    }
+}
+
+/// MSSQL's json null clause
+///
+/// ```plaintext
+/// <json_null_clause> ::=
+///       NULL ON NULL
+///     | ABSENT ON NULL
+/// ```
+///
+/// <https://learn.microsoft.com/en-us/sql/t-sql/functions/json-object-transact-sql?view=sql-server-ver16#json_null_clause>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JsonNullClause {
+    NullOnNull,
+    AbsentOnNull,
+}
+
+impl Display for JsonNullClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonNullClause::NullOnNull => write!(f, "NULL ON NULL"),
+            JsonNullClause::AbsentOnNull => write!(f, "ABSENT ON NULL"),
+        }
     }
 }
 

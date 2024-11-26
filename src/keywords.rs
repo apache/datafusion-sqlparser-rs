@@ -74,6 +74,7 @@ macro_rules! define_keywords {
 define_keywords!(
     ABORT,
     ABS,
+    ABSENT,
     ABSOLUTE,
     ACCESS,
     ACCOUNT,
@@ -389,6 +390,7 @@ define_keywords!(
     INITIALLY,
     INNER,
     INOUT,
+    INPATH,
     INPUT,
     INPUTFORMAT,
     INSENSITIVE,
@@ -797,6 +799,7 @@ define_keywords!(
     UNION,
     UNIQUE,
     UNKNOWN,
+    UNLISTEN,
     UNLOAD,
     UNLOCK,
     UNLOGGED,
@@ -891,6 +894,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::CLUSTER,
     Keyword::DISTRIBUTE,
     Keyword::GLOBAL,
+    Keyword::ANTI,
+    Keyword::SEMI,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
     Keyword::OUTER,
     Keyword::SET,
@@ -942,4 +947,14 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::FROM,
     Keyword::INTO,
     Keyword::END,
+];
+
+/// Global list of reserved keywords that cannot be parsed as identifiers
+/// without special handling like quoting. Parser should call `Dialect::is_reserved_for_identifier`
+/// to allow for each dialect to customize the list.
+pub const RESERVED_FOR_IDENTIFIER: &[Keyword] = &[
+    Keyword::EXISTS,
+    Keyword::INTERVAL,
+    Keyword::STRUCT,
+    Keyword::TRIM,
 ];

@@ -191,12 +191,9 @@ impl Dialect for PostgreSqlDialect {
     }
 
     /// see <https://www.postgresql.org/docs/current/sql-listen.html>
-    fn supports_listen(&self) -> bool {
-        true
-    }
-
+    /// see <https://www.postgresql.org/docs/current/sql-unlisten.html>
     /// see <https://www.postgresql.org/docs/current/sql-notify.html>
-    fn supports_notify(&self) -> bool {
+    fn supports_listen_notify(&self) -> bool {
         true
     }
 
@@ -207,6 +204,31 @@ impl Dialect for PostgreSqlDialect {
 
     /// see <https://www.postgresql.org/docs/current/sql-comment.html>
     fn supports_comment_on(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/sql-load.html>
+    fn supports_load_extension(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/functions-json.html>
+    ///
+    /// Required to support the colon in:
+    /// ```sql
+    /// SELECT json_object('a': 'b')
+    /// ```
+    fn supports_named_fn_args_with_colon_operator(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/functions-json.html>
+    ///
+    /// Required to support the label in:
+    /// ```sql
+    /// SELECT json_object('label': 'value')
+    /// ```
+    fn supports_named_fn_args_with_expr_name(&self) -> bool {
         true
     }
 }

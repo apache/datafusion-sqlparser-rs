@@ -47,6 +47,10 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
+        true
+    }
+
     // DuckDB uses this syntax for `STRUCT`s.
     //
     // https://duckdb.org/docs/sql/data_types/struct.html#creating-structs
@@ -64,6 +68,11 @@ impl Dialect for DuckDbDialect {
     // DuckDB is compatible with PostgreSQL syntax for this statement,
     // although not all features may be implemented.
     fn supports_explain_with_utility_options(&self) -> bool {
+        true
+    }
+
+    /// See DuckDB <https://duckdb.org/docs/sql/statements/load_and_install.html#load>
+    fn supports_load_extension(&self) -> bool {
         true
     }
 }

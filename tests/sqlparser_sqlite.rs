@@ -465,6 +465,7 @@ fn parse_update_tuple_row_values() {
     assert_eq!(
         sqlite().verified_stmt("UPDATE x SET (a, b) = (1, 2)"),
         Statement::Update {
+            or: None,
             assignments: vec![Assignment {
                 target: AssignmentTarget::Tuple(vec![
                     ObjectName(vec![Ident::new("a"),]),
@@ -485,6 +486,7 @@ fn parse_update_tuple_row_values() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
+                    json_path: None,
                 },
                 joins: vec![],
             },

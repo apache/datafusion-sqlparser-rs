@@ -29,10 +29,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::fmt;
 use core::iter::Peekable;
 use core::num::NonZeroU8;
 use core::str::Chars;
+use core::{cmp, fmt};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -422,7 +422,9 @@ impl fmt::Display for Whitespace {
 }
 
 /// Location in input string
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Ord, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Location {
     /// Line number, starting from 1
     pub line: u64,
@@ -431,36 +433,114 @@ pub struct Location {
 }
 
 impl fmt::Display for Location {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.line == 0 {
             return Ok(());
         }
-        write!(
-            f,
-            // TODO: use standard compiler location syntax (<path>:<line>:<col>)
-            " at Line: {}, Column: {}",
-            self.line, self.column,
-        )
+        write!(f, " at Line: {}, Column: {}", self.line, self.column)
+    }
+}
+
+impl fmt::Debug for Location {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Location({},{})", self.line, self.column)
+    }
+}
+
+impl Location {
+    pub fn of(line: u64, column: u64) -> Self {
+        Self { line, column }
+    }
+
+    pub fn span_to(self, end: Self) -> Span {
+        Span { start: self, end }
+    }
+}
+
+impl From<(u64, u64)> for Location {
+    fn from((line, column): (u64, u64)) -> Self {
+        Self { line, column }
+    }
+}
+
+/// A span of source code locations (start, end)
+#[derive(Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Span {
+    pub start: Location,
+    pub end: Location,
+}
+
+impl fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Span({:?}..{:?})", self.start, self.end)
+    }
+}
+
+impl Span {
+    // An empty span (0, 0) -> (0, 0)
+    // We need a const instance for pattern matching
+    const EMPTY: Span = Self::empty();
+
+    pub fn new(start: Location, end: Location) -> Span {
+        Span { start, end }
+    }
+
+    /// Returns an empty span (0, 0) -> (0, 0)
+    /// Empty spans represent no knowledge of source location
+    pub const fn empty() -> Span {
+        Span {
+            start: Location { line: 0, column: 0 },
+            end: Location { line: 0, column: 0 },
+        }
+    }
+
+    /// Returns the smallest Span that contains both `self` and `other`
+    /// If either span is [Span::empty], the other span is returned
+    pub fn union(&self, other: &Span) -> Span {
+        // If either span is empty, return the other
+        // this prevents propagating (0, 0) through the tree
+        match (self, other) {
+            (&Span::EMPTY, _) => *other,
+            (_, &Span::EMPTY) => *self,
+            _ => Span {
+                start: cmp::min(self.start, other.start),
+                end: cmp::max(self.end, other.end),
+            },
+        }
+    }
+
+    /// Same as [Span::union] for `Option<Span>`
+    /// If `other` is `None`, `self` is returned
+    pub fn union_opt(&self, other: &Option<Span>) -> Span {
+        match other {
+            Some(other) => self.union(other),
+            None => *self,
+        }
     }
 }
 
 /// A [Token] with [Location] attached to it
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TokenWithLocation {
     pub token: Token,
-    pub location: Location,
+    pub span: Span,
 }
 
 impl TokenWithLocation {
-    pub fn new(token: Token, line: u64, column: u64) -> TokenWithLocation {
-        TokenWithLocation {
-            token,
-            location: Location { line, column },
-        }
+    pub fn new(token: Token, span: Span) -> TokenWithLocation {
+        TokenWithLocation { token, span }
     }
 
     pub fn wrap(token: Token) -> TokenWithLocation {
-        TokenWithLocation::new(token, 0, 0)
+        TokenWithLocation::new(token, Span::empty())
+    }
+
+    pub fn at(token: Token, start: Location, end: Location) -> TokenWithLocation {
+        TokenWithLocation::new(token, Span::new(start, end))
     }
 }
 
@@ -656,7 +736,9 @@ impl<'a> Tokenizer<'a> {
 
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
-            buf.push(TokenWithLocation { token, location });
+            let span = location.span_to(state.location());
+
+            buf.push(TokenWithLocation { token, span });
 
             location = state.location();
         }
@@ -704,8 +786,9 @@ impl<'a> Tokenizer<'a> {
                     }
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
-                // BigQuery uses b or B for byte string literal
-                b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                // BigQuery and MySQL use b or B for byte string literal, Postgres for bit strings
+                b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | MySqlDialect | GenericDialect) =>
+                {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('\'') => {
@@ -2668,18 +2751,30 @@ mod tests {
             .tokenize_with_location()
             .unwrap();
         let expected = vec![
-            TokenWithLocation::new(Token::make_keyword("SELECT"), 1, 1),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 7),
-            TokenWithLocation::new(Token::make_word("a", None), 1, 8),
-            TokenWithLocation::new(Token::Comma, 1, 9),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 1, 10),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 1),
-            TokenWithLocation::new(Token::make_word("b", None), 2, 2),
+            TokenWithLocation::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
+            TokenWithLocation::at(
+                Token::Whitespace(Whitespace::Space),
+                (1, 7).into(),
+                (1, 8).into(),
+            ),
+            TokenWithLocation::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
+            TokenWithLocation::at(Token::Comma, (1, 9).into(), (1, 10).into()),
+            TokenWithLocation::at(
+                Token::Whitespace(Whitespace::Newline),
+                (1, 10).into(),
+                (2, 1).into(),
+            ),
+            TokenWithLocation::at(
+                Token::Whitespace(Whitespace::Space),
+                (2, 1).into(),
+                (2, 2).into(),
+            ),
+            TokenWithLocation::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
         ];
         compare(expected, tokens);
     }
 
-    fn compare<T: PartialEq + std::fmt::Debug>(expected: Vec<T>, actual: Vec<T>) {
+    fn compare<T: PartialEq + fmt::Debug>(expected: Vec<T>, actual: Vec<T>) {
         //println!("------------------------------");
         //println!("tokens   = {:?}", actual);
         //println!("expected = {:?}", expected);

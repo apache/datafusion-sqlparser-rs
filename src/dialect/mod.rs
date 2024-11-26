@@ -231,8 +231,31 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports named arguments of the form FUN(a = '1', b = '2').
+    /// Returns true if the dialect supports named arguments of the form `FUN(a = '1', b = '2')`.
     fn supports_named_fn_args_with_eq_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a : '1', b : '2')`.
+    fn supports_named_fn_args_with_colon_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a := '1', b := '2')`.
+    fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports named arguments of the form `FUN(a => '1', b => '2')`.
+    fn supports_named_fn_args_with_rarrow_operator(&self) -> bool {
+        true
+    }
+
+    /// Returns true if dialect supports argument name as arbitrary expression.
+    /// e.g. `FUN(LOWER('a'):'1',  b:'2')`
+    /// Such function arguments are represented in the AST by the `FunctionArg::ExprNamed` variant,
+    /// otherwise use the `FunctionArg::Named` variant (compatible reason).
+    fn supports_named_fn_args_with_expr_name(&self) -> bool {
         false
     }
 
@@ -276,6 +299,15 @@ pub trait Dialect: Debug + Any {
     /// SELECT transform(array(1, 2, 3), x -> x + 1); -- returns [2,3,4]
     /// ```
     fn supports_lambda_functions(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports method calls, for example:
+    ///
+    /// ```sql
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')
+    /// ```
+    fn supports_methods(&self) -> bool {
         false
     }
 
@@ -601,13 +633,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports the `LISTEN` statement
-    fn supports_listen(&self) -> bool {
+    /// Returns true if the dialect supports the `LISTEN`, `UNLISTEN` and `NOTIFY` statements
+    fn supports_listen_notify(&self) -> bool {
         false
     }
 
-    /// Returns true if the dialect supports the `NOTIFY` statement
-    fn supports_notify(&self) -> bool {
+    /// Returns true if the dialect supports the `LOAD DATA` statement
+    fn supports_load_data(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports the `LOAD extension` statement
+    fn supports_load_extension(&self) -> bool {
         false
     }
 
@@ -637,6 +674,18 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports the `CREATE TABLE SELECT` statement
     fn supports_create_table_select(&self) -> bool {
         false
+    }
+
+    /// Returns true if the dialect supports PartiQL for querying semi-structured data
+    /// <https://partiql.org/index.html>
+    fn supports_partiql(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the specified keyword is reserved and cannot be
+    /// used as an identifier without special handling like quoting.
+    fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
+        keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 }
 

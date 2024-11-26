@@ -18,13 +18,17 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec::Vec};
 
+use helpers::attached_token::AttachedToken;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::*;
+use crate::{
+    ast::*,
+    tokenizer::{Token, TokenWithLocation},
+};
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
@@ -276,6 +280,8 @@ impl fmt::Display for Table {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Select {
+    /// Token for the `SELECT` keyword
+    pub select_token: AttachedToken,
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
@@ -505,6 +511,8 @@ impl fmt::Display for NamedWindowDefinition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct With {
+    // Token for the "WITH" keyword
+    pub with_token: AttachedToken,
     pub recursive: bool,
     pub cte_tables: Vec<Cte>,
 }
@@ -556,6 +564,8 @@ pub struct Cte {
     pub query: Box<Query>,
     pub from: Option<Ident>,
     pub materialized: Option<CteAsMaterialized>,
+    // Token for the closing parenthesis
+    pub closing_paren_token: AttachedToken,
 }
 
 impl fmt::Display for Cte {
@@ -607,10 +617,12 @@ impl fmt::Display for IdentWithAlias {
 }
 
 /// Additional options for wildcards, e.g. Snowflake `EXCLUDE`/`RENAME` and Bigquery `EXCEPT`.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WildcardAdditionalOptions {
+    /// The wildcard token `*`
+    pub wildcard_token: AttachedToken,
     /// `[ILIKE...]`.
     ///  Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
     pub opt_ilike: Option<IlikeSelectItem>,
@@ -626,6 +638,19 @@ pub struct WildcardAdditionalOptions {
     pub opt_replace: Option<ReplaceSelectItem>,
     /// `[RENAME ...]`.
     pub opt_rename: Option<RenameSelectItem>,
+}
+
+impl Default for WildcardAdditionalOptions {
+    fn default() -> Self {
+        Self {
+            wildcard_token: TokenWithLocation::wrap(Token::Mul).into(),
+            opt_ilike: None,
+            opt_exclude: None,
+            opt_except: None,
+            opt_replace: None,
+            opt_rename: None,
+        }
+    }
 }
 
 impl fmt::Display for WildcardAdditionalOptions {
@@ -974,6 +999,8 @@ pub enum TableFactor {
         with_ordinality: bool,
         /// [Partition selection](https://dev.mysql.com/doc/refman/8.0/en/partitioning-selection.html), supported by MySQL.
         partitions: Vec<Ident>,
+        /// Optional PartiQL JsonPath: <https://partiql.org/dql/from.html>
+        json_path: Option<JsonPath>,
     },
     Derived {
         lateral: bool,
@@ -1375,8 +1402,12 @@ impl fmt::Display for TableFactor {
                 version,
                 partitions,
                 with_ordinality,
+                json_path,
             } => {
                 write!(f, "{name}")?;
+                if let Some(json_path) = json_path {
+                    write!(f, "{json_path}")?;
+                }
                 if !partitions.is_empty() {
                     write!(f, "PARTITION ({})", display_comma_separated(partitions))?;
                 }
@@ -1597,7 +1628,7 @@ impl fmt::Display for TableFactor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAlias {
     pub name: Ident,
-    pub columns: Vec<Ident>,
+    pub columns: Vec<TableAliasColumnDef>,
 }
 
 impl fmt::Display for TableAlias {
@@ -1605,6 +1636,41 @@ impl fmt::Display for TableAlias {
         write!(f, "{}", self.name)?;
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        Ok(())
+    }
+}
+
+/// SQL column definition in a table expression alias.
+/// Most of the time, the data type is not specified.
+/// But some table-valued functions do require specifying the data type.
+///
+/// See <https://www.postgresql.org/docs/17/queries-table-expressions.html#QUERIES-TABLEFUNCTIONS>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableAliasColumnDef {
+    /// Column name alias
+    pub name: Ident,
+    /// Some table-valued functions require specifying the data type in the alias.
+    pub data_type: Option<DataType>,
+}
+
+impl TableAliasColumnDef {
+    /// Create a new table alias column definition with only a name and no type
+    pub fn from_name<S: Into<String>>(name: S) -> Self {
+        TableAliasColumnDef {
+            name: Ident::new(name),
+            data_type: None,
+        }
+    }
+}
+
+impl fmt::Display for TableAliasColumnDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(ref data_type) = self.data_type {
+            write!(f, " {}", data_type)?;
         }
         Ok(())
     }
@@ -1694,6 +1760,13 @@ impl fmt::Display for Join {
                 suffix(constraint)
             ),
             JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
+            JoinOperator::Semi(constraint) => write!(
+                f,
+                " {}SEMI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
             JoinOperator::LeftSemi(constraint) => write!(
                 f,
                 " {}LEFT SEMI JOIN {}{}",
@@ -1704,6 +1777,13 @@ impl fmt::Display for Join {
             JoinOperator::RightSemi(constraint) => write!(
                 f,
                 " {}RIGHT SEMI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::Anti(constraint) => write!(
+                f,
+                " {}ANTI JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
@@ -1746,10 +1826,14 @@ pub enum JoinOperator {
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
     CrossJoin,
+    /// SEMI (non-standard)
+    Semi(JoinConstraint),
     /// LEFT SEMI (non-standard)
     LeftSemi(JoinConstraint),
     /// RIGHT SEMI (non-standard)
     RightSemi(JoinConstraint),
+    /// ANTI (non-standard)
+    Anti(JoinConstraint),
     /// LEFT ANTI (non-standard)
     LeftAnti(JoinConstraint),
     /// RIGHT ANTI (non-standard)

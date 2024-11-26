@@ -12441,7 +12441,6 @@ fn test_reserved_keywords_for_identifiers() {
     dialects.parse_sql_statements(sql).unwrap();
 }
 
-
 #[test]
 fn overflow() {
     let expr = std::iter::repeat("1")

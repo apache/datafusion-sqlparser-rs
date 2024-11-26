@@ -27,6 +27,7 @@ use core::{
 use helpers::attached_token::AttachedToken;
 
 use log::debug;
+use std::sync::OnceLock;
 
 use recursion::RecursionCounter;
 use IsLateral::*;
@@ -3328,7 +3329,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Return nth non-whitespace token that has not yet been processed
-    pub fn peek_nth_token(&self, mut n: usize) -> TokenWithLocation {
+    pub fn peek_nth_token(&self, n: usize) -> TokenWithLocation {
+        self.peek_nth_token_ref(n).clone()
+    }
+
+    /// Return nth non-whitespace token that has not yet been processed
+    pub fn peek_nth_token_ref(&self, mut n: usize) -> &TokenWithLocation {
         let mut index = self.index;
         loop {
             index += 1;
@@ -3339,10 +3345,11 @@ impl<'a> Parser<'a> {
                 }) => continue,
                 non_whitespace => {
                     if n == 0 {
-                        return non_whitespace.cloned().unwrap_or(TokenWithLocation {
-                            token: Token::EOF,
-                            span: Span::empty(),
-                        });
+                        if let Some(tok) = non_whitespace {
+                            return tok;
+                        } else {
+                            return eof_token();
+                        }
                     }
                     n -= 1;
                 }
@@ -3379,6 +3386,13 @@ impl<'a> Parser<'a> {
     /// (or None if reached end-of-file) and mark it as processed. OK to call
     /// repeatedly after reaching EOF.
     pub fn next_token(&mut self) -> TokenWithLocation {
+        self.next_token_ref().clone()
+    }
+
+    /// Return the first non-whitespace token that has not yet been processed
+    /// (or None if reached end-of-file) and mark it as processed. OK to call
+    /// repeatedly after reaching EOF.
+    pub fn next_token_ref(&mut self) -> &TokenWithLocation {
         loop {
             self.index += 1;
             match self.tokens.get(self.index - 1) {
@@ -3387,9 +3401,11 @@ impl<'a> Parser<'a> {
                     span: _,
                 }) => continue,
                 token => {
-                    return token
-                        .cloned()
-                        .unwrap_or_else(|| TokenWithLocation::wrap(Token::EOF))
+                    if let Some(token) = token {
+                        return token;
+                    } else {
+                        return eof_token();
+                    }
                 }
             }
         }
@@ -12853,6 +12869,11 @@ impl Word {
             span,
         }
     }
+}
+
+static EOF_TOKEN: OnceLock<TokenWithLocation> = OnceLock::new();
+fn eof_token() -> &'static TokenWithLocation {
+    EOF_TOKEN.get_or_init(|| TokenWithLocation::wrap(Token::EOF))
 }
 
 #[cfg(test)]

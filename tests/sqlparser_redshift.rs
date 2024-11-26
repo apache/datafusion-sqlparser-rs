@@ -300,7 +300,7 @@ fn test_parse_json_path_from() {
         TableFactor::Table {
             name, json_path, ..
         } => {
-            assert_eq!(name, &ObjectName(vec![Ident::new("src")]));
+            assert_eq!(name, &ObjectName::from(vec![Ident::new("src")]));
             assert_eq!(
                 json_path,
                 &Some(JsonPath {
@@ -324,7 +324,7 @@ fn test_parse_json_path_from() {
         TableFactor::Table {
             name, json_path, ..
         } => {
-            assert_eq!(name, &ObjectName(vec![Ident::new("src")]));
+            assert_eq!(name, &ObjectName::from(vec![Ident::new("src")]));
             assert_eq!(
                 json_path,
                 &Some(JsonPath {
@@ -357,7 +357,7 @@ fn test_parse_json_path_from() {
         } => {
             assert_eq!(
                 name,
-                &ObjectName(vec![Ident::new("src"), Ident::new("a"), Ident::new("b")])
+                &ObjectName::from(vec![Ident::new("src"), Ident::new("a"), Ident::new("b")])
             );
             assert_eq!(json_path, &None);
         }

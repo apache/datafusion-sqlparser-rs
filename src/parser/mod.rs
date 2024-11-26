@@ -3278,6 +3278,12 @@ impl<'a> Parser<'a> {
         self.peek_nth_token(0)
     }
 
+    /// Return the first non-whitespace token that has not yet been processed
+    /// (or None if reached end-of-file)
+    pub fn peek_token_ref(&self) -> &TokenWithLocation {
+        self.peek_nth_token_ref(0)
+    }
+
     /// Returns the `N` next non-whitespace tokens that have not yet been
     /// processed.
     ///
@@ -3305,6 +3311,11 @@ impl<'a> Parser<'a> {
             .map(|with_loc| with_loc.token)
     }
 
+    pub fn peek_tokens_ref<const N: usize>(&self) -> [&Token; N] {
+        self.peek_tokens_with_location_ref()
+            .map(|with_loc| &with_loc.token)
+    }
+
     /// Returns the `N` next non-whitespace tokens with locations that have not
     /// yet been processed.
     ///
@@ -3325,6 +3336,26 @@ impl<'a> Parser<'a> {
                 token: Token::EOF,
                 span: Span::empty(),
             });
+        })
+    }
+
+    pub fn peek_tokens_with_location_ref<const N: usize>(&self) -> [&TokenWithLocation; N] {
+        let mut index = self.index;
+        core::array::from_fn(|_| loop {
+            let token = self.tokens.get(index);
+            index += 1;
+            if let Some(TokenWithLocation {
+                token: Token::Whitespace(_),
+                span: _,
+            }) = token
+            {
+                continue;
+            }
+            if let Some(tok) = token {
+                return tok;
+            } else {
+                return eof_token();
+            };
         })
     }
 
@@ -3454,6 +3485,13 @@ impl<'a> Parser<'a> {
     pub fn parse_keyword_token(&mut self, expected: Keyword) -> Option<TokenWithLocation> {
         match self.peek_token().token {
             Token::Word(w) if expected == w.keyword => Some(self.next_token()),
+            _ => None,
+        }
+    }
+
+    pub fn parse_keyword_token_ref(&mut self, expected: Keyword) -> Option<&TokenWithLocation> {
+        match &self.peek_token_ref().token {
+            Token::Word(w) if expected == w.keyword => Some(self.next_token_ref()),
             _ => None,
         }
     }

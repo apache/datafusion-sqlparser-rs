@@ -329,6 +329,9 @@ impl<'a> Parser<'a> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// Note: when "std" feature is enabled, this crate uses additional stack overflow protection
+    //  for some of its recursive methods. See [`recursive::recursive`] for more information.
     pub fn with_recursion_limit(mut self, recursion_limit: usize) -> Self {
         self.recursion_counter = RecursionCounter::new(recursion_limit);
         self

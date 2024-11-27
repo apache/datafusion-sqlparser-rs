@@ -4718,7 +4718,12 @@ impl<'a> Parser<'a> {
                     Keyword::UNDEFINED => CreateViewAlgorithm::Undefined,
                     Keyword::MERGE => CreateViewAlgorithm::Merge,
                     Keyword::TEMPTABLE => CreateViewAlgorithm::TempTable,
-                    _ => unreachable!(),
+                    _ => {
+                        self.prev_token();
+                        let found = self.next_token();
+                        return self
+                            .expected("UNDEFINED or MERGE or TEMPTABLE after ALGORITHM =", found);
+                    }
                 },
             )
         } else {
@@ -4735,7 +4740,11 @@ impl<'a> Parser<'a> {
                 match self.expect_one_of_keywords(&[Keyword::DEFINER, Keyword::INVOKER])? {
                     Keyword::DEFINER => CreateViewSecurity::Definer,
                     Keyword::INVOKER => CreateViewSecurity::Invoker,
-                    _ => unreachable!(),
+                    _ => {
+                        self.prev_token();
+                        let found = self.next_token();
+                        return self.expected("DEFINER or INVOKER after SQL SECURITY", found);
+                    }
                 },
             )
         } else {

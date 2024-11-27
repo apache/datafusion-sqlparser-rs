@@ -8584,9 +8584,9 @@ impl<'a> Parser<'a> {
 
     /// Parse a simple one-word identifier (possibly quoted, possibly a keyword)
     ///
-    /// The `in_table_clause` parameter indicates whether the identifier is a table in a FROM, JOIN, or
-    /// similar table clause. Currently, this is used only to support unquoted hyphenated identifiers in
-    //  this context on BigQuery.
+    /// The `in_table_clause` parameter indicates whether the identifier is a table in a FROM, JOIN,
+    /// or similar table clause. Currently, this is used only to support unquoted hyphenated
+    /// identifiers in this context on BigQuery.
     pub fn parse_identifier(&mut self, in_table_clause: bool) -> Result<Ident, ParserError> {
         let next_token = self.next_token();
         match next_token.token {

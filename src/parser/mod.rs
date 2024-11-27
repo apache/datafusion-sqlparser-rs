@@ -1147,10 +1147,10 @@ impl<'a> Parser<'a> {
     ) -> Result<Expr, ParserError> {
         match self.peek_token().token {
             Token::Period => {
-                self.parse_compound_expr(Expr::Identifier(w.to_ident()))
+                self.parse_compound_expr(Expr::Identifier(w.to_ident(w_span)))
             },
             Token::LParen => {
-                let id_parts = vec![w.to_ident()];
+                let id_parts = vec![w.to_ident(w_span)];
                 let mut expr = self.parse_function(ObjectName(id_parts))?;
                 // if the function returns an array, it can be subscripted
                 if self.consume_token(&Token::LBracket) {
@@ -1160,7 +1160,7 @@ impl<'a> Parser<'a> {
             },
             Token::LBracket => {
                 let _ = self.consume_token(&Token::LBracket);
-                let ident = Expr::Identifier(w.to_ident());
+                let ident = Expr::Identifier(w.to_ident(w_span));
                 let subscript = self.parse_multi_dim_subscript(ident)?;
                 self.parse_compound_expr(subscript)
             }
@@ -1171,57 +1171,10 @@ impl<'a> Parser<'a> {
             if w.value.starts_with('_') =>
                 {
                     Ok(Expr::IntroducedString {
-                        introducer: w.value,
+                        introducer: w.value.clone(),
                         value: self.parse_introduced_string_value()?,
                     })
                 }
-            Token::LParen | Token::Period => {
-                let mut id_parts: Vec<Ident> = vec![w.to_ident(w_span)];
-                let mut ending_wildcard: Option<TokenWithLocation> = None;
-                while self.consume_token(&Token::Period) {
-                    let next_token = self.next_token();
-                    match next_token.token {
-                        Token::Word(w) => id_parts.push(w.to_ident(next_token.span)),
-                        Token::Mul => {
-                            // Postgres explicitly allows funcnm(tablenm.*) and the
-                            // function array_agg traverses this control flow
-                            if dialect_of!(self is PostgreSqlDialect) {
-                                ending_wildcard = Some(next_token);
-                                break;
-                            } else {
-                                return self.expected("an identifier after '.'", next_token);
-                            }
-                        }
-                        Token::SingleQuotedString(s) => id_parts.push(Ident::with_quote('\'', s)),
-                        _ => {
-                            return self.expected("an identifier or a '*' after '.'", next_token);
-                        }
-                    }
-                }
-
-                if let Some(wildcard_token) = ending_wildcard {
-                    Ok(Expr::QualifiedWildcard(
-                        ObjectName(id_parts),
-                        AttachedToken(wildcard_token),
-                    ))
-                } else if self.consume_token(&Token::LParen) {
-                    if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
-                        && self.consume_tokens(&[Token::Plus, Token::RParen])
-                    {
-                        Ok(Expr::OuterJoin(Box::new(
-                            match <[Ident; 1]>::try_from(id_parts) {
-                                Ok([ident]) => Expr::Identifier(ident),
-                                Err(parts) => Expr::CompoundIdentifier(parts),
-                            },
-                        )))
-                    } else {
-                        self.prev_token();
-                        self.parse_function(ObjectName(id_parts))
-                    }
-                } else {
-                    Ok(Expr::CompoundIdentifier(id_parts))
-                }
-            }
             // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
             Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
@@ -1460,16 +1413,16 @@ impl<'a> Parser<'a> {
 
     pub fn parse_compound_expr(&mut self, init: Expr) -> Result<Expr, ParserError> {
         let mut expressions: Vec<Expr> = vec![init];
-        let mut ends_with_wildcard = false;
+        let mut ending_wildcard: Option<TokenWithLocation> = None;
         while self.consume_token(&Token::Period) {
             let next_token = self.next_token();
             match next_token.token {
                 Token::Word(w) => {
                     let expr = if self.consume_token(&Token::LBracket) {
-                        let expr = Expr::Identifier(w.to_ident());
+                        let expr = Expr::Identifier(w.to_ident(next_token.span));
                         self.parse_multi_dim_subscript(expr)?
                     } else {
-                        Expr::Identifier(w.to_ident())
+                        Expr::Identifier(w.to_ident(next_token.span))
                     };
                     expressions.push(expr)
                 }
@@ -1477,7 +1430,7 @@ impl<'a> Parser<'a> {
                     // Postgres explicitly allows funcnm(tablenm.*) and the
                     // function array_agg traverses this control flow
                     if dialect_of!(self is PostgreSqlDialect) {
-                        ends_with_wildcard = true;
+                        ending_wildcard = Some(next_token);
                         break;
                     } else {
                         return self.expected("an identifier after '.'", next_token);
@@ -1492,19 +1445,22 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if ends_with_wildcard {
+        if let Some(wildcard_token) = ending_wildcard {
             let id_parts = Self::exprs_to_idents(&expressions);
             if id_parts.len() != expressions.len() {
                 return self.expected("an identifier or a '*' after '.'", self.peek_token());
             }
             let id_parts = id_parts.into_iter().cloned().collect::<Vec<_>>();
-            Ok(Expr::QualifiedWildcard(ObjectName(id_parts)))
+            Ok(Expr::QualifiedWildcard(
+                ObjectName(id_parts),
+                AttachedToken(wildcard_token),
+            ))
         } else if self.consume_token(&Token::LParen) {
             let id_parts = Self::exprs_to_idents(&expressions);
             if id_parts.len() != expressions.len() {
                 return self.expected("an identifier or a '*' after '.'", self.peek_token());
             }
-            let id_parts: Vec<Ident> = id_parts.into_iter().cloned().collect::<Vec<_>>();
+            let id_parts = id_parts.into_iter().cloned().collect::<Vec<_>>();
             if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
                 && self.consume_tokens(&[Token::Plus, Token::RParen])
             {
@@ -3330,7 +3286,7 @@ impl<'a> Parser<'a> {
             }),
             _ => parser_err!(
                 "Expected identifier or string literal",
-                self.peek_token().location
+                self.peek_token()
             ),
         };
         self.expect_token(&Token::RBracket)?;

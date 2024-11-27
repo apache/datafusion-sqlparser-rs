@@ -1276,9 +1276,6 @@ impl Spanned for Expr {
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
             Expr::TypedString { .. } => Span::empty(),
-            Expr::MapAccess { column, keys } => column
-                .span()
-                .union(&union_spans(keys.iter().map(|i| i.key.span()))),
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))

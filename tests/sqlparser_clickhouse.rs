@@ -21,6 +21,8 @@
 #[macro_use]
 mod test_utils;
 
+use helpers::attached_token::AttachedToken;
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 use sqlparser::ast::Expr::{BinaryOp, Identifier};
@@ -39,12 +41,14 @@ fn parse_map_access_expr() {
     assert_eq!(
         Select {
             distinct: None,
+            select_token: AttachedToken::empty(),
             top: None,
             top_before_distinct: false,
             projection: vec![UnnamedExpr(Expr::Subscript {
                 expr: Box::new(Identifier(Ident {
                     value: "string_values".to_string(),
                     quote_style: None,
+                    span: Span::empty(),
                 })),
                 subscript: Box::new(Subscript::Index {
                     index: call(
@@ -901,7 +905,8 @@ fn parse_create_view_with_fields_data_types() {
                         data_type: Some(DataType::Custom(
                             ObjectName(vec![Ident {
                                 value: "int".into(),
-                                quote_style: Some('"')
+                                quote_style: Some('"'),
+                                span: Span::empty(),
                             }]),
                             vec![]
                         )),
@@ -912,7 +917,8 @@ fn parse_create_view_with_fields_data_types() {
                         data_type: Some(DataType::Custom(
                             ObjectName(vec![Ident {
                                 value: "String".into(),
-                                quote_style: Some('"')
+                                quote_style: Some('"'),
+                                span: Span::empty(),
                             }]),
                             vec![]
                         )),

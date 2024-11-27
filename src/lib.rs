@@ -74,9 +74,9 @@
 //! # Source Spans
 //!
 //! Starting with version  `0.53.0` sqlparser introduced source spans to the
-//! AST. This feature provides source information for syntax errors enables
+//! AST. This feature provides source information for syntax errors, enabling
 //! better error messages. See [issue #1548] for more information and the
-//! [`Spanned`] traite to access the spans.
+//! [`Spanned`] trait to access the spans.
 //!
 //! [issue #1548]: https://github.com/apache/datafusion-sqlparser-rs/issues/1548
 //! [`Spanned`]: ast::Spanned
@@ -84,7 +84,7 @@
 //! ## Migration Guide
 //!
 //! For the next few releases, we will be incrementally adding source spans to the
-//! AST odes, trying to minimize the impact on existing users. Some breaking
+//! AST nodes, trying to minimize the impact on existing users. Some breaking
 //! changes are inevitable, and the following is a summary of the changes:
 //!
 //! #### New fields for spans (must be added to any existing pattern matches)

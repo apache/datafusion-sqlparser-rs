@@ -599,7 +599,7 @@ pub enum CeilFloorKind {
 /// # Semantics / Type Checking
 ///
 /// The parser does not distinguish between expressions of different types
-/// (e.g. boolean vs string). The the caller is responsible for detecting and
+/// (e.g. boolean vs string). The caller is responsible for detecting and
 /// validating types as necessary (for example  `WHERE 1` vs `SELECT 1=1`)
 /// See the [README.md] for more details.
 ///

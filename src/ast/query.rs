@@ -18,13 +18,17 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec::Vec};
 
+use helpers::attached_token::AttachedToken;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::*;
+use crate::{
+    ast::*,
+    tokenizer::{Token, TokenWithLocation},
+};
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
@@ -276,6 +280,8 @@ impl fmt::Display for Table {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Select {
+    /// Token for the `SELECT` keyword
+    pub select_token: AttachedToken,
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
@@ -505,6 +511,8 @@ impl fmt::Display for NamedWindowDefinition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct With {
+    // Token for the "WITH" keyword
+    pub with_token: AttachedToken,
     pub recursive: bool,
     pub cte_tables: Vec<Cte>,
 }
@@ -556,6 +564,8 @@ pub struct Cte {
     pub query: Box<Query>,
     pub from: Option<Ident>,
     pub materialized: Option<CteAsMaterialized>,
+    // Token for the closing parenthesis
+    pub closing_paren_token: AttachedToken,
 }
 
 impl fmt::Display for Cte {
@@ -607,10 +617,12 @@ impl fmt::Display for IdentWithAlias {
 }
 
 /// Additional options for wildcards, e.g. Snowflake `EXCLUDE`/`RENAME` and Bigquery `EXCEPT`.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WildcardAdditionalOptions {
+    /// The wildcard token `*`
+    pub wildcard_token: AttachedToken,
     /// `[ILIKE...]`.
     ///  Snowflake syntax: <https://docs.snowflake.com/en/sql-reference/sql/select#parameters>
     pub opt_ilike: Option<IlikeSelectItem>,
@@ -626,6 +638,19 @@ pub struct WildcardAdditionalOptions {
     pub opt_replace: Option<ReplaceSelectItem>,
     /// `[RENAME ...]`.
     pub opt_rename: Option<RenameSelectItem>,
+}
+
+impl Default for WildcardAdditionalOptions {
+    fn default() -> Self {
+        Self {
+            wildcard_token: TokenWithLocation::wrap(Token::Mul).into(),
+            opt_ilike: None,
+            opt_exclude: None,
+            opt_except: None,
+            opt_replace: None,
+            opt_rename: None,
+        }
+    }
 }
 
 impl fmt::Display for WildcardAdditionalOptions {

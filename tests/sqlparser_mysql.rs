@@ -3030,7 +3030,7 @@ fn parse_create_view_algorithm_param() {
     let stmt = mysql().verified_stmt(sql);
     if let Statement::CreateView {
         params:
-            Some(MySQLViewParams {
+            Some(CreateViewParams {
                 algorithm,
                 definer,
                 security,
@@ -3038,7 +3038,7 @@ fn parse_create_view_algorithm_param() {
         ..
     } = stmt
     {
-        assert_eq!(algorithm, Some(MySQLViewAlgorithm::Merge));
+        assert_eq!(algorithm, Some(CreateViewAlgorithm::Merge));
         assert!(definer.is_none());
         assert!(security.is_none());
     } else {
@@ -3054,7 +3054,7 @@ fn parse_create_view_definer_param() {
     let stmt = mysql().verified_stmt(sql);
     if let Statement::CreateView {
         params:
-            Some(MySQLViewParams {
+            Some(CreateViewParams {
                 algorithm,
                 definer,
                 security,
@@ -3088,7 +3088,7 @@ fn parse_create_view_security_param() {
     let stmt = mysql().verified_stmt(sql);
     if let Statement::CreateView {
         params:
-            Some(MySQLViewParams {
+            Some(CreateViewParams {
                 algorithm,
                 definer,
                 security,
@@ -3098,7 +3098,7 @@ fn parse_create_view_security_param() {
     {
         assert!(algorithm.is_none());
         assert!(definer.is_none());
-        assert_eq!(security, Some(MySQLViewSecurity::Definer));
+        assert_eq!(security, Some(CreateViewSecurity::Definer));
     } else {
         unreachable!()
     }
@@ -3111,7 +3111,7 @@ fn parse_create_view_multiple_params() {
     let stmt = mysql().verified_stmt(sql);
     if let Statement::CreateView {
         params:
-            Some(MySQLViewParams {
+            Some(CreateViewParams {
                 algorithm,
                 definer,
                 security,
@@ -3119,7 +3119,7 @@ fn parse_create_view_multiple_params() {
         ..
     } = stmt
     {
-        assert_eq!(algorithm, Some(MySQLViewAlgorithm::Undefined));
+        assert_eq!(algorithm, Some(CreateViewAlgorithm::Undefined));
         assert_eq!(
             definer,
             Some(Grantee::UserHost {
@@ -3133,7 +3133,7 @@ fn parse_create_view_multiple_params() {
                 },
             })
         );
-        assert_eq!(security, Some(MySQLViewSecurity::Invoker));
+        assert_eq!(security, Some(CreateViewSecurity::Invoker));
     } else {
         unreachable!()
     }

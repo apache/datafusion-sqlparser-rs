@@ -2428,7 +2428,7 @@ pub enum Statement {
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
         to: Option<ObjectName>,
         /// MySQL: Optional parameters for the view algorithm, definer, and security context
-        params: Option<MySQLViewParams>,
+        params: Option<CreateViewParams>,
     },
     /// ```sql
     /// CREATE TABLE
@@ -7358,18 +7358,18 @@ impl Display for MySQLColumnPosition {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum MySQLViewAlgorithm {
+pub enum CreateViewAlgorithm {
     Undefined,
     Merge,
     TempTable,
 }
 
-impl Display for MySQLViewAlgorithm {
+impl Display for CreateViewAlgorithm {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MySQLViewAlgorithm::Undefined => write!(f, "UNDEFINED"),
-            MySQLViewAlgorithm::Merge => write!(f, "MERGE"),
-            MySQLViewAlgorithm::TempTable => write!(f, "TEMPTABLE"),
+            CreateViewAlgorithm::Undefined => write!(f, "UNDEFINED"),
+            CreateViewAlgorithm::Merge => write!(f, "MERGE"),
+            CreateViewAlgorithm::TempTable => write!(f, "TEMPTABLE"),
         }
     }
 }
@@ -7377,16 +7377,16 @@ impl Display for MySQLViewAlgorithm {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum MySQLViewSecurity {
+pub enum CreateViewSecurity {
     Definer,
     Invoker,
 }
 
-impl Display for MySQLViewSecurity {
+impl Display for CreateViewSecurity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MySQLViewSecurity::Definer => write!(f, "DEFINER"),
-            MySQLViewSecurity::Invoker => write!(f, "INVOKER"),
+            CreateViewSecurity::Definer => write!(f, "DEFINER"),
+            CreateViewSecurity::Invoker => write!(f, "INVOKER"),
         }
     }
 }
@@ -7397,13 +7397,13 @@ impl Display for MySQLViewSecurity {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct MySQLViewParams {
-    pub algorithm: Option<MySQLViewAlgorithm>,
+pub struct CreateViewParams {
+    pub algorithm: Option<CreateViewAlgorithm>,
     pub definer: Option<Grantee>,
-    pub security: Option<MySQLViewSecurity>,
+    pub security: Option<CreateViewSecurity>,
 }
 
-impl Display for MySQLViewParams {
+impl Display for CreateViewParams {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let parts = [
             self.algorithm

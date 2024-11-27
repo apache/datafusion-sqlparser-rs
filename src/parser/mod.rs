@@ -749,13 +749,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            cascade = if self.parse_keyword(Keyword::CASCADE) {
-                Some(TruncateCascadeOption::Cascade)
-            } else if self.parse_keyword(Keyword::RESTRICT) {
-                Some(TruncateCascadeOption::Restrict)
-            } else {
-                None
-            };
+            cascade = self.parse_cascade_option();
         };
 
         let on_cluster = self.parse_optional_on_cluster()?;
@@ -769,6 +763,16 @@ impl<'a> Parser<'a> {
             cascade,
             on_cluster,
         })
+    }
+
+    fn parse_cascade_option(&mut self) -> Option<CascadeOption> {
+        if self.parse_keyword(Keyword::CASCADE) {
+            Some(CascadeOption::Cascade)
+        } else if self.parse_keyword(Keyword::RESTRICT) {
+            Some(CascadeOption::Restrict)
+        } else {
+            None
+        }
     }
 
     pub fn parse_attach_duckdb_database_options(
@@ -11133,21 +11137,7 @@ impl<'a> Parser<'a> {
             .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
             .then(|| self.parse_identifier(false).unwrap());
 
-        let loc = self.peek_token().location;
-        let cascade = if !dialect_of!(self is MySqlDialect) {
-            let cascade = self.parse_keyword(Keyword::CASCADE);
-            let restrict = self.parse_keyword(Keyword::RESTRICT);
-            if cascade && restrict {
-                return parser_err!("Cannot specify both CASCADE and RESTRICT in REVOKE", loc);
-            }
-            if cascade || restrict {
-                Some(cascade)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let cascade = self.parse_cascade_option();
 
         Ok(Statement::Revoke {
             privileges,

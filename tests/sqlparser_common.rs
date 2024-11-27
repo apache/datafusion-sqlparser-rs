@@ -8254,7 +8254,7 @@ fn test_revoke_with_cascade() {
             );
             assert_eq_vec(&["users", "auth"], &tables);
             assert_eq_vec(&["analyst"], &grantees);
-            assert_eq!(cascade, Some(true));
+            assert_eq!(cascade, Some(CascadeOption::Cascade));
             assert_eq!(None, granted_by);
         }
         _ => unreachable!(),

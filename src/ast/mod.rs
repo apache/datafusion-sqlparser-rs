@@ -2286,7 +2286,7 @@ pub enum Statement {
         identity: Option<TruncateIdentityOption>,
         /// Postgres-specific option
         /// [ CASCADE | RESTRICT ]
-        cascade: Option<TruncateCascadeOption>,
+        cascade: Option<CascadeOption>,
         /// ClickHouse-specific option
         /// [ ON CLUSTER cluster_name ]
         ///
@@ -3135,7 +3135,7 @@ pub enum Statement {
         objects: GrantObjects,
         grantees: Vec<Grantee>,
         granted_by: Option<Ident>,
-        cascade: Option<bool>,
+        cascade: Option<CascadeOption>,
     },
     /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
@@ -3551,8 +3551,8 @@ impl fmt::Display for Statement {
                 }
                 if let Some(cascade) = cascade {
                     match cascade {
-                        TruncateCascadeOption::Cascade => write!(f, " CASCADE")?,
-                        TruncateCascadeOption::Restrict => write!(f, " RESTRICT")?,
+                        CascadeOption::Cascade => write!(f, " CASCADE")?,
+                        CascadeOption::Restrict => write!(f, " RESTRICT")?,
                     }
                 }
 
@@ -4671,7 +4671,7 @@ impl fmt::Display for Statement {
                     write!(f, " GRANTED BY {grantor}")?;
                 }
                 if let Some(cascade) = cascade {
-                    write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
+                    write!(f, " {}", cascade)?;
                 }
                 Ok(())
             }
@@ -5069,14 +5069,23 @@ pub enum TruncateIdentityOption {
     Continue,
 }
 
-/// PostgreSQL cascade option for TRUNCATE table
+/// Cascade/restrict option for Postgres TRUNCATE table, MySQL GRANT/REVOKE, etc.
 /// [ CASCADE | RESTRICT ]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum TruncateCascadeOption {
+pub enum CascadeOption {
     Cascade,
     Restrict,
+}
+
+impl Display for CascadeOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CascadeOption::Cascade => write!(f, "CASCADE"),
+            CascadeOption::Restrict => write!(f, "RESTRICT"),
+        }
+    }
 }
 
 /// Can use to describe options in  create sequence or table column type identity

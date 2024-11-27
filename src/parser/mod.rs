@@ -11478,6 +11478,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_named_arg_operator(&mut self) -> Result<FunctionArgOperator, ParserError> {
+        if self.parse_keyword(Keyword::VALUE) {
+            return Ok(FunctionArgOperator::Value);
+        }
         let tok = self.next_token();
         match tok.token {
             Token::RArrow if self.dialect.supports_named_fn_args_with_rarrow_operator() => {
@@ -11495,9 +11498,6 @@ impl<'a> Parser<'a> {
             }
             Token::Colon if self.dialect.supports_named_fn_args_with_colon_operator() => {
                 Ok(FunctionArgOperator::Colon)
-            }
-            Token::Word(w) if w.value.eq_ignore_ascii_case("value") => {
-                Ok(FunctionArgOperator::Value)
             }
             _ => {
                 self.prev_token();

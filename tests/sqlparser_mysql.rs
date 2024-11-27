@@ -3002,7 +3002,7 @@ fn parse_grant() {
 fn parse_revoke() {
     let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
     assert_eq!(
-        mysql().verified_stmt(sql),
+        mysql_and_generic().verified_stmt(sql),
         Statement::Revoke {
             privileges: Privileges::All {
                 with_privileges_keyword: false
@@ -3044,6 +3044,8 @@ fn parse_create_view_algorithm_param() {
     } else {
         unreachable!()
     }
+    mysql().verified_stmt("CREATE ALGORITHM = UNDEFINED VIEW foo AS SELECT 1");
+    mysql().verified_stmt("CREATE ALGORITHM = TEMPTABLE VIEW foo AS SELECT 1");
 }
 
 #[test]
@@ -3097,6 +3099,41 @@ fn parse_create_view_security_param() {
         assert!(algorithm.is_none());
         assert!(definer.is_none());
         assert_eq!(security, Some(MySQLViewSecurity::Definer));
+    } else {
+        unreachable!()
+    }
+    mysql().verified_stmt("CREATE SQL SECURITY INVOKER VIEW foo AS SELECT 1");
+}
+
+#[test]
+fn parse_create_view_multiple_params() {
+    let sql = "CREATE ALGORITHM = UNDEFINED DEFINER = `root`@`%` SQL SECURITY INVOKER VIEW foo AS SELECT 1";
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::CreateView {
+        params:
+            Some(MySQLViewParams {
+                algorithm,
+                definer,
+                security,
+            }),
+        ..
+    } = stmt
+    {
+        assert_eq!(algorithm, Some(MySQLViewAlgorithm::Undefined));
+        assert_eq!(
+            definer,
+            Some(Grantee::UserHost {
+                user: Ident {
+                    value: "root".to_owned(),
+                    quote_style: Some('`')
+                },
+                host: Ident {
+                    value: "%".to_owned(),
+                    quote_style: Some('`')
+                },
+            })
+        );
+        assert_eq!(security, Some(MySQLViewSecurity::Invoker));
     } else {
         unreachable!()
     }

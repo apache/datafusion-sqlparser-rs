@@ -102,6 +102,10 @@ impl Dialect for MySqlDialect {
     fn supports_create_table_select(&self) -> bool {
         true
     }
+
+    fn supports_user_host_grantee(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

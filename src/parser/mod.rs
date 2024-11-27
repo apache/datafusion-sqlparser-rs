@@ -11114,8 +11114,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_grantee(&mut self) -> Result<Grantee, ParserError> {
         let user = self.parse_identifier(false)?;
-        if dialect_of!(self is MySqlDialect | GenericDialect) && self.consume_token(&Token::AtSign)
-        {
+        if self.dialect.supports_user_host_grantee() && self.consume_token(&Token::AtSign) {
             let host = self.parse_identifier(false)?;
             Ok(Grantee::UserHost { user, host })
         } else {

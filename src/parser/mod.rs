@@ -8520,10 +8520,12 @@ impl<'a> Parser<'a> {
     ) -> Result<ObjectName, ParserError> {
         let mut idents = vec![];
         loop {
-            let ident = if allow_wildcards && self.consume_token(&Token::Mul) {
+            let ident = if allow_wildcards && self.peek_token().token == Token::Mul {
+                let span = self.next_token().span;
                 Ident {
                     value: Token::Mul.to_string(),
                     quote_style: None,
+                    span,
                 }
             } else {
                 self.parse_identifier(in_table_clause)?

@@ -3018,53 +3018,75 @@ fn parse_bitstring_literal() {
 #[test]
 fn parse_grant() {
     let sql = "GRANT ALL ON *.* TO 'jeffrey'@'%'";
-    assert_eq!(
-        mysql().verified_stmt(sql),
-        Statement::Grant {
-            privileges: Privileges::All {
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::Grant {
+        privileges,
+        objects,
+        grantees,
+        with_grant_option,
+        granted_by,
+    } = stmt
+    {
+        assert_eq!(
+            privileges,
+            Privileges::All {
                 with_privileges_keyword: false
-            },
-            objects: GrantObjects::Tables(vec![ObjectName(vec!["*".into(), "*".into()])]),
-            grantees: vec![Grantee::UserHost {
-                user: Ident {
-                    value: "jeffrey".to_owned(),
-                    quote_style: Some('\'')
-                },
-                host: Ident {
-                    value: "%".to_owned(),
-                    quote_style: Some('\'')
-                }
-            }],
-            with_grant_option: false,
-            granted_by: None
+            }
+        );
+        assert_eq!(
+            objects,
+            GrantObjects::Tables(vec![ObjectName(vec!["*".into(), "*".into()])])
+        );
+        assert!(!with_grant_option);
+        assert!(granted_by.is_none());
+        if let [Grantee::UserHost { user, host }] = grantees.as_slice() {
+            assert_eq!(user.value, "jeffrey");
+            assert_eq!(user.quote_style, Some('\''));
+            assert_eq!(host.value, "%");
+            assert_eq!(host.quote_style, Some('\''));
+        } else {
+            unreachable!()
         }
-    )
+    } else {
+        unreachable!()
+    }
 }
 
 #[test]
 fn parse_revoke() {
     let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
-    assert_eq!(
-        mysql_and_generic().verified_stmt(sql),
-        Statement::Revoke {
-            privileges: Privileges::All {
+    let stmt = mysql_and_generic().verified_stmt(sql);
+    if let Statement::Revoke {
+        privileges,
+        objects,
+        grantees,
+        granted_by,
+        cascade,
+    } = stmt
+    {
+        assert_eq!(
+            privileges,
+            Privileges::All {
                 with_privileges_keyword: false
-            },
-            objects: GrantObjects::Tables(vec![ObjectName(vec!["db1".into(), "*".into()])]),
-            grantees: vec![Grantee::UserHost {
-                user: Ident {
-                    value: "jeffrey".to_owned(),
-                    quote_style: Some('\'')
-                },
-                host: Ident {
-                    value: "%".to_owned(),
-                    quote_style: Some('\'')
-                }
-            }],
-            granted_by: None,
-            cascade: None,
+            }
+        );
+        assert_eq!(
+            objects,
+            GrantObjects::Tables(vec![ObjectName(vec!["db1".into(), "*".into()])])
+        );
+        if let [Grantee::UserHost { user, host }] = grantees.as_slice() {
+            assert_eq!(user.value, "jeffrey");
+            assert_eq!(user.quote_style, Some('\''));
+            assert_eq!(host.value, "%");
+            assert_eq!(host.quote_style, Some('\''));
+        } else {
+            unreachable!()
         }
-    )
+        assert!(granted_by.is_none());
+        assert!(cascade.is_none());
+    } else {
+        unreachable!()
+    }
 }
 
 #[test]
@@ -3106,19 +3128,14 @@ fn parse_create_view_definer_param() {
     } = stmt
     {
         assert!(algorithm.is_none());
-        assert_eq!(
-            definer,
-            Some(Grantee::UserHost {
-                user: Ident {
-                    value: "jeffrey".to_owned(),
-                    quote_style: Some('\'')
-                },
-                host: Ident {
-                    value: "localhost".to_owned(),
-                    quote_style: Some('\'')
-                },
-            })
-        );
+        if let Some(Grantee::UserHost { user, host }) = definer {
+            assert_eq!(user.value, "jeffrey");
+            assert_eq!(user.quote_style, Some('\''));
+            assert_eq!(host.value, "localhost");
+            assert_eq!(host.quote_style, Some('\''));
+        } else {
+            unreachable!()
+        }
         assert!(security.is_none());
     } else {
         unreachable!()
@@ -3163,19 +3180,14 @@ fn parse_create_view_multiple_params() {
     } = stmt
     {
         assert_eq!(algorithm, Some(CreateViewAlgorithm::Undefined));
-        assert_eq!(
-            definer,
-            Some(Grantee::UserHost {
-                user: Ident {
-                    value: "root".to_owned(),
-                    quote_style: Some('`')
-                },
-                host: Ident {
-                    value: "%".to_owned(),
-                    quote_style: Some('`')
-                },
-            })
-        );
+        if let Some(Grantee::UserHost { user, host }) = definer {
+            assert_eq!(user.value, "root");
+            assert_eq!(user.quote_style, Some('`'));
+            assert_eq!(host.value, "%");
+            assert_eq!(host.quote_style, Some('`'));
+        } else {
+            unreachable!()
+        }
         assert_eq!(security, Some(CreateViewSecurity::Invoker));
     } else {
         unreachable!()

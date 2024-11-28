@@ -49,7 +49,7 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
-use crate::ast::{ColumnOption, Expr, Statement};
+use crate::ast::{ColumnOption, Expr, JoinConstraint, JoinOperator, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -686,6 +686,36 @@ pub trait Dialect: Debug + Any {
     /// used as an identifier without special handling like quoting.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
+    }
+
+    /// Verifies if the given `JoinOperator`'s constraint is valid for this SQL dialect.
+    /// Returns `true` if the join constraint is valid, otherwise `false`.
+    fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {
+        let constraint = join_operator.constraint();
+
+        match constraint {
+            JoinConstraint::Natural => true,
+            JoinConstraint::On(_) | JoinConstraint::Using(_) => match join_operator {
+                JoinOperator::Inner(_)
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::FullOuter(_)
+                | JoinOperator::Semi(_)
+                | JoinOperator::LeftSemi(_)
+                | JoinOperator::RightSemi(_)
+                | JoinOperator::Anti(_)
+                | JoinOperator::LeftAnti(_)
+                | JoinOperator::RightAnti(_)
+                | JoinOperator::AsOf { .. } => true,
+                _ => false,
+            },
+            JoinConstraint::None => match join_operator {
+                JoinOperator::CrossJoin | JoinOperator::CrossApply | JoinOperator::OuterApply => {
+                    true
+                }
+                _ => false,
+            },
+        }
     }
 }
 

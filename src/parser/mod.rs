@@ -10157,21 +10157,7 @@ impl<'a> Parser<'a> {
                 let join_constraint = self.parse_join_constraint(natural)?;
                 let join_operator = join_operator_type(join_constraint);
 
-                let requires_constraint = match join_operator {
-                    JoinOperator::Inner(JoinConstraint::None)
-                    | JoinOperator::LeftOuter(JoinConstraint::None)
-                    | JoinOperator::RightOuter(JoinConstraint::None)
-                    | JoinOperator::FullOuter(JoinConstraint::None)
-                    | JoinOperator::LeftSemi(JoinConstraint::None)
-                    | JoinOperator::RightSemi(JoinConstraint::None)
-                    | JoinOperator::LeftAnti(JoinConstraint::None)
-                    | JoinOperator::RightAnti(JoinConstraint::None)
-                    | JoinOperator::Semi(JoinConstraint::None)
-                    | JoinOperator::Anti(JoinConstraint::None) => !natural,
-                    _ => false,
-                };
-
-                if requires_constraint {
+                if !self.dialect.verify_join_constraint(&join_operator) {
                     self.expected("ON, or USING after JOIN", self.peek_token())?
                 }
 

@@ -12370,7 +12370,8 @@ fn parse_create_table_select() {
 
 #[test]
 fn parse_no_condition_join_strategy() {
-    let dialects = all_dialects_where(|d| d.supports_create_table_select());
+    let mysql_dialect = TestedDialects::new(vec![Box::new(MySqlDialect {})]);
+    let generic_dialect = TestedDialects::new(vec![Box::new(GenericDialect {})]);
 
     let join_types = vec![
         "JOIN",
@@ -12396,14 +12397,32 @@ fn parse_no_condition_join_strategy() {
             "SELECT * FROM (SELECT 1 AS id, 'Foo' AS name) AS l {} (SELECT 1 AS id, 'Bar' AS name) AS r",
             join
         );
-        let result = dialects.parse_sql_statements(&sql);
+        let result_generic = generic_dialect.parse_sql_statements(&sql);
         if join.starts_with("CROSS") || join.starts_with("NATURAL") {
-            // CROSS JOIN and NATURAL JOIN don't require ON or USING clauses
-            assert!(result.is_ok());
+            assert!(result_generic.is_ok());
         } else {
-            // Other joins require ON or USING clauses
             assert_eq!(
-                result.unwrap_err(),
+                result_generic.unwrap_err(),
+                ParserError::ParserError(
+                    "Expected: ON, or USING after JOIN, found: EOF".to_string()
+                )
+            );
+        }
+
+        let result_mysql = mysql_dialect.parse_sql_statements(&sql);
+        if join.starts_with("CROSS")
+            || join.starts_with("NATURAL")
+            || join.starts_with("INNER")
+            || join.starts_with("JOIN")
+            || join.starts_with("LEFT JOIN")
+            || join.starts_with("LEFT OUTER")
+            || join.starts_with("RIGHT JOIN")
+            || join.starts_with("RIGHT OUTER")
+        {
+            assert!(result_mysql.is_ok());
+        } else {
+            assert_eq!(
+                result_mysql.unwrap_err(),
                 ParserError::ParserError(
                     "Expected: ON, or USING after JOIN, found: EOF".to_string()
                 )

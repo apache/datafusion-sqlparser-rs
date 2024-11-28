@@ -19,7 +19,9 @@
 use alloc::boxed::Box;
 
 use crate::{
-    ast::{BinaryOperator, Expr, LockTable, LockTableType, Statement},
+    ast::{
+        BinaryOperator, Expr, JoinConstraint, JoinOperator, LockTable, LockTableType, Statement,
+    },
     dialect::Dialect,
     keywords::Keyword,
     parser::{Parser, ParserError},
@@ -101,6 +103,39 @@ impl Dialect for MySqlDialect {
     /// see <https://dev.mysql.com/doc/refman/8.4/en/create-table-select.html>
     fn supports_create_table_select(&self) -> bool {
         true
+    }
+
+    /// Verifies if the given `JoinOperator`'s constraint is valid for this SQL dialect.
+    /// Returns `true` if the join constraint is valid, otherwise `false`.
+    fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {
+        let constraint = join_operator.constraint();
+
+        match constraint {
+            JoinConstraint::Natural => true,
+            JoinConstraint::On(_) | JoinConstraint::Using(_) => match join_operator {
+                JoinOperator::Inner(_)
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::FullOuter(_)
+                | JoinOperator::Semi(_)
+                | JoinOperator::LeftSemi(_)
+                | JoinOperator::RightSemi(_)
+                | JoinOperator::Anti(_)
+                | JoinOperator::LeftAnti(_)
+                | JoinOperator::RightAnti(_)
+                | JoinOperator::AsOf { .. } => true,
+                _ => false,
+            },
+            JoinConstraint::None => match join_operator {
+                JoinOperator::Inner(_)
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::CrossJoin
+                | JoinOperator::CrossApply
+                | JoinOperator::OuterApply => true,
+                _ => false,
+            },
+        }
     }
 }
 

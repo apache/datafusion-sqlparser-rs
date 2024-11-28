@@ -1827,6 +1827,27 @@ pub enum JoinOperator {
     },
 }
 
+impl JoinOperator {
+    pub fn constraint(&self) -> JoinConstraint {
+        match self {
+            JoinOperator::Inner(constraint)
+            | JoinOperator::LeftOuter(constraint)
+            | JoinOperator::RightOuter(constraint)
+            | JoinOperator::FullOuter(constraint)
+            | JoinOperator::Semi(constraint)
+            | JoinOperator::LeftSemi(constraint)
+            | JoinOperator::RightSemi(constraint)
+            | JoinOperator::Anti(constraint)
+            | JoinOperator::LeftAnti(constraint)
+            | JoinOperator::RightAnti(constraint) => constraint.clone(),
+            JoinOperator::AsOf { constraint, .. } => constraint.clone(),
+            JoinOperator::CrossJoin | JoinOperator::CrossApply | JoinOperator::OuterApply => {
+                JoinConstraint::None
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

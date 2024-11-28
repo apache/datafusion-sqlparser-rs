@@ -12084,6 +12084,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::StartTransaction {
             modes: self.parse_transaction_modes()?,
             begin: false,
+            transaction: Some(TransactionWorkOption::Transaction),
             modifier: None,
         })
     }
@@ -12100,10 +12101,15 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
+        let transaction = match self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]) {
+            Some(Keyword::TRANSACTION) => Some(TransactionWorkOption::Transaction),
+            Some(Keyword::WORK) => Some(TransactionWorkOption::Work),
+            _ => None,
+        };
         Ok(Statement::StartTransaction {
             modes: self.parse_transaction_modes()?,
             begin: true,
+            transaction,
             modifier,
         })
     }

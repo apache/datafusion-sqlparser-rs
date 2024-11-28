@@ -3014,3 +3014,8 @@ fn parse_bitstring_literal() {
         ))]
     );
 }
+
+#[test]
+fn parse_begin_without_transaction() {
+    mysql().verified_stmt("BEGIN");
+}

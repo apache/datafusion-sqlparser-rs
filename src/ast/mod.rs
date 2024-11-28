@@ -885,7 +885,7 @@ pub enum Expr {
     /// Example:
     ///
     /// ```sql
-    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')   
+    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')
     /// SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)').value('.','NVARCHAR(MAX)')
     /// ```
     ///
@@ -2929,6 +2929,7 @@ pub enum Statement {
     StartTransaction {
         modes: Vec<TransactionMode>,
         begin: bool,
+        transaction: Option<TransactionWorkOption>,
         /// Only for SQLite
         modifier: Option<TransactionModifier>,
     },
@@ -4629,16 +4630,20 @@ impl fmt::Display for Statement {
             Statement::StartTransaction {
                 modes,
                 begin: syntax_begin,
+                transaction,
                 modifier,
             } => {
                 if *syntax_begin {
                     if let Some(modifier) = *modifier {
-                        write!(f, "BEGIN {} TRANSACTION", modifier)?;
+                        write!(f, "BEGIN {}", modifier)?;
                     } else {
-                        write!(f, "BEGIN TRANSACTION")?;
+                        write!(f, "BEGIN")?;
                     }
                 } else {
-                    write!(f, "START TRANSACTION")?;
+                    write!(f, "START")?;
+                }
+                if let Some(transaction) = transaction {
+                    write!(f, " {transaction}")?;
                 }
                 if !modes.is_empty() {
                     write!(f, " {}", display_comma_separated(modes))?;
@@ -5131,6 +5136,24 @@ pub enum TruncateIdentityOption {
 pub enum TruncateCascadeOption {
     Cascade,
     Restrict,
+}
+
+/// Transaction started with [ TRANSACTION | WORK ]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TransactionWorkOption {
+    Transaction,
+    Work,
+}
+
+impl Display for TransactionWorkOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TransactionWorkOption::Transaction => write!(f, "TRANSACTION"),
+            TransactionWorkOption::Work => write!(f, "WORK"),
+        }
+    }
 }
 
 /// Can use to describe options in  create sequence or table column type identity

@@ -10883,13 +10883,12 @@ impl<'a> Parser<'a> {
         Ok(ExprWithAlias { expr, alias })
     }
     /// Parses an expression with an optional alias
-
+    ///
     /// Examples:
-
+    ///
     /// ```sql
     /// SUM(price) AS total_price
     /// ```
-
     /// ```sql
     /// SUM(price)
     /// ```
@@ -10905,7 +10904,6 @@ impl<'a> Parser<'a> {
     /// assert_eq!(Some("b".to_string()), expr_with_alias.alias.map(|x|x.value));
     /// # Ok(())
     /// # }
-
     pub fn parse_expr_with_alias(&mut self) -> Result<ExprWithAlias, ParserError> {
         let expr = self.parse_expr()?;
         let alias = if self.parse_keyword(Keyword::AS) {

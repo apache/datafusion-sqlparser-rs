@@ -691,30 +691,26 @@ pub trait Dialect: Debug + Any {
     /// Verifies if the given `JoinOperator`'s constraint is valid for this SQL dialect.
     /// Returns `true` if the join constraint is valid, otherwise `false`.
     fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {
-        let constraint = join_operator.constraint();
-
-        match constraint {
+        match join_operator.constraint() {
             JoinConstraint::Natural => true,
-            JoinConstraint::On(_) | JoinConstraint::Using(_) => match join_operator {
+            JoinConstraint::On(_) | JoinConstraint::Using(_) => matches!(
+                join_operator,
                 JoinOperator::Inner(_)
-                | JoinOperator::LeftOuter(_)
-                | JoinOperator::RightOuter(_)
-                | JoinOperator::FullOuter(_)
-                | JoinOperator::Semi(_)
-                | JoinOperator::LeftSemi(_)
-                | JoinOperator::RightSemi(_)
-                | JoinOperator::Anti(_)
-                | JoinOperator::LeftAnti(_)
-                | JoinOperator::RightAnti(_)
-                | JoinOperator::AsOf { .. } => true,
-                _ => false,
-            },
-            JoinConstraint::None => match join_operator {
-                JoinOperator::CrossJoin | JoinOperator::CrossApply | JoinOperator::OuterApply => {
-                    true
-                }
-                _ => false,
-            },
+                    | JoinOperator::LeftOuter(_)
+                    | JoinOperator::RightOuter(_)
+                    | JoinOperator::FullOuter(_)
+                    | JoinOperator::Semi(_)
+                    | JoinOperator::LeftSemi(_)
+                    | JoinOperator::RightSemi(_)
+                    | JoinOperator::Anti(_)
+                    | JoinOperator::LeftAnti(_)
+                    | JoinOperator::RightAnti(_)
+                    | JoinOperator::AsOf { .. }
+            ),
+            JoinConstraint::None => matches!(
+                join_operator,
+                JoinOperator::CrossJoin | JoinOperator::CrossApply | JoinOperator::OuterApply
+            ),
         }
     }
 }

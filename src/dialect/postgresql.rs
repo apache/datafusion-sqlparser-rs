@@ -211,6 +211,26 @@ impl Dialect for PostgreSqlDialect {
     fn supports_load_extension(&self) -> bool {
         true
     }
+
+    /// See <https://www.postgresql.org/docs/current/functions-json.html>
+    ///
+    /// Required to support the colon in:
+    /// ```sql
+    /// SELECT json_object('a': 'b')
+    /// ```
+    fn supports_named_fn_args_with_colon_operator(&self) -> bool {
+        true
+    }
+
+    /// See <https://www.postgresql.org/docs/current/functions-json.html>
+    ///
+    /// Required to support the label in:
+    /// ```sql
+    /// SELECT json_object('label': 'value')
+    /// ```
+    fn supports_named_fn_args_with_expr_name(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

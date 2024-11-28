@@ -680,6 +680,18 @@ pub trait Dialect: Debug + Any {
     fn supports_create_table_select(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports PartiQL for querying semi-structured data
+    /// <https://partiql.org/index.html>
+    fn supports_partiql(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the specified keyword is reserved and cannot be
+    /// used as an identifier without special handling like quoting.
+    fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
+        keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
+    }
 }
 
 /// This represents the operators for which precedence must be defined

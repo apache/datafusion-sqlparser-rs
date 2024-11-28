@@ -23,6 +23,7 @@ use std::ops::Deref;
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
+use sqlparser::tokenizer::Span;
 use test_utils::*;
 
 #[test]
@@ -229,6 +230,7 @@ fn parse_delete_statement() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
+                    json_path: None,
                 },
                 from[0].relation
             );
@@ -677,10 +679,12 @@ fn parse_typed_struct_syntax_bigquery() {
                     Ident {
                         value: "t".into(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                     Ident {
                         value: "str_col".into(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                 ]),
             ],
@@ -689,6 +693,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     field_name: Some(Ident {
                         value: "x".into(),
                         quote_style: None,
+                        span: Span::empty(),
                     }),
                     field_type: DataType::Int64
                 },
@@ -696,6 +701,7 @@ fn parse_typed_struct_syntax_bigquery() {
                     field_name: Some(Ident {
                         value: "y".into(),
                         quote_style: None,
+                        span: Span::empty(),
                     }),
                     field_type: DataType::String(None)
                 },
@@ -708,6 +714,7 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::Identifier(Ident {
                 value: "nested_col".into(),
                 quote_style: None,
+                span: Span::empty(),
             }),],
             fields: vec![
                 StructField {
@@ -739,6 +746,7 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::Identifier(Ident {
                 value: "nested_col".into(),
                 quote_style: None,
+                span: Span::empty(),
             }),],
             fields: vec![
                 StructField {
@@ -986,10 +994,12 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     Ident {
                         value: "t".into(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                     Ident {
                         value: "str_col".into(),
                         quote_style: None,
+                        span: Span::empty(),
                     },
                 ]),
             ],
@@ -998,6 +1008,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     field_name: Some(Ident {
                         value: "x".into(),
                         quote_style: None,
+                        span: Span::empty(),
                     }),
                     field_type: DataType::Int64
                 },
@@ -1005,6 +1016,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                     field_name: Some(Ident {
                         value: "y".into(),
                         quote_style: None,
+                        span: Span::empty(),
                     }),
                     field_type: DataType::String(None)
                 },
@@ -1017,6 +1029,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::Identifier(Ident {
                 value: "nested_col".into(),
                 quote_style: None,
+                span: Span::empty(),
             }),],
             fields: vec![
                 StructField {
@@ -1048,6 +1061,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::Identifier(Ident {
                 value: "nested_col".into(),
                 quote_style: None,
+                span: Span::empty(),
             }),],
             fields: vec![
                 StructField {
@@ -1373,6 +1387,7 @@ fn parse_table_identifiers() {
                     version: None,
                     partitions: vec![],
                     with_ordinality: false,
+                    json_path: None,
                 },
                 joins: vec![]
             },]
@@ -1546,6 +1561,7 @@ fn parse_table_time_travel() {
                 ))),
                 partitions: vec![],
                 with_ordinality: false,
+                json_path: None,
             },
             joins: vec![]
         },]
@@ -1644,6 +1660,7 @@ fn parse_merge() {
                     version: Default::default(),
                     partitions: Default::default(),
                     with_ordinality: false,
+                    json_path: None,
                 },
                 table
             );
@@ -1659,6 +1676,7 @@ fn parse_merge() {
                     version: Default::default(),
                     partitions: Default::default(),
                     with_ordinality: false,
+                    json_path: None,
                 },
                 source
             );

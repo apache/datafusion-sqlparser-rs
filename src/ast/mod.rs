@@ -23,15 +23,21 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use helpers::attached_token::AttachedToken;
 
-use core::fmt::{self, Display};
 use core::ops::Deref;
+use core::{
+    fmt::{self, Display},
+    hash,
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
+
+use crate::tokenizer::Span;
 
 pub use self::data_type::{
     ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, ExactNumberInfo,
@@ -87,6 +93,9 @@ mod dml;
 pub mod helpers;
 mod operator;
 mod query;
+mod spans;
+pub use spans::Spanned;
+
 mod trigger;
 mod value;
 
@@ -131,7 +140,7 @@ where
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Ident {
@@ -140,10 +149,41 @@ pub struct Ident {
     /// The starting quote if any. Valid quote characters are the single quote,
     /// double quote, backtick, and opening square bracket.
     pub quote_style: Option<char>,
+    /// The span of the identifier in the original SQL string.
+    pub span: Span,
 }
 
+impl PartialEq for Ident {
+    fn eq(&self, other: &Self) -> bool {
+        let Ident {
+            value,
+            quote_style,
+            // exhaustiveness check; we ignore spans in comparisons
+            span: _,
+        } = self;
+
+        value == &other.value && quote_style == &other.quote_style
+    }
+}
+
+impl core::hash::Hash for Ident {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        let Ident {
+            value,
+            quote_style,
+            // exhaustiveness check; we ignore spans in hashes
+            span: _,
+        } = self;
+
+        value.hash(state);
+        quote_style.hash(state);
+    }
+}
+
+impl Eq for Ident {}
+
 impl Ident {
-    /// Create a new identifier with the given value and no quotes.
+    /// Create a new identifier with the given value and no quotes and an empty span.
     pub fn new<S>(value: S) -> Self
     where
         S: Into<String>,
@@ -151,6 +191,7 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: None,
+            span: Span::empty(),
         }
     }
 
@@ -164,6 +205,30 @@ impl Ident {
         Ident {
             value: value.into(),
             quote_style: Some(quote),
+            span: Span::empty(),
+        }
+    }
+
+    pub fn with_span<S>(span: Span, value: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Ident {
+            value: value.into(),
+            quote_style: None,
+            span,
+        }
+    }
+
+    pub fn with_quote_and_span<S>(quote: char, span: Span, value: S) -> Self
+    where
+        S: Into<String>,
+    {
+        assert!(quote == '\'' || quote == '"' || quote == '`' || quote == '[');
+        Ident {
+            value: value.into(),
+            quote_style: Some(quote),
+            span,
         }
     }
 }
@@ -173,6 +238,7 @@ impl From<&str> for Ident {
         Ident {
             value: value.to_string(),
             quote_style: None,
+            span: Span::empty(),
         }
     }
 }
@@ -919,10 +985,10 @@ pub enum Expr {
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
-    Wildcard,
+    Wildcard(AttachedToken),
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
     /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
-    QualifiedWildcard(ObjectName),
+    QualifiedWildcard(ObjectName, AttachedToken),
     /// Some dialects support an older syntax for outer joins where columns are
     /// marked with the `(+)` operator in the WHERE clause, for example:
     ///
@@ -1211,8 +1277,8 @@ impl fmt::Display for Expr {
             Expr::MapAccess { column, keys } => {
                 write!(f, "{column}{}", display_separated(keys, ""))
             }
-            Expr::Wildcard => f.write_str("*"),
-            Expr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
+            Expr::Wildcard(_) => f.write_str("*"),
+            Expr::QualifiedWildcard(prefix, _) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsTrue(ast) => write!(f, "{ast} IS TRUE"),
             Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
@@ -5475,8 +5541,8 @@ pub enum FunctionArgExpr {
 impl From<Expr> for FunctionArgExpr {
     fn from(wildcard_expr: Expr) -> Self {
         match wildcard_expr {
-            Expr::QualifiedWildcard(prefix) => Self::QualifiedWildcard(prefix),
-            Expr::Wildcard => Self::Wildcard,
+            Expr::QualifiedWildcard(prefix, _) => Self::QualifiedWildcard(prefix),
+            Expr::Wildcard(_) => Self::Wildcard,
             expr => Self::Expr(expr),
         }
     }

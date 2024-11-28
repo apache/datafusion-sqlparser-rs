@@ -667,7 +667,7 @@ pub enum TableConstraint {
         columns: Vec<Ident>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
-        /// Optional [Postgres] nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
+        /// Optional Postgres nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
         nulls_distinct: NullsDistinctOption,
     },
     /// MySQL [definition][1] for `PRIMARY KEY` constraints statements:\

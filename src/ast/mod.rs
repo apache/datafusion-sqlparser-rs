@@ -7629,6 +7629,72 @@ impl Display for JsonNullClause {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SamplingMethod {
+    Bernoulli,
+    Row,
+    System,
+    Block,
+}
+
+impl Display for SamplingMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SamplingMethod::Bernoulli => write!(f, "BERNOULLI"),
+            SamplingMethod::Row => write!(f, "ROW"),
+            SamplingMethod::System => write!(f, "SYSTEM"),
+            SamplingMethod::Block => write!(f, "BLOCK"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SampleSeed {
+    Seed(u32),
+    Repeatable(u32),
+}
+
+impl Display for SampleSeed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SampleSeed::Seed(seed) => write!(f, "SEED ({})", seed),
+            SampleSeed::Repeatable(seed) => write!(f, "REPEATABLE ({})", seed),
+        }
+    }
+}
+
+/// Table sampling
+/// Snowflake (and others) offer ways to sample rows from various tables in a query
+/// <https://docs.snowflake.com/en/sql-reference/constructs/sample>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Sampling {
+    /// The method with which to do the sampling
+    pub method: SamplingMethod,
+    /// Sample size. Can be integer or probability (decimal)
+    pub size: Value,
+    /// `ROWS` keyword
+    pub rows: bool,
+    /// Optional `SEED` keyword for deterministic sampling
+    pub seed: Option<SampleSeed>,
+}
+
+impl Display for Sampling {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, " {} ({}", self.method, self.size)?;
+        write!(f, "){}", if self.rows { " ROWS" } else { "" })?;
+        if let Some(ref seed) = self.seed {
+            write!(f, " {seed}")?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

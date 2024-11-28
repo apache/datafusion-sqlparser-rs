@@ -12756,6 +12756,85 @@ impl<'a> Parser<'a> {
             Ok(None)
         }
     }
+
+    fn parse_sampling(&mut self) -> Result<Sampling, ParserError> {
+        // Ensure the first keyword is SAMPLE or TABLESAMPLE
+        if self
+            .parse_one_of_keywords(&[Keyword::SAMPLE, Keyword::TABLESAMPLE])
+            .is_none()
+        {
+            return self.expected("Expected SAMPLE or TABLESAMPLE keyword", self.peek_token());
+        }
+
+        // Parse the sampling method
+        let method = self
+            .parse_one_of_keywords(&[
+                Keyword::BERNOULLI,
+                Keyword::ROW,
+                Keyword::SYSTEM,
+                Keyword::BLOCK,
+            ])
+            .ok_or_else(|| {
+                ParserError::ParserError(format!("Expected one of BEROULLI, SYSTEM, ROW, BLOCK"))
+            })?;
+
+        // Parse common structure: (size) [ROWS] [SEED | REPEATABLE]
+        self.expect_token(&Token::LParen)?;
+        let size = self.parse_value()?;
+
+        // ROWS keyword is only valid for BERNOULLI | ROW sampling
+        let rows = match method {
+            Keyword::BERNOULLI | Keyword::ROW => {
+                self.parse_one_of_keywords(&[Keyword::ROWS]).is_some()
+            }
+            _ => false,
+        };
+        self.expect_token(&Token::RParen)?;
+
+        // Parse optional seed
+        let seed_keyword = self.parse_one_of_keywords(&[Keyword::REPEATABLE, Keyword::SEED]);
+        let seed = if let Some(keyword) = seed_keyword {
+            self.expect_token(&Token::LParen)?;
+            let seed_value = match self.parse_value()? {
+                Value::Number(n, _) => n
+                    .parse::<u32>()
+                    .map_err(|_| ParserError::ParserError(format!("Invalid seed value {}", n)))?,
+                _ => unreachable!(),
+            };
+            self.expect_token(&Token::RParen)?;
+
+            Some(match keyword {
+                Keyword::SEED => SampleSeed::Seed(seed_value),
+                Keyword::REPEATABLE => SampleSeed::Repeatable(seed_value),
+                _ => unreachable!(),
+            })
+        } else {
+            None
+        };
+
+        Ok(Sampling {
+            method: self.keyword_to_sampling_method(method)?,
+            size,
+            rows,
+            seed,
+        })
+    }
+
+    fn keyword_to_sampling_method(
+        &mut self,
+        keyword: Keyword,
+    ) -> Result<SamplingMethod, ParserError> {
+        match keyword {
+            Keyword::BERNOULLI => Ok(SamplingMethod::Bernoulli),
+            Keyword::ROW => Ok(SamplingMethod::Row),
+            Keyword::SYSTEM => Ok(SamplingMethod::System),
+            Keyword::BLOCK => Ok(SamplingMethod::Block),
+            _ => Err(ParserError::ParserError(format!(
+                "Unsuppored keyword for sampling: {:?}",
+                keyword
+            ))),
+        }
+    }
 }
 
 impl Word {

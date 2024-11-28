@@ -557,6 +557,7 @@ impl Spanned for TableConstraint {
                 columns,
                 index_options: _,
                 characteristics,
+                nulls_distinct: _,
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)

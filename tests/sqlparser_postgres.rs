@@ -595,6 +595,13 @@ fn parse_alter_table_constraints_rename() {
 }
 
 #[test]
+fn parse_alter_table_constraints_unique_nulls_distinct() {
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS NOT DISTINCT (c)");
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS DISTINCT (c)");
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE (c)");
+}
+
+#[test]
 fn parse_alter_table_disable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");

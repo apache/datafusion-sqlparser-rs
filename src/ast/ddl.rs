@@ -667,6 +667,8 @@ pub enum TableConstraint {
         columns: Vec<Ident>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
+        /// Optional [Postgres] nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
+        nulls_distinct: NullsDistinctOption,
     },
     /// MySQL [definition][1] for `PRIMARY KEY` constraints statements:\
     /// * `[CONSTRAINT [<name>]] PRIMARY KEY [index_name] [index_type] (<columns>) <index_options>`
@@ -775,10 +777,11 @@ impl fmt::Display for TableConstraint {
                 columns,
                 index_options,
                 characteristics,
+                nulls_distinct,
             } => {
                 write!(
                     f,
-                    "{}UNIQUE{index_type_display:>}{}{} ({})",
+                    "{}UNIQUE{nulls_distinct}{index_type_display:>}{}{} ({})",
                     display_constraint_name(name),
                     display_option_spaced(index_name),
                     display_option(" USING ", "", index_type),
@@ -982,6 +985,31 @@ impl fmt::Display for IndexOption {
         match self {
             Self::Using(index_type) => write!(f, "USING {index_type}"),
             Self::Comment(s) => write!(f, "COMMENT '{s}'"),
+        }
+    }
+}
+
+/// [Postgres] unique index nulls handling option: `[ NULLS [ NOT ] DISTINCT ]`
+///
+/// [Postgres]: https://www.postgresql.org/docs/17/sql-altertable.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum NullsDistinctOption {
+    /// Not specified
+    None,
+    /// NULLS DISTINCT
+    Distinct,
+    /// NULLS NOT DISTINCT
+    NotDistinct,
+}
+
+impl fmt::Display for NullsDistinctOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::None => Ok(()),
+            Self::Distinct => write!(f, " NULLS DISTINCT"),
+            Self::NotDistinct => write!(f, " NULLS NOT DISTINCT"),
         }
     }
 }

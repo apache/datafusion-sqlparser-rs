@@ -400,7 +400,7 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "INT4", zerofill, false)
             }
             DataType::Int8(zerofill) => {
-                format_type_with_optional_length(f, "INT8", zerofill, false)
+                format_type_with_optional_length(f, "Int8", zerofill, false)
             }
             DataType::Int16 => {
                 write!(f, "Int16")
@@ -409,7 +409,7 @@ impl fmt::Display for DataType {
                 write!(f, "Int32")
             }
             DataType::Int64 => {
-                write!(f, "INT64")
+                write!(f, "Int64")
             }
             DataType::Int128 => {
                 write!(f, "Int128")
@@ -433,7 +433,7 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "BIGINT", zerofill, true)
             }
             DataType::UnsignedInt8(zerofill) => {
-                format_type_with_optional_length(f, "INT8", zerofill, true)
+                format_type_with_optional_length(f, "Int8", zerofill, true)
             }
             DataType::UInt8 => {
                 write!(f, "UInt8")
@@ -456,19 +456,19 @@ impl fmt::Display for DataType {
             DataType::Real => write!(f, "REAL"),
             DataType::Float4 => write!(f, "FLOAT4"),
             DataType::Float32 => write!(f, "Float32"),
-            DataType::Float64 => write!(f, "FLOAT64"),
+            DataType::Float64 => write!(f, "Float64"),
             DataType::Double => write!(f, "DOUBLE"),
             DataType::Float8 => write!(f, "FLOAT8"),
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
-            DataType::Bool => write!(f, "BOOL"),
-            DataType::Boolean => write!(f, "BOOLEAN"),
-            DataType::Date => write!(f, "DATE"),
+            DataType::Bool => write!(f, "Bool"),
+            DataType::Boolean => write!(f, "Boolean"),
+            DataType::Date => write!(f, "Date"),
             DataType::Date32 => write!(f, "Date32"),
             DataType::Time(precision, timezone_info) => {
                 format_datetime_precision_and_tz(f, "TIME", precision, timezone_info)
             }
             DataType::Datetime(precision) => {
-                format_type_with_optional_length(f, "DATETIME", precision, false)
+                format_type_with_optional_length(f, "DateTime", precision, false)
             }
             DataType::Timestamp(precision, timezone_info) => {
                 format_datetime_precision_and_tz(f, "TIMESTAMP", precision, timezone_info)
@@ -486,13 +486,13 @@ impl fmt::Display for DataType {
             DataType::JSONB => write!(f, "JSONB"),
             DataType::Regclass => write!(f, "REGCLASS"),
             DataType::Text => write!(f, "TEXT"),
-            DataType::String(size) => format_type_with_optional_length(f, "STRING", size, false),
+            DataType::String(size) => format_type_with_optional_length(f, "String", size, false),
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => match ty {
-                ArrayElemTypeDef::None => write!(f, "ARRAY"),
+                ArrayElemTypeDef::None => write!(f, "Array"),
                 ArrayElemTypeDef::SquareBracket(t, None) => write!(f, "{t}[]"),
                 ArrayElemTypeDef::SquareBracket(t, Some(size)) => write!(f, "{t}[{size}]"),
-                ArrayElemTypeDef::AngleBracket(t) => write!(f, "ARRAY<{t}>"),
+                ArrayElemTypeDef::AngleBracket(t) => write!(f, "Array<{t}>"),
                 ArrayElemTypeDef::Parenthesis(t) => write!(f, "Array({t})"),
             },
             DataType::Custom(ty, modifiers) => {

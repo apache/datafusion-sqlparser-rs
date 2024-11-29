@@ -4239,7 +4239,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Statement::CreateFunction {
+        Ok(Statement::CreateFunction(CreateFunction {
             or_replace,
             temporary,
             name,
@@ -4255,7 +4255,7 @@ impl<'a> Parser<'a> {
             determinism_specifier: None,
             options: None,
             remote_connection: None,
-        })
+        }))
     }
 
     /// Parse `CREATE FUNCTION` for [Hive]
@@ -4272,7 +4272,7 @@ impl<'a> Parser<'a> {
         let as_ = self.parse_create_function_body_string()?;
         let using = self.parse_optional_create_function_using()?;
 
-        Ok(Statement::CreateFunction {
+        Ok(Statement::CreateFunction(CreateFunction {
             or_replace,
             temporary,
             name,
@@ -4288,7 +4288,7 @@ impl<'a> Parser<'a> {
             determinism_specifier: None,
             options: None,
             remote_connection: None,
-        })
+        }))
     }
 
     /// Parse `CREATE FUNCTION` for [BigQuery]
@@ -4361,7 +4361,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::CreateFunction {
+        Ok(Statement::CreateFunction(CreateFunction {
             or_replace,
             temporary,
             if_not_exists,
@@ -4377,7 +4377,7 @@ impl<'a> Parser<'a> {
             behavior: None,
             called_on_null: None,
             parallel: None,
-        })
+        }))
     }
 
     fn parse_function_arg(&mut self) -> Result<OperateFunctionArg, ParserError> {

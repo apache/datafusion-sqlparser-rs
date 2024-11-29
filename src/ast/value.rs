@@ -261,7 +261,7 @@ pub struct EscapeQuotedString<'a> {
     quote: char,
 }
 
-impl<'a> fmt::Display for EscapeQuotedString<'a> {
+impl fmt::Display for EscapeQuotedString<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // EscapeQuotedString doesn't know which mode of escape was
         // chosen by the user. So this code must to correctly display
@@ -325,7 +325,7 @@ pub fn escape_double_quote_string(s: &str) -> EscapeQuotedString<'_> {
 
 pub struct EscapeEscapedStringLiteral<'a>(&'a str);
 
-impl<'a> fmt::Display for EscapeEscapedStringLiteral<'a> {
+impl fmt::Display for EscapeEscapedStringLiteral<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for c in self.0.chars() {
             match c {
@@ -359,7 +359,7 @@ pub fn escape_escaped_string(s: &str) -> EscapeEscapedStringLiteral<'_> {
 
 pub struct EscapeUnicodeStringLiteral<'a>(&'a str);
 
-impl<'a> fmt::Display for EscapeUnicodeStringLiteral<'a> {
+impl fmt::Display for EscapeUnicodeStringLiteral<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for c in self.0.chars() {
             match c {

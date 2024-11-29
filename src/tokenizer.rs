@@ -584,7 +584,7 @@ struct State<'a> {
     pub col: u64,
 }
 
-impl<'a> State<'a> {
+impl State<'_> {
     /// return the next character and advance the stream
     pub fn next(&mut self) -> Option<char> {
         match self.peekable.next() {

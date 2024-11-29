@@ -27,6 +27,7 @@ use core::{
 use helpers::attached_token::AttachedToken;
 
 use log::debug;
+use std::sync::OnceLock;
 
 use recursion::RecursionCounter;
 use IsLateral::*;
@@ -3277,6 +3278,12 @@ impl<'a> Parser<'a> {
         self.peek_nth_token(0)
     }
 
+    /// Return the first non-whitespace token that has not yet been processed
+    /// (or None if reached end-of-file)
+    pub fn peek_token_ref(&self) -> &TokenWithLocation {
+        self.peek_nth_token_ref(0)
+    }
+
     /// Returns the `N` next non-whitespace tokens that have not yet been
     /// processed.
     ///
@@ -3304,6 +3311,11 @@ impl<'a> Parser<'a> {
             .map(|with_loc| with_loc.token)
     }
 
+    pub fn peek_tokens_ref<const N: usize>(&self) -> [&Token; N] {
+        self.peek_tokens_with_location_ref()
+            .map(|with_loc| &with_loc.token)
+    }
+
     /// Returns the `N` next non-whitespace tokens with locations that have not
     /// yet been processed.
     ///
@@ -3327,8 +3339,33 @@ impl<'a> Parser<'a> {
         })
     }
 
+    pub fn peek_tokens_with_location_ref<const N: usize>(&self) -> [&TokenWithLocation; N] {
+        let mut index = self.index;
+        core::array::from_fn(|_| loop {
+            let token = self.tokens.get(index);
+            index += 1;
+            if let Some(TokenWithLocation {
+                token: Token::Whitespace(_),
+                span: _,
+            }) = token
+            {
+                continue;
+            }
+            if let Some(tok) = token {
+                return tok;
+            } else {
+                return eof_token();
+            };
+        })
+    }
+
     /// Return nth non-whitespace token that has not yet been processed
-    pub fn peek_nth_token(&self, mut n: usize) -> TokenWithLocation {
+    pub fn peek_nth_token(&self, n: usize) -> TokenWithLocation {
+        self.peek_nth_token_ref(n).clone()
+    }
+
+    /// Return nth non-whitespace token that has not yet been processed
+    pub fn peek_nth_token_ref(&self, mut n: usize) -> &TokenWithLocation {
         let mut index = self.index;
         loop {
             index += 1;
@@ -3339,10 +3376,11 @@ impl<'a> Parser<'a> {
                 }) => continue,
                 non_whitespace => {
                     if n == 0 {
-                        return non_whitespace.cloned().unwrap_or(TokenWithLocation {
-                            token: Token::EOF,
-                            span: Span::empty(),
-                        });
+                        if let Some(tok) = non_whitespace {
+                            return tok;
+                        } else {
+                            return eof_token();
+                        }
                     }
                     n -= 1;
                 }
@@ -3379,6 +3417,13 @@ impl<'a> Parser<'a> {
     /// (or None if reached end-of-file) and mark it as processed. OK to call
     /// repeatedly after reaching EOF.
     pub fn next_token(&mut self) -> TokenWithLocation {
+        self.next_token_ref().clone()
+    }
+
+    /// Return the first non-whitespace token that has not yet been processed
+    /// (or None if reached end-of-file) and mark it as processed. OK to call
+    /// repeatedly after reaching EOF.
+    pub fn next_token_ref(&mut self) -> &TokenWithLocation {
         loop {
             self.index += 1;
             match self.tokens.get(self.index - 1) {
@@ -3387,9 +3432,11 @@ impl<'a> Parser<'a> {
                     span: _,
                 }) => continue,
                 token => {
-                    return token
-                        .cloned()
-                        .unwrap_or_else(|| TokenWithLocation::wrap(Token::EOF))
+                    if let Some(token) = token {
+                        return token;
+                    } else {
+                        return eof_token();
+                    }
                 }
             }
         }
@@ -3438,6 +3485,13 @@ impl<'a> Parser<'a> {
     pub fn parse_keyword_token(&mut self, expected: Keyword) -> Option<TokenWithLocation> {
         match self.peek_token().token {
             Token::Word(w) if expected == w.keyword => Some(self.next_token()),
+            _ => None,
+        }
+    }
+
+    pub fn parse_keyword_token_ref(&mut self, expected: Keyword) -> Option<&TokenWithLocation> {
+        match &self.peek_token_ref().token {
+            Token::Word(w) if expected == w.keyword => Some(self.next_token_ref()),
             _ => None,
         }
     }
@@ -12851,6 +12905,11 @@ impl Word {
             span,
         }
     }
+}
+
+static EOF_TOKEN: OnceLock<TokenWithLocation> = OnceLock::new();
+fn eof_token() -> &'static TokenWithLocation {
+    EOF_TOKEN.get_or_init(|| TokenWithLocation::wrap(Token::EOF))
 }
 
 #[cfg(test)]

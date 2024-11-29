@@ -62,17 +62,17 @@ impl Dialect for DatabricksDialect {
 
     // https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-qry-select-join.html
     fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
-        match join_operator {
+        matches!(
+            join_operator,
             JoinOperator::Inner(_)
-            | JoinOperator::LeftOuter(_)
-            | JoinOperator::RightOuter(_)
-            | JoinOperator::FullOuter(_)
-            | JoinOperator::CrossJoin
-            | JoinOperator::Anti(_)
-            | JoinOperator::LeftAnti(_)
-            | JoinOperator::Semi(_)
-            | JoinOperator::LeftSemi(_) => true,
-            _ => false,
-        }
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::FullOuter(_)
+                | JoinOperator::CrossJoin
+                | JoinOperator::Anti(_)
+                | JoinOperator::LeftAnti(_)
+                | JoinOperator::Semi(_)
+                | JoinOperator::LeftSemi(_)
+        )
     }
 }

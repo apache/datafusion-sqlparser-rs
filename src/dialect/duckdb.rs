@@ -78,20 +78,20 @@ impl Dialect for DuckDbDialect {
 
     // https://duckdb.org/docs/sql/query_syntax/from.html#joins
     fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
-        match join_operator {
+        matches!(
+            join_operator,
             JoinOperator::Inner(_)
-            | JoinOperator::LeftOuter(_)
-            | JoinOperator::RightOuter(_)
-            | JoinOperator::FullOuter(_)
-            | JoinOperator::CrossJoin
-            | JoinOperator::Anti(_)
-            | JoinOperator::LeftAnti(_)
-            | JoinOperator::RightAnti(_)
-            | JoinOperator::Semi(_)
-            | JoinOperator::LeftSemi(_)
-            | JoinOperator::RightSemi(_)
-            | JoinOperator::AsOf { .. } => true,
-            _ => false,
-        }
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::FullOuter(_)
+                | JoinOperator::CrossJoin
+                | JoinOperator::Anti(_)
+                | JoinOperator::LeftAnti(_)
+                | JoinOperator::RightAnti(_)
+                | JoinOperator::Semi(_)
+                | JoinOperator::LeftSemi(_)
+                | JoinOperator::RightSemi(_)
+                | JoinOperator::AsOf { .. }
+        )
     }
 }

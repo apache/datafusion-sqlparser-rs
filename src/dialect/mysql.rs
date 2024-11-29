@@ -106,13 +106,13 @@ impl Dialect for MySqlDialect {
     }
 
     fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
-        match join_operator {
+        matches!(
+            join_operator,
             JoinOperator::Inner(_)
-            | JoinOperator::LeftOuter(_)
-            | JoinOperator::RightOuter(_)
-            | JoinOperator::CrossJoin => true,
-            _ => false,
-        }
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::CrossJoin
+        )
     }
 
     fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {

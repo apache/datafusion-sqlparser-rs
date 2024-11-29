@@ -285,7 +285,7 @@ fn test_distribute_by() {
 
 #[test]
 fn no_join_condition() {
-    let join = "SELECT a, b FROM db.table_name CROSS JOIN a";
+    let join = "SELECT a, b FROM db.table_name JOIN a";
     hive().verified_stmt(join);
 }
 

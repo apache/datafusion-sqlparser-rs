@@ -83,14 +83,14 @@ impl Dialect for RedshiftSqlDialect {
 
     // https://docs.aws.amazon.com/redshift/latest/dg/r_Join_examples.html
     fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
-        match join_operator {
+        matches!(
+            join_operator,
             JoinOperator::Inner(_)
-            | JoinOperator::LeftOuter(_)
-            | JoinOperator::RightOuter(_)
-            | JoinOperator::FullOuter(_)
-            | JoinOperator::CrossJoin => true,
-            _ => false,
-        }
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::FullOuter(_)
+                | JoinOperator::CrossJoin
+        )
     }
 
     fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {

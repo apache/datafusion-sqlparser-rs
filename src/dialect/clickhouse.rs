@@ -53,20 +53,20 @@ impl Dialect for ClickHouseDialect {
 
     // https://clickhouse.com/docs/en/sql-reference/statements/select/join
     fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
-        match join_operator {
+        matches!(
+            join_operator,
             JoinOperator::Inner(_)
-            | JoinOperator::LeftOuter(_)
-            | JoinOperator::RightOuter(_)
-            | JoinOperator::FullOuter(_)
-            | JoinOperator::CrossJoin
-            | JoinOperator::Semi(_)
-            | JoinOperator::LeftSemi(_)
-            | JoinOperator::RightSemi(_)
-            | JoinOperator::Anti(_)
-            | JoinOperator::LeftAnti(_)
-            | JoinOperator::RightAnti(_)
-            | JoinOperator::AsOf { .. } => true,
-            _ => false,
-        }
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::FullOuter(_)
+                | JoinOperator::CrossJoin
+                | JoinOperator::Semi(_)
+                | JoinOperator::LeftSemi(_)
+                | JoinOperator::RightSemi(_)
+                | JoinOperator::Anti(_)
+                | JoinOperator::LeftAnti(_)
+                | JoinOperator::RightAnti(_)
+                | JoinOperator::AsOf { .. }
+        )
     }
 }

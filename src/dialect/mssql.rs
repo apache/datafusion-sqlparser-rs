@@ -84,16 +84,16 @@ impl Dialect for MsSqlDialect {
 
     // https://learn.microsoft.com/en-us/sql/relational-databases/performance/joins?view=sql-server-ver16
     fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
-        match join_operator {
+        matches!(
+            join_operator,
             JoinOperator::Inner(_)
-            | JoinOperator::LeftOuter(_)
-            | JoinOperator::RightOuter(_)
-            | JoinOperator::FullOuter(_)
-            | JoinOperator::CrossJoin
-            | JoinOperator::CrossApply
-            | JoinOperator::OuterApply => true,
-            _ => false,
-        }
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::FullOuter(_)
+                | JoinOperator::CrossJoin
+                | JoinOperator::CrossApply
+                | JoinOperator::OuterApply
+        )
     }
 
     fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {

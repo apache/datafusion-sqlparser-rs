@@ -67,16 +67,16 @@ impl Dialect for HiveDialect {
 
     // https://cwiki.apache.org/confluence/display/hive/languagemanual+joins
     fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
-        match join_operator {
+        matches!(
+            join_operator,
             JoinOperator::Inner(_)
-            | JoinOperator::LeftOuter(_)
-            | JoinOperator::RightOuter(_)
-            | JoinOperator::FullOuter(_)
-            | JoinOperator::CrossJoin
-            | JoinOperator::Semi(_)
-            | JoinOperator::LeftSemi(_) => true,
-            _ => false,
-        }
+                | JoinOperator::LeftOuter(_)
+                | JoinOperator::RightOuter(_)
+                | JoinOperator::FullOuter(_)
+                | JoinOperator::CrossJoin
+                | JoinOperator::Semi(_)
+                | JoinOperator::LeftSemi(_)
+        )
     }
 
     fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {

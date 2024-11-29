@@ -15,7 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::dialect::Dialect;
+use crate::{
+    ast::{JoinConstraint, JoinOperator},
+    dialect::Dialect,
+};
 
 /// A [`Dialect`] for [Hive](https://hive.apache.org/).
 #[derive(Debug)]
@@ -60,5 +63,38 @@ impl Dialect for HiveDialect {
     /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
     fn supports_load_data(&self) -> bool {
         true
+    }
+
+    // https://cwiki.apache.org/confluence/display/hive/languagemanual+joins
+    fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator {
+            JoinOperator::Inner(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::CrossJoin
+            | JoinOperator::Semi(_)
+            | JoinOperator::LeftSemi(_) => true,
+            _ => false,
+        }
+    }
+
+    fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator.constraint() {
+            JoinConstraint::Natural => false,
+            JoinConstraint::On(_) | JoinConstraint::Using(_) => matches!(
+                join_operator,
+                JoinOperator::Inner(_)
+                    | JoinOperator::LeftOuter(_)
+                    | JoinOperator::RightOuter(_)
+                    | JoinOperator::FullOuter(_)
+                    | JoinOperator::Semi(_)
+                    | JoinOperator::LeftSemi(_)
+            ),
+            JoinConstraint::None => matches!(
+                join_operator,
+                JoinOperator::Inner(_) | JoinOperator::CrossJoin
+            ),
+        }
     }
 }

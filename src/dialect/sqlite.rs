@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::Statement;
+use crate::ast::{JoinOperator, Statement};
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -80,5 +80,17 @@ impl Dialect for SQLiteDialect {
 
     fn supports_asc_desc_in_column_definition(&self) -> bool {
         true
+    }
+
+    // https://www.sqlite.org/lang_select.html
+    fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator {
+            JoinOperator::Inner(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::CrossJoin => true,
+            _ => false,
+        }
     }
 }

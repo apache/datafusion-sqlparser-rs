@@ -10186,16 +10186,24 @@ impl<'a> Parser<'a> {
                 let join_constraint = self.parse_join_constraint(natural)?;
                 let join_operator = join_operator_type(join_constraint);
 
-                if !self.dialect.verify_join_constraint(&join_operator) {
-                    self.expected("ON, or USING after JOIN", self.peek_token())?
-                }
-
                 Join {
                     relation,
                     global,
                     join_operator,
                 }
             };
+
+            if !self.dialect.verify_join_constraint(&join.join_operator) {
+                self.expected("ON, or USING after JOIN", self.peek_token())?
+            }
+
+            if !self.dialect.verify_join_operator(&join.join_operator) {
+                Err(ParserError::ParserError(format!(
+                    "Unsupported join type {} in the current dialect",
+                    join
+                )))?
+            }
+
             joins.push(join);
         }
         Ok(TableWithJoins { relation, joins })

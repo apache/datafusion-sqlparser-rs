@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use crate::ast::{JoinConstraint, JoinOperator};
 use crate::dialect::Dialect;
 use core::iter::Peekable;
 use core::str::Chars;
@@ -78,5 +79,31 @@ impl Dialect for RedshiftSqlDialect {
     /// Redshift supports PartiQL: <https://docs.aws.amazon.com/redshift/latest/dg/super-overview.html>
     fn supports_partiql(&self) -> bool {
         true
+    }
+
+    // https://docs.aws.amazon.com/redshift/latest/dg/r_Join_examples.html
+    fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator {
+            JoinOperator::Inner(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::CrossJoin => true,
+            _ => false,
+        }
+    }
+
+    fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator.constraint() {
+            JoinConstraint::Natural => false,
+            JoinConstraint::On(_) | JoinConstraint::Using(_) => matches!(
+                join_operator,
+                JoinOperator::Inner(_)
+                    | JoinOperator::LeftOuter(_)
+                    | JoinOperator::RightOuter(_)
+                    | JoinOperator::FullOuter(_)
+            ),
+            JoinConstraint::None => matches!(join_operator, JoinOperator::CrossJoin),
+        }
     }
 }

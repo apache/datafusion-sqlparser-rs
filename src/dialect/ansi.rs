@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::dialect::Dialect;
+use crate::{ast::JoinOperator, dialect::Dialect};
 
 /// A [`Dialect`] for [ANSI SQL](https://en.wikipedia.org/wiki/SQL:2011).
 #[derive(Debug)]
@@ -32,5 +32,16 @@ impl Dialect for AnsiDialect {
 
     fn require_interval_qualifier(&self) -> bool {
         true
+    }
+
+    fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator {
+            JoinOperator::Inner(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::CrossJoin => true,
+            _ => false,
+        }
     }
 }

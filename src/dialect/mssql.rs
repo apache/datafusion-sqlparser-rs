@@ -15,7 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::dialect::Dialect;
+use crate::{
+    ast::{JoinConstraint, JoinOperator},
+    dialect::Dialect,
+};
 
 /// A [`Dialect`] for [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/)
 #[derive(Debug)]
@@ -77,5 +80,36 @@ impl Dialect for MsSqlDialect {
 
     fn supports_named_fn_args_with_rarrow_operator(&self) -> bool {
         false
+    }
+
+    // https://learn.microsoft.com/en-us/sql/relational-databases/performance/joins?view=sql-server-ver16
+    fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator {
+            JoinOperator::Inner(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::CrossJoin
+            | JoinOperator::CrossApply
+            | JoinOperator::OuterApply => true,
+            _ => false,
+        }
+    }
+
+    fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator.constraint() {
+            JoinConstraint::Natural => false,
+            JoinConstraint::On(_) | JoinConstraint::Using(_) => matches!(
+                join_operator,
+                JoinOperator::Inner(_)
+                    | JoinOperator::LeftOuter(_)
+                    | JoinOperator::RightOuter(_)
+                    | JoinOperator::FullOuter(_)
+            ),
+            JoinConstraint::None => matches!(
+                join_operator,
+                JoinOperator::CrossJoin | JoinOperator::CrossApply | JoinOperator::OuterApply
+            ),
+        }
     }
 }

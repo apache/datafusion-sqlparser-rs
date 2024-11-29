@@ -688,6 +688,12 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
+    /// Verifies whether the provided `JoinOperator` is supported by this SQL dialect.
+    /// Returns `true` if the `JoinOperator` is supported, otherwise `false`.
+    fn verify_join_operator(&self, _join_operator: &JoinOperator) -> bool {
+        true
+    }
+
     /// Verifies if the given `JoinOperator`'s constraint is valid for this SQL dialect.
     /// Returns `true` if the join constraint is valid, otherwise `false`.
     fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {
@@ -709,7 +715,10 @@ pub trait Dialect: Debug + Any {
             ),
             JoinConstraint::None => matches!(
                 join_operator,
-                JoinOperator::CrossJoin | JoinOperator::CrossApply | JoinOperator::OuterApply
+                JoinOperator::CrossJoin
+                    | JoinOperator::CrossApply
+                    | JoinOperator::OuterApply
+                    | JoinOperator::AsOf { .. }
             ),
         }
     }

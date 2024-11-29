@@ -28,7 +28,7 @@
 // limitations under the License.
 use log::debug;
 
-use crate::ast::{ObjectName, Statement, UserDefinedTypeRepresentation};
+use crate::ast::{JoinOperator, ObjectName, Statement, UserDefinedTypeRepresentation};
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -230,6 +230,18 @@ impl Dialect for PostgreSqlDialect {
     /// ```
     fn supports_named_fn_args_with_expr_name(&self) -> bool {
         true
+    }
+
+    // https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator {
+            JoinOperator::Inner(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::CrossJoin => true,
+            _ => false,
+        }
     }
 }
 

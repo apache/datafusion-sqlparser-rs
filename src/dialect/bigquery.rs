@@ -15,7 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::dialect::Dialect;
+use crate::{
+    ast::{JoinConstraint, JoinOperator},
+    dialect::Dialect,
+};
 
 /// A [`Dialect`] for [Google Bigquery](https://cloud.google.com/bigquery/)
 #[derive(Debug, Default)]
@@ -71,5 +74,31 @@ impl Dialect for BigQueryDialect {
 
     fn require_interval_qualifier(&self) -> bool {
         true
+    }
+
+    // https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#join_types
+    fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator {
+            JoinOperator::Inner(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::CrossJoin => true,
+            _ => false,
+        }
+    }
+
+    fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator.constraint() {
+            JoinConstraint::Natural => false,
+            JoinConstraint::On(_) | JoinConstraint::Using(_) => matches!(
+                join_operator,
+                JoinOperator::Inner(_)
+                    | JoinOperator::LeftOuter(_)
+                    | JoinOperator::RightOuter(_)
+                    | JoinOperator::FullOuter(_)
+            ),
+            JoinConstraint::None => matches!(join_operator, JoinOperator::CrossJoin),
+        }
     }
 }

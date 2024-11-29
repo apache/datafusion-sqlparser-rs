@@ -6115,9 +6115,11 @@ fn parse_nullary_table_valued_function() {
 }
 
 #[test]
-fn parse_implicit_join() {
+fn gen_dialect_parse_implicit_join() {
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+
     let sql = "SELECT * FROM t1, t2";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     assert_eq!(
         vec![
             TableWithJoins {
@@ -6151,7 +6153,7 @@ fn parse_implicit_join() {
     );
 
     let sql = "SELECT * FROM t1a NATURAL JOIN t1b, t2a NATURAL JOIN t2b";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     assert_eq!(
         vec![
             TableWithJoins {
@@ -6235,7 +6237,7 @@ fn parse_cross_join() {
 }
 
 #[test]
-fn parse_joins_on() {
+fn gen_dialect_parse_joins_on() {
     fn join_with_constraint(
         relation: impl Into<String>,
         alias: Option<TableAlias>,
@@ -6261,9 +6263,17 @@ fn parse_joins_on() {
             })),
         }
     }
+
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+
     // Test parsing of aliases
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             table_alias("foo"),
@@ -6271,17 +6281,27 @@ fn parse_joins_on() {
             JoinOperator::Inner,
         )]
     );
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT * FROM t1 JOIN t2 foo ON c1 = c2",
         "SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2",
     );
     // Test parsing of different join operators
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, false, JoinOperator::Inner)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6290,7 +6310,12 @@ fn parse_joins_on() {
         )]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6299,11 +6324,21 @@ fn parse_joins_on() {
         )]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 SEMI JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, false, JoinOperator::Semi)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 LEFT SEMI JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 LEFT SEMI JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6312,7 +6347,12 @@ fn parse_joins_on() {
         )]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 RIGHT SEMI JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 RIGHT SEMI JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6321,11 +6361,21 @@ fn parse_joins_on() {
         )]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 ANTI JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, false, JoinOperator::Anti)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6334,7 +6384,12 @@ fn parse_joins_on() {
         )]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 RIGHT ANTI JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 RIGHT ANTI JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6343,7 +6398,12 @@ fn parse_joins_on() {
         )]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6353,7 +6413,12 @@ fn parse_joins_on() {
     );
 
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 GLOBAL FULL JOIN t2 ON c1 = c2")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6364,7 +6429,7 @@ fn parse_joins_on() {
 }
 
 #[test]
-fn parse_joins_using() {
+fn gen_dialect_parse_joins_using() {
     fn join_with_constraint(
         relation: impl Into<String>,
         alias: Option<TableAlias>,
@@ -6385,64 +6450,121 @@ fn parse_joins_using() {
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
         }
     }
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+
     // Test parsing of aliases
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 JOIN t2 AS foo USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 JOIN t2 AS foo USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint(
             "t2",
             table_alias("foo"),
             JoinOperator::Inner,
         )]
     );
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT * FROM t1 JOIN t2 foo USING(c1)",
         "SELECT * FROM t1 JOIN t2 AS foo USING(c1)",
     );
     // Test parsing of different join operators
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 LEFT JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 SEMI JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 SEMI JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::Semi)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 LEFT SEMI JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 LEFT SEMI JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftSemi)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 RIGHT SEMI JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 RIGHT SEMI JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightSemi)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 ANTI JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 ANTI JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::Anti)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftAnti)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 RIGHT ANTI JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 RIGHT ANTI JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightAnti)]
     );
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 USING(c1)").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 FULL JOIN t2 USING(c1)")
+                .from
+        )
+        .joins,
         vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
 }
 
 #[test]
-fn parse_natural_join() {
+fn gen_dialect_parse_natural_join() {
     fn natural_join(f: impl Fn(JoinConstraint) -> JoinOperator, alias: Option<TableAlias>) -> Join {
         Join {
             relation: TableFactor::Table {
@@ -6460,32 +6582,59 @@ fn parse_natural_join() {
         }
     }
 
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+
     // if not specified, inner join as default
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 NATURAL JOIN t2")
+                .from
+        )
+        .joins,
         vec![natural_join(JoinOperator::Inner, None)]
     );
     // left join explicitly
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 NATURAL LEFT JOIN t2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 NATURAL LEFT JOIN t2")
+                .from
+        )
+        .joins,
         vec![natural_join(JoinOperator::LeftOuter, None)]
     );
 
     // right join explicitly
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 NATURAL RIGHT JOIN t2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 NATURAL RIGHT JOIN t2")
+                .from
+        )
+        .joins,
         vec![natural_join(JoinOperator::RightOuter, None)]
     );
 
     // full join explicitly
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 NATURAL FULL JOIN t2").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 NATURAL FULL JOIN t2")
+                .from
+        )
+        .joins,
         vec![natural_join(JoinOperator::FullOuter, None)]
     );
 
     // natural join another table with alias
     assert_eq!(
-        only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2 AS t3").from).joins,
+        only(
+            dialects
+                .verified_only_select("SELECT * FROM t1 NATURAL JOIN t2 AS t3")
+                .from
+        )
+        .joins,
         vec![natural_join(JoinOperator::Inner, table_alias("t3"))]
     );
 
@@ -6503,11 +6652,13 @@ fn parse_complex_join() {
 }
 
 #[test]
-fn parse_join_nesting() {
+fn gen_dialect_parse_join_nesting() {
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+
     let sql = "SELECT * FROM a NATURAL JOIN (b NATURAL JOIN (c NATURAL JOIN d NATURAL JOIN e)) \
                NATURAL JOIN (f NATURAL JOIN (g NATURAL JOIN h))";
     assert_eq!(
-        only(&verified_only_select(sql).from).joins,
+        only(dialects.verified_only_select(sql).from).joins,
         vec![
             join(nest!(table("b"), nest!(table("c"), table("d"), table("e")))),
             join(nest!(table("f"), nest!(table("g"), table("h")))),
@@ -6515,19 +6666,19 @@ fn parse_join_nesting() {
     );
 
     let sql = "SELECT * FROM (a NATURAL JOIN b) NATURAL JOIN c";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     let from = only(select.from);
     assert_eq!(from.relation, nest!(table("a"), table("b")));
     assert_eq!(from.joins, vec![join(table("c"))]);
 
     let sql = "SELECT * FROM (((a NATURAL JOIN b)))";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     let from = only(select.from);
     assert_eq!(from.relation, nest!(nest!(nest!(table("a"), table("b")))));
     assert_eq!(from.joins, vec![]);
 
     let sql = "SELECT * FROM a NATURAL JOIN (((b NATURAL JOIN c)))";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     let from = only(select.from);
     assert_eq!(from.relation, table("a"));
     assert_eq!(
@@ -6536,7 +6687,7 @@ fn parse_join_nesting() {
     );
 
     let sql = "SELECT * FROM (a NATURAL JOIN b) AS c";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     let from = only(select.from);
     assert_eq!(
         from.relation,
@@ -6552,20 +6703,22 @@ fn parse_join_nesting() {
 }
 
 #[test]
-fn parse_join_syntax_variants() {
-    one_statement_parses_to(
+fn gen_dialect_parse_join_syntax_variants() {
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+
+    dialects.one_statement_parses_to(
         "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 JOIN t2 USING(c1)",
     );
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 LEFT JOIN t2 USING(c1)",
     );
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT c1 FROM t1 RIGHT OUTER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 RIGHT JOIN t2 USING(c1)",
     );
-    one_statement_parses_to(
+    dialects.one_statement_parses_to(
         "SELECT c1 FROM t1 FULL OUTER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 FULL JOIN t2 USING(c1)",
     );
@@ -6682,27 +6835,29 @@ fn parse_recursive_cte() {
 }
 
 #[test]
-fn parse_derived_tables() {
+fn gen_dialect_parse_derived_tables() {
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+
     let sql = "SELECT a.x, b.y FROM (SELECT x FROM foo) AS a CROSS JOIN (SELECT y FROM bar) AS b";
-    let _ = verified_only_select(sql);
+    let _ = dialects.verified_only_select(sql);
     //TODO: add assertions
 
     let sql = "SELECT a.x, b.y \
                FROM (SELECT x FROM foo) AS a (x) \
                CROSS JOIN (SELECT y FROM bar) AS b (y)";
-    let _ = verified_only_select(sql);
+    let _ = dialects.verified_only_select(sql);
     //TODO: add assertions
 
     let sql = "SELECT * FROM (((SELECT 1)))";
-    let _ = verified_only_select(sql);
+    let _ = dialects.verified_only_select(sql);
     // TODO: add assertions
 
     let sql = "SELECT * FROM t NATURAL JOIN (((SELECT 1)))";
-    let _ = verified_only_select(sql);
+    let _ = dialects.verified_only_select(sql);
     // TODO: add assertions
 
     let sql = "SELECT * FROM (((SELECT 1) UNION (SELECT 2)) AS t1 NATURAL JOIN t2)";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     let from = only(select.from);
     assert_eq!(
         from.relation,
@@ -12424,9 +12579,8 @@ fn parse_create_table_select() {
 }
 
 #[test]
-fn parse_no_condition_join_strategy() {
-    let mysql_dialect = TestedDialects::new(vec![Box::new(MySqlDialect {})]);
-    let generic_dialect = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+fn gen_dialect_parse_no_condition_join_strategy() {
+    let dialects = TestedDialects::new(vec![Box::new(GenericDialect {})]);
 
     let join_types = vec![
         "JOIN",
@@ -12452,32 +12606,12 @@ fn parse_no_condition_join_strategy() {
             "SELECT * FROM (SELECT 1 AS id, 'Foo' AS name) AS l {} (SELECT 1 AS id, 'Bar' AS name) AS r",
             join
         );
-        let result_generic = generic_dialect.parse_sql_statements(&sql);
+        let result = dialects.parse_sql_statements(&sql);
         if join.starts_with("CROSS") || join.starts_with("NATURAL") {
-            assert!(result_generic.is_ok());
+            assert!(result.is_ok());
         } else {
             assert_eq!(
-                result_generic.unwrap_err(),
-                ParserError::ParserError(
-                    "Expected: ON, or USING after JOIN, found: EOF".to_string()
-                )
-            );
-        }
-
-        let result_mysql = mysql_dialect.parse_sql_statements(&sql);
-        if join.starts_with("CROSS")
-            || join.starts_with("NATURAL")
-            || join.starts_with("INNER")
-            || join.starts_with("JOIN")
-            || join.starts_with("LEFT JOIN")
-            || join.starts_with("LEFT OUTER")
-            || join.starts_with("RIGHT JOIN")
-            || join.starts_with("RIGHT OUTER")
-        {
-            assert!(result_mysql.is_ok());
-        } else {
-            assert_eq!(
-                result_mysql.unwrap_err(),
+                result.unwrap_err(),
                 ParserError::ParserError(
                     "Expected: ON, or USING after JOIN, found: EOF".to_string()
                 )

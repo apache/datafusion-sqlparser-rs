@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::dialect::Dialect;
+use crate::{ast::JoinOperator, dialect::Dialect};
 
 // A [`Dialect`] for [ClickHouse](https://clickhouse.com/).
 #[derive(Debug)]
@@ -49,5 +49,24 @@ impl Dialect for ClickHouseDialect {
 
     fn supports_limit_comma(&self) -> bool {
         true
+    }
+
+    // https://clickhouse.com/docs/en/sql-reference/statements/select/join
+    fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator {
+            JoinOperator::Inner(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::CrossJoin
+            | JoinOperator::Semi(_)
+            | JoinOperator::LeftSemi(_)
+            | JoinOperator::RightSemi(_)
+            | JoinOperator::Anti(_)
+            | JoinOperator::LeftAnti(_)
+            | JoinOperator::RightAnti(_)
+            | JoinOperator::AsOf { .. } => true,
+            _ => false,
+        }
     }
 }

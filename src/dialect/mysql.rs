@@ -105,24 +105,22 @@ impl Dialect for MySqlDialect {
         true
     }
 
-    /// Verifies if the given `JoinOperator`'s constraint is valid for this SQL dialect.
-    /// Returns `true` if the join constraint is valid, otherwise `false`.
+    fn verify_join_operator(&self, join_operator: &JoinOperator) -> bool {
+        match join_operator {
+            JoinOperator::Inner(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::CrossJoin => true,
+            _ => false,
+        }
+    }
+
     fn verify_join_constraint(&self, join_operator: &JoinOperator) -> bool {
         match join_operator.constraint() {
             JoinConstraint::Natural => true,
             JoinConstraint::On(_) | JoinConstraint::Using(_) => matches!(
                 join_operator,
-                JoinOperator::Inner(_)
-                    | JoinOperator::LeftOuter(_)
-                    | JoinOperator::RightOuter(_)
-                    | JoinOperator::FullOuter(_)
-                    | JoinOperator::Semi(_)
-                    | JoinOperator::LeftSemi(_)
-                    | JoinOperator::RightSemi(_)
-                    | JoinOperator::Anti(_)
-                    | JoinOperator::LeftAnti(_)
-                    | JoinOperator::RightAnti(_)
-                    | JoinOperator::AsOf { .. }
+                JoinOperator::Inner(_) | JoinOperator::LeftOuter(_) | JoinOperator::RightOuter(_)
             ),
             JoinConstraint::None => matches!(
                 join_operator,
@@ -130,8 +128,6 @@ impl Dialect for MySqlDialect {
                     | JoinOperator::LeftOuter(_)
                     | JoinOperator::RightOuter(_)
                     | JoinOperator::CrossJoin
-                    | JoinOperator::CrossApply
-                    | JoinOperator::OuterApply
             ),
         }
     }

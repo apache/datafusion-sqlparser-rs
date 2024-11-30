@@ -282,6 +282,7 @@ impl fmt::Display for Table {
 pub struct Select {
     /// Token for the `SELECT` keyword
     pub select_token: AttachedToken,
+    /// `SELECT [DISTINCT] ...`
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
@@ -511,7 +512,7 @@ impl fmt::Display for NamedWindowDefinition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct With {
-    // Token for the "WITH" keyword
+    /// Token for the "WITH" keyword
     pub with_token: AttachedToken,
     pub recursive: bool,
     pub cte_tables: Vec<Cte>,
@@ -564,7 +565,7 @@ pub struct Cte {
     pub query: Box<Query>,
     pub from: Option<Ident>,
     pub materialized: Option<CteAsMaterialized>,
-    // Token for the closing parenthesis
+    /// Token for the closing parenthesis
     pub closing_paren_token: AttachedToken,
 }
 

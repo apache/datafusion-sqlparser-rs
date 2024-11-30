@@ -19,7 +19,7 @@ use core::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use core::fmt::{self, Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
-use crate::tokenizer::{Token, TokenWithSpan};
+use crate::tokenizer::TokenWithSpan;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -27,17 +27,65 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-/// A wrapper type for attaching tokens to AST nodes that should be ignored in comparisons and hashing.
-/// This should be used when a token is not relevant for semantics, but is still needed for
-/// accurate source location tracking.
+/// A wrapper over [`TokenWithSpan`]s that ignores the token and source
+/// location in comparisons and hashing.
+///
+/// This type is used when the token and location is not relevant for semantics,
+/// but is still needed for accurate source location tracking, for example, in
+/// the nodes in the [ast](crate::ast) module.
+///
+/// Note: **All** `AttachedTokens` are equal.
+///
+/// # Examples
+///
+/// Same token, different location are equal
+/// ```
+/// # use sqlparser::ast::helpers::attached_token::AttachedToken;
+/// # use sqlparser::tokenizer::{Location, Span, Token, TokenWithLocation};
+/// // commas @ line 1, column 10
+/// let tok1 = TokenWithLocation::new(
+///   Token::Comma,
+///   Span::new(Location::new(1, 10), Location::new(1, 11)),
+/// );
+/// // commas @ line 2, column 20
+/// let tok2 = TokenWithLocation::new(
+///   Token::Comma,
+///   Span::new(Location::new(2, 20), Location::new(2, 21)),
+/// );
+///
+/// assert_ne!(tok1, tok2); // token with locations are *not* equal
+/// assert_eq!(AttachedToken(tok1), AttachedToken(tok2)); // attached tokens are
+/// ```
+///
+/// Different token, different location are equal 🤯
+///
+/// ```
+/// # use sqlparser::ast::helpers::attached_token::AttachedToken;
+/// # use sqlparser::tokenizer::{Location, Span, Token, TokenWithLocation};
+/// // commas @ line 1, column 10
+/// let tok1 = TokenWithLocation::new(
+///   Token::Comma,
+///   Span::new(Location::new(1, 10), Location::new(1, 11)),
+/// );
+/// // period @ line 2, column 20
+/// let tok2 = TokenWithLocation::new(
+///  Token::Period,
+///   Span::new(Location::new(2, 10), Location::new(2, 21)),
+/// );
+///
+/// assert_ne!(tok1, tok2); // token with locations are *not* equal
+/// assert_eq!(AttachedToken(tok1), AttachedToken(tok2)); // attached tokens are
+/// ```
+/// // period @ line 2, column 20
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct AttachedToken(pub TokenWithSpan);
 
 impl AttachedToken {
+    /// Return a new Empty AttachedToken
     pub fn empty() -> Self {
-        AttachedToken(TokenWithSpan::wrap(Token::EOF))
+        AttachedToken(TokenWithSpan::new_eof())
     }
 }
 
@@ -78,5 +126,11 @@ impl Hash for AttachedToken {
 impl From<TokenWithSpan> for AttachedToken {
     fn from(value: TokenWithSpan) -> Self {
         AttachedToken(value)
+    }
+}
+
+impl From<AttachedToken> for TokenWithSpan {
+    fn from(value: AttachedToken) -> Self {
+        value.0
     }
 }

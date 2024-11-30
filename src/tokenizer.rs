@@ -600,22 +600,26 @@ impl Span {
     }
 }
 
+/// Backwards compatibility struct for [`TokenWithSpan`]
+#[deprecated(since = "0.53.0", note = "please use `TokenWithSpan` instead")]
+pub type TokenWithLocation = TokenWithSpan;
+
 /// A [Token] with [Span] attached to it
 ///
 /// This is used to track the location of a token in the input string
 ///
 /// # Examples
 /// ```
-/// # use sqlparser::tokenizer::{Location, Span, Token, TokenWithLocation};
+/// # use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan};
 /// // commas @ line 1, column 10
-/// let tok1 = TokenWithLocation::new(
+/// let tok1 = TokenWithSpan::new(
 ///   Token::Comma,
 ///   Span::new(Location::new(1, 10), Location::new(1, 11)),
 /// );
 /// assert_eq!(tok1, Token::Comma); // can compare the token
 ///
 /// // commas @ line 2, column 20
-/// let tok2 = TokenWithLocation::new(
+/// let tok2 = TokenWithSpan::new(
 ///   Token::Comma,
 ///   Span::new(Location::new(2, 20), Location::new(2, 21)),
 /// );
@@ -625,46 +629,46 @@ impl Span {
 #[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct TokenWithLocation {
+pub struct TokenWithSpan {
     pub token: Token,
     pub span: Span,
 }
 
-impl TokenWithLocation {
-    /// Create a new [`TokenWithLocation`] from a [`Token`] and a [`Span`]
-    pub fn new(token: Token, span: Span) -> TokenWithLocation {
-        TokenWithLocation { token, span }
+impl TokenWithSpan {
+    /// Create a new [`TokenWithSpan`] from a [`Token`] and a [`Span`]
+    pub fn new(token: Token, span: Span) -> Self {
+        Self { token, span }
     }
 
     /// Wrap a token with an empty span
-    pub fn wrap(token: Token) -> TokenWithLocation {
-        TokenWithLocation::new(token, Span::empty())
+    pub fn wrap(token: Token) -> Self {
+        Self::new(token, Span::empty())
     }
 
     /// Wrap a token with a location from `start` to `end`
-    pub fn at(token: Token, start: Location, end: Location) -> TokenWithLocation {
-        TokenWithLocation::new(token, Span::new(start, end))
+    pub fn at(token: Token, start: Location, end: Location) -> Self {
+        Self::new(token, Span::new(start, end))
     }
 
     /// Return an EOF token with no location
     pub fn new_eof() -> Self {
-        TokenWithLocation::wrap(Token::EOF)
+        Self::wrap(Token::EOF)
     }
 }
 
-impl PartialEq<Token> for TokenWithLocation {
+impl PartialEq<Token> for TokenWithSpan {
     fn eq(&self, other: &Token) -> bool {
         &self.token == other
     }
 }
 
-impl PartialEq<TokenWithLocation> for Token {
-    fn eq(&self, other: &TokenWithLocation) -> bool {
+impl PartialEq<TokenWithSpan> for Token {
+    fn eq(&self, other: &TokenWithSpan) -> bool {
         self == &other.token
     }
 }
 
-impl fmt::Display for TokenWithLocation {
+impl fmt::Display for TokenWithSpan {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.token.fmt(f)
     }
@@ -692,7 +696,7 @@ struct State<'a> {
     pub col: u64,
 }
 
-impl<'a> State<'a> {
+impl State<'_> {
     /// return the next character and advance the stream
     pub fn next(&mut self) -> Option<char> {
         match self.peekable.next() {
@@ -824,8 +828,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize the statement and produce a vector of tokens with location information
-    pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
-        let mut tokens: Vec<TokenWithLocation> = vec![];
+    pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithSpan>, TokenizerError> {
+        let mut tokens: Vec<TokenWithSpan> = vec![];
         self.tokenize_with_location_into_buf(&mut tokens)
             .map(|_| tokens)
     }
@@ -834,7 +838,7 @@ impl<'a> Tokenizer<'a> {
     /// If an error is thrown, the buffer will contain all tokens that were successfully parsed before the error.
     pub fn tokenize_with_location_into_buf(
         &mut self,
-        buf: &mut Vec<TokenWithLocation>,
+        buf: &mut Vec<TokenWithSpan>,
     ) -> Result<(), TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),
@@ -846,7 +850,7 @@ impl<'a> Tokenizer<'a> {
         while let Some(token) = self.next_token(&mut state)? {
             let span = location.span_to(state.location());
 
-            buf.push(TokenWithLocation { token, span });
+            buf.push(TokenWithSpan { token, span });
 
             location = state.location();
         }
@@ -2859,25 +2863,25 @@ mod tests {
             .tokenize_with_location()
             .unwrap();
         let expected = vec![
-            TokenWithLocation::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
-            TokenWithLocation::at(
+            TokenWithSpan::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
+            TokenWithSpan::at(
                 Token::Whitespace(Whitespace::Space),
                 (1, 7).into(),
                 (1, 8).into(),
             ),
-            TokenWithLocation::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
-            TokenWithLocation::at(Token::Comma, (1, 9).into(), (1, 10).into()),
-            TokenWithLocation::at(
+            TokenWithSpan::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
+            TokenWithSpan::at(Token::Comma, (1, 9).into(), (1, 10).into()),
+            TokenWithSpan::at(
                 Token::Whitespace(Whitespace::Newline),
                 (1, 10).into(),
                 (2, 1).into(),
             ),
-            TokenWithLocation::at(
+            TokenWithSpan::at(
                 Token::Whitespace(Whitespace::Space),
                 (2, 1).into(),
                 (2, 2).into(),
             ),
-            TokenWithLocation::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
+            TokenWithSpan::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
         ];
         compare(expected, tokens);
     }

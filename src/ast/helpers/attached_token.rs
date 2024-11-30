@@ -19,7 +19,7 @@ use core::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use core::fmt::{self, Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
-use crate::tokenizer::TokenWithLocation;
+use crate::tokenizer::TokenWithSpan;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-/// A wrapper over [`TokenWithLocation`]s that ignores the token and source
+/// A wrapper over [`TokenWithSpan`]s that ignores the token and source
 /// location in comparisons and hashing.
 ///
 /// This type is used when the token and location is not relevant for semantics,
@@ -80,12 +80,12 @@ use sqlparser_derive::{Visit, VisitMut};
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct AttachedToken(pub TokenWithLocation);
+pub struct AttachedToken(pub TokenWithSpan);
 
 impl AttachedToken {
     /// Return a new Empty AttachedToken
     pub fn empty() -> Self {
-        AttachedToken(TokenWithLocation::new_eof())
+        AttachedToken(TokenWithSpan::new_eof())
     }
 }
 
@@ -123,13 +123,13 @@ impl Hash for AttachedToken {
     }
 }
 
-impl From<TokenWithLocation> for AttachedToken {
-    fn from(value: TokenWithLocation) -> Self {
+impl From<TokenWithSpan> for AttachedToken {
+    fn from(value: TokenWithSpan) -> Self {
         AttachedToken(value)
     }
 }
 
-impl From<AttachedToken> for TokenWithLocation {
+impl From<AttachedToken> for TokenWithSpan {
     fn from(value: AttachedToken) -> Self {
         value.0
     }

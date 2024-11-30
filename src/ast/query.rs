@@ -27,7 +27,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
     ast::*,
-    tokenizer::{Token, TokenWithLocation},
+    tokenizer::{Token, TokenWithSpan},
 };
 
 /// The most complete variant of a `SELECT` query expression, optionally
@@ -644,7 +644,7 @@ pub struct WildcardAdditionalOptions {
 impl Default for WildcardAdditionalOptions {
     fn default() -> Self {
         Self {
-            wildcard_token: TokenWithLocation::wrap(Token::Mul).into(),
+            wildcard_token: TokenWithSpan::wrap(Token::Mul).into(),
             opt_ilike: None,
             opt_exclude: None,
             opt_except: None,
@@ -1714,7 +1714,7 @@ impl fmt::Display for Join {
         }
         fn suffix(constraint: &'_ JoinConstraint) -> impl fmt::Display + '_ {
             struct Suffix<'a>(&'a JoinConstraint);
-            impl<'a> fmt::Display for Suffix<'a> {
+            impl fmt::Display for Suffix<'_> {
                 fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                     match self.0 {
                         JoinConstraint::On(expr) => write!(f, " ON {expr}"),

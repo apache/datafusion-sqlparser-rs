@@ -151,6 +151,55 @@ visitor.post_visit_expr(<is null operand>)
 visitor.post_visit_expr(<is null expr>)
 ```
 
+If the field is a `Option` and add `#[with = "visit_xxx"]` to the field, the generated code
+will try to access the field only if it is `Some`:
+
+```rust
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowStatementIn {
+    pub clause: ShowStatementInClause,
+    pub parent_type: Option<ShowStatementInParentType>,
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub parent_name: Option<ObjectName>,
+}
+```
+
+This will generate
+
+```rust
+impl sqlparser::ast::Visit for ShowStatementIn {
+    fn visit<V: sqlparser::ast::Visitor>(
+        &self,
+        visitor: &mut V,
+    ) -> ::std::ops::ControlFlow<V::Break> {
+        sqlparser::ast::Visit::visit(&self.clause, visitor)?;
+        sqlparser::ast::Visit::visit(&self.parent_type, visitor)?;
+        if let Some(value) = &self.parent_name {
+            visitor.pre_visit_relation(value)?;
+            sqlparser::ast::Visit::visit(value, visitor)?;
+            visitor.post_visit_relation(value)?;
+        }
+        ::std::ops::ControlFlow::Continue(())
+    }
+}
+
+impl sqlparser::ast::VisitMut for ShowStatementIn {
+    fn visit<V: sqlparser::ast::VisitorMut>(
+        &mut self,
+        visitor: &mut V,
+    ) -> ::std::ops::ControlFlow<V::Break> {
+        sqlparser::ast::VisitMut::visit(&mut self.clause, visitor)?;
+        sqlparser::ast::VisitMut::visit(&mut self.parent_type, visitor)?;
+        if let Some(value) = &mut self.parent_name {
+            visitor.pre_visit_relation(value)?;
+            sqlparser::ast::VisitMut::visit(value, visitor)?;
+            visitor.post_visit_relation(value)?;
+        }
+        ::std::ops::ControlFlow::Continue(())
+    }
+}
+```
+
 ## Releasing
 
 This crate's release is not automated. Instead it is released manually as needed

@@ -1327,15 +1327,18 @@ pub enum ColumnOption {
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
 
-    /// ClickHouse supports `MATERIALIZE`, `EPHEMERAL` and `ALIAS` expr to generate default values.
-    /// Syntax: `b INT MATERIALIZE (a + 1)`
-    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table#default_values)
-
     /// `MATERIALIZE <expr>`
+    /// Syntax: `b INT MATERIALIZE (a + 1)`
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table#default_values)
     Materialized(Expr),
     /// `EPHEMERAL [<expr>]`
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table#default_values)
     Ephemeral(Option<Expr>),
     /// `ALIAS <expr>`
+    ///
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table#default_values)
     Alias(Expr),
 
     /// `{ PRIMARY KEY | UNIQUE } [<constraint_characteristics>]`
@@ -1552,7 +1555,7 @@ pub enum GeneratedExpressionMode {
 #[must_use]
 fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
     struct ConstraintName<'a>(&'a Option<Ident>);
-    impl<'a> fmt::Display for ConstraintName<'a> {
+    impl fmt::Display for ConstraintName<'_> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             if let Some(name) = self.0 {
                 write!(f, "CONSTRAINT {name} ")?;
@@ -1573,7 +1576,7 @@ fn display_option<'a, T: fmt::Display>(
     option: &'a Option<T>,
 ) -> impl fmt::Display + 'a {
     struct OptionDisplay<'a, T>(&'a str, &'a str, &'a Option<T>);
-    impl<'a, T: fmt::Display> fmt::Display for OptionDisplay<'a, T> {
+    impl<T: fmt::Display> fmt::Display for OptionDisplay<'_, T> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             if let Some(inner) = self.2 {
                 let (prefix, postfix) = (self.0, self.1);

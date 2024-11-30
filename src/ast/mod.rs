@@ -110,7 +110,7 @@ where
     sep: &'static str,
 }
 
-impl<'a, T> fmt::Display for DisplaySeparated<'a, T>
+impl<T> fmt::Display for DisplaySeparated<'_, T>
 where
     T: fmt::Display,
 {
@@ -7665,6 +7665,7 @@ impl fmt::Display for ShowStatementInParentType {
 pub struct ShowStatementIn {
     pub clause: ShowStatementInClause,
     pub parent_type: Option<ShowStatementInParentType>,
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub parent_name: Option<ObjectName>,
 }
 

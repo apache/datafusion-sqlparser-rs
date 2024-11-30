@@ -7069,6 +7069,7 @@ fn parse_create_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7081,7 +7082,8 @@ fn parse_create_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7129,6 +7131,7 @@ fn parse_create_view_with_columns() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(
@@ -7151,7 +7154,8 @@ fn parse_create_view_with_columns() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7174,6 +7178,7 @@ fn parse_create_view_temporary() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7186,7 +7191,8 @@ fn parse_create_view_temporary() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7209,6 +7215,7 @@ fn parse_create_or_replace_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -7221,7 +7228,8 @@ fn parse_create_or_replace_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7248,6 +7256,7 @@ fn parse_create_or_replace_materialized_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -7260,7 +7269,8 @@ fn parse_create_or_replace_materialized_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7283,6 +7293,7 @@ fn parse_create_materialized_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7295,7 +7306,8 @@ fn parse_create_materialized_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7318,6 +7330,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7330,7 +7343,8 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -8426,14 +8440,14 @@ fn parse_grant() {
 
 #[test]
 fn test_revoke() {
-    let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
+    let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst";
     match verified_stmt(sql) {
         Statement::Revoke {
             privileges,
             objects: GrantObjects::Tables(tables),
             grantees,
-            cascade,
             granted_by,
+            cascade,
         } => {
             assert_eq!(
                 Privileges::All {
@@ -8443,7 +8457,33 @@ fn test_revoke() {
             );
             assert_eq_vec(&["users", "auth"], &tables);
             assert_eq_vec(&["analyst"], &grantees);
-            assert!(cascade);
+            assert_eq!(cascade, None);
+            assert_eq!(None, granted_by);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_revoke_with_cascade() {
+    let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
+    match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
+        Statement::Revoke {
+            privileges,
+            objects: GrantObjects::Tables(tables),
+            grantees,
+            granted_by,
+            cascade,
+        } => {
+            assert_eq!(
+                Privileges::All {
+                    with_privileges_keyword: true
+                },
+                privileges
+            );
+            assert_eq_vec(&["users", "auth"], &tables);
+            assert_eq_vec(&["analyst"], &grantees);
+            assert_eq!(cascade, Some(CascadeOption::Cascade));
             assert_eq!(None, granted_by);
         }
         _ => unreachable!(),

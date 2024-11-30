@@ -4038,7 +4038,7 @@ fn parse_truncate_with_options() {
             table: true,
             only: true,
             identity: Some(TruncateIdentityOption::Restart),
-            cascade: Some(TruncateCascadeOption::Cascade),
+            cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
         },
         truncate
@@ -4070,7 +4070,7 @@ fn parse_truncate_with_table_list() {
             table: true,
             only: false,
             identity: Some(TruncateIdentityOption::Restart),
-            cascade: Some(TruncateCascadeOption::Cascade),
+            cascade: Some(CascadeOption::Cascade),
             on_cluster: None,
         },
         truncate

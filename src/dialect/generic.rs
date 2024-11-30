@@ -123,4 +123,8 @@ impl Dialect for GenericDialect {
     fn supports_named_fn_args_with_assignment_operator(&self) -> bool {
         true
     }
+
+    fn supports_user_host_grantee(&self) -> bool {
+        true
+    }
 }

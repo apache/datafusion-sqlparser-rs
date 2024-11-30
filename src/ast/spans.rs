@@ -325,6 +325,7 @@ impl Spanned for Statement {
                 if_not_exists: _,
                 temporary: _,
                 to,
+                params: _,
             } => union_spans(
                 core::iter::once(name.span())
                     .chain(columns.iter().map(|i| i.span()))

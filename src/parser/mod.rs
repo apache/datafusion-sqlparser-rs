@@ -8129,6 +8129,9 @@ impl<'a> Parser<'a> {
                 Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
                 Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_precision()?)),
                 Keyword::BLOB => Ok(DataType::Blob(self.parse_optional_precision()?)),
+                Keyword::TINYBLOB => Ok(DataType::TinyBlob),
+                Keyword::MEDIUMBLOB => Ok(DataType::MediumBlob),
+                Keyword::LONGBLOB => Ok(DataType::LongBlob),
                 Keyword::BYTES => Ok(DataType::Bytes(self.parse_optional_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
@@ -8188,6 +8191,9 @@ impl<'a> Parser<'a> {
                     Ok(DataType::FixedString(character_length))
                 }
                 Keyword::TEXT => Ok(DataType::Text),
+                Keyword::TINYTEXT => Ok(DataType::TinyText),
+                Keyword::MEDIUMTEXT => Ok(DataType::MediumText),
+                Keyword::LONGTEXT => Ok(DataType::LongText),
                 Keyword::BYTEA => Ok(DataType::Bytea),
                 Keyword::NUMERIC => Ok(DataType::Numeric(
                     self.parse_exact_number_optional_precision_scale()?,

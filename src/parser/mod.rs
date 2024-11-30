@@ -8457,6 +8457,13 @@ impl<'a> Parser<'a> {
     pub fn parse_object_name(&mut self, in_table_clause: bool) -> Result<ObjectName, ParserError> {
         let mut idents = vec![];
         loop {
+            if self.dialect.supports_object_name_double_dot_notation()
+                && idents.len() == 1
+                && self.consume_token(&Token::Period)
+            {
+                // Empty string here means default schema
+                idents.push(Ident::new(""));
+            }
             idents.push(self.parse_identifier(in_table_clause)?);
             if !self.consume_token(&Token::Period) {
                 break;
@@ -11482,6 +11489,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_named_arg_operator(&mut self) -> Result<FunctionArgOperator, ParserError> {
+        if self.parse_keyword(Keyword::VALUE) {
+            return Ok(FunctionArgOperator::Value);
+        }
         let tok = self.next_token();
         match tok.token {
             Token::RArrow if self.dialect.supports_named_fn_args_with_rarrow_operator() => {

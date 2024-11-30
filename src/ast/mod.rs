@@ -5540,6 +5540,8 @@ pub enum FunctionArgOperator {
     Assignment,
     /// function(arg1 : value1)
     Colon,
+    /// function(arg1 VALUE value1)
+    Value,
 }
 
 impl fmt::Display for FunctionArgOperator {
@@ -5549,6 +5551,7 @@ impl fmt::Display for FunctionArgOperator {
             FunctionArgOperator::RightArrow => f.write_str("=>"),
             FunctionArgOperator::Assignment => f.write_str(":="),
             FunctionArgOperator::Colon => f.write_str(":"),
+            FunctionArgOperator::Value => f.write_str("VALUE"),
         }
     }
 }

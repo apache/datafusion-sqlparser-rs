@@ -50,4 +50,10 @@ impl Dialect for ClickHouseDialect {
     fn supports_limit_comma(&self) -> bool {
         true
     }
+
+    /// ClickHouse supports `Enum8` and `Enum16` types.
+    /// See [ClickHouse](https://clickhouse.com/docs/en/sql-reference/data-types/enum)
+    fn supports_enum_type_with_bits(&self) -> bool {
+        true
+    }
 }

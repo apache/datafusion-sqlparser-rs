@@ -707,6 +707,11 @@ pub trait Dialect: Debug + Any {
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
+
+    /// Return true if the dialect supports the Enum type with bits like Enum8, Enum16
+    fn supports_enum_type_with_bits(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

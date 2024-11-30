@@ -286,6 +286,8 @@ define_keywords!(
     ENFORCED,
     ENGINE,
     ENUM,
+    ENUM16,
+    ENUM8,
     EPHEMERAL,
     EPOCH,
     EQUALS,

@@ -25,9 +25,20 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{display_comma_separated, ObjectName, StructField, UnionField};
+use crate::ast::{display_comma_separated, ObjectName, StructField, UnionField, Value};
 
 use super::{value::escape_single_quote_string, ColumnDef};
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum EnumValue {
+    String(String),
+    /// ClickHouse allows to specify an integer value for each enum value.
+    ///
+    /// [clickhouse](https://clickhouse.com/docs/en/sql-reference/data-types/enum)
+    Pair(String, Value),
+}
 
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -334,7 +345,7 @@ pub enum DataType {
     /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nested-data-structures/nested
     Nested(Vec<ColumnDef>),
     /// Enums
-    Enum(Vec<String>),
+    Enum(Vec<EnumValue>, Option<i64>),
     /// Set
     Set(Vec<String>),
     /// Struct
@@ -546,13 +557,22 @@ impl fmt::Display for DataType {
                     write!(f, "{}({})", ty, modifiers.join(", "))
                 }
             }
-            DataType::Enum(vals) => {
-                write!(f, "ENUM(")?;
+            DataType::Enum(vals, bits) => {
+                match bits {
+                    Some(bits) => write!(f, "ENUM{}", bits),
+                    None => write!(f, "ENUM"),
+                }?;
+                write!(f, "(")?;
                 for (i, v) in vals.iter().enumerate() {
                     if i != 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "'{}'", escape_single_quote_string(v))?;
+                    match v {
+                        EnumValue::String(v) => write!(f, "'{}'", escape_single_quote_string(v))?,
+                        EnumValue::Pair(v, i) => {
+                            write!(f, "'{}' = {}", escape_single_quote_string(v), i)?
+                        }
+                    }
                 }
                 write!(f, ")")
             }

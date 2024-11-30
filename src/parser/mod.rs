@@ -11482,6 +11482,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_named_arg_operator(&mut self) -> Result<FunctionArgOperator, ParserError> {
+        if self.parse_keyword(Keyword::VALUE) {
+            return Ok(FunctionArgOperator::Value);
+        }
         let tok = self.next_token();
         match tok.token {
             Token::RArrow if self.dialect.supports_named_fn_args_with_rarrow_operator() => {

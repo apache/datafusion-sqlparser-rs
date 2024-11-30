@@ -19,7 +19,7 @@ use core::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use core::fmt::{self, Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
-use crate::tokenizer::{Token, TokenWithLocation};
+use crate::tokenizer::{Token, TokenWithSpan};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -33,11 +33,11 @@ use sqlparser_derive::{Visit, VisitMut};
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct AttachedToken(pub TokenWithLocation);
+pub struct AttachedToken(pub TokenWithSpan);
 
 impl AttachedToken {
     pub fn empty() -> Self {
-        AttachedToken(TokenWithLocation::wrap(Token::EOF))
+        AttachedToken(TokenWithSpan::wrap(Token::EOF))
     }
 }
 
@@ -75,8 +75,8 @@ impl Hash for AttachedToken {
     }
 }
 
-impl From<TokenWithLocation> for AttachedToken {
-    fn from(value: TokenWithLocation) -> Self {
+impl From<TokenWithSpan> for AttachedToken {
+    fn from(value: TokenWithSpan) -> Self {
         AttachedToken(value)
     }
 }

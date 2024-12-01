@@ -25,19 +25,19 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{display_comma_separated, ObjectName, StructField, UnionField, Value};
+use crate::ast::{display_comma_separated, Expr, ObjectName, StructField, UnionField};
 
 use super::{value::escape_single_quote_string, ColumnDef};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum EnumValue {
-    String(String),
+pub enum EnumMember {
+    Name(String),
     /// ClickHouse allows to specify an integer value for each enum value.
     ///
     /// [clickhouse](https://clickhouse.com/docs/en/sql-reference/data-types/enum)
-    Pair(String, Value),
+    NamedValue(String, Expr),
 }
 
 /// SQL data types
@@ -345,7 +345,7 @@ pub enum DataType {
     /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nested-data-structures/nested
     Nested(Vec<ColumnDef>),
     /// Enums
-    Enum(Vec<EnumValue>, Option<i64>),
+    Enum(Vec<EnumMember>, Option<u8>),
     /// Set
     Set(Vec<String>),
     /// Struct
@@ -568,9 +568,11 @@ impl fmt::Display for DataType {
                         write!(f, ", ")?;
                     }
                     match v {
-                        EnumValue::String(v) => write!(f, "'{}'", escape_single_quote_string(v))?,
-                        EnumValue::Pair(v, i) => {
-                            write!(f, "'{}' = {}", escape_single_quote_string(v), i)?
+                        EnumMember::Name(name) => {
+                            write!(f, "'{}'", escape_single_quote_string(name))?
+                        }
+                        EnumMember::NamedValue(name, value) => {
+                            write!(f, "'{}' = {}", escape_single_quote_string(name), value)?
                         }
                     }
                 }

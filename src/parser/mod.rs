@@ -7997,25 +7997,21 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_enum_values(&mut self) -> Result<Vec<EnumValue>, ParserError> {
+    pub fn parse_enum_values(&mut self) -> Result<Vec<EnumMember>, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let values = self.parse_comma_separated(Parser::parse_enum_value)?;
+        let values = self.parse_comma_separated(|parser| {
+            let name = parser.parse_literal_string()?;
+            let e = if parser.consume_token(&Token::Eq) {
+                let value = parser.parse_number()?;
+                EnumMember::NamedValue(name, value)
+            } else {
+                EnumMember::Name(name)
+            };
+            Ok(e)
+        })?;
         self.expect_token(&Token::RParen)?;
-        Ok(values)
-    }
 
-    pub fn parse_enum_value(&mut self) -> Result<EnumValue, ParserError> {
-        let str = self.parse_literal_string()?;
-        let value = match self.peek_token().token {
-            Token::Eq => {
-                // Consume the `=` token
-                self.next_token();
-                let value = self.parse_number_value()?;
-                EnumValue::Pair(str, value)
-            }
-            _ => EnumValue::String(str),
-        };
-        Ok(value)
+        Ok(values)
     }
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)

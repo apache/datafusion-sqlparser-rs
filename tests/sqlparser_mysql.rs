@@ -892,8 +892,8 @@ fn parse_create_table_set_enum() {
                         name: Ident::new("baz"),
                         data_type: DataType::Enum(
                             vec![
-                                EnumValue::String("a".to_string()),
-                                EnumValue::String("b".to_string())
+                                EnumMember::Name("a".to_string()),
+                                EnumMember::Name("b".to_string())
                             ],
                             None
                         ),

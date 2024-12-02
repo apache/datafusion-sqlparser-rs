@@ -74,7 +74,7 @@ mod recursion {
     /// borrow checker so the automatic [`DepthGuard`] decrement a
     /// reference to the counter.
     ///
-    /// Note: when "std" feature is enabled, this crate uses additional stack overflow protection
+    /// Note: when "recursive-protection" feature is enabled, this crate uses additional stack overflow protection
     /// for some of its recursive methods. See [`recursive::recursive`] for more information.
     pub(crate) struct RecursionCounter {
         remaining_depth: Rc<Cell<usize>>,
@@ -330,7 +330,7 @@ impl<'a> Parser<'a> {
     /// # }
     /// ```
     ///
-    /// Note: when "std" feature is enabled, this crate uses additional stack overflow protection
+    /// Note: when "recursive-protection" feature is enabled, this crate uses additional stack overflow protection
     //  for some of its recursive methods. See [`recursive::recursive`] for more information.
     pub fn with_recursion_limit(mut self, recursion_limit: usize) -> Self {
         self.recursion_counter = RecursionCounter::new(recursion_limit);

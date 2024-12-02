@@ -63,12 +63,12 @@ The following optional [crate  features](https://doc.rust-lang.org/cargo/referen
 
 * `serde`: Adds [Serde](https://serde.rs/) support by implementing  `Serialize` and `Deserialize` for all AST nodes.
 * `visitor`: Adds a `Visitor` capable of recursively walking the AST tree.
-
+* `recursive-protection` (enabled by default), uses [recursive](https://docs.rs/recursive/latest/recursive/) for stack overflow protection. 
 
 ## Syntax vs Semantics
 
 This crate provides only a syntax parser, and tries to avoid applying
-any SQL semantics, and accepts queries that specific databases would
+any SQL semantics, and accepts queries that specific databases wouldc
 reject, even when using that Database's specific `Dialect`. For
 example, `CREATE TABLE(x int, x int)` is accepted by this crate, even
 though most SQL engines will reject this statement due to the repeated

@@ -1123,9 +1123,8 @@ impl<'a> Parser<'a> {
             Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                 Ok(Some(self.parse_match_against()?))
             }
-            Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
-                self.prev_token();
-                Ok(Some(self.parse_bigquery_struct_literal()?))
+            Keyword::STRUCT if self.dialect.supports_struct_literal() => {
+                Ok(Some(self.parse_struct_literal()?))
             }
             Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
                 let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
@@ -2383,7 +2382,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Bigquery specific: Parse a struct literal
     /// Syntax
     /// ```sql
     /// -- typed
@@ -2391,7 +2389,9 @@ impl<'a> Parser<'a> {
     /// -- typeless
     /// STRUCT( expr1 [AS field_name] [, ... ])
     /// ```
-    fn parse_bigquery_struct_literal(&mut self) -> Result<Expr, ParserError> {
+    fn parse_struct_literal(&mut self) -> Result<Expr, ParserError> {
+        // Parse the fields definition if exist `<[field_name] field_type, ...>`
+        self.prev_token();
         let (fields, trailing_bracket) =
             self.parse_struct_type_def(Self::parse_struct_field_def)?;
         if trailing_bracket.0 {
@@ -2401,6 +2401,7 @@ impl<'a> Parser<'a> {
             );
         }
 
+        // Parse the struct values `(expr1 [, ... ])`
         self.expect_token(&Token::LParen)?;
         let values = self
             .parse_comma_separated(|parser| parser.parse_struct_field_expr(!fields.is_empty()))?;
@@ -2409,13 +2410,13 @@ impl<'a> Parser<'a> {
         Ok(Expr::Struct { values, fields })
     }
 
-    /// Parse an expression value for a bigquery struct [1]
+    /// Parse an expression value for a struct literal
     /// Syntax
     /// ```sql
     /// expr [AS name]
     /// ```
     ///
-    /// Parameter typed_syntax is set to true if the expression
+    /// For biquery [1], Parameter typed_syntax is set to true if the expression
     /// is to be parsed as a field expression declared using typed
     /// struct syntax [2], and false if using typeless struct syntax [3].
     ///

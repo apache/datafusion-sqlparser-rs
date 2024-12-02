@@ -375,6 +375,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports the STRUCT literal
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT STRUCT(1 as one, 'foo' as foo, false)
+    /// ```
+    fn supports_struct_literal(&self) -> bool {
+        false
+    }
+
     /// Dialect-specific infix parser override
     ///
     /// This method is called to parse the next infix expression.

@@ -931,12 +931,14 @@ pub enum Expr {
     Rollup(Vec<Vec<Expr>>),
     /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
     Tuple(Vec<Expr>),
-    /// `BigQuery` specific `Struct` literal expression [1]
+    /// `Struct` literal expression
     /// Syntax:
     /// ```sql
     /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type)
+    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/functions/struct.html)
     /// ```
-    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct {
         /// Struct values.
         values: Vec<Expr>,

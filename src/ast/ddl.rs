@@ -30,8 +30,10 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, DataType, Expr, Ident, MySQLColumnPosition,
-    ObjectName, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
+    display_comma_separated, display_separated, CreateFunctionBody, CreateFunctionUsing, DataType,
+    Expr, FunctionBehavior, FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel,
+    Ident, MySQLColumnPosition, ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect,
+    SequenceOptions, SqlOption, Tag, Value,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -1817,5 +1819,128 @@ impl fmt::Display for ClusteredBy {
             write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
         }
         write!(f, " INTO {} BUCKETS", self.num_buckets)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateFunction {
+    pub or_replace: bool,
+    pub temporary: bool,
+    pub if_not_exists: bool,
+    pub name: ObjectName,
+    pub args: Option<Vec<OperateFunctionArg>>,
+    pub return_type: Option<DataType>,
+    /// The expression that defines the function.
+    ///
+    /// Examples:
+    /// ```sql
+    /// AS ((SELECT 1))
+    /// AS "console.log();"
+    /// ```
+    pub function_body: Option<CreateFunctionBody>,
+    /// Behavior attribute for the function
+    ///
+    /// IMMUTABLE | STABLE | VOLATILE
+    ///
+    /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub behavior: Option<FunctionBehavior>,
+    /// CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
+    ///
+    /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub called_on_null: Option<FunctionCalledOnNull>,
+    /// PARALLEL { UNSAFE | RESTRICTED | SAFE }
+    ///
+    /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    pub parallel: Option<FunctionParallel>,
+    /// USING ... (Hive only)
+    pub using: Option<CreateFunctionUsing>,
+    /// Language used in a UDF definition.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION foo() LANGUAGE js AS "console.log();"
+    /// ```
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_javascript_udf)
+    pub language: Option<Ident>,
+    /// Determinism keyword used for non-sql UDF definitions.
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11)
+    pub determinism_specifier: Option<FunctionDeterminismSpecifier>,
+    /// List of options for creating the function.
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11)
+    pub options: Option<Vec<SqlOption>>,
+    /// Connection resource for a remote function.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION foo()
+    /// RETURNS FLOAT64
+    /// REMOTE WITH CONNECTION us.myconnection
+    /// ```
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_remote_function)
+    pub remote_connection: Option<ObjectName>,
+}
+
+impl fmt::Display for CreateFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE {or_replace}{temp}FUNCTION {if_not_exists}{name}",
+            name = self.name,
+            temp = if self.temporary { "TEMPORARY " } else { "" },
+            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+        )?;
+        if let Some(args) = &self.args {
+            write!(f, "({})", display_comma_separated(args))?;
+        }
+        if let Some(return_type) = &self.return_type {
+            write!(f, " RETURNS {return_type}")?;
+        }
+        if let Some(determinism_specifier) = &self.determinism_specifier {
+            write!(f, " {determinism_specifier}")?;
+        }
+        if let Some(language) = &self.language {
+            write!(f, " LANGUAGE {language}")?;
+        }
+        if let Some(behavior) = &self.behavior {
+            write!(f, " {behavior}")?;
+        }
+        if let Some(called_on_null) = &self.called_on_null {
+            write!(f, " {called_on_null}")?;
+        }
+        if let Some(parallel) = &self.parallel {
+            write!(f, " {parallel}")?;
+        }
+        if let Some(remote_connection) = &self.remote_connection {
+            write!(f, " REMOTE WITH CONNECTION {remote_connection}")?;
+        }
+        if let Some(CreateFunctionBody::AsBeforeOptions(function_body)) = &self.function_body {
+            write!(f, " AS {function_body}")?;
+        }
+        if let Some(CreateFunctionBody::Return(function_body)) = &self.function_body {
+            write!(f, " RETURN {function_body}")?;
+        }
+        if let Some(using) = &self.using {
+            write!(f, " {using}")?;
+        }
+        if let Some(options) = &self.options {
+            write!(
+                f,
+                " OPTIONS({})",
+                display_comma_separated(options.as_slice())
+            )?;
+        }
+        if let Some(CreateFunctionBody::AsAfterOptions(function_body)) = &self.function_body {
+            write!(f, " AS {function_body}")?;
+        }
+        Ok(())
     }
 }

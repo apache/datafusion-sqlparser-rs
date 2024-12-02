@@ -2929,7 +2929,7 @@ pub enum Statement {
     StartTransaction {
         modes: Vec<TransactionMode>,
         begin: bool,
-        transaction: Option<TransactionWorkOption>,
+        transaction: Option<BeginTransactionKind>,
         /// Only for SQLite
         modifier: Option<TransactionModifier>,
     },
@@ -5142,16 +5142,16 @@ pub enum TruncateCascadeOption {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum TransactionWorkOption {
+pub enum BeginTransactionKind {
     Transaction,
     Work,
 }
 
-impl Display for TransactionWorkOption {
+impl Display for BeginTransactionKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TransactionWorkOption::Transaction => write!(f, "TRANSACTION"),
-            TransactionWorkOption::Work => write!(f, "WORK"),
+            BeginTransactionKind::Transaction => write!(f, "TRANSACTION"),
+            BeginTransactionKind::Work => write!(f, "WORK"),
         }
     }
 }

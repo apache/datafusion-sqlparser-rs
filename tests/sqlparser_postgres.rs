@@ -2825,6 +2825,19 @@ fn test_json() {
 }
 
 #[test]
+fn test_fn_arg_with_value_operator() {
+    match pg().verified_expr("JSON_OBJECT('name' VALUE 'value')") {
+        Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, .. }), .. }) => {
+            assert!(matches!(
+                &args[..],
+                &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
+            ), "Invalid function argument: {:?}", args);
+        }
+        other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
+    }
+}
+
+#[test]
 fn parse_json_table_is_not_reserved() {
     // JSON_TABLE is not a reserved keyword in PostgreSQL, even though it is in SQL:2023
     // see: https://en.wikipedia.org/wiki/List_of_SQL_reserved_words
@@ -3618,7 +3631,7 @@ fn parse_create_function() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS 'select $1 + $2;'";
     assert_eq!(
         pg_and_generic().verified_stmt(sql),
-        Statement::CreateFunction {
+        Statement::CreateFunction(CreateFunction {
             or_replace: false,
             temporary: false,
             name: ObjectName(vec![Ident::new("add")]),
@@ -3639,7 +3652,7 @@ fn parse_create_function() {
             determinism_specifier: None,
             options: None,
             remote_connection: None,
-        }
+        })
     );
 }
 
@@ -4974,7 +4987,7 @@ fn parse_trigger_related_functions() {
 
     assert_eq!(
         create_function,
-        Statement::CreateFunction {
+        Statement::CreateFunction(CreateFunction {
             or_replace: false,
             temporary: false,
             if_not_exists: false,
@@ -5004,7 +5017,7 @@ fn parse_trigger_related_functions() {
             options: None,
             remote_connection: None
         }
-    );
+    ));
 
     // Check the third statement
 

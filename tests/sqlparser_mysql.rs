@@ -3016,6 +3016,23 @@ fn parse_bitstring_literal() {
 }
 
 #[test]
+fn parse_longblob_type() {
+    let sql = "CREATE TABLE foo (bar LONGBLOB)";
+    let stmt = mysql_and_generic().verified_stmt(sql);
+    if let Statement::CreateTable(CreateTable { columns, .. }) = stmt {
+        assert_eq!(columns.len(), 1);
+        assert_eq!(columns[0].data_type, DataType::LongBlob);
+    } else {
+        unreachable!()
+    }
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar TINYBLOB)");
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar MEDIUMBLOB)");
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar TINYTEXT)");
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar MEDIUMTEXT)");
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar LONGTEXT)");
+}
+
+#[test]
 fn parse_begin_without_transaction() {
     mysql().verified_stmt("BEGIN");
 }

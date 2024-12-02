@@ -59,4 +59,9 @@ impl Dialect for DatabricksDialect {
     fn require_interval_qualifier(&self) -> bool {
         true
     }
+
+    // See https://docs.databricks.com/en/sql/language-manual/functions/struct.html
+    fn supports_struct_literal(&self) -> bool {
+        true
+    }
 }

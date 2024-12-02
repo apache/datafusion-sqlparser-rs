@@ -527,6 +527,9 @@ fn parse_start_transaction_with_modifier() {
     sqlite_and_generic().verified_stmt("BEGIN DEFERRED TRANSACTION");
     sqlite_and_generic().verified_stmt("BEGIN IMMEDIATE TRANSACTION");
     sqlite_and_generic().verified_stmt("BEGIN EXCLUSIVE TRANSACTION");
+    sqlite_and_generic().verified_stmt("BEGIN DEFERRED");
+    sqlite_and_generic().verified_stmt("BEGIN IMMEDIATE");
+    sqlite_and_generic().verified_stmt("BEGIN EXCLUSIVE");
 
     let unsupported_dialects = TestedDialects::new(
         all_dialects()

@@ -596,7 +596,19 @@ fn parse_alter_table_constraints_rename() {
 
 #[test]
 fn parse_alter_table_constraints_unique_nulls_distinct() {
-    pg_and_generic().verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS NOT DISTINCT (c)");
+    match pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS NOT DISTINCT (c)")
+    {
+        Statement::AlterTable { operations, .. } => match &operations[0] {
+            AlterTableOperation::AddConstraint(TableConstraint::Unique {
+                nulls_distinct, ..
+            }) => {
+                assert_eq!(nulls_distinct, &NullsDistinctOption::NotDistinct)
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
     pg_and_generic().verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS DISTINCT (c)");
     pg_and_generic().verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE (c)");
 }

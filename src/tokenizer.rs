@@ -422,13 +422,35 @@ impl fmt::Display for Whitespace {
 }
 
 /// Location in input string
+///
+/// # Create an "empty" (unknown) `Location`
+/// ```
+/// # use sqlparser::tokenizer::Location;
+/// let location = Location::empty();
+/// ```
+///
+/// # Create a `Location` from a line and column
+/// ```
+/// # use sqlparser::tokenizer::Location;
+/// let location = Location::new(1, 1);
+/// ```
+///
+/// # Create a `Location` from a pair
+/// ```
+/// # use sqlparser::tokenizer::Location;
+/// let location = Location::from((1, 1));
+/// ```
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Location {
-    /// Line number, starting from 1
+    /// Line number, starting from 1.
+    ///
+    /// Note: Line 0 is used for empty spans
     pub line: u64,
-    /// Line column, starting from 1
+    /// Line column, starting from 1.
+    ///
+    /// Note: Column 0 is used for empty spans
     pub column: u64,
 }
 
@@ -448,10 +470,25 @@ impl fmt::Debug for Location {
 }
 
 impl Location {
-    pub fn of(line: u64, column: u64) -> Self {
+    /// Return an "empty" / unknown location
+    pub fn empty() -> Self {
+        Self { line: 0, column: 0 }
+    }
+
+    /// Create a new `Location` for a given line and column
+    pub fn new(line: u64, column: u64) -> Self {
         Self { line, column }
     }
 
+    /// Create a new location for a given line and column
+    ///
+    /// Alias for [`Self::new`]
+    // TODO: remove / deprecate in favor of` `new` for consistency?
+    pub fn of(line: u64, column: u64) -> Self {
+        Self::new(line, column)
+    }
+
+    /// Combine self and `end` into a new `Span`
     pub fn span_to(self, end: Self) -> Span {
         Span { start: self, end }
     }
@@ -463,7 +500,9 @@ impl From<(u64, u64)> for Location {
     }
 }
 
-/// A span of source code locations (start, end)
+/// A span represents a linear portion of the input string (start, end)
+///
+/// See [Spanned](crate::ast::Spanned) for more information.
 #[derive(Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -483,12 +522,15 @@ impl Span {
     // We need a const instance for pattern matching
     const EMPTY: Span = Self::empty();
 
+    /// Create a new span from a start and end [`Location`]
     pub fn new(start: Location, end: Location) -> Span {
         Span { start, end }
     }
 
-    /// Returns an empty span (0, 0) -> (0, 0)
+    /// Returns an empty span `(0, 0) -> (0, 0)`
+    ///
     /// Empty spans represent no knowledge of source location
+    /// See [Spanned](crate::ast::Spanned) for more information.
     pub const fn empty() -> Span {
         Span {
             start: Location { line: 0, column: 0 },
@@ -498,6 +540,19 @@ impl Span {
 
     /// Returns the smallest Span that contains both `self` and `other`
     /// If either span is [Span::empty], the other span is returned
+    ///
+    /// # Examples
+    /// ```
+    /// # use sqlparser::tokenizer::{Span, Location};
+    /// // line 1, column1 -> line 2, column 5
+    /// let span1 = Span::new(Location::new(1, 1), Location::new(2, 5));
+    /// // line 2, column 3 -> line 3, column 7
+    /// let span2 = Span::new(Location::new(2, 3), Location::new(3, 7));
+    /// // Union of the two is the min/max of the two spans
+    /// // line 1, column 1 -> line 3, column 7
+    /// let union = span1.union(&span2);
+    /// assert_eq!(union, Span::new(Location::new(1, 1), Location::new(3, 7)));
+    /// ```
     pub fn union(&self, other: &Span) -> Span {
         // If either span is empty, return the other
         // this prevents propagating (0, 0) through the tree
@@ -512,6 +567,7 @@ impl Span {
     }
 
     /// Same as [Span::union] for `Option<Span>`
+    ///
     /// If `other` is `None`, `self` is returned
     pub fn union_opt(&self, other: &Option<Span>) -> Span {
         match other {
@@ -519,44 +575,100 @@ impl Span {
             None => *self,
         }
     }
+
+    /// Return the [Span::union] of all spans in the iterator
+    ///
+    /// If the iterator is empty, an empty span is returned
+    ///
+    /// # Example
+    /// ```
+    /// # use sqlparser::tokenizer::{Span, Location};
+    /// let spans = vec![
+    ///     Span::new(Location::new(1, 1), Location::new(2, 5)),
+    ///     Span::new(Location::new(2, 3), Location::new(3, 7)),
+    ///     Span::new(Location::new(3, 1), Location::new(4, 2)),
+    /// ];
+    /// // line 1, column 1 -> line 4, column 2
+    /// assert_eq!(
+    ///   Span::union_iter(spans),
+    ///   Span::new(Location::new(1, 1), Location::new(4, 2))
+    /// );
+    pub fn union_iter<I: IntoIterator<Item = Span>>(iter: I) -> Span {
+        iter.into_iter()
+            .reduce(|acc, item| acc.union(&item))
+            .unwrap_or(Span::empty())
+    }
 }
 
-/// A [Token] with [Location] attached to it
+/// Backwards compatibility struct for [`TokenWithSpan`]
+#[deprecated(since = "0.53.0", note = "please use `TokenWithSpan` instead")]
+pub type TokenWithLocation = TokenWithSpan;
+
+/// A [Token] with [Span] attached to it
+///
+/// This is used to track the location of a token in the input string
+///
+/// # Examples
+/// ```
+/// # use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan};
+/// // commas @ line 1, column 10
+/// let tok1 = TokenWithSpan::new(
+///   Token::Comma,
+///   Span::new(Location::new(1, 10), Location::new(1, 11)),
+/// );
+/// assert_eq!(tok1, Token::Comma); // can compare the token
+///
+/// // commas @ line 2, column 20
+/// let tok2 = TokenWithSpan::new(
+///   Token::Comma,
+///   Span::new(Location::new(2, 20), Location::new(2, 21)),
+/// );
+/// // same token but different locations are not equal
+/// assert_ne!(tok1, tok2);
+/// ```
 #[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct TokenWithLocation {
+pub struct TokenWithSpan {
     pub token: Token,
     pub span: Span,
 }
 
-impl TokenWithLocation {
-    pub fn new(token: Token, span: Span) -> TokenWithLocation {
-        TokenWithLocation { token, span }
+impl TokenWithSpan {
+    /// Create a new [`TokenWithSpan`] from a [`Token`] and a [`Span`]
+    pub fn new(token: Token, span: Span) -> Self {
+        Self { token, span }
     }
 
-    pub fn wrap(token: Token) -> TokenWithLocation {
-        TokenWithLocation::new(token, Span::empty())
+    /// Wrap a token with an empty span
+    pub fn wrap(token: Token) -> Self {
+        Self::new(token, Span::empty())
     }
 
-    pub fn at(token: Token, start: Location, end: Location) -> TokenWithLocation {
-        TokenWithLocation::new(token, Span::new(start, end))
+    /// Wrap a token with a location from `start` to `end`
+    pub fn at(token: Token, start: Location, end: Location) -> Self {
+        Self::new(token, Span::new(start, end))
+    }
+
+    /// Return an EOF token with no location
+    pub fn new_eof() -> Self {
+        Self::wrap(Token::EOF)
     }
 }
 
-impl PartialEq<Token> for TokenWithLocation {
+impl PartialEq<Token> for TokenWithSpan {
     fn eq(&self, other: &Token) -> bool {
         &self.token == other
     }
 }
 
-impl PartialEq<TokenWithLocation> for Token {
-    fn eq(&self, other: &TokenWithLocation) -> bool {
+impl PartialEq<TokenWithSpan> for Token {
+    fn eq(&self, other: &TokenWithSpan) -> bool {
         self == &other.token
     }
 }
 
-impl fmt::Display for TokenWithLocation {
+impl fmt::Display for TokenWithSpan {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.token.fmt(f)
     }
@@ -584,7 +696,7 @@ struct State<'a> {
     pub col: u64,
 }
 
-impl<'a> State<'a> {
+impl State<'_> {
     /// return the next character and advance the stream
     pub fn next(&mut self) -> Option<char> {
         match self.peekable.next() {
@@ -716,8 +828,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize the statement and produce a vector of tokens with location information
-    pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
-        let mut tokens: Vec<TokenWithLocation> = vec![];
+    pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithSpan>, TokenizerError> {
+        let mut tokens: Vec<TokenWithSpan> = vec![];
         self.tokenize_with_location_into_buf(&mut tokens)
             .map(|_| tokens)
     }
@@ -726,7 +838,7 @@ impl<'a> Tokenizer<'a> {
     /// If an error is thrown, the buffer will contain all tokens that were successfully parsed before the error.
     pub fn tokenize_with_location_into_buf(
         &mut self,
-        buf: &mut Vec<TokenWithLocation>,
+        buf: &mut Vec<TokenWithSpan>,
     ) -> Result<(), TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),
@@ -738,7 +850,7 @@ impl<'a> Tokenizer<'a> {
         while let Some(token) = self.next_token(&mut state)? {
             let span = location.span_to(state.location());
 
-            buf.push(TokenWithLocation { token, span });
+            buf.push(TokenWithSpan { token, span });
 
             location = state.location();
         }
@@ -2751,25 +2863,25 @@ mod tests {
             .tokenize_with_location()
             .unwrap();
         let expected = vec![
-            TokenWithLocation::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
-            TokenWithLocation::at(
+            TokenWithSpan::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
+            TokenWithSpan::at(
                 Token::Whitespace(Whitespace::Space),
                 (1, 7).into(),
                 (1, 8).into(),
             ),
-            TokenWithLocation::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
-            TokenWithLocation::at(Token::Comma, (1, 9).into(), (1, 10).into()),
-            TokenWithLocation::at(
+            TokenWithSpan::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
+            TokenWithSpan::at(Token::Comma, (1, 9).into(), (1, 10).into()),
+            TokenWithSpan::at(
                 Token::Whitespace(Whitespace::Newline),
                 (1, 10).into(),
                 (2, 1).into(),
             ),
-            TokenWithLocation::at(
+            TokenWithSpan::at(
                 Token::Whitespace(Whitespace::Space),
                 (2, 1).into(),
                 (2, 2).into(),
             ),
-            TokenWithLocation::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
+            TokenWithSpan::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
         ];
         compare(expected, tokens);
     }

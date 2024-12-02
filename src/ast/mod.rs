@@ -47,7 +47,7 @@ pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue,
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, Deduplicate, DeferrableInitial, GeneratedAs,
+    ConstraintCharacteristics, CreateFunction, Deduplicate, DeferrableInitial, GeneratedAs,
     GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
     IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay,
     NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, TableConstraint,
@@ -111,7 +111,7 @@ where
     sep: &'static str,
 }
 
-impl<'a, T> fmt::Display for DisplaySeparated<'a, T>
+impl<T> fmt::Display for DisplaySeparated<'_, T>
 where
     T: fmt::Display,
 {
@@ -597,9 +597,21 @@ pub enum CeilFloorKind {
 
 /// An SQL expression of any type.
 ///
+/// # Semantics / Type Checking
+///
 /// The parser does not distinguish between expressions of different types
-/// (e.g. boolean vs string), so the caller must handle expressions of
-/// inappropriate type, like `WHERE 1` or `SELECT 1=1`, as necessary.
+/// (e.g. boolean vs string). The caller is responsible for detecting and
+/// validating types as necessary (for example  `WHERE 1` vs `SELECT 1=1`)
+/// See the [README.md] for more details.
+///
+/// [README.md]: https://github.com/apache/datafusion-sqlparser-rs/blob/main/README.md#syntax-vs-semantics
+///
+/// # Equality and Hashing Does not Include Source Locations
+///
+/// The `Expr` type implements `PartialEq` and `Eq` based on the semantic value
+/// of the expression (not bitwise comparison). This means that `Expr` instances
+/// that are semantically equivalent but have different spans (locations in the
+/// source tree) will compare as equal.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(
@@ -920,12 +932,14 @@ pub enum Expr {
     Rollup(Vec<Vec<Expr>>),
     /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
     Tuple(Vec<Expr>),
-    /// `BigQuery` specific `Struct` literal expression [1]
+    /// `Struct` literal expression
     /// Syntax:
     /// ```sql
     /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type)
+    /// [Databricks](https://docs.databricks.com/en/sql/language-manual/functions/struct.html)
     /// ```
-    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct {
         /// Struct values.
         values: Vec<Expr>,
@@ -2990,64 +3004,7 @@ pub enum Statement {
     /// 1. [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction)
     /// 2. [Postgres](https://www.postgresql.org/docs/15/sql-createfunction.html)
     /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
-    CreateFunction {
-        or_replace: bool,
-        temporary: bool,
-        if_not_exists: bool,
-        name: ObjectName,
-        args: Option<Vec<OperateFunctionArg>>,
-        return_type: Option<DataType>,
-        /// The expression that defines the function.
-        ///
-        /// Examples:
-        /// ```sql
-        /// AS ((SELECT 1))
-        /// AS "console.log();"
-        /// ```
-        function_body: Option<CreateFunctionBody>,
-        /// Behavior attribute for the function
-        ///
-        /// IMMUTABLE | STABLE | VOLATILE
-        ///
-        /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
-        behavior: Option<FunctionBehavior>,
-        /// CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
-        ///
-        /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
-        called_on_null: Option<FunctionCalledOnNull>,
-        /// PARALLEL { UNSAFE | RESTRICTED | SAFE }
-        ///
-        /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
-        parallel: Option<FunctionParallel>,
-        /// USING ... (Hive only)
-        using: Option<CreateFunctionUsing>,
-        /// Language used in a UDF definition.
-        ///
-        /// Example:
-        /// ```sql
-        /// CREATE FUNCTION foo() LANGUAGE js AS "console.log();"
-        /// ```
-        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_javascript_udf)
-        language: Option<Ident>,
-        /// Determinism keyword used for non-sql UDF definitions.
-        ///
-        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11)
-        determinism_specifier: Option<FunctionDeterminismSpecifier>,
-        /// List of options for creating the function.
-        ///
-        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11)
-        options: Option<Vec<SqlOption>>,
-        /// Connection resource for a remote function.
-        ///
-        /// Example:
-        /// ```sql
-        /// CREATE FUNCTION foo()
-        /// RETURNS FLOAT64
-        /// REMOTE WITH CONNECTION us.myconnection
-        /// ```
-        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_remote_function)
-        remote_connection: Option<ObjectName>,
-    },
+    CreateFunction(CreateFunction),
     /// CREATE TRIGGER
     ///
     /// Examples:
@@ -3813,75 +3770,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateFunction {
-                or_replace,
-                temporary,
-                if_not_exists,
-                name,
-                args,
-                return_type,
-                function_body,
-                language,
-                behavior,
-                called_on_null,
-                parallel,
-                using,
-                determinism_specifier,
-                options,
-                remote_connection,
-            } => {
-                write!(
-                    f,
-                    "CREATE {or_replace}{temp}FUNCTION {if_not_exists}{name}",
-                    temp = if *temporary { "TEMPORARY " } else { "" },
-                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                )?;
-                if let Some(args) = args {
-                    write!(f, "({})", display_comma_separated(args))?;
-                }
-                if let Some(return_type) = return_type {
-                    write!(f, " RETURNS {return_type}")?;
-                }
-                if let Some(determinism_specifier) = determinism_specifier {
-                    write!(f, " {determinism_specifier}")?;
-                }
-                if let Some(language) = language {
-                    write!(f, " LANGUAGE {language}")?;
-                }
-                if let Some(behavior) = behavior {
-                    write!(f, " {behavior}")?;
-                }
-                if let Some(called_on_null) = called_on_null {
-                    write!(f, " {called_on_null}")?;
-                }
-                if let Some(parallel) = parallel {
-                    write!(f, " {parallel}")?;
-                }
-                if let Some(remote_connection) = remote_connection {
-                    write!(f, " REMOTE WITH CONNECTION {remote_connection}")?;
-                }
-                if let Some(CreateFunctionBody::AsBeforeOptions(function_body)) = function_body {
-                    write!(f, " AS {function_body}")?;
-                }
-                if let Some(CreateFunctionBody::Return(function_body)) = function_body {
-                    write!(f, " RETURN {function_body}")?;
-                }
-                if let Some(using) = using {
-                    write!(f, " {using}")?;
-                }
-                if let Some(options) = options {
-                    write!(
-                        f,
-                        " OPTIONS({})",
-                        display_comma_separated(options.as_slice())
-                    )?;
-                }
-                if let Some(CreateFunctionBody::AsAfterOptions(function_body)) = function_body {
-                    write!(f, " AS {function_body}")?;
-                }
-                Ok(())
-            }
+            Statement::CreateFunction(create_function) => create_function.fmt(f),
             Statement::CreateTrigger {
                 or_replace,
                 is_constraint,
@@ -5529,6 +5418,8 @@ pub enum FunctionArgOperator {
     Assignment,
     /// function(arg1 : value1)
     Colon,
+    /// function(arg1 VALUE value1)
+    Value,
 }
 
 impl fmt::Display for FunctionArgOperator {
@@ -5538,6 +5429,7 @@ impl fmt::Display for FunctionArgOperator {
             FunctionArgOperator::RightArrow => f.write_str("=>"),
             FunctionArgOperator::Assignment => f.write_str(":="),
             FunctionArgOperator::Colon => f.write_str(":"),
+            FunctionArgOperator::Value => f.write_str("VALUE"),
         }
     }
 }
@@ -7654,6 +7546,7 @@ impl fmt::Display for ShowStatementInParentType {
 pub struct ShowStatementIn {
     pub clause: ShowStatementInClause,
     pub parent_type: Option<ShowStatementInParentType>,
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub parent_name: Option<ObjectName>,
 }
 

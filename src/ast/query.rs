@@ -27,7 +27,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::{
     ast::*,
-    tokenizer::{Token, TokenWithLocation},
+    tokenizer::{Token, TokenWithSpan},
 };
 
 /// The most complete variant of a `SELECT` query expression, optionally
@@ -282,6 +282,7 @@ impl fmt::Display for Table {
 pub struct Select {
     /// Token for the `SELECT` keyword
     pub select_token: AttachedToken,
+    /// `SELECT [DISTINCT] ...`
     pub distinct: Option<Distinct>,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
@@ -511,7 +512,7 @@ impl fmt::Display for NamedWindowDefinition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct With {
-    // Token for the "WITH" keyword
+    /// Token for the "WITH" keyword
     pub with_token: AttachedToken,
     pub recursive: bool,
     pub cte_tables: Vec<Cte>,
@@ -564,7 +565,7 @@ pub struct Cte {
     pub query: Box<Query>,
     pub from: Option<Ident>,
     pub materialized: Option<CteAsMaterialized>,
-    // Token for the closing parenthesis
+    /// Token for the closing parenthesis
     pub closing_paren_token: AttachedToken,
 }
 
@@ -643,7 +644,7 @@ pub struct WildcardAdditionalOptions {
 impl Default for WildcardAdditionalOptions {
     fn default() -> Self {
         Self {
-            wildcard_token: TokenWithLocation::wrap(Token::Mul).into(),
+            wildcard_token: TokenWithSpan::wrap(Token::Mul).into(),
             opt_ilike: None,
             opt_exclude: None,
             opt_except: None,
@@ -1713,7 +1714,7 @@ impl fmt::Display for Join {
         }
         fn suffix(constraint: &'_ JoinConstraint) -> impl fmt::Display + '_ {
             struct Suffix<'a>(&'a JoinConstraint);
-            impl<'a> fmt::Display for Suffix<'a> {
+            impl fmt::Display for Suffix<'_> {
                 fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                     match self.0 {
                         JoinConstraint::On(expr) => write!(f, " ON {expr}"),

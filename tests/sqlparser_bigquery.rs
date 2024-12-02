@@ -2011,7 +2011,7 @@ fn test_bigquery_create_function() {
     let stmt = bigquery().verified_stmt(sql);
     assert_eq!(
         stmt,
-        Statement::CreateFunction {
+        Statement::CreateFunction(CreateFunction {
             or_replace: true,
             temporary: true,
             if_not_exists: false,
@@ -2036,7 +2036,7 @@ fn test_bigquery_create_function() {
             remote_connection: None,
             called_on_null: None,
             parallel: None,
-        }
+        })
     );
 
     let sqls = [

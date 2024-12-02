@@ -26,7 +26,7 @@ use crate::{
     tokenizer::Token,
 };
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_alter_role(&mut self) -> Result<Statement, ParserError> {
         if dialect_of!(self is PostgreSqlDialect) {
             return self.parse_pg_alter_role();

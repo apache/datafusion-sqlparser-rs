@@ -53,7 +53,7 @@ impl Dialect for RedshiftSqlDialect {
             // PartiQL uses single quote as starting identification inside a quote
             // It is a normal identifier if it has no single quote at the beginning.
             // Additionally square bracket can contain quoted identifier.
-            return ch == '"' || ch != '\'' && self.is_identifier_start(ch);
+            return ch == '"' || self.is_identifier_start(ch);
         }
         false
     }

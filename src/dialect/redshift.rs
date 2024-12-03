@@ -41,10 +41,18 @@ impl Dialect for RedshiftSqlDialect {
     /// treating them as json path. If there is identifier then we assume
     /// there is no json path.
     fn is_proper_identifier_inside_quotes(&self, mut chars: Peekable<Chars<'_>>) -> bool {
+        // PartiQL uses square bracket as a start character and a quote is a beginning of quoted identifier
+        if let Some(quote_start) = chars.peek() {
+            if *quote_start == '"' {
+                return true;
+            }
+        };
         chars.next();
         let mut not_white_chars = chars.skip_while(|ch| ch.is_whitespace()).peekable();
         if let Some(&ch) = not_white_chars.peek() {
-            return self.is_identifier_start(ch);
+            // PartiQL uses single quote as starting identification inside a quote
+            // It is a normal identifier if it has no single quote at the beginning
+            return ch != '\'' && self.is_identifier_start(ch);
         }
         false
     }

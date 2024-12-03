@@ -353,3 +353,15 @@ fn test_parse_json_path_from() {
         _ => panic!(),
     }
 }
+
+#[test]
+fn test_parse_select_numbered_columns() {
+    redshift_and_generic().verified_stmt(r#"SELECT 1 AS "1" FROM a"#);
+}
+
+#[test]
+fn test_parse_create_numbered_columns() {
+    redshift_and_generic().verified_stmt(
+        r#"CREATE TABLE test_table_1 ("1" INT, "d" VARCHAR(155), "2" DOUBLE PRECISION)"#,
+    );
+}

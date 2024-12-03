@@ -126,6 +126,7 @@ define_keywords!(
     BIGNUMERIC,
     BINARY,
     BINDING,
+    BIT,
     BLOB,
     BLOOMFILTER,
     BOOL,

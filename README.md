@@ -68,7 +68,7 @@ The following optional [crate  features](https://doc.rust-lang.org/cargo/referen
 ## Syntax vs Semantics
 
 This crate provides only a syntax parser, and tries to avoid applying
-any SQL semantics, and accepts queries that specific databases wouldc
+any SQL semantics, and accepts queries that specific databases would
 reject, even when using that Database's specific `Dialect`. For
 example, `CREATE TABLE(x int, x int)` is accepted by this crate, even
 though most SQL engines will reject this statement due to the repeated

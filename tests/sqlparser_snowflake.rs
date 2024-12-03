@@ -2709,6 +2709,20 @@ fn parse_use() {
                 Ident::with_quote(quote, "my_schema")
             ])))
         );
+        std::assert_eq!(
+            snowflake().verified_stmt(&format!("USE ROLE {0}my_role{0}", quote)),
+            Statement::Use(Use::Role(ObjectName(vec![Ident::with_quote(
+                quote,
+                "my_role".to_string(),
+            )])))
+        );
+        std::assert_eq!(
+            snowflake().verified_stmt(&format!("USE WAREHOUSE {0}my_wh{0}", quote)),
+            Statement::Use(Use::Warehouse(ObjectName(vec![Ident::with_quote(
+                quote,
+                "my_wh".to_string(),
+            )])))
+        );
     }
 
     // Test invalid syntax - missing identifier
@@ -2719,6 +2733,10 @@ fn parse_use() {
             ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
         );
     }
+
+    snowflake().verified_stmt("USE SECONDARY ROLES ALL");
+    snowflake().verified_stmt("USE SECONDARY ROLES NONE");
+    snowflake().verified_stmt("USE SECONDARY ROLES r1, r2, r3");
 }
 
 #[test]

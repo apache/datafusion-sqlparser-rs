@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use super::{Expr, Ident, Password};
+use super::{display_comma_separated, Expr, Ident, Password};
 use crate::ast::{display_separated, ObjectName};
 
 /// An option in `ROLE` statement.
@@ -204,12 +204,14 @@ impl fmt::Display for AlterRoleOperation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Use {
-    Catalog(ObjectName),   // e.g. `USE CATALOG foo.bar`
-    Schema(ObjectName),    // e.g. `USE SCHEMA foo.bar`
-    Database(ObjectName),  // e.g. `USE DATABASE foo.bar`
-    Warehouse(ObjectName), // e.g. `USE WAREHOUSE foo.bar`
-    Object(ObjectName),    // e.g. `USE foo.bar`
-    Default,               // e.g. `USE DEFAULT`
+    Catalog(ObjectName),            // e.g. `USE CATALOG foo.bar`
+    Schema(ObjectName),             // e.g. `USE SCHEMA foo.bar`
+    Database(ObjectName),           // e.g. `USE DATABASE foo.bar`
+    Warehouse(ObjectName),          // e.g. `USE WAREHOUSE foo.bar`
+    Role(ObjectName),               // e.g. `USE ROLE PUBLIC`
+    SecondaryRoles(SecondaryRoles), // e.g. `USE SECONDARY ROLES ALL`
+    Object(ObjectName),             // e.g. `USE foo.bar`
+    Default,                        // e.g. `USE DEFAULT`
 }
 
 impl fmt::Display for Use {
@@ -220,8 +222,33 @@ impl fmt::Display for Use {
             Use::Schema(name) => write!(f, "SCHEMA {}", name),
             Use::Database(name) => write!(f, "DATABASE {}", name),
             Use::Warehouse(name) => write!(f, "WAREHOUSE {}", name),
+            Use::Role(name) => write!(f, "ROLE {}", name),
+            Use::SecondaryRoles(secondary_roles) => {
+                write!(f, "SECONDARY ROLES {}", secondary_roles)
+            }
             Use::Object(name) => write!(f, "{}", name),
             Use::Default => write!(f, "DEFAULT"),
+        }
+    }
+}
+
+/// Snowflake `SECONDARY ROLES` USE variant
+/// See: <https://docs.snowflake.com/en/sql-reference/sql/use-secondary-roles>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SecondaryRoles {
+    All,
+    None,
+    List(Vec<Ident>),
+}
+
+impl fmt::Display for SecondaryRoles {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SecondaryRoles::All => write!(f, "ALL"),
+            SecondaryRoles::None => write!(f, "NONE"),
+            SecondaryRoles::List(roles) => write!(f, "{}", display_comma_separated(roles)),
         }
     }
 }

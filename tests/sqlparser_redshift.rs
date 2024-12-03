@@ -279,6 +279,31 @@ fn test_redshift_json_path() {
         },
         expr_from_projection(only(&select.projection))
     );
+
+    let sql = r#"SELECT db1.sc1.tbl1.col1[0]."id" FROM customer_orders_lineitem"#;
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        &Expr::JsonAccess {
+            value: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("db1"),
+                Ident::new("sc1"),
+                Ident::new("tbl1"),
+                Ident::new("col1")
+            ])),
+            path: JsonPath {
+                path: vec![
+                    JsonPathElem::Bracket {
+                        key: Expr::Value(Value::Number("0".parse().unwrap(), false))
+                    },
+                    JsonPathElem::Dot {
+                        key: "id".to_string(),
+                        quoted: true,
+                    }
+                ]
+            }
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]
@@ -357,6 +382,8 @@ fn test_parse_json_path_from() {
 #[test]
 fn test_parse_select_numbered_columns() {
     redshift_and_generic().verified_stmt(r#"SELECT 1 AS "1" FROM a"#);
+    // RedShift specific case - quoted identifier inside square bracket
+    redshift().verified_stmt(r#"SELECT 1 AS ["1"] FROM a"#);
 }
 
 #[test]

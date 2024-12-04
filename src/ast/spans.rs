@@ -11,12 +11,12 @@ use super::{
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
     IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
     JsonPath, JsonPathElem, LateralView, MatchRecognizePattern, Measure, NamedWindowDefinition,
-    ObjectName, Offset, OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, Partition,
-    PivotValueSource, ProjectionSelect, Query, ReferentialAction, RenameSelectItem,
-    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
-    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
-    TableFactor, TableOptionsClustered, TableWithJoins, Use, Value, Values, ViewColumnDef,
-    WildcardAdditionalOptions, With, WithFill,
+    ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OrderBy,
+    OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
+    TableConstraint, TableFactor, TableOptionsClustered, TableWithJoins, Use, Value, Values,
+    ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -1303,7 +1303,7 @@ impl Spanned for Expr {
                 .union_opt(&overlay_for.as_ref().map(|i| i.span())),
             Expr::Collate { expr, collation } => expr
                 .span()
-                .union(&union_spans(collation.0.iter().map(|i| i.span))),
+                .union(&union_spans(collation.0.iter().map(|i| i.span()))),
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
             Expr::TypedString { .. } => Span::empty(),
@@ -1412,7 +1412,7 @@ impl Spanned for Expr {
                 object_name
                     .0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(iter::once(token.0.span)),
             ),
             Expr::OuterJoin(expr) => expr.span(),
@@ -1448,7 +1448,15 @@ impl Spanned for ObjectName {
     fn span(&self) -> Span {
         let ObjectName(segments) = self;
 
-        union_spans(segments.iter().map(|i| i.span))
+        union_spans(segments.iter().map(|i| i.span()))
+    }
+}
+
+impl Spanned for ObjectNamePart {
+    fn span(&self) -> Span {
+        match self {
+            ObjectNamePart::Identifier(ident) => ident.span,
+        }
     }
 }
 
@@ -1478,7 +1486,7 @@ impl Spanned for Function {
         union_spans(
             name.0
                 .iter()
-                .map(|i| i.span)
+                .map(|i| i.span())
                 .chain(iter::once(args.span()))
                 .chain(iter::once(parameters.span()))
                 .chain(filter.iter().map(|i| i.span()))
@@ -1564,7 +1572,7 @@ impl Spanned for SelectItem {
                 object_name
                     .0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(iter::once(wildcard_additional_options.span())),
             ),
             SelectItem::Wildcard(wildcard_additional_options) => wildcard_additional_options.span(),
@@ -1673,7 +1681,7 @@ impl Spanned for TableFactor {
             } => union_spans(
                 name.0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(alias.as_ref().map(|alias| {
                         union_spans(
                             iter::once(alias.name.span)
@@ -1718,7 +1726,7 @@ impl Spanned for TableFactor {
             } => union_spans(
                 name.0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(args.iter().map(|i| i.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
@@ -1869,7 +1877,7 @@ impl Spanned for FunctionArgExpr {
         match self {
             FunctionArgExpr::Expr(expr) => expr.span(),
             FunctionArgExpr::QualifiedWildcard(object_name) => {
-                union_spans(object_name.0.iter().map(|i| i.span))
+                union_spans(object_name.0.iter().map(|i| i.span()))
             }
             FunctionArgExpr::Wildcard => Span::empty(),
         }

@@ -64,7 +64,7 @@ fn parse_map_access_expr() {
             into: None,
             from: vec![TableWithJoins {
                 relation: Table {
-                    name: ObjectName(vec![Ident::new("foos")]),
+                    name: ObjectName::from(vec![Ident::new("foos")]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -179,7 +179,10 @@ fn parse_delimited_identifiers() {
             partitions: _,
             json_path: _,
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
+            assert_eq!(
+                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                name
+            );
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
@@ -198,7 +201,7 @@ fn parse_delimited_identifiers() {
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -308,7 +311,7 @@ fn parse_alter_table_add_projection() {
         Statement::AlterTable {
             name, operations, ..
         } => {
-            assert_eq!(name, ObjectName(vec!["t0".into()]));
+            assert_eq!(name, ObjectName::from(vec!["t0".into()]));
             assert_eq!(1, operations.len());
             assert_eq!(
                 operations[0],
@@ -378,7 +381,7 @@ fn parse_alter_table_drop_projection() {
         Statement::AlterTable {
             name, operations, ..
         } => {
-            assert_eq!(name, ObjectName(vec!["t0".into()]));
+            assert_eq!(name, ObjectName::from(vec!["t0".into()]));
             assert_eq!(1, operations.len());
             assert_eq!(
                 operations[0],
@@ -411,7 +414,7 @@ fn parse_alter_table_clear_and_materialize_projection() {
             Statement::AlterTable {
                 name, operations, ..
             } => {
-                assert_eq!(name, ObjectName(vec!["t0".into()]));
+                assert_eq!(name, ObjectName::from(vec!["t0".into()]));
                 assert_eq!(1, operations.len());
                 assert_eq!(
                     operations[0],
@@ -555,7 +558,7 @@ fn parse_clickhouse_data_types() {
 
     match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(name, ObjectName::from(vec!["table".into()]));
             assert_eq!(
                 columns,
                 vec![
@@ -596,7 +599,7 @@ fn parse_create_table_with_nullable() {
 
     match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(name, ObjectName::from(vec!["table".into()]));
             assert_eq!(
                 columns,
                 vec![
@@ -645,7 +648,7 @@ fn parse_create_table_with_nested_data_types() {
 
     match clickhouse().one_statement_parses_to(sql, "") {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(name, ObjectName::from(vec!["table".into()]));
             assert_eq!(
                 columns,
                 vec![
@@ -761,7 +764,7 @@ fn parse_create_table_with_primary_key() {
                 })
             );
             fn assert_function(actual: &Function, name: &str, arg: &str) -> bool {
-                assert_eq!(actual.name, ObjectName(vec![Ident::new(name)]));
+                assert_eq!(actual.name, ObjectName::from(vec![Ident::new(name)]));
                 assert_eq!(
                     actual.args,
                     FunctionArguments::List(FunctionArgumentList {
@@ -820,7 +823,7 @@ fn parse_create_table_with_variant_default_expressions() {
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Materialized(Expr::Function(Function {
-                                name: ObjectName(vec![Ident::new("now")]),
+                                name: ObjectName::from(vec![Ident::new("now")]),
                                 args: FunctionArguments::List(FunctionArgumentList {
                                     args: vec![],
                                     duplicate_treatment: None,
@@ -841,7 +844,7 @@ fn parse_create_table_with_variant_default_expressions() {
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Ephemeral(Some(Expr::Function(Function {
-                                name: ObjectName(vec![Ident::new("now")]),
+                                name: ObjectName::from(vec![Ident::new("now")]),
                                 args: FunctionArguments::List(FunctionArgumentList {
                                     args: vec![],
                                     duplicate_treatment: None,
@@ -871,7 +874,7 @@ fn parse_create_table_with_variant_default_expressions() {
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Alias(Expr::Function(Function {
-                                name: ObjectName(vec![Ident::new("toString")]),
+                                name: ObjectName::from(vec![Ident::new("toString")]),
                                 args: FunctionArguments::List(FunctionArgumentList {
                                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                         Identifier(Ident::new("c"))
@@ -898,14 +901,14 @@ fn parse_create_table_with_variant_default_expressions() {
 fn parse_create_view_with_fields_data_types() {
     match clickhouse().verified_stmt(r#"CREATE VIEW v (i "int", f "String") AS SELECT * FROM t"#) {
         Statement::CreateView { name, columns, .. } => {
-            assert_eq!(name, ObjectName(vec!["v".into()]));
+            assert_eq!(name, ObjectName::from(vec!["v".into()]));
             assert_eq!(
                 columns,
                 vec![
                     ViewColumnDef {
                         name: "i".into(),
                         data_type: Some(DataType::Custom(
-                            ObjectName(vec![Ident {
+                            ObjectName::from(vec![Ident {
                                 value: "int".into(),
                                 quote_style: Some('"'),
                                 span: Span::empty(),
@@ -917,7 +920,7 @@ fn parse_create_view_with_fields_data_types() {
                     ViewColumnDef {
                         name: "f".into(),
                         data_type: Some(DataType::Custom(
-                            ObjectName(vec![Ident {
+                            ObjectName::from(vec![Ident {
                                 value: "String".into(),
                                 quote_style: Some('"'),
                                 span: Span::empty(),
@@ -1358,7 +1361,7 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             clickhouse().verified_stmt(&format!("USE {}", object_name)),
-            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
         );
@@ -1366,7 +1369,7 @@ fn parse_use() {
             // Test single identifier with different type of quotes
             assert_eq!(
                 clickhouse().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
-                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
                 )])))

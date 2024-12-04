@@ -418,7 +418,7 @@ fn parse_window_function_with_filter() {
         assert_eq!(
             select.projection,
             vec![SelectItem::UnnamedExpr(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new(func_name)]),
+                name: ObjectName::from(vec![Ident::new(func_name)]),
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
@@ -468,8 +468,8 @@ fn parse_update_tuple_row_values() {
             or: None,
             assignments: vec![Assignment {
                 target: AssignmentTarget::Tuple(vec![
-                    ObjectName(vec![Ident::new("a"),]),
-                    ObjectName(vec![Ident::new("b"),]),
+                    ObjectName::from(vec![Ident::new("a"),]),
+                    ObjectName::from(vec![Ident::new("b"),]),
                 ]),
                 value: Expr::Tuple(vec![
                     Expr::Value(Value::Number("1".parse().unwrap(), false)),
@@ -479,7 +479,7 @@ fn parse_update_tuple_row_values() {
             selection: None,
             table: TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("x")]),
+                    name: ObjectName::from(vec![Ident::new("x")]),
                     alias: None,
                     args: None,
                     with_hints: vec![],

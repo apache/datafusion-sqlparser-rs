@@ -402,7 +402,7 @@ fn parse_create_table_with_defaults() {
                                 unit: None
                             }
                         )),
-                        collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
+                        collation: Some(ObjectName::from(vec![Ident::with_quote('"', "es_ES")])),
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -946,7 +946,7 @@ fn test_copy_from() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: false,
@@ -964,7 +964,7 @@ fn test_copy_from() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: false,
@@ -982,7 +982,7 @@ fn test_copy_from() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: false,
@@ -1006,7 +1006,7 @@ fn test_copy_to() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: true,
@@ -1024,7 +1024,7 @@ fn test_copy_to() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: true,
@@ -1042,7 +1042,7 @@ fn test_copy_to() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: true,
@@ -1083,7 +1083,7 @@ fn parse_copy_from() {
         pg_and_generic().one_statement_parses_to(sql, ""),
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["table".into()]),
+                table_name: ObjectName::from(vec!["table".into()]),
                 columns: vec!["a".into(), "b".into()],
             },
             to: false,
@@ -1129,7 +1129,7 @@ fn parse_copy_to() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: true,
@@ -1147,7 +1147,7 @@ fn parse_copy_to() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["country".into()]),
+                table_name: ObjectName::from(vec!["country".into()]),
                 columns: vec![],
             },
             to: true,
@@ -1164,7 +1164,7 @@ fn parse_copy_to() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["country".into()]),
+                table_name: ObjectName::from(vec!["country".into()]),
                 columns: vec![],
             },
             to: true,
@@ -1250,7 +1250,7 @@ fn parse_copy_from_before_v9_0() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: false,
@@ -1279,7 +1279,7 @@ fn parse_copy_from_before_v9_0() {
         pg_and_generic().one_statement_parses_to(sql, ""),
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: false,
@@ -1307,7 +1307,7 @@ fn parse_copy_to_before_v9_0() {
         stmt,
         Statement::Copy {
             source: CopySource::Table {
-                table_name: ObjectName(vec!["users".into()]),
+                table_name: ObjectName::from(vec!["users".into()]),
                 columns: vec![],
             },
             to: true,
@@ -1339,7 +1339,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
+            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
             value: vec![Expr::Identifier(Ident {
                 value: "b".into(),
                 quote_style: None,
@@ -1354,7 +1354,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
+            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
             value: vec![Expr::Value(Value::SingleQuotedString("b".into()))],
         }
     );
@@ -1365,7 +1365,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
+            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
             value: vec![Expr::Value(number("0"))],
         }
     );
@@ -1376,7 +1376,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
+            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
             value: vec![Expr::Identifier(Ident::new("DEFAULT"))],
         }
     );
@@ -1387,7 +1387,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: true,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName(vec![Ident::new("a")])),
+            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
             value: vec![Expr::Identifier("b".into())],
         }
     );
@@ -1398,7 +1398,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName(vec![
+            variables: OneOrManyWithParens::One(ObjectName::from(vec![
                 Ident::new("a"),
                 Ident::new("b"),
                 Ident::new("c")
@@ -1420,7 +1420,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName(vec![
+            variables: OneOrManyWithParens::One(ObjectName::from(vec![
                 Ident::new("hive"),
                 Ident::new("tez"),
                 Ident::new("auto"),
@@ -1564,7 +1564,7 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName(vec!["a".into()]),
+            name: ObjectName::from(vec!["a".into()]),
             parameters: vec![],
             has_parentheses: false,
             using: vec![]
@@ -1575,7 +1575,7 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName(vec!["a".into()]),
+            name: ObjectName::from(vec!["a".into()]),
             parameters: vec![
                 Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
@@ -1590,7 +1590,7 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName(vec!["a".into()]),
+            name: ObjectName::from(vec!["a".into()]),
             parameters: vec![],
             has_parentheses: false,
             using: vec![
@@ -1699,7 +1699,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(
+                            vec!["dname".into()]
+                        )),
                         value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
                     },],
                     selection: None
@@ -1730,14 +1732,18 @@ fn parse_pg_on_conflict() {
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
                         Assignment {
-                            target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
+                            target: AssignmentTarget::ColumnName(ObjectName::from(vec![
+                                "dname".into()
+                            ])),
                             value: Expr::CompoundIdentifier(vec![
                                 "EXCLUDED".into(),
                                 "dname".into()
                             ])
                         },
                         Assignment {
-                            target: AssignmentTarget::ColumnName(ObjectName(vec!["area".into()])),
+                            target: AssignmentTarget::ColumnName(ObjectName::from(vec![
+                                "area".into()
+                            ])),
                             value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
                         },
                     ],
@@ -1787,7 +1793,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(
+                            vec!["dname".into()]
+                        )),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -1821,11 +1829,16 @@ fn parse_pg_on_conflict() {
                 })),
             ..
         }) => {
-            assert_eq!(vec![Ident::from("distributors_did_pkey")], cname.0);
+            assert_eq!(
+                ObjectName::from(vec![Ident::from("distributors_did_pkey")]),
+                cname
+            );
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(
+                            vec!["dname".into()]
+                        )),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -2528,7 +2541,7 @@ fn parse_array_subquery_expr() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("ARRAY")]),
+            name: ObjectName::from(vec![Ident::new("ARRAY")]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::Subquery(Box::new(Query {
                 with: None,
@@ -2866,7 +2879,10 @@ fn parse_json_table_is_not_reserved() {
         TableFactor::Table {
             name: ObjectName(name),
             ..
-        } => assert_eq!("JSON_TABLE", name[0].value),
+        } => assert_eq!(
+            ObjectNamePart::Identifier(Ident::new("JSON_TABLE")),
+            name[0]
+        ),
         other => panic!("Expected: JSON_TABLE to be parsed as a table name, but got {other:?}"),
     }
 }
@@ -2907,7 +2923,7 @@ fn test_composite_value() {
         SelectItem::UnnamedExpr(Expr::CompositeAccess {
             key: Ident::new("n"),
             expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
-                name: ObjectName(vec![
+                name: ObjectName::from(vec![
                     Ident::new("information_schema"),
                     Ident::new("_pg_expandarray")
                 ]),
@@ -3087,7 +3103,7 @@ fn parse_current_functions() {
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("CURRENT_CATALOG")]),
+            name: ObjectName::from(vec![Ident::new("CURRENT_CATALOG")]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
@@ -3099,7 +3115,7 @@ fn parse_current_functions() {
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("CURRENT_USER")]),
+            name: ObjectName::from(vec![Ident::new("CURRENT_USER")]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
@@ -3111,7 +3127,7 @@ fn parse_current_functions() {
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("SESSION_USER")]),
+            name: ObjectName::from(vec![Ident::new("SESSION_USER")]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
@@ -3123,7 +3139,7 @@ fn parse_current_functions() {
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("USER")]),
+            name: ObjectName::from(vec![Ident::new("USER")]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::None,
             null_treatment: None,
@@ -3434,7 +3450,7 @@ fn parse_alter_role() {
                 span: Span::empty(),
             },
             operation: AlterRoleOperation::Set {
-                config_name: ObjectName(vec![Ident {
+                config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
@@ -3455,13 +3471,13 @@ fn parse_alter_role() {
                 span: Span::empty(),
             },
             operation: AlterRoleOperation::Set {
-                config_name: ObjectName(vec![Ident {
+                config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
                 }]),
                 config_value: SetConfigValue::Value(Expr::Value(number("100000"))),
-                in_database: Some(ObjectName(vec![Ident {
+                in_database: Some(ObjectName::from(vec![Ident {
                     value: "database_name".into(),
                     quote_style: None,
                     span: Span::empty(),
@@ -3480,13 +3496,13 @@ fn parse_alter_role() {
                 span: Span::empty(),
             },
             operation: AlterRoleOperation::Set {
-                config_name: ObjectName(vec![Ident {
+                config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
                 }]),
                 config_value: SetConfigValue::Value(Expr::Value(number("100000"))),
-                in_database: Some(ObjectName(vec![Ident {
+                in_database: Some(ObjectName::from(vec![Ident {
                     value: "database_name".into(),
                     quote_style: None,
                     span: Span::empty(),
@@ -3505,13 +3521,13 @@ fn parse_alter_role() {
                 span: Span::empty(),
             },
             operation: AlterRoleOperation::Set {
-                config_name: ObjectName(vec![Ident {
+                config_name: ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
                 }]),
                 config_value: SetConfigValue::Default,
-                in_database: Some(ObjectName(vec![Ident {
+                in_database: Some(ObjectName::from(vec![Ident {
                     value: "database_name".into(),
                     quote_style: None,
                     span: Span::empty(),
@@ -3546,12 +3562,12 @@ fn parse_alter_role() {
                 span: Span::empty(),
             },
             operation: AlterRoleOperation::Reset {
-                config_name: ResetConfig::ConfigName(ObjectName(vec![Ident {
+                config_name: ResetConfig::ConfigName(ObjectName::from(vec![Ident {
                     value: "maintenance_work_mem".into(),
                     quote_style: None,
                     span: Span::empty(),
                 }])),
-                in_database: Some(ObjectName(vec![Ident {
+                in_database: Some(ObjectName::from(vec![Ident {
                     value: "database_name".into(),
                     quote_style: None,
                     span: Span::empty(),
@@ -3579,7 +3595,10 @@ fn parse_delimited_identifiers() {
             partitions: _,
             json_path: _,
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
+            assert_eq!(
+                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                name
+            );
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
@@ -3598,7 +3617,7 @@ fn parse_delimited_identifiers() {
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -3653,7 +3672,7 @@ fn parse_create_function() {
         Statement::CreateFunction(CreateFunction {
             or_replace: false,
             temporary: false,
-            name: ObjectName(vec![Ident::new("add")]),
+            name: ObjectName::from(vec![Ident::new("add")]),
             args: Some(vec![
                 OperateFunctionArg::unnamed(DataType::Integer(None)),
                 OperateFunctionArg::unnamed(DataType::Integer(None)),
@@ -3697,7 +3716,7 @@ fn parse_drop_function() {
         Statement::DropFunction {
             if_exists: true,
             func_desc: vec![FunctionDesc {
-                name: ObjectName(vec![Ident {
+                name: ObjectName::from(vec![Ident {
                     value: "test_func".to_string(),
                     quote_style: None,
                     span: Span::empty(),
@@ -3714,7 +3733,7 @@ fn parse_drop_function() {
         Statement::DropFunction {
             if_exists: true,
             func_desc: vec![FunctionDesc {
-                name: ObjectName(vec![Ident {
+                name: ObjectName::from(vec![Ident {
                     value: "test_func".to_string(),
                     quote_style: None,
                     span: Span::empty(),
@@ -3740,7 +3759,7 @@ fn parse_drop_function() {
             if_exists: true,
             func_desc: vec![
                 FunctionDesc {
-                    name: ObjectName(vec![Ident {
+                    name: ObjectName::from(vec![Ident {
                         value: "test_func1".to_string(),
                         quote_style: None,
                         span: Span::empty(),
@@ -3759,7 +3778,7 @@ fn parse_drop_function() {
                     ]),
                 },
                 FunctionDesc {
-                    name: ObjectName(vec![Ident {
+                    name: ObjectName::from(vec![Ident {
                         value: "test_func2".to_string(),
                         quote_style: None,
                         span: Span::empty(),
@@ -3791,7 +3810,7 @@ fn parse_drop_procedure() {
         Statement::DropProcedure {
             if_exists: true,
             proc_desc: vec![FunctionDesc {
-                name: ObjectName(vec![Ident {
+                name: ObjectName::from(vec![Ident {
                     value: "test_proc".to_string(),
                     quote_style: None,
                     span: Span::empty(),
@@ -3808,7 +3827,7 @@ fn parse_drop_procedure() {
         Statement::DropProcedure {
             if_exists: true,
             proc_desc: vec![FunctionDesc {
-                name: ObjectName(vec![Ident {
+                name: ObjectName::from(vec![Ident {
                     value: "test_proc".to_string(),
                     quote_style: None,
                     span: Span::empty(),
@@ -3834,7 +3853,7 @@ fn parse_drop_procedure() {
             if_exists: true,
             proc_desc: vec![
                 FunctionDesc {
-                    name: ObjectName(vec![Ident {
+                    name: ObjectName::from(vec![Ident {
                         value: "test_proc1".to_string(),
                         quote_style: None,
                         span: Span::empty(),
@@ -3853,7 +3872,7 @@ fn parse_drop_procedure() {
                     ]),
                 },
                 FunctionDesc {
-                    name: ObjectName(vec![Ident {
+                    name: ObjectName::from(vec![Ident {
                         value: "test_proc2".to_string(),
                         quote_style: None,
                         span: Span::empty(),
@@ -4035,7 +4054,7 @@ fn parse_select_group_by_cube() {
 #[test]
 fn parse_truncate() {
     let truncate = pg_and_generic().verified_stmt("TRUNCATE db.table_name");
-    let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+    let table_name = ObjectName::from(vec![Ident::new("db"), Ident::new("table_name")]);
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
     }];
@@ -4058,7 +4077,7 @@ fn parse_truncate_with_options() {
     let truncate = pg_and_generic()
         .verified_stmt("TRUNCATE TABLE ONLY db.table_name RESTART IDENTITY CASCADE");
 
-    let table_name = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
+    let table_name = ObjectName::from(vec![Ident::new("db"), Ident::new("table_name")]);
     let table_names = vec![TruncateTableTarget {
         name: table_name.clone(),
     }];
@@ -4083,8 +4102,8 @@ fn parse_truncate_with_table_list() {
         "TRUNCATE TABLE db.table_name, db.other_table_name RESTART IDENTITY CASCADE",
     );
 
-    let table_name_a = ObjectName(vec![Ident::new("db"), Ident::new("table_name")]);
-    let table_name_b = ObjectName(vec![Ident::new("db"), Ident::new("other_table_name")]);
+    let table_name_a = ObjectName::from(vec![Ident::new("db"), Ident::new("table_name")]);
+    let table_name_b = ObjectName::from(vec![Ident::new("db"), Ident::new("other_table_name")]);
 
     let table_names = vec![
         TruncateTableTarget {
@@ -4280,7 +4299,7 @@ fn test_simple_postgres_insert_with_alias() {
             or: None,
             ignore: false,
             into: true,
-            table_name: ObjectName(vec![Ident {
+            table_name: ObjectName::from(vec![Ident {
                 value: "test_tables".to_string(),
                 quote_style: None,
                 span: Span::empty(),
@@ -4347,7 +4366,7 @@ fn test_simple_postgres_insert_with_alias() {
             or: None,
             ignore: false,
             into: true,
-            table_name: ObjectName(vec![Ident {
+            table_name: ObjectName::from(vec![Ident {
                 value: "test_tables".to_string(),
                 quote_style: None,
                 span: Span::empty(),
@@ -4416,7 +4435,7 @@ fn test_simple_insert_with_quoted_alias() {
             or: None,
             ignore: false,
             into: true,
-            table_name: ObjectName(vec![Ident {
+            table_name: ObjectName::from(vec![Ident {
                 value: "test_tables".to_string(),
                 quote_style: None,
                 span: Span::empty(),
@@ -4610,10 +4629,10 @@ fn parse_create_simple_before_insert_trigger() {
     let expected = Statement::CreateTrigger {
         or_replace: false,
         is_constraint: false,
-        name: ObjectName(vec![Ident::new("check_insert")]),
+        name: ObjectName::from(vec![Ident::new("check_insert")]),
         period: TriggerPeriod::Before,
         events: vec![TriggerEvent::Insert],
-        table_name: ObjectName(vec![Ident::new("accounts")]),
+        table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
         trigger_object: TriggerObject::Row,
@@ -4622,7 +4641,7 @@ fn parse_create_simple_before_insert_trigger() {
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
-                name: ObjectName(vec![Ident::new("check_account_insert")]),
+                name: ObjectName::from(vec![Ident::new("check_account_insert")]),
                 args: None,
             },
         },
@@ -4638,10 +4657,10 @@ fn parse_create_after_update_trigger_with_condition() {
     let expected = Statement::CreateTrigger {
         or_replace: false,
         is_constraint: false,
-        name: ObjectName(vec![Ident::new("check_update")]),
+        name: ObjectName::from(vec![Ident::new("check_update")]),
         period: TriggerPeriod::After,
         events: vec![TriggerEvent::Update(vec![])],
-        table_name: ObjectName(vec![Ident::new("accounts")]),
+        table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
         trigger_object: TriggerObject::Row,
@@ -4657,7 +4676,7 @@ fn parse_create_after_update_trigger_with_condition() {
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
-                name: ObjectName(vec![Ident::new("check_account_update")]),
+                name: ObjectName::from(vec![Ident::new("check_account_update")]),
                 args: None,
             },
         },
@@ -4673,10 +4692,10 @@ fn parse_create_instead_of_delete_trigger() {
     let expected = Statement::CreateTrigger {
         or_replace: false,
         is_constraint: false,
-        name: ObjectName(vec![Ident::new("check_delete")]),
+        name: ObjectName::from(vec![Ident::new("check_delete")]),
         period: TriggerPeriod::InsteadOf,
         events: vec![TriggerEvent::Delete],
-        table_name: ObjectName(vec![Ident::new("accounts")]),
+        table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
         trigger_object: TriggerObject::Row,
@@ -4685,7 +4704,7 @@ fn parse_create_instead_of_delete_trigger() {
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
-                name: ObjectName(vec![Ident::new("check_account_deletes")]),
+                name: ObjectName::from(vec![Ident::new("check_account_deletes")]),
                 args: None,
             },
         },
@@ -4701,14 +4720,14 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
     let expected = Statement::CreateTrigger {
         or_replace: false,
         is_constraint: true,
-        name: ObjectName(vec![Ident::new("check_multiple_events")]),
+        name: ObjectName::from(vec![Ident::new("check_multiple_events")]),
         period: TriggerPeriod::Before,
         events: vec![
             TriggerEvent::Insert,
             TriggerEvent::Update(vec![]),
             TriggerEvent::Delete,
         ],
-        table_name: ObjectName(vec![Ident::new("accounts")]),
+        table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![],
         trigger_object: TriggerObject::Row,
@@ -4717,7 +4736,7 @@ fn parse_create_trigger_with_multiple_events_and_deferrable() {
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
-                name: ObjectName(vec![Ident::new("check_account_changes")]),
+                name: ObjectName::from(vec![Ident::new("check_account_changes")]),
                 args: None,
             },
         },
@@ -4737,21 +4756,21 @@ fn parse_create_trigger_with_referencing() {
     let expected = Statement::CreateTrigger {
         or_replace: false,
         is_constraint: false,
-        name: ObjectName(vec![Ident::new("check_referencing")]),
+        name: ObjectName::from(vec![Ident::new("check_referencing")]),
         period: TriggerPeriod::Before,
         events: vec![TriggerEvent::Insert],
-        table_name: ObjectName(vec![Ident::new("accounts")]),
+        table_name: ObjectName::from(vec![Ident::new("accounts")]),
         referenced_table_name: None,
         referencing: vec![
             TriggerReferencing {
                 refer_type: TriggerReferencingType::NewTable,
                 is_as: true,
-                transition_relation_name: ObjectName(vec![Ident::new("new_accounts")]),
+                transition_relation_name: ObjectName::from(vec![Ident::new("new_accounts")]),
             },
             TriggerReferencing {
                 refer_type: TriggerReferencingType::OldTable,
                 is_as: true,
-                transition_relation_name: ObjectName(vec![Ident::new("old_accounts")]),
+                transition_relation_name: ObjectName::from(vec![Ident::new("old_accounts")]),
             },
         ],
         trigger_object: TriggerObject::Row,
@@ -4760,7 +4779,7 @@ fn parse_create_trigger_with_referencing() {
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,
             func_desc: FunctionDesc {
-                name: ObjectName(vec![Ident::new("check_account_referencing")]),
+                name: ObjectName::from(vec![Ident::new("check_account_referencing")]),
                 args: None,
             },
         },
@@ -4819,8 +4838,8 @@ fn parse_drop_trigger() {
                 pg().verified_stmt(sql),
                 Statement::DropTrigger {
                     if_exists,
-                    trigger_name: ObjectName(vec![Ident::new("check_update")]),
-                    table_name: ObjectName(vec![Ident::new("table_name")]),
+                    trigger_name: ObjectName::from(vec![Ident::new("check_update")]),
+                    table_name: ObjectName::from(vec![Ident::new("table_name")]),
                     option
                 }
             );
@@ -4933,7 +4952,7 @@ fn parse_trigger_related_functions() {
             if_not_exists: false,
             transient: false,
             volatile: false,
-            name: ObjectName(vec![Ident::new("emp")]),
+            name: ObjectName::from(vec![Ident::new("emp")]),
             columns: vec![
                 ColumnDef {
                     name: "empname".into(),
@@ -5010,7 +5029,7 @@ fn parse_trigger_related_functions() {
             or_replace: false,
             temporary: false,
             if_not_exists: false,
-            name: ObjectName(vec![Ident::new("emp_stamp")]),
+            name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             args: None,
             return_type: Some(DataType::Trigger),
             function_body: Some(
@@ -5045,10 +5064,10 @@ fn parse_trigger_related_functions() {
         Statement::CreateTrigger {
             or_replace: false,
             is_constraint: false,
-            name: ObjectName(vec![Ident::new("emp_stamp")]),
+            name: ObjectName::from(vec![Ident::new("emp_stamp")]),
             period: TriggerPeriod::Before,
             events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![])],
-            table_name: ObjectName(vec![Ident::new("emp")]),
+            table_name: ObjectName::from(vec![Ident::new("emp")]),
             referenced_table_name: None,
             referencing: vec![],
             trigger_object: TriggerObject::Row,
@@ -5057,7 +5076,7 @@ fn parse_trigger_related_functions() {
             exec_body: TriggerExecBody {
                 exec_type: TriggerExecBodyType::Function,
                 func_desc: FunctionDesc {
-                    name: ObjectName(vec![Ident::new("emp_stamp")]),
+                    name: ObjectName::from(vec![Ident::new("emp_stamp")]),
                     args: None,
                 }
             },
@@ -5070,8 +5089,8 @@ fn parse_trigger_related_functions() {
         drop_trigger,
         Statement::DropTrigger {
             if_exists: false,
-            trigger_name: ObjectName(vec![Ident::new("emp_stamp")]),
-            table_name: ObjectName(vec![Ident::new("emp")]),
+            trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+            table_name: ObjectName::from(vec![Ident::new("emp")]),
             option: None
         }
     );

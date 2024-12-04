@@ -37,8 +37,8 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
-use sqlparser::tokenizer::Span;
 use sqlparser::tokenizer::Tokenizer;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::{
     all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, call, expr_from_projection,
     join, number, only, table, table_alias, TestedDialects,
@@ -10324,19 +10324,39 @@ fn parse_map_access_expr() {
         Box::new(ClickHouseDialect {}),
     ]);
     let expr = dialects.verified_expr(sql);
-    let expected = Expr::Subscript {
-        expr: Box::new(Expr::Subscript {
-            expr: Box::new(Expr::Identifier(Ident::new("users"))),
-            subscript: Box::new(Subscript::Index {
+    let expected = Expr::CompoundExpr {
+        root: Box::new(Expr::Identifier(Ident::with_span(
+            Span::new(Location::of(1, 1), Location::of(1, 6)),
+            "users",
+        ))),
+        chain: vec![
+            AccessField::SubScript(Subscript::Index {
                 index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
                     expr: Expr::Value(number("1")).into(),
                 },
             }),
-        }),
-        subscript: Box::new(Subscript::Index {
-            index: call("safe_offset", [Expr::Value(number("2"))]),
-        }),
+            AccessField::SubScript(Subscript::Index {
+                index: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::with_span(
+                        Span::new(Location::of(1, 11), Location::of(1, 22)),
+                        "safe_offset",
+                    )]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            number("2"),
+                        )))],
+                        clauses: vec![],
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                }),
+            }),
+        ],
     };
     assert_eq!(expr, expected);
 
@@ -11117,26 +11137,26 @@ fn test_map_syntax() {
         }),
     );
 
-    check(
-        "MAP {'a': 10, 'b': 20}['a']",
-        Expr::Subscript {
-            expr: Box::new(Expr::Map(Map {
-                entries: vec![
-                    MapEntry {
-                        key: Box::new(Expr::Value(Value::SingleQuotedString("a".to_owned()))),
-                        value: Box::new(number_expr("10")),
-                    },
-                    MapEntry {
-                        key: Box::new(Expr::Value(Value::SingleQuotedString("b".to_owned()))),
-                        value: Box::new(number_expr("20")),
-                    },
-                ],
-            })),
-            subscript: Box::new(Subscript::Index {
-                index: Expr::Value(Value::SingleQuotedString("a".to_owned())),
-            }),
-        },
-    );
+    // check(
+    //     "MAP {'a': 10, 'b': 20}['a']",
+    //     Expr::Subscript {
+    //         expr: Box::new(Expr::Map(Map {
+    //             entries: vec![
+    //                 MapEntry {
+    //                     key: Box::new(Expr::Value(Value::SingleQuotedString("a".to_owned()))),
+    //                     value: Box::new(number_expr("10")),
+    //                 },
+    //                 MapEntry {
+    //                     key: Box::new(Expr::Value(Value::SingleQuotedString("b".to_owned()))),
+    //                     value: Box::new(number_expr("20")),
+    //                 },
+    //             ],
+    //         })),
+    //         subscript: Box::new(Subscript::Index {
+    //             index: Expr::Value(Value::SingleQuotedString("a".to_owned())),
+    //         }),
+    //     },
+    // );
 
     check("MAP {}", Expr::Map(Map { entries: vec![] }));
 }

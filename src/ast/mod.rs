@@ -577,6 +577,12 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
+    /// Multi-part Expression accessing. It's used to represent a access chain from a root expression.
+    /// e.g. `expr[0]`, `expr[0][0]`, or `expr.field1.filed2[1].field3`, ...
+    CompoundExpr {
+        root: Box<Expr>,
+        chain: Vec<AccessField>,
+    },
     /// Access data nested in a value containing semi-structured data, such as
     /// the `VARIANT` type on Snowflake. for example `src:customer[0].name`.
     ///
@@ -916,11 +922,6 @@ pub enum Expr {
     /// ```
     /// [1]: https://duckdb.org/docs/sql/data_types/map#creating-maps
     Map(Map),
-    /// An access of nested data using subscript syntax, for example `array[2]`.
-    Subscript {
-        expr: Box<Expr>,
-        subscript: Box<Subscript>,
-    },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
     /// An interval expression e.g. `INTERVAL '1' YEAR`
@@ -1035,6 +1036,14 @@ impl fmt::Display for Subscript {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AccessField {
+    Expr(Expr),
+    SubScript(Subscript),
 }
 
 /// A lambda function.
@@ -1235,6 +1244,16 @@ impl fmt::Display for Expr {
             Expr::Wildcard(_) => f.write_str("*"),
             Expr::QualifiedWildcard(prefix, _) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
+            Expr::CompoundExpr { root, chain } => {
+                write!(f, "{}", root)?;
+                for field in chain {
+                    match field {
+                        AccessField::Expr(expr) => write!(f, ".{}", expr)?,
+                        AccessField::SubScript(subscript) => write!(f, "[{}]", subscript)?,
+                    }
+                }
+                Ok(())
+            }
             Expr::IsTrue(ast) => write!(f, "{ast} IS TRUE"),
             Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
             Expr::IsFalse(ast) => write!(f, "{ast} IS FALSE"),
@@ -1653,12 +1672,6 @@ impl fmt::Display for Expr {
             }
             Expr::Map(map) => {
                 write!(f, "{map}")
-            }
-            Expr::Subscript {
-                expr,
-                subscript: key,
-            } => {
-                write!(f, "{expr}[{key}]")
             }
             Expr::Array(set) => {
                 write!(f, "{set}")

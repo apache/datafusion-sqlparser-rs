@@ -1172,7 +1172,7 @@ impl<'a> Parser<'a> {
                     self.parse_compound_expr(expr, fields)
                 }
             }
-            Token::LBracket => {
+            Token::LBracket if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect) => {
                 let _ = self.consume_token(&Token::LBracket);
                 let ident = Expr::Identifier(w.to_ident(w_span));
                 let mut fields = vec![];

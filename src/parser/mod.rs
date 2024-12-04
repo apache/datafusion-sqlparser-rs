@@ -8134,6 +8134,13 @@ impl<'a> Parser<'a> {
                 Keyword::MEDIUMBLOB => Ok(DataType::MediumBlob),
                 Keyword::LONGBLOB => Ok(DataType::LongBlob),
                 Keyword::BYTES => Ok(DataType::Bytes(self.parse_optional_precision()?)),
+                Keyword::BIT => {
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::BitVarying(self.parse_optional_precision()?))
+                    } else {
+                        Ok(DataType::Bit(self.parse_optional_precision()?))
+                    }
+                }
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
                 Keyword::DATE32 => Ok(DataType::Date32),

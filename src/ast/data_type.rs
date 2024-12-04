@@ -307,6 +307,16 @@ pub enum DataType {
     FixedString(u64),
     /// Bytea
     Bytea,
+    /// Bit string, e.g. [Postgres], [MySQL], or [MSSQL]
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/current/datatype-bit.html
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/bit-type.html
+    /// [MSSQL]: https://learn.microsoft.com/en-us/sql/t-sql/data-types/bit-transact-sql?view=sql-server-ver16
+    Bit(Option<u64>),
+    /// Variable-length bit string e.g. [Postgres]
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/current/datatype-bit.html
+    BitVarying(Option<u64>),
     /// Custom type such as enums
     Custom(ObjectName, Vec<String>),
     /// Arrays
@@ -518,6 +528,10 @@ impl fmt::Display for DataType {
             DataType::LongText => write!(f, "LONGTEXT"),
             DataType::String(size) => format_type_with_optional_length(f, "STRING", size, false),
             DataType::Bytea => write!(f, "BYTEA"),
+            DataType::Bit(size) => format_type_with_optional_length(f, "BIT", size, false),
+            DataType::BitVarying(size) => {
+                format_type_with_optional_length(f, "BIT VARYING", size, false)
+            }
             DataType::Array(ty) => match ty {
                 ArrayElemTypeDef::None => write!(f, "ARRAY"),
                 ArrayElemTypeDef::SquareBracket(t, None) => write!(f, "{t}[]"),

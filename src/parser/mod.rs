@@ -6729,6 +6729,8 @@ impl<'a> Parser<'a> {
                         .expected("`index_name` or `(column_name [, ...])`", self.peek_token());
                 }
 
+                let nulls_distinct = self.parse_optional_nulls_distinct()?;
+
                 // optional index name
                 let index_name = self.parse_optional_indent()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
@@ -6744,6 +6746,7 @@ impl<'a> Parser<'a> {
                     columns,
                     index_options,
                     characteristics,
+                    nulls_distinct,
                 }))
             }
             Token::Word(w) if w.keyword == Keyword::PRIMARY => {
@@ -6864,6 +6867,20 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+    }
+
+    fn parse_optional_nulls_distinct(&mut self) -> Result<NullsDistinctOption, ParserError> {
+        Ok(if self.parse_keyword(Keyword::NULLS) {
+            let not = self.parse_keyword(Keyword::NOT);
+            self.expect_keyword(Keyword::DISTINCT)?;
+            if not {
+                NullsDistinctOption::NotDistinct
+            } else {
+                NullsDistinctOption::Distinct
+            }
+        } else {
+            NullsDistinctOption::None
+        })
     }
 
     pub fn maybe_parse_options(

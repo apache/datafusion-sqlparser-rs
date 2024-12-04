@@ -669,6 +669,7 @@ fn table_constraint_unique_primary_ctor(
             columns,
             index_options,
             characteristics,
+            nulls_distinct: NullsDistinctOption::None,
         },
         None => TableConstraint::PrimaryKey {
             name,

@@ -21,21 +21,51 @@ use super::{
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
 fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
-    iter.reduce(|acc, item| acc.union(&item))
-        .unwrap_or(Span::empty())
+    Span::union_iter(iter)
 }
 
-/// A trait for AST nodes that have a source span for use in diagnostics.
+/// Trait for AST nodes that have a source location information.
 ///
-/// Source spans are not guaranteed to be entirely accurate. They may
-/// be missing keywords or other tokens. Some nodes may not have a computable
-/// span at all, in which case they return [`Span::empty()`].
+/// # Notes:
 ///
-/// Some impl blocks may contain doc comments with information
-/// on which nodes are missing spans.
+/// Source [`Span`] are not yet complete. They may be missing:
+///
+/// 1. keywords or other tokens
+/// 2. span information entirely, in which case they return [`Span::empty()`].
+///
+/// Note Some impl blocks (rendered below) are annotated with which nodes are
+/// missing spans. See [this ticket] for additional information and status.
+///
+/// [this ticket]: https://github.com/apache/datafusion-sqlparser-rs/issues/1548
+///
+/// # Example
+/// ```
+/// # use sqlparser::parser::{Parser, ParserError};
+/// # use sqlparser::ast::Spanned;
+/// # use sqlparser::dialect::GenericDialect;
+/// # use sqlparser::tokenizer::Location;
+/// # fn main() -> Result<(), ParserError> {
+/// let dialect = GenericDialect {};
+/// let sql = r#"SELECT *
+///   FROM table_1"#;
+/// let statements = Parser::new(&dialect)
+///   .try_with_sql(sql)?
+///   .parse_statements()?;
+/// // Get the span of the first statement (SELECT)
+/// let span = statements[0].span();
+/// // statement starts at line 1, column 1 (1 based, not 0 based)
+/// assert_eq!(span.start, Location::new(1, 1));
+/// // statement ends on line 2, column 15
+/// assert_eq!(span.end, Location::new(2, 15));
+/// # Ok(())
+/// # }
+/// ```
+///
 pub trait Spanned {
-    /// Compute the source span for this AST node, by recursively
-    /// combining the spans of its children.
+    /// Return the [`Span`] (the minimum and maximum [`Location`]) for this AST
+    /// node, by recursively combining the spans of its children.
+    ///
+    /// [`Location`]: crate::tokenizer::Location
     fn span(&self) -> Span;
 }
 
@@ -557,6 +587,7 @@ impl Spanned for TableConstraint {
                 columns,
                 index_options: _,
                 characteristics,
+                nulls_distinct: _,
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)

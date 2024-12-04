@@ -76,6 +76,18 @@ pub enum DataType {
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-large-object-string-type
     /// [Oracle]: https://docs.oracle.com/javadb/10.8.3.0/ref/rrefblob.html
     Blob(Option<u64>),
+    /// [MySQL] blob with up to 2**8 bytes
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
+    TinyBlob,
+    /// [MySQL] blob with up to 2**24 bytes
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
+    MediumBlob,
+    /// [MySQL] blob with up to 2**32 bytes
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
+    LongBlob,
     /// Variable-length binary data with optional length.
     ///
     /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#bytes_type
@@ -275,6 +287,18 @@ pub enum DataType {
     Regclass,
     /// Text
     Text,
+    /// [MySQL] text with up to 2**8 bytes
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
+    TinyText,
+    /// [MySQL] text with up to 2**24 bytes
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
+    MediumText,
+    /// [MySQL] text with up to 2**32 bytes
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
+    LongText,
     /// String with optional length.
     String(Option<u64>),
     /// A fixed-length string e.g [ClickHouse][1].
@@ -283,6 +307,16 @@ pub enum DataType {
     FixedString(u64),
     /// Bytea
     Bytea,
+    /// Bit string, e.g. [Postgres], [MySQL], or [MSSQL]
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/current/datatype-bit.html
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/bit-type.html
+    /// [MSSQL]: https://learn.microsoft.com/en-us/sql/t-sql/data-types/bit-transact-sql?view=sql-server-ver16
+    Bit(Option<u64>),
+    /// Variable-length bit string e.g. [Postgres]
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/current/datatype-bit.html
+    BitVarying(Option<u64>),
     /// Custom type such as enums
     Custom(ObjectName, Vec<String>),
     /// Arrays
@@ -355,6 +389,9 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "VARBINARY", size, false)
             }
             DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
+            DataType::TinyBlob => write!(f, "TINYBLOB"),
+            DataType::MediumBlob => write!(f, "MEDIUMBLOB"),
+            DataType::LongBlob => write!(f, "LONGBLOB"),
             DataType::Bytes(size) => format_type_with_optional_length(f, "BYTES", size, false),
             DataType::Numeric(info) => {
                 write!(f, "NUMERIC{info}")
@@ -486,8 +523,15 @@ impl fmt::Display for DataType {
             DataType::JSONB => write!(f, "JSONB"),
             DataType::Regclass => write!(f, "REGCLASS"),
             DataType::Text => write!(f, "TEXT"),
+            DataType::TinyText => write!(f, "TINYTEXT"),
+            DataType::MediumText => write!(f, "MEDIUMTEXT"),
+            DataType::LongText => write!(f, "LONGTEXT"),
             DataType::String(size) => format_type_with_optional_length(f, "STRING", size, false),
             DataType::Bytea => write!(f, "BYTEA"),
+            DataType::Bit(size) => format_type_with_optional_length(f, "BIT", size, false),
+            DataType::BitVarying(size) => {
+                format_type_with_optional_length(f, "BIT VARYING", size, false)
+            }
             DataType::Array(ty) => match ty {
                 ArrayElemTypeDef::None => write!(f, "ARRAY"),
                 ArrayElemTypeDef::SquareBracket(t, None) => write!(f, "{t}[]"),

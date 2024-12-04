@@ -7761,9 +7761,9 @@ fn parse_start_transaction() {
     }
 
     verified_stmt("START TRANSACTION");
-    one_statement_parses_to("BEGIN", "BEGIN TRANSACTION");
-    one_statement_parses_to("BEGIN WORK", "BEGIN TRANSACTION");
-    one_statement_parses_to("BEGIN TRANSACTION", "BEGIN TRANSACTION");
+    verified_stmt("BEGIN");
+    verified_stmt("BEGIN WORK");
+    verified_stmt("BEGIN TRANSACTION");
 
     verified_stmt("START TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
     verified_stmt("START TRANSACTION ISOLATION LEVEL READ COMMITTED");
@@ -12482,4 +12482,23 @@ fn test_reserved_keywords_for_identifiers() {
     let dialects = all_dialects_where(|d| !d.is_reserved_for_identifier(Keyword::INTERVAL));
     let sql = "SELECT MAX(interval) FROM tbl";
     dialects.parse_sql_statements(sql).unwrap();
+}
+
+#[test]
+fn parse_create_table_with_bit_types() {
+    let sql = "CREATE TABLE t (a BIT, b BIT VARYING, c BIT(42), d BIT VARYING(43))";
+    match verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(columns.len(), 4);
+            assert_eq!(columns[0].data_type, DataType::Bit(None));
+            assert_eq!(columns[0].to_string(), "a BIT");
+            assert_eq!(columns[1].data_type, DataType::BitVarying(None));
+            assert_eq!(columns[1].to_string(), "b BIT VARYING");
+            assert_eq!(columns[2].data_type, DataType::Bit(Some(42)));
+            assert_eq!(columns[2].to_string(), "c BIT(42)");
+            assert_eq!(columns[3].data_type, DataType::BitVarying(Some(43)));
+            assert_eq!(columns[3].to_string(), "d BIT VARYING(43)");
+        }
+        _ => unreachable!(),
+    }
 }

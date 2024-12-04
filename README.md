@@ -100,13 +100,18 @@ similar semantics are represented with the same AST. We welcome PRs to fix such
 issues and distinguish different syntaxes in the AST.
 
 
-## WIP: Extracting source locations from AST nodes
+## Source Locations (Work in Progress)
 
-This crate allows recovering source locations from AST nodes via the [Spanned](https://docs.rs/sqlparser/latest/sqlparser/ast/trait.Spanned.html) trait, which can be used for advanced diagnostics tooling. Note that this feature is a work in progress and many nodes report missing or inaccurate spans. Please see [this document](./docs/source_spans.md#source-span-contributing-guidelines) for information on how to contribute missing improvements.
+This crate allows recovering source locations from AST nodes via the [Spanned]
+trait, which can be used for advanced diagnostics tooling. Note that this
+feature is a work in progress and many nodes report missing or inaccurate spans.
+Please see [this ticket] for information on how to contribute missing
+improvements.
+
+[Spanned]: https://docs.rs/sqlparser/latest/sqlparser/ast/trait.Spanned.html
+[this ticket]: https://github.com/apache/datafusion-sqlparser-rs/issues/1548
 
 ```rust
-use sqlparser::ast::Spanned;
-
 // Parse SQL
 let ast = Parser::parse_sql(&GenericDialect, "SELECT A FROM B").unwrap();
 
@@ -123,9 +128,9 @@ SQL was first standardized in 1987, and revisions of the standard have been
 published regularly since. Most revisions have added significant new features to
 the language, and as a result no database claims to support the full breadth of
 features. This parser currently supports most of the SQL-92 syntax, plus some
-syntax from newer versions that have been explicitly requested, plus some MSSQL,
-PostgreSQL, and other dialect-specific syntax. Whenever possible, the [online
-SQL:2016 grammar][sql-2016-grammar] is used to guide what syntax to accept.
+syntax from newer versions that have been explicitly requested, plus various
+other dialect-specific syntax. Whenever possible, the [online SQL:2016
+grammar][sql-2016-grammar] is used to guide what syntax to accept.
 
 Unfortunately, stating anything more specific about compliance is difficult.
 There is no publicly available test suite that can assess compliance

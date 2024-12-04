@@ -595,6 +595,25 @@ fn parse_alter_table_constraints_rename() {
 }
 
 #[test]
+fn parse_alter_table_constraints_unique_nulls_distinct() {
+    match pg_and_generic()
+        .verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS NOT DISTINCT (c)")
+    {
+        Statement::AlterTable { operations, .. } => match &operations[0] {
+            AlterTableOperation::AddConstraint(TableConstraint::Unique {
+                nulls_distinct, ..
+            }) => {
+                assert_eq!(nulls_distinct, &NullsDistinctOption::NotDistinct)
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE NULLS DISTINCT (c)");
+    pg_and_generic().verified_stmt("ALTER TABLE t ADD CONSTRAINT b UNIQUE (c)");
+}
+
+#[test]
 fn parse_alter_table_disable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
@@ -2825,6 +2844,19 @@ fn test_json() {
 }
 
 #[test]
+fn test_fn_arg_with_value_operator() {
+    match pg().verified_expr("JSON_OBJECT('name' VALUE 'value')") {
+        Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, .. }), .. }) => {
+            assert!(matches!(
+                &args[..],
+                &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
+            ), "Invalid function argument: {:?}", args);
+        }
+        other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
+    }
+}
+
+#[test]
 fn parse_json_table_is_not_reserved() {
     // JSON_TABLE is not a reserved keyword in PostgreSQL, even though it is in SQL:2023
     // see: https://en.wikipedia.org/wiki/List_of_SQL_reserved_words
@@ -3618,7 +3650,7 @@ fn parse_create_function() {
     let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS 'select $1 + $2;'";
     assert_eq!(
         pg_and_generic().verified_stmt(sql),
-        Statement::CreateFunction {
+        Statement::CreateFunction(CreateFunction {
             or_replace: false,
             temporary: false,
             name: ObjectName(vec![Ident::new("add")]),
@@ -3639,7 +3671,7 @@ fn parse_create_function() {
             determinism_specifier: None,
             options: None,
             remote_connection: None,
-        }
+        })
     );
 }
 
@@ -4974,7 +5006,7 @@ fn parse_trigger_related_functions() {
 
     assert_eq!(
         create_function,
-        Statement::CreateFunction {
+        Statement::CreateFunction(CreateFunction {
             or_replace: false,
             temporary: false,
             if_not_exists: false,
@@ -5004,7 +5036,7 @@ fn parse_trigger_related_functions() {
             options: None,
             remote_connection: None
         }
-    );
+    ));
 
     // Check the third statement
 

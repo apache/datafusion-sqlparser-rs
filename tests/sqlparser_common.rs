@@ -10330,13 +10330,13 @@ fn parse_map_access_expr() {
             "users",
         ))),
         chain: vec![
-            AccessField::SubScript(Subscript::Index {
+            AccessField::Subscript(Subscript::Index {
                 index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
                     expr: Expr::Value(number("1")).into(),
                 },
             }),
-            AccessField::SubScript(Subscript::Index {
+            AccessField::Subscript(Subscript::Index {
                 index: Expr::Function(Function {
                     name: ObjectName(vec![Ident::with_span(
                         Span::new(Location::of(1, 11), Location::of(1, 22)),
@@ -11137,26 +11137,26 @@ fn test_map_syntax() {
         }),
     );
 
-    // check(
-    //     "MAP {'a': 10, 'b': 20}['a']",
-    //     Expr::Subscript {
-    //         expr: Box::new(Expr::Map(Map {
-    //             entries: vec![
-    //                 MapEntry {
-    //                     key: Box::new(Expr::Value(Value::SingleQuotedString("a".to_owned()))),
-    //                     value: Box::new(number_expr("10")),
-    //                 },
-    //                 MapEntry {
-    //                     key: Box::new(Expr::Value(Value::SingleQuotedString("b".to_owned()))),
-    //                     value: Box::new(number_expr("20")),
-    //                 },
-    //             ],
-    //         })),
-    //         subscript: Box::new(Subscript::Index {
-    //             index: Expr::Value(Value::SingleQuotedString("a".to_owned())),
-    //         }),
-    //     },
-    // );
+    check(
+        "MAP {'a': 10, 'b': 20}['a']",
+        Expr::CompoundExpr {
+            root: Box::new(Expr::Map(Map {
+                entries: vec![
+                    MapEntry {
+                        key: Box::new(Expr::Value(Value::SingleQuotedString("a".to_owned()))),
+                        value: Box::new(number_expr("10")),
+                    },
+                    MapEntry {
+                        key: Box::new(Expr::Value(Value::SingleQuotedString("b".to_owned()))),
+                        value: Box::new(number_expr("20")),
+                    },
+                ],
+            })),
+            chain: vec![AccessField::Subscript(Subscript::Index {
+                index: Expr::Value(Value::SingleQuotedString("a".to_owned())),
+            })],
+        },
+    );
 
     check("MAP {}", Expr::Map(Map { entries: vec![] }));
 }

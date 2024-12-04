@@ -1975,13 +1975,13 @@ fn parse_map_access_expr() {
             "users",
         ))),
         chain: vec![
-            AccessField::SubScript(Subscript::Index {
+            AccessField::Subscript(Subscript::Index {
                 index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
                     expr: Expr::Value(number("1")).into(),
                 },
             }),
-            AccessField::SubScript(Subscript::Index {
+            AccessField::Subscript(Subscript::Index {
                 index: Expr::Function(Function {
                     name: ObjectName(vec![Ident::with_span(
                         Span::new(Location::of(1, 11), Location::of(1, 22)),

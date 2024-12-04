@@ -1447,7 +1447,7 @@ impl Spanned for AccessField {
     fn span(&self) -> Span {
         match self {
             AccessField::Expr(ident) => ident.span(),
-            AccessField::SubScript(subscript) => subscript.span(),
+            AccessField::Subscript(subscript) => subscript.span(),
         }
     }
 }

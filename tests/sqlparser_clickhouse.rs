@@ -50,7 +50,7 @@ fn parse_map_access_expr() {
                     quote_style: None,
                     span: Span::empty(),
                 })),
-                chain: vec![AccessField::SubScript(Subscript::Index {
+                chain: vec![AccessField::Subscript(Subscript::Index {
                     index: call(
                         "indexOf",
                         [
@@ -86,7 +86,7 @@ fn parse_map_access_expr() {
                 right: Box::new(BinaryOp {
                     left: Box::new(Expr::CompoundExpr {
                         root: Box::new(Identifier(Ident::new("string_value"))),
-                        chain: vec![AccessField::SubScript(Subscript::Index {
+                        chain: vec![AccessField::Subscript(Subscript::Index {
                             index: call(
                                 "indexOf",
                                 [

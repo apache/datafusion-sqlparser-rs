@@ -960,7 +960,6 @@ impl<'a> Parser<'a> {
     /// Parse tokens until the precedence changes.
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
-        debug!("precedence: {}", precedence);
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
         debug!("prefix: {:?}", expr);
@@ -1427,6 +1426,10 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Try to parse an [Expr::CompoundExpr] like `a.b.c` or `a.b[1].c`.
+    /// If all the fields are `Expr::Identifier`s, return an [Expr::CompoundIdentifier] instead.
+    /// If only the root exists, return the root.
+    /// If self supports [Dialect::supports_partiql], it will fall back when occurs [Token::LBracket] for JsonAccess parsing.
     pub fn parse_compound_expr(
         &mut self,
         root: Expr,
@@ -3221,7 +3224,7 @@ impl<'a> Parser<'a> {
     /// Parser is right after `[`
     pub fn parse_subscript(&mut self, chain: &mut Vec<AccessField>) -> Result<(), ParserError> {
         let subscript = self.parse_subscript_inner()?;
-        chain.push(AccessField::SubScript(subscript));
+        chain.push(AccessField::Subscript(subscript));
         Ok(())
     }
 

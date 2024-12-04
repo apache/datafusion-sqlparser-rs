@@ -656,7 +656,7 @@ fn test_array_index() {
                 ],
                 named: false
             })),
-            chain: vec![AccessField::SubScript(Subscript::Index {
+            chain: vec![AccessField::Subscript(Subscript::Index {
                 index: Expr::Value(number("3"))
             })]
         },

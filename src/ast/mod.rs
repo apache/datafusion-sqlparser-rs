@@ -1053,12 +1053,23 @@ impl fmt::Display for Subscript {
     }
 }
 
+/// The contents inside the `.` in an access chain.
+/// It can be an expression or a subscript.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AccessField {
     Expr(Expr),
-    SubScript(Subscript),
+    Subscript(Subscript),
+}
+
+impl fmt::Display for AccessField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AccessField::Expr(expr) => write!(f, "{}", expr),
+            AccessField::Subscript(subscript) => write!(f, "{}", subscript),
+        }
+    }
 }
 
 /// A lambda function.
@@ -1264,7 +1275,7 @@ impl fmt::Display for Expr {
                 for field in chain {
                     match field {
                         AccessField::Expr(expr) => write!(f, ".{}", expr)?,
-                        AccessField::SubScript(subscript) => write!(f, "[{}]", subscript)?,
+                        AccessField::Subscript(subscript) => write!(f, "[{}]", subscript)?,
                     }
                 }
                 Ok(())

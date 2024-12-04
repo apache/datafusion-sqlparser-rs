@@ -12461,12 +12461,13 @@ fn parse_create_table_with_bit_types() {
     }
 }
 
+#[test]
 fn parse_create_table_with_enum_types() {
     let sql = "CREATE TABLE t0 (foo ENUM8('a' = 1, 'b' = 2), bar ENUM16('a' = 1, 'b' = 2), baz ENUM('a', 'b'))";
     match all_dialects().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            std::assert_eq!(name.to_string(), "t0");
-            std::assert_eq!(
+            assert_eq!(name.to_string(), "t0");
+            assert_eq!(
                 vec![
                     ColumnDef {
                         name: Ident::new("foo"),
@@ -12524,7 +12525,7 @@ fn parse_create_table_with_enum_types() {
     }
 
     // invalid case missing value for enum pair
-    std::assert_eq!(
+    assert_eq!(
         all_dialects()
             .parse_sql_statements("CREATE TABLE t0 (foo ENUM8('a' = 1, 'b' = ))")
             .unwrap_err(),
@@ -12532,7 +12533,7 @@ fn parse_create_table_with_enum_types() {
     );
 
     // invalid case that name is not a string
-    std::assert_eq!(
+    assert_eq!(
         all_dialects()
             .parse_sql_statements("CREATE TABLE t0 (foo ENUM8('a' = 1, 2))")
             .unwrap_err(),

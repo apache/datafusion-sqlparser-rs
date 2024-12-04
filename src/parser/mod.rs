@@ -1172,7 +1172,8 @@ impl<'a> Parser<'a> {
                     self.parse_compound_expr(expr, fields)
                 }
             }
-            Token::LBracket if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect) => {
+            Token::LBracket if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect) =>
+            {
                 let _ = self.consume_token(&Token::LBracket);
                 let ident = Expr::Identifier(w.to_ident(w_span));
                 let mut fields = vec![];
@@ -1440,12 +1441,12 @@ impl<'a> Parser<'a> {
                     let expr = Expr::Identifier(w.to_ident(next_token.span));
                     chain.push(AccessField::Expr(expr));
                     if self.consume_token(&Token::LBracket) {
-                       if self.dialect.supports_partiql() {
-                           ending_lbracket = true;
-                           break;
-                       } else {
-                           self.parse_multi_dim_subscript(&mut chain)?
-                       }
+                        if self.dialect.supports_partiql() {
+                            ending_lbracket = true;
+                            break;
+                        } else {
+                            self.parse_multi_dim_subscript(&mut chain)?
+                        }
                     }
                 }
                 Token::Mul => {
@@ -1472,7 +1473,6 @@ impl<'a> Parser<'a> {
         if self.dialect.supports_partiql() && ending_lbracket {
             self.prev_token();
         }
-
 
         if let Some(wildcard_token) = ending_wildcard {
             let Some(id_parts) = Self::exprs_to_idents(&root, &chain) else {
@@ -3100,7 +3100,6 @@ impl<'a> Parser<'a> {
                 let mut chain = vec![];
                 self.parse_multi_dim_subscript(&mut chain)?;
                 self.parse_compound_expr(expr, chain)
-
             } else if self.dialect.supports_partiql() {
                 self.prev_token();
                 self.parse_json_access(expr)

@@ -2114,8 +2114,9 @@ fn parse_array_index_expr() {
                     index: num[0].clone()
                 }),
                 AccessField::SubScript(Subscript::Index {
-                index: num[0].clone()
-            })],
+                    index: num[0].clone()
+                })
+            ],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2153,23 +2154,23 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::CompoundExpr {
             root: Box::new(Expr::Nested(Box::new(Expr::Cast {
-                    kind: CastKind::Cast,
-                    expr: Box::new(Expr::Array(Array {
-                        elem: vec![Expr::Array(Array {
-                            elem: vec![num[2].clone(), num[3].clone(),],
-                            named: true,
-                        })],
+                kind: CastKind::Cast,
+                expr: Box::new(Expr::Array(Array {
+                    elem: vec![Expr::Array(Array {
+                        elem: vec![num[2].clone(), num[3].clone(),],
                         named: true,
-                    })),
-                    data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
-                        Box::new(DataType::Array(ArrayElemTypeDef::SquareBracket(
-                            Box::new(DataType::Int(None)),
-                            None
-                        ))),
+                    })],
+                    named: true,
+                })),
+                data_type: DataType::Array(ArrayElemTypeDef::SquareBracket(
+                    Box::new(DataType::Array(ArrayElemTypeDef::SquareBracket(
+                        Box::new(DataType::Int(None)),
                         None
-                    )),
-                    format: None,
-                }))),
+                    ))),
+                    None
+                )),
+                format: None,
+            }))),
             chain: vec![
                 AccessField::SubScript(Subscript::Index {
                     index: num[1].clone()
@@ -2284,13 +2285,13 @@ fn parse_array_multi_subscript() {
     assert_eq!(
         Expr::CompoundExpr {
             root: Box::new(call(
-                    "make_array",
-                    vec![
-                        Expr::Value(number("1")),
-                        Expr::Value(number("2")),
-                        Expr::Value(number("3"))
-                    ]
-                )),
+                "make_array",
+                vec![
+                    Expr::Value(number("1")),
+                    Expr::Value(number("2")),
+                    Expr::Value(number("3"))
+                ]
+            )),
             chain: vec![
                 AccessField::SubScript(Subscript::Slice {
                     lower_bound: Some(Expr::Value(number("1"))),

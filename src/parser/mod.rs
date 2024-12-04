@@ -1420,7 +1420,7 @@ impl<'a> Parser<'a> {
         root: Expr,
         mut chain: Vec<AccessField>,
     ) -> Result<Expr, ParserError> {
-        let mut ending_wildcard: Option<TokenWithLocation> = None;
+        let mut ending_wildcard: Option<TokenWithSpan> = None;
         while self.consume_token(&Token::Period) {
             let next_token = self.next_token();
             match next_token.token {
@@ -3201,7 +3201,6 @@ impl<'a> Parser<'a> {
     /// Parser is right after `[`
     pub fn parse_subscript(&mut self, chain: &mut Vec<AccessField>) -> Result<(), ParserError> {
         let subscript = self.parse_subscript_inner()?;
-        dbg!(&subscript);
         chain.push(AccessField::SubScript(subscript));
         Ok(())
     }

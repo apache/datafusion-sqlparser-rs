@@ -7273,6 +7273,10 @@ impl<'a> Parser<'a> {
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let name = self.parse_identifier(false)?;
                 AlterTableOperation::DropProjection { if_exists, name }
+            } else if dialect_of!(self is SnowflakeDialect | GenericDialect)
+                && self.parse_keywords(&[Keyword::CLUSTERING, Keyword::KEY])
+            {
+                AlterTableOperation::DropClusteringKey
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
@@ -7444,6 +7448,21 @@ impl<'a> Parser<'a> {
                 partition,
                 with_name,
             }
+        } else if dialect_of!(self is SnowflakeDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY])
+        {
+            self.expect_token(&Token::LParen)?;
+            let exprs = self.parse_comma_separated(|parser| parser.parse_expr())?;
+            self.expect_token(&Token::RParen)?;
+            AlterTableOperation::ClusterBy { exprs }
+        } else if dialect_of!(self is SnowflakeDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::SUSPEND, Keyword::RECLUSTER])
+        {
+            AlterTableOperation::SuspendRecluster
+        } else if dialect_of!(self is SnowflakeDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::RESUME, Keyword::RECLUSTER])
+        {
+            AlterTableOperation::ResumeRecluster
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

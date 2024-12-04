@@ -1412,6 +1412,42 @@ fn test_alter_table_swap_with() {
 }
 
 #[test]
+fn test_alter_table_clustering() {
+    let sql = r#"ALTER TABLE tab CLUSTER BY (c1, "c2", TO_DATE(c3))"#;
+    match alter_table_op(snowflake_and_generic().verified_stmt(sql)) {
+        AlterTableOperation::ClusterBy { exprs } => {
+            assert_eq!(
+                exprs,
+                [
+                    Expr::Identifier(Ident::new("c1")),
+                    Expr::Identifier(Ident::with_quote('"', "c2")),
+                    Expr::Function(Function {
+                        name: ObjectName(vec![Ident::new("TO_DATE")]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("c3"))
+                            ))],
+                            duplicate_treatment: None,
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![]
+                    })
+                ],
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    snowflake_and_generic().verified_stmt("ALTER TABLE tbl DROP CLUSTERING KEY");
+    snowflake_and_generic().verified_stmt("ALTER TABLE tbl SUSPEND RECLUSTER");
+    snowflake_and_generic().verified_stmt("ALTER TABLE tbl RESUME RECLUSTER");
+}
+
+#[test]
 fn test_drop_stage() {
     match snowflake_and_generic().verified_stmt("DROP STAGE s1") {
         Statement::Drop {
@@ -2916,3 +2952,8 @@ fn test_sf_double_dot_notation() {
 
 #[test]
 fn test_parse_double_dot_notation_wrong_position() {}
+
+#[test]
+fn test_xx() {
+    snowflake().parse_sql_statements("alter table GONG.internal.stg_keyword_trackers_internal_export_v202407 cluster by (company_id);").unwrap();
+}

@@ -70,7 +70,10 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is a ClickHouse-specific operation.
     /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#drop-projection)
-    DropProjection { if_exists: bool, name: Ident },
+    DropProjection {
+        if_exists: bool,
+        name: Ident,
+    },
 
     /// `MATERIALIZE PROJECTION [IF EXISTS] name [IN PARTITION partition_name]`
     ///
@@ -99,11 +102,15 @@ pub enum AlterTableOperation {
     /// `DISABLE RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    DisableRule { name: Ident },
+    DisableRule {
+        name: Ident,
+    },
     /// `DISABLE TRIGGER [ trigger_name | ALL | USER ]`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    DisableTrigger { name: Ident },
+    DisableTrigger {
+        name: Ident,
+    },
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
         if_exists: bool,
@@ -152,19 +159,27 @@ pub enum AlterTableOperation {
     /// `ENABLE ALWAYS RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableAlwaysRule { name: Ident },
+    EnableAlwaysRule {
+        name: Ident,
+    },
     /// `ENABLE ALWAYS TRIGGER trigger_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableAlwaysTrigger { name: Ident },
+    EnableAlwaysTrigger {
+        name: Ident,
+    },
     /// `ENABLE REPLICA RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableReplicaRule { name: Ident },
+    EnableReplicaRule {
+        name: Ident,
+    },
     /// `ENABLE REPLICA TRIGGER trigger_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableReplicaTrigger { name: Ident },
+    EnableReplicaTrigger {
+        name: Ident,
+    },
     /// `ENABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -172,11 +187,15 @@ pub enum AlterTableOperation {
     /// `ENABLE RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableRule { name: Ident },
+    EnableRule {
+        name: Ident,
+    },
     /// `ENABLE TRIGGER [ trigger_name | ALL | USER ]`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableTrigger { name: Ident },
+    EnableTrigger {
+        name: Ident,
+    },
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
         old_partitions: Vec<Expr>,
@@ -197,7 +216,9 @@ pub enum AlterTableOperation {
         new_column_name: Ident,
     },
     /// `RENAME TO <table_name>`
-    RenameTable { table_name: ObjectName },
+    RenameTable {
+        table_name: ObjectName,
+    },
     // CHANGE [ COLUMN ] <old_name> <new_name> <data_type> [ <options> ]
     ChangeColumn {
         old_name: Ident,
@@ -218,7 +239,10 @@ pub enum AlterTableOperation {
     /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    RenameConstraint { old_name: Ident, new_name: Ident },
+    RenameConstraint {
+        old_name: Ident,
+        new_name: Ident,
+    },
     /// `ALTER [ COLUMN ]`
     AlterColumn {
         column_name: Ident,
@@ -227,14 +251,27 @@ pub enum AlterTableOperation {
     /// 'SWAP WITH <table_name>'
     ///
     /// Note: this is Snowflake specific <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
-    SwapWith { table_name: ObjectName },
+    SwapWith {
+        table_name: ObjectName,
+    },
     /// 'SET TBLPROPERTIES ( { property_key [ = ] property_val } [, ...] )'
-    SetTblProperties { table_properties: Vec<SqlOption> },
-
+    SetTblProperties {
+        table_properties: Vec<SqlOption>,
+    },
     /// `OWNER TO { <new_owner> | CURRENT_ROLE | CURRENT_USER | SESSION_USER }`
     ///
     /// Note: this is PostgreSQL-specific <https://www.postgresql.org/docs/current/sql-altertable.html>
-    OwnerTo { new_owner: Owner },
+    OwnerTo {
+        new_owner: Owner,
+    },
+    /// Snowflake table clustering options
+    /// <https://docs.snowflake.com/en/sql-reference/sql/alter-table#clustering-actions-clusteringaction>
+    ClusterBy {
+        exprs: Vec<Expr>,
+    },
+    DropClusteringKey,
+    SuspendRecluster,
+    ResumeRecluster,
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -546,6 +583,22 @@ impl fmt::Display for AlterTableOperation {
                 if let Some(name) = with_name {
                     write!(f, " WITH NAME {name}")?;
                 }
+                Ok(())
+            }
+            AlterTableOperation::ClusterBy { exprs } => {
+                write!(f, "CLUSTER BY ({})", display_comma_separated(exprs))?;
+                Ok(())
+            }
+            AlterTableOperation::DropClusteringKey => {
+                write!(f, "DROP CLUSTERING KEY")?;
+                Ok(())
+            }
+            AlterTableOperation::SuspendRecluster => {
+                write!(f, "SUSPEND RECLUSTER")?;
+                Ok(())
+            }
+            AlterTableOperation::ResumeRecluster => {
+                write!(f, "RESUME RECLUSTER")?;
                 Ok(())
             }
         }

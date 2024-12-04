@@ -590,7 +590,7 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
-    /// Multi-part Expression accessing. It's used to represent a access chain from a root expression.
+    /// Multi-part Expression accessing. It's used to represent an access chain from a root expression.
     /// e.g. `expr[0]`, `expr[0][0]`, or `expr.field1.filed2[1].field3`, ...
     CompoundExpr {
         root: Box<Expr>,

@@ -3032,3 +3032,8 @@ fn parse_longblob_type() {
     mysql_and_generic().verified_stmt("CREATE TABLE foo (bar MEDIUMTEXT)");
     mysql_and_generic().verified_stmt("CREATE TABLE foo (bar LONGTEXT)");
 }
+
+#[test]
+fn parse_begin_without_transaction() {
+    mysql().verified_stmt("BEGIN");
+}

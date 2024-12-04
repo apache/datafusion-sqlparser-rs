@@ -7736,9 +7736,9 @@ fn parse_start_transaction() {
     }
 
     verified_stmt("START TRANSACTION");
-    one_statement_parses_to("BEGIN", "BEGIN TRANSACTION");
-    one_statement_parses_to("BEGIN WORK", "BEGIN TRANSACTION");
-    one_statement_parses_to("BEGIN TRANSACTION", "BEGIN TRANSACTION");
+    verified_stmt("BEGIN");
+    verified_stmt("BEGIN WORK");
+    verified_stmt("BEGIN TRANSACTION");
 
     verified_stmt("START TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
     verified_stmt("START TRANSACTION ISOLATION LEVEL READ COMMITTED");

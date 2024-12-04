@@ -2952,8 +2952,3 @@ fn test_sf_double_dot_notation() {
 
 #[test]
 fn test_parse_double_dot_notation_wrong_position() {}
-
-#[test]
-fn test_xx() {
-    snowflake().parse_sql_statements("alter table GONG.internal.stg_keyword_trackers_internal_export_v202407 cluster by (company_id);").unwrap();
-}

@@ -23,7 +23,7 @@ use std::ops::Deref;
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[test]
@@ -1969,36 +1969,48 @@ fn parse_map_access_expr() {
     let sql = "users[-1][safe_offset(2)].a.b";
     let expr = bigquery().verified_expr(sql);
 
-    fn composite_access(expr: Expr, key: impl Into<Ident>) -> Expr {
-        Expr::CompositeAccess {
-            expr: Box::new(expr),
-            key: key.into(),
-        }
-    }
-
-    fn subscript(expr: Expr, index: Expr) -> Expr {
-        Expr::Subscript {
-            expr: Box::new(expr),
-            subscript: Box::new(Subscript::Index { index }),
-        }
-    }
-
-    let expected = composite_access(
-        composite_access(
-            subscript(
-                subscript(
-                    Expr::Identifier("users".into()),
-                    Expr::UnaryOp {
-                        op: UnaryOperator::Minus,
-                        expr: Box::new(Expr::Value(number("1"))),
-                    },
-                ),
-                call("safe_offset", vec![Expr::Value(number("2"))]),
-            ),
-            "a",
-        ),
-        "b",
-    );
+    let expected = Expr::CompoundExpr {
+        root: Box::new(Expr::Identifier(Ident::with_span(
+            Span::new(Location::of(1, 1), Location::of(1, 6)),
+            "users",
+        ))),
+        chain: vec![
+            AccessField::SubScript(Subscript::Index {
+                index: Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: Expr::Value(number("1")).into(),
+                },
+            }),
+            AccessField::SubScript(Subscript::Index {
+                index: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::with_span(
+                        Span::new(Location::of(1, 11), Location::of(1, 22)),
+                        "safe_offset",
+                    )]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            number("2"),
+                        )))],
+                        clauses: vec![],
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                }),
+            }),
+            AccessField::Expr(Expr::Identifier(Ident::with_span(
+                Span::new(Location::of(1, 24), Location::of(1, 25)),
+                "a",
+            ))),
+            AccessField::Expr(Expr::Identifier(Ident::with_span(
+                Span::new(Location::of(1, 26), Location::of(1, 27)),
+                "b",
+            ))),
+        ],
+    };
     assert_eq!(expr, expected);
 
     let sql = "SELECT myfunc()[-1].a[SAFE_OFFSET(2)].b";

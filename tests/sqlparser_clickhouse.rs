@@ -44,13 +44,13 @@ fn parse_map_access_expr() {
             select_token: AttachedToken::empty(),
             top: None,
             top_before_distinct: false,
-            projection: vec![UnnamedExpr(Expr::Subscript {
-                expr: Box::new(Identifier(Ident {
+            projection: vec![UnnamedExpr(Expr::CompoundExpr {
+                root: Box::new(Identifier(Ident {
                     value: "string_values".to_string(),
                     quote_style: None,
                     span: Span::empty(),
                 })),
-                subscript: Box::new(Subscript::Index {
+                chain: vec![AccessField::SubScript(Subscript::Index {
                     index: call(
                         "indexOf",
                         [
@@ -58,7 +58,7 @@ fn parse_map_access_expr() {
                             Expr::Value(Value::SingleQuotedString("endpoint".to_string()))
                         ]
                     ),
-                }),
+                })],
             })],
             into: None,
             from: vec![TableWithJoins {
@@ -84,9 +84,9 @@ fn parse_map_access_expr() {
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
-                    left: Box::new(Expr::Subscript {
-                        expr: Box::new(Identifier(Ident::new("string_value"))),
-                        subscript: Box::new(Subscript::Index {
+                    left: Box::new(Expr::CompoundExpr {
+                        root: Box::new(Identifier(Ident::new("string_value"))),
+                        chain: vec![AccessField::SubScript(Subscript::Index {
                             index: call(
                                 "indexOf",
                                 [
@@ -94,7 +94,7 @@ fn parse_map_access_expr() {
                                     Expr::Value(Value::SingleQuotedString("app".to_string()))
                                 ]
                             ),
-                        }),
+                        })],
                     }),
                     op: BinaryOperator::NotEq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),

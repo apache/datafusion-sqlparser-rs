@@ -1165,7 +1165,6 @@ impl<'a> Parser<'a> {
                 let ident = Expr::Identifier(w.to_ident(w_span));
                 let mut fields = vec![];
                 self.parse_multi_dim_subscript(&mut fields)?;
-                dbg!(&fields);
                 self.parse_compound_expr(ident, fields)
             }
             // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html

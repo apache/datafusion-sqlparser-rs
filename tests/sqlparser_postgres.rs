@@ -2095,11 +2095,11 @@ fn parse_array_index_expr() {
     let sql = "SELECT foo[0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Subscript {
-            expr: Box::new(Expr::Identifier(Ident::new("foo"))),
-            subscript: Box::new(Subscript::Index {
+        &Expr::CompoundExpr {
+            root: Box::new(Expr::Identifier(Ident::new("foo"))),
+            chain: vec![AccessField::SubScript(Subscript::Index {
                 index: num[0].clone()
-            }),
+            })],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2107,16 +2107,15 @@ fn parse_array_index_expr() {
     let sql = "SELECT foo[0][0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Subscript {
-            expr: Box::new(Expr::Subscript {
-                expr: Box::new(Expr::Identifier(Ident::new("foo"))),
-                subscript: Box::new(Subscript::Index {
+        &Expr::CompoundExpr {
+            root: Box::new(Expr::Identifier(Ident::new("foo"))),
+            chain: vec![
+                AccessField::SubScript(Subscript::Index {
                     index: num[0].clone()
                 }),
-            }),
-            subscript: Box::new(Subscript::Index {
+                AccessField::SubScript(Subscript::Index {
                 index: num[0].clone()
-            }),
+            })],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2124,29 +2123,27 @@ fn parse_array_index_expr() {
     let sql = r#"SELECT bar[0]["baz"]["fooz"] FROM foos"#;
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Subscript {
-            expr: Box::new(Expr::Subscript {
-                expr: Box::new(Expr::Subscript {
-                    expr: Box::new(Expr::Identifier(Ident::new("bar"))),
-                    subscript: Box::new(Subscript::Index {
-                        index: num[0].clone()
-                    })
+        &Expr::CompoundExpr {
+            root: Box::new(Expr::Identifier(Ident::new("bar"))),
+            chain: vec![
+                AccessField::SubScript(Subscript::Index {
+                    index: num[0].clone()
                 }),
-                subscript: Box::new(Subscript::Index {
+                AccessField::SubScript(Subscript::Index {
                     index: Expr::Identifier(Ident {
                         value: "baz".to_string(),
                         quote_style: Some('"'),
                         span: Span::empty(),
                     })
-                })
-            }),
-            subscript: Box::new(Subscript::Index {
-                index: Expr::Identifier(Ident {
-                    value: "fooz".to_string(),
-                    quote_style: Some('"'),
-                    span: Span::empty(),
-                })
-            })
+                }),
+                AccessField::SubScript(Subscript::Index {
+                    index: Expr::Identifier(Ident {
+                        value: "fooz".to_string(),
+                        quote_style: Some('"'),
+                        span: Span::empty(),
+                    })
+                }),
+            ],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2154,9 +2151,8 @@ fn parse_array_index_expr() {
     let sql = "SELECT (CAST(ARRAY[ARRAY[2, 3]] AS INT[][]))[1][2]";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Subscript {
-            expr: Box::new(Expr::Subscript {
-                expr: Box::new(Expr::Nested(Box::new(Expr::Cast {
+        &Expr::CompoundExpr {
+            root: Box::new(Expr::Nested(Box::new(Expr::Cast {
                     kind: CastKind::Cast,
                     expr: Box::new(Expr::Array(Array {
                         elem: vec![Expr::Array(Array {
@@ -2174,13 +2170,14 @@ fn parse_array_index_expr() {
                     )),
                     format: None,
                 }))),
-                subscript: Box::new(Subscript::Index {
+            chain: vec![
+                AccessField::SubScript(Subscript::Index {
                     index: num[1].clone()
                 }),
-            }),
-            subscript: Box::new(Subscript::Index {
-                index: num[2].clone()
-            }),
+                AccessField::SubScript(Subscript::Index {
+                    index: num[2].clone()
+                }),
+            ],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2269,8 +2266,11 @@ fn parse_array_subscript() {
         ),
     ];
     for (sql, expect) in tests {
-        let Expr::Subscript { subscript, .. } = pg_and_generic().verified_expr(sql) else {
+        let Expr::CompoundExpr { chain, .. } = pg_and_generic().verified_expr(sql) else {
             panic!("expected subscript expr");
+        };
+        let Some(AccessField::SubScript(subscript)) = chain.last() else {
+            panic!("expected subscript");
         };
         assert_eq!(expect, *subscript);
     }
@@ -2282,9 +2282,8 @@ fn parse_array_subscript() {
 fn parse_array_multi_subscript() {
     let expr = pg_and_generic().verified_expr("make_array(1, 2, 3)[1:2][2]");
     assert_eq!(
-        Expr::Subscript {
-            expr: Box::new(Expr::Subscript {
-                expr: Box::new(call(
+        Expr::CompoundExpr {
+            root: Box::new(call(
                     "make_array",
                     vec![
                         Expr::Value(number("1")),
@@ -2292,15 +2291,16 @@ fn parse_array_multi_subscript() {
                         Expr::Value(number("3"))
                     ]
                 )),
-                subscript: Box::new(Subscript::Slice {
+            chain: vec![
+                AccessField::SubScript(Subscript::Slice {
                     lower_bound: Some(Expr::Value(number("1"))),
                     upper_bound: Some(Expr::Value(number("2"))),
                     stride: None,
                 }),
-            }),
-            subscript: Box::new(Subscript::Index {
-                index: Expr::Value(number("2")),
-            }),
+                AccessField::SubScript(Subscript::Index {
+                    index: Expr::Value(number("2")),
+                }),
+            ],
         },
         expr,
     );

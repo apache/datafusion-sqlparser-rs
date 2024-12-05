@@ -1612,7 +1612,7 @@ impl<'a> Tokenizer<'a> {
         s
     }
 
-    /// Tokenize an identifier or keyword, after the first char is already consumed.
+    /// Read a quoted identifier
     fn tokenize_quoted_identifier(
         &self,
         quote_start: char,

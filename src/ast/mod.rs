@@ -454,40 +454,6 @@ pub enum CastFormat {
     ValueAtTimeZone(Value, Value),
 }
 
-/// Represents the syntax/style used in a map access.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum MapAccessSyntax {
-    /// Access using bracket notation. `mymap[mykey]`
-    Bracket,
-    /// Access using period notation. `mymap.mykey`
-    Period,
-}
-
-/// Expression used to access a value in a nested structure.
-///
-/// Example: `SAFE_OFFSET(0)` in
-/// ```sql
-/// SELECT mymap[SAFE_OFFSET(0)];
-/// ```
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct MapAccessKey {
-    pub key: Expr,
-    pub syntax: MapAccessSyntax,
-}
-
-impl fmt::Display for MapAccessKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.syntax {
-            MapAccessSyntax::Bracket => write!(f, "[{}]", self.key),
-            MapAccessSyntax::Period => write!(f, ".{}", self.key),
-        }
-    }
-}
-
 /// An element of a JSON path.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -624,6 +590,12 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
+    /// Multi-part Expression accessing. It's used to represent an access chain from a root expression.
+    /// e.g. `expr[0]`, `expr[0][0]`, or `expr.field1.filed2[1].field3`, ...
+    CompoundExpr {
+        root: Box<Expr>,
+        chain: Vec<AccessField>,
+    },
     /// Access data nested in a value containing semi-structured data, such as
     /// the `VARIANT` type on Snowflake. for example `src:customer[0].name`.
     ///
@@ -877,14 +849,6 @@ pub enum Expr {
         data_type: DataType,
         value: String,
     },
-    /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
-    /// Note that depending on the dialect, struct like accesses may be
-    /// parsed as [`Subscript`](Self::Subscript) or [`MapAccess`](Self::MapAccess)
-    /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
-    MapAccess {
-        column: Box<Expr>,
-        keys: Vec<MapAccessKey>,
-    },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// Arbitrary expr method call
@@ -973,11 +937,6 @@ pub enum Expr {
     /// ```
     /// [1]: https://duckdb.org/docs/sql/data_types/map#creating-maps
     Map(Map),
-    /// An access of nested data using subscript syntax, for example `array[2]`.
-    Subscript {
-        expr: Box<Expr>,
-        subscript: Box<Subscript>,
-    },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
     /// An interval expression e.g. `INTERVAL '1' YEAR`
@@ -1090,6 +1049,25 @@ impl fmt::Display for Subscript {
                 }
                 Ok(())
             }
+        }
+    }
+}
+
+/// The contents inside the `.` in an access chain.
+/// It can be an expression or a subscript.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AccessField {
+    Expr(Expr),
+    Subscript(Subscript),
+}
+
+impl fmt::Display for AccessField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AccessField::Expr(expr) => write!(f, "{}", expr),
+            AccessField::Subscript(subscript) => write!(f, "{}", subscript),
         }
     }
 }
@@ -1289,12 +1267,19 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Identifier(s) => write!(f, "{s}"),
-            Expr::MapAccess { column, keys } => {
-                write!(f, "{column}{}", display_separated(keys, ""))
-            }
             Expr::Wildcard(_) => f.write_str("*"),
             Expr::QualifiedWildcard(prefix, _) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
+            Expr::CompoundExpr { root, chain } => {
+                write!(f, "{}", root)?;
+                for field in chain {
+                    match field {
+                        AccessField::Expr(expr) => write!(f, ".{}", expr)?,
+                        AccessField::Subscript(subscript) => write!(f, "[{}]", subscript)?,
+                    }
+                }
+                Ok(())
+            }
             Expr::IsTrue(ast) => write!(f, "{ast} IS TRUE"),
             Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
             Expr::IsFalse(ast) => write!(f, "{ast} IS FALSE"),
@@ -1713,12 +1698,6 @@ impl fmt::Display for Expr {
             }
             Expr::Map(map) => {
                 write!(f, "{map}")
-            }
-            Expr::Subscript {
-                expr,
-                subscript: key,
-            } => {
-                write!(f, "{expr}[{key}]")
             }
             Expr::Array(set) => {
                 write!(f, "{set}")

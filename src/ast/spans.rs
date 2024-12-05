@@ -3,7 +3,7 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Array, Assignment,
+    AccessField, AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Array, Assignment,
     AssignmentTarget, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef,
     ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
     CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
@@ -1233,6 +1233,9 @@ impl Spanned for Expr {
             Expr::Identifier(ident) => ident.span,
             Expr::CompoundIdentifier(vec) => union_spans(vec.iter().map(|i| i.span)),
             Expr::CompositeAccess { expr, key } => expr.span().union(&key.span),
+            Expr::CompoundExpr { root, chain } => {
+                union_spans(iter::once(root.span()).chain(chain.iter().map(|i| i.span())))
+            }
             Expr::IsFalse(expr) => expr.span(),
             Expr::IsNotFalse(expr) => expr.span(),
             Expr::IsTrue(expr) => expr.span(),
@@ -1307,9 +1310,6 @@ impl Spanned for Expr {
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
             Expr::TypedString { .. } => Span::empty(),
-            Expr::MapAccess { column, keys } => column
-                .span()
-                .union(&union_spans(keys.iter().map(|i| i.key.span()))),
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))
@@ -1405,7 +1405,6 @@ impl Spanned for Expr {
             Expr::Named { .. } => Span::empty(),
             Expr::Dictionary(_) => Span::empty(),
             Expr::Map(_) => Span::empty(),
-            Expr::Subscript { expr, subscript } => expr.span().union(&subscript.span()),
             Expr::Interval(interval) => interval.value.span(),
             Expr::Wildcard(token) => token.0.span,
             Expr::QualifiedWildcard(object_name, token) => union_spans(
@@ -1440,6 +1439,15 @@ impl Spanned for Subscript {
                 .into_iter()
                 .flatten(),
             ),
+        }
+    }
+}
+
+impl Spanned for AccessField {
+    fn span(&self) -> Span {
+        match self {
+            AccessField::Expr(ident) => ident.span(),
+            AccessField::Subscript(subscript) => subscript.span(),
         }
     }
 }

@@ -1085,29 +1085,40 @@ impl<'a> Tokenizer<'a> {
                     .special_delimited_identifier_start(chars.peekable.clone())
                     .is_some() =>
                 {
-                    let (quote_start, nested_delimiter) = self
+                    let (quote_start, nested_quote_start) = self
                         .dialect
                         .special_delimited_identifier_start(chars.peekable.clone())
                         .unwrap();
 
-                    let mut word = vec![];
-
-                    let identifier_quote_start = if let Some(nested_delimiter) = nested_delimiter {
-                        chars.next(); // skip the first delimiter
-                        word.push(peeking_take_while(chars, |ch| ch.is_whitespace()));
-                        word.push(format!("{nested_delimiter}"));
-                        nested_delimiter
-                    } else {
-                        quote_start
+                    let Some(nested_quote_start) = nested_quote_start else {
+                        let word = self.tokenize_quoted_identifier(quote_start, chars)?;
+                        return Ok(Some(Token::make_word(&word, Some(quote_start))));
                     };
 
-                    word.push(self.tokenize_quoted_identifier(identifier_quote_start, chars)?);
+                    let mut word = vec![];
+                    let quote_end = Word::matching_end_quote(quote_start);
+                    let nested_quote_end = Word::matching_end_quote(nested_quote_start);
+                    let error_loc = chars.location();
 
-                    if let Some(nested_delimiter) = nested_delimiter {
-                        word.push(format!("{}", Word::matching_end_quote(nested_delimiter)));
-                        word.push(peeking_take_while(chars, |ch| ch.is_whitespace()));
-                        chars.next(); // skip close of first delimiter
+                    chars.next(); // skip the first delimiter
+                    word.push(peeking_take_while(chars, |ch| ch.is_whitespace()));
+                    if chars.peek() != Some(&nested_quote_start) {
+                        return self.tokenizer_error(
+                            error_loc,
+                            format!("Expected nested delimiter '{nested_quote_start}' before EOF."),
+                        );
                     }
+                    word.push(format!("{nested_quote_start}"));
+                    word.push(self.tokenize_quoted_identifier(nested_quote_end, chars)?);
+                    word.push(format!("{nested_quote_end}"));
+                    word.push(peeking_take_while(chars, |ch| ch.is_whitespace()));
+                    if chars.peek() != Some(&quote_end) {
+                        return self.tokenizer_error(
+                            error_loc,
+                            format!("Expected close delimiter '{quote_end}' before EOF."),
+                        );
+                    }
+                    chars.next(); // skip close delimiter
 
                     Ok(Some(Token::make_word(&word.concat(), Some(quote_start))))
                 }

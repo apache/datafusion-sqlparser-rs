@@ -32,11 +32,15 @@ pub struct RedshiftSqlDialect {}
 // in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
+    fn is_nested_delimited_identifier_start(&self, ch: char) -> bool {
+        ch == '['
+    }
+
     /// Determine if quoted characters are looks like special case of quotation begining with `[`.
     /// It's needed to distinguish treating square brackets as quotes from
     /// treating them as json path. If there is identifier then we assume
     /// there is no json path.
-    fn special_delimited_identifier_start(
+    fn nested_delimited_identifier(
         &self,
         mut chars: Peekable<Chars<'_>>,
     ) -> Option<(char, Option<char>)> {

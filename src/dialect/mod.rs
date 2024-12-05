@@ -128,16 +128,22 @@ pub trait Dialect: Debug + Any {
         ch == '"' || ch == '`'
     }
 
-    /// Return the character used to quote identifiers.
-    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
-        None
+    /// Determine if a character starts a potential nested quoted identifier.
+    /// RedShift support old way of quotation with `[` and it can cover even nested quoted identifier.
+    fn is_nested_delimited_identifier_start(&self, _ch: char) -> bool {
+        false
     }
 
-    /// Determine if special way quoted characters are presented
-    fn special_delimited_identifier_start(
+    /// Determine if nested quoted characters are presented
+    fn nested_delimited_identifier(
         &self,
         mut _chars: Peekable<Chars<'_>>,
     ) -> Option<(char, Option<char>)> {
+        None
+    }
+
+    /// Return the character used to quote identifiers.
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         None
     }
 
@@ -851,19 +857,23 @@ mod tests {
                 self.0.is_delimited_identifier_start(ch)
             }
 
+            fn is_nested_delimited_identifier_start(&self, ch: char) -> bool {
+                self.0.is_nested_delimited_identifier_start(ch)
+            }
+
+            fn nested_delimited_identifier(
+                &self,
+                chars: std::iter::Peekable<std::str::Chars<'_>>,
+            ) -> Option<(char, Option<char>)> {
+                self.0.nested_delimited_identifier(chars)
+            }
+
             fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
                 self.0.identifier_quote_style(identifier)
             }
 
             fn supports_string_literal_backslash_escape(&self) -> bool {
                 self.0.supports_string_literal_backslash_escape()
-            }
-
-            fn special_delimited_identifier_start(
-                &self,
-                chars: std::iter::Peekable<std::str::Chars<'_>>,
-            ) -> Option<(char, Option<char>)> {
-                self.0.special_delimited_identifier_start(chars)
             }
 
             fn supports_filter_during_aggregation(&self) -> bool {

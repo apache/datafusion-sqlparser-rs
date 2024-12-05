@@ -1080,14 +1080,18 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::make_word(&word, Some(quote_start))))
                 }
                 // special (quoted) identifier
-                _ if self
-                    .dialect
-                    .special_delimited_identifier_start(chars.peekable.clone())
-                    .is_some() =>
+                quote_start
+                    if self
+                        .dialect
+                        .is_nested_delimited_identifier_start(quote_start)
+                        && self
+                            .dialect
+                            .nested_delimited_identifier(chars.peekable.clone())
+                            .is_some() =>
                 {
                     let (quote_start, nested_quote_start) = self
                         .dialect
-                        .special_delimited_identifier_start(chars.peekable.clone())
+                        .nested_delimited_identifier(chars.peekable.clone())
                         .unwrap();
 
                     let Some(nested_quote_start) = nested_quote_start else {

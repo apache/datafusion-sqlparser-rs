@@ -1075,40 +1075,41 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::DoubleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
-                quote_start
-                    if self.dialect.is_delimited_identifier_start(ch)
-                        && self
-                            .dialect
-                            .is_proper_identifier_inside_quotes(chars.peekable.clone()) =>
-                {
-                    let word = if let Some(nested_quote_start) = self
-                        .dialect
-                        .nested_quote_start(quote_start, chars.peekable.clone())
-                    {
-                        chars.next(); // consume the opening quote
-
-                        let quote_end = Word::matching_end_quote(quote_start);
-                        let error_loc = chars.location();
-
-                        peeking_take_while(chars, |ch| ch.is_whitespace());
-                        let nested_word =
-                            self.tokenize_quoted_identifier(nested_quote_start, chars)?;
-                        peeking_take_while(chars, |ch| ch.is_whitespace());
-
-                        if chars.peek() != Some(&quote_end) {
-                            return self.tokenizer_error(
-                                error_loc,
-                                format!("Expected close delimiter '{quote_end}' before EOF."),
-                            );
-                        }
-
-                        chars.next(); // consume the closing nested quote
-
-                        format!("{nested_quote_start}{nested_word}{nested_quote_start}")
-                    } else {
-                        self.tokenize_quoted_identifier(quote_start, chars)?
-                    };
+                quote_start if self.dialect.is_delimited_identifier_start(ch) => {
+                    let word = self.tokenize_quoted_identifier(quote_start, chars)?;
                     Ok(Some(Token::make_word(&word, Some(quote_start))))
+                }
+                // special (quoted) identifier
+                _ if self
+                    .dialect
+                    .special_delimited_identifier_start(chars.peekable.clone())
+                    .is_some() =>
+                {
+                    let (quote_start, nested_delimiter) = self
+                        .dialect
+                        .special_delimited_identifier_start(chars.peekable.clone())
+                        .unwrap();
+
+                    let mut word = vec![];
+
+                    let identifier_quote_start = if let Some(nested_delimiter) = nested_delimiter {
+                        chars.next(); // skip the first delimiter
+                        word.push(peeking_take_while(chars, |ch| ch.is_whitespace()));
+                        word.push(format!("{nested_delimiter}"));
+                        nested_delimiter
+                    } else {
+                        quote_start
+                    };
+
+                    word.push(self.tokenize_quoted_identifier(identifier_quote_start, chars)?);
+
+                    if let Some(nested_delimiter) = nested_delimiter {
+                        word.push(format!("{}", Word::matching_end_quote(nested_delimiter)));
+                        word.push(peeking_take_while(chars, |ch| ch.is_whitespace()));
+                        chars.next(); // skip close of first delimiter
+                    }
+
+                    Ok(Some(Token::make_word(&word.concat(), Some(quote_start))))
                 }
                 // numbers and period
                 '0'..='9' | '.' => {

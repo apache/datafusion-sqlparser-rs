@@ -133,17 +133,11 @@ pub trait Dialect: Debug + Any {
         None
     }
 
-    /// Determine if quoted characters are proper for identifier
-    fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
-        true
-    }
-
-    /// Determine if nested quote start is presented and return it
-    fn nested_quote_start(
+    /// Determine if special way quoted characters are presented
+    fn special_delimited_identifier_start(
         &self,
-        _quote_start: char,
         mut _chars: Peekable<Chars<'_>>,
-    ) -> Option<char> {
+    ) -> Option<(char, Option<char>)> {
         None
     }
 
@@ -865,11 +859,11 @@ mod tests {
                 self.0.supports_string_literal_backslash_escape()
             }
 
-            fn is_proper_identifier_inside_quotes(
+            fn special_delimited_identifier_start(
                 &self,
                 chars: std::iter::Peekable<std::str::Chars<'_>>,
-            ) -> bool {
-                self.0.is_proper_identifier_inside_quotes(chars)
+            ) -> Option<(char, Option<char>)> {
+                self.0.special_delimited_identifier_start(chars)
             }
 
             fn supports_filter_during_aggregation(&self) -> bool {

@@ -32,55 +32,32 @@ pub struct RedshiftSqlDialect {}
 // in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
-    fn is_delimited_identifier_start(&self, ch: char) -> bool {
-        ch == '"' || ch == '['
-    }
-
-    /// Determine if quoted characters are proper for identifier
+    /// Determine if quoted characters are looks like special case of quotation begining with `[`.
     /// It's needed to distinguish treating square brackets as quotes from
     /// treating them as json path. If there is identifier then we assume
     /// there is no json path.
-    fn is_proper_identifier_inside_quotes(&self, mut chars: Peekable<Chars<'_>>) -> bool {
-        // PartiQL (used as json path query language in Redshift) uses square bracket as
-        // a start character and a quote is a beginning of quoted identifier.
-        // Skipping analyzing token such as `"a"` and analyze only token that
-        // can be part of json path potentially.
-        // For ex., `[0]` (seems part of json path) or `["a"]` (normal quoted identifier)
-        if let Some(quote_start) = chars.peek() {
-            if *quote_start == '"' {
-                return true;
-            }
-        };
-        chars.next();
-        let mut not_white_chars = chars.skip_while(|ch| ch.is_whitespace()).peekable();
-        if let Some(&ch) = not_white_chars.peek() {
-            // PartiQL uses single quote as starting identification inside a quote
-            // It is a normal identifier if it has no single quote at the beginning.
-            // Square bracket can contain quoted identifier.
-            // For ex., `["a"]`, but this is not a part of json path, and it is a normal quoted identifier.
-            return ch == '"' || self.is_identifier_start(ch);
-        }
-        false
-    }
-
-    /// RedShift support nested quoted identifier like `["a"]`.
-    /// Determine if nested quote started and return it.  
-    fn nested_quote_start(
+    fn special_delimited_identifier_start(
         &self,
-        quote_start: char,
         mut chars: Peekable<Chars<'_>>,
-    ) -> Option<char> {
-        if quote_start != '[' {
+    ) -> Option<(char, Option<char>)> {
+        if chars.peek() != Some(&'[') {
             return None;
         }
 
-        chars.next(); // skip opening quote start
+        chars.next();
 
-        if chars.skip_while(|ch| ch.is_whitespace()).peekable().peek() == Some(&'"') {
-            Some('"')
-        } else {
-            None
+        let mut not_white_chars = chars.skip_while(|ch| ch.is_whitespace()).peekable();
+
+        if let Some(&ch) = not_white_chars.peek() {
+            if ch == '"' {
+                return Some(('[', Some('"')));
+            }
+            if self.is_identifier_start(ch) {
+                return Some(('[', None));
+            }
         }
+
+        None
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {

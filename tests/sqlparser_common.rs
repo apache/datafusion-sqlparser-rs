@@ -51,6 +51,7 @@ mod test_utils;
 use pretty_assertions::assert_eq;
 use sqlparser::ast::ColumnOption::Comment;
 use sqlparser::ast::Expr::{Identifier, UnaryOp};
+use sqlparser::ast::Value::Number;
 use sqlparser::test_utils::all_dialects_except;
 
 #[test]
@@ -9250,7 +9251,7 @@ fn parse_cache_table() {
             format!(
                 "CACHE {table_flag} TABLE '{cache_table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) {sql}",
             )
-            .as_str()
+                .as_str()
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
@@ -9275,7 +9276,7 @@ fn parse_cache_table() {
             format!(
                 "CACHE {table_flag} TABLE '{cache_table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) AS {sql}",
             )
-            .as_str()
+                .as_str()
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
@@ -11459,7 +11460,7 @@ fn parse_explain_with_option_list() {
             }),
         },
     ];
-    run_explain_analyze (
+    run_explain_analyze(
         all_dialects_where(|d| d.supports_explain_with_utility_options()),
         "EXPLAIN (ANALYZE, VERBOSE true, WAL OFF, FORMAT YAML, USER_DEF_NUM -100.1) SELECT sqrt(id) FROM foo",
         false,
@@ -12458,4 +12459,84 @@ fn parse_create_table_with_bit_types() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_create_table_with_enum_types() {
+    let sql = "CREATE TABLE t0 (foo ENUM8('a' = 1, 'b' = 2), bar ENUM16('a' = 1, 'b' = 2), baz ENUM('a', 'b'))";
+    match all_dialects().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(name.to_string(), "t0");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("foo"),
+                        data_type: DataType::Enum(
+                            vec![
+                                EnumMember::NamedValue(
+                                    "a".to_string(),
+                                    Expr::Value(Number("1".parse().unwrap(), false))
+                                ),
+                                EnumMember::NamedValue(
+                                    "b".to_string(),
+                                    Expr::Value(Number("2".parse().unwrap(), false))
+                                )
+                            ],
+                            Some(8)
+                        ),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar"),
+                        data_type: DataType::Enum(
+                            vec![
+                                EnumMember::NamedValue(
+                                    "a".to_string(),
+                                    Expr::Value(Number("1".parse().unwrap(), false))
+                                ),
+                                EnumMember::NamedValue(
+                                    "b".to_string(),
+                                    Expr::Value(Number("2".parse().unwrap(), false))
+                                )
+                            ],
+                            Some(16)
+                        ),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("baz"),
+                        data_type: DataType::Enum(
+                            vec![
+                                EnumMember::Name("a".to_string()),
+                                EnumMember::Name("b".to_string())
+                            ],
+                            None
+                        ),
+                        collation: None,
+                        options: vec![],
+                    }
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // invalid case missing value for enum pair
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE TABLE t0 (foo ENUM8('a' = 1, 'b' = ))")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: a value, found: )".to_string())
+    );
+
+    // invalid case that name is not a string
+    assert_eq!(
+        all_dialects()
+            .parse_sql_statements("CREATE TABLE t0 (foo ENUM8('a' = 1, 2))")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: literal string, found: 2".to_string())
+    );
 }

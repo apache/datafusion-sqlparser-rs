@@ -1049,18 +1049,18 @@ impl<'a> Parser<'a> {
             | Keyword::CURRENT_USER
             | Keyword::SESSION_USER
             | Keyword::USER
-                if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
-            {
-                Ok(Some(Expr::Function(Function {
-                    name: ObjectName(vec![w.to_ident(w_span)]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::None,
-                    null_treatment: None,
-                    filter: None,
-                    over: None,
-                    within_group: vec![],
-                })))
-            }
+            if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+                {
+                    Ok(Some(Expr::Function(Function {
+                        name: ObjectName(vec![w.to_ident(w_span)]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::None,
+                        null_treatment: None,
+                        filter: None,
+                        over: None,
+                        within_group: vec![],
+                    })))
+                }
             Keyword::CURRENT_TIMESTAMP
             | Keyword::CURRENT_TIME
             | Keyword::CURRENT_DATE
@@ -1075,18 +1075,18 @@ impl<'a> Parser<'a> {
             Keyword::TRY_CAST => Ok(Some(self.parse_cast_expr(CastKind::TryCast)?)),
             Keyword::SAFE_CAST => Ok(Some(self.parse_cast_expr(CastKind::SafeCast)?)),
             Keyword::EXISTS
-                // Support parsing Databricks has a function named `exists`.
-                if !dialect_of!(self is DatabricksDialect)
-                    || matches!(
+            // Support parsing Databricks has a function named `exists`.
+            if !dialect_of!(self is DatabricksDialect)
+                || matches!(
                         self.peek_nth_token(1).token,
                         Token::Word(Word {
                             keyword: Keyword::SELECT | Keyword::WITH,
                             ..
                         })
                     ) =>
-            {
-                Ok(Some(self.parse_exists_expr(false)?))
-            }
+                {
+                    Ok(Some(self.parse_exists_expr(false)?))
+                }
             Keyword::EXTRACT => Ok(Some(self.parse_extract_expr()?)),
             Keyword::CEIL => Ok(Some(self.parse_ceil_floor_expr(true)?)),
             Keyword::FLOOR => Ok(Some(self.parse_ceil_floor_expr(false)?)),
@@ -1103,22 +1103,22 @@ impl<'a> Parser<'a> {
                 Ok(Some(self.parse_array_expr(true)?))
             }
             Keyword::ARRAY
-                if self.peek_token() == Token::LParen
-                    && !dialect_of!(self is ClickHouseDialect | DatabricksDialect) =>
-            {
-                self.expect_token(&Token::LParen)?;
-                let query = self.parse_query()?;
-                self.expect_token(&Token::RParen)?;
-                Ok(Some(Expr::Function(Function {
-                    name: ObjectName(vec![w.to_ident(w_span)]),
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::Subquery(query),
-                    filter: None,
-                    null_treatment: None,
-                    over: None,
-                    within_group: vec![],
-                })))
-            }
+            if self.peek_token() == Token::LParen
+                && !dialect_of!(self is ClickHouseDialect | DatabricksDialect) =>
+                {
+                    self.expect_token(&Token::LParen)?;
+                    let query = self.parse_query()?;
+                    self.expect_token(&Token::RParen)?;
+                    Ok(Some(Expr::Function(Function {
+                        name: ObjectName(vec![w.to_ident(w_span)]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::Subquery(query),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                    })))
+                }
             Keyword::NOT => Ok(Some(self.parse_not()?)),
             Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                 Ok(Some(self.parse_match_against()?))
@@ -5023,7 +5023,7 @@ impl<'a> Parser<'a> {
                         return Err(ParserError::ParserError(format!("Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. {e}")))
                     }
                 }
-            },
+            }
         };
         Ok(owner)
     }
@@ -7997,6 +7997,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_enum_values(&mut self) -> Result<Vec<EnumMember>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let values = self.parse_comma_separated(|parser| {
+            let name = parser.parse_literal_string()?;
+            let e = if parser.consume_token(&Token::Eq) {
+                let value = parser.parse_number()?;
+                EnumMember::NamedValue(name, value)
+            } else {
+                EnumMember::Name(name)
+            };
+            Ok(e)
+        })?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(values)
+    }
+
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<DataType, ParserError> {
         let (ty, trailing_bracket) = self.parse_data_type_helper()?;
@@ -8235,7 +8252,9 @@ impl<'a> Parser<'a> {
                 Keyword::BIGDECIMAL => Ok(DataType::BigDecimal(
                     self.parse_exact_number_optional_precision_scale()?,
                 )),
-                Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
+                Keyword::ENUM => Ok(DataType::Enum(self.parse_enum_values()?, None)),
+                Keyword::ENUM8 => Ok(DataType::Enum(self.parse_enum_values()?, Some(8))),
+                Keyword::ENUM16 => Ok(DataType::Enum(self.parse_enum_values()?, Some(16))),
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
                     if dialect_of!(self is SnowflakeDialect) {

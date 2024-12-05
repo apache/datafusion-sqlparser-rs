@@ -45,7 +45,7 @@ impl Dialect for RedshiftSqlDialect {
         // a start character and a quote is a beginning of quoted identifier.
         // Skipping analyzing token such as `"a"` and analyze only token that
         // can be part of json path potentially.
-        // For ex., `[0]`, `['a']` (seems part of json path) or `["a"]` (normal quoted identifier)
+        // For ex., `[0]` (seems part of json path) or `["a"]` (normal quoted identifier)
         if let Some(quote_start) = chars.peek() {
             if *quote_start == '"' {
                 return true;
@@ -61,6 +61,26 @@ impl Dialect for RedshiftSqlDialect {
             return ch == '"' || self.is_identifier_start(ch);
         }
         false
+    }
+
+    /// RedShift support nested quoted identifier like `["a"]`.
+    /// Determine if nested quote started and return it.  
+    fn nested_quote_start(
+        &self,
+        quote_start: char,
+        mut chars: Peekable<Chars<'_>>,
+    ) -> Option<char> {
+        if quote_start != '[' {
+            return None;
+        }
+
+        chars.next(); // skip opening quote start
+
+        if chars.skip_while(|ch| ch.is_whitespace()).peekable().peek() == Some(&'"') {
+            Some('"')
+        } else {
+            None
+        }
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {

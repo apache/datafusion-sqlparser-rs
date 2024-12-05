@@ -138,6 +138,15 @@ pub trait Dialect: Debug + Any {
         true
     }
 
+    /// Determine if nested quote start is presented and return it
+    fn nested_quote_start(
+        &self,
+        _quote_start: char,
+        mut _chars: Peekable<Chars<'_>>,
+    ) -> Option<char> {
+        None
+    }
+
     /// Determine if a character is a valid start character for an unquoted identifier
     fn is_identifier_start(&self, ch: char) -> bool;
 

@@ -384,6 +384,9 @@ fn test_parse_select_numbered_columns() {
     redshift_and_generic().verified_stmt(r#"SELECT 1 AS "1" FROM a"#);
     // RedShift specific case - quoted identifier inside square bracket
     redshift().verified_stmt(r#"SELECT 1 AS ["1"] FROM a"#);
+    redshift().verified_stmt(r#"SELECT 1 AS ["[="] FROM a"#);
+    redshift().verified_stmt(r#"SELECT 1 AS ["=]"] FROM a"#);
+    redshift().verified_stmt(r#"SELECT 1 AS ["a[b]"] FROM a"#);
 }
 
 #[test]

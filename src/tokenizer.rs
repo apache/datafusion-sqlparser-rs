@@ -1081,19 +1081,34 @@ impl<'a> Tokenizer<'a> {
                             .dialect
                             .is_proper_identifier_inside_quotes(chars.peekable.clone()) =>
                 {
-                    let error_loc = chars.location();
-                    chars.next(); // consume the opening quote
-                    let quote_end = Word::matching_end_quote(quote_start);
-                    let (s, last_char) = self.parse_quoted_ident(chars, quote_end);
+                    let word = if let Some(nested_quote_start) = self
+                        .dialect
+                        .nested_quote_start(quote_start, chars.peekable.clone())
+                    {
+                        chars.next(); // consume the opening quote
 
-                    if last_char == Some(quote_end) {
-                        Ok(Some(Token::make_word(&s, Some(quote_start))))
+                        let quote_end = Word::matching_end_quote(quote_start);
+                        let error_loc = chars.location();
+
+                        peeking_take_while(chars, |ch| ch.is_whitespace());
+                        let nested_word =
+                            self.tokenize_quoted_identifier(nested_quote_start, chars)?;
+                        peeking_take_while(chars, |ch| ch.is_whitespace());
+
+                        if chars.peek() != Some(&quote_end) {
+                            return self.tokenizer_error(
+                                error_loc,
+                                format!("Expected close delimiter '{quote_end}' before EOF."),
+                            );
+                        }
+
+                        chars.next(); // consume the closing nested quote
+
+                        format!("{nested_quote_start}{nested_word}{nested_quote_start}")
                     } else {
-                        self.tokenizer_error(
-                            error_loc,
-                            format!("Expected close delimiter '{quote_end}' before EOF."),
-                        )
-                    }
+                        self.tokenize_quoted_identifier(quote_start, chars)?
+                    };
+                    Ok(Some(Token::make_word(&word, Some(quote_start))))
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
@@ -1595,6 +1610,27 @@ impl<'a> Tokenizer<'a> {
             self.dialect.is_identifier_part(ch)
         }));
         s
+    }
+
+    /// Tokenize an identifier or keyword, after the first char is already consumed.
+    fn tokenize_quoted_identifier(
+        &self,
+        quote_start: char,
+        chars: &mut State,
+    ) -> Result<String, TokenizerError> {
+        let error_loc = chars.location();
+        chars.next(); // consume the opening quote
+        let quote_end = Word::matching_end_quote(quote_start);
+        let (s, last_char) = self.parse_quoted_ident(chars, quote_end);
+
+        if last_char == Some(quote_end) {
+            Ok(s)
+        } else {
+            self.tokenizer_error(
+                error_loc,
+                format!("Expected close delimiter '{quote_end}' before EOF."),
+            )
+        }
     }
 
     /// Read a single quoted string, starting with the opening quote.

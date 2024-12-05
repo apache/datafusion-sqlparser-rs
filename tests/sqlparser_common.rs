@@ -4066,8 +4066,8 @@ fn test_alter_table_with_on_cluster() {
         Statement::AlterTable {
             name, on_cluster, ..
         } => {
-            std::assert_eq!(name.to_string(), "t");
-            std::assert_eq!(on_cluster, Some(Ident::with_quote('\'', "cluster")));
+            assert_eq!(name.to_string(), "t");
+            assert_eq!(on_cluster, Some(Ident::with_quote('\'', "cluster")));
         }
         _ => unreachable!(),
     }
@@ -4078,15 +4078,15 @@ fn test_alter_table_with_on_cluster() {
         Statement::AlterTable {
             name, on_cluster, ..
         } => {
-            std::assert_eq!(name.to_string(), "t");
-            std::assert_eq!(on_cluster, Some(Ident::new("cluster_name")));
+            assert_eq!(name.to_string(), "t");
+            assert_eq!(on_cluster, Some(Ident::new("cluster_name")));
         }
         _ => unreachable!(),
     }
 
     let res = all_dialects()
         .parse_sql_statements("ALTER TABLE t ON CLUSTER 123 ADD CONSTRAINT bar PRIMARY KEY (baz)");
-    std::assert_eq!(
+    assert_eq!(
         res.unwrap_err(),
         ParserError::ParserError("Expected: identifier, found: 123".to_string())
     )
@@ -11226,7 +11226,7 @@ fn test_group_by_nothing() {
     let Select { group_by, .. } = all_dialects_where(|d| d.supports_group_by_expr())
         .verified_only_select("SELECT count(1) FROM t GROUP BY ()");
     {
-        std::assert_eq!(
+        assert_eq!(
             GroupByExpr::Expressions(vec![Expr::Tuple(vec![])], vec![]),
             group_by
         );
@@ -11235,7 +11235,7 @@ fn test_group_by_nothing() {
     let Select { group_by, .. } = all_dialects_where(|d| d.supports_group_by_expr())
         .verified_only_select("SELECT name, count(1) FROM t GROUP BY name, ()");
     {
-        std::assert_eq!(
+        assert_eq!(
             GroupByExpr::Expressions(
                 vec![
                     Identifier(Ident::new("name".to_string())),

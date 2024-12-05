@@ -10093,21 +10093,44 @@ impl<'a> Parser<'a> {
         } else if dialect_of!(self is DatabricksDialect) {
             self.parse_one_of_keywords(&[Keyword::CATALOG, Keyword::DATABASE, Keyword::SCHEMA])
         } else if dialect_of!(self is SnowflakeDialect) {
-            self.parse_one_of_keywords(&[Keyword::DATABASE, Keyword::SCHEMA, Keyword::WAREHOUSE])
+            self.parse_one_of_keywords(&[
+                Keyword::DATABASE,
+                Keyword::SCHEMA,
+                Keyword::WAREHOUSE,
+                Keyword::ROLE,
+                Keyword::SECONDARY,
+            ])
         } else {
             None // No specific keywords for other dialects, including GenericDialect
         };
 
-        let obj_name = self.parse_object_name(false)?;
-        let result = match parsed_keyword {
-            Some(Keyword::CATALOG) => Use::Catalog(obj_name),
-            Some(Keyword::DATABASE) => Use::Database(obj_name),
-            Some(Keyword::SCHEMA) => Use::Schema(obj_name),
-            Some(Keyword::WAREHOUSE) => Use::Warehouse(obj_name),
-            _ => Use::Object(obj_name),
+        let result = if matches!(parsed_keyword, Some(Keyword::SECONDARY)) {
+            self.parse_secondary_roles()?
+        } else {
+            let obj_name = self.parse_object_name(false)?;
+            match parsed_keyword {
+                Some(Keyword::CATALOG) => Use::Catalog(obj_name),
+                Some(Keyword::DATABASE) => Use::Database(obj_name),
+                Some(Keyword::SCHEMA) => Use::Schema(obj_name),
+                Some(Keyword::WAREHOUSE) => Use::Warehouse(obj_name),
+                Some(Keyword::ROLE) => Use::Role(obj_name),
+                _ => Use::Object(obj_name),
+            }
         };
 
         Ok(Statement::Use(result))
+    }
+
+    fn parse_secondary_roles(&mut self) -> Result<Use, ParserError> {
+        self.expect_keyword(Keyword::ROLES)?;
+        if self.parse_keyword(Keyword::NONE) {
+            Ok(Use::SecondaryRoles(SecondaryRoles::None))
+        } else if self.parse_keyword(Keyword::ALL) {
+            Ok(Use::SecondaryRoles(SecondaryRoles::All))
+        } else {
+            let roles = self.parse_comma_separated(|parser| parser.parse_identifier(false))?;
+            Ok(Use::SecondaryRoles(SecondaryRoles::List(roles)))
+        }
     }
 
     pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {

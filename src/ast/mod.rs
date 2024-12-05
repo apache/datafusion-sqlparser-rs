@@ -43,7 +43,9 @@ pub use self::data_type::{
     ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, EnumMember, ExactNumberInfo,
     StructBracketKind, TimezoneInfo,
 };
-pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue, Use};
+pub use self::dcl::{
+    AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
+};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,

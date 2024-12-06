@@ -146,8 +146,9 @@ pub trait Dialect: Debug + Any {
     ///
     /// Example (Redshift):
     /// ```text
-    /// `["foo"]` => (Some(`[`), Some(`"`))
-    /// `[foo]` => (Some(`[`), None)
+    /// `["foo"]` => Some(`[`, Some(`"`))
+    /// `[foo]` => Some(`[`, None)
+    /// `[0]` => None
     /// `"foo"` => None
     /// ```
     fn peek_nested_delimited_identifier_quotes(

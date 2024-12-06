@@ -1020,6 +1020,10 @@ impl Spanned for AlterTableOperation {
                 union_spans(table_properties.iter().map(|i| i.span()))
             }
             AlterTableOperation::OwnerTo { .. } => Span::empty(),
+            AlterTableOperation::ClusterBy { exprs } => union_spans(exprs.iter().map(|e| e.span())),
+            AlterTableOperation::DropClusteringKey => Span::empty(),
+            AlterTableOperation::SuspendRecluster => Span::empty(),
+            AlterTableOperation::ResumeRecluster => Span::empty(),
         }
     }
 }

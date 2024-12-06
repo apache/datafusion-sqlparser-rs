@@ -32,15 +32,29 @@ pub struct RedshiftSqlDialect {}
 // in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
+    /// Determine if a character starts a potential nested quoted identifier.
+    /// Example: RedShift supports the following quote styles to all mean the same thing:
+    /// ```sql
+    /// SELECT 1 AS foo;
+    /// SELECT 1 AS "foo";
+    /// SELECT 1 AS [foo];
+    /// SELECT 1 AS ["foo"];
+    /// ```
     fn is_nested_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '['
     }
 
-    /// Determine if quoted characters are looks like special case of quotation begining with `[`.
-    /// It's needed to distinguish treating square brackets as quotes from
-    /// treating them as json path. If there is identifier then we assume
-    /// there is no json path.
-    fn nested_delimited_identifier(
+    /// Only applicable whenever [`Self::is_nested_delimited_identifier_start`] returns true
+    /// If the next sequence of tokens potentially represent a nested identifier, then this method
+    /// returns a tuple containing the outer quote style, and if present, the inner (nested) quote style.
+    ///
+    /// Example (Redshift):
+    /// ```text
+    /// `["foo"]` => (Some(`[`), Some(`"`))
+    /// `[foo]` => (Some(`[`), None)
+    /// `"foo"` => None
+    /// ```
+    fn peek_nested_delimited_identifier_quotes(
         &self,
         mut chars: Peekable<Chars<'_>>,
     ) -> Option<(char, Option<char>)> {

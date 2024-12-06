@@ -1079,20 +1079,25 @@ impl<'a> Tokenizer<'a> {
                     let word = self.tokenize_quoted_identifier(quote_start, chars)?;
                     Ok(Some(Token::make_word(&word, Some(quote_start))))
                 }
-                // special (quoted) identifier
+                // Potentially nested delimited (quoted) identifier
                 quote_start
                     if self
                         .dialect
                         .is_nested_delimited_identifier_start(quote_start)
                         && self
                             .dialect
-                            .nested_delimited_identifier(chars.peekable.clone())
+                            .peek_nested_delimited_identifier_quotes(chars.peekable.clone())
                             .is_some() =>
                 {
-                    let (quote_start, nested_quote_start) = self
+                    let Some((quote_start, nested_quote_start)) = self
                         .dialect
-                        .nested_delimited_identifier(chars.peekable.clone())
-                        .unwrap();
+                        .peek_nested_delimited_identifier_quotes(chars.peekable.clone())
+                    else {
+                        return self.tokenizer_error(
+                            chars.location(),
+                            format!("Expected nested delimiter '{quote_start}' before EOF."),
+                        );
+                    };
 
                     let Some(nested_quote_start) = nested_quote_start else {
                         let word = self.tokenize_quoted_identifier(quote_start, chars)?;
@@ -1112,9 +1117,9 @@ impl<'a> Tokenizer<'a> {
                             format!("Expected nested delimiter '{nested_quote_start}' before EOF."),
                         );
                     }
-                    word.push(format!("{nested_quote_start}"));
+                    word.push(nested_quote_start.into());
                     word.push(self.tokenize_quoted_identifier(nested_quote_end, chars)?);
-                    word.push(format!("{nested_quote_end}"));
+                    word.push(nested_quote_end.into());
                     word.push(peeking_take_while(chars, |ch| ch.is_whitespace()));
                     if chars.peek() != Some(&quote_end) {
                         return self.tokenizer_error(

@@ -129,13 +129,28 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Determine if a character starts a potential nested quoted identifier.
-    /// RedShift support old way of quotation with `[` and it can cover even nested quoted identifier.
+    /// Example: RedShift supports the following quote styles to all mean the same thing:
+    /// ```sql
+    /// SELECT 1 AS foo;
+    /// SELECT 1 AS "foo";
+    /// SELECT 1 AS [foo];
+    /// SELECT 1 AS ["foo"];
+    /// ```
     fn is_nested_delimited_identifier_start(&self, _ch: char) -> bool {
         false
     }
 
-    /// Determine if nested quoted characters are presented
-    fn nested_delimited_identifier(
+    /// Only applicable whenever [`Self::is_nested_delimited_identifier_start`] returns true
+    /// If the next sequence of tokens potentially represent a nested identifier, then this method
+    /// returns a tuple containing the outer quote style, and if present, the inner (nested) quote style.
+    ///
+    /// Example (Redshift):
+    /// ```text
+    /// `["foo"]` => (Some(`[`), Some(`"`))
+    /// `[foo]` => (Some(`[`), None)
+    /// `"foo"` => None
+    /// ```
+    fn peek_nested_delimited_identifier_quotes(
         &self,
         mut _chars: Peekable<Chars<'_>>,
     ) -> Option<(char, Option<char>)> {
@@ -861,11 +876,11 @@ mod tests {
                 self.0.is_nested_delimited_identifier_start(ch)
             }
 
-            fn nested_delimited_identifier(
+            fn peek_nested_delimited_identifier_quotes(
                 &self,
                 chars: std::iter::Peekable<std::str::Chars<'_>>,
             ) -> Option<(char, Option<char>)> {
-                self.0.nested_delimited_identifier(chars)
+                self.0.peek_nested_delimited_identifier_quotes(chars)
             }
 
             fn identifier_quote_style(&self, identifier: &str) -> Option<char> {

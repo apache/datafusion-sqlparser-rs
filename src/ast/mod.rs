@@ -40,18 +40,21 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::tokenizer::Span;
 
 pub use self::data_type::{
-    ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, ExactNumberInfo,
+    ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, EnumMember, ExactNumberInfo,
     StructBracketKind, TimezoneInfo,
 };
-pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue, Use};
+pub use self::dcl::{
+    AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
+};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
     ConstraintCharacteristics, CreateFunction, Deduplicate, DeferrableInitial, GeneratedAs,
     GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay, Owner,
-    Partition, ProcedureParam, ReferentialAction, TableConstraint, TagsColumnOption,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay,
+    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, TableConstraint,
+    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2944,6 +2947,7 @@ pub enum Statement {
     StartTransaction {
         modes: Vec<TransactionMode>,
         begin: bool,
+        transaction: Option<BeginTransactionKind>,
         /// Only for SQLite
         modifier: Option<TransactionModifier>,
     },
@@ -4519,16 +4523,20 @@ impl fmt::Display for Statement {
             Statement::StartTransaction {
                 modes,
                 begin: syntax_begin,
+                transaction,
                 modifier,
             } => {
                 if *syntax_begin {
                     if let Some(modifier) = *modifier {
-                        write!(f, "BEGIN {} TRANSACTION", modifier)?;
+                        write!(f, "BEGIN {}", modifier)?;
                     } else {
-                        write!(f, "BEGIN TRANSACTION")?;
+                        write!(f, "BEGIN")?;
                     }
                 } else {
-                    write!(f, "START TRANSACTION")?;
+                    write!(f, "START")?;
+                }
+                if let Some(transaction) = transaction {
+                    write!(f, " {transaction}")?;
                 }
                 if !modes.is_empty() {
                     write!(f, " {}", display_comma_separated(modes))?;
@@ -5021,6 +5029,24 @@ pub enum TruncateIdentityOption {
 pub enum TruncateCascadeOption {
     Cascade,
     Restrict,
+}
+
+/// Transaction started with [ TRANSACTION | WORK ]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum BeginTransactionKind {
+    Transaction,
+    Work,
+}
+
+impl Display for BeginTransactionKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BeginTransactionKind::Transaction => write!(f, "TRANSACTION"),
+            BeginTransactionKind::Work => write!(f, "WORK"),
+        }
+    }
 }
 
 /// Can use to describe options in  create sequence or table column type identity

@@ -1412,6 +1412,42 @@ fn test_alter_table_swap_with() {
 }
 
 #[test]
+fn test_alter_table_clustering() {
+    let sql = r#"ALTER TABLE tab CLUSTER BY (c1, "c2", TO_DATE(c3))"#;
+    match alter_table_op(snowflake_and_generic().verified_stmt(sql)) {
+        AlterTableOperation::ClusterBy { exprs } => {
+            assert_eq!(
+                exprs,
+                [
+                    Expr::Identifier(Ident::new("c1")),
+                    Expr::Identifier(Ident::with_quote('"', "c2")),
+                    Expr::Function(Function {
+                        name: ObjectName(vec![Ident::new("TO_DATE")]),
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("c3"))
+                            ))],
+                            duplicate_treatment: None,
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![]
+                    })
+                ],
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    snowflake_and_generic().verified_stmt("ALTER TABLE tbl DROP CLUSTERING KEY");
+    snowflake_and_generic().verified_stmt("ALTER TABLE tbl SUSPEND RECLUSTER");
+    snowflake_and_generic().verified_stmt("ALTER TABLE tbl RESUME RECLUSTER");
+}
+
+#[test]
 fn test_drop_stage() {
     match snowflake_and_generic().verified_stmt("DROP STAGE s1") {
         Statement::Drop {
@@ -2649,7 +2685,7 @@ fn parse_use() {
     let quote_styles = ['\'', '"', '`'];
     for object_name in &valid_object_names {
         // Test single identifier without quotes
-        std::assert_eq!(
+        assert_eq!(
             snowflake().verified_stmt(&format!("USE {}", object_name)),
             Statement::Use(Use::Object(ObjectName(vec![Ident::new(
                 object_name.to_string()
@@ -2657,7 +2693,7 @@ fn parse_use() {
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
-            std::assert_eq!(
+            assert_eq!(
                 snowflake().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
                 Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
                     quote,
@@ -2669,7 +2705,7 @@ fn parse_use() {
 
     for &quote in &quote_styles {
         // Test double identifier with different type of quotes
-        std::assert_eq!(
+        assert_eq!(
             snowflake().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
             Statement::Use(Use::Object(ObjectName(vec![
                 Ident::with_quote(quote, "CATALOG"),
@@ -2678,7 +2714,7 @@ fn parse_use() {
         );
     }
     // Test double identifier without quotes
-    std::assert_eq!(
+    assert_eq!(
         snowflake().verified_stmt("USE mydb.my_schema"),
         Statement::Use(Use::Object(ObjectName(vec![
             Ident::new("mydb"),
@@ -2688,37 +2724,55 @@ fn parse_use() {
 
     for &quote in &quote_styles {
         // Test single and double identifier with keyword and different type of quotes
-        std::assert_eq!(
+        assert_eq!(
             snowflake().verified_stmt(&format!("USE DATABASE {0}my_database{0}", quote)),
             Statement::Use(Use::Database(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_database".to_string(),
             )])))
         );
-        std::assert_eq!(
+        assert_eq!(
             snowflake().verified_stmt(&format!("USE SCHEMA {0}my_schema{0}", quote)),
             Statement::Use(Use::Schema(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_schema".to_string(),
             )])))
         );
-        std::assert_eq!(
+        assert_eq!(
             snowflake().verified_stmt(&format!("USE SCHEMA {0}CATALOG{0}.{0}my_schema{0}", quote)),
             Statement::Use(Use::Schema(ObjectName(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
             ])))
         );
+        assert_eq!(
+            snowflake().verified_stmt(&format!("USE ROLE {0}my_role{0}", quote)),
+            Statement::Use(Use::Role(ObjectName(vec![Ident::with_quote(
+                quote,
+                "my_role".to_string(),
+            )])))
+        );
+        assert_eq!(
+            snowflake().verified_stmt(&format!("USE WAREHOUSE {0}my_wh{0}", quote)),
+            Statement::Use(Use::Warehouse(ObjectName(vec![Ident::with_quote(
+                quote,
+                "my_wh".to_string(),
+            )])))
+        );
     }
 
     // Test invalid syntax - missing identifier
     let invalid_cases = ["USE SCHEMA", "USE DATABASE", "USE WAREHOUSE"];
     for sql in &invalid_cases {
-        std::assert_eq!(
+        assert_eq!(
             snowflake().parse_sql_statements(sql).unwrap_err(),
             ParserError::ParserError("Expected: identifier, found: EOF".to_string()),
         );
     }
+
+    snowflake().verified_stmt("USE SECONDARY ROLES ALL");
+    snowflake().verified_stmt("USE SECONDARY ROLES NONE");
+    snowflake().verified_stmt("USE SECONDARY ROLES r1, r2, r3");
 }
 
 #[test]

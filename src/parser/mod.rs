@@ -10717,11 +10717,7 @@ impl<'a> Parser<'a> {
                     None
                 };
                 self.expect_token(&Token::RParen)?;
-                TableSample::Bucket(TableSampleBucket {
-                    bucket,
-                    total,
-                    on,
-                })
+                TableSample::Bucket(TableSampleBucket { bucket, total, on })
             } else {
                 let value = match self.try_parse(|p| p.parse_number_value()) {
                     Ok(num) => num,
@@ -10754,10 +10750,7 @@ impl<'a> Parser<'a> {
                         None
                     };
                     self.expect_token(&Token::RParen)?;
-                    TableSample::Implicit(TableSampleImplicit {
-                        value,
-                        unit,
-                    })
+                    TableSample::Implicit(TableSampleImplicit { value, unit })
                 }
             }
         } else {

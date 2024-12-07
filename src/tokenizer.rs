@@ -1110,7 +1110,7 @@ impl<'a> Tokenizer<'a> {
                     let error_loc = chars.location();
 
                     chars.next(); // skip the first delimiter
-                    word.push(peeking_take_while(chars, |ch| ch.is_whitespace()));
+                    peeking_take_while(chars, |ch| ch.is_whitespace());
                     if chars.peek() != Some(&nested_quote_start) {
                         return self.tokenizer_error(
                             error_loc,
@@ -1120,7 +1120,7 @@ impl<'a> Tokenizer<'a> {
                     word.push(nested_quote_start.into());
                     word.push(self.tokenize_quoted_identifier(nested_quote_end, chars)?);
                     word.push(nested_quote_end.into());
-                    word.push(peeking_take_while(chars, |ch| ch.is_whitespace()));
+                    peeking_take_while(chars, |ch| ch.is_whitespace());
                     if chars.peek() != Some(&quote_end) {
                         return self.tokenizer_error(
                             error_loc,

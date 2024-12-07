@@ -391,10 +391,11 @@ fn test_parse_select_numbered_columns() {
 #[test]
 fn test_parse_nested_quoted_identifier() {
     redshift().verified_stmt(r#"SELECT 1 AS ["1"] FROM a"#);
-    redshift().verified_stmt(r#"SELECT 1 AS [ " 1 " ]"#);
     redshift().verified_stmt(r#"SELECT 1 AS ["[="] FROM a"#);
     redshift().verified_stmt(r#"SELECT 1 AS ["=]"] FROM a"#);
     redshift().verified_stmt(r#"SELECT 1 AS ["a[b]"] FROM a"#);
+    // trim spaces
+    redshift().one_statement_parses_to(r#"SELECT 1 AS [ " 1 " ]"#, r#"SELECT 1 AS [" 1 "]"#);
     // invalid query
     assert!(redshift()
         .parse_sql_statements(r#"SELECT 1 AS ["1]"#)

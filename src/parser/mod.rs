@@ -10544,8 +10544,10 @@ impl<'a> Parser<'a> {
             let mut sample = None;
             let mut sample_before_alias = false;
             if self.dialect.supports_table_sample_before_alias() {
-                sample = self.parse_optional_table_sample()?;
+                sample = self.maybe_parse_table_sample()?;
                 if sample.is_some() {
+                    // No need to modify the default is no sample option
+                    // exists on the statement
                     sample_before_alias = true;
                 }
             }
@@ -10565,7 +10567,7 @@ impl<'a> Parser<'a> {
             };
 
             if !self.dialect.supports_table_sample_before_alias() {
-                sample = self.parse_optional_table_sample()?;
+                sample = self.maybe_parse_table_sample()?;
                 sample_before_alias = false;
             }
 
@@ -10600,7 +10602,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_optional_table_sample(&mut self) -> Result<Option<TableSample>, ParserError> {
+    fn maybe_parse_table_sample(&mut self) -> Result<Option<TableSample>, ParserError> {
         if self
             .parse_one_of_keywords(&[Keyword::SAMPLE, Keyword::TABLESAMPLE])
             .is_none()
@@ -10681,7 +10683,8 @@ impl<'a> Parser<'a> {
                         }
                     }
                 };
-                if self.peek_token().token == Token::RParen && dialect_of!(self is SnowflakeDialect)
+                if self.peek_token().token == Token::RParen
+                    && !self.dialect.supports_implicit_table_sample()
                 {
                     self.expect_token(&Token::RParen)?;
                     Ok(Some(TableSample::Bernoulli(TableSampleBernoulli {

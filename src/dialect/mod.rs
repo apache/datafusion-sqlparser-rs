@@ -708,10 +708,16 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
-    /// Returns true if the dialect supports the `TABLESAMPLE` option
+    /// Returns true if this dialect supports the `TABLESAMPLE` option
     /// before the table alias option.
     /// <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#_7_6_table_reference>
     fn supports_table_sample_before_alias(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect support not specifying a table sample method.
+    /// <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#sample-clause>
+    fn supports_implicit_table_sample(&self) -> bool {
         false
     }
 }

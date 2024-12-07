@@ -73,6 +73,8 @@ fn parse_table_time_travel() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
+                sample_before_alias: false,
             },
             joins: vec![]
         },]
@@ -221,6 +223,8 @@ fn parse_mssql_openjson() {
                 with_ordinality: false,
                 partitions: vec![],
                 json_path: None,
+                sample: None,
+                sample_before_alias: false,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -279,6 +283,8 @@ fn parse_mssql_openjson() {
                 with_ordinality: false,
                 partitions: vec![],
                 json_path: None,
+                sample: None,
+                sample_before_alias: false,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -338,6 +344,8 @@ fn parse_mssql_openjson() {
                 with_ordinality: false,
                 partitions: vec![],
                 json_path: None,
+                sample: None,
+                sample_before_alias: false,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -396,6 +404,8 @@ fn parse_mssql_openjson() {
                 with_ordinality: false,
                 partitions: vec![],
                 json_path: None,
+                sample: None,
+                sample_before_alias: false,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -434,6 +444,8 @@ fn parse_mssql_openjson() {
                 with_ordinality: false,
                 partitions: vec![],
                 json_path: None,
+                sample: None,
+                sample_before_alias: false,
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -611,9 +623,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
-            with_ordinality: _,
-            partitions: _,
-            json_path: _,
+            ..
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -1082,20 +1092,11 @@ fn parse_substring_in_select() {
                         })],
                         into: None,
                         from: vec![TableWithJoins {
-                            relation: TableFactor::Table {
-                                name: ObjectName(vec![Ident {
-                                    value: "test".to_string(),
-                                    quote_style: None,
-                                    span: Span::empty(),
-                                }]),
-                                alias: None,
-                                args: None,
-                                with_hints: vec![],
-                                version: None,
-                                partitions: vec![],
-                                with_ordinality: false,
-                                json_path: None,
-                            },
+                            relation: table_from_name(ObjectName(vec![Ident {
+                                value: "test".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            }])),
                             joins: vec![]
                         }],
                         lateral_views: vec![],

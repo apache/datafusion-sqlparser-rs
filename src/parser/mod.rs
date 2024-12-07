@@ -10594,6 +10594,15 @@ impl<'a> Parser<'a> {
 
             let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
 
+            let mut sample = None;
+            let mut sample_before_alias = false;
+            if self.dialect.supports_table_sample_before_alias() {
+                sample = self.parse_optional_table_sample()?;
+                if sample.is_some() {
+                    sample_before_alias = true;
+                }
+            }
+
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
 
             // MSSQL-specific table hints:
@@ -10608,6 +10617,11 @@ impl<'a> Parser<'a> {
                 }
             };
 
+            if !self.dialect.supports_table_sample_before_alias() {
+                sample = self.parse_optional_table_sample()?;
+                sample_before_alias = false;
+            }
+
             let mut table = TableFactor::Table {
                 name,
                 alias,
@@ -10617,6 +10631,8 @@ impl<'a> Parser<'a> {
                 partitions,
                 with_ordinality,
                 json_path,
+                sample,
+                sample_before_alias,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {
@@ -10634,6 +10650,118 @@ impl<'a> Parser<'a> {
             }
 
             Ok(table)
+        }
+    }
+
+    fn parse_optional_table_sample(&mut self) -> Result<Option<TableSample>, ParserError> {
+        if self
+            .parse_one_of_keywords(&[Keyword::SAMPLE, Keyword::TABLESAMPLE])
+            .is_none()
+        {
+            return Ok(None);
+        }
+
+        if self
+            .parse_one_of_keywords(&[Keyword::BERNOULLI, Keyword::ROW])
+            .is_some()
+        {
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+
+            let (probability, value, unit) = if self.parse_keyword(Keyword::ROWS) {
+                (None, Some(expr), Some(TableSampleUnit::Rows))
+            } else if self.parse_keyword(Keyword::PERCENT) {
+                (None, Some(expr), Some(TableSampleUnit::Percent))
+            } else {
+                (Some(expr), None, None)
+            };
+            self.expect_token(&Token::RParen)?;
+            Ok(Some(TableSample::Bernoulli(TableSampleBernoulli {
+                probability,
+                value,
+                unit,
+            })))
+        } else if self
+            .parse_one_of_keywords(&[Keyword::SYSTEM, Keyword::BLOCK])
+            .is_some()
+        {
+            self.expect_token(&Token::LParen)?;
+            let probability = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            let seed = if self
+                .parse_one_of_keywords(&[Keyword::REPEATABLE, Keyword::SEED])
+                .is_some()
+            {
+                self.expect_token(&Token::LParen)?;
+                let seed = self.parse_expr()?;
+                self.expect_token(&Token::RParen)?;
+                Some(seed)
+            } else {
+                None
+            };
+            Ok(Some(TableSample::System(TableSampleSystem {
+                probability,
+                seed,
+            })))
+        } else if self.peek_token().token == Token::LParen {
+            self.expect_token(&Token::LParen)?;
+            if self.parse_keyword(Keyword::BUCKET) {
+                let bucket = self.parse_number_value()?;
+                self.expect_keywords(&[Keyword::OUT, Keyword::OF])?;
+                let total = self.parse_number_value()?;
+                let on = if self.parse_keyword(Keyword::ON) {
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
+                self.expect_token(&Token::RParen)?;
+                Ok(Some(TableSample::Bucket(TableSampleBucket {
+                    bucket,
+                    total,
+                    on,
+                })))
+            } else {
+                let value = match self.try_parse(|p| p.parse_number_value()) {
+                    Ok(num) => num,
+                    _ => {
+                        if let Token::Word(w) = self.next_token().token {
+                            Value::Placeholder(w.value)
+                        } else {
+                            return parser_err!(
+                                "Expecting number or byte length e.g. 100M",
+                                self.peek_token().span.start
+                            );
+                        }
+                    }
+                };
+                if self.peek_token().token == Token::RParen && dialect_of!(self is SnowflakeDialect)
+                {
+                    self.expect_token(&Token::RParen)?;
+                    Ok(Some(TableSample::Bernoulli(TableSampleBernoulli {
+                        probability: Some(Expr::Value(value)),
+                        unit: None,
+                        value: None,
+                    })))
+                } else {
+                    let unit = if self.parse_keyword(Keyword::ROWS) {
+                        Some(TableSampleUnit::Rows)
+                    } else if self.parse_keyword(Keyword::PERCENT) {
+                        Some(TableSampleUnit::Percent)
+                    } else {
+                        None
+                    };
+                    self.expect_token(&Token::RParen)?;
+                    Ok(Some(TableSample::Implicit(TableSampleImplicit {
+                        value,
+                        unit,
+                    })))
+                }
+            }
+        } else {
+            return parser_err!(
+                "Expecting BERNOULLI, ROW, SYSTEM or BLOCK",
+                self.peek_token().span.start
+            );
         }
     }
 

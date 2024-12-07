@@ -1884,16 +1884,9 @@ fn parse_select_with_numeric_prefix_column_name() {
                     )))],
                     into: None,
                     from: vec![TableWithJoins {
-                        relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
-                            alias: None,
-                            args: None,
-                            with_hints: vec![],
-                            version: None,
-                            partitions: vec![],
-                            with_ordinality: false,
-                            json_path: None,
-                        },
+                        relation: table_from_name(ObjectName(vec![Ident::with_quote(
+                            '"', "table"
+                        )])),
                         joins: vec![]
                     }],
                     lateral_views: vec![],
@@ -1943,16 +1936,9 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     ],
                     into: None,
                     from: vec![TableWithJoins {
-                        relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
-                            alias: None,
-                            args: None,
-                            with_hints: vec![],
-                            version: None,
-                            partitions: vec![],
-                            with_ordinality: false,
-                            json_path: None,
-                        },
+                        relation: table_from_name(ObjectName(vec![Ident::with_quote(
+                            '"', "table"
+                        )])),
                         joins: vec![]
                     }],
                     lateral_views: vec![],
@@ -2020,6 +2006,8 @@ fn parse_update_with_joins() {
                         partitions: vec![],
                         with_ordinality: false,
                         json_path: None,
+                        sample: None,
+                        sample_before_alias: false,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -2034,6 +2022,8 @@ fn parse_update_with_joins() {
                             partitions: vec![],
                             with_ordinality: false,
                             json_path: None,
+                            sample: None,
+                            sample_before_alias: false,
                         },
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -2464,20 +2454,11 @@ fn parse_substring_in_select() {
                         })],
                         into: None,
                         from: vec![TableWithJoins {
-                            relation: TableFactor::Table {
-                                name: ObjectName(vec![Ident {
-                                    value: "test".to_string(),
-                                    quote_style: None,
-                                    span: Span::empty(),
-                                }]),
-                                alias: None,
-                                args: None,
-                                with_hints: vec![],
-                                version: None,
-                                partitions: vec![],
-                                with_ordinality: false,
-                                json_path: None,
-                            },
+                            relation: table_from_name(ObjectName(vec![Ident {
+                                value: "test".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            }])),
                             joins: vec![]
                         }],
                         lateral_views: vec![],

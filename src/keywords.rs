@@ -120,6 +120,7 @@ define_keywords!(
     BEGIN,
     BEGIN_FRAME,
     BEGIN_PARTITION,
+    BERNOULLI,
     BETWEEN,
     BIGDECIMAL,
     BIGINT,
@@ -128,12 +129,14 @@ define_keywords!(
     BINDING,
     BIT,
     BLOB,
+    BLOCK,
     BLOOMFILTER,
     BOOL,
     BOOLEAN,
     BOTH,
     BROWSE,
     BTREE,
+    BUCKET,
     BUCKETS,
     BY,
     BYPASSRLS,
@@ -680,6 +683,7 @@ define_keywords!(
     RUN,
     SAFE,
     SAFE_CAST,
+    SAMPLE,
     SAVEPOINT,
     SCHEMA,
     SCHEMAS,
@@ -690,6 +694,7 @@ define_keywords!(
     SECONDARY,
     SECRET,
     SECURITY,
+    SEED,
     SELECT,
     SEMI,
     SENSITIVE,
@@ -932,6 +937,9 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::CONNECT,
     // Reserved for snowflake MATCH_RECOGNIZE
     Keyword::MATCH_RECOGNIZE,
+    // Reserved for Snowflake table sample
+    Keyword::SAMPLE,
+    Keyword::TABLESAMPLE,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

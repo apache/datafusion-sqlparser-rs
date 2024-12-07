@@ -346,6 +346,23 @@ pub fn table(name: impl Into<String>) -> TableFactor {
         partitions: vec![],
         with_ordinality: false,
         json_path: None,
+        sample: None,
+        sample_before_alias: false,
+    }
+}
+
+pub fn table_from_name(name: ObjectName) -> TableFactor {
+    TableFactor::Table {
+        name,
+        alias: None,
+        args: None,
+        with_hints: vec![],
+        version: None,
+        partitions: vec![],
+        with_ordinality: false,
+        json_path: None,
+        sample: None,
+        sample_before_alias: false,
     }
 }
 
@@ -362,6 +379,8 @@ pub fn table_with_alias(name: impl Into<String>, alias: impl Into<String>) -> Ta
         partitions: vec![],
         with_ordinality: false,
         json_path: None,
+        sample: None,
+        sample_before_alias: false,
     }
 }
 

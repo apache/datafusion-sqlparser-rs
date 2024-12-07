@@ -222,16 +222,7 @@ fn parse_delete_statement() {
             ..
         }) => {
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![Ident::with_quote('"', "table")])),
                 from[0].relation
             );
         }
@@ -1379,16 +1370,7 @@ fn parse_table_identifiers() {
         assert_eq!(
             select.from,
             vec![TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(expected),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(expected)),
                 joins: vec![]
             },]
         );
@@ -1562,6 +1544,8 @@ fn parse_table_time_travel() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
+                sample_before_alias: false,
             },
             joins: vec![]
         },]
@@ -1661,6 +1645,8 @@ fn parse_merge() {
                     partitions: Default::default(),
                     with_ordinality: false,
                     json_path: None,
+                    sample: None,
+                    sample_before_alias: false,
                 },
                 table
             );
@@ -1677,6 +1663,8 @@ fn parse_merge() {
                     partitions: Default::default(),
                     with_ordinality: false,
                     json_path: None,
+                    sample: None,
+                    sample_before_alias: false,
                 },
                 source
             );

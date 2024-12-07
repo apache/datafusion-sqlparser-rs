@@ -2964,6 +2964,7 @@ fn test_table_sample() {
     snowflake_and_generic()
         .verified_stmt("SELECT * FROM testtable AS t TABLESAMPLE BERNOULLI (10)");
 
+    // In Snowflake we translate implicit table sample method to bernoulli
     snowflake().one_statement_parses_to(
         "SELECT * FROM testtable SAMPLE (10)",
         "SELECT * FROM testtable TABLESAMPLE BERNOULLI (10)",
@@ -2976,12 +2977,12 @@ fn test_table_sample() {
 
     snowflake_and_generic().one_statement_parses_to(
         "SELECT * FROM testtable SAMPLE BLOCK (3) SEED (82)",
-        "SELECT * FROM testtable TABLESAMPLE SYSTEM (3) SEED (82)",
+        "SELECT * FROM testtable TABLESAMPLE SYSTEM (3) REPEATABLE (82)",
     );
 
     snowflake_and_generic().one_statement_parses_to(
-        "SELECT * FROM testtable SAMPLE BLOCK (0.012) REPEATABLE (99992)",
-        "SELECT * FROM testtable TABLESAMPLE SYSTEM (0.012) SEED (99992)",
+        "SELECT * FROM testtable SAMPLE BLOCK (0.012) SEED (99992)",
+        "SELECT * FROM testtable TABLESAMPLE SYSTEM (0.012) REPEATABLE (99992)",
     );
 
     snowflake_and_generic()

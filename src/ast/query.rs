@@ -1177,7 +1177,7 @@ pub struct TableSampleBernoulli {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableSampleSystem {
     pub probability: Expr,
-    pub seed: Option<Expr>,
+    pub repeatable: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1252,8 +1252,8 @@ impl fmt::Display for TableSample {
             }
             TableSample::System(sample) => {
                 write!(f, " SYSTEM ({})", sample.probability)?;
-                if let Some(seed) = &sample.seed {
-                    write!(f, " SEED ({})", seed)?;
+                if let Some(repeatable) = &sample.repeatable {
+                    write!(f, " REPEATABLE ({})", repeatable)?;
                 }
             }
             TableSample::Bucket(sample) => {

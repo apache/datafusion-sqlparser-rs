@@ -10703,7 +10703,7 @@ impl<'a> Parser<'a> {
             };
             Ok(Some(TableSample::System(TableSampleSystem {
                 probability,
-                seed,
+                repeatable: seed,
             })))
         } else if self.peek_token().token == Token::LParen {
             self.expect_token(&Token::LParen)?;

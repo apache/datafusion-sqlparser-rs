@@ -185,16 +185,7 @@ fn test_values_clause() {
         "SELECT * FROM values",
     ));
     assert_eq!(
-        Some(&TableFactor::Table {
-            name: ObjectName(vec![Ident::new("values")]),
-            alias: None,
-            args: None,
-            with_hints: vec![],
-            version: None,
-            partitions: vec![],
-            with_ordinality: false,
-            json_path: None,
-        }),
+        Some(&table_from_name(ObjectName(vec![Ident::new("values")]))),
         query
             .body
             .as_select()

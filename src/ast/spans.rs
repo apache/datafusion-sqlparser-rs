@@ -1681,6 +1681,8 @@ impl Spanned for TableFactor {
                 with_ordinality: _,
                 partitions: _,
                 json_path: _,
+                sample: _,
+                sample_before_alias: _,
             } => union_spans(
                 name.0
                     .iter()

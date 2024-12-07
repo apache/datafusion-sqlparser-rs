@@ -10655,7 +10655,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn maybe_parse_table_sample(&mut self) -> Result<Option<TableSample>, ParserError> {
+    fn maybe_parse_table_sample(&mut self) -> Result<Option<Box<TableSample>>, ParserError> {
         if self
             .parse_one_of_keywords(&[Keyword::SAMPLE, Keyword::TABLESAMPLE])
             .is_none()
@@ -10663,7 +10663,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
 
-        if self
+        let sample = if self
             .parse_one_of_keywords(&[Keyword::BERNOULLI, Keyword::ROW])
             .is_some()
         {
@@ -10678,11 +10678,11 @@ impl<'a> Parser<'a> {
                 (Some(expr), None, None)
             };
             self.expect_token(&Token::RParen)?;
-            Ok(Some(TableSample::Bernoulli(TableSampleBernoulli {
+            TableSample::Bernoulli(TableSampleBernoulli {
                 probability,
                 value,
                 unit,
-            })))
+            })
         } else if self
             .parse_one_of_keywords(&[Keyword::SYSTEM, Keyword::BLOCK])
             .is_some()
@@ -10701,10 +10701,10 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            Ok(Some(TableSample::System(TableSampleSystem {
+            TableSample::System(TableSampleSystem {
                 probability,
                 repeatable: seed,
-            })))
+            })
         } else if self.peek_token().token == Token::LParen {
             self.expect_token(&Token::LParen)?;
             if self.parse_keyword(Keyword::BUCKET) {
@@ -10717,11 +10717,11 @@ impl<'a> Parser<'a> {
                     None
                 };
                 self.expect_token(&Token::RParen)?;
-                Ok(Some(TableSample::Bucket(TableSampleBucket {
+                TableSample::Bucket(TableSampleBucket {
                     bucket,
                     total,
                     on,
-                })))
+                })
             } else {
                 let value = match self.try_parse(|p| p.parse_number_value()) {
                     Ok(num) => num,
@@ -10740,11 +10740,11 @@ impl<'a> Parser<'a> {
                     && !self.dialect.supports_implicit_table_sample()
                 {
                     self.expect_token(&Token::RParen)?;
-                    Ok(Some(TableSample::Bernoulli(TableSampleBernoulli {
+                    TableSample::Bernoulli(TableSampleBernoulli {
                         probability: Some(Expr::Value(value)),
                         unit: None,
                         value: None,
-                    })))
+                    })
                 } else {
                     let unit = if self.parse_keyword(Keyword::ROWS) {
                         Some(TableSampleUnit::Rows)
@@ -10754,10 +10754,10 @@ impl<'a> Parser<'a> {
                         None
                     };
                     self.expect_token(&Token::RParen)?;
-                    Ok(Some(TableSample::Implicit(TableSampleImplicit {
+                    TableSample::Implicit(TableSampleImplicit {
                         value,
                         unit,
-                    })))
+                    })
                 }
             }
         } else {
@@ -10765,7 +10765,9 @@ impl<'a> Parser<'a> {
                 "Expecting BERNOULLI, ROW, SYSTEM or BLOCK",
                 self.peek_token().span.start
             );
-        }
+        };
+
+        Ok(Some(Box::new(sample)))
     }
 
     /// Parses `OPENJSON( jsonExpression [ , path ] )  [ <with_clause> ]` clause,

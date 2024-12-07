@@ -1004,7 +1004,7 @@ pub enum TableFactor {
         json_path: Option<JsonPath>,
         /// Optional table sample modifier
         /// See: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#sample-clause>
-        sample: Option<TableSample>,
+        sample: Option<Box<TableSample>>,
         /// Position of the table sample modifier in the table factor. Default is after the table alias
         /// e.g. `SELECT * FROM tbl t TABLESAMPLE (10 ROWS)`. See `Dialect::supports_table_sample_before_alias`.
         sample_before_alias: bool,

@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::DollarQuotedString;
+use crate::ast::{DollarQuotedString, Ident};
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
@@ -388,6 +388,14 @@ impl fmt::Display for Word {
 }
 
 impl Word {
+    pub fn to_ident(&self, span: Span) -> Ident {
+        Ident {
+            value: self.value.clone(),
+            quote_style: self.quote_style,
+            span,
+        }
+    }
+
     fn matching_end_quote(ch: char) -> char {
         match ch {
             '"' => '"', // ANSI and most dialects

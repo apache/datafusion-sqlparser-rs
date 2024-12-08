@@ -2,7 +2,7 @@ use crate::parser::*;
 
 use crate::parser_err;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse a REVOKE statement
     pub fn parse_revoke(&mut self) -> Result<Statement, ParserError> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;

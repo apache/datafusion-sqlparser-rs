@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// `INSTALL [extension_name]`
     pub fn parse_install(&mut self) -> Result<Statement, ParserError> {
         let extension_name = self.parse_identifier(false)?;

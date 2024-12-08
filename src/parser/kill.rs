@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     // KILL [CONNECTION | QUERY | MUTATION] processlist_id
     pub fn parse_kill(&mut self) -> Result<Statement, ParserError> {
         let modifier_keyword =

@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_unload(&mut self) -> Result<Statement, ParserError> {
         self.expect_token(&Token::LParen)?;
         let query = self.parse_query()?;

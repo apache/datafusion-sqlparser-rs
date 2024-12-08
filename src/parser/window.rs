@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_named_window(&mut self) -> Result<NamedWindowDefinition, ParserError> {
         let ident = self.parse_identifier(false)?;
         self.expect_keyword(Keyword::AS)?;

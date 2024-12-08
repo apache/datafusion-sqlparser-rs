@@ -17,7 +17,7 @@ use alloc::vec;
 
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,

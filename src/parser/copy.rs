@@ -2,7 +2,7 @@ use super::*;
 
 use crate::parser_err;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let source;

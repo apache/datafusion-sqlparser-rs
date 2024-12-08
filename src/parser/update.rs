@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_update(&mut self) -> Result<Statement, ParserError> {
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;

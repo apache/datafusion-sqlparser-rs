@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse a GRANT statement.
     pub fn parse_grant(&mut self) -> Result<Statement, ParserError> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;

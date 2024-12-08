@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse a `DECLARE` statement.
     ///
     /// ```sql

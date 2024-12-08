@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
         let terse = self.parse_keyword(Keyword::TERSE);
         let extended = self.parse_keyword(Keyword::EXTENDED);

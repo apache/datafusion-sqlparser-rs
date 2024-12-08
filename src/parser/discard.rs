@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_discard(&mut self) -> Result<Statement, ParserError> {
         let object_type = if self.parse_keyword(Keyword::ALL) {
             DiscardObject::ALL

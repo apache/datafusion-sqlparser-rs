@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse `CREATE FUNCTION` for [Postgres]
     ///
     /// [Postgres]: https://www.postgresql.org/docs/15/sql-createfunction.html

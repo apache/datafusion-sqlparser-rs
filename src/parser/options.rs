@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn maybe_parse_options(
         &mut self,
         keyword: Keyword,

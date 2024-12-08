@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_explain(
         &mut self,
         describe_alias: DescribeAlias,

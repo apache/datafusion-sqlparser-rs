@@ -1,7 +1,7 @@
 use crate::keywords::ALL_KEYWORDS;
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse a [Snowflake] `DECLARE` statement.
     ///
     /// Syntax:

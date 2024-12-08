@@ -2,7 +2,7 @@ use crate::parser::*;
 
 use crate::parser_err;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_flush(&mut self) -> Result<Statement, ParserError> {
         let mut channel = None;
         let mut tables: Vec<ObjectName> = vec![];

@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     // FETCH [ direction { FROM | IN } ] cursor INTO target;
     pub fn parse_fetch_statement(&mut self) -> Result<Statement, ParserError> {
         let direction = if self.parse_keyword(Keyword::NEXT) {

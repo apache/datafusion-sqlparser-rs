@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse a simple one-word identifier (possibly quoted, possibly a keyword)
     ///
     /// The `in_table_clause` parameter indicates whether the identifier is a table in a FROM, JOIN, or

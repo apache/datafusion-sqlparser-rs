@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse an INSERT statement, returning a `Box`ed SetExpr
     ///
     /// This is used to reduce the size of the stack frames in debug builds

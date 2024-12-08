@@ -2,7 +2,7 @@ use crate::parser::*;
 
 use crate::parser_err;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse a `CALL procedure_name(arg1, arg2, ...)`
     /// or `CALL procedure_name` statement
     pub fn parse_call(&mut self) -> Result<Statement, ParserError> {

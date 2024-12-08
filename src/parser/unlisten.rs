@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_unlisten(&mut self) -> Result<Statement, ParserError> {
         let channel = if self.consume_token(&Token::Mul) {
             Ident::new(Expr::Wildcard(AttachedToken::empty()).to_string())

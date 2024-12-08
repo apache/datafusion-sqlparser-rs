@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_attach_database(&mut self) -> Result<Statement, ParserError> {
         let database = self.parse_keyword(Keyword::DATABASE);
         let database_file_name = self.parse_expr()?;

@@ -2,7 +2,7 @@ use crate::parser::*;
 
 // DuckDB related parsing
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_attach_duckdb_database_options(
         &mut self,
     ) -> Result<Vec<AttachDuckDBDatabaseOption>, ParserError> {

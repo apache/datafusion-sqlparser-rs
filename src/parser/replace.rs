@@ -2,7 +2,7 @@ use crate::parser::*;
 
 use crate::parser_err;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse an REPLACE statement
     pub fn parse_replace(&mut self) -> Result<Statement, ParserError> {
         if !dialect_of!(self is MySqlDialect | GenericDialect) {

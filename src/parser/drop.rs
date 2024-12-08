@@ -2,7 +2,7 @@ use super::*;
 
 use crate::parser_err;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse statements of the DropTrigger type such as:
     ///
     /// ```sql

@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_execute(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
 

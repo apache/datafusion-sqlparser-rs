@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_close(&mut self) -> Result<Statement, ParserError> {
         let cursor = if self.parse_keyword(Keyword::ALL) {
             CloseCursor::All

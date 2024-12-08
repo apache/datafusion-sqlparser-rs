@@ -2,7 +2,7 @@ use super::*;
 
 use crate::parser_err;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Parse a literal value (numbers, strings, date/time, booleans)
     pub fn parse_value(&mut self) -> Result<Value, ParserError> {
         let next_token = self.next_token();

@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_notify(&mut self) -> Result<Statement, ParserError> {
         let channel = self.parse_identifier(false)?;
         let payload = if self.consume_token(&Token::Comma) {

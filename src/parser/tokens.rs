@@ -2,7 +2,7 @@ use super::*;
 
 use crate::parser_err;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     /// Consume the parser and return its underlying token buffer
     pub fn into_tokens(self) -> Vec<TokenWithSpan> {
         self.tokens

@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
         let modifier =
             self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
@@ -18,7 +18,7 @@ impl<'a> Parser<'a> {
             && self.consume_token(&Token::LParen)
         {
             let variables = OneOrManyWithParens::Many(
-                self.parse_comma_separated(|parser: &mut Parser<'a>| {
+                self.parse_comma_separated(|parser: &mut Parser<'_>| {
                     parser.parse_identifier(false)
                 })?
                 .into_iter()

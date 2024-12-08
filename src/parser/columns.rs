@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
         let mut constraints = vec![];

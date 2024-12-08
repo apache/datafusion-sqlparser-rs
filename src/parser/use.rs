@@ -1,6 +1,6 @@
 use crate::parser::*;
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     pub fn parse_use(&mut self) -> Result<Statement, ParserError> {
         // Determine which keywords are recognized by the current dialect
         let parsed_keyword = if dialect_of!(self is HiveDialect) {

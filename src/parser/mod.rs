@@ -10595,13 +10595,9 @@ impl<'a> Parser<'a> {
             let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
 
             let mut sample = None;
-            let mut sample_before_alias = false;
             if self.dialect.supports_table_sample_before_alias() {
-                sample = self.maybe_parse_table_sample()?;
-                if sample.is_some() {
-                    // No need to modify the default is no sample option
-                    // exists on the statement
-                    sample_before_alias = true;
+                if let Some(parsed_sample) = self.maybe_parse_table_sample()? {
+                    sample = Some(TableSampleKind::BeforeTableAlias(parsed_sample));
                 }
             }
 
@@ -10620,8 +10616,9 @@ impl<'a> Parser<'a> {
             };
 
             if !self.dialect.supports_table_sample_before_alias() {
-                sample = self.maybe_parse_table_sample()?;
-                sample_before_alias = false;
+                if let Some(parsed_sample) = self.maybe_parse_table_sample()? {
+                    sample = Some(TableSampleKind::AfterTableAlias(parsed_sample));
+                }
             }
 
             let mut table = TableFactor::Table {
@@ -10634,7 +10631,6 @@ impl<'a> Parser<'a> {
                 with_ordinality,
                 json_path,
                 sample,
-                sample_before_alias,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {
@@ -10655,7 +10651,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn maybe_parse_table_sample(&mut self) -> Result<Option<Box<TableSample>>, ParserError> {
+    fn maybe_parse_table_sample(&mut self) -> Result<Option<Box<TableSampleMethod>>, ParserError> {
         if self
             .parse_one_of_keywords(&[Keyword::SAMPLE, Keyword::TABLESAMPLE])
             .is_none()
@@ -10663,6 +10659,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
 
+        // Try to parse based on an explicit table sample method keyword
         let sample = if self
             .parse_one_of_keywords(&[Keyword::BERNOULLI, Keyword::ROW])
             .is_some()
@@ -10678,7 +10675,7 @@ impl<'a> Parser<'a> {
                 (Some(expr), None, None)
             };
             self.expect_token(&Token::RParen)?;
-            TableSample::Bernoulli(TableSampleBernoulli {
+            TableSampleMethod::Bernoulli(TableSampleBernoulli {
                 probability,
                 value,
                 unit,
@@ -10701,10 +10698,11 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            TableSample::System(TableSampleSystem {
+            TableSampleMethod::System(TableSampleSystem {
                 probability,
                 repeatable: seed,
             })
+        // Try to parse without an explicit table sample method keyword
         } else if self.peek_token().token == Token::LParen {
             self.expect_token(&Token::LParen)?;
             if self.parse_keyword(Keyword::BUCKET) {
@@ -10717,10 +10715,10 @@ impl<'a> Parser<'a> {
                     None
                 };
                 self.expect_token(&Token::RParen)?;
-                TableSample::Bucket(TableSampleBucket { bucket, total, on })
+                TableSampleMethod::Bucket(TableSampleBucket { bucket, total, on })
             } else {
-                let value = match self.try_parse(|p| p.parse_number_value()) {
-                    Ok(num) => num,
+                let value = match self.maybe_parse(|p| p.parse_number_value()) {
+                    Ok(Some(num)) => num,
                     _ => {
                         if let Token::Word(w) = self.next_token().token {
                             Value::Placeholder(w.value)
@@ -10733,10 +10731,10 @@ impl<'a> Parser<'a> {
                     }
                 };
                 if self.peek_token().token == Token::RParen
-                    && !self.dialect.supports_implicit_table_sample()
+                    && !self.dialect.supports_implicit_table_sample_method()
                 {
                     self.expect_token(&Token::RParen)?;
-                    TableSample::Bernoulli(TableSampleBernoulli {
+                    TableSampleMethod::Bernoulli(TableSampleBernoulli {
                         probability: Some(Expr::Value(value)),
                         unit: None,
                         value: None,
@@ -10750,7 +10748,7 @@ impl<'a> Parser<'a> {
                         None
                     };
                     self.expect_token(&Token::RParen)?;
-                    TableSample::Implicit(TableSampleImplicit { value, unit })
+                    TableSampleMethod::Implicit(TableSampleImplicit { value, unit })
                 }
             }
         } else {

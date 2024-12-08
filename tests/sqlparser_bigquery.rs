@@ -1545,7 +1545,6 @@ fn parse_table_time_travel() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                sample_before_alias: false,
             },
             joins: vec![]
         },]
@@ -1646,7 +1645,6 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    sample_before_alias: false,
                 },
                 table
             );
@@ -1664,7 +1662,6 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    sample_before_alias: false,
                 },
                 source
             );

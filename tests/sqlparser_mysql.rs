@@ -2007,7 +2007,6 @@ fn parse_update_with_joins() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        sample_before_alias: false,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -2023,7 +2022,6 @@ fn parse_update_with_joins() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
-                            sample_before_alias: false,
                         },
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {

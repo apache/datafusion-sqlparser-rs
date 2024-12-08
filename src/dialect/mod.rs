@@ -707,6 +707,27 @@ pub trait Dialect: Debug + Any {
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
+
+    /// Returns true if this dialect supports the `TABLESAMPLE` option
+    /// before the table alias option. For example:
+    ///
+    /// Table sample before alias: `SELECT * FROM tbl AS t TABLESAMPLE (10)`
+    /// Table sample after alias: `SELECT * FROM tbl TABLESAMPLE (10) AS t`
+    ///
+    /// <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#_7_6_table_reference>
+    fn supports_table_sample_before_alias(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect support not specifying a table sample method. For example:
+    ///
+    /// Implicit table sample method: `SELECT * FROM tbl TABLESAMPLE (10)`
+    /// Explicit table sample method: `SELECT * FROM tbl TABLESAMPLE BERNOULLI (10)`
+    ///
+    /// <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#sample-clause>
+    fn supports_implicit_table_sample_method(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

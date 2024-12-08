@@ -463,7 +463,6 @@ fn parse_update_with_table_alias() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        sample_before_alias: false,
                     },
                     joins: vec![],
                 },
@@ -557,7 +556,6 @@ fn parse_select_with_table_alias() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                sample_before_alias: false,
             },
             joins: vec![],
         }]
@@ -748,7 +746,6 @@ fn parse_where_delete_with_alias_statement() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    sample_before_alias: false,
                 },
                 from[0].relation,
             );
@@ -767,7 +764,6 @@ fn parse_where_delete_with_alias_statement() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
-                        sample_before_alias: false,
                     },
                     joins: vec![],
                 }]),
@@ -6109,7 +6105,6 @@ fn parse_joins_on() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                sample_before_alias: false,
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -6239,7 +6234,6 @@ fn parse_joins_using() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                sample_before_alias: false,
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
@@ -6315,7 +6309,6 @@ fn parse_natural_join() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                sample_before_alias: false,
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -8333,7 +8326,6 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    sample_before_alias: false,
                 }
             );
             assert_eq!(table, table_no_into);
@@ -9440,7 +9432,6 @@ fn parse_pivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                sample_before_alias: false,
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -9517,7 +9508,6 @@ fn parse_unpivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
-                sample_before_alias: false,
             }),
             value: Ident {
                 value: "quantity".to_string(),
@@ -9589,7 +9579,6 @@ fn parse_pivot_unpivot_table() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
-                    sample_before_alias: false,
                 }),
                 value: Ident {
                     value: "population".to_string(),
@@ -12352,14 +12341,14 @@ fn parse_create_table_with_enum_types() {
 
 #[test]
 fn test_table_sample() {
-    let dialects = all_dialects_where(|d| !d.supports_implicit_table_sample());
+    let dialects = all_dialects_where(|d| !d.supports_implicit_table_sample_method());
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE BERNOULLI (50)");
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50)");
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
 
     // The only dialect that supports implicit tablesample is Hive and it requires aliase after the table sample
     let dialects = all_dialects_where(|d| {
-        d.supports_implicit_table_sample() && d.supports_table_sample_before_alias()
+        d.supports_implicit_table_sample_method() && d.supports_table_sample_before_alias()
     });
     dialects.verified_stmt("SELECT * FROM tbl TABLESAMPLE (50) AS t");
     dialects.verified_stmt("SELECT * FROM tbl TABLESAMPLE (50 ROWS) AS t");

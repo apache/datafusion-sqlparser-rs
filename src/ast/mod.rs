@@ -69,8 +69,8 @@ pub use self::query::{
     OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
     SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
-    TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableSample,
-    TableSampleBernoulli, TableSampleBucket, TableSampleImplicit, TableSampleSystem,
+    TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableSampleBernoulli,
+    TableSampleBucket, TableSampleImplicit, TableSampleKind, TableSampleMethod, TableSampleSystem,
     TableSampleUnit, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode, Values,
     WildcardAdditionalOptions, With, WithFill,
 };

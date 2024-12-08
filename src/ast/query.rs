@@ -1004,10 +1004,7 @@ pub enum TableFactor {
         json_path: Option<JsonPath>,
         /// Optional table sample modifier
         /// See: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#sample-clause>
-        sample: Option<Box<TableSample>>,
-        /// Position of the table sample modifier in the table factor. Default is after the table alias
-        /// e.g. `SELECT * FROM tbl t TABLESAMPLE (10 ROWS)`. See `Dialect::supports_table_sample_before_alias`.
-        sample_before_alias: bool,
+        sample: Option<TableSampleKind>,
     },
     Derived {
         lateral: bool,
@@ -1156,7 +1153,19 @@ pub enum TableFactor {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum TableSample {
+
+pub enum TableSampleKind {
+    /// Table sample located before the table alias option
+    BeforeTableAlias(Box<TableSampleMethod>),
+    /// Table sample located after the table alias option
+    AfterTableAlias(Box<TableSampleMethod>),
+}
+
+/// The table sample method options
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableSampleMethod {
     Bernoulli(TableSampleBernoulli),
     System(TableSampleSystem),
     Bucket(TableSampleBucket),
@@ -1234,11 +1243,11 @@ impl fmt::Display for TableSampleImplicit {
     }
 }
 
-impl fmt::Display for TableSample {
+impl fmt::Display for TableSampleMethod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, " TABLESAMPLE")?;
         match self {
-            TableSample::Bernoulli(sample) => {
+            TableSampleMethod::Bernoulli(sample) => {
                 write!(f, " BERNOULLI (")?;
                 if let Some(probability) = &sample.probability {
                     write!(f, "{})", probability)?;
@@ -1250,16 +1259,16 @@ impl fmt::Display for TableSample {
                     write!(f, ")")?;
                 }
             }
-            TableSample::System(sample) => {
+            TableSampleMethod::System(sample) => {
                 write!(f, " SYSTEM ({})", sample.probability)?;
                 if let Some(repeatable) = &sample.repeatable {
                     write!(f, " REPEATABLE ({})", repeatable)?;
                 }
             }
-            TableSample::Bucket(sample) => {
+            TableSampleMethod::Bucket(sample) => {
                 write!(f, " ({})", sample)?;
             }
-            TableSample::Implicit(sample) => {
+            TableSampleMethod::Implicit(sample) => {
                 write!(f, " ({})", sample)?;
             }
         }
@@ -1526,7 +1535,6 @@ impl fmt::Display for TableFactor {
                 with_ordinality,
                 json_path,
                 sample,
-                sample_before_alias,
             } => {
                 write!(f, "{name}")?;
                 if let Some(json_path) = json_path {
@@ -1549,7 +1557,7 @@ impl fmt::Display for TableFactor {
                 if *with_ordinality {
                     write!(f, " WITH ORDINALITY")?;
                 }
-                if let (Some(sample), true) = (sample, sample_before_alias) {
+                if let Some(TableSampleKind::BeforeTableAlias(sample)) = sample {
                     write!(f, "{sample}")?;
                 }
                 if let Some(alias) = alias {
@@ -1561,7 +1569,7 @@ impl fmt::Display for TableFactor {
                 if let Some(version) = version {
                     write!(f, "{version}")?;
                 }
-                if let (Some(sample), false) = (sample, sample_before_alias) {
+                if let Some(TableSampleKind::AfterTableAlias(sample)) = sample {
                     write!(f, "{sample}")?;
                 }
                 Ok(())

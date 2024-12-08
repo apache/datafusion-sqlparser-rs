@@ -10703,8 +10703,7 @@ impl<'a> Parser<'a> {
                 repeatable: seed,
             })
         // Try to parse without an explicit table sample method keyword
-        } else if self.peek_token().token == Token::LParen {
-            self.expect_token(&Token::LParen)?;
+        } else if self.consume_token(&Token::LParen) {
             if self.parse_keyword(Keyword::BUCKET) {
                 let bucket = self.parse_number_value()?;
                 self.expect_keywords(&[Keyword::OUT, Keyword::OF])?;
@@ -10717,9 +10716,9 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 TableSampleMethod::Bucket(TableSampleBucket { bucket, total, on })
             } else {
-                let value = match self.maybe_parse(|p| p.parse_number_value()) {
-                    Ok(Some(num)) => num,
-                    _ => {
+                let value = match self.maybe_parse(|p| p.parse_number_value())? {
+                    Some(num) => num,
+                    None => {
                         if let Token::Word(w) = self.next_token().token {
                             Value::Placeholder(w.value)
                         } else {
@@ -10730,10 +10729,9 @@ impl<'a> Parser<'a> {
                         }
                     }
                 };
-                if self.peek_token().token == Token::RParen
-                    && !self.dialect.supports_implicit_table_sample_method()
+                if !self.dialect.supports_implicit_table_sample_method()
+                    && self.consume_token(&Token::RParen)
                 {
-                    self.expect_token(&Token::RParen)?;
                     TableSampleMethod::Bernoulli(TableSampleBernoulli {
                         probability: Some(Expr::Value(value)),
                         unit: None,

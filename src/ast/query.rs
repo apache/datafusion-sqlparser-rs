@@ -1172,21 +1172,96 @@ pub enum TableSampleMethod {
     Implicit(TableSampleImplicit),
 }
 
+/// The table sample method names
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableSampleMethodName {
+    Row,
+    Bernoulli,
+    System,
+    Block,
+}
+
+impl fmt::Display for TableSampleMethodName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TableSampleMethodName::Bernoulli => write!(f, "BERNOULLI"),
+            TableSampleMethodName::Row => write!(f, "ROW"),
+            TableSampleMethodName::System => write!(f, "SYSTEM"),
+            TableSampleMethodName::Block => write!(f, "BLOCK"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableSampleBernoulli {
-    pub probability: Option<Expr>,
-    pub value: Option<Expr>,
+    pub name: TableSampleMethodName,
+    pub probability: Option<Value>,
+    pub value: Option<Value>,
     pub unit: Option<TableSampleUnit>,
+}
+
+impl fmt::Display for TableSampleBernoulli {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, " {} (", self.name)?;
+        if let Some(probability) = &self.probability {
+            write!(f, "{})", probability)?;
+        } else if let Some(value) = &self.value {
+            write!(f, "{}", value)?;
+            if let Some(unit) = &self.unit {
+                write!(f, " {}", unit)?;
+            }
+            write!(f, ")")?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableSampleSystem {
-    pub probability: Expr,
-    pub repeatable: Option<Expr>,
+    pub name: TableSampleMethodName,
+    pub probability: Value,
+    pub seed: Option<TableSampleSeed>,
+}
+
+impl fmt::Display for TableSampleSystem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, " {} ({})", self.name, self.probability)?;
+        if let Some(seed) = &self.seed {
+            write!(f, " {} ({})", seed.modifier, seed.value)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableSampleSeed {
+    pub modifier: TableSampleSeedModifier,
+    pub value: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableSampleSeedModifier {
+    Repeatable,
+    Seed,
+}
+
+impl fmt::Display for TableSampleSeedModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TableSampleSeedModifier::Repeatable => write!(f, "REPEATABLE"),
+            TableSampleSeedModifier::Seed => write!(f, "SEED"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1248,22 +1323,10 @@ impl fmt::Display for TableSampleMethod {
         write!(f, " TABLESAMPLE")?;
         match self {
             TableSampleMethod::Bernoulli(sample) => {
-                write!(f, " BERNOULLI (")?;
-                if let Some(probability) = &sample.probability {
-                    write!(f, "{})", probability)?;
-                } else if let Some(value) = &sample.value {
-                    write!(f, "{}", value)?;
-                    if let Some(unit) = &sample.unit {
-                        write!(f, " {}", unit)?;
-                    }
-                    write!(f, ")")?;
-                }
+                write!(f, "{}", sample)?;
             }
             TableSampleMethod::System(sample) => {
-                write!(f, " SYSTEM ({})", sample.probability)?;
-                if let Some(repeatable) = &sample.repeatable {
-                    write!(f, " REPEATABLE ({})", repeatable)?;
-                }
+                write!(f, "{}", sample)?;
             }
             TableSampleMethod::Bucket(sample) => {
                 write!(f, " ({})", sample)?;

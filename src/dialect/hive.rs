@@ -66,9 +66,4 @@ impl Dialect for HiveDialect {
     fn supports_table_sample_before_alias(&self) -> bool {
         true
     }
-
-    /// See Hive <https://cwiki.apache.org/confluence/display/hive/languagemanual+sampling>
-    fn supports_implicit_table_sample_method(&self) -> bool {
-        true
-    }
 }

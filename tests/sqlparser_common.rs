@@ -12386,16 +12386,13 @@ fn parse_create_table_with_enum_types() {
 
 #[test]
 fn test_table_sample() {
-    let dialects = all_dialects_where(|d| !d.supports_implicit_table_sample_method());
-    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE BERNOULLI (50)");
-    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50)");
-    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
-
-    // The only dialect that supports implicit tablesample is Hive and it requires aliase after the table sample
-    let dialects = all_dialects_where(|d| {
-        d.supports_implicit_table_sample_method() && d.supports_table_sample_before_alias()
-    });
+    let dialects = all_dialects_where(|d| d.supports_table_sample_before_alias());
     dialects.verified_stmt("SELECT * FROM tbl TABLESAMPLE (50) AS t");
     dialects.verified_stmt("SELECT * FROM tbl TABLESAMPLE (50 ROWS) AS t");
     dialects.verified_stmt("SELECT * FROM tbl TABLESAMPLE (50 PERCENT) AS t");
+
+    let dialects = all_dialects_where(|d| !d.supports_table_sample_before_alias());
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE BERNOULLI (50)");
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50)");
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
 }

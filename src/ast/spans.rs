@@ -3,11 +3,11 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    AccessField, AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Array, Assignment,
-    AssignmentTarget, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef,
-    ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
-    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
-    ExprWithAlias, Fetch, FromTable, Function, FunctionArg, FunctionArgExpr,
+    AccessField, dcl::SecondaryRoles, AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Array,
+    Assignment, AssignmentTarget, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
+    ColumnOptionDef, ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex,
+    CreateTable, CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem,
+    Expr, ExprWithAlias, Fetch, FromTable, Function, FunctionArg, FunctionArgExpr,
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
     IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
     JsonPath, JsonPathElem, LateralView, MatchRecognizePattern, Measure, NamedWindowDefinition,
@@ -484,6 +484,13 @@ impl Spanned for Use {
             Use::Schema(object_name) => object_name.span(),
             Use::Database(object_name) => object_name.span(),
             Use::Warehouse(object_name) => object_name.span(),
+            Use::Role(object_name) => object_name.span(),
+            Use::SecondaryRoles(secondary_roles) => {
+                if let SecondaryRoles::List(roles) = secondary_roles {
+                    return union_spans(roles.iter().map(|i| i.span));
+                }
+                Span::empty()
+            }
             Use::Object(object_name) => object_name.span(),
             Use::Default => Span::empty(),
         }
@@ -1013,6 +1020,10 @@ impl Spanned for AlterTableOperation {
                 union_spans(table_properties.iter().map(|i| i.span()))
             }
             AlterTableOperation::OwnerTo { .. } => Span::empty(),
+            AlterTableOperation::ClusterBy { exprs } => union_spans(exprs.iter().map(|e| e.span())),
+            AlterTableOperation::DropClusteringKey => Span::empty(),
+            AlterTableOperation::SuspendRecluster => Span::empty(),
+            AlterTableOperation::ResumeRecluster => Span::empty(),
         }
     }
 }

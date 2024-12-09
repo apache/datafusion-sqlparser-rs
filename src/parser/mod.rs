@@ -11291,9 +11291,8 @@ impl<'a> Parser<'a> {
 
         let replace_into = false;
 
-        let action = self.parse_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE]);
-        let into = action == Some(Keyword::INTO);
-        let overwrite = action == Some(Keyword::OVERWRITE);
+        let overwrite = self.parse_keyword(Keyword::OVERWRITE);
+        let into = self.parse_keyword(Keyword::INTO);
 
         let local = self.parse_keyword(Keyword::LOCAL);
 

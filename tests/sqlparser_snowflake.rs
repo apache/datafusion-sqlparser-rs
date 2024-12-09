@@ -2952,3 +2952,9 @@ fn test_sf_double_dot_notation() {
 
 #[test]
 fn test_parse_double_dot_notation_wrong_position() {}
+
+#[test]
+fn parse_insert_overwrite() {
+    let insert_overwrite_into = r#"INSERT OVERWRITE INTO schema.table SELECT a FROM b"#;
+    snowflake().verified_stmt(insert_overwrite_into);
+}

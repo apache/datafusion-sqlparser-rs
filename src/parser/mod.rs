@@ -1144,7 +1144,9 @@ impl<'a> Parser<'a> {
         w_span: Span,
     ) -> Result<Expr, ParserError> {
         match self.peek_token().token {
-            Token::Period => self.parse_compound_field_access(Expr::Identifier(w.to_ident(w_span)), vec![]),
+            Token::Period => {
+                self.parse_compound_field_access(Expr::Identifier(w.to_ident(w_span)), vec![])
+            }
             Token::LParen => {
                 let id_parts = vec![w.to_ident(w_span)];
                 // parse `(+)` outer join syntax

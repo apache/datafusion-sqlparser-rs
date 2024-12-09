@@ -2267,7 +2267,8 @@ fn parse_array_subscript() {
         ),
     ];
     for (sql, expect) in tests {
-        let Expr::CompoundFieldAccess { access_chain, .. } = pg_and_generic().verified_expr(sql) else {
+        let Expr::CompoundFieldAccess { access_chain, .. } = pg_and_generic().verified_expr(sql)
+        else {
             panic!("expected subscript expr");
         };
         let Some(AccessExpr::Subscript(subscript)) = access_chain.last() else {

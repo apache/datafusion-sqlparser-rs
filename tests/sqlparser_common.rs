@@ -10330,7 +10330,7 @@ fn parse_map_access_expr() {
             Span::new(Location::of(1, 1), Location::of(1, 6)),
             "users",
         ))),
-        chain: vec![
+        access_chain: vec![
             AccessExpr::Subscript(Subscript::Index {
                 index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
@@ -11153,7 +11153,7 @@ fn test_map_syntax() {
                     },
                 ],
             })),
-            chain: vec![AccessExpr::Subscript(Subscript::Index {
+            access_chain: vec![AccessExpr::Subscript(Subscript::Index {
                 index: Expr::Value(Value::SingleQuotedString("a".to_owned())),
             })],
         },

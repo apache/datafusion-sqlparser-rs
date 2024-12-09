@@ -1086,8 +1086,8 @@ pub enum AccessExpr {
 impl fmt::Display for AccessExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccessExpr::Dot(expr) => write!(f, "{}", expr),
-            AccessExpr::Subscript(subscript) => write!(f, "{}", subscript),
+            AccessExpr::Dot(expr) => write!(f, ".{}", expr),
+            AccessExpr::Subscript(subscript) => write!(f, "[{}]", subscript),
         }
     }
 }
@@ -1290,13 +1290,10 @@ impl fmt::Display for Expr {
             Expr::Wildcard(_) => f.write_str("*"),
             Expr::QualifiedWildcard(prefix, _) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
-            Expr::CompoundFieldAccess { root, chain } => {
+            Expr::CompoundFieldAccess { root, access_chain } => {
                 write!(f, "{}", root)?;
-                for field in chain {
-                    match field {
-                        AccessExpr::Dot(expr) => write!(f, ".{}", expr)?,
-                        AccessExpr::Subscript(subscript) => write!(f, "[{}]", subscript)?,
-                    }
+                for field in access_chain {
+                    write!(f, "{}", field)?;
                 }
                 Ok(())
             }

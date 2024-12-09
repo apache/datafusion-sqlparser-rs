@@ -1974,7 +1974,7 @@ fn parse_map_access_expr() {
             Span::new(Location::of(1, 1), Location::of(1, 6)),
             "users",
         ))),
-        chain: vec![
+        access_chain: vec![
             AccessExpr::Subscript(Subscript::Index {
                 index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,

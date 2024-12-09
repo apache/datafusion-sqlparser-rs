@@ -1507,7 +1507,7 @@ impl<'a> Parser<'a> {
             }
             Ok(Expr::CompoundFieldAccess {
                 root: Box::new(root),
-                chain: chain.clone(),
+                access_chain: chain.clone(),
             })
         }
     }
@@ -3288,15 +3288,15 @@ impl<'a> Parser<'a> {
         let result = match key {
             Expr::Identifier(_) => Ok(Expr::CompoundFieldAccess {
                 root: Box::new(expr),
-                chain: vec![AccessExpr::Dot(key)],
+                access_chain: vec![AccessExpr::Dot(key)],
             }),
             Expr::Value(Value::SingleQuotedString(_)) => Ok(Expr::CompoundFieldAccess {
                 root: Box::new(expr),
-                chain: vec![AccessExpr::Dot(key)],
+                access_chain: vec![AccessExpr::Dot(key)],
             }),
             Expr::Value(Value::DoubleQuotedString(s)) => Ok(Expr::CompoundFieldAccess {
                 root: Box::new(expr),
-                chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new(s)))],
+                access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new(s)))],
             }),
             _ => parser_err!("Expected identifier or string literal", self.peek_token()),
         };

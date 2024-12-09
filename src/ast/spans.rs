@@ -1244,8 +1244,8 @@ impl Spanned for Expr {
             Expr::Identifier(ident) => ident.span,
             Expr::CompoundIdentifier(vec) => union_spans(vec.iter().map(|i| i.span)),
             Expr::CompositeAccess { expr, key } => expr.span().union(&key.span),
-            Expr::CompoundFieldAccess { root, chain } => {
-                union_spans(iter::once(root.span()).chain(chain.iter().map(|i| i.span())))
+            Expr::CompoundFieldAccess { root, access_chain } => {
+                union_spans(iter::once(root.span()).chain(access_chain.iter().map(|i| i.span())))
             }
             Expr::IsFalse(expr) => expr.span(),
             Expr::IsNotFalse(expr) => expr.span(),

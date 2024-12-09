@@ -2097,7 +2097,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::CompoundFieldAccess {
             root: Box::new(Expr::Identifier(Ident::new("foo"))),
-            chain: vec![AccessExpr::Subscript(Subscript::Index {
+            access_chain: vec![AccessExpr::Subscript(Subscript::Index {
                 index: num[0].clone()
             })],
         },
@@ -2109,7 +2109,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::CompoundFieldAccess {
             root: Box::new(Expr::Identifier(Ident::new("foo"))),
-            chain: vec![
+            access_chain: vec![
                 AccessExpr::Subscript(Subscript::Index {
                     index: num[0].clone()
                 }),
@@ -2126,7 +2126,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::CompoundFieldAccess {
             root: Box::new(Expr::Identifier(Ident::new("bar"))),
-            chain: vec![
+            access_chain: vec![
                 AccessExpr::Subscript(Subscript::Index {
                     index: num[0].clone()
                 }),
@@ -2171,7 +2171,7 @@ fn parse_array_index_expr() {
                 )),
                 format: None,
             }))),
-            chain: vec![
+            access_chain: vec![
                 AccessExpr::Subscript(Subscript::Index {
                     index: num[1].clone()
                 }),
@@ -2267,10 +2267,10 @@ fn parse_array_subscript() {
         ),
     ];
     for (sql, expect) in tests {
-        let Expr::CompoundFieldAccess { chain, .. } = pg_and_generic().verified_expr(sql) else {
+        let Expr::CompoundFieldAccess { access_chain, .. } = pg_and_generic().verified_expr(sql) else {
             panic!("expected subscript expr");
         };
-        let Some(AccessExpr::Subscript(subscript)) = chain.last() else {
+        let Some(AccessExpr::Subscript(subscript)) = access_chain.last() else {
             panic!("expected subscript");
         };
         assert_eq!(expect, *subscript);
@@ -2292,7 +2292,7 @@ fn parse_array_multi_subscript() {
                     Expr::Value(number("3"))
                 ]
             )),
-            chain: vec![
+            access_chain: vec![
                 AccessExpr::Subscript(Subscript::Slice {
                     lower_bound: Some(Expr::Value(number("1"))),
                     upper_bound: Some(Expr::Value(number("2"))),

@@ -3,20 +3,20 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    AccessField, dcl::SecondaryRoles, AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Array,
-    Assignment, AssignmentTarget, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex,
-    CreateTable, CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem,
-    Expr, ExprWithAlias, Fetch, FromTable, Function, FunctionArg, FunctionArgExpr,
-    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
-    IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
-    JsonPath, JsonPathElem, LateralView, MatchRecognizePattern, Measure, NamedWindowDefinition,
-    ObjectName, Offset, OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, Partition,
-    PivotValueSource, ProjectionSelect, Query, ReferentialAction, RenameSelectItem,
-    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
-    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
-    TableFactor, TableOptionsClustered, TableWithJoins, Use, Value, Values, ViewColumnDef,
-    WildcardAdditionalOptions, With, WithFill,
+    dcl::SecondaryRoles, AccessField, AlterColumnOperation, AlterIndexOperation,
+    AlterTableOperation, Array, Assignment, AssignmentTarget, CloseCursor, ClusteredIndex,
+    ColumnDef, ColumnOption, ColumnOptionDef, ConflictTarget, ConnectBy, ConstraintCharacteristics,
+    CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate,
+    ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable, Function,
+    FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments,
+    GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
+    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
+    Measure, NamedWindowDefinition, ObjectName, Offset, OnConflict, OnConflictAction, OnInsert,
+    OrderBy, OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
+    TableConstraint, TableFactor, TableOptionsClustered, TableWithJoins, Use, Value, Values,
+    ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.

@@ -70,7 +70,8 @@ pub use self::query::{
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
     SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
     TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableSampleBernoulli,
-    TableSampleBucket, TableSampleImplicit, TableSampleKind, TableSampleMethod, TableSampleSystem,
+    TableSampleBucket, TableSampleImplicit, TableSampleKind, TableSampleMethod,
+    TableSampleMethodName, TableSampleSeed, TableSampleSeedModifier, TableSampleSystem,
     TableSampleUnit, TableVersion, TableWithJoins, Top, TopQuantity, ValueTableMode, Values,
     WildcardAdditionalOptions, With, WithFill,
 };

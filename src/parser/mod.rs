@@ -10660,48 +10660,14 @@ impl<'a> Parser<'a> {
         }
 
         // Try to parse based on an explicit table sample method keyword
-        let sample = if self
-            .parse_one_of_keywords(&[Keyword::BERNOULLI, Keyword::ROW])
-            .is_some()
-        {
-            self.expect_token(&Token::LParen)?;
-            let expr = self.parse_expr()?;
-
-            let (probability, value, unit) = if self.parse_keyword(Keyword::ROWS) {
-                (None, Some(expr), Some(TableSampleUnit::Rows))
-            } else if self.parse_keyword(Keyword::PERCENT) {
-                (None, Some(expr), Some(TableSampleUnit::Percent))
-            } else {
-                (Some(expr), None, None)
-            };
-            self.expect_token(&Token::RParen)?;
-            TableSampleMethod::Bernoulli(TableSampleBernoulli {
-                probability,
-                value,
-                unit,
-            })
-        } else if self
-            .parse_one_of_keywords(&[Keyword::SYSTEM, Keyword::BLOCK])
-            .is_some()
-        {
-            self.expect_token(&Token::LParen)?;
-            let probability = self.parse_expr()?;
-            self.expect_token(&Token::RParen)?;
-            let seed = if self
-                .parse_one_of_keywords(&[Keyword::REPEATABLE, Keyword::SEED])
-                .is_some()
-            {
-                self.expect_token(&Token::LParen)?;
-                let seed = self.parse_expr()?;
-                self.expect_token(&Token::RParen)?;
-                Some(seed)
-            } else {
-                None
-            };
-            TableSampleMethod::System(TableSampleSystem {
-                probability,
-                repeatable: seed,
-            })
+        let sample = if self.parse_keyword(Keyword::BERNOULLI) {
+            self.parse_table_sample_bernoulli(TableSampleMethodName::Bernoulli)?
+        } else if self.parse_keyword(Keyword::ROW) {
+            self.parse_table_sample_bernoulli(TableSampleMethodName::Row)?
+        } else if self.parse_keyword(Keyword::SYSTEM) {
+            self.parse_table_sample_system(TableSampleMethodName::System)?
+        } else if self.parse_keyword(Keyword::BLOCK) {
+            self.parse_table_sample_system(TableSampleMethodName::Block)?
         // Try to parse without an explicit table sample method keyword
         } else if self.consume_token(&Token::LParen) {
             if self.parse_keyword(Keyword::BUCKET) {
@@ -10729,34 +10695,79 @@ impl<'a> Parser<'a> {
                         }
                     }
                 };
-                if !self.dialect.supports_implicit_table_sample_method()
-                    && self.consume_token(&Token::RParen)
-                {
-                    TableSampleMethod::Bernoulli(TableSampleBernoulli {
-                        probability: Some(Expr::Value(value)),
-                        unit: None,
-                        value: None,
-                    })
+                let unit = if self.parse_keyword(Keyword::ROWS) {
+                    Some(TableSampleUnit::Rows)
+                } else if self.parse_keyword(Keyword::PERCENT) {
+                    Some(TableSampleUnit::Percent)
                 } else {
-                    let unit = if self.parse_keyword(Keyword::ROWS) {
-                        Some(TableSampleUnit::Rows)
-                    } else if self.parse_keyword(Keyword::PERCENT) {
-                        Some(TableSampleUnit::Percent)
-                    } else {
-                        None
-                    };
-                    self.expect_token(&Token::RParen)?;
-                    TableSampleMethod::Implicit(TableSampleImplicit { value, unit })
-                }
+                    None
+                };
+                self.expect_token(&Token::RParen)?;
+                TableSampleMethod::Implicit(TableSampleImplicit { value, unit })
             }
         } else {
             return parser_err!(
-                "Expecting BERNOULLI, ROW, SYSTEM or BLOCK",
+                "Expecting BERNOULLI, ROW, SYSTEM, BLOCK or a valid TABLESAMPLE expression in parenthesis",
                 self.peek_token().span.start
             );
         };
 
         Ok(Some(Box::new(sample)))
+    }
+
+    fn parse_table_sample_bernoulli(
+        &mut self,
+        name: TableSampleMethodName,
+    ) -> Result<TableSampleMethod, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let value = self.parse_number_value()?;
+        let (probability, value, unit) = if self.parse_keyword(Keyword::ROWS) {
+            (None, Some(value), Some(TableSampleUnit::Rows))
+        } else if self.parse_keyword(Keyword::PERCENT) {
+            (None, Some(value), Some(TableSampleUnit::Percent))
+        } else {
+            (Some(value), None, None)
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(TableSampleMethod::Bernoulli(TableSampleBernoulli {
+            name,
+            probability,
+            value,
+            unit,
+        }))
+    }
+
+    fn parse_table_sample_system(
+        &mut self,
+        name: TableSampleMethodName,
+    ) -> Result<TableSampleMethod, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let probability = self.parse_number_value()?;
+        self.expect_token(&Token::RParen)?;
+
+        let seed = if self.parse_keyword(Keyword::REPEATABLE) {
+            Some(self.parse_table_sample_seed(TableSampleSeedModifier::Repeatable)?)
+        } else if self.parse_keyword(Keyword::SEED) {
+            Some(self.parse_table_sample_seed(TableSampleSeedModifier::Seed)?)
+        } else {
+            None
+        };
+
+        Ok(TableSampleMethod::System(TableSampleSystem {
+            name,
+            probability,
+            seed,
+        }))
+    }
+
+    fn parse_table_sample_seed(
+        &mut self,
+        modifier: TableSampleSeedModifier,
+    ) -> Result<TableSampleSeed, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let value = self.parse_number_value()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(TableSampleSeed { modifier, value })
     }
 
     /// Parses `OPENJSON( jsonExpression [ , path ] )  [ <with_clause> ]` clause,

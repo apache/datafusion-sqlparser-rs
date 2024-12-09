@@ -1163,11 +1163,7 @@ impl<'a> Parser<'a> {
                     if self.dialect.supports_methods() {
                         expr = self.try_parse_method(expr)?
                     }
-                    let mut fields = vec![];
-                    // if the function returns an array, it can be subscripted
-                    if self.consume_token(&Token::LBracket) {
-                        self.parse_multi_dim_subscript(&mut fields)?;
-                    }
+                    let fields = vec![];
                     self.parse_compound_expr(expr, fields)
                 }
             }

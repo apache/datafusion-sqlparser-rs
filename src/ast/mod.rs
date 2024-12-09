@@ -611,7 +611,7 @@ pub enum Expr {
     /// - If a struct access likes a.field1.field2, it will be represented by CompoundIdentifer([a, field1, field2])
     CompoundExpr {
         root: Box<Expr>,
-        chain: Vec<AccessField>,
+        chain: Vec<AccessExpr>,
     },
     /// Access data nested in a value containing semi-structured data, such as
     /// the `VARIANT` type on Snowflake. for example `src:customer[0].name`.
@@ -1070,21 +1070,23 @@ impl fmt::Display for Subscript {
     }
 }
 
-/// The contents inside the `.` in an access chain.
+/// An element of a [`Expr::CompoundExpr`].
 /// It can be an expression or a subscript.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum AccessField {
-    Expr(Expr),
+pub enum AccessExpr {
+    /// Accesses a field using dot notation, e.g. `foo.bar.baz`.
+    Dot(Expr),
+    /// Accesses a field or array element using bracket notation, e.g. `foo['bar']`.
     Subscript(Subscript),
 }
 
-impl fmt::Display for AccessField {
+impl fmt::Display for AccessExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccessField::Expr(expr) => write!(f, "{}", expr),
-            AccessField::Subscript(subscript) => write!(f, "{}", subscript),
+            AccessExpr::Dot(expr) => write!(f, "{}", expr),
+            AccessExpr::Subscript(subscript) => write!(f, "{}", subscript),
         }
     }
 }
@@ -1291,8 +1293,8 @@ impl fmt::Display for Expr {
                 write!(f, "{}", root)?;
                 for field in chain {
                     match field {
-                        AccessField::Expr(expr) => write!(f, ".{}", expr)?,
-                        AccessField::Subscript(subscript) => write!(f, "[{}]", subscript)?,
+                        AccessExpr::Dot(expr) => write!(f, ".{}", expr)?,
+                        AccessExpr::Subscript(subscript) => write!(f, "[{}]", subscript)?,
                     }
                 }
                 Ok(())

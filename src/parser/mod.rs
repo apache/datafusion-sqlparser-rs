@@ -1433,7 +1433,7 @@ impl<'a> Parser<'a> {
     pub fn parse_compound_expr(
         &mut self,
         root: Expr,
-        mut chain: Vec<AccessField>,
+        mut chain: Vec<AccessExpr>,
     ) -> Result<Expr, ParserError> {
         let mut ending_wildcard: Option<TokenWithSpan> = None;
         let mut ending_lbracket = false;
@@ -1442,7 +1442,7 @@ impl<'a> Parser<'a> {
             match next_token.token {
                 Token::Word(w) => {
                     let expr = Expr::Identifier(w.to_ident(next_token.span));
-                    chain.push(AccessField::Expr(expr));
+                    chain.push(AccessExpr::Dot(expr));
                     if self.consume_token(&Token::LBracket) {
                         if self.dialect.supports_partiql() {
                             ending_lbracket = true;
@@ -1464,7 +1464,7 @@ impl<'a> Parser<'a> {
                 }
                 Token::SingleQuotedString(s) => {
                     let expr = Expr::Identifier(Ident::with_quote('\'', s));
-                    chain.push(AccessField::Expr(expr));
+                    chain.push(AccessExpr::Dot(expr));
                 }
                 _ => {
                     return self.expected("an identifier or a '*' after '.'", next_token);
@@ -1516,14 +1516,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn exprs_to_idents(root: &Expr, fields: &[AccessField]) -> Option<Vec<Ident>> {
+    fn exprs_to_idents(root: &Expr, fields: &[AccessExpr]) -> Option<Vec<Ident>> {
         let mut idents = vec![];
         let Expr::Identifier(root) = root else {
             return None;
         };
         idents.push(root.clone());
         for x in fields {
-            if let AccessField::Expr(Expr::Identifier(ident)) = x {
+            if let AccessExpr::Dot(Expr::Identifier(ident)) = x {
                 idents.push(ident.clone())
             } else {
                 return None;
@@ -3208,7 +3208,7 @@ impl<'a> Parser<'a> {
     /// Parser is right after the first `[`
     pub fn parse_multi_dim_subscript(
         &mut self,
-        chain: &mut Vec<AccessField>,
+        chain: &mut Vec<AccessExpr>,
     ) -> Result<(), ParserError> {
         loop {
             self.parse_subscript(chain)?;
@@ -3222,9 +3222,9 @@ impl<'a> Parser<'a> {
     /// Parses an array subscript like `[1:3]`
     ///
     /// Parser is right after `[`
-    pub fn parse_subscript(&mut self, chain: &mut Vec<AccessField>) -> Result<(), ParserError> {
+    pub fn parse_subscript(&mut self, chain: &mut Vec<AccessExpr>) -> Result<(), ParserError> {
         let subscript = self.parse_subscript_inner()?;
-        chain.push(AccessField::Subscript(subscript));
+        chain.push(AccessExpr::Subscript(subscript));
         Ok(())
     }
 
@@ -3292,15 +3292,15 @@ impl<'a> Parser<'a> {
         let result = match key {
             Expr::Identifier(_) => Ok(Expr::CompoundExpr {
                 root: Box::new(expr),
-                chain: vec![AccessField::Expr(key)],
+                chain: vec![AccessExpr::Dot(key)],
             }),
             Expr::Value(Value::SingleQuotedString(_)) => Ok(Expr::CompoundExpr {
                 root: Box::new(expr),
-                chain: vec![AccessField::Expr(key)],
+                chain: vec![AccessExpr::Dot(key)],
             }),
             Expr::Value(Value::DoubleQuotedString(s)) => Ok(Expr::CompoundExpr {
                 root: Box::new(expr),
-                chain: vec![AccessField::Expr(Expr::Identifier(Ident::new(s)))],
+                chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new(s)))],
             }),
             _ => parser_err!("Expected identifier or string literal", self.peek_token()),
         };

@@ -3,7 +3,7 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    dcl::SecondaryRoles, AccessField, AlterColumnOperation, AlterIndexOperation,
+    dcl::SecondaryRoles, AccessExpr, AlterColumnOperation, AlterIndexOperation,
     AlterTableOperation, Array, Assignment, AssignmentTarget, CloseCursor, ClusteredIndex,
     ColumnDef, ColumnOption, ColumnOptionDef, ConflictTarget, ConnectBy, ConstraintCharacteristics,
     CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate,
@@ -1454,11 +1454,11 @@ impl Spanned for Subscript {
     }
 }
 
-impl Spanned for AccessField {
+impl Spanned for AccessExpr {
     fn span(&self) -> Span {
         match self {
-            AccessField::Expr(ident) => ident.span(),
-            AccessField::Subscript(subscript) => subscript.span(),
+            AccessExpr::Dot(ident) => ident.span(),
+            AccessExpr::Subscript(subscript) => subscript.span(),
         }
     }
 }

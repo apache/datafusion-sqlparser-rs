@@ -2097,7 +2097,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::CompoundExpr {
             root: Box::new(Expr::Identifier(Ident::new("foo"))),
-            chain: vec![AccessField::Subscript(Subscript::Index {
+            chain: vec![AccessExpr::Subscript(Subscript::Index {
                 index: num[0].clone()
             })],
         },
@@ -2110,10 +2110,10 @@ fn parse_array_index_expr() {
         &Expr::CompoundExpr {
             root: Box::new(Expr::Identifier(Ident::new("foo"))),
             chain: vec![
-                AccessField::Subscript(Subscript::Index {
+                AccessExpr::Subscript(Subscript::Index {
                     index: num[0].clone()
                 }),
-                AccessField::Subscript(Subscript::Index {
+                AccessExpr::Subscript(Subscript::Index {
                     index: num[0].clone()
                 })
             ],
@@ -2127,17 +2127,17 @@ fn parse_array_index_expr() {
         &Expr::CompoundExpr {
             root: Box::new(Expr::Identifier(Ident::new("bar"))),
             chain: vec![
-                AccessField::Subscript(Subscript::Index {
+                AccessExpr::Subscript(Subscript::Index {
                     index: num[0].clone()
                 }),
-                AccessField::Subscript(Subscript::Index {
+                AccessExpr::Subscript(Subscript::Index {
                     index: Expr::Identifier(Ident {
                         value: "baz".to_string(),
                         quote_style: Some('"'),
                         span: Span::empty(),
                     })
                 }),
-                AccessField::Subscript(Subscript::Index {
+                AccessExpr::Subscript(Subscript::Index {
                     index: Expr::Identifier(Ident {
                         value: "fooz".to_string(),
                         quote_style: Some('"'),
@@ -2172,10 +2172,10 @@ fn parse_array_index_expr() {
                 format: None,
             }))),
             chain: vec![
-                AccessField::Subscript(Subscript::Index {
+                AccessExpr::Subscript(Subscript::Index {
                     index: num[1].clone()
                 }),
-                AccessField::Subscript(Subscript::Index {
+                AccessExpr::Subscript(Subscript::Index {
                     index: num[2].clone()
                 }),
             ],
@@ -2270,7 +2270,7 @@ fn parse_array_subscript() {
         let Expr::CompoundExpr { chain, .. } = pg_and_generic().verified_expr(sql) else {
             panic!("expected subscript expr");
         };
-        let Some(AccessField::Subscript(subscript)) = chain.last() else {
+        let Some(AccessExpr::Subscript(subscript)) = chain.last() else {
             panic!("expected subscript");
         };
         assert_eq!(expect, *subscript);
@@ -2293,12 +2293,12 @@ fn parse_array_multi_subscript() {
                 ]
             )),
             chain: vec![
-                AccessField::Subscript(Subscript::Slice {
+                AccessExpr::Subscript(Subscript::Slice {
                     lower_bound: Some(Expr::Value(number("1"))),
                     upper_bound: Some(Expr::Value(number("2"))),
                     stride: None,
                 }),
-                AccessField::Subscript(Subscript::Index {
+                AccessExpr::Subscript(Subscript::Index {
                     index: Expr::Value(number("2")),
                 }),
             ],

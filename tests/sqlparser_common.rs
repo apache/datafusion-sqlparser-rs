@@ -10331,13 +10331,13 @@ fn parse_map_access_expr() {
             "users",
         ))),
         chain: vec![
-            AccessField::Subscript(Subscript::Index {
+            AccessExpr::Subscript(Subscript::Index {
                 index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
                     expr: Expr::Value(number("1")).into(),
                 },
             }),
-            AccessField::Subscript(Subscript::Index {
+            AccessExpr::Subscript(Subscript::Index {
                 index: Expr::Function(Function {
                     name: ObjectName(vec![Ident::with_span(
                         Span::new(Location::of(1, 11), Location::of(1, 22)),
@@ -11153,7 +11153,7 @@ fn test_map_syntax() {
                     },
                 ],
             })),
-            chain: vec![AccessField::Subscript(Subscript::Index {
+            chain: vec![AccessExpr::Subscript(Subscript::Index {
                 index: Expr::Value(Value::SingleQuotedString("a".to_owned())),
             })],
         },

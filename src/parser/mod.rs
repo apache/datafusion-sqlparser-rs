@@ -1147,7 +1147,7 @@ impl<'a> Parser<'a> {
             Token::Period => self.parse_compound_expr(Expr::Identifier(w.to_ident(w_span)), vec![]),
             Token::LParen => {
                 let id_parts = vec![w.to_ident(w_span)];
-                // parse_comma_outer_join is used to parse the following pattern:
+                // parse `(+)` outer join syntax
                 if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
                     && self.consume_tokens(&[Token::LParen, Token::Plus, Token::RParen])
                 {

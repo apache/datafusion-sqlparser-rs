@@ -1188,9 +1188,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
-            with_ordinality: _,
-            partitions: _,
-            json_path: _,
+            ..
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -2952,3 +2950,19 @@ fn test_sf_double_dot_notation() {
 
 #[test]
 fn test_parse_double_dot_notation_wrong_position() {}
+
+#[test]
+fn test_table_sample() {
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM testtable SAMPLE (10)",
+        "SELECT * FROM testtable TABLESAMPLE (10)",
+    );
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM testtable AS t TABLESAMPLE BERNOULLI (10)");
+    snowflake_and_generic().verified_stmt("SELECT * FROM testtable AS t TABLESAMPLE ROW (10)");
+    snowflake_and_generic().verified_stmt("SELECT * FROM testtable AS t TABLESAMPLE ROW (10 ROWS)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM testtable TABLESAMPLE BLOCK (3) SEED (82)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM testtable TABLESAMPLE SYSTEM (3) REPEATABLE (82)");
+}

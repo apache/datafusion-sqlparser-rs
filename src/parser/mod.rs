@@ -10541,6 +10541,13 @@ impl<'a> Parser<'a> {
 
             let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
 
+            let mut sample = None;
+            if self.dialect.supports_table_sample_before_alias() {
+                if let Some(parsed_sample) = self.maybe_parse_table_sample()? {
+                    sample = Some(TableSampleKind::BeforeTableAlias(parsed_sample));
+                }
+            }
+
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
 
             // MSSQL-specific table hints:
@@ -10555,6 +10562,12 @@ impl<'a> Parser<'a> {
                 }
             };
 
+            if !self.dialect.supports_table_sample_before_alias() {
+                if let Some(parsed_sample) = self.maybe_parse_table_sample()? {
+                    sample = Some(TableSampleKind::AfterTableAlias(parsed_sample));
+                }
+            }
+
             let mut table = TableFactor::Table {
                 name,
                 alias,
@@ -10564,6 +10577,7 @@ impl<'a> Parser<'a> {
                 partitions,
                 with_ordinality,
                 json_path,
+                sample,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {
@@ -10582,6 +10596,125 @@ impl<'a> Parser<'a> {
 
             Ok(table)
         }
+    }
+
+    fn maybe_parse_table_sample(&mut self) -> Result<Option<Box<TableSampleMethod>>, ParserError> {
+        if self
+            .parse_one_of_keywords(&[Keyword::SAMPLE, Keyword::TABLESAMPLE])
+            .is_none()
+        {
+            return Ok(None);
+        }
+
+        // Try to parse based on an explicit table sample method keyword
+        let sample = if self.parse_keyword(Keyword::BERNOULLI) {
+            self.parse_table_sample_bernoulli(TableSampleMethodName::Bernoulli)?
+        } else if self.parse_keyword(Keyword::ROW) {
+            self.parse_table_sample_bernoulli(TableSampleMethodName::Row)?
+        } else if self.parse_keyword(Keyword::SYSTEM) {
+            self.parse_table_sample_system(TableSampleMethodName::System)?
+        } else if self.parse_keyword(Keyword::BLOCK) {
+            self.parse_table_sample_system(TableSampleMethodName::Block)?
+        // Try to parse without an explicit table sample method keyword
+        } else if self.consume_token(&Token::LParen) {
+            if self.parse_keyword(Keyword::BUCKET) {
+                let bucket = self.parse_number_value()?;
+                self.expect_keywords(&[Keyword::OUT, Keyword::OF])?;
+                let total = self.parse_number_value()?;
+                let on = if self.parse_keyword(Keyword::ON) {
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
+                self.expect_token(&Token::RParen)?;
+                TableSampleMethod::Bucket(TableSampleBucket { bucket, total, on })
+            } else {
+                let value = match self.maybe_parse(|p| p.parse_number_value())? {
+                    Some(num) => num,
+                    None => {
+                        if let Token::Word(w) = self.next_token().token {
+                            Value::Placeholder(w.value)
+                        } else {
+                            return parser_err!(
+                                "Expecting number or byte length e.g. 100M",
+                                self.peek_token().span.start
+                            );
+                        }
+                    }
+                };
+                let unit = if self.parse_keyword(Keyword::ROWS) {
+                    Some(TableSampleUnit::Rows)
+                } else if self.parse_keyword(Keyword::PERCENT) {
+                    Some(TableSampleUnit::Percent)
+                } else {
+                    None
+                };
+                self.expect_token(&Token::RParen)?;
+                TableSampleMethod::Implicit(TableSampleImplicit { value, unit })
+            }
+        } else {
+            return parser_err!(
+                "Expecting BERNOULLI, ROW, SYSTEM, BLOCK or a valid TABLESAMPLE expression in parenthesis",
+                self.peek_token().span.start
+            );
+        };
+
+        Ok(Some(Box::new(sample)))
+    }
+
+    fn parse_table_sample_bernoulli(
+        &mut self,
+        name: TableSampleMethodName,
+    ) -> Result<TableSampleMethod, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let value = self.parse_number_value()?;
+        let (probability, value, unit) = if self.parse_keyword(Keyword::ROWS) {
+            (None, Some(value), Some(TableSampleUnit::Rows))
+        } else if self.parse_keyword(Keyword::PERCENT) {
+            (None, Some(value), Some(TableSampleUnit::Percent))
+        } else {
+            (Some(value), None, None)
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(TableSampleMethod::Bernoulli(TableSampleBernoulli {
+            name,
+            probability,
+            value,
+            unit,
+        }))
+    }
+
+    fn parse_table_sample_system(
+        &mut self,
+        name: TableSampleMethodName,
+    ) -> Result<TableSampleMethod, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let probability = self.parse_number_value()?;
+        self.expect_token(&Token::RParen)?;
+
+        let seed = if self.parse_keyword(Keyword::REPEATABLE) {
+            Some(self.parse_table_sample_seed(TableSampleSeedModifier::Repeatable)?)
+        } else if self.parse_keyword(Keyword::SEED) {
+            Some(self.parse_table_sample_seed(TableSampleSeedModifier::Seed)?)
+        } else {
+            None
+        };
+
+        Ok(TableSampleMethod::System(TableSampleSystem {
+            name,
+            probability,
+            seed,
+        }))
+    }
+
+    fn parse_table_sample_seed(
+        &mut self,
+        modifier: TableSampleSeedModifier,
+    ) -> Result<TableSampleSeed, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let value = self.parse_number_value()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(TableSampleSeed { modifier, value })
     }
 
     /// Parses `OPENJSON( jsonExpression [ , path ] )  [ <with_clause> ]` clause,

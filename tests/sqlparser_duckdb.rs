@@ -647,7 +647,7 @@ fn test_array_index() {
         _ => panic!("Expected an expression with alias"),
     };
     assert_eq!(
-        &Expr::CompoundExpr {
+        &Expr::CompoundFieldAccess {
             root: Box::new(Expr::Array(Array {
                 elem: vec![
                     Expr::Value(Value::SingleQuotedString("a".to_owned())),

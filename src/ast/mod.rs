@@ -592,26 +592,27 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
-    /// Multi-part Expression accessing. It's used to represent an access chain from a root expression.
+    /// Multi-part expression access.
     ///
-    /// For example:
+    /// This structure represents an access chain in structured / nested types
+    /// such as maps, arrays, and lists:
     /// - Array
     ///     - A 1-dim array a[1] will be represented like:
-    ///         `CompoundExpr(Ident('a'), vec![Subscript(1)]`
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript(1)]`
     ///     - A 2-dim array a[1][2] will be represented like:
-    ///         `CompoundExpr(Ident('a'), vec![Subscript(1), Subscript(2)]`
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript(1), Subscript(2)]`
     /// - Map or Struct (Bracket-style)
     ///     - A map a['field1'] will be represented like:
-    ///         `CompoundExpr(Ident('a'), vec![Subscript('field')]`
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript('field')]`
     ///     - A 2-dim map a['field1']['field2'] will be represented like:
-    ///         `CompoundExpr(Ident('a'), vec![Subscript('field1'), Subscript('field2')]`
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript('field1'), Subscript('field2')]`
     /// - Struct (Dot-style) (only effect when the chain contains both subscript and expr)
     ///     - A struct access a[field1].field2 will be represented like:
-    ///         `CompoundExpr(Ident('a'), vec![Subscript('field1'), Ident('field2')]`
-    /// - If a struct access likes a.field1.field2, it will be represented by CompoundIdentifer([a, field1, field2])
-    CompoundExpr {
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript('field1'), Ident('field2')]`
+    /// - If a struct access likes a.field1.field2, it will be represented by CompoundIdentifier([a, field1, field2])
+    CompoundFieldAccess {
         root: Box<Expr>,
-        chain: Vec<AccessExpr>,
+        access_chain: Vec<AccessExpr>,
     },
     /// Access data nested in a value containing semi-structured data, such as
     /// the `VARIANT` type on Snowflake. for example `src:customer[0].name`.
@@ -1070,7 +1071,7 @@ impl fmt::Display for Subscript {
     }
 }
 
-/// An element of a [`Expr::CompoundExpr`].
+/// An element of a [`Expr::CompoundFieldAccess`].
 /// It can be an expression or a subscript.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1289,7 +1290,7 @@ impl fmt::Display for Expr {
             Expr::Wildcard(_) => f.write_str("*"),
             Expr::QualifiedWildcard(prefix, _) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
-            Expr::CompoundExpr { root, chain } => {
+            Expr::CompoundFieldAccess { root, chain } => {
                 write!(f, "{}", root)?;
                 for field in chain {
                     match field {

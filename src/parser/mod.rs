@@ -1422,7 +1422,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Try to parse an [Expr::CompoundExpr] like `a.b.c` or `a.b[1].c`.
+    /// Try to parse an [Expr::CompoundFieldAccess] like `a.b.c` or `a.b[1].c`.
     /// If all the fields are `Expr::Identifier`s, return an [Expr::CompoundIdentifier] instead.
     /// If only the root exists, return the root.
     /// If self supports [Dialect::supports_partiql], it will fall back when occurs [Token::LBracket] for JsonAccess parsing.
@@ -1505,7 +1505,7 @@ impl<'a> Parser<'a> {
             if chain.is_empty() {
                 return Ok(root);
             }
-            Ok(Expr::CompoundExpr {
+            Ok(Expr::CompoundFieldAccess {
                 root: Box::new(root),
                 chain: chain.clone(),
             })
@@ -3286,15 +3286,15 @@ impl<'a> Parser<'a> {
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let key = self.parse_expr()?;
         let result = match key {
-            Expr::Identifier(_) => Ok(Expr::CompoundExpr {
+            Expr::Identifier(_) => Ok(Expr::CompoundFieldAccess {
                 root: Box::new(expr),
                 chain: vec![AccessExpr::Dot(key)],
             }),
-            Expr::Value(Value::SingleQuotedString(_)) => Ok(Expr::CompoundExpr {
+            Expr::Value(Value::SingleQuotedString(_)) => Ok(Expr::CompoundFieldAccess {
                 root: Box::new(expr),
                 chain: vec![AccessExpr::Dot(key)],
             }),
-            Expr::Value(Value::DoubleQuotedString(s)) => Ok(Expr::CompoundExpr {
+            Expr::Value(Value::DoubleQuotedString(s)) => Ok(Expr::CompoundFieldAccess {
                 root: Box::new(expr),
                 chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new(s)))],
             }),

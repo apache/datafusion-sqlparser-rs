@@ -1969,7 +1969,7 @@ fn parse_map_access_expr() {
     let sql = "users[-1][safe_offset(2)].a.b";
     let expr = bigquery().verified_expr(sql);
 
-    let expected = Expr::CompoundExpr {
+    let expected = Expr::CompoundFieldAccess {
         root: Box::new(Expr::Identifier(Ident::with_span(
             Span::new(Location::of(1, 1), Location::of(1, 6)),
             "users",

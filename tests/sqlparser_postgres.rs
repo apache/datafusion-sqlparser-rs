@@ -2095,7 +2095,7 @@ fn parse_array_index_expr() {
     let sql = "SELECT foo[0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::CompoundExpr {
+        &Expr::CompoundFieldAccess {
             root: Box::new(Expr::Identifier(Ident::new("foo"))),
             chain: vec![AccessExpr::Subscript(Subscript::Index {
                 index: num[0].clone()
@@ -2107,7 +2107,7 @@ fn parse_array_index_expr() {
     let sql = "SELECT foo[0][0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::CompoundExpr {
+        &Expr::CompoundFieldAccess {
             root: Box::new(Expr::Identifier(Ident::new("foo"))),
             chain: vec![
                 AccessExpr::Subscript(Subscript::Index {
@@ -2124,7 +2124,7 @@ fn parse_array_index_expr() {
     let sql = r#"SELECT bar[0]["baz"]["fooz"] FROM foos"#;
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::CompoundExpr {
+        &Expr::CompoundFieldAccess {
             root: Box::new(Expr::Identifier(Ident::new("bar"))),
             chain: vec![
                 AccessExpr::Subscript(Subscript::Index {
@@ -2152,7 +2152,7 @@ fn parse_array_index_expr() {
     let sql = "SELECT (CAST(ARRAY[ARRAY[2, 3]] AS INT[][]))[1][2]";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::CompoundExpr {
+        &Expr::CompoundFieldAccess {
             root: Box::new(Expr::Nested(Box::new(Expr::Cast {
                 kind: CastKind::Cast,
                 expr: Box::new(Expr::Array(Array {
@@ -2267,7 +2267,7 @@ fn parse_array_subscript() {
         ),
     ];
     for (sql, expect) in tests {
-        let Expr::CompoundExpr { chain, .. } = pg_and_generic().verified_expr(sql) else {
+        let Expr::CompoundFieldAccess { chain, .. } = pg_and_generic().verified_expr(sql) else {
             panic!("expected subscript expr");
         };
         let Some(AccessExpr::Subscript(subscript)) = chain.last() else {
@@ -2283,7 +2283,7 @@ fn parse_array_subscript() {
 fn parse_array_multi_subscript() {
     let expr = pg_and_generic().verified_expr("make_array(1, 2, 3)[1:2][2]");
     assert_eq!(
-        Expr::CompoundExpr {
+        Expr::CompoundFieldAccess {
             root: Box::new(call(
                 "make_array",
                 vec![

@@ -10325,7 +10325,7 @@ fn parse_map_access_expr() {
         Box::new(ClickHouseDialect {}),
     ]);
     let expr = dialects.verified_expr(sql);
-    let expected = Expr::CompoundExpr {
+    let expected = Expr::CompoundFieldAccess {
         root: Box::new(Expr::Identifier(Ident::with_span(
             Span::new(Location::of(1, 1), Location::of(1, 6)),
             "users",
@@ -11140,7 +11140,7 @@ fn test_map_syntax() {
 
     check(
         "MAP {'a': 10, 'b': 20}['a']",
-        Expr::CompoundExpr {
+        Expr::CompoundFieldAccess {
             root: Box::new(Expr::Map(Map {
                 entries: vec![
                     MapEntry {

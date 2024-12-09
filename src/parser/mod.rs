@@ -1144,7 +1144,7 @@ impl<'a> Parser<'a> {
         w_span: Span,
     ) -> Result<Expr, ParserError> {
         match self.peek_token().token {
-            Token::Period => self.parse_compound_expr(Expr::Identifier(w.to_ident(w_span)), vec![]),
+            Token::Period => self.parse_compound_field_access(Expr::Identifier(w.to_ident(w_span)), vec![]),
             Token::LParen => {
                 let id_parts = vec![w.to_ident(w_span)];
                 // parse `(+)` outer join syntax
@@ -1164,7 +1164,7 @@ impl<'a> Parser<'a> {
                         expr = self.try_parse_method(expr)?
                     }
                     let fields = vec![];
-                    self.parse_compound_expr(expr, fields)
+                    self.parse_compound_field_access(expr, fields)
                 }
             }
             Token::LBracket if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect) =>
@@ -1173,7 +1173,7 @@ impl<'a> Parser<'a> {
                 let ident = Expr::Identifier(w.to_ident(w_span));
                 let mut fields = vec![];
                 self.parse_multi_dim_subscript(&mut fields)?;
-                self.parse_compound_expr(ident, fields)
+                self.parse_compound_field_access(ident, fields)
             }
             // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
             Token::SingleQuotedString(_)
@@ -1426,7 +1426,7 @@ impl<'a> Parser<'a> {
     /// If all the fields are `Expr::Identifier`s, return an [Expr::CompoundIdentifier] instead.
     /// If only the root exists, return the root.
     /// If self supports [Dialect::supports_partiql], it will fall back when occurs [Token::LBracket] for JsonAccess parsing.
-    pub fn parse_compound_expr(
+    pub fn parse_compound_field_access(
         &mut self,
         root: Expr,
         mut chain: Vec<AccessExpr>,
@@ -3098,7 +3098,7 @@ impl<'a> Parser<'a> {
             {
                 let mut chain = vec![];
                 self.parse_multi_dim_subscript(&mut chain)?;
-                self.parse_compound_expr(expr, chain)
+                self.parse_compound_field_access(expr, chain)
             } else if self.dialect.supports_partiql() {
                 self.prev_token();
                 self.parse_json_access(expr)

@@ -597,19 +597,19 @@ pub enum Expr {
     /// This structure represents an access chain in structured / nested types
     /// such as maps, arrays, and lists:
     /// - Array
-    ///     - A 1-dim array a[1] will be represented like:
+    ///     - A 1-dim array `a[1]` will be represented like:
     ///         `CompoundFieldAccess(Ident('a'), vec![Subscript(1)]`
-    ///     - A 2-dim array a[1][2] will be represented like:
+    ///     - A 2-dim array `a[1][2]` will be represented like:
     ///         `CompoundFieldAccess(Ident('a'), vec![Subscript(1), Subscript(2)]`
     /// - Map or Struct (Bracket-style)
-    ///     - A map a['field1'] will be represented like:
+    ///     - A map `a['field1']` will be represented like:
     ///         `CompoundFieldAccess(Ident('a'), vec![Subscript('field')]`
-    ///     - A 2-dim map a['field1']['field2'] will be represented like:
+    ///     - A 2-dim map `a['field1']['field2']` will be represented like:
     ///         `CompoundFieldAccess(Ident('a'), vec![Subscript('field1'), Subscript('field2')]`
     /// - Struct (Dot-style) (only effect when the chain contains both subscript and expr)
-    ///     - A struct access a[field1].field2 will be represented like:
+    ///     - A struct access `a[field1].field2` will be represented like:
     ///         `CompoundFieldAccess(Ident('a'), vec![Subscript('field1'), Ident('field2')]`
-    /// - If a struct access likes a.field1.field2, it will be represented by CompoundIdentifier([a, field1, field2])
+    /// - If a struct access likes `a.field1.field2`, it will be represented by CompoundIdentifier([a, field1, field2])
     CompoundFieldAccess {
         root: Box<Expr>,
         access_chain: Vec<AccessExpr>,

@@ -1087,7 +1087,7 @@ impl<'a> Parser<'a> {
             // Support parsing Databricks has a function named `exists`.
             if !dialect_of!(self is DatabricksDialect)
                 || matches!(
-                        self.peek_nth_token(1).token,
+                        self.peek_nth_token_ref(1).token,
                         Token::Word(Word {
                             keyword: Keyword::SELECT | Keyword::WITH,
                             ..
@@ -1099,7 +1099,7 @@ impl<'a> Parser<'a> {
             Keyword::EXTRACT => Ok(Some(self.parse_extract_expr()?)),
             Keyword::CEIL => Ok(Some(self.parse_ceil_floor_expr(true)?)),
             Keyword::FLOOR => Ok(Some(self.parse_ceil_floor_expr(false)?)),
-            Keyword::POSITION if self.peek_token().token == Token::LParen => {
+            Keyword::POSITION if self.peek_token_ref().token == Token::LParen => {
                 Ok(Some(self.parse_position_expr(w.to_ident(w_span))?))
             }
             Keyword::SUBSTRING => Ok(Some(self.parse_substring_expr()?)),
@@ -1107,7 +1107,7 @@ impl<'a> Parser<'a> {
             Keyword::TRIM => Ok(Some(self.parse_trim_expr()?)),
             Keyword::INTERVAL => Ok(Some(self.parse_interval()?)),
             // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
-            Keyword::ARRAY if self.peek_token() == Token::LBracket => {
+            Keyword::ARRAY if *self.peek_token_ref() == Token::LBracket => {
                 self.expect_token(&Token::LBracket)?;
                 Ok(Some(self.parse_array_expr(true)?))
             }
@@ -1139,7 +1139,7 @@ impl<'a> Parser<'a> {
                 let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
                 Ok(Some(Expr::Prior(Box::new(expr))))
             }
-            Keyword::MAP if self.peek_token() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
+            Keyword::MAP if *self.peek_token_ref() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
                 Ok(Some(self.parse_duckdb_map_literal()?))
             }
             _ => Ok(None)
@@ -1152,27 +1152,28 @@ impl<'a> Parser<'a> {
         w: &Word,
         w_span: Span,
     ) -> Result<Expr, ParserError> {
-        match self.peek_token().token {
+        let dialect = self.dialect;
+        match self.peek_token_ref().token {
             Token::LParen | Token::Period => {
                 let mut id_parts: Vec<Ident> = vec![w.to_ident(w_span)];
                 let mut ending_wildcard: Option<TokenWithSpan> = None;
                 while self.consume_token(&Token::Period) {
-                    let next_token = self.next_token();
-                    match next_token.token {
+                    let next_token = self.next_token_ref();
+                    match &next_token.token {
                         Token::Word(w) => id_parts.push(w.to_ident(next_token.span)),
                         Token::Mul => {
                             // Postgres explicitly allows funcnm(tablenm.*) and the
                             // function array_agg traverses this control flow
-                            if dialect_of!(self is PostgreSqlDialect) {
-                                ending_wildcard = Some(next_token);
+                            if dialect_is!(dialect is PostgreSqlDialect) {
+                                ending_wildcard = Some(next_token.clone());
                                 break;
                             } else {
-                                return self.expected("an identifier after '.'", next_token);
+                                return self.expected_current("an identifier after '.'");
                             }
                         }
                         Token::SingleQuotedString(s) => id_parts.push(Ident::with_quote('\'', s)),
                         _ => {
-                            return self.expected("an identifier or a '*' after '.'", next_token);
+                            return self.expected_current("an identifier or a '*' after '.'");
                         }
                     }
                 }

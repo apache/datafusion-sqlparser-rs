@@ -3474,20 +3474,30 @@ impl<'a> Parser<'a> {
     /// true. Otherwise, no tokens are consumed and returns false.
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> bool {
-        self.parse_keyword_token(expected).is_some()
+        if self.peek_keyword(expected) {
+            self.next_token_ref();
+            true
+        } else {
+            false
+        }
     }
 
     #[must_use]
     pub fn parse_keyword_token(&mut self, expected: Keyword) -> Option<TokenWithSpan> {
-        match self.peek_token().token {
-            Token::Word(w) if expected == w.keyword => Some(self.next_token()),
+        self.parse_keyword_token_ref(expected).cloned()
+    }
+
+    #[must_use]
+    pub fn parse_keyword_token_ref(&mut self, expected: Keyword) -> Option<&TokenWithSpan> {
+        match &self.peek_token_ref().token {
+            Token::Word(w) if expected == w.keyword => Some(self.next_token_ref()),
             _ => None,
         }
     }
 
     #[must_use]
     pub fn peek_keyword(&mut self, expected: Keyword) -> bool {
-        matches!(self.peek_token().token, Token::Word(w) if expected == w.keyword)
+        matches!(&self.peek_token_ref().token, Token::Word(w) if expected == w.keyword)
     }
 
     /// If the current token is the `expected` keyword followed by
@@ -3568,10 +3578,10 @@ impl<'a> Parser<'a> {
     /// If the current token is the `expected` keyword, consume the token.
     /// Otherwise, return an error.
     pub fn expect_keyword(&mut self, expected: Keyword) -> Result<TokenWithSpan, ParserError> {
-        if let Some(token) = self.parse_keyword_token(expected) {
-            Ok(token)
+        if let Some(token) = self.parse_keyword_token_ref(expected) {
+            Ok(token.clone())
         } else {
-            self.expected(format!("{:?}", &expected).as_str(), self.peek_token())
+            self.expected_current(format!("{:?}", &expected).as_str())
         }
     }
 
@@ -3587,8 +3597,8 @@ impl<'a> Parser<'a> {
     /// Consume the next token if it matches the expected token, otherwise return false
     #[must_use]
     pub fn consume_token(&mut self, expected: &Token) -> bool {
-        if self.peek_token() == *expected {
-            self.next_token();
+        if self.peek_token_ref() == expected {
+            self.next_token_ref();
             true
         } else {
             false
@@ -9137,9 +9147,9 @@ impl<'a> Parser<'a> {
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Box<Query>, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
-        let with = if let Some(with_token) = self.parse_keyword_token(Keyword::WITH) {
+        let with = if let Some(with_token) = self.parse_keyword_token_ref(Keyword::WITH) {
             Some(With {
-                with_token: with_token.into(),
+                with_token: with_token.clone().into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
                 cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
             })

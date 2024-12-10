@@ -973,3 +973,61 @@ pub const RESERVED_FOR_IDENTIFIER: &[Keyword] = &[
     Keyword::STRUCT,
     Keyword::TRIM,
 ];
+
+pub const NA: usize = usize::MAX;
+
+#[rustfmt::skip]
+pub const KEYWORD_LOOKUP_INDEX_ROOT: &[usize; 26] = &[
+      0,  42,  67, 148, 198, 241, 281, 294, 305, 350, 357, 360, 390,
+    430, 465, 497, 539, 543, 605, 683, 728, 761, 780, 793, 795, 796,
+];
+
+pub fn lookup(word: &str) -> Keyword {
+    if word.len() < 2 {
+        return Keyword::NoKeyword;
+    }
+
+    let word = word.to_uppercase();
+    let byte1 = word.as_bytes()[0];
+    if !byte1.is_ascii_uppercase() {
+        return Keyword::NoKeyword;
+    }
+
+    let start = KEYWORD_LOOKUP_INDEX_ROOT[(byte1 - b'A') as usize];
+
+    let end = if (byte1 + 1) <= b'Z' {
+        KEYWORD_LOOKUP_INDEX_ROOT[(byte1 - b'A' + 1) as usize]
+    } else {
+        ALL_KEYWORDS.len()
+    };
+
+    let keyword = ALL_KEYWORDS[start..end].binary_search(&word.as_str());
+    keyword.map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x + start])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_keyword_index_roots() {
+        let mut root_index = Vec::with_capacity(26);
+        root_index.push(0);
+        for idx in 1..ALL_KEYWORDS.len() {
+            assert!(ALL_KEYWORDS[idx - 1] < ALL_KEYWORDS[idx]);
+            let prev = ALL_KEYWORDS[idx - 1].as_bytes()[0];
+            let curr = ALL_KEYWORDS[idx].as_bytes()[0];
+            if curr != prev {
+                root_index.push(idx);
+            }
+        }
+        assert_eq!(&root_index, KEYWORD_LOOKUP_INDEX_ROOT);
+    }
+
+    #[test]
+    fn check_keyword_lookup() {
+        for idx in 0..ALL_KEYWORDS.len() {
+            assert_eq!(lookup(ALL_KEYWORDS[idx]), ALL_KEYWORDS_INDEX[idx]);
+        }
+    }
+}

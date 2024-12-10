@@ -2739,8 +2739,11 @@ impl<'a> Parser<'a> {
             return infix;
         }
 
-        let mut tok = self.next_token();
-        let regular_binary_operator = match &mut tok.token {
+        let dialect = self.dialect;
+
+        let (tok, tok_index) = self.next_token_ref_with_index();
+        let span = tok.span;
+        let regular_binary_operator = match &tok.token {
             Token::Spaceship => Some(BinaryOperator::Spaceship),
             Token::DoubleEq => Some(BinaryOperator::Eq),
             Token::Eq => Some(BinaryOperator::Eq),
@@ -2758,7 +2761,7 @@ impl<'a> Parser<'a> {
             Token::Caret => {
                 // In PostgreSQL, ^ stands for the exponentiation operation,
                 // and # stands for XOR. See https://www.postgresql.org/docs/current/functions-math.html
-                if dialect_of!(self is PostgreSqlDialect) {
+                if dialect_is!(dialect is PostgreSqlDialect) {
                     Some(BinaryOperator::PGExp)
                 } else {
                     Some(BinaryOperator::BitwiseXor)
@@ -2766,22 +2769,22 @@ impl<'a> Parser<'a> {
             }
             Token::Ampersand => Some(BinaryOperator::BitwiseAnd),
             Token::Div => Some(BinaryOperator::Divide),
-            Token::DuckIntDiv if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+            Token::DuckIntDiv if dialect_is!(dialect is DuckDbDialect | GenericDialect) => {
                 Some(BinaryOperator::DuckIntegerDivide)
             }
-            Token::ShiftLeft if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
+            Token::ShiftLeft if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftLeft)
             }
-            Token::ShiftRight if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
+            Token::ShiftRight if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftRight)
             }
-            Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
+            Token::Sharp if dialect_is!(dialect is PostgreSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseXor)
             }
-            Token::Overlap if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+            Token::Overlap if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGOverlap)
             }
-            Token::CaretAt if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+            Token::CaretAt if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGStartsWith)
             }
             Token::Tilde => Some(BinaryOperator::PGRegexMatch),
@@ -2804,13 +2807,13 @@ impl<'a> Parser<'a> {
             Token::Question => Some(BinaryOperator::Question),
             Token::QuestionAnd => Some(BinaryOperator::QuestionAnd),
             Token::QuestionPipe => Some(BinaryOperator::QuestionPipe),
-            Token::CustomBinaryOperator(s) => Some(BinaryOperator::Custom(core::mem::take(s))),
+            Token::CustomBinaryOperator(s) => Some(BinaryOperator::Custom(s.clone())),
 
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
                 Keyword::XOR => Some(BinaryOperator::Xor),
-                Keyword::OPERATOR if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+                Keyword::OPERATOR if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                     self.expect_token(&Token::LParen)?;
                     // there are special rules for operator names in
                     // postgres so we can not use 'parse_object'
@@ -2818,7 +2821,7 @@ impl<'a> Parser<'a> {
                     // See https://www.postgresql.org/docs/current/sql-createoperator.html
                     let mut idents = vec![];
                     loop {
-                        idents.push(self.next_token().to_string());
+                        idents.push(self.next_token_ref().to_string());
                         if !self.consume_token(&Token::Period) {
                             break;
                         }
@@ -2831,6 +2834,7 @@ impl<'a> Parser<'a> {
             _ => None,
         };
 
+        let tok = self.token_at(tok_index);
         if let Some(op) = regular_binary_operator {
             if let Some(keyword) =
                 self.parse_one_of_keywords(&[Keyword::ANY, Keyword::ALL, Keyword::SOME])
@@ -2861,7 +2865,7 @@ impl<'a> Parser<'a> {
                         format!(
                         "Expected one of [=, >, <, =>, =<, !=] as comparison operator, found: {op}"
                     ),
-                        tok.span.start
+                        span.start
                     );
                 };
 
@@ -2990,19 +2994,19 @@ impl<'a> Parser<'a> {
                     tok.span.start
                 ),
             }
-        } else if Token::DoubleColon == tok {
+        } else if Token::DoubleColon == *tok {
             Ok(Expr::Cast {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(expr),
                 data_type: self.parse_data_type()?,
                 format: None,
             })
-        } else if Token::ExclamationMark == tok && self.dialect.supports_factorial_operator() {
+        } else if Token::ExclamationMark == *tok && self.dialect.supports_factorial_operator() {
             Ok(Expr::UnaryOp {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),
             })
-        } else if Token::LBracket == tok {
+        } else if Token::LBracket == *tok {
             if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
                 self.parse_subscript(expr)
             } else if dialect_of!(self is SnowflakeDialect) || self.dialect.supports_partiql() {
@@ -3011,7 +3015,7 @@ impl<'a> Parser<'a> {
             } else {
                 self.parse_map_access(expr)
             }
-        } else if dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == tok {
+        } else if dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == *tok {
             self.prev_token();
             self.parse_json_access(expr)
         } else {
@@ -3282,6 +3286,12 @@ impl<'a> Parser<'a> {
         self.dialect.get_next_precedence_default(self)
     }
 
+    /// Return the token at the given location, or EOF if the index is beyond
+    /// the length of the current set of tokens.
+    pub fn token_at(&self, index: usize) -> &TokenWithSpan {
+        self.tokens.get(index).unwrap_or(&EOF_TOKEN)
+    }
+
     /// Return the first non-whitespace token that has not yet been processed
     /// or Token::EOF
     pub fn peek_token(&self) -> TokenWithSpan {
@@ -3398,10 +3408,14 @@ impl<'a> Parser<'a> {
         self.next_token_ref().clone()
     }
 
+    pub fn next_token_ref(&mut self) -> &TokenWithSpan {
+        self.next_token_ref_with_index().0
+    }
+
     /// Return the first non-whitespace token that has not yet been processed
     /// (or None if reached end-of-file) and mark it as processed. OK to call
     /// repeatedly after reaching EOF.
-    pub fn next_token_ref(&mut self) -> &TokenWithSpan {
+    pub fn next_token_ref_with_index(&mut self) -> (&TokenWithSpan, usize) {
         loop {
             self.index += 1;
             match self.tokens.get(self.index - 1) {
@@ -3409,7 +3423,7 @@ impl<'a> Parser<'a> {
                     token: Token::Whitespace(_),
                     span: _,
                 }) => continue,
-                token => return token.unwrap_or(&EOF_TOKEN),
+                token => return (token.unwrap_or(&EOF_TOKEN), self.index),
             }
         }
     }

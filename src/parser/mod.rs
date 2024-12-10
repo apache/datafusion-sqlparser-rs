@@ -186,6 +186,15 @@ impl std::error::Error for ParserError {}
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;
 
+// A constant EOF token that can be referenced.
+const EOF_TOKEN: TokenWithSpan = TokenWithSpan {
+    token: Token::EOF,
+    span: Span {
+        start: Location { line: 0, column: 0 },
+        end: Location { line: 0, column: 0 },
+    },
+};
+
 /// Composite types declarations using angle brackets syntax can be arbitrary
 /// nested such that the following declaration is possible:
 ///      `ARRAY<ARRAY<INT>>`
@@ -1236,7 +1245,7 @@ impl<'a> Parser<'a> {
         // Note also that naively `SELECT date` looks like a syntax error because the `date` type
         // name is not followed by a string literal, but in fact in PostgreSQL it is a valid
         // expression that should parse as the column name "date".
-        let loc = self.peek_token().span.start;
+        let loc = self.peek_token_ref().span.start;
         let opt_expr = self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
                 DataType::Interval => parser.parse_interval(),
@@ -1259,8 +1268,14 @@ impl<'a> Parser<'a> {
             return Ok(expr);
         }
 
-        let next_token = self.next_token();
-        let expr = match next_token.token {
+        // Cache some dialect properties to avoid lifetime issues with the
+        // next_token reference.
+
+        let dialect = self.dialect;
+
+        let next_token = self.next_token_ref();
+        let span = next_token.span;
+        let expr = match &next_token.token {
             Token::Word(w) => {
                 // The word we consumed may fall into one of two cases: it has a special meaning, or not.
                 // For example, in Snowflake, the word `interval` may have two meanings depending on the context:
@@ -1270,14 +1285,13 @@ impl<'a> Parser<'a> {
                 //
                 // We first try to parse the word and following tokens as a special expression, and if that fails,
                 // we rollback and try to parse it as an identifier.
-                match self.try_parse(|parser| {
-                    parser.parse_expr_prefix_by_reserved_word(&w, next_token.span)
-                }) {
+                let w = w.clone();
+                match self.try_parse(|parser| parser.parse_expr_prefix_by_reserved_word(&w, span)) {
                     // This word indicated an expression prefix and parsing was successful
                     Ok(Some(expr)) => Ok(expr),
 
                     // No expression prefix associated with this word
-                    Ok(None) => Ok(self.parse_expr_prefix_by_unreserved_word(&w, next_token.span)?),
+                    Ok(None) => Ok(self.parse_expr_prefix_by_unreserved_word(&w, span)?),
 
                     // If parsing of the word as a special expression failed, we are facing two options:
                     // 1. The statement is malformed, e.g. `SELECT INTERVAL '1 DAI` (`DAI` instead of `DAY`)
@@ -1288,7 +1302,7 @@ impl<'a> Parser<'a> {
                     Err(e) => {
                         if !self.dialect.is_reserved_for_identifier(w.keyword) {
                             if let Ok(Some(expr)) = self.maybe_parse(|parser| {
-                                parser.parse_expr_prefix_by_unreserved_word(&w, next_token.span)
+                                parser.parse_expr_prefix_by_unreserved_word(&w, span)
                             }) {
                                 return Ok(expr);
                             }
@@ -1300,7 +1314,7 @@ impl<'a> Parser<'a> {
             // array `[1, 2, 3]`
             Token::LBracket => self.parse_array_expr(false),
             tok @ Token::Minus | tok @ Token::Plus => {
-                let op = if tok == Token::Plus {
+                let op = if *tok == Token::Plus {
                     UnaryOperator::Plus
                 } else {
                     UnaryOperator::Minus
@@ -1312,20 +1326,16 @@ impl<'a> Parser<'a> {
                     ),
                 })
             }
-            Token::ExclamationMark if self.dialect.supports_bang_not_operator() => {
-                Ok(Expr::UnaryOp {
-                    op: UnaryOperator::BangNot,
-                    expr: Box::new(
-                        self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?,
-                    ),
-                })
-            }
+            Token::ExclamationMark if dialect.supports_bang_not_operator() => Ok(Expr::UnaryOp {
+                op: UnaryOperator::BangNot,
+                expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
+            }),
             tok @ Token::DoubleExclamationMark
             | tok @ Token::PGSquareRoot
             | tok @ Token::PGCubeRoot
             | tok @ Token::AtSign
             | tok @ Token::Tilde
-                if dialect_of!(self is PostgreSqlDialect) =>
+                if dialect_is!(dialect is PostgreSqlDialect) =>
             {
                 let op = match tok {
                     Token::DoubleExclamationMark => UnaryOperator::PGPrefixFactorial,
@@ -1342,7 +1352,7 @@ impl<'a> Parser<'a> {
                     ),
                 })
             }
-            Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+            Token::EscapedStringLiteral(_) if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) =>
             {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
@@ -1408,11 +1418,11 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-            Token::LBrace if self.dialect.supports_dictionary_syntax() => {
+            Token::LBrace if dialect.supports_dictionary_syntax() => {
                 self.prev_token();
                 self.parse_duckdb_struct_literal()
             }
-            _ => self.expected("an expression", next_token),
+            _ => self.expected_current("an expression"),
         }?;
 
         let expr = self.try_parse_method(expr)?;
@@ -3273,9 +3283,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Return the first non-whitespace token that has not yet been processed
-    /// (or None if reached end-of-file)
+    /// or Token::EOF
     pub fn peek_token(&self) -> TokenWithSpan {
         self.peek_nth_token(0)
+    }
+
+    /// Return a reference to the first non-whitespace token that has not yet
+    /// been processed or Token::EOF
+    pub fn peek_token_ref(&self) -> &TokenWithSpan {
+        self.peek_nth_token_ref(0)
     }
 
     /// Returns the `N` next non-whitespace tokens that have not yet been
@@ -3329,7 +3345,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Return nth non-whitespace token that has not yet been processed
-    pub fn peek_nth_token(&self, mut n: usize) -> TokenWithSpan {
+    pub fn peek_nth_token(&self, n: usize) -> TokenWithSpan {
+        self.peek_nth_token_ref(n).clone()
+    }
+
+    /// Return nth non-whitespace token that has not yet been processed
+    pub fn peek_nth_token_ref(&self, mut n: usize) -> &TokenWithSpan {
         let mut index = self.index;
         loop {
             index += 1;
@@ -3340,10 +3361,7 @@ impl<'a> Parser<'a> {
                 }) => continue,
                 non_whitespace => {
                     if n == 0 {
-                        return non_whitespace.cloned().unwrap_or(TokenWithSpan {
-                            token: Token::EOF,
-                            span: Span::empty(),
-                        });
+                        return non_whitespace.unwrap_or(&EOF_TOKEN);
                     }
                     n -= 1;
                 }
@@ -3376,10 +3394,14 @@ impl<'a> Parser<'a> {
         matched
     }
 
+    pub fn next_token(&mut self) -> TokenWithSpan {
+        self.next_token_ref().clone()
+    }
+
     /// Return the first non-whitespace token that has not yet been processed
     /// (or None if reached end-of-file) and mark it as processed. OK to call
     /// repeatedly after reaching EOF.
-    pub fn next_token(&mut self) -> TokenWithSpan {
+    pub fn next_token_ref(&mut self) -> &TokenWithSpan {
         loop {
             self.index += 1;
             match self.tokens.get(self.index - 1) {
@@ -3387,11 +3409,7 @@ impl<'a> Parser<'a> {
                     token: Token::Whitespace(_),
                     span: _,
                 }) => continue,
-                token => {
-                    return token
-                        .cloned()
-                        .unwrap_or_else(|| TokenWithSpan::wrap(Token::EOF))
-                }
+                token => return token.unwrap_or(&EOF_TOKEN),
             }
         }
     }
@@ -3422,6 +3440,15 @@ impl<'a> Parser<'a> {
 
     /// Report `found` was encountered instead of `expected`
     pub fn expected<T>(&self, expected: &str, found: TokenWithSpan) -> Result<T, ParserError> {
+        parser_err!(
+            format!("Expected: {expected}, found: {found}"),
+            found.span.start
+        )
+    }
+
+    /// Report that the current token was found instead of `expected`.
+    pub fn expected_current<T>(&self, expected: &str) -> Result<T, ParserError> {
+        let found = self.tokens.get(self.index).unwrap_or(&EOF_TOKEN);
         parser_err!(
             format!("Expected: {expected}, found: {found}"),
             found.span.start

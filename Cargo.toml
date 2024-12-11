@@ -46,6 +46,7 @@ visitor = ["sqlparser_derive"]
 [dependencies]
 bigdecimal = { version = "0.4.1", features = ["serde"], optional = true }
 log = "0.4"
+phf = { version = "0.11", default-features = false }
 serde = { version = "1.0", features = ["derive"], optional = true }
 # serde_json is only used in examples/cli, but we have to put it outside
 # of dev-dependencies because of
@@ -57,6 +58,10 @@ sqlparser_derive = { version = "0.3.0", path = "derive", optional = true }
 simple_logger = "5.0"
 matches = "0.1"
 pretty_assertions = "1"
+
+[build-dependencies]
+phf = { version = "0.11", default-features = false }
+phf_codegen = "0.11"
 
 [package.metadata.docs.rs]
 # Document these features on docs.rs

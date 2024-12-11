@@ -235,11 +235,11 @@ impl Dialect for PostgreSqlDialect {
 
 pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
     let name = parser.maybe_parse(|parser| -> Result<ObjectName, ParserError> {
-        parser.expect_keyword(Keyword::CREATE)?;
-        parser.expect_keyword(Keyword::TYPE)?;
+        parser.expect_keyword_is(Keyword::CREATE)?;
+        parser.expect_keyword_is(Keyword::TYPE)?;
         let name = parser.parse_object_name(false)?;
-        parser.expect_keyword(Keyword::AS)?;
-        parser.expect_keyword(Keyword::ENUM)?;
+        parser.expect_keyword_is(Keyword::AS)?;
+        parser.expect_keyword_is(Keyword::ENUM)?;
         Ok(name)
     });
 

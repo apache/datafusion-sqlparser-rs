@@ -52,11 +52,11 @@ impl Parser<'_> {
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterpolicy.html)
     pub fn parse_alter_policy(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier(false)?;
-        self.expect_keyword(Keyword::ON)?;
+        self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
 
         if self.parse_keyword(Keyword::RENAME) {
-            self.expect_keyword(Keyword::TO)?;
+            self.expect_keyword_is(Keyword::TO)?;
             let new_name = self.parse_identifier(false)?;
             Ok(Statement::AlterPolicy {
                 name,
@@ -232,7 +232,7 @@ impl Parser<'_> {
             Some(Keyword::BYPASSRLS) => RoleOption::BypassRLS(true),
             Some(Keyword::NOBYPASSRLS) => RoleOption::BypassRLS(false),
             Some(Keyword::CONNECTION) => {
-                self.expect_keyword(Keyword::LIMIT)?;
+                self.expect_keyword_is(Keyword::LIMIT)?;
                 RoleOption::ConnectionLimit(Expr::Value(self.parse_number_value()?))
             }
             Some(Keyword::CREATEDB) => RoleOption::CreateDB(true),
@@ -256,7 +256,7 @@ impl Parser<'_> {
             Some(Keyword::SUPERUSER) => RoleOption::SuperUser(true),
             Some(Keyword::NOSUPERUSER) => RoleOption::SuperUser(false),
             Some(Keyword::VALID) => {
-                self.expect_keyword(Keyword::UNTIL)?;
+                self.expect_keyword_is(Keyword::UNTIL)?;
                 RoleOption::ValidUntil(Expr::Value(self.parse_value()?))
             }
             _ => self.expected("option", self.peek_token())?,

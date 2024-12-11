@@ -1158,7 +1158,7 @@ impl<'a> Parser<'a> {
                 let mut id_parts: Vec<Ident> = vec![w.to_ident(w_span)];
                 let mut ending_wildcard: Option<TokenWithSpan> = None;
                 while self.consume_token(&Token::Period) {
-                    let next_token = self.next_token_ref();
+                    let (next_token, next_token_index) = self.next_token_ref_with_index();
                     match &next_token.token {
                         Token::Word(w) => id_parts.push(w.to_ident(next_token.span)),
                         Token::Mul => {
@@ -1168,12 +1168,14 @@ impl<'a> Parser<'a> {
                                 ending_wildcard = Some(next_token.clone());
                                 break;
                             } else {
-                                return self.expected_current("an identifier after '.'");
+                                return self
+                                    .expected_at("an identifier after '.'", next_token_index);
                             }
                         }
                         Token::SingleQuotedString(s) => id_parts.push(Ident::with_quote('\'', s)),
                         _ => {
-                            return self.expected_current("an identifier or a '*' after '.'");
+                            return self
+                                .expected_at("an identifier or a '*' after '.'", next_token_index);
                         }
                     }
                 }
@@ -1274,7 +1276,7 @@ impl<'a> Parser<'a> {
 
         let dialect = self.dialect;
 
-        let next_token = self.next_token_ref();
+        let (next_token, next_token_index) = self.next_token_ref_with_index();
         let span = next_token.span;
         let expr = match &next_token.token {
             Token::Word(w) => {
@@ -1423,7 +1425,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 self.parse_duckdb_struct_literal()
             }
-            _ => self.expected_current("an expression"),
+            _ => self.expected_at("an expression", next_token_index),
         }?;
 
         let expr = self.try_parse_method(expr)?;
@@ -3424,7 +3426,7 @@ impl<'a> Parser<'a> {
                     token: Token::Whitespace(_),
                     span: _,
                 }) => continue,
-                token => return (token.unwrap_or(&EOF_TOKEN), self.index),
+                token => return (token.unwrap_or(&EOF_TOKEN), self.index - 1),
             }
         }
     }
@@ -3461,9 +3463,17 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// report `found` was encountered instead of `expected`
+    pub fn expected_ref<T>(&self, expected: &str, found: &TokenWithSpan) -> Result<T, ParserError> {
+        parser_err!(
+            format!("Expected: {expected}, found: {found}"),
+            found.span.start
+        )
+    }
+
     /// Report that the current token was found instead of `expected`.
-    pub fn expected_current<T>(&self, expected: &str) -> Result<T, ParserError> {
-        let found = self.tokens.get(self.index).unwrap_or(&EOF_TOKEN);
+    pub fn expected_at<T>(&self, expected: &str, index: usize) -> Result<T, ParserError> {
+        let found = self.tokens.get(index).unwrap_or(&EOF_TOKEN);
         parser_err!(
             format!("Expected: {expected}, found: {found}"),
             found.span.start
@@ -3568,7 +3578,10 @@ impl<'a> Parser<'a> {
             Ok(keyword)
         } else {
             let keywords: Vec<String> = keywords.iter().map(|x| format!("{x:?}")).collect();
-            self.expected_current(&format!("one of {}", keywords.join(" or ")))
+            self.expected_ref(
+                &format!("one of {}", keywords.join(" or ")),
+                self.peek_token_ref(),
+            )
         }
     }
 
@@ -3578,7 +3591,7 @@ impl<'a> Parser<'a> {
         if let Some(token) = self.parse_keyword_token_ref(expected) {
             Ok(token.clone())
         } else {
-            self.expected_current(format!("{:?}", &expected).as_str())
+            self.expected_ref(format!("{:?}", &expected).as_str(), self.peek_token_ref())
         }
     }
 
@@ -3591,7 +3604,7 @@ impl<'a> Parser<'a> {
         if self.parse_keyword_token_ref(expected).is_some() {
             Ok(())
         } else {
-            self.expected_current(format!("{:?}", &expected).as_str())
+            self.expected_ref(format!("{:?}", &expected).as_str(), self.peek_token_ref())
         }
     }
 
@@ -3635,7 +3648,7 @@ impl<'a> Parser<'a> {
         if self.peek_token_ref() == expected {
             Ok(self.next_token())
         } else {
-            self.expected_current(&expected.to_string())
+            self.expected_ref(&expected.to_string(), self.peek_token_ref())
         }
     }
 
@@ -8104,7 +8117,7 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let dialect = self.dialect;
-        let next_token = self.next_token_ref();
+        let (next_token, next_token_index) = self.next_token_ref_with_index();
         let mut trailing_bracket: MatchedTrailingBracket = false.into();
         let mut data = match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -8402,7 +8415,7 @@ impl<'a> Parser<'a> {
                     }
                 }
             },
-            _ => self.expected_current("a data type name"),
+            _ => self.expected_at("a data type name", next_token_index),
         }?;
 
         // Parse array data types. Note: this is postgresql-specific and different from

@@ -32,21 +32,51 @@ pub struct RedshiftSqlDialect {}
 // in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
-    fn is_delimited_identifier_start(&self, ch: char) -> bool {
-        ch == '"' || ch == '['
+    /// Determine if a character starts a potential nested quoted identifier.
+    /// Example: RedShift supports the following quote styles to all mean the same thing:
+    /// ```sql
+    /// SELECT 1 AS foo;
+    /// SELECT 1 AS "foo";
+    /// SELECT 1 AS [foo];
+    /// SELECT 1 AS ["foo"];
+    /// ```
+    fn is_nested_delimited_identifier_start(&self, ch: char) -> bool {
+        ch == '['
     }
 
-    /// Determine if quoted characters are proper for identifier
-    /// It's needed to distinguish treating square brackets as quotes from
-    /// treating them as json path. If there is identifier then we assume
-    /// there is no json path.
-    fn is_proper_identifier_inside_quotes(&self, mut chars: Peekable<Chars<'_>>) -> bool {
-        chars.next();
-        let mut not_white_chars = chars.skip_while(|ch| ch.is_whitespace()).peekable();
-        if let Some(&ch) = not_white_chars.peek() {
-            return self.is_identifier_start(ch);
+    /// Only applicable whenever [`Self::is_nested_delimited_identifier_start`] returns true
+    /// If the next sequence of tokens potentially represent a nested identifier, then this method
+    /// returns a tuple containing the outer quote style, and if present, the inner (nested) quote style.
+    ///
+    /// Example (Redshift):
+    /// ```text
+    /// `["foo"]` => Some(`[`, Some(`"`))
+    /// `[foo]` => Some(`[`, None)
+    /// `[0]` => None
+    /// `"foo"` => None
+    /// ```
+    fn peek_nested_delimited_identifier_quotes(
+        &self,
+        mut chars: Peekable<Chars<'_>>,
+    ) -> Option<(char, Option<char>)> {
+        if chars.peek() != Some(&'[') {
+            return None;
         }
-        false
+
+        chars.next();
+
+        let mut not_white_chars = chars.skip_while(|ch| ch.is_whitespace()).peekable();
+
+        if let Some(&ch) = not_white_chars.peek() {
+            if ch == '"' {
+                return Some(('[', Some('"')));
+            }
+            if self.is_identifier_start(ch) {
+                return Some(('[', None));
+            }
+        }
+
+        None
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {

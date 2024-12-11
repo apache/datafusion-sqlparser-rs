@@ -1075,25 +1075,61 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::DoubleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
+                quote_start if self.dialect.is_delimited_identifier_start(ch) => {
+                    let word = self.tokenize_quoted_identifier(quote_start, chars)?;
+                    Ok(Some(Token::make_word(&word, Some(quote_start))))
+                }
+                // Potentially nested delimited (quoted) identifier
                 quote_start
-                    if self.dialect.is_delimited_identifier_start(ch)
+                    if self
+                        .dialect
+                        .is_nested_delimited_identifier_start(quote_start)
                         && self
                             .dialect
-                            .is_proper_identifier_inside_quotes(chars.peekable.clone()) =>
+                            .peek_nested_delimited_identifier_quotes(chars.peekable.clone())
+                            .is_some() =>
                 {
-                    let error_loc = chars.location();
-                    chars.next(); // consume the opening quote
-                    let quote_end = Word::matching_end_quote(quote_start);
-                    let (s, last_char) = self.parse_quoted_ident(chars, quote_end);
+                    let Some((quote_start, nested_quote_start)) = self
+                        .dialect
+                        .peek_nested_delimited_identifier_quotes(chars.peekable.clone())
+                    else {
+                        return self.tokenizer_error(
+                            chars.location(),
+                            format!("Expected nested delimiter '{quote_start}' before EOF."),
+                        );
+                    };
 
-                    if last_char == Some(quote_end) {
-                        Ok(Some(Token::make_word(&s, Some(quote_start))))
-                    } else {
-                        self.tokenizer_error(
+                    let Some(nested_quote_start) = nested_quote_start else {
+                        let word = self.tokenize_quoted_identifier(quote_start, chars)?;
+                        return Ok(Some(Token::make_word(&word, Some(quote_start))));
+                    };
+
+                    let mut word = vec![];
+                    let quote_end = Word::matching_end_quote(quote_start);
+                    let nested_quote_end = Word::matching_end_quote(nested_quote_start);
+                    let error_loc = chars.location();
+
+                    chars.next(); // skip the first delimiter
+                    peeking_take_while(chars, |ch| ch.is_whitespace());
+                    if chars.peek() != Some(&nested_quote_start) {
+                        return self.tokenizer_error(
+                            error_loc,
+                            format!("Expected nested delimiter '{nested_quote_start}' before EOF."),
+                        );
+                    }
+                    word.push(nested_quote_start.into());
+                    word.push(self.tokenize_quoted_identifier(nested_quote_end, chars)?);
+                    word.push(nested_quote_end.into());
+                    peeking_take_while(chars, |ch| ch.is_whitespace());
+                    if chars.peek() != Some(&quote_end) {
+                        return self.tokenizer_error(
                             error_loc,
                             format!("Expected close delimiter '{quote_end}' before EOF."),
-                        )
+                        );
                     }
+                    chars.next(); // skip close delimiter
+
+                    Ok(Some(Token::make_word(&word.concat(), Some(quote_start))))
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
@@ -1595,6 +1631,27 @@ impl<'a> Tokenizer<'a> {
             self.dialect.is_identifier_part(ch)
         }));
         s
+    }
+
+    /// Read a quoted identifier
+    fn tokenize_quoted_identifier(
+        &self,
+        quote_start: char,
+        chars: &mut State,
+    ) -> Result<String, TokenizerError> {
+        let error_loc = chars.location();
+        chars.next(); // consume the opening quote
+        let quote_end = Word::matching_end_quote(quote_start);
+        let (s, last_char) = self.parse_quoted_ident(chars, quote_end);
+
+        if last_char == Some(quote_end) {
+            Ok(s)
+        } else {
+            self.tokenizer_error(
+                error_loc,
+                format!("Expected close delimiter '{quote_end}' before EOF."),
+            )
+        }
     }
 
     /// Read a single quoted string, starting with the opening quote.

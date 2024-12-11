@@ -8093,9 +8093,10 @@ impl<'a> Parser<'a> {
     fn parse_data_type_helper(
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
-        let next_token = self.next_token();
+        let dialect = self.dialect;
+        let next_token = self.next_token_ref();
         let mut trailing_bracket: MatchedTrailingBracket = false.into();
-        let mut data = match next_token.token {
+        let mut data = match &next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
                 Keyword::BOOL => Ok(DataType::Bool),
@@ -8335,12 +8336,12 @@ impl<'a> Parser<'a> {
                         ))))
                     }
                 }
-                Keyword::STRUCT if dialect_of!(self is DuckDbDialect) => {
+                Keyword::STRUCT if dialect_is!(dialect is DuckDbDialect) => {
                     self.prev_token();
                     let field_defs = self.parse_duckdb_struct_type_def()?;
                     Ok(DataType::Struct(field_defs, StructBracketKind::Parentheses))
                 }
-                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                Keyword::STRUCT if dialect_is!(dialect is BigQueryDialect | GenericDialect) => {
                     self.prev_token();
                     let (field_defs, _trailing_bracket) =
                         self.parse_struct_type_def(Self::parse_struct_field_def)?;
@@ -8350,18 +8351,18 @@ impl<'a> Parser<'a> {
                         StructBracketKind::AngleBrackets,
                     ))
                 }
-                Keyword::UNION if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                Keyword::UNION if dialect_is!(dialect is DuckDbDialect | GenericDialect) => {
                     self.prev_token();
                     let fields = self.parse_union_type_def()?;
                     Ok(DataType::Union(fields))
                 }
-                Keyword::NULLABLE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
+                Keyword::NULLABLE if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     Ok(self.parse_sub_type(DataType::Nullable)?)
                 }
-                Keyword::LOWCARDINALITY if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
+                Keyword::LOWCARDINALITY if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     Ok(self.parse_sub_type(DataType::LowCardinality)?)
                 }
-                Keyword::MAP if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
+                Keyword::MAP if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     self.prev_token();
                     let (key_data_type, value_data_type) = self.parse_click_house_map_def()?;
                     Ok(DataType::Map(
@@ -8369,13 +8370,13 @@ impl<'a> Parser<'a> {
                         Box::new(value_data_type),
                     ))
                 }
-                Keyword::NESTED if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
+                Keyword::NESTED if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     self.expect_token(&Token::LParen)?;
                     let field_defs = self.parse_comma_separated(Parser::parse_column_def)?;
                     self.expect_token(&Token::RParen)?;
                     Ok(DataType::Nested(field_defs))
                 }
-                Keyword::TUPLE if dialect_of!(self is ClickHouseDialect | GenericDialect) => {
+                Keyword::TUPLE if dialect_is!(dialect is ClickHouseDialect | GenericDialect) => {
                     self.prev_token();
                     let field_defs = self.parse_click_house_tuple_def()?;
                     Ok(DataType::Tuple(field_defs))
@@ -8391,7 +8392,7 @@ impl<'a> Parser<'a> {
                     }
                 }
             },
-            _ => self.expected("a data type name", next_token),
+            _ => self.expected_current("a data type name"),
         }?;
 
         // Parse array data types. Note: this is postgresql-specific and different from

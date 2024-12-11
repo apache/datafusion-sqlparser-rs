@@ -1212,6 +1212,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -1423,6 +1424,7 @@ fn test_alter_table_clustering() {
                     Expr::Identifier(Ident::with_quote('"', "c2")),
                     Expr::Function(Function {
                         name: ObjectName(vec![Ident::new("TO_DATE")]),
+                        uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(

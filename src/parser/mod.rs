@@ -1053,6 +1053,7 @@ impl<'a> Parser<'a> {
                 {
                     Ok(Some(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident(w_span)]),
+                        uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::None,
                         null_treatment: None,
@@ -1111,6 +1112,7 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     Ok(Some(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident(w_span)]),
+                        uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::Subquery(query),
                         filter: None,
@@ -1408,9 +1410,9 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-            Token::LBrace if self.dialect.supports_dictionary_syntax() => {
+            Token::LBrace => {
                 self.prev_token();
-                self.parse_duckdb_struct_literal()
+                self.parse_lbrace_expr()
             }
             _ => self.expected("an expression", next_token),
         }?;
@@ -1509,7 +1511,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Tries to parse the body of an [ODBC function] call.
+    /// i.e. without the enclosing braces
+    ///
+    /// ```sql
+    /// fn myfunc(1,2,3)
+    /// ```
+    ///
+    /// [ODBC function]: https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/scalar-function-calls?view=sql-server-2017
+    fn maybe_parse_odbc_fn_body(&mut self) -> Result<Option<Expr>, ParserError> {
+        self.maybe_parse(|p| {
+            p.expect_keyword(Keyword::FN)?;
+            let fn_name = p.parse_object_name(false)?;
+            let mut fn_call = p.parse_function_call(fn_name)?;
+            fn_call.uses_odbc_syntax = true;
+            Ok(Expr::Function(fn_call))
+        })
+    }
+
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
+        self.parse_function_call(name).map(Expr::Function)
+    }
+
+    fn parse_function_call(&mut self, name: ObjectName) -> Result<Function, ParserError> {
         self.expect_token(&Token::LParen)?;
 
         // Snowflake permits a subquery to be passed as an argument without
@@ -1517,15 +1541,16 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is SnowflakeDialect) && self.peek_sub_query() {
             let subquery = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
-            return Ok(Expr::Function(Function {
+            return Ok(Function {
                 name,
+                uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::Subquery(subquery),
                 filter: None,
                 null_treatment: None,
                 over: None,
                 within_group: vec![],
-            }));
+            });
         }
 
         let mut args = self.parse_function_argument_list()?;
@@ -1584,15 +1609,16 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Expr::Function(Function {
+        Ok(Function {
             name,
+            uses_odbc_syntax: false,
             parameters,
             args: FunctionArguments::List(args),
             null_treatment,
             filter,
             over,
             within_group,
-        }))
+        })
     }
 
     /// Optionally parses a null treatment clause.
@@ -1619,6 +1645,7 @@ impl<'a> Parser<'a> {
         };
         Ok(Expr::Function(Function {
             name,
+            uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args,
             filter: None,
@@ -2209,6 +2236,31 @@ impl<'a> Parser<'a> {
                 expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
             }),
         }
+    }
+
+    /// Parse expression types that start with a left brace '{'.
+    /// Examples:
+    /// ```sql
+    /// -- Dictionary expr.
+    /// {'key1': 'value1', 'key2': 'value2'}
+    ///
+    /// -- Function call using the ODBC syntax.
+    /// { fn CONCAT('foo', 'bar') }
+    /// ```
+    fn parse_lbrace_expr(&mut self) -> Result<Expr, ParserError> {
+        let token = self.expect_token(&Token::LBrace)?;
+
+        if let Some(fn_expr) = self.maybe_parse_odbc_fn_body()? {
+            self.expect_token(&Token::RBrace)?;
+            return Ok(fn_expr);
+        }
+
+        if self.dialect.supports_dictionary_syntax() {
+            self.prev_token(); // Put back the '{'
+            return self.parse_duckdb_struct_literal();
+        }
+
+        self.expected("an expression", token)
     }
 
     /// Parses fulltext expressions [`sqlparser::ast::Expr::MatchAgainst`]
@@ -7578,6 +7630,7 @@ impl<'a> Parser<'a> {
         } else {
             Ok(Statement::Call(Function {
                 name: object_name,
+                uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::None,
                 over: None,

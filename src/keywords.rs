@@ -333,6 +333,7 @@ define_keywords!(
     FLOAT8,
     FLOOR,
     FLUSH,
+    FN,
     FOLLOWING,
     FOR,
     FORCE,

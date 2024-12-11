@@ -635,6 +635,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -1388,6 +1389,7 @@ fn parse_create_table_with_valid_options() {
                                     },
                                 ],
                             ),
+                            uses_odbc_syntax: false,
                             parameters: FunctionArguments::None,
                             args: FunctionArguments::List(
                                 FunctionArgumentList {

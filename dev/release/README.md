@@ -146,6 +146,12 @@ Move artifacts to the release location in SVN, using the `release-tarball.sh` sc
 ```shell
 ./dev/release/release-tarball.sh 0.52.0 1
 ```
+ 
+Promote the rc tag to the release tag
+```shell
+git tag v0.52.0 v0.52.0-rc3
+git push apache v0.52.0
+```
 
 Congratulations! The release is now official!
 

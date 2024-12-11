@@ -10964,6 +10964,8 @@ fn insert_into_with_parentheses() {
         Box::new(GenericDialect {}),
     ]);
     dialects.verified_stmt("INSERT INTO t1 (id, name) (SELECT t2.id, t2.name FROM t2)");
+    dialects.verified_stmt("INSERT INTO t1 (SELECT t2.id, t2.name FROM t2)");
+    dialects.verified_stmt(r#"INSERT INTO t1 ("select", name) (SELECT t2.name FROM t2)"#);
 }
 
 #[test]

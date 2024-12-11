@@ -1478,6 +1478,7 @@ impl Spanned for Function {
     fn span(&self) -> Span {
         let Function {
             name,
+            uses_odbc_syntax: _,
             parameters,
             args,
             filter,

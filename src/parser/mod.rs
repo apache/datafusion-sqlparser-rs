@@ -8606,14 +8606,14 @@ impl<'a> Parser<'a> {
     pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
         loop {
-            match self.peek_token().token {
+            match &self.peek_token_ref().token {
                 Token::Word(w) => {
-                    idents.push(w.to_ident(self.peek_token().span));
+                    idents.push(w.to_ident(self.peek_token_ref().span));
                 }
                 Token::EOF | Token::Eq => break,
                 _ => {}
             }
-            self.next_token();
+            self.next_token_ref();
         }
         Ok(idents)
     }

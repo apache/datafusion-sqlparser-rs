@@ -8747,7 +8747,9 @@ impl<'a> Parser<'a> {
                             }
                             Token::Number(s, false) if s.chars().all(|c| c.is_ascii_digit()) => {
                                 ident.value.push_str(&s);
-                                true
+                                // If next token is period, then it is part of an ObjectName and we don't expect whitespace
+                                // after the number.
+                                !matches!(self.peek_token().token, Token::Period)
                             }
                             _ => {
                                 return self

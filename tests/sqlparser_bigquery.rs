@@ -1525,6 +1525,26 @@ fn parse_hyphenated_table_identifiers() {
     assert_eq!(
         bigquery()
             .verified_only_select_with_canonical(
+                "select * from foo-123.bar",
+                "SELECT * FROM foo-123.bar"
+            )
+            .from[0]
+            .relation,
+        TableFactor::Table {
+            name: ObjectName(vec![Ident::new("foo-123"), Ident::new("bar")]),
+            alias: None,
+            args: None,
+            with_hints: vec![],
+            version: None,
+            partitions: vec![],
+            with_ordinality: false,
+            json_path: None,
+        }
+    );
+
+    assert_eq!(
+        bigquery()
+            .verified_only_select_with_canonical(
                 "SELECT foo-bar.x FROM t",
                 "SELECT foo - bar.x FROM t"
             )

@@ -3199,16 +3199,50 @@ mod tests {
     fn test_mysql_users_grantees() {
         let dialect = MySqlDialect {};
 
-        let sql = "CREATE USER 'root'@'localhost'";
+        let sql = "CREATE USER `root`@`%`";
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("CREATE"),
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("USER"),
             Token::Whitespace(Whitespace::Space),
-            Token::SingleQuotedString("root".to_string()),
+            Token::make_word("root", Some('`')),
             Token::AtSign,
-            Token::SingleQuotedString("localhost".to_string()),
+            Token::make_word("%", Some('`')),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn test_postgres_abs_without_space_and_string_literal() {
+        let dialect = MySqlDialect {};
+
+        let sql = "SELECT @'1'";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::AtSign,
+            Token::SingleQuotedString("1".to_string()),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn test_postgres_abs_without_space_and_quoted_column() {
+        let dialect = MySqlDialect {};
+
+        let sql = r#"SELECT @"bar" FROM foo"#;
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::AtSign,
+            Token::DoubleQuotedString("bar".to_string()),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("FROM"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("foo", None),
         ];
         compare(expected, tokens);
     }

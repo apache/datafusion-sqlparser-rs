@@ -72,4 +72,9 @@ impl Dialect for BigQueryDialect {
     fn require_interval_qualifier(&self) -> bool {
         true
     }
+
+    // See https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#constructing_a_struct
+    fn supports_struct_literal(&self) -> bool {
+        true
+    }
 }

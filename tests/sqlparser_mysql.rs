@@ -677,6 +677,7 @@ fn table_constraint_unique_primary_ctor(
             columns,
             index_options,
             characteristics,
+            nulls_distinct: NullsDistinctOption::None,
         },
         None => TableConstraint::PrimaryKey {
             name,
@@ -692,7 +693,7 @@ fn table_constraint_unique_primary_ctor(
 #[test]
 fn parse_create_table_primary_and_unique_key() {
     let sqls = ["UNIQUE KEY", "PRIMARY KEY"]
-        .map(|key_ty|format!("CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, CONSTRAINT bar_key {key_ty} (bar))"));
+        .map(|key_ty| format!("CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, CONSTRAINT bar_key {key_ty} (bar))"));
 
     let index_type_display = [Some(KeyOrIndexDisplay::Key), None];
 
@@ -760,7 +761,7 @@ fn parse_create_table_primary_and_unique_key() {
 #[test]
 fn parse_create_table_primary_and_unique_key_with_index_options() {
     let sqls = ["UNIQUE INDEX", "PRIMARY KEY"]
-        .map(|key_ty|format!("CREATE TABLE foo (bar INT, var INT, CONSTRAINT constr {key_ty} index_name (bar, var) USING HASH COMMENT 'yes, ' USING BTREE COMMENT 'MySQL allows')"));
+        .map(|key_ty| format!("CREATE TABLE foo (bar INT, var INT, CONSTRAINT constr {key_ty} index_name (bar, var) USING HASH COMMENT 'yes, ' USING BTREE COMMENT 'MySQL allows')"));
 
     let index_type_display = [Some(KeyOrIndexDisplay::Index), None];
 
@@ -834,7 +835,7 @@ fn parse_create_table_primary_and_unique_key_with_index_type() {
 #[test]
 fn parse_create_table_primary_and_unique_key_characteristic_test() {
     let sqls = ["UNIQUE INDEX", "PRIMARY KEY"]
-        .map(|key_ty|format!("CREATE TABLE x (y INT, CONSTRAINT constr {key_ty} (y) NOT DEFERRABLE INITIALLY IMMEDIATE)"));
+        .map(|key_ty| format!("CREATE TABLE x (y INT, CONSTRAINT constr {key_ty} (y) NOT DEFERRABLE INITIALLY IMMEDIATE)"));
     for sql in &sqls {
         mysql_and_generic().verified_stmt(sql);
     }
@@ -897,7 +898,13 @@ fn parse_create_table_set_enum() {
                     },
                     ColumnDef {
                         name: Ident::new("baz"),
-                        data_type: DataType::Enum(vec!["a".to_string(), "b".to_string()]),
+                        data_type: DataType::Enum(
+                            vec![
+                                EnumMember::Name("a".to_string()),
+                                EnumMember::Name("b".to_string())
+                            ],
+                            None
+                        ),
                         collation: None,
                         options: vec![],
                     }
@@ -3192,4 +3199,26 @@ fn parse_create_view_multiple_params() {
     } else {
         unreachable!()
     }
+}
+
+#[test]
+fn parse_longblob_type() {
+    let sql = "CREATE TABLE foo (bar LONGBLOB)";
+    let stmt = mysql_and_generic().verified_stmt(sql);
+    if let Statement::CreateTable(CreateTable { columns, .. }) = stmt {
+        assert_eq!(columns.len(), 1);
+        assert_eq!(columns[0].data_type, DataType::LongBlob);
+    } else {
+        unreachable!()
+    }
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar TINYBLOB)");
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar MEDIUMBLOB)");
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar TINYTEXT)");
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar MEDIUMTEXT)");
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (bar LONGTEXT)");
+}
+
+#[test]
+fn parse_begin_without_transaction() {
+    mysql().verified_stmt("BEGIN");
 }

@@ -278,3 +278,38 @@ fn parse_use() {
         );
     }
 }
+
+#[test]
+fn parse_databricks_struct_function() {
+    assert_eq!(
+        databricks_and_generic()
+            .verified_only_select("SELECT STRUCT(1, 'foo')")
+            .projection[0],
+        SelectItem::UnnamedExpr(Expr::Struct {
+            values: vec![
+                Expr::Value(number("1")),
+                Expr::Value(Value::SingleQuotedString("foo".to_string()))
+            ],
+            fields: vec![]
+        })
+    );
+    assert_eq!(
+        databricks_and_generic()
+            .verified_only_select("SELECT STRUCT(1 AS one, 'foo' AS foo, false)")
+            .projection[0],
+        SelectItem::UnnamedExpr(Expr::Struct {
+            values: vec![
+                Expr::Named {
+                    expr: Expr::Value(number("1")).into(),
+                    name: Ident::new("one")
+                },
+                Expr::Named {
+                    expr: Expr::Value(Value::SingleQuotedString("foo".to_string())).into(),
+                    name: Ident::new("foo")
+                },
+                Expr::Value(Value::Boolean(false))
+            ],
+            fields: vec![]
+        })
+    );
+}

@@ -365,6 +365,26 @@ pub trait Dialect: Debug + Any {
         self.supports_trailing_commas()
     }
 
+    /// Returns true if the dialect supports double dot notation for object names
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT * FROM db_name..table_name
+    /// ```
+    fn supports_object_name_double_dot_notation(&self) -> bool {
+        false
+    }
+
+    /// Return true if the dialect supports the STRUCT literal
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT STRUCT(1 as one, 'foo' as foo, false)
+    /// ```
+    fn supports_struct_literal(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
     fn supports_user_host_grantee(&self) -> bool {
         false

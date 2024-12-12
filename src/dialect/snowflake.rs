@@ -54,6 +54,14 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    // Snowflake supports double-dot notation when the schema name is not specified
+    // In this case the default PUBLIC schema is used
+    //
+    // see https://docs.snowflake.com/en/sql-reference/name-resolution#resolution-when-schema-omitted-double-dot-notation
+    fn supports_object_name_double_dot_notation(&self) -> bool {
+        true
+    }
+
     fn is_identifier_part(&self, ch: char) -> bool {
         ch.is_ascii_lowercase()
             || ch.is_ascii_uppercase()

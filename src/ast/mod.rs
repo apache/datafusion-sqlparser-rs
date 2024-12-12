@@ -3908,7 +3908,7 @@ impl fmt::Display for Statement {
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                 )?;
                 if let Some(params) = params {
-                    write!(f, "{params} ")?;
+                    params.fmt(f)?;
                 }
                 write!(
                     f,
@@ -7398,21 +7398,21 @@ pub struct CreateViewParams {
 
 impl Display for CreateViewParams {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let parts = [
-            self.algorithm
-                .as_ref()
-                .map(|algorithm| format!("ALGORITHM = {algorithm}")),
-            self.definer
-                .as_ref()
-                .map(|definer| format!("DEFINER = {definer}")),
-            self.security
-                .as_ref()
-                .map(|security| format!("SQL SECURITY {security}")),
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-        display_separated(&parts, " ").fmt(f)
+        let CreateViewParams {
+            algorithm,
+            definer,
+            security,
+        } = self;
+        if let Some(algorithm) = algorithm {
+            write!(f, "ALGORITHM = {algorithm} ")?;
+        }
+        if let Some(definers) = definer {
+            write!(f, "DEFINER = {definers} ")?;
+        }
+        if let Some(security) = security {
+            write!(f, "SQL SECURITY {security} ")?;
+        }
+        Ok(())
     }
 }
 

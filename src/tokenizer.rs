@@ -1396,6 +1396,15 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some(' ') => Ok(Some(Token::AtSign)),
+                        // We break on quotes here, because no dialect allows identifiers starting
+                        // with @ and containing quotation marks (e.g. `@'foo'`) unless they are
+                        // quoted, which is tokenized as a quoted string, not here (e.g.
+                        // `"@'foo'"`). Further, at least two dialects parse `@` followed by a
+                        // quoted string as two separate tokens, which this allows. For example,
+                        // Postgres parses `@'1'` as the absolute value of '1' which is implicitly
+                        // cast to a numeric type. And when parsing MySQL-style grantees (e.g.
+                        // `GRANT ALL ON *.* to 'root'@'localhost'`), we also want separate tokens
+                        // for the user, the `@`, and the host.
                         Some('\'') => Ok(Some(Token::AtSign)),
                         Some('\"') => Ok(Some(Token::AtSign)),
                         Some('`') => Ok(Some(Token::AtSign)),

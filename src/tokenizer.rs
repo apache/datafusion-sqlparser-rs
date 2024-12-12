@@ -1119,7 +1119,7 @@ impl<'a> Tokenizer<'a> {
                         {
                             s.push('.');
                             chars.next();
-                        } else if s.is_empty() {
+                        } else if !s.is_empty() {
                             // Number might be part of period separated construct. Keep the period for next token
                             // e.g. a-12.b
                             return Ok(Some(Token::Number(s, false)));

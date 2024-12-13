@@ -2097,6 +2097,14 @@ fn test_bigquery_create_function() {
             "REMOTE WITH CONNECTION us.myconnection ",
             "OPTIONS(a = [1, 2])",
         ),
+        // Templated
+        concat!(
+        "CREATE OR REPLACE TEMPORARY FUNCTION ",
+        "my_function(param1 ANY TYPE) ",
+        "AS (",
+        "(SELECT 1)",
+        ")",
+        ),
     ];
     for sql in sqls {
         bigquery().verified_stmt(sql);

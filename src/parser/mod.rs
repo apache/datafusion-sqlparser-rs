@@ -8382,6 +8382,10 @@ impl<'a> Parser<'a> {
                     Ok(DataType::Tuple(field_defs))
                 }
                 Keyword::TRIGGER => Ok(DataType::Trigger),
+                Keyword::ANY => {
+                    self.expect_keyword(Keyword::TYPE)?;
+                    Ok(DataType::AnyType)
+                }
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;
@@ -8391,6 +8395,7 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Custom(type_name, vec![]))
                     }
                 }
+
             },
             _ => self.expected("a data type name", next_token),
         }?;

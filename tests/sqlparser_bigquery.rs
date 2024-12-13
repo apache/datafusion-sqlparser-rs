@@ -2099,11 +2099,11 @@ fn test_bigquery_create_function() {
         ),
         // Templated
         concat!(
-        "CREATE OR REPLACE TEMPORARY FUNCTION ",
-        "my_function(param1 ANY TYPE) ",
-        "AS (",
-        "(SELECT 1)",
-        ")",
+            "CREATE OR REPLACE TEMPORARY FUNCTION ",
+            "my_function(param1 ANY TYPE) ",
+            "AS (",
+            "(SELECT 1)",
+            ")",
         ),
     ];
     for sql in sqls {

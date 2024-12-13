@@ -376,7 +376,7 @@ pub enum DataType {
     /// Any data type, used in BigQuery UDF definitions for templated parameters
     ///
     /// [bigquery]: https://cloud.google.com/bigquery/docs/user-defined-functions#templated-sql-udf-parameters
-    AnyType
+    AnyType,
 }
 
 impl fmt::Display for DataType {

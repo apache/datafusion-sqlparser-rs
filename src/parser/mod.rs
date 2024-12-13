@@ -8395,7 +8395,6 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Custom(type_name, vec![]))
                     }
                 }
-
             },
             _ => self.expected("a data type name", next_token),
         }?;

@@ -2961,10 +2961,8 @@ fn parse_insert_overwrite() {
 
 #[test]
 fn test_table_sample() {
-    snowflake_and_generic().one_statement_parses_to(
-        "SELECT * FROM testtable SAMPLE (10)",
-        "SELECT * FROM testtable TABLESAMPLE (10)",
-    );
+    snowflake_and_generic().verified_stmt("SELECT * FROM testtable SAMPLE (10)");
+    snowflake_and_generic().verified_stmt("SELECT * FROM testtable TABLESAMPLE (10)");
     snowflake_and_generic()
         .verified_stmt("SELECT * FROM testtable AS t TABLESAMPLE BERNOULLI (10)");
     snowflake_and_generic().verified_stmt("SELECT * FROM testtable AS t TABLESAMPLE ROW (10)");
@@ -2973,4 +2971,6 @@ fn test_table_sample() {
         .verified_stmt("SELECT * FROM testtable TABLESAMPLE BLOCK (3) SEED (82)");
     snowflake_and_generic()
         .verified_stmt("SELECT * FROM testtable TABLESAMPLE SYSTEM (3) REPEATABLE (82)");
+    snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) REPEATABLE (1)");
+    snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) SEED (1)");
 }

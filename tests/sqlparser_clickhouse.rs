@@ -1614,6 +1614,14 @@ fn parse_explain_table() {
     }
 }
 
+#[test]
+fn parse_table_sample() {
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 0.1");
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1000");
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1 / 10");
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1 / 10 OFFSET 1 / 2");
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

@@ -1156,86 +1156,85 @@ pub enum TableFactor {
 
 pub enum TableSampleKind {
     /// Table sample located before the table alias option
-    BeforeTableAlias(Box<TableSampleMethod>),
+    BeforeTableAlias(Box<TableSample>),
     /// Table sample located after the table alias option
-    AfterTableAlias(Box<TableSampleMethod>),
+    AfterTableAlias(Box<TableSample>),
 }
 
-/// The table sample method options
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum TableSampleMethod {
-    Bernoulli(TableSampleBernoulli),
-    System(TableSampleSystem),
-    Bucket(TableSampleBucket),
-    Implicit(TableSampleImplicit),
+pub struct TableSample {
+    pub modifier: TableSampleModifier,
+    pub name: Option<TableSampleMethod>,
+    pub quantity: Option<TableSampleQuantity>,
+    pub seed: Option<TableSampleSeed>,
+    pub bucket: Option<TableSampleBucket>,
+    pub offset: Option<Expr>,
 }
 
-/// The table sample method names
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum TableSampleMethodName {
-    Row,
-    Bernoulli,
-    System,
-    Block,
+pub enum TableSampleModifier {
+    Sample,
+    TableSample,
 }
 
-impl fmt::Display for TableSampleMethodName {
+impl fmt::Display for TableSampleModifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TableSampleMethodName::Bernoulli => write!(f, "BERNOULLI"),
-            TableSampleMethodName::Row => write!(f, "ROW"),
-            TableSampleMethodName::System => write!(f, "SYSTEM"),
-            TableSampleMethodName::Block => write!(f, "BLOCK"),
+            TableSampleModifier::Sample => write!(f, "SAMPLE")?,
+            TableSampleModifier::TableSample => write!(f, "TABLESAMPLE")?,
         }
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct TableSampleBernoulli {
-    pub name: TableSampleMethodName,
-    pub probability: Option<Value>,
-    pub value: Option<Value>,
+pub struct TableSampleQuantity {
+    pub parenthesized: bool,
+    pub value: Expr,
     pub unit: Option<TableSampleUnit>,
 }
 
-impl fmt::Display for TableSampleBernoulli {
+impl fmt::Display for TableSampleQuantity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, " {} (", self.name)?;
-        if let Some(probability) = &self.probability {
-            write!(f, "{})", probability)?;
-        } else if let Some(value) = &self.value {
-            write!(f, "{}", value)?;
-            if let Some(unit) = &self.unit {
-                write!(f, " {}", unit)?;
-            }
+        if self.parenthesized {
+            write!(f, "(")?;
+        }
+        write!(f, "{}", self.value)?;
+        if let Some(unit) = &self.unit {
+            write!(f, " {}", unit)?;
+        }
+        if self.parenthesized {
             write!(f, ")")?;
         }
         Ok(())
     }
 }
 
+/// The table sample method names
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct TableSampleSystem {
-    pub name: TableSampleMethodName,
-    pub probability: Value,
-    pub seed: Option<TableSampleSeed>,
+pub enum TableSampleMethod {
+    Row,
+    Bernoulli,
+    System,
+    Block,
 }
 
-impl fmt::Display for TableSampleSystem {
+impl fmt::Display for TableSampleMethod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, " {} ({})", self.name, self.probability)?;
-        if let Some(seed) = &self.seed {
-            write!(f, " {} ({})", seed.modifier, seed.value)?;
+        match self {
+            TableSampleMethod::Bernoulli => write!(f, "BERNOULLI"),
+            TableSampleMethod::Row => write!(f, "ROW"),
+            TableSampleMethod::System => write!(f, "SYSTEM"),
+            TableSampleMethod::Block => write!(f, "BLOCK"),
         }
-        Ok(())
     }
 }
 
@@ -1245,6 +1244,13 @@ impl fmt::Display for TableSampleSystem {
 pub struct TableSampleSeed {
     pub modifier: TableSampleSeedModifier,
     pub value: Value,
+}
+
+impl fmt::Display for TableSampleSeed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ({})", self.modifier, self.value)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1299,41 +1305,23 @@ impl fmt::Display for TableSampleBucket {
         Ok(())
     }
 }
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct TableSampleImplicit {
-    pub value: Value,
-    pub unit: Option<TableSampleUnit>,
-}
-
-impl fmt::Display for TableSampleImplicit {
+impl fmt::Display for TableSample {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.value)?;
-        if let Some(unit) = &self.unit {
-            write!(f, " {}", unit)?;
+        write!(f, " {}", self.modifier)?;
+        if let Some(name) = &self.name {
+            write!(f, " {}", name)?;
         }
-        Ok(())
-    }
-}
-
-impl fmt::Display for TableSampleMethod {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, " TABLESAMPLE")?;
-        match self {
-            TableSampleMethod::Bernoulli(sample) => {
-                write!(f, "{}", sample)?;
-            }
-            TableSampleMethod::System(sample) => {
-                write!(f, "{}", sample)?;
-            }
-            TableSampleMethod::Bucket(sample) => {
-                write!(f, " ({})", sample)?;
-            }
-            TableSampleMethod::Implicit(sample) => {
-                write!(f, " ({})", sample)?;
-            }
+        if let Some(quantity) = &self.quantity {
+            write!(f, " {}", quantity)?;
+        }
+        if let Some(seed) = &self.seed {
+            write!(f, " {}", seed)?;
+        }
+        if let Some(bucket) = &self.bucket {
+            write!(f, " ({})", bucket)?;
+        }
+        if let Some(offset) = &self.offset {
+            write!(f, " OFFSET {}", offset)?;
         }
         Ok(())
     }

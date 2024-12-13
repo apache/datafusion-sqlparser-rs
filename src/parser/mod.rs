@@ -10651,99 +10651,80 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn maybe_parse_table_sample(&mut self) -> Result<Option<Box<TableSampleMethod>>, ParserError> {
-        if self
-            .parse_one_of_keywords(&[Keyword::SAMPLE, Keyword::TABLESAMPLE])
-            .is_none()
-        {
+    fn maybe_parse_table_sample(&mut self) -> Result<Option<Box<TableSample>>, ParserError> {
+        let modifier = if self.parse_keyword(Keyword::TABLESAMPLE) {
+            TableSampleModifier::TableSample
+        } else if self.parse_keyword(Keyword::SAMPLE) {
+            TableSampleModifier::Sample
+        } else {
             return Ok(None);
-        }
+        };
 
-        // Try to parse based on an explicit table sample method keyword
-        let sample = if self.parse_keyword(Keyword::BERNOULLI) {
-            self.parse_table_sample_bernoulli(TableSampleMethodName::Bernoulli)?
-        } else if self.parse_keyword(Keyword::ROW) {
-            self.parse_table_sample_bernoulli(TableSampleMethodName::Row)?
-        } else if self.parse_keyword(Keyword::SYSTEM) {
-            self.parse_table_sample_system(TableSampleMethodName::System)?
-        } else if self.parse_keyword(Keyword::BLOCK) {
-            self.parse_table_sample_system(TableSampleMethodName::Block)?
-        // Try to parse without an explicit table sample method keyword
-        } else if self.consume_token(&Token::LParen) {
-            if self.parse_keyword(Keyword::BUCKET) {
-                let bucket = self.parse_number_value()?;
-                self.expect_keywords(&[Keyword::OUT, Keyword::OF])?;
-                let total = self.parse_number_value()?;
-                let on = if self.parse_keyword(Keyword::ON) {
-                    Some(self.parse_expr()?)
-                } else {
-                    None
-                };
-                self.expect_token(&Token::RParen)?;
-                TableSampleMethod::Bucket(TableSampleBucket { bucket, total, on })
+        let name = match self.parse_one_of_keywords(&[
+            Keyword::BERNOULLI,
+            Keyword::ROW,
+            Keyword::SYSTEM,
+            Keyword::BLOCK,
+        ]) {
+            Some(Keyword::BERNOULLI) => Some(TableSampleMethod::Bernoulli),
+            Some(Keyword::ROW) => Some(TableSampleMethod::Row),
+            Some(Keyword::SYSTEM) => Some(TableSampleMethod::System),
+            Some(Keyword::BLOCK) => Some(TableSampleMethod::Block),
+            _ => None,
+        };
+
+        let parenthesized = self.consume_token(&Token::LParen);
+
+        let (quantity, bucket) = if parenthesized && self.parse_keyword(Keyword::BUCKET) {
+            let selected_bucket = self.parse_number_value()?;
+            self.expect_keywords(&[Keyword::OUT, Keyword::OF])?;
+            let total = self.parse_number_value()?;
+            let on = if self.parse_keyword(Keyword::ON) {
+                Some(self.parse_expr()?)
             } else {
-                let value = match self.maybe_parse(|p| p.parse_number_value())? {
-                    Some(num) => num,
-                    None => {
-                        if let Token::Word(w) = self.next_token().token {
-                            Value::Placeholder(w.value)
-                        } else {
-                            return parser_err!(
-                                "Expecting number or byte length e.g. 100M",
-                                self.peek_token().span.start
-                            );
-                        }
+                None
+            };
+            (
+                None,
+                Some(TableSampleBucket {
+                    bucket: selected_bucket,
+                    total,
+                    on,
+                }),
+            )
+        } else {
+            let value = match self.maybe_parse(|p| p.parse_expr())? {
+                Some(num) => num,
+                None => {
+                    if let Token::Word(w) = self.next_token().token {
+                        Expr::Value(Value::Placeholder(w.value))
+                    } else {
+                        return parser_err!(
+                            "Expecting number or byte length e.g. 100M",
+                            self.peek_token().span.start
+                        );
                     }
-                };
-                let unit = if self.parse_keyword(Keyword::ROWS) {
-                    Some(TableSampleUnit::Rows)
-                } else if self.parse_keyword(Keyword::PERCENT) {
-                    Some(TableSampleUnit::Percent)
-                } else {
-                    None
-                };
-                self.expect_token(&Token::RParen)?;
-                TableSampleMethod::Implicit(TableSampleImplicit { value, unit })
-            }
-        } else {
-            return parser_err!(
-                "Expecting BERNOULLI, ROW, SYSTEM, BLOCK or a valid TABLESAMPLE expression in parenthesis",
-                self.peek_token().span.start
-            );
+                }
+            };
+            let unit = if self.parse_keyword(Keyword::ROWS) {
+                Some(TableSampleUnit::Rows)
+            } else if self.parse_keyword(Keyword::PERCENT) {
+                Some(TableSampleUnit::Percent)
+            } else {
+                None
+            };
+            (
+                Some(TableSampleQuantity {
+                    parenthesized,
+                    value,
+                    unit,
+                }),
+                None,
+            )
         };
-
-        Ok(Some(Box::new(sample)))
-    }
-
-    fn parse_table_sample_bernoulli(
-        &mut self,
-        name: TableSampleMethodName,
-    ) -> Result<TableSampleMethod, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let value = self.parse_number_value()?;
-        let (probability, value, unit) = if self.parse_keyword(Keyword::ROWS) {
-            (None, Some(value), Some(TableSampleUnit::Rows))
-        } else if self.parse_keyword(Keyword::PERCENT) {
-            (None, Some(value), Some(TableSampleUnit::Percent))
-        } else {
-            (Some(value), None, None)
-        };
-        self.expect_token(&Token::RParen)?;
-        Ok(TableSampleMethod::Bernoulli(TableSampleBernoulli {
-            name,
-            probability,
-            value,
-            unit,
-        }))
-    }
-
-    fn parse_table_sample_system(
-        &mut self,
-        name: TableSampleMethodName,
-    ) -> Result<TableSampleMethod, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let probability = self.parse_number_value()?;
-        self.expect_token(&Token::RParen)?;
+        if parenthesized {
+            self.expect_token(&Token::RParen)?;
+        }
 
         let seed = if self.parse_keyword(Keyword::REPEATABLE) {
             Some(self.parse_table_sample_seed(TableSampleSeedModifier::Repeatable)?)
@@ -10753,11 +10734,20 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(TableSampleMethod::System(TableSampleSystem {
+        let offset = if self.parse_keyword(Keyword::OFFSET) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        Ok(Some(Box::new(TableSample {
+            modifier,
             name,
-            probability,
+            quantity,
             seed,
-        }))
+            bucket,
+            offset,
+        })))
     }
 
     fn parse_table_sample_seed(

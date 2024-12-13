@@ -8382,8 +8382,8 @@ impl<'a> Parser<'a> {
                     Ok(DataType::Tuple(field_defs))
                 }
                 Keyword::TRIGGER => Ok(DataType::Trigger),
-                Keyword::ANY => {
-                    self.expect_keyword(Keyword::TYPE)?;
+                Keyword::ANY if self.peek_keyword(Keyword::TYPE) => {
+                    let _ = self.parse_keyword(Keyword::TYPE);
                     Ok(DataType::AnyType)
                 }
                 _ => {

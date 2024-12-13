@@ -2097,14 +2097,6 @@ fn test_bigquery_create_function() {
             "REMOTE WITH CONNECTION us.myconnection ",
             "OPTIONS(a = [1, 2])",
         ),
-        // Templated
-        concat!(
-            "CREATE OR REPLACE TEMPORARY FUNCTION ",
-            "my_function(param1 ANY TYPE) ",
-            "AS (",
-            "(SELECT 1)",
-            ")",
-        ),
     ];
     for sql in sqls {
         bigquery().verified_stmt(sql);
@@ -2219,4 +2211,20 @@ fn test_any_value() {
     );
     bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MAX sold)");
     bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MIN sold)");
+}
+
+#[test]
+fn test_any_type() {
+    bigquery().verified_stmt(concat!(
+        "CREATE OR REPLACE TEMPORARY FUNCTION ",
+        "my_function(param1 ANY TYPE) ",
+        "AS (",
+        "(SELECT 1)",
+        ")",
+    ));
+}
+
+#[test]
+fn test_any_type_dont_break_custom_type() {
+    bigquery_and_generic().verified_stmt("CREATE TABLE foo (x ANY)");
 }

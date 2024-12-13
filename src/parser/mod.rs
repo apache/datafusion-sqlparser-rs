@@ -851,7 +851,9 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::TABLE)?;
+        if dialect_of!(self is MySqlDialect | DatabricksDialect | HiveDialect | SnowflakeDialect) {
+            self.expect_keyword(Keyword::TABLE)?;
+        }
         let table_name = self.parse_object_name(false)?;
         let mut for_columns = false;
         let mut cache_metadata = false;

@@ -226,7 +226,7 @@ fn parse_create_table_auto_increment() {
                         ColumnOptionDef {
                             name: None,
                             option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                                "AUTOINCREMENT"
+                                "AUTOINCREMENT".into()
                             )]),
                         },
                     ],
@@ -262,14 +262,14 @@ fn parse_create_table_primary_key_asc_desc() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY ASC)";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { columns, .. }) => {
-            assert_eq!(vec![expected_column_def("ASC")], columns);
+            assert_eq!(vec![expected_column_def("ASC".into())], columns);
         }
         _ => unreachable!(),
     }
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY DESC)";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { columns, .. }) => {
-            assert_eq!(vec![expected_column_def("DESC")], columns);
+            assert_eq!(vec![expected_column_def("DESC".into())], columns);
         }
         _ => unreachable!(),
     }

@@ -4160,7 +4160,7 @@ impl<'a> Parser<'a> {
             Keyword::ARCHIVE => Ok(Some(CreateFunctionUsing::Archive(uri))),
             _ => self.expected(
                 "JAR, FILE or ARCHIVE, got {:?}",
-                TokenWithSpan::wrap(Token::make_keyword(format!("{keyword:?}").as_str())),
+                TokenWithSpan::wrap(Token::make_keyword(format!("{keyword:?}"))),
             ),
         }
     }
@@ -6495,28 +6495,28 @@ impl<'a> Parser<'a> {
         {
             // Support AUTO_INCREMENT for MySQL
             Ok(Some(ColumnOption::DialectSpecific(vec![
-                Token::make_keyword("AUTO_INCREMENT"),
+                Token::make_keyword("AUTO_INCREMENT".into()),
             ])))
         } else if self.parse_keyword(Keyword::AUTOINCREMENT)
             && dialect_of!(self is SQLiteDialect |  GenericDialect)
         {
             // Support AUTOINCREMENT for SQLite
             Ok(Some(ColumnOption::DialectSpecific(vec![
-                Token::make_keyword("AUTOINCREMENT"),
+                Token::make_keyword("AUTOINCREMENT".into()),
             ])))
         } else if self.parse_keyword(Keyword::ASC)
             && self.dialect.supports_asc_desc_in_column_definition()
         {
             // Support ASC for SQLite
             Ok(Some(ColumnOption::DialectSpecific(vec![
-                Token::make_keyword("ASC"),
+                Token::make_keyword("ASC".into()),
             ])))
         } else if self.parse_keyword(Keyword::DESC)
             && self.dialect.supports_asc_desc_in_column_definition()
         {
             // Support DESC for SQLite
             Ok(Some(ColumnOption::DialectSpecific(vec![
-                Token::make_keyword("DESC"),
+                Token::make_keyword("DESC".into()),
             ])))
         } else if self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
             && dialect_of!(self is MySqlDialect | GenericDialect)
@@ -6889,7 +6889,7 @@ impl<'a> Parser<'a> {
                     return self.expected(
                         "FULLTEXT or SPATIAL option without constraint name",
                         TokenWithSpan {
-                            token: Token::make_keyword(&name.to_string()),
+                            token: Token::make_keyword(name.to_string()),
                             span: next_token.span,
                         },
                     );
@@ -13028,17 +13028,29 @@ mod tests {
     fn test_prev_index() {
         let sql = "SELECT version";
         all_dialects().run_parser_method(sql, |parser| {
-            assert_eq!(parser.peek_token(), Token::make_keyword("SELECT"));
-            assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
+            assert_eq!(parser.peek_token(), Token::make_keyword("SELECT".into()));
+            assert_eq!(parser.next_token(), Token::make_keyword("SELECT".into()));
             parser.prev_token();
-            assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
+            assert_eq!(parser.next_token(), Token::make_keyword("SELECT".into()));
+            assert_eq!(
+                parser.next_token(),
+                Token::make_word("version".into(), None)
+            );
             parser.prev_token();
-            assert_eq!(parser.peek_token(), Token::make_word("version", None));
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
+            assert_eq!(
+                parser.peek_token(),
+                Token::make_word("version".into(), None)
+            );
+            assert_eq!(
+                parser.next_token(),
+                Token::make_word("version".into(), None)
+            );
             assert_eq!(parser.peek_token(), Token::EOF);
             parser.prev_token();
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
+            assert_eq!(
+                parser.next_token(),
+                Token::make_word("version".into(), None)
+            );
             assert_eq!(parser.next_token(), Token::EOF);
             assert_eq!(parser.next_token(), Token::EOF);
             parser.prev_token();

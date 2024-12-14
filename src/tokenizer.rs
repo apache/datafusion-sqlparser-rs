@@ -339,21 +339,25 @@ impl fmt::Display for Token {
 }
 
 impl Token {
-    pub fn make_keyword(keyword: &str) -> Self {
+    pub fn make_keyword(keyword: String) -> Self {
         Token::make_word(keyword, None)
     }
 
-    pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
-        let word_uppercase = word.to_uppercase();
+    pub fn make_word(word: String, quote_style: Option<char>) -> Self {
+        // Look for keyword ignoring ascii case
+        let keyword = if quote_style.is_none() {
+            let word_uppercase = word.to_uppercase();
+            ALL_KEYWORDS
+                .binary_search(&word_uppercase.as_str())
+                .map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
+        } else {
+            Keyword::NoKeyword
+        };
+
         Token::Word(Word {
-            value: word.to_string(),
+            value: word,
             quote_style,
-            keyword: if quote_style.is_none() {
-                let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
-                keyword.map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
-            } else {
-                Keyword::NoKeyword
-            },
+            keyword,
         })
     }
 }
@@ -880,7 +884,7 @@ impl<'a> Tokenizer<'a> {
             return Ok(Some(Token::Number(s, false)));
         }
 
-        Ok(Some(Token::make_word(&word, None)))
+        Ok(Some(Token::make_word(word, None)))
     }
 
     /// Get the next token or return None
@@ -934,7 +938,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "b" or "B"
                             let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -961,7 +965,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "r" or "R"
                             let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -977,7 +981,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "N"
                             let s = self.tokenize_word(n, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -994,7 +998,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "E" or "e"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -1013,7 +1017,7 @@ impl<'a> Tokenizer<'a> {
                     }
                     // regular identifier starting with an "U" or "u"
                     let s = self.tokenize_word(x, chars);
-                    Ok(Some(Token::make_word(&s, None)))
+                    Ok(Some(Token::make_word(s, None)))
                 }
                 // The spec only allows an uppercase 'X' to introduce a hex
                 // string, but PostgreSQL, at least, allows a lowercase 'x' too.
@@ -1028,7 +1032,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "X"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(s, None)))
                         }
                     }
                 }
@@ -1087,7 +1091,7 @@ impl<'a> Tokenizer<'a> {
                     let (s, last_char) = self.parse_quoted_ident(chars, quote_end);
 
                     if last_char == Some(quote_end) {
-                        Ok(Some(Token::make_word(&s, Some(quote_start))))
+                        Ok(Some(Token::make_word(s, Some(quote_start))))
                     } else {
                         self.tokenizer_error(
                             error_loc,
@@ -1156,7 +1160,7 @@ impl<'a> Tokenizer<'a> {
 
                         if !word.is_empty() {
                             s += word.as_str();
-                            return Ok(Some(Token::make_word(s.as_str(), None)));
+                            return Ok(Some(Token::make_word(s, None)));
                         }
                     }
 
@@ -2105,7 +2109,7 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];
@@ -2120,7 +2124,7 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from(".1"), false),
         ];
@@ -2136,7 +2140,7 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Word(Word {
                 value: "foo".to_string(),
@@ -2157,7 +2161,7 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e10"), false),
             Token::Comma,
@@ -2169,11 +2173,11 @@ mod tests {
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
-            Token::make_word("ea", None),
+            Token::make_word("ea".into(), None),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e-10"), false),
-            Token::make_word("a", None),
+            Token::make_word("a".into(), None),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1e-10"), false),
@@ -2191,9 +2195,9 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("sqrt", None),
+            Token::make_word("sqrt".into(), None),
             Token::LParen,
             Token::Number(String::from("1"), false),
             Token::RParen,
@@ -2209,7 +2213,7 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString(String::from("a")),
             Token::Whitespace(Whitespace::Space),
@@ -2227,17 +2231,17 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("one", None),
+            Token::make_word("one".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::Pipe,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("two", None),
+            Token::make_word("two".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::Caret,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("three", None),
+            Token::make_word("three".into(), None),
         ];
         compare(expected, tokens);
     }
@@ -2250,34 +2254,34 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("true"),
+            Token::make_keyword("true".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("XOR"),
+            Token::make_keyword("XOR".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("true"),
+            Token::make_keyword("true".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("false"),
+            Token::make_keyword("false".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("XOR"),
+            Token::make_keyword("XOR".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("false"),
+            Token::make_keyword("false".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("true"),
+            Token::make_keyword("true".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("XOR"),
+            Token::make_keyword("XOR".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("false"),
+            Token::make_keyword("false".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("false"),
+            Token::make_keyword("false".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("XOR"),
+            Token::make_keyword("XOR".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("true"),
+            Token::make_keyword("true".into()),
         ];
         compare(expected, tokens);
     }
@@ -2289,25 +2293,25 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Mul,
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("FROM"),
+            Token::make_keyword("FROM".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("customer", None),
+            Token::make_word("customer".into(), None),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("WHERE"),
+            Token::make_keyword("WHERE".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("id", None),
+            Token::make_word("id".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1"), false),
+            Token::Number("1".into(), false),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("LIMIT"),
+            Token::make_keyword("LIMIT".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("5"), false),
+            Token::Number("5".into(), false),
         ];
 
         compare(expected, tokens);
@@ -2320,23 +2324,23 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("EXPLAIN"),
+            Token::make_keyword("EXPLAIN".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Mul,
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("FROM"),
+            Token::make_keyword("FROM".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("customer", None),
+            Token::make_word("customer".into(), None),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("WHERE"),
+            Token::make_keyword("WHERE".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("id", None),
+            Token::make_word("id".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1"), false),
+            Token::Number("1".into(), false),
         ];
 
         compare(expected, tokens);
@@ -2349,25 +2353,25 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("EXPLAIN"),
+            Token::make_keyword("EXPLAIN".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("ANALYZE"),
+            Token::make_keyword("ANALYZE".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Mul,
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("FROM"),
+            Token::make_keyword("FROM".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("customer", None),
+            Token::make_word("customer".into(), None),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("WHERE"),
+            Token::make_keyword("WHERE".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("id", None),
+            Token::make_word("id".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1"), false),
+            Token::Number("1".into(), false),
         ];
 
         compare(expected, tokens);
@@ -2380,21 +2384,21 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Mul,
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("FROM"),
+            Token::make_keyword("FROM".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("customer", None),
+            Token::make_word("customer".into(), None),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("WHERE"),
+            Token::make_keyword("WHERE".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("salary", None),
+            Token::make_word("salary".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::Neq,
             Token::Whitespace(Whitespace::Space),
-            Token::SingleQuotedString(String::from("Not Provided")),
+            Token::SingleQuotedString("Not Provided".into()),
         ];
 
         compare(expected, tokens);
@@ -2410,7 +2414,7 @@ mod tests {
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
             Token::Char('💝'),
-            Token::make_word("مصطفىh", None),
+            Token::make_word("مصطفىh".into(), None),
         ];
         compare(expected, tokens);
     }
@@ -2468,16 +2472,16 @@ mod tests {
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
             Token::Whitespace(Whitespace::Newline),
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Mul,
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("FROM"),
+            Token::make_keyword("FROM".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("table"),
+            Token::make_keyword("table".into()),
             Token::Whitespace(Whitespace::Tab),
             Token::Char('💝'),
-            Token::make_word("مصطفىh", None),
+            Token::make_word("مصطفىh".into(), None),
         ];
         compare(expected, tokens);
     }
@@ -2490,7 +2494,7 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::DollarQuotedString(DollarQuotedString {
                 value: "dollar '$' quoted strings have $tags like this$ or like this $$".into(),
@@ -2523,7 +2527,7 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::DollarQuotedString(DollarQuotedString {
                 value: "within dollar '$' quoted strings have $tags like this$ ".into(),
@@ -2557,11 +2561,11 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
-            Token::make_word("FUNCTION", None),
+            Token::make_word("FUNCTION".into(), None),
             Token::LParen,
-            Token::make_word("key", None),
+            Token::make_word("key".into(), None),
             Token::RArrow,
-            Token::make_word("value", None),
+            Token::make_word("value".into(), None),
             Token::RParen,
         ];
         compare(expected, tokens);
@@ -2574,11 +2578,11 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
 
         let expected = vec![
-            Token::make_word("a", None),
+            Token::make_word("a".into(), None),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("IS"),
+            Token::make_keyword("IS".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("NULL"),
+            Token::make_keyword("NULL".into()),
         ];
 
         compare(expected, tokens);
@@ -2696,13 +2700,13 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
-            Token::make_word("line1", None),
+            Token::make_word("line1".into(), None),
             Token::Whitespace(Whitespace::Newline),
-            Token::make_word("line2", None),
+            Token::make_word("line2".into(), None),
             Token::Whitespace(Whitespace::Newline),
-            Token::make_word("line3", None),
+            Token::make_word("line3".into(), None),
             Token::Whitespace(Whitespace::Newline),
-            Token::make_word("line4", None),
+            Token::make_word("line4".into(), None),
             Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);
@@ -2714,17 +2718,17 @@ mod tests {
         let dialect = MsSqlDialect {};
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("TOP"),
+            Token::make_keyword("TOP".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("5"), false),
+            Token::Number("5".into(), false),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("bar", Some('[')),
+            Token::make_word("bar".into(), Some('[')),
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("FROM"),
+            Token::make_keyword("FROM".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("foo", None),
+            Token::make_word("foo".into(), None),
         ];
         compare(expected, tokens);
     }
@@ -2735,30 +2739,30 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::Tilde,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::TildeAsterisk,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkTilde,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkTildeAsterisk,
             Token::Whitespace(Whitespace::Space),
@@ -2773,30 +2777,30 @@ mod tests {
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::DoubleTilde,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::DoubleTildeAsterisk,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkDoubleTilde,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("_a%".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col".into(), None),
             Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkDoubleTildeAsterisk,
             Token::Whitespace(Whitespace::Space),
@@ -2812,11 +2816,11 @@ mod tests {
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a " b"#, Some('"')),
+            Token::make_word(r#"a " b"#.into(), Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a ""#, Some('"')),
+            Token::make_word(r#"a ""#.into(), Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"c """#, Some('"')),
+            Token::make_word(r#"c """#.into(), Some('"')),
             Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);
@@ -2828,7 +2832,7 @@ mod tests {
         let dialect = SnowflakeDialect {};
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
-            Token::make_word(r#"field"#, None),
+            Token::make_word(r#"field"#.into(), None),
             Token::Div,
             Token::Number("1000".to_string(), false),
         ];
@@ -2845,11 +2849,11 @@ mod tests {
             .unwrap();
         let expected = vec![
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a "" b"#, Some('"')),
+            Token::make_word(r#"a "" b"#.into(), Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a """#, Some('"')),
+            Token::make_word(r#"a """#.into(), Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"c """""#, Some('"')),
+            Token::make_word(r#"c """""#.into(), Some('"')),
             Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);
@@ -2863,13 +2867,21 @@ mod tests {
             .tokenize_with_location()
             .unwrap();
         let expected = vec![
-            TokenWithSpan::at(Token::make_keyword("SELECT"), (1, 1).into(), (1, 7).into()),
+            TokenWithSpan::at(
+                Token::make_keyword("SELECT".into()),
+                (1, 1).into(),
+                (1, 7).into(),
+            ),
             TokenWithSpan::at(
                 Token::Whitespace(Whitespace::Space),
                 (1, 7).into(),
                 (1, 8).into(),
             ),
-            TokenWithSpan::at(Token::make_word("a", None), (1, 8).into(), (1, 9).into()),
+            TokenWithSpan::at(
+                Token::make_word("a".into(), None),
+                (1, 8).into(),
+                (1, 9).into(),
+            ),
             TokenWithSpan::at(Token::Comma, (1, 9).into(), (1, 10).into()),
             TokenWithSpan::at(
                 Token::Whitespace(Whitespace::Newline),
@@ -2881,7 +2893,11 @@ mod tests {
                 (2, 1).into(),
                 (2, 2).into(),
             ),
-            TokenWithSpan::at(Token::make_word("b", None), (2, 2).into(), (2, 3).into()),
+            TokenWithSpan::at(
+                Token::make_word("b".into(), None),
+                (2, 2).into(),
+                (2, 3).into(),
+            ),
         ];
         compare(expected, tokens);
     }
@@ -3001,11 +3017,11 @@ mod tests {
         let sql = r#"SELECT * FROM 1"#;
         let tokens = Tokenizer::new(dialect, sql).tokenize().unwrap();
         let expected = vec![
-            Token::make_keyword("SELECT"),
+            Token::make_keyword("SELECT".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Mul,
             Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("FROM"),
+            Token::make_keyword("FROM".into()),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
         ];

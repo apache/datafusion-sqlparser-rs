@@ -70,7 +70,8 @@ macro_rules! define_keywords {
     };
 }
 
-// The following keywords should be sorted to be able to match using binary search
+// Notes: The following keywords should be sorted to be able to match using
+// binary search
 define_keywords!(
     ABORT,
     ABS,

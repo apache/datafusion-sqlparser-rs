@@ -1062,6 +1062,7 @@ impl<'a> Parser<'a> {
                 {
                     Ok(Some(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident(w_span)]),
+                        uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::None,
                         null_treatment: None,
@@ -1120,6 +1121,7 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     Ok(Some(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident(w_span)]),
+                        uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::Subquery(query),
                         filter: None,
@@ -1421,9 +1423,9 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-            Token::LBrace if dialect.supports_dictionary_syntax() => {
+            Token::LBrace => {
                 self.prev_token();
-                self.parse_duckdb_struct_literal()
+                self.parse_lbrace_expr()
             }
             _ => self.expected_at("an expression", next_token_index),
         }?;
@@ -1522,7 +1524,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Tries to parse the body of an [ODBC function] call.
+    /// i.e. without the enclosing braces
+    ///
+    /// ```sql
+    /// fn myfunc(1,2,3)
+    /// ```
+    ///
+    /// [ODBC function]: https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/scalar-function-calls?view=sql-server-2017
+    fn maybe_parse_odbc_fn_body(&mut self) -> Result<Option<Expr>, ParserError> {
+        self.maybe_parse(|p| {
+            p.expect_keyword(Keyword::FN)?;
+            let fn_name = p.parse_object_name(false)?;
+            let mut fn_call = p.parse_function_call(fn_name)?;
+            fn_call.uses_odbc_syntax = true;
+            Ok(Expr::Function(fn_call))
+        })
+    }
+
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
+        self.parse_function_call(name).map(Expr::Function)
+    }
+
+    fn parse_function_call(&mut self, name: ObjectName) -> Result<Function, ParserError> {
         self.expect_token(&Token::LParen)?;
 
         // Snowflake permits a subquery to be passed as an argument without
@@ -1530,15 +1554,16 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is SnowflakeDialect) && self.peek_sub_query() {
             let subquery = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
-            return Ok(Expr::Function(Function {
+            return Ok(Function {
                 name,
+                uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::Subquery(subquery),
                 filter: None,
                 null_treatment: None,
                 over: None,
                 within_group: vec![],
-            }));
+            });
         }
 
         let mut args = self.parse_function_argument_list()?;
@@ -1597,15 +1622,16 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Expr::Function(Function {
+        Ok(Function {
             name,
+            uses_odbc_syntax: false,
             parameters,
             args: FunctionArguments::List(args),
             null_treatment,
             filter,
             over,
             within_group,
-        }))
+        })
     }
 
     /// Optionally parses a null treatment clause.
@@ -1632,6 +1658,7 @@ impl<'a> Parser<'a> {
         };
         Ok(Expr::Function(Function {
             name,
+            uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args,
             filter: None,
@@ -2222,6 +2249,31 @@ impl<'a> Parser<'a> {
                 expr: Box::new(self.parse_subexpr(self.dialect.prec_value(Precedence::UnaryNot))?),
             }),
         }
+    }
+
+    /// Parse expression types that start with a left brace '{'.
+    /// Examples:
+    /// ```sql
+    /// -- Dictionary expr.
+    /// {'key1': 'value1', 'key2': 'value2'}
+    ///
+    /// -- Function call using the ODBC syntax.
+    /// { fn CONCAT('foo', 'bar') }
+    /// ```
+    fn parse_lbrace_expr(&mut self) -> Result<Expr, ParserError> {
+        let token = self.expect_token(&Token::LBrace)?;
+
+        if let Some(fn_expr) = self.maybe_parse_odbc_fn_body()? {
+            self.expect_token(&Token::RBrace)?;
+            return Ok(fn_expr);
+        }
+
+        if self.dialect.supports_dictionary_syntax() {
+            self.prev_token(); // Put back the '{'
+            return self.parse_duckdb_struct_literal();
+        }
+
+        self.expected("an expression", token)
     }
 
     /// Parses fulltext expressions [`sqlparser::ast::Expr::MatchAgainst`]
@@ -7653,6 +7705,7 @@ impl<'a> Parser<'a> {
         } else {
             Ok(Statement::Call(Function {
                 name: object_name,
+                uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::None,
                 over: None,
@@ -11405,14 +11458,19 @@ impl<'a> Parser<'a> {
                 if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
                     (vec![], None, vec![], None)
                 } else {
-                    let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+                    let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
+                        let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
-                    let partitioned = self.parse_insert_partition()?;
-                    // Hive allows you to specify columns after partitions as well if you want.
-                    let after_columns = if dialect_of!(self is HiveDialect) {
-                        self.parse_parenthesized_column_list(Optional, false)?
+                        let partitioned = self.parse_insert_partition()?;
+                        // Hive allows you to specify columns after partitions as well if you want.
+                        let after_columns = if dialect_of!(self is HiveDialect) {
+                            self.parse_parenthesized_column_list(Optional, false)?
+                        } else {
+                            vec![]
+                        };
+                        (columns, partitioned, after_columns)
                     } else {
-                        vec![]
+                        Default::default()
                     };
 
                     let source = Some(self.parse_query()?);
@@ -11505,6 +11563,14 @@ impl<'a> Parser<'a> {
                 insert_alias,
             }))
         }
+    }
+
+    /// Returns true if the immediate tokens look like the
+    /// beginning of a subquery. `(SELECT ...`
+    fn peek_subquery_start(&mut self) -> bool {
+        let [maybe_lparen, maybe_select] = self.peek_tokens();
+        Token::LParen == maybe_lparen
+            && matches!(maybe_select, Token::Word(w) if w.keyword == Keyword::SELECT)
     }
 
     fn parse_conflict_clause(&mut self) -> Option<SqliteOnConflict> {

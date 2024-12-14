@@ -199,6 +199,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -821,6 +822,7 @@ fn parse_create_table_with_variant_default_expressions() {
                             name: None,
                             option: ColumnOption::Materialized(Expr::Function(Function {
                                 name: ObjectName(vec![Ident::new("now")]),
+                                uses_odbc_syntax: false,
                                 args: FunctionArguments::List(FunctionArgumentList {
                                     args: vec![],
                                     duplicate_treatment: None,
@@ -842,6 +844,7 @@ fn parse_create_table_with_variant_default_expressions() {
                             name: None,
                             option: ColumnOption::Ephemeral(Some(Expr::Function(Function {
                                 name: ObjectName(vec![Ident::new("now")]),
+                                uses_odbc_syntax: false,
                                 args: FunctionArguments::List(FunctionArgumentList {
                                     args: vec![],
                                     duplicate_treatment: None,
@@ -872,6 +875,7 @@ fn parse_create_table_with_variant_default_expressions() {
                             name: None,
                             option: ColumnOption::Alias(Expr::Function(Function {
                                 name: ObjectName(vec![Ident::new("toString")]),
+                                uses_odbc_syntax: false,
                                 args: FunctionArguments::List(FunctionArgumentList {
                                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                         Identifier(Ident::new("c"))

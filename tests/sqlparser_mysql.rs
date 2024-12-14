@@ -637,7 +637,7 @@ fn parse_create_table_auto_increment() {
                         ColumnOptionDef {
                             name: None,
                             option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                                "AUTO_INCREMENT"
+                                "AUTO_INCREMENT".into()
                             )]),
                         },
                     ],
@@ -727,7 +727,7 @@ fn parse_create_table_primary_and_unique_key() {
                                 ColumnOptionDef {
                                     name: None,
                                     option: ColumnOption::DialectSpecific(vec![
-                                        Token::make_keyword("AUTO_INCREMENT")
+                                        Token::make_keyword("AUTO_INCREMENT".into())
                                     ]),
                                 },
                             ],

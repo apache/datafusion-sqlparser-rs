@@ -495,14 +495,14 @@ fn test_snowflake_single_line_tokenize() {
     let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
 
     let expected = vec![
-        Token::make_keyword("CREATE"),
+        Token::make_keyword("CREATE".into()),
         Token::Whitespace(Whitespace::Space),
-        Token::make_keyword("TABLE"),
+        Token::make_keyword("TABLE".into()),
         Token::Whitespace(Whitespace::SingleLineComment {
-            prefix: "#".to_string(),
-            comment: " this is a comment \n".to_string(),
+            prefix: "#".into(),
+            comment: " this is a comment \n".into(),
         }),
-        Token::make_word("table_1", None),
+        Token::make_word("table_1".into(), None),
     ];
 
     assert_eq!(expected, tokens);
@@ -511,15 +511,15 @@ fn test_snowflake_single_line_tokenize() {
     let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
 
     let expected = vec![
-        Token::make_keyword("CREATE"),
+        Token::make_keyword("CREATE".into()),
         Token::Whitespace(Whitespace::Space),
-        Token::make_keyword("TABLE"),
+        Token::make_keyword("TABLE".into()),
         Token::Whitespace(Whitespace::Space),
         Token::Whitespace(Whitespace::SingleLineComment {
             prefix: "//".to_string(),
             comment: " this is a comment \n".to_string(),
         }),
-        Token::make_word("table_1", None),
+        Token::make_word("table_1".into(), None),
     ];
 
     assert_eq!(expected, tokens);

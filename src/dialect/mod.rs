@@ -128,14 +128,39 @@ pub trait Dialect: Debug + Any {
         ch == '"' || ch == '`'
     }
 
-    /// Return the character used to quote identifiers.
-    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+    /// Determine if a character starts a potential nested quoted identifier.
+    /// Example: RedShift supports the following quote styles to all mean the same thing:
+    /// ```sql
+    /// SELECT 1 AS foo;
+    /// SELECT 1 AS "foo";
+    /// SELECT 1 AS [foo];
+    /// SELECT 1 AS ["foo"];
+    /// ```
+    fn is_nested_delimited_identifier_start(&self, _ch: char) -> bool {
+        false
+    }
+
+    /// Only applicable whenever [`Self::is_nested_delimited_identifier_start`] returns true
+    /// If the next sequence of tokens potentially represent a nested identifier, then this method
+    /// returns a tuple containing the outer quote style, and if present, the inner (nested) quote style.
+    ///
+    /// Example (Redshift):
+    /// ```text
+    /// `["foo"]` => Some(`[`, Some(`"`))
+    /// `[foo]` => Some(`[`, None)
+    /// `[0]` => None
+    /// `"foo"` => None
+    /// ```
+    fn peek_nested_delimited_identifier_quotes(
+        &self,
+        mut _chars: Peekable<Chars<'_>>,
+    ) -> Option<(char, Option<char>)> {
         None
     }
 
-    /// Determine if quoted characters are proper for identifier
-    fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
-        true
+    /// Return the character used to quote identifiers.
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        None
     }
 
     /// Determine if a character is a valid start character for an unquoted identifier
@@ -869,19 +894,23 @@ mod tests {
                 self.0.is_delimited_identifier_start(ch)
             }
 
+            fn is_nested_delimited_identifier_start(&self, ch: char) -> bool {
+                self.0.is_nested_delimited_identifier_start(ch)
+            }
+
+            fn peek_nested_delimited_identifier_quotes(
+                &self,
+                chars: std::iter::Peekable<std::str::Chars<'_>>,
+            ) -> Option<(char, Option<char>)> {
+                self.0.peek_nested_delimited_identifier_quotes(chars)
+            }
+
             fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
                 self.0.identifier_quote_style(identifier)
             }
 
             fn supports_string_literal_backslash_escape(&self) -> bool {
                 self.0.supports_string_literal_backslash_escape()
-            }
-
-            fn is_proper_identifier_inside_quotes(
-                &self,
-                chars: std::iter::Peekable<std::str::Chars<'_>>,
-            ) -> bool {
-                self.0.is_proper_identifier_inside_quotes(chars)
             }
 
             fn supports_filter_during_aggregation(&self) -> bool {

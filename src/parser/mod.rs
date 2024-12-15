@@ -8382,6 +8382,10 @@ impl<'a> Parser<'a> {
                     Ok(DataType::Tuple(field_defs))
                 }
                 Keyword::TRIGGER => Ok(DataType::Trigger),
+                Keyword::ANY if self.peek_keyword(Keyword::TYPE) => {
+                    let _ = self.parse_keyword(Keyword::TYPE);
+                    Ok(DataType::AnyType)
+                }
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;

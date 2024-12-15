@@ -2212,3 +2212,19 @@ fn test_any_value() {
     bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MAX sold)");
     bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MIN sold)");
 }
+
+#[test]
+fn test_any_type() {
+    bigquery().verified_stmt(concat!(
+        "CREATE OR REPLACE TEMPORARY FUNCTION ",
+        "my_function(param1 ANY TYPE) ",
+        "AS (",
+        "(SELECT 1)",
+        ")",
+    ));
+}
+
+#[test]
+fn test_any_type_dont_break_custom_type() {
+    bigquery_and_generic().verified_stmt("CREATE TABLE foo (x ANY)");
+}

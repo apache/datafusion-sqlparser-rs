@@ -268,20 +268,11 @@ fn test_select_union_by_name() {
                 top_before_distinct: false,
                 into: None,
                 from: vec![TableWithJoins {
-                    relation: TableFactor::Table {
-                        name: ObjectName(vec![Ident {
-                            value: "capitals".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        }]),
-                        alias: None,
-                        args: None,
-                        with_hints: vec![],
-                        version: None,
-                        partitions: vec![],
-                        with_ordinality: false,
-                        json_path: None,
-                    },
+                    relation: table_from_name(ObjectName(vec![Ident {
+                        value: "capitals".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }])),
                     joins: vec![],
                 }],
                 lateral_views: vec![],
@@ -306,20 +297,11 @@ fn test_select_union_by_name() {
                 top_before_distinct: false,
                 into: None,
                 from: vec![TableWithJoins {
-                    relation: TableFactor::Table {
-                        name: ObjectName(vec![Ident {
-                            value: "weather".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        }]),
-                        alias: None,
-                        args: None,
-                        with_hints: vec![],
-                        version: None,
-                        partitions: vec![],
-                        with_ordinality: false,
-                        json_path: None,
-                    },
+                    relation: table_from_name(ObjectName(vec![Ident {
+                        value: "weather".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }])),
                     joins: vec![],
                 }],
                 lateral_views: vec![],

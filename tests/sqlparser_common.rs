@@ -41,7 +41,7 @@ use sqlparser::tokenizer::Span;
 use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
     all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, call, expr_from_projection,
-    join, number, only, table, table_alias, TestedDialects,
+    join, number, only, table, table_alias, table_from_name, TestedDialects,
 };
 
 #[macro_use]
@@ -359,16 +359,7 @@ fn parse_update_set_from() {
         stmt,
         Statement::Update {
             table: TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("t1")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec![Ident::new("t1")])),
                 joins: vec![],
             },
             assignments: vec![Assignment {
@@ -391,16 +382,7 @@ fn parse_update_set_from() {
                             ],
                             into: None,
                             from: vec![TableWithJoins {
-                                relation: TableFactor::Table {
-                                    name: ObjectName(vec![Ident::new("t1")]),
-                                    alias: None,
-                                    args: None,
-                                    with_hints: vec![],
-                                    version: None,
-                                    partitions: vec![],
-                                    with_ordinality: false,
-                                    json_path: None,
-                                },
+                                relation: table_from_name(ObjectName(vec![Ident::new("t1")])),
                                 joins: vec![],
                             }],
                             lateral_views: vec![],
@@ -480,6 +462,7 @@ fn parse_update_with_table_alias() {
                         partitions: vec![],
                         with_ordinality: false,
                         json_path: None,
+                        sample: None,
                     },
                     joins: vec![],
                 },
@@ -572,6 +555,7 @@ fn parse_select_with_table_alias() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
             },
             joins: vec![],
         }]
@@ -601,16 +585,7 @@ fn parse_delete_statement() {
             ..
         }) => {
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![Ident::with_quote('"', "table")])),
                 from[0].relation
             );
         }
@@ -649,29 +624,17 @@ fn parse_delete_statement_for_multi_tables() {
                 tables[1]
             );
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![
+                    Ident::new("schema1"),
+                    Ident::new("table1")
+                ])),
                 from[0].relation
             );
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![
+                    Ident::new("schema2"),
+                    Ident::new("table2")
+                ])),
                 from[0].joins[0].relation
             );
         }
@@ -689,55 +652,31 @@ fn parse_delete_statement_for_multi_tables_with_using() {
             ..
         }) => {
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![
+                    Ident::new("schema1"),
+                    Ident::new("table1")
+                ])),
                 from[0].relation
             );
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![
+                    Ident::new("schema2"),
+                    Ident::new("table2")
+                ])),
                 from[1].relation
             );
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![
+                    Ident::new("schema1"),
+                    Ident::new("table1")
+                ])),
                 using[0].relation
             );
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![
+                    Ident::new("schema2"),
+                    Ident::new("table2")
+                ])),
                 using[0].joins[0].relation
             );
         }
@@ -760,16 +699,7 @@ fn parse_where_delete_statement() {
             ..
         }) => {
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("foo")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![Ident::new("foo")])),
                 from[0].relation,
             );
 
@@ -815,6 +745,7 @@ fn parse_where_delete_with_alias_statement() {
                     partitions: vec![],
                     with_ordinality: false,
                     json_path: None,
+                    sample: None,
                 },
                 from[0].relation,
             );
@@ -832,6 +763,7 @@ fn parse_where_delete_with_alias_statement() {
                         partitions: vec![],
                         with_ordinality: false,
                         json_path: None,
+                        sample: None,
                     },
                     joins: vec![],
                 }]),
@@ -4920,20 +4852,11 @@ fn test_parse_named_window() {
         ],
         into: None,
         from: vec![TableWithJoins {
-            relation: TableFactor::Table {
-                name: ObjectName(vec![Ident {
-                    value: "aggregate_test_100".to_string(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }]),
-                alias: None,
-                args: None,
-                with_hints: vec![],
-                version: None,
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-            },
+            relation: table_from_name(ObjectName(vec![Ident {
+                value: "aggregate_test_100".to_string(),
+                quote_style: None,
+                span: Span::empty(),
+            }])),
             joins: vec![],
         }],
         lateral_views: vec![],
@@ -5511,20 +5434,11 @@ fn parse_interval_and_or_xor() {
             }))],
             into: None,
             from: vec![TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident {
-                        value: "test".to_string(),
-                        quote_style: None,
-                        span: Span::empty(),
-                    }]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec![Ident {
+                    value: "test".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }])),
                 joins: vec![],
             }],
             lateral_views: vec![],
@@ -6132,29 +6046,11 @@ fn parse_implicit_join() {
     assert_eq!(
         vec![
             TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec!["t1".into()]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec!["t1".into()])),
                 joins: vec![],
             },
             TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec!["t2".into()]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec!["t2".into()])),
                 joins: vec![],
             },
         ],
@@ -6166,53 +6062,17 @@ fn parse_implicit_join() {
     assert_eq!(
         vec![
             TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec!["t1a".into()]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec!["t1a".into()])),
                 joins: vec![Join {
-                    relation: TableFactor::Table {
-                        name: ObjectName(vec!["t1b".into()]),
-                        alias: None,
-                        args: None,
-                        with_hints: vec![],
-                        version: None,
-                        partitions: vec![],
-                        with_ordinality: false,
-                        json_path: None,
-                    },
+                    relation: table_from_name(ObjectName(vec!["t1b".into()])),
                     global: false,
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
                 }],
             },
             TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec!["t2a".into()]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec!["t2a".into()])),
                 joins: vec![Join {
-                    relation: TableFactor::Table {
-                        name: ObjectName(vec!["t2b".into()]),
-                        alias: None,
-                        args: None,
-                        with_hints: vec![],
-                        version: None,
-                        partitions: vec![],
-                        with_ordinality: false,
-                        json_path: None,
-                    },
+                    relation: table_from_name(ObjectName(vec!["t2b".into()])),
                     global: false,
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
                 }],
@@ -6228,16 +6088,7 @@ fn parse_cross_join() {
     let select = verified_only_select(sql);
     assert_eq!(
         Join {
-            relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("t2")]),
-                alias: None,
-                args: None,
-                with_hints: vec![],
-                version: None,
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-            },
+            relation: table_from_name(ObjectName(vec![Ident::new("t2")])),
             global: false,
             join_operator: JoinOperator::CrossJoin,
         },
@@ -6263,6 +6114,7 @@ fn parse_joins_on() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -6391,6 +6243,7 @@ fn parse_joins_using() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
@@ -6465,6 +6318,7 @@ fn parse_natural_join() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -6728,16 +6582,7 @@ fn parse_derived_tables() {
                     }),
                 },
                 joins: vec![Join {
-                    relation: TableFactor::Table {
-                        name: ObjectName(vec!["t2".into()]),
-                        alias: None,
-                        args: None,
-                        with_hints: vec![],
-                        version: None,
-                        partitions: vec![],
-                        with_ordinality: false,
-                        json_path: None,
-                    },
+                    relation: table_from_name(ObjectName(vec!["t2".into()])),
                     global: false,
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
                 }],
@@ -7668,20 +7513,11 @@ fn lateral_function() {
         top_before_distinct: false,
         into: None,
         from: vec![TableWithJoins {
-            relation: TableFactor::Table {
-                name: ObjectName(vec![Ident {
-                    value: "customer".to_string(),
-                    quote_style: None,
-                    span: Span::empty(),
-                }]),
-                alias: None,
-                args: None,
-                with_hints: vec![],
-                version: None,
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-            },
+            relation: table_from_name(ObjectName(vec![Ident {
+                value: "customer".to_string(),
+                quote_style: None,
+                span: Span::empty(),
+            }])),
             joins: vec![Join {
                 relation: TableFactor::Function {
                     lateral: true,
@@ -8499,6 +8335,7 @@ fn parse_merge() {
                     partitions: vec![],
                     with_ordinality: false,
                     json_path: None,
+                    sample: None,
                 }
             );
             assert_eq!(table, table_no_into);
@@ -8519,16 +8356,10 @@ fn parse_merge() {
                             )],
                             into: None,
                             from: vec![TableWithJoins {
-                                relation: TableFactor::Table {
-                                    name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
-                                    alias: None,
-                                    args: None,
-                                    with_hints: vec![],
-                                    version: None,
-                                    partitions: vec![],
-                                    with_ordinality: false,
-                                    json_path: None,
-                                },
+                                relation: table_from_name(ObjectName(vec![
+                                    Ident::new("s"),
+                                    Ident::new("foo")
+                                ])),
                                 joins: vec![],
                             }],
                             lateral_views: vec![],
@@ -9611,6 +9442,7 @@ fn parse_pivot_table() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -9686,6 +9518,7 @@ fn parse_unpivot_table() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
             }),
             value: Ident {
                 value: "quantity".to_string(),
@@ -9756,6 +9589,7 @@ fn parse_pivot_unpivot_table() {
                     partitions: vec![],
                     with_ordinality: false,
                     json_path: None,
+                    sample: None,
                 }),
                 value: Ident {
                     value: "population".to_string(),
@@ -10165,16 +9999,7 @@ fn parse_unload() {
                     projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
                     into: None,
                     from: vec![TableWithJoins {
-                        relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::new("tab")]),
-                            alias: None,
-                            args: None,
-                            with_hints: vec![],
-                            version: None,
-                            partitions: vec![],
-                            with_ordinality: false,
-                            json_path: None,
-                        },
+                        relation: table_from_name(ObjectName(vec![Ident::new("tab")])),
                         joins: vec![],
                     }],
                     lateral_views: vec![],
@@ -10348,16 +10173,7 @@ fn parse_connect_by() {
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
         ],
         from: vec![TableWithJoins {
-            relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("employees")]),
-                alias: None,
-                args: None,
-                with_hints: vec![],
-                version: None,
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-            },
+            relation: table_from_name(ObjectName(vec![Ident::new("employees")])),
             joins: vec![],
         }],
         into: None,
@@ -10437,16 +10253,7 @@ fn parse_connect_by() {
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
             ],
             from: vec![TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("employees")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec![Ident::new("employees")])),
                 joins: vec![],
             }],
             into: None,
@@ -10601,16 +10408,7 @@ fn test_match_recognize() {
     use MatchRecognizeSymbol::*;
     use RepetitionQuantifier::*;
 
-    let table = TableFactor::Table {
-        name: ObjectName(vec![Ident::new("my_table")]),
-        alias: None,
-        args: None,
-        with_hints: vec![],
-        version: None,
-        partitions: vec![],
-        with_ordinality: false,
-        json_path: None,
-    };
+    let table = table_from_name(ObjectName(vec![Ident::new("my_table")]));
 
     fn check(options: &str, expect: TableFactor) {
         let select = all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(
@@ -12584,4 +12382,17 @@ fn parse_create_table_with_enum_types() {
             .unwrap_err(),
         ParserError::ParserError("Expected: literal string, found: 2".to_string())
     );
+}
+
+#[test]
+fn test_table_sample() {
+    let dialects = all_dialects_where(|d| d.supports_table_sample_before_alias());
+    dialects.verified_stmt("SELECT * FROM tbl TABLESAMPLE (50) AS t");
+    dialects.verified_stmt("SELECT * FROM tbl TABLESAMPLE (50 ROWS) AS t");
+    dialects.verified_stmt("SELECT * FROM tbl TABLESAMPLE (50 PERCENT) AS t");
+
+    let dialects = all_dialects_where(|d| !d.supports_table_sample_before_alias());
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE BERNOULLI (50)");
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50)");
+    dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
 }

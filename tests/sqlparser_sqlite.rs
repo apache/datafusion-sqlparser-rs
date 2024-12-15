@@ -479,16 +479,7 @@ fn parse_update_tuple_row_values() {
             }],
             selection: None,
             table: TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("x")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec![Ident::new("x")])),
                 joins: vec![],
             },
             from: None,

@@ -39,27 +39,18 @@ fn test_square_brackets_over_db_schema_table_name() {
     assert_eq!(
         select.from[0],
         TableWithJoins {
-            relation: TableFactor::Table {
-                name: ObjectName(vec![
-                    Ident {
-                        value: "test_schema".to_string(),
-                        quote_style: Some('['),
-                        span: Span::empty(),
-                    },
-                    Ident {
-                        value: "test_table".to_string(),
-                        quote_style: Some('['),
-                        span: Span::empty(),
-                    }
-                ]),
-                alias: None,
-                args: None,
-                with_hints: vec![],
-                version: None,
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-            },
+            relation: table_from_name(ObjectName(vec![
+                Ident {
+                    value: "test_schema".to_string(),
+                    quote_style: Some('['),
+                    span: Span::empty(),
+                },
+                Ident {
+                    value: "test_table".to_string(),
+                    quote_style: Some('['),
+                    span: Span::empty(),
+                }
+            ])),
             joins: vec![],
         }
     );
@@ -90,27 +81,18 @@ fn test_double_quotes_over_db_schema_table_name() {
     assert_eq!(
         select.from[0],
         TableWithJoins {
-            relation: TableFactor::Table {
-                name: ObjectName(vec![
-                    Ident {
-                        value: "test_schema".to_string(),
-                        quote_style: Some('"'),
-                        span: Span::empty(),
-                    },
-                    Ident {
-                        value: "test_table".to_string(),
-                        quote_style: Some('"'),
-                        span: Span::empty(),
-                    }
-                ]),
-                alias: None,
-                args: None,
-                with_hints: vec![],
-                version: None,
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-            },
+            relation: table_from_name(ObjectName(vec![
+                Ident {
+                    value: "test_schema".to_string(),
+                    quote_style: Some('"'),
+                    span: Span::empty(),
+                },
+                Ident {
+                    value: "test_table".to_string(),
+                    quote_style: Some('"'),
+                    span: Span::empty(),
+                }
+            ])),
             joins: vec![],
         }
     );
@@ -130,9 +112,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
-            with_ordinality: _,
-            partitions: _,
-            json_path: _,
+            ..
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);

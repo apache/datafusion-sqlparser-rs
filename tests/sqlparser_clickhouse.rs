@@ -63,16 +63,7 @@ fn parse_map_access_expr() {
             })],
             into: None,
             from: vec![TableWithJoins {
-                relation: Table {
-                    name: ObjectName(vec![Ident::new("foos")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec![Ident::new("foos")])),
                 joins: vec![],
             }],
             lateral_views: vec![],
@@ -175,9 +166,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
-            with_ordinality: _,
-            partitions: _,
-            json_path: _,
+            ..
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -1623,6 +1612,14 @@ fn parse_explain_table() {
         }
         _ => panic!("Unexpected Statement, must be ExplainTable"),
     }
+}
+
+#[test]
+fn parse_table_sample() {
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 0.1");
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1000");
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1 / 10");
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1 / 10 OFFSET 1 / 2");
 }
 
 fn clickhouse() -> TestedDialects {

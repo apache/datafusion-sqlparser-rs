@@ -1984,6 +1984,7 @@ fn parse_map_access_expr() {
                     null_treatment: None,
                     over: None,
                     within_group: vec![],
+                    uses_odbc_syntax: false,
                 }),
             }),
             AccessExpr::Dot(Expr::Identifier(Ident::with_span(

@@ -1149,16 +1149,8 @@ impl<'a> Parser<'a> {
             }
             Token::LParen => {
                 let id_parts = vec![w.to_ident(w_span)];
-                // parse `(+)` outer join syntax
-                if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
-                    && self.consume_tokens(&[Token::LParen, Token::Plus, Token::RParen])
-                {
-                    Ok(Expr::OuterJoin(Box::new(
-                        match <[Ident; 1]>::try_from(id_parts) {
-                            Ok([ident]) => Expr::Identifier(ident),
-                            Err(parts) => Expr::CompoundIdentifier(parts),
-                        },
-                    )))
+                if let Some(expr) = self.parse_outer_join_expr(&id_parts) {
+                    Ok(expr)
                 } else {
                     let mut expr = self.parse_function(ObjectName(id_parts))?;
                     // consume all period if it's a method chain
@@ -1481,22 +1473,16 @@ impl<'a> Parser<'a> {
                 ObjectName(Self::exprs_to_idents(root, chain)?),
                 AttachedToken(wildcard_token),
             ))
-        } else if self.consume_token(&Token::LParen) {
+        } else if matches!(self.peek_token().token, Token::LParen) {
             if !Self::is_all_ident(&root, &chain) {
+                // consume LParen
+                self.next_token();
                 return self.expected("an identifier or a '*' after '.'", self.peek_token());
             };
             let id_parts = Self::exprs_to_idents(root, chain)?;
-            if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
-                && self.consume_tokens(&[Token::Plus, Token::RParen])
-            {
-                Ok(Expr::OuterJoin(Box::new(
-                    match <[Ident; 1]>::try_from(id_parts) {
-                        Ok([ident]) => Expr::Identifier(ident),
-                        Err(parts) => Expr::CompoundIdentifier(parts),
-                    },
-                )))
+            if let Some(expr) = self.parse_outer_join_expr(&id_parts) {
+                Ok(expr)
             } else {
-                self.prev_token();
                 self.parse_function(ObjectName(id_parts))
             }
         } else {
@@ -1534,12 +1520,34 @@ impl<'a> Parser<'a> {
                 if let AccessExpr::Dot(Expr::Identifier(ident)) = x {
                     idents.push(ident);
                 } else {
-                    return parser_err!(format!("Expected identifier, found: {}", x), x.span().start);
+                    return parser_err!(
+                        format!("Expected identifier, found: {}", x),
+                        x.span().start
+                    );
                 }
             }
             Ok(idents)
         } else {
-            parser_err!(format!("Expected identifier, found: {}", root), root.span().start)
+            parser_err!(
+                format!("Expected identifier, found: {}", root),
+                root.span().start
+            )
+        }
+    }
+
+    /// Try to parse OuterJoin expression `(+)`
+    fn parse_outer_join_expr(&mut self, id_parts: &[Ident]) -> Option<Expr> {
+        if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
+            && self.consume_tokens(&[Token::LParen, Token::Plus, Token::RParen])
+        {
+            Some(Expr::OuterJoin(Box::new(
+                match <[Ident; 1]>::try_from(id_parts.to_vec()) {
+                    Ok([ident]) => Expr::Identifier(ident),
+                    Err(parts) => Expr::CompoundIdentifier(parts),
+                },
+            )))
+        } else {
+            None
         }
     }
 

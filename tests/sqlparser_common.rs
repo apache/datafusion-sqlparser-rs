@@ -4375,6 +4375,7 @@ fn run_explain_analyze(
             analyze,
             verbose,
             query_plan,
+            estimate,
             statement,
             format,
             options,
@@ -4384,6 +4385,7 @@ fn run_explain_analyze(
             assert_eq!(format, expected_format);
             assert_eq!(options, exepcted_options);
             assert!(!query_plan);
+            assert!(!estimate);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
         }
         _ => panic!("Unexpected Statement, must be Explain"),
@@ -4525,6 +4527,34 @@ fn parse_explain_query_plan() {
         all_dialects()
             .parse_sql_statements("EXPLAIN QUERY SELECT sqrt(id) FROM foo")
             .unwrap_err()
+    );
+}
+
+#[test]
+fn parse_explain_estimate() {
+    let statement = all_dialects().verified_stmt("EXPLAIN ESTIMATE SELECT sqrt(id) FROM foo");
+
+    match &statement {
+        Statement::Explain {
+            query_plan,
+            estimate,
+            analyze,
+            verbose,
+            statement,
+            ..
+        } => {
+            assert!(estimate);
+            assert!(!query_plan);
+            assert!(!analyze);
+            assert!(!verbose);
+            assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        "EXPLAIN ESTIMATE SELECT sqrt(id) FROM foo",
+        statement.to_string()
     );
 }
 

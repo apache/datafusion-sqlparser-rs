@@ -356,6 +356,15 @@ fn test_snowflake_create_table_column_comment() {
 }
 
 #[test]
+fn test_snowflake_create_table_on_commit() {
+    snowflake().verified_stmt(
+        r#"CREATE LOCAL TEMPORARY TABLE "AAA"."foo" ("bar" INTEGER) ON COMMIT PRESERVE ROWS"#,
+    );
+    snowflake().verified_stmt(r#"CREATE TABLE "AAA"."foo" ("bar" INTEGER) ON COMMIT DELETE ROWS"#);
+    snowflake().verified_stmt(r#"CREATE TABLE "AAA"."foo" ("bar" INTEGER) ON COMMIT DROP"#);
+}
+
+#[test]
 fn test_snowflake_create_local_table() {
     match snowflake().verified_stmt("CREATE TABLE my_table (a INT)") {
         Statement::CreateTable(CreateTable { name, global, .. }) => {

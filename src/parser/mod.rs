@@ -6155,22 +6155,11 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let on_commit: Option<OnCommit> =
-            if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT, Keyword::DELETE, Keyword::ROWS])
-            {
-                Some(OnCommit::DeleteRows)
-            } else if self.parse_keywords(&[
-                Keyword::ON,
-                Keyword::COMMIT,
-                Keyword::PRESERVE,
-                Keyword::ROWS,
-            ]) {
-                Some(OnCommit::PreserveRows)
-            } else if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT, Keyword::DROP]) {
-                Some(OnCommit::Drop)
-            } else {
-                None
-            };
+        let on_commit = if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT]) {
+            Some(self.parse_create_table_on_commit()?)
+        } else {
+            None
+        };
 
         let strict = self.parse_keyword(Keyword::STRICT);
 
@@ -6224,6 +6213,21 @@ impl<'a> Parser<'a> {
             .primary_key(primary_key)
             .strict(strict)
             .build())
+    }
+
+    pub fn parse_create_table_on_commit(&mut self) -> Result<OnCommit, ParserError> {
+        if self.parse_keywords(&[Keyword::DELETE, Keyword::ROWS]) {
+            Ok(OnCommit::DeleteRows)
+        } else if self.parse_keywords(&[Keyword::PRESERVE, Keyword::ROWS]) {
+            Ok(OnCommit::PreserveRows)
+        } else if self.parse_keywords(&[Keyword::DROP]) {
+            Ok(OnCommit::Drop)
+        } else {
+            parser_err!(
+                "Expecting DELETE ROWS, PRESERVE ROWS or DROP",
+                self.peek_token()
+            )
+        }
     }
 
     /// Parse configuration like partitioning, clustering information during the table creation.

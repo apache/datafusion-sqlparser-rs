@@ -1161,7 +1161,6 @@ impl<'a> Parser<'a> {
             }
             Token::LBracket if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect) =>
             {
-                let _ = self.consume_token(&Token::LBracket);
                 let ident = Expr::Identifier(w.to_ident(w_span));
                 let mut fields = vec![];
                 self.parse_multi_dim_subscript(&mut fields)?;
@@ -1431,8 +1430,9 @@ impl<'a> Parser<'a> {
                 Token::Word(w) => {
                     let expr = Expr::Identifier(w.to_ident(next_token.span));
                     chain.push(AccessExpr::Dot(expr));
-                    if self.consume_token(&Token::LBracket) {
+                    if self.peek_token().token == Token::LBracket {
                         if self.dialect.supports_partiql() {
+                            self.next_token();
                             ending_lbracket = true;
                             break;
                         } else {
@@ -1473,7 +1473,7 @@ impl<'a> Parser<'a> {
                 ObjectName(Self::exprs_to_idents(root, chain)?),
                 AttachedToken(wildcard_token),
             ))
-        } else if matches!(self.peek_token().token, Token::LParen) {
+        } else if self.peek_token().token == Token::LParen {
             if !Self::is_all_ident(&root, &chain) {
                 // consume LParen
                 self.next_token();
@@ -3120,6 +3120,8 @@ impl<'a> Parser<'a> {
             if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect)
             {
                 let mut chain = vec![];
+                // back to LBracket
+                self.prev_token();
                 self.parse_multi_dim_subscript(&mut chain)?;
                 self.parse_compound_field_access(expr, chain)
             } else if self.dialect.supports_partiql() {
@@ -3223,17 +3225,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a multi-dimension array accessing like `[1:3][1][1]`
-    ///
-    /// Parser is right after the first `[`
     pub fn parse_multi_dim_subscript(
         &mut self,
         chain: &mut Vec<AccessExpr>,
     ) -> Result<(), ParserError> {
-        loop {
+        while self.consume_token(&Token::LBracket) {
             self.parse_subscript(chain)?;
-            if !self.consume_token(&Token::LBracket) {
-                break;
-            }
         }
         Ok(())
     }
@@ -3241,7 +3238,7 @@ impl<'a> Parser<'a> {
     /// Parses an array subscript like `[1:3]`
     ///
     /// Parser is right after `[`
-    pub fn parse_subscript(&mut self, chain: &mut Vec<AccessExpr>) -> Result<(), ParserError> {
+    fn parse_subscript(&mut self, chain: &mut Vec<AccessExpr>) -> Result<(), ParserError> {
         let subscript = self.parse_subscript_inner()?;
         chain.push(AccessExpr::Subscript(subscript));
         Ok(())

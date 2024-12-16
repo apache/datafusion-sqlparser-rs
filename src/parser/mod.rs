@@ -1474,17 +1474,18 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(wildcard_token) = ending_wildcard {
-            let Some(id_parts) = Self::exprs_to_idents(&root, &chain) else {
+            if !Self::is_all_ident(&root, &chain) {
                 return self.expected("an identifier or a '*' after '.'", self.peek_token());
             };
             Ok(Expr::QualifiedWildcard(
-                ObjectName(id_parts),
+                ObjectName(Self::exprs_to_idents(root, chain)?),
                 AttachedToken(wildcard_token),
             ))
         } else if self.consume_token(&Token::LParen) {
-            let Some(id_parts) = Self::exprs_to_idents(&root, &chain) else {
+            if !Self::is_all_ident(&root, &chain) {
                 return self.expected("an identifier or a '*' after '.'", self.peek_token());
             };
+            let id_parts = Self::exprs_to_idents(root, chain)?;
             if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
                 && self.consume_tokens(&[Token::Plus, Token::RParen])
             {
@@ -1499,8 +1500,10 @@ impl<'a> Parser<'a> {
                 self.parse_function(ObjectName(id_parts))
             }
         } else {
-            if let Some(id_parts) = Self::exprs_to_idents(&root, &chain) {
-                return Ok(Expr::CompoundIdentifier(id_parts));
+            if Self::is_all_ident(&root, &chain) {
+                return Ok(Expr::CompoundIdentifier(Self::exprs_to_idents(
+                    root, chain,
+                )?));
             }
             if chain.is_empty() {
                 return Ok(root);
@@ -1512,22 +1515,32 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Try to transform the root and fields into a list of [Ident]s.
-    /// If any element (root and fields) is not an [Expr::Identifier], return None.
-    fn exprs_to_idents(root: &Expr, fields: &[AccessExpr]) -> Option<Vec<Ident>> {
-        let mut idents = vec![];
-        let Expr::Identifier(root) = root else {
-            return None;
-        };
-        idents.push(root.clone());
-        for x in fields {
-            if let AccessExpr::Dot(Expr::Identifier(ident)) = x {
-                idents.push(ident.clone())
-            } else {
-                return None;
-            }
+    /// Check if the root is an identifier and all fields are identifiers.
+    fn is_all_ident(root: &Expr, fields: &[AccessExpr]) -> bool {
+        if !matches!(root, Expr::Identifier(_)) {
+            return false;
         }
-        Some(idents)
+        fields
+            .iter()
+            .all(|x| matches!(x, AccessExpr::Dot(Expr::Identifier(_))))
+    }
+
+    /// Convert a root and a list of fields to a list of identifiers.
+    fn exprs_to_idents(root: Expr, fields: Vec<AccessExpr>) -> Result<Vec<Ident>, ParserError> {
+        let mut idents = vec![];
+        if let Expr::Identifier(root) = root {
+            idents.push(root);
+            for x in fields {
+                if let AccessExpr::Dot(Expr::Identifier(ident)) = x {
+                    idents.push(ident);
+                } else {
+                    return parser_err!(format!("Expected identifier, found: {}", x), x.span().start);
+                }
+            }
+            Ok(idents)
+        } else {
+            parser_err!(format!("Expected identifier, found: {}", root), root.span().start)
+        }
     }
 
     pub fn parse_utility_options(&mut self) -> Result<Vec<UtilityOption>, ParserError> {

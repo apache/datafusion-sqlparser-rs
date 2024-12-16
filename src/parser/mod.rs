@@ -1512,6 +1512,8 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Try to transform the root and fields into a list of [Ident]s.
+    /// If any element (root and fields) is not an [Expr::Identifier], return None.
     fn exprs_to_idents(root: &Expr, fields: &[AccessExpr]) -> Option<Vec<Ident>> {
         let mut idents = vec![];
         let Expr::Identifier(root) = root else {
@@ -3199,7 +3201,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse an multi-dimension array accessing like `[1:3][1][1]`
+    /// Parse a multi-dimension array accessing like `[1:3][1][1]`
     ///
     /// Parser is right after the first `[`
     pub fn parse_multi_dim_subscript(

@@ -3105,7 +3105,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 self.parse_json_access(expr)
             } else {
-                self.parse_map_access(expr)
+                parser_err!("Array subscripting is not supported", tok.span.start)
             }
         } else if dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == tok {
             self.prev_token();
@@ -3283,27 +3283,6 @@ impl<'a> Parser<'a> {
 
         debug_assert!(!path.is_empty());
         Ok(JsonPath { path })
-    }
-
-    pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_expr()?;
-        let result = match key {
-            Expr::Identifier(_) => Ok(Expr::CompoundFieldAccess {
-                root: Box::new(expr),
-                access_chain: vec![AccessExpr::Dot(key)],
-            }),
-            Expr::Value(Value::SingleQuotedString(_)) => Ok(Expr::CompoundFieldAccess {
-                root: Box::new(expr),
-                access_chain: vec![AccessExpr::Dot(key)],
-            }),
-            Expr::Value(Value::DoubleQuotedString(s)) => Ok(Expr::CompoundFieldAccess {
-                root: Box::new(expr),
-                access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new(s)))],
-            }),
-            _ => parser_err!("Expected identifier or string literal", self.peek_token()),
-        };
-        self.expect_token(&Token::RBracket)?;
-        result
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator.

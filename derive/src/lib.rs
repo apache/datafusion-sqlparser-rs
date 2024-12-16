@@ -18,7 +18,11 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::spanned::Spanned;
-use syn::{parse::{Parse, ParseStream}, parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Generics, Ident, Index, LitStr, Meta, Token, Type, TypePath};
+use syn::{
+    parse::{Parse, ParseStream},
+    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Generics,
+    Ident, Index, LitStr, Meta, Token, Type, TypePath,
+};
 use syn::{Path, PathArguments};
 
 /// Implementation of `[#derive(Visit)]`
@@ -267,7 +271,11 @@ fn visit_children(
 }
 
 fn is_option(ty: &Type) -> bool {
-    if let Type::Path(TypePath { path: Path { segments, .. }, .. }) = ty {
+    if let Type::Path(TypePath {
+        path: Path { segments, .. },
+        ..
+    }) = ty
+    {
         if let Some(segment) = segments.last() {
             if segment.ident == "Option" {
                 if let PathArguments::AngleBracketed(args) = &segment.arguments {

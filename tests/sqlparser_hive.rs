@@ -459,6 +459,7 @@ fn parse_delimited_identifiers() {
             with_ordinality: _,
             partitions: _,
             json_path: _,
+            sample: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -480,6 +481,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -534,6 +536,15 @@ fn parse_use() {
         hive().verified_stmt("USE DEFAULT"),
         Statement::Use(Use::Default)
     );
+}
+
+#[test]
+fn test_tample_sample() {
+    hive().verified_stmt("SELECT * FROM source TABLESAMPLE (BUCKET 3 OUT OF 32 ON rand()) AS s");
+    hive().verified_stmt("SELECT * FROM source TABLESAMPLE (BUCKET 3 OUT OF 16 ON id)");
+    hive().verified_stmt("SELECT * FROM source TABLESAMPLE (100M) AS s");
+    hive().verified_stmt("SELECT * FROM source TABLESAMPLE (0.1 PERCENT) AS s");
+    hive().verified_stmt("SELECT * FROM source TABLESAMPLE (10 ROWS)");
 }
 
 fn hive() -> TestedDialects {

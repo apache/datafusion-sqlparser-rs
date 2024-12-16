@@ -1162,9 +1162,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let mut expr = self.parse_function(ObjectName(id_parts))?;
                     // consume all period if it's a method chain
-                    if self.dialect.supports_methods() {
-                        expr = self.try_parse_method(expr)?
-                    }
+                    expr = self.try_parse_method(expr)?;
                     let fields = vec![];
                     self.parse_compound_field_access(expr, fields)
                 }

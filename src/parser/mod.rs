@@ -6215,7 +6215,7 @@ impl<'a> Parser<'a> {
             .build())
     }
 
-    pub fn parse_create_table_on_commit(&mut self) -> Result<OnCommit, ParserError> {
+    pub(crate) fn parse_create_table_on_commit(&mut self) -> Result<OnCommit, ParserError> {
         if self.parse_keywords(&[Keyword::DELETE, Keyword::ROWS]) {
             Ok(OnCommit::DeleteRows)
         } else if self.parse_keywords(&[Keyword::PRESERVE, Keyword::ROWS]) {

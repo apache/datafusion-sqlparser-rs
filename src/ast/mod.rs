@@ -1291,6 +1291,7 @@ impl fmt::Display for CastFormat {
 }
 
 impl fmt::Display for Expr {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Identifier(s) => write!(f, "{s}"),

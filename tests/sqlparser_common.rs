@@ -579,6 +579,12 @@ fn parse_select_with_table_alias() {
 }
 
 #[test]
+fn parse_analyze() {
+    verified_stmt("ANALYZE TABLE test_table");
+    verified_stmt("ANALYZE test_table");
+}
+
+#[test]
 fn parse_invalid_table_name() {
     let ast = all_dialects().run_parser_method("db.public..customer", |parser| {
         parser.parse_object_name(false)

@@ -69,8 +69,11 @@ pub use self::query::{
     OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
     SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
-    TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableVersion, TableWithJoins,
-    Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
+    TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableSample,
+    TableSampleBucket, TableSampleKind, TableSampleMethod, TableSampleModifier,
+    TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier, TableSampleUnit, TableVersion,
+    TableWithJoins, Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With,
+    WithFill,
 };
 
 pub use self::trigger::{
@@ -3237,6 +3240,9 @@ pub enum Statement {
         ///
         /// [SQLite](https://sqlite.org/lang_explain.html)
         query_plan: bool,
+        /// `EXPLAIN ESTIMATE`
+        /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/statements/explain#explain-estimate)
+        estimate: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
         /// Optional output format of explain
@@ -3469,6 +3475,7 @@ impl fmt::Display for Statement {
                 verbose,
                 analyze,
                 query_plan,
+                estimate,
                 statement,
                 format,
                 options,
@@ -3480,6 +3487,9 @@ impl fmt::Display for Statement {
                 }
                 if *analyze {
                     write!(f, "ANALYZE ")?;
+                }
+                if *estimate {
+                    write!(f, "ESTIMATE ")?;
                 }
 
                 if *verbose {
@@ -5524,6 +5534,15 @@ impl fmt::Display for CloseCursor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Function {
     pub name: ObjectName,
+    /// Flags whether this function call uses the [ODBC syntax].
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT {fn CONCAT('foo', 'bar')}
+    /// ```
+    ///
+    /// [ODBC syntax]: https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/scalar-function-calls?view=sql-server-2017
+    pub uses_odbc_syntax: bool,
     /// The parameters to the function, including any options specified within the
     /// delimiting parentheses.
     ///
@@ -5562,6 +5581,10 @@ pub struct Function {
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.uses_odbc_syntax {
+            write!(f, "{{fn ")?;
+        }
+
         write!(f, "{}{}{}", self.name, self.parameters, self.args)?;
 
         if !self.within_group.is_empty() {
@@ -5582,6 +5605,10 @@ impl fmt::Display for Function {
 
         if let Some(o) = &self.over {
             write!(f, " OVER {o}")?;
+        }
+
+        if self.uses_odbc_syntax {
+            write!(f, "}}")?;
         }
 
         Ok(())

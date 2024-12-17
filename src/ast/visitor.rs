@@ -530,6 +530,7 @@ where
 ///     let old_expr = std::mem::replace(expr, Expr::Value(Value::Null));
 ///     *expr = Expr::Function(Function {
 ///           name: ObjectName(vec![Ident::new("f")]),
+///           uses_odbc_syntax: false,
 ///           args: FunctionArguments::List(FunctionArgumentList {
 ///               duplicate_treatment: None,
 ///               args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],

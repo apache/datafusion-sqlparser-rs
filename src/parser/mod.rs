@@ -9091,6 +9091,7 @@ impl<'a> Parser<'a> {
         let mut analyze = false;
         let mut verbose = false;
         let mut query_plan = false;
+        let mut estimate = false;
         let mut format = None;
         let mut options = None;
 
@@ -9103,6 +9104,8 @@ impl<'a> Parser<'a> {
             options = Some(self.parse_utility_options()?)
         } else if self.parse_keywords(&[Keyword::QUERY, Keyword::PLAN]) {
             query_plan = true;
+        } else if self.parse_keyword(Keyword::ESTIMATE) {
+            estimate = true;
         } else {
             analyze = self.parse_keyword(Keyword::ANALYZE);
             verbose = self.parse_keyword(Keyword::VERBOSE);
@@ -9120,6 +9123,7 @@ impl<'a> Parser<'a> {
                 analyze,
                 verbose,
                 query_plan,
+                estimate,
                 statement: Box::new(statement),
                 format,
                 options,

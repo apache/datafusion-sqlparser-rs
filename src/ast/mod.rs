@@ -3239,6 +3239,9 @@ pub enum Statement {
         ///
         /// [SQLite](https://sqlite.org/lang_explain.html)
         query_plan: bool,
+        /// `EXPLAIN ESTIMATE`
+        /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/statements/explain#explain-estimate)
+        estimate: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
         /// Optional output format of explain
@@ -3471,6 +3474,7 @@ impl fmt::Display for Statement {
                 verbose,
                 analyze,
                 query_plan,
+                estimate,
                 statement,
                 format,
                 options,
@@ -3482,6 +3486,9 @@ impl fmt::Display for Statement {
                 }
                 if *analyze {
                     write!(f, "ANALYZE ")?;
+                }
+                if *estimate {
+                    write!(f, "ESTIMATE ")?;
                 }
 
                 if *verbose {

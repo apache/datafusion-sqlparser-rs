@@ -298,6 +298,7 @@ define_keywords!(
     ERROR,
     ESCAPE,
     ESCAPED,
+    ESTIMATE,
     EVENT,
     EVERY,
     EXCEPT,

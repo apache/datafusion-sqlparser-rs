@@ -6830,7 +6830,15 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
                 self.expect_keyword(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name(false)?;
-                let referred_columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                // PostgreSQL allows foreign key columns to be optional
+                // (https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-PARMS-REFERENCES)
+                let parenthesized_column_list_optional = if dialect_of!(self is PostgreSqlDialect) {
+                    Optional
+                } else {
+                    Mandatory
+                };
+                let referred_columns = self
+                    .parse_parenthesized_column_list(parenthesized_column_list_optional, false)?;
                 let mut on_delete = None;
                 let mut on_update = None;
                 loop {

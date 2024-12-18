@@ -12335,7 +12335,7 @@ fn parse_create_table_with_bit_types() {
 }
 
 #[test]
-fn parse_composed_access_expr() {
+fn parse_composite_access_expr() {
     assert_eq!(
         verified_expr("f(a).b"),
         Expr::CompositeAccess {

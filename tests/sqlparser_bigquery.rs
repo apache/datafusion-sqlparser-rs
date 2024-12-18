@@ -1512,16 +1512,7 @@ fn parse_hyphenated_table_identifiers() {
             )
             .from[0]
             .relation,
-        TableFactor::Table {
-            name: ObjectName(vec![Ident::new("foo-123"), Ident::new("bar")]),
-            alias: None,
-            args: None,
-            with_hints: vec![],
-            version: None,
-            partitions: vec![],
-            with_ordinality: false,
-            json_path: None,
-        }
+        table_from_name(ObjectName(vec![Ident::new("foo-123"), Ident::new("bar")])),
     );
 
     assert_eq!(

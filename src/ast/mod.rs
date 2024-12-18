@@ -2759,6 +2759,15 @@ pub enum Statement {
         version: Option<Ident>,
     },
     /// ```sql
+    /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
+    /// ```
+    DropExtension {
+        names: Vec<Ident>,
+        if_exists: bool,
+        /// `CASCADE` or `RESTRICT`
+        cascade_or_restrict: Option<ReferentialAction>,
+    },
+    /// ```sql
     /// FETCH
     /// ```
     /// Retrieve rows from a query using a cursor
@@ -4023,6 +4032,21 @@ impl fmt::Display for Statement {
                     }
                 }
 
+                Ok(())
+            }
+            Statement::DropExtension {
+                names,
+                if_exists,
+                cascade_or_restrict,
+            } => {
+                write!(f, "DROP EXTENSION")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {}", display_comma_separated(names))?;
+                if let Some(cascade_or_restrict) = cascade_or_restrict {
+                    write!(f, " {cascade_or_restrict}")?;
+                }
                 Ok(())
             }
             Statement::CreateRole {

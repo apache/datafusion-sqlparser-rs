@@ -663,6 +663,22 @@ fn parse_create_extension() {
 }
 
 #[test]
+fn parse_drop_extension() {
+    pg_and_generic().verified_stmt("DROP EXTENSION extension_name");
+    pg_and_generic().verified_stmt("DROP EXTENSION extension_name CASCADE");
+    pg_and_generic().verified_stmt("DROP EXTENSION extension_name RESTRICT");
+    pg_and_generic().verified_stmt("DROP EXTENSION extension_name, extension_name2 CASCADE");
+    pg_and_generic().verified_stmt("DROP EXTENSION extension_name, extension_name2 RESTRICT");
+
+    pg_and_generic().verified_stmt("DROP EXTENSION IF EXISTS extension_name");
+    pg_and_generic().verified_stmt("DROP EXTENSION IF EXISTS extension_name CASCADE");
+    pg_and_generic()
+        .verified_stmt("DROP EXTENSION IF EXISTS extension_name1, extension_name2 CASCADE");
+    pg_and_generic()
+        .verified_stmt("DROP EXTENSION IF EXISTS extension_name1, extension_name2 RESTRICT");
+}
+
+#[test]
 fn parse_alter_table_alter_column() {
     pg().one_statement_parses_to(
         "ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'",

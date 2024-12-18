@@ -4167,6 +4167,7 @@ fn parse_alter_table_constraints() {
     check_one("UNIQUE (id)");
     check_one("FOREIGN KEY (foo, bar) REFERENCES AnotherTable(foo, bar)");
     check_one("CHECK (end_date > start_date OR end_date IS NULL)");
+    check_one("CONSTRAINT fk FOREIGN KEY (lng) REFERENCES othertable4");
 
     fn check_one(constraint_text: &str) {
         match alter_table_op(verified_stmt(&format!(

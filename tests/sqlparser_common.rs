@@ -3009,7 +3009,7 @@ fn parse_create_table() {
                     },
                     ColumnDef {
                         name: "lat".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -3018,7 +3018,7 @@ fn parse_create_table() {
                     },
                     ColumnDef {
                         name: "lng".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![],
                     },
@@ -3198,7 +3198,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     ColumnDef {
                         name: "lat".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -3207,7 +3207,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     ColumnDef {
                         name: "lng".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![],
                     },
@@ -3838,7 +3838,7 @@ fn parse_create_external_table() {
                     },
                     ColumnDef {
                         name: "lat".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -3847,7 +3847,7 @@ fn parse_create_external_table() {
                     },
                     ColumnDef {
                         name: "lng".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![],
                     },

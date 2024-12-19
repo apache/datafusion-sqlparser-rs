@@ -254,7 +254,7 @@ pub enum DataType {
     /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     Float8,
     /// Double
-    Double,
+    Double(ExactNumberInfo),
     /// Double PRECISION e.g. [standard], [postgresql]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#approximate-numeric-type
@@ -508,7 +508,7 @@ impl fmt::Display for DataType {
             DataType::Float4 => write!(f, "FLOAT4"),
             DataType::Float32 => write!(f, "Float32"),
             DataType::Float64 => write!(f, "FLOAT64"),
-            DataType::Double => write!(f, "DOUBLE"),
+            DataType::Double(info) => write!(f, "DOUBLE{info}"),
             DataType::Float8 => write!(f, "FLOAT8"),
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::Bool => write!(f, "BOOL"),

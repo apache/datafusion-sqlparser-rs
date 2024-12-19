@@ -6830,7 +6830,7 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
                 self.expect_keyword(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name(false)?;
-                let referred_columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                let referred_columns = self.parse_parenthesized_column_list(Optional, false)?;
                 let mut on_delete = None;
                 let mut on_update = None;
                 loop {

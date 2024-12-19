@@ -885,12 +885,14 @@ impl fmt::Display for TableConstraint {
             } => {
                 write!(
                     f,
-                    "{}FOREIGN KEY ({}) REFERENCES {}({})",
+                    "{}FOREIGN KEY ({}) REFERENCES {}",
                     display_constraint_name(name),
                     display_comma_separated(columns),
                     foreign_table,
-                    display_comma_separated(referred_columns),
                 )?;
+                if !referred_columns.is_empty() {
+                    write!(f, "({})", display_comma_separated(referred_columns))?;
+                }
                 if let Some(action) = on_delete {
                     write!(f, " ON DELETE {action}")?;
                 }

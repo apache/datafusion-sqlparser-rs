@@ -851,7 +851,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::TABLE)?;
+        let has_table_keyword = self.parse_keyword(Keyword::TABLE);
         let table_name = self.parse_object_name(false)?;
         let mut for_columns = false;
         let mut cache_metadata = false;
@@ -896,6 +896,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Statement::Analyze {
+            has_table_keyword,
             table_name,
             for_columns,
             columns,

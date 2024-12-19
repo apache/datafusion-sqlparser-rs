@@ -640,7 +640,7 @@ pub enum Expr {
         /// The path to the data to extract.
         path: JsonPath,
     },
-    /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
+    /// CompositeAccess eg: SELECT foo(bar).z, (information_schema._pg_expandarray(array['i','i'])).n
     CompositeAccess {
         expr: Box<Expr>,
         key: Ident,

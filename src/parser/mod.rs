@@ -8114,7 +8114,9 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::PRECISION) {
                         Ok(DataType::DoublePrecision)
                     } else {
-                        Ok(DataType::Double)
+                        Ok(DataType::Double(
+                            self.parse_exact_number_optional_precision_scale()?
+                        ))
                     }
                 }
                 Keyword::TINYINT => {

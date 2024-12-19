@@ -3022,3 +3022,14 @@ fn parse_longblob_type() {
 fn parse_begin_without_transaction() {
     mysql().verified_stmt("BEGIN");
 }
+
+
+#[test]
+fn parse_double_precision() {
+    mysql().verified_stmt("CREATE TABLE foo (bar DOUBLE)");
+    mysql().verified_stmt("CREATE TABLE foo (bar DOUBLE(11,0))");
+    mysql().one_statement_parses_to("CREATE TABLE foo (bar DOUBLE(11, 0))","CREATE TABLE foo (bar DOUBLE(11,0))");
+
+
+}
+

@@ -563,6 +563,12 @@ fn parse_select_with_table_alias() {
 }
 
 #[test]
+fn parse_analyze() {
+    verified_stmt("ANALYZE TABLE test_table");
+    verified_stmt("ANALYZE test_table");
+}
+
+#[test]
 fn parse_invalid_table_name() {
     let ast = all_dialects().run_parser_method("db.public..customer", |parser| {
         parser.parse_object_name(false)
@@ -4167,6 +4173,7 @@ fn parse_alter_table_constraints() {
     check_one("UNIQUE (id)");
     check_one("FOREIGN KEY (foo, bar) REFERENCES AnotherTable(foo, bar)");
     check_one("CHECK (end_date > start_date OR end_date IS NULL)");
+    check_one("CONSTRAINT fk FOREIGN KEY (lng) REFERENCES othertable4");
 
     fn check_one(constraint_text: &str) {
         match alter_table_op(verified_stmt(&format!(

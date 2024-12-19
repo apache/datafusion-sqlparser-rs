@@ -284,6 +284,7 @@ impl Spanned for Statement {
                 cache_metadata: _,
                 noscan: _,
                 compute_statistics: _,
+                has_table_keyword: _,
             } => union_spans(
                 core::iter::once(table_name.span())
                     .chain(partitions.iter().flat_map(|i| i.iter().map(|k| k.span())))

@@ -23,7 +23,7 @@ use std::ops::Deref;
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[test]
@@ -1965,27 +1965,47 @@ fn parse_map_access_expr() {
     let sql = "users[-1][safe_offset(2)].a.b";
     let expr = bigquery().verified_expr(sql);
 
-    fn map_access_key(key: Expr, syntax: MapAccessSyntax) -> MapAccessKey {
-        MapAccessKey { key, syntax }
-    }
-    let expected = Expr::MapAccess {
-        column: Expr::Identifier(Ident::new("users")).into(),
-        keys: vec![
-            map_access_key(
-                Expr::UnaryOp {
+    let expected = Expr::CompoundFieldAccess {
+        root: Box::new(Expr::Identifier(Ident::with_span(
+            Span::new(Location::of(1, 1), Location::of(1, 6)),
+            "users",
+        ))),
+        access_chain: vec![
+            AccessExpr::Subscript(Subscript::Index {
+                index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
                     expr: Expr::Value(number("1")).into(),
                 },
-                MapAccessSyntax::Bracket,
-            ),
-            map_access_key(
-                call("safe_offset", [Expr::Value(number("2"))]),
-                MapAccessSyntax::Bracket,
-            ),
-            map_access_key(
-                Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("b")]),
-                MapAccessSyntax::Period,
-            ),
+            }),
+            AccessExpr::Subscript(Subscript::Index {
+                index: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::with_span(
+                        Span::new(Location::of(1, 11), Location::of(1, 22)),
+                        "safe_offset",
+                    )]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            number("2"),
+                        )))],
+                        clauses: vec![],
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                    uses_odbc_syntax: false,
+                }),
+            }),
+            AccessExpr::Dot(Expr::Identifier(Ident::with_span(
+                Span::new(Location::of(1, 24), Location::of(1, 25)),
+                "a",
+            ))),
+            AccessExpr::Dot(Expr::Identifier(Ident::with_span(
+                Span::new(Location::of(1, 26), Location::of(1, 27)),
+                "b",
+            ))),
         ],
     };
     assert_eq!(expr, expected);

@@ -46,7 +46,7 @@ use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
     SnowflakeDialect,
 };
-use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use crate::keywords::{self, Keyword};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -344,13 +344,11 @@ impl Token {
     }
 
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
-        let word_uppercase = word.to_uppercase();
         Token::Word(Word {
             value: word.to_string(),
             quote_style,
             keyword: if quote_style.is_none() {
-                let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
-                keyword.map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
+                keywords::lookup(word)
             } else {
                 Keyword::NoKeyword
             },

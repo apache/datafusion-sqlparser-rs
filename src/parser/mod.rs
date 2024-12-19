@@ -8115,7 +8115,7 @@ impl<'a> Parser<'a> {
                         Ok(DataType::DoublePrecision)
                     } else {
                         Ok(DataType::Double(
-                            self.parse_exact_number_optional_precision_scale()?
+                            self.parse_exact_number_optional_precision_scale()?,
                         ))
                     }
                 }

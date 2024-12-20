@@ -18,7 +18,11 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::spanned::Spanned;
-use syn::{parse::{Parse, ParseStream}, parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Generics, Ident, Index, LitStr, Meta, Token, Type, TypePath};
+use syn::{
+    parse::{Parse, ParseStream},
+    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Generics,
+    Ident, Index, LitStr, Meta, Token, Type, TypePath,
+};
 use syn::{Path, PathArguments};
 
 /// Implementation of `[#derive(Visit)]`
@@ -74,7 +78,10 @@ fn derive_visit(input: proc_macro::TokenStream, visit_type: &VisitType) -> proc_
 
     let expanded = quote! {
         // The generated impl.
+        // Note that it uses [`recursive::recursive`] to protect from stack overflow.
+        // See tests in https://github.com/apache/datafusion-sqlparser-rs/pull/1522/ for more info.
         impl #impl_generics sqlparser::ast::#visit_trait for #name #ty_generics #where_clause {
+             #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
             fn visit<V: sqlparser::ast::#visitor_trait>(
                 &#modifier self,
                 visitor: &mut V
@@ -267,7 +274,11 @@ fn visit_children(
 }
 
 fn is_option(ty: &Type) -> bool {
-    if let Type::Path(TypePath { path: Path { segments, .. }, .. }) = ty {
+    if let Type::Path(TypePath {
+        path: Path { segments, .. },
+        ..
+    }) = ty
+    {
         if let Some(segment) = segments.last() {
             if segment.ident == "Option" {
                 if let PathArguments::AngleBracketed(args) = &segment.arguments {

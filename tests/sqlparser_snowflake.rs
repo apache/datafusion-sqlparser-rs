@@ -356,6 +356,15 @@ fn test_snowflake_create_table_column_comment() {
 }
 
 #[test]
+fn test_snowflake_create_table_on_commit() {
+    snowflake().verified_stmt(
+        r#"CREATE LOCAL TEMPORARY TABLE "AAA"."foo" ("bar" INTEGER) ON COMMIT PRESERVE ROWS"#,
+    );
+    snowflake().verified_stmt(r#"CREATE TABLE "AAA"."foo" ("bar" INTEGER) ON COMMIT DELETE ROWS"#);
+    snowflake().verified_stmt(r#"CREATE TABLE "AAA"."foo" ("bar" INTEGER) ON COMMIT DROP"#);
+}
+
+#[test]
 fn test_snowflake_create_local_table() {
     match snowflake().verified_stmt("CREATE TABLE my_table (a INT)") {
         Statement::CreateTable(CreateTable { name, global, .. }) => {
@@ -1188,9 +1197,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
-            with_ordinality: _,
-            partitions: _,
-            json_path: _,
+            ..
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -1212,6 +1219,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -1423,6 +1431,7 @@ fn test_alter_table_clustering() {
                     Expr::Identifier(Ident::with_quote('"', "c2")),
                     Expr::Function(Function {
                         name: ObjectName(vec![Ident::new("TO_DATE")]),
+                        uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
@@ -2957,4 +2966,20 @@ fn test_parse_double_dot_notation_wrong_position() {}
 fn parse_insert_overwrite() {
     let insert_overwrite_into = r#"INSERT OVERWRITE INTO schema.table SELECT a FROM b"#;
     snowflake().verified_stmt(insert_overwrite_into);
+}
+
+#[test]
+fn test_table_sample() {
+    snowflake_and_generic().verified_stmt("SELECT * FROM testtable SAMPLE (10)");
+    snowflake_and_generic().verified_stmt("SELECT * FROM testtable TABLESAMPLE (10)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM testtable AS t TABLESAMPLE BERNOULLI (10)");
+    snowflake_and_generic().verified_stmt("SELECT * FROM testtable AS t TABLESAMPLE ROW (10)");
+    snowflake_and_generic().verified_stmt("SELECT * FROM testtable AS t TABLESAMPLE ROW (10 ROWS)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM testtable TABLESAMPLE BLOCK (3) SEED (82)");
+    snowflake_and_generic()
+        .verified_stmt("SELECT * FROM testtable TABLESAMPLE SYSTEM (3) REPEATABLE (82)");
+    snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) REPEATABLE (1)");
+    snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) SEED (1)");
 }

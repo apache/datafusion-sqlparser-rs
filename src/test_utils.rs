@@ -346,6 +346,21 @@ pub fn table(name: impl Into<String>) -> TableFactor {
         partitions: vec![],
         with_ordinality: false,
         json_path: None,
+        sample: None,
+    }
+}
+
+pub fn table_from_name(name: ObjectName) -> TableFactor {
+    TableFactor::Table {
+        name,
+        alias: None,
+        args: None,
+        with_hints: vec![],
+        version: None,
+        partitions: vec![],
+        with_ordinality: false,
+        json_path: None,
+        sample: None,
     }
 }
 
@@ -362,6 +377,7 @@ pub fn table_with_alias(name: impl Into<String>, alias: impl Into<String>) -> Ta
         partitions: vec![],
         with_ordinality: false,
         json_path: None,
+        sample: None,
     }
 }
 
@@ -376,6 +392,7 @@ pub fn join(relation: TableFactor) -> Join {
 pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
     Expr::Function(Function {
         name: ObjectName(vec![Ident::new(function)]),
+        uses_odbc_syntax: false,
         parameters: FunctionArguments::None,
         args: FunctionArguments::List(FunctionArgumentList {
             duplicate_treatment: None,

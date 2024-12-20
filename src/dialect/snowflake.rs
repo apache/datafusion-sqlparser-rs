@@ -377,6 +377,10 @@ pub fn parse_create_table(
                     parser.expect_token(&Token::RParen)?;
                     builder = builder.with_tags(Some(tags));
                 }
+                Keyword::ON if parser.parse_keyword(Keyword::COMMIT) => {
+                    let on_commit = Some(parser.parse_create_table_on_commit()?);
+                    builder = builder.on_commit(on_commit);
+                }
                 _ => {
                     return parser.expected("end of statement", next_token);
                 }

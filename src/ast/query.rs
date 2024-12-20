@@ -1002,6 +1002,9 @@ pub enum TableFactor {
         partitions: Vec<Ident>,
         /// Optional PartiQL JsonPath: <https://partiql.org/dql/from.html>
         json_path: Option<JsonPath>,
+        /// Optional table sample modifier
+        /// See: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#sample-clause>
+        sample: Option<TableSampleKind>,
     },
     Derived {
         lateral: bool,
@@ -1144,6 +1147,184 @@ pub enum TableFactor {
         symbols: Vec<SymbolDefinition>,
         alias: Option<TableAlias>,
     },
+}
+
+/// The table sample modifier options
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+
+pub enum TableSampleKind {
+    /// Table sample located before the table alias option
+    BeforeTableAlias(Box<TableSample>),
+    /// Table sample located after the table alias option
+    AfterTableAlias(Box<TableSample>),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableSample {
+    pub modifier: TableSampleModifier,
+    pub name: Option<TableSampleMethod>,
+    pub quantity: Option<TableSampleQuantity>,
+    pub seed: Option<TableSampleSeed>,
+    pub bucket: Option<TableSampleBucket>,
+    pub offset: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableSampleModifier {
+    Sample,
+    TableSample,
+}
+
+impl fmt::Display for TableSampleModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TableSampleModifier::Sample => write!(f, "SAMPLE")?,
+            TableSampleModifier::TableSample => write!(f, "TABLESAMPLE")?,
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableSampleQuantity {
+    pub parenthesized: bool,
+    pub value: Expr,
+    pub unit: Option<TableSampleUnit>,
+}
+
+impl fmt::Display for TableSampleQuantity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.parenthesized {
+            write!(f, "(")?;
+        }
+        write!(f, "{}", self.value)?;
+        if let Some(unit) = &self.unit {
+            write!(f, " {}", unit)?;
+        }
+        if self.parenthesized {
+            write!(f, ")")?;
+        }
+        Ok(())
+    }
+}
+
+/// The table sample method names
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableSampleMethod {
+    Row,
+    Bernoulli,
+    System,
+    Block,
+}
+
+impl fmt::Display for TableSampleMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TableSampleMethod::Bernoulli => write!(f, "BERNOULLI"),
+            TableSampleMethod::Row => write!(f, "ROW"),
+            TableSampleMethod::System => write!(f, "SYSTEM"),
+            TableSampleMethod::Block => write!(f, "BLOCK"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableSampleSeed {
+    pub modifier: TableSampleSeedModifier,
+    pub value: Value,
+}
+
+impl fmt::Display for TableSampleSeed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ({})", self.modifier, self.value)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableSampleSeedModifier {
+    Repeatable,
+    Seed,
+}
+
+impl fmt::Display for TableSampleSeedModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TableSampleSeedModifier::Repeatable => write!(f, "REPEATABLE"),
+            TableSampleSeedModifier::Seed => write!(f, "SEED"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableSampleUnit {
+    Rows,
+    Percent,
+}
+
+impl fmt::Display for TableSampleUnit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TableSampleUnit::Percent => write!(f, "PERCENT"),
+            TableSampleUnit::Rows => write!(f, "ROWS"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableSampleBucket {
+    pub bucket: Value,
+    pub total: Value,
+    pub on: Option<Expr>,
+}
+
+impl fmt::Display for TableSampleBucket {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "BUCKET {} OUT OF {}", self.bucket, self.total)?;
+        if let Some(on) = &self.on {
+            write!(f, " ON {}", on)?;
+        }
+        Ok(())
+    }
+}
+impl fmt::Display for TableSample {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, " {}", self.modifier)?;
+        if let Some(name) = &self.name {
+            write!(f, " {}", name)?;
+        }
+        if let Some(quantity) = &self.quantity {
+            write!(f, " {}", quantity)?;
+        }
+        if let Some(seed) = &self.seed {
+            write!(f, " {}", seed)?;
+        }
+        if let Some(bucket) = &self.bucket {
+            write!(f, " ({})", bucket)?;
+        }
+        if let Some(offset) = &self.offset {
+            write!(f, " OFFSET {}", offset)?;
+        }
+        Ok(())
+    }
 }
 
 /// The source of values in a `PIVOT` operation.
@@ -1404,6 +1585,7 @@ impl fmt::Display for TableFactor {
                 partitions,
                 with_ordinality,
                 json_path,
+                sample,
             } => {
                 write!(f, "{name}")?;
                 if let Some(json_path) = json_path {
@@ -1426,6 +1608,9 @@ impl fmt::Display for TableFactor {
                 if *with_ordinality {
                     write!(f, " WITH ORDINALITY")?;
                 }
+                if let Some(TableSampleKind::BeforeTableAlias(sample)) = sample {
+                    write!(f, "{sample}")?;
+                }
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
@@ -1434,6 +1619,9 @@ impl fmt::Display for TableFactor {
                 }
                 if let Some(version) = version {
                     write!(f, "{version}")?;
+                }
+                if let Some(TableSampleKind::AfterTableAlias(sample)) = sample {
+                    write!(f, "{sample}")?;
                 }
                 Ok(())
             }

@@ -254,7 +254,7 @@ pub enum DataType {
     /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     Float8,
     /// Double
-    Double,
+    Double(ExactNumberInfo),
     /// Double PRECISION e.g. [standard], [postgresql]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#approximate-numeric-type
@@ -373,6 +373,10 @@ pub enum DataType {
     ///
     /// [postgresql]: https://www.postgresql.org/docs/current/plpgsql-trigger.html
     Trigger,
+    /// Any data type, used in BigQuery UDF definitions for templated parameters
+    ///
+    /// [bigquery]: https://cloud.google.com/bigquery/docs/user-defined-functions#templated-sql-udf-parameters
+    AnyType,
 }
 
 impl fmt::Display for DataType {
@@ -383,7 +387,6 @@ impl fmt::Display for DataType {
             DataType::CharacterVarying(size) => {
                 format_character_string_type(f, "CHARACTER VARYING", size)
             }
-
             DataType::CharVarying(size) => format_character_string_type(f, "CHAR VARYING", size),
             DataType::Varchar(size) => format_character_string_type(f, "VARCHAR", size),
             DataType::Nvarchar(size) => format_character_string_type(f, "NVARCHAR", size),
@@ -505,7 +508,7 @@ impl fmt::Display for DataType {
             DataType::Float4 => write!(f, "FLOAT4"),
             DataType::Float32 => write!(f, "Float32"),
             DataType::Float64 => write!(f, "FLOAT64"),
-            DataType::Double => write!(f, "DOUBLE"),
+            DataType::Double(info) => write!(f, "DOUBLE{info}"),
             DataType::Float8 => write!(f, "FLOAT8"),
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::Bool => write!(f, "BOOL"),
@@ -626,6 +629,7 @@ impl fmt::Display for DataType {
             }
             DataType::Unspecified => Ok(()),
             DataType::Trigger => write!(f, "TRIGGER"),
+            DataType::AnyType => write!(f, "ANY TYPE"),
         }
     }
 }

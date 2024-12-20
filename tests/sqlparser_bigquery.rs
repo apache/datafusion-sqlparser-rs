@@ -222,16 +222,7 @@ fn parse_delete_statement() {
             ..
         }) => {
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![Ident::with_quote('"', "table")])),
                 from[0].relation
             );
         }
@@ -1379,16 +1370,7 @@ fn parse_table_identifiers() {
         assert_eq!(
             select.from,
             vec![TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(expected),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(expected)),
                 joins: vec![]
             },]
         );
@@ -1525,6 +1507,17 @@ fn parse_hyphenated_table_identifiers() {
     assert_eq!(
         bigquery()
             .verified_only_select_with_canonical(
+                "select * from foo-123.bar",
+                "SELECT * FROM foo-123.bar"
+            )
+            .from[0]
+            .relation,
+        table_from_name(ObjectName(vec![Ident::new("foo-123"), Ident::new("bar")])),
+    );
+
+    assert_eq!(
+        bigquery()
+            .verified_only_select_with_canonical(
                 "SELECT foo-bar.x FROM t",
                 "SELECT foo - bar.x FROM t"
             )
@@ -1562,6 +1555,7 @@ fn parse_table_time_travel() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
             },
             joins: vec![]
         },]
@@ -1661,6 +1655,7 @@ fn parse_merge() {
                     partitions: Default::default(),
                     with_ordinality: false,
                     json_path: None,
+                    sample: None,
                 },
                 table
             );
@@ -1677,6 +1672,7 @@ fn parse_merge() {
                     partitions: Default::default(),
                     with_ordinality: false,
                     json_path: None,
+                    sample: None,
                 },
                 source
             );
@@ -2211,4 +2207,20 @@ fn test_any_value() {
     );
     bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MAX sold)");
     bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MIN sold)");
+}
+
+#[test]
+fn test_any_type() {
+    bigquery().verified_stmt(concat!(
+        "CREATE OR REPLACE TEMPORARY FUNCTION ",
+        "my_function(param1 ANY TYPE) ",
+        "AS (",
+        "(SELECT 1)",
+        ")",
+    ));
+}
+
+#[test]
+fn test_any_type_dont_break_custom_type() {
+    bigquery_and_generic().verified_stmt("CREATE TABLE foo (x ANY)");
 }

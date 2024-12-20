@@ -530,6 +530,7 @@ where
 ///     let old_expr = std::mem::replace(expr, Expr::Value(Value::Null));
 ///     *expr = Expr::Function(Function {
 ///           name: ObjectName(vec![Ident::new("f")]),
+///           uses_odbc_syntax: false,
 ///           args: FunctionArguments::List(FunctionArgumentList {
 ///               duplicate_treatment: None,
 ///               args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],
@@ -892,5 +893,30 @@ mod tests {
             let actual: Vec<_> = actual.iter().map(|x| x.as_str()).collect();
             assert_eq!(actual, expected)
         }
+    }
+
+    struct QuickVisitor; // [`TestVisitor`] is too slow to iterate over thousands of nodes
+
+    impl Visitor for QuickVisitor {
+        type Break = ();
+    }
+
+    #[test]
+    fn overflow() {
+        let cond = (0..1000)
+            .map(|n| format!("X = {}", n))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let sql = format!("SELECT x where {0}", cond);
+
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, sql.as_str()).tokenize().unwrap();
+        let s = Parser::new(&dialect)
+            .with_tokens(tokens)
+            .parse_statement()
+            .unwrap();
+
+        let mut visitor = QuickVisitor {};
+        s.visit(&mut visitor);
     }
 }

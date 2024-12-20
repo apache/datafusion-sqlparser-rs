@@ -3336,6 +3336,27 @@ pub enum Statement {
         is_eq: bool,
     },
     /// ```sql
+    /// LOCK [ TABLE ] [ ONLY ] name [ * ] [, ...] [ IN lockmode MODE ] [ NOWAIT ]
+    /// ```
+    /// Where *lockmode* is one of:
+    ///
+    /// ACCESS SHARE | ROW SHARE | ROW EXCLUSIVE | SHARE UPDATE EXCLUSIVE
+    /// | SHARE | SHARE ROW EXCLUSIVE | EXCLUSIVE | ACCESS EXCLUSIVE
+    ///
+    /// Note: this is a Postgres-specific statement. See <https://www.postgresql.org/docs/current/sql-lock.html>
+    LockTablesPG {
+        /// whether the TABLE keyword was present
+        keyword_table: bool,
+        /// whether the ONLY keyword was present
+        keyword_only: bool,
+        /// the tables to lock, in locking order
+        tables: Vec<ObjectName>,
+        /// the lock mode
+        lock_mode: Option<LockMode>,
+        /// whether NOWAIT keyword was present
+        keyword_nowait: bool,
+    },
+    /// ```sql
     /// LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
@@ -4891,6 +4912,29 @@ impl fmt::Display for Statement {
                     } else {
                         write!(f, "({val})")?;
                     }
+                }
+                Ok(())
+            }
+            Statement::LockTablesPG {
+                keyword_table,
+                keyword_only,
+                tables,
+                lock_mode,
+                keyword_nowait,
+            } => {
+                write!(f, "LOCK ")?;
+                if *keyword_table {
+                    write!(f, "TABLE ")?;
+                }
+                if *keyword_only {
+                    write!(f, "ONLY ")?;
+                }
+                write!(f, "{}", display_comma_separated(tables))?;
+                if let Some(ref lock_mode) = lock_mode {
+                    write!(f, " IN {} MODE", lock_mode)?;
+                }
+                if *keyword_nowait {
+                    write!(f, " NOWAIT")?;
                 }
                 Ok(())
             }
@@ -7296,6 +7340,35 @@ impl fmt::Display for LockTableType {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum LockMode {
+    AccessShare,
+    RowShare,
+    RowExclusive,
+    ShareUpdateExclusive,
+    Share,
+    ShareRowExclusive,
+    Exclusive,
+    AccessExclusive,
+}
+
+impl fmt::Display for LockMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LockMode::AccessShare => write!(f, "ACCESS SHARE"),
+            LockMode::RowShare => write!(f, "ROW SHARE"),
+            LockMode::RowExclusive => write!(f, "ROW EXCLUSIVE"),
+            LockMode::ShareUpdateExclusive => write!(f, "SHARE UPDATE EXCLUSIVE"),
+            LockMode::Share => write!(f, "SHARE"),
+            LockMode::ShareRowExclusive => write!(f, "SHARE ROW EXCLUSIVE"),
+            LockMode::Exclusive => write!(f, "EXCLUSIVE"),
+            LockMode::AccessExclusive => write!(f, "ACCESS EXCLUSIVE"),
+        }
     }
 }
 

@@ -28,7 +28,7 @@
 // limitations under the License.
 use log::debug;
 
-use crate::ast::{ObjectName, Statement, UserDefinedTypeRepresentation};
+use crate::ast::{LockMode, ObjectName, Statement, UserDefinedTypeRepresentation};
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -139,6 +139,9 @@ impl Dialect for PostgreSqlDialect {
         if parser.parse_keyword(Keyword::CREATE) {
             parser.prev_token(); // unconsume the CREATE in case we don't end up parsing anything
             parse_create(parser)
+        } else if parser.parse_keyword(Keyword::LOCK) {
+            parser.prev_token(); // unconsume the LOCK in case we don't end up parsing anything
+            Some(parse_lock_table(parser))
         } else {
             None
         }
@@ -265,4 +268,52 @@ pub fn parse_create_type_as_enum(
         name,
         representation: UserDefinedTypeRepresentation::Enum { labels },
     })
+}
+
+pub fn parse_lock_table(parser: &mut Parser) -> Result<Statement, ParserError> {
+    parser.expect_keyword(Keyword::LOCK)?;
+    let keyword_table = parser.parse_keyword(Keyword::TABLE);
+    let keyword_only = parser.parse_keyword(Keyword::ONLY);
+    let tables: Vec<ObjectName> =
+        parser.parse_comma_separated(|parser| parser.parse_object_name(false))?;
+    let lock_mode = parse_lock_mode(parser)?;
+    let keyword_nowait = parser.parse_keyword(Keyword::NOWAIT);
+
+    Ok(Statement::LockTablesPG {
+        keyword_table,
+        keyword_only,
+        tables,
+        lock_mode,
+        keyword_nowait,
+    })
+}
+
+pub fn parse_lock_mode(parser: &mut Parser) -> Result<Option<LockMode>, ParserError> {
+    if !parser.parse_keyword(Keyword::IN) {
+        return Ok(None);
+    }
+
+    let lock_mode = if parser.parse_keywords(&[Keyword::ACCESS, Keyword::SHARE]) {
+        LockMode::AccessShare
+    } else if parser.parse_keywords(&[Keyword::ACCESS, Keyword::EXCLUSIVE]) {
+        LockMode::AccessExclusive
+    } else if parser.parse_keywords(&[Keyword::EXCLUSIVE]) {
+        LockMode::Exclusive
+    } else if parser.parse_keywords(&[Keyword::ROW, Keyword::EXCLUSIVE]) {
+        LockMode::RowExclusive
+    } else if parser.parse_keywords(&[Keyword::ROW, Keyword::SHARE]) {
+        LockMode::RowShare
+    } else if parser.parse_keywords(&[Keyword::SHARE, Keyword::ROW, Keyword::EXCLUSIVE]) {
+        LockMode::ShareRowExclusive
+    } else if parser.parse_keywords(&[Keyword::SHARE, Keyword::UPDATE, Keyword::EXCLUSIVE]) {
+        LockMode::ShareUpdateExclusive
+    } else if parser.parse_keywords(&[Keyword::SHARE]) {
+        LockMode::Share
+    } else {
+        return Err(ParserError::ParserError("Expected: ACCESS EXCLUSIVE | ACCESS SHARE | EXCLUSIVE | ROW EXCLUSIVE | ROW SHARE | SHARE | SHARE ROW EXCLUSIVE | SHARE ROW EXCLUSIVE".into()));
+    };
+
+    parser.expect_keyword(Keyword::MODE)?;
+
+    Ok(Some(lock_mode))
 }

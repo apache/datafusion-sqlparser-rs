@@ -478,6 +478,7 @@ impl Spanned for Statement {
             Statement::CreateType { .. } => Span::empty(),
             Statement::Pragma { .. } => Span::empty(),
             Statement::LockTables { .. } => Span::empty(),
+            Statement::LockTablesPG { .. } => Span::empty(),
             Statement::UnlockTables => Span::empty(),
             Statement::Unload { .. } => Span::empty(),
             Statement::OptimizeTable { .. } => Span::empty(),

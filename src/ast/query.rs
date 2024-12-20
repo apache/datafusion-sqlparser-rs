@@ -350,7 +350,9 @@ impl fmt::Display for Select {
             }
         }
 
-        write!(f, " {}", display_comma_separated(&self.projection))?;
+        if !self.projection.is_empty() {
+            write!(f, " {}", display_comma_separated(&self.projection))?;
+        }
 
         if let Some(ref into) = self.into {
             write!(f, " {into}")?;

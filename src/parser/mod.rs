@@ -9604,7 +9604,13 @@ impl<'a> Parser<'a> {
             top = Some(self.parse_top()?);
         }
 
-        let projection = self.parse_projection()?;
+        let projection = if dialect_of!(self is PostgreSqlDialect | GenericDialect)
+            && self.peek_keyword(Keyword::FROM)
+        {
+            vec![]
+        } else {
+            self.parse_projection()?
+        };
 
         let into = if self.parse_keyword(Keyword::INTO) {
             let temporary = self

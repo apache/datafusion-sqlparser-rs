@@ -5291,3 +5291,35 @@ fn parse_bitstring_literal() {
         ))]
     );
 }
+
+#[test]
+fn parse_select_without_projection() {
+    pg_and_generic().verified_stmt("SELECT FROM users");
+}
+
+#[test]
+fn parse_lock_table() {
+    pg().verified_stmt("LOCK customers");
+    pg().verified_stmt("LOCK TABLE customers");
+    pg().verified_stmt("LOCK TABLE ONLY customers");
+    pg().verified_stmt("LOCK TABLE ONLY customers IN ACCESS SHARE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers IN ROW SHARE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers IN ROW EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers IN SHARE UPDATE EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers IN SHARE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers IN SHARE ROW EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers IN EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers IN ACCESS EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK customers, orders");
+    pg().verified_stmt("LOCK TABLE customers, orders");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders IN ACCESS SHARE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders IN ROW SHARE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders IN ROW EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders IN SHARE UPDATE EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders IN SHARE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders IN SHARE ROW EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders IN EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders IN ACCESS EXCLUSIVE MODE");
+    pg().verified_stmt("LOCK TABLE ONLY customers, orders IN ACCESS SHARE MODE NOWAIT");
+}

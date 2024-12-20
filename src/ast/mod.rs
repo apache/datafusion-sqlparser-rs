@@ -3341,16 +3341,13 @@ pub enum Statement {
         value: Option<Value>,
         is_eq: bool,
     },
-    /// ```sql
-    /// LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]
-    /// ```
-    /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    LockTables { tables: Vec<LockTable> },
+    /// See [`LockTables`].
+    LockTables(LockTables),
     /// ```sql
     /// UNLOCK TABLES
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    UnlockTables,
+    UnlockTables(bool),
     /// ```sql
     /// UNLOAD(statement) TO <destination> [ WITH options ]
     /// ```
@@ -4925,11 +4922,15 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::LockTables { tables } => {
-                write!(f, "LOCK TABLES {}", display_comma_separated(tables))
+            Statement::LockTables(lock_tables) => {
+                write!(f, "{}", lock_tables)
             }
-            Statement::UnlockTables => {
-                write!(f, "UNLOCK TABLES")
+            Statement::UnlockTables(pluralized) => {
+                if *pluralized {
+                    write!(f, "UNLOCK TABLES")
+                } else {
+                    write!(f, "UNLOCK TABLE")
+                }
             }
             Statement::Unload { query, to, with } => {
                 write!(f, "UNLOAD({query}) TO {to}")?;
@@ -7278,16 +7279,126 @@ impl fmt::Display for SearchModifier {
     }
 }
 
+/// A `LOCK TABLE ..` statement. MySQL and Postgres variants are supported.
+///
+/// The MySQL and Postgres syntax variants are significant enough that they
+/// are explicitly represented as enum variants. In order to support additional
+/// databases in the future, this enum is marked as `#[non_exhaustive]`.
+///
+/// In MySQL, when multiple tables are mentioned in the statement the lock mode
+/// can vary per table.
+///
+/// In contrast, Postgres only allows specifying a single mode which is applied
+/// to all mentioned tables.
+///
+/// MySQL: see <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
+///
+/// ```sql
+/// LOCK [TABLE | TABLES] name [[AS] alias] locktype [,name [[AS] alias] locktype]
+/// ````
+///
+/// Where *locktype* is:
+/// ```sql
+/// READ [LOCAL] | [LOW_PRIORITY] WRITE
+/// ```
+///
+/// Postgres: See <https://www.postgresql.org/docs/current/sql-lock.html>
+///
+/// ```sql
+/// LOCK [ TABLE ] [ ONLY ] name [, ...] [ IN lockmode MODE ] [ NOWAIT ]
+/// ```
+/// Where *lockmode* is one of:
+///
+/// ```sql
+/// ACCESS SHARE | ROW SHARE | ROW EXCLUSIVE | SHARE UPDATE EXCLUSIVE
+/// | SHARE | SHARE ROW EXCLUSIVE | EXCLUSIVE | ACCESS EXCLUSIVE
+/// ``````
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct LockTable {
-    pub table: Ident,
-    pub alias: Option<Ident>,
-    pub lock_type: LockTableType,
+#[non_exhaustive]
+pub enum LockTables {
+    /// The MySQL syntax variant
+    MySql {
+        /// Whether the `TABLE` or `TABLES` keyword was used.
+        pluralized_table_keyword: bool,
+        /// The tables to lock and their per-table lock mode.
+        tables: Vec<MySqlTableLock>,
+    },
+
+    /// The Postgres syntax variant.
+    Postgres {
+        /// One or more optionally schema-qualified table names to lock.
+        tables: Vec<ObjectName>,
+        /// The lock type applied to all mentioned tables.
+        lock_mode: Option<LockTableType>,
+        /// Whether the optional `TABLE` keyword was present (to support round-trip parse & render)
+        has_table_keyword: bool,
+        /// Whether the `ONLY` option was specified.
+        only: bool,
+        /// Whether the `NOWAIT` option was specified.
+        no_wait: bool,
+    },
 }
 
-impl fmt::Display for LockTable {
+impl Display for LockTables {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LockTables::MySql {
+                pluralized_table_keyword,
+                tables,
+            } => {
+                write!(
+                    f,
+                    "LOCK {tbl_kwd} ",
+                    tbl_kwd = if *pluralized_table_keyword {
+                        "TABLES"
+                    } else {
+                        "TABLE"
+                    }
+                )?;
+                write!(f, "{}", display_comma_separated(tables))?;
+                Ok(())
+            }
+            LockTables::Postgres {
+                tables,
+                lock_mode,
+                has_table_keyword,
+                only,
+                no_wait,
+            } => {
+                write!(
+                    f,
+                    "LOCK{tbl_kwd}",
+                    tbl_kwd = if *has_table_keyword { " TABLE" } else { "" }
+                )?;
+                if *only {
+                    write!(f, " ONLY")?;
+                }
+                write!(f, " {}", display_comma_separated(tables))?;
+                if let Some(lock_mode) = lock_mode {
+                    write!(f, " IN {} MODE", lock_mode)?;
+                }
+                if *no_wait {
+                    write!(f, " NOWAIT")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// A locked table from a MySQL `LOCK TABLE` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MySqlTableLock {
+    pub table: ObjectName,
+    pub alias: Option<Ident>,
+    pub lock_type: Option<LockTableType>,
+}
+
+impl fmt::Display for MySqlTableLock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self {
             table: tbl_name,
@@ -7299,17 +7410,34 @@ impl fmt::Display for LockTable {
         if let Some(alias) = alias {
             write!(f, "AS {alias} ")?;
         }
-        write!(f, "{lock_type}")?;
+        if let Some(lock_type) = lock_type {
+            write!(f, "{lock_type}")?;
+        }
         Ok(())
     }
 }
 
+/// Table lock types.
+///
+/// `Read` & `Write` are MySQL-specfic.
+///
+/// AccessShare, RowShare, RowExclusive, ShareUpdateExclusive, Share,
+/// ShareRowExclusive, Exclusive, AccessExclusive are Postgres-specific.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[non_exhaustive]
 pub enum LockTableType {
     Read { local: bool },
     Write { low_priority: bool },
+    AccessShare,
+    RowShare,
+    RowExclusive,
+    ShareUpdateExclusive,
+    Share,
+    ShareRowExclusive,
+    Exclusive,
+    AccessExclusive,
 }
 
 impl fmt::Display for LockTableType {
@@ -7326,6 +7454,30 @@ impl fmt::Display for LockTableType {
                     write!(f, "LOW_PRIORITY ")?;
                 }
                 write!(f, "WRITE")?;
+            }
+            Self::AccessShare => {
+                write!(f, "ACCESS SHARE")?;
+            }
+            Self::RowShare => {
+                write!(f, "ROW SHARE")?;
+            }
+            Self::RowExclusive => {
+                write!(f, "ROW EXCLUSIVE")?;
+            }
+            Self::ShareUpdateExclusive => {
+                write!(f, "SHARE UPDATE EXCLUSIVE")?;
+            }
+            Self::Share => {
+                write!(f, "SHARE")?;
+            }
+            Self::ShareRowExclusive => {
+                write!(f, "SHARE ROW EXCLUSIVE")?;
+            }
+            Self::Exclusive => {
+                write!(f, "EXCLUSIVE")?;
+            }
+            Self::AccessExclusive => {
+                write!(f, "ACCESS EXCLUSIVE")?;
             }
         }
 

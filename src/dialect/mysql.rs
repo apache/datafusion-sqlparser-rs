@@ -19,7 +19,7 @@
 use alloc::boxed::Box;
 
 use crate::{
-    ast::{BinaryOperator, Expr, LockTable, LockTableType, Statement},
+    ast::{BinaryOperator, Expr, LockTableType, LockTables, MySqlTableLock, Statement},
     dialect::Dialect,
     keywords::Keyword,
     parser::{Parser, ParserError},
@@ -81,10 +81,14 @@ impl Dialect for MySqlDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-        if parser.parse_keywords(&[Keyword::LOCK, Keyword::TABLES]) {
-            Some(parse_lock_tables(parser))
+        if parser.parse_keywords(&[Keyword::LOCK, Keyword::TABLE]) {
+            Some(parse_lock_tables(parser, false))
+        } else if parser.parse_keywords(&[Keyword::LOCK, Keyword::TABLES]) {
+            Some(parse_lock_tables(parser, true))
+        } else if parser.parse_keywords(&[Keyword::UNLOCK, Keyword::TABLE]) {
+            Some(parse_unlock_tables(parser, false))
         } else if parser.parse_keywords(&[Keyword::UNLOCK, Keyword::TABLES]) {
-            Some(parse_unlock_tables(parser))
+            Some(parse_unlock_tables(parser, true))
         } else {
             None
         }
@@ -106,22 +110,28 @@ impl Dialect for MySqlDialect {
 
 /// `LOCK TABLES`
 /// <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-fn parse_lock_tables(parser: &mut Parser) -> Result<Statement, ParserError> {
+fn parse_lock_tables(
+    parser: &mut Parser,
+    pluralized_table_keyword: bool,
+) -> Result<Statement, ParserError> {
     let tables = parser.parse_comma_separated(parse_lock_table)?;
-    Ok(Statement::LockTables { tables })
+    Ok(Statement::LockTables(LockTables::MySql {
+        pluralized_table_keyword,
+        tables,
+    }))
 }
 
 // tbl_name [[AS] alias] lock_type
-fn parse_lock_table(parser: &mut Parser) -> Result<LockTable, ParserError> {
-    let table = parser.parse_identifier()?;
+fn parse_lock_table(parser: &mut Parser) -> Result<MySqlTableLock, ParserError> {
+    let table = parser.parse_object_name(false)?;
     let alias =
         parser.parse_optional_alias(&[Keyword::READ, Keyword::WRITE, Keyword::LOW_PRIORITY])?;
     let lock_type = parse_lock_tables_type(parser)?;
 
-    Ok(LockTable {
+    Ok(MySqlTableLock {
         table,
         alias,
-        lock_type,
+        lock_type: Some(lock_type),
     })
 }
 
@@ -146,6 +156,9 @@ fn parse_lock_tables_type(parser: &mut Parser) -> Result<LockTableType, ParserEr
 
 /// UNLOCK TABLES
 /// <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-fn parse_unlock_tables(_parser: &mut Parser) -> Result<Statement, ParserError> {
-    Ok(Statement::UnlockTables)
+fn parse_unlock_tables(
+    _parser: &mut Parser,
+    pluralized_table: bool,
+) -> Result<Statement, ParserError> {
+    Ok(Statement::UnlockTables(pluralized_table))
 }

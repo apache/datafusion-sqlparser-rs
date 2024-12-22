@@ -11699,14 +11699,16 @@ impl<'a> Parser<'a> {
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {
-            Some(self.parse_table_and_joins()?)
+            Some(UpdateTableFromKind::BeforeSet(
+                self.parse_table_and_joins()?,
+            ))
         } else {
             None
         };
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
         let from = if from_before_set.is_none() && self.parse_keyword(Keyword::FROM) {
-            Some(self.parse_table_and_joins()?)
+            Some(UpdateTableFromKind::AfterSet(self.parse_table_and_joins()?))
         } else {
             from_before_set
         };

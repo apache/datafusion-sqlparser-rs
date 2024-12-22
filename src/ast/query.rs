@@ -2788,3 +2788,14 @@ impl fmt::Display for ValueTableMode {
         }
     }
 }
+
+/// The update table from options
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UpdateTableFromKind {
+    /// Table sample located before the table alias option
+    BeforeSet(TableWithJoins),
+    /// Table sample located after the table alias option
+    AfterSet(TableWithJoins),
+}

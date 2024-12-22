@@ -32,8 +32,8 @@ use super::{
     PivotValueSource, ProjectionSelect, Query, ReferentialAction, RenameSelectItem,
     ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
     Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
-    TableFactor, TableOptionsClustered, TableWithJoins, Use, Value, Values, ViewColumnDef,
-    WildcardAdditionalOptions, With, WithFill,
+    TableFactor, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values,
+    ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -2095,6 +2095,15 @@ impl Spanned for SelectInto {
         } = self;
 
         name.span()
+    }
+}
+
+impl Spanned for UpdateTableFromKind {
+    fn span(&self) -> Span {
+        match self {
+            UpdateTableFromKind::BeforeSet(vec) => vec.span(),
+            UpdateTableFromKind::AfterSet(vec) => vec.span(),
+        }
     }
 }
 

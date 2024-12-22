@@ -12396,3 +12396,17 @@ fn test_table_sample() {
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50)");
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
 }
+
+#[test]
+fn parse_update_from_before_select() {
+    let res = all_dialects()
+    .parse_sql_statements("UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id");
+
+    assert!(res.is_ok(), "{res:?}");
+
+    let res = all_dialects().parse_sql_statements(
+        "UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name FROM (SELECT name from t2) AS t2",
+    );
+
+    assert!(res.is_err());
+}

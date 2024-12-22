@@ -2974,10 +2974,3 @@ fn test_table_sample() {
     snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) REPEATABLE (1)");
     snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) SEED (1)");
 }
-
-#[test]
-fn parse_update_from_before_select() {
-    assert!(snowflake()
-    .parse_sql_statements("UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id")
-    .is_ok());
-}

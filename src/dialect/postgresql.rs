@@ -231,6 +231,16 @@ impl Dialect for PostgreSqlDialect {
     fn supports_named_fn_args_with_expr_name(&self) -> bool {
         true
     }
+
+    /// Return true if the dialect supports empty projections in SELECT statements
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT from table_name
+    /// ```
+    fn supports_empty_projections(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

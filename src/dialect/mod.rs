@@ -410,6 +410,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports empty projections in SELECT statements
+    ///
+    /// Example
+    /// ```sql
+    /// SELECT from table_name
+    /// ```
+    fn supports_empty_projections(&self) -> bool {
+        false
+    }
+
     /// Dialect-specific infix parser override
     ///
     /// This method is called to parse the next infix expression.

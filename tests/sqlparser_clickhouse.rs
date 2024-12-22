@@ -25,7 +25,7 @@ use helpers::attached_token::AttachedToken;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
 
-use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
+use sqlparser::ast::Expr::{BinaryOp, Identifier};
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Table;
 use sqlparser::ast::Value::Number;
@@ -44,22 +44,21 @@ fn parse_map_access_expr() {
             select_token: AttachedToken::empty(),
             top: None,
             top_before_distinct: false,
-            projection: vec![UnnamedExpr(MapAccess {
-                column: Box::new(Identifier(Ident {
+            projection: vec![UnnamedExpr(Expr::CompoundFieldAccess {
+                root: Box::new(Identifier(Ident {
                     value: "string_values".to_string(),
                     quote_style: None,
                     span: Span::empty(),
                 })),
-                keys: vec![MapAccessKey {
-                    key: call(
+                access_chain: vec![AccessExpr::Subscript(Subscript::Index {
+                    index: call(
                         "indexOf",
                         [
                             Expr::Identifier(Ident::new("string_names")),
                             Expr::Value(Value::SingleQuotedString("endpoint".to_string()))
                         ]
                     ),
-                    syntax: MapAccessSyntax::Bracket
-                }],
+                })],
             })],
             into: None,
             from: vec![TableWithJoins {
@@ -76,18 +75,17 @@ fn parse_map_access_expr() {
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
-                    left: Box::new(MapAccess {
-                        column: Box::new(Identifier(Ident::new("string_value"))),
-                        keys: vec![MapAccessKey {
-                            key: call(
+                    left: Box::new(Expr::CompoundFieldAccess {
+                        root: Box::new(Identifier(Ident::new("string_value"))),
+                        access_chain: vec![AccessExpr::Subscript(Subscript::Index {
+                            index: call(
                                 "indexOf",
                                 [
                                     Expr::Identifier(Ident::new("string_name")),
                                     Expr::Value(Value::SingleQuotedString("app".to_string()))
                                 ]
                             ),
-                            syntax: MapAccessSyntax::Bracket
-                        }],
+                        })],
                     }),
                     op: BinaryOperator::NotEq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),

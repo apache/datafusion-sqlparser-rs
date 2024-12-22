@@ -630,8 +630,8 @@ fn test_array_index() {
         _ => panic!("Expected an expression with alias"),
     };
     assert_eq!(
-        &Expr::Subscript {
-            expr: Box::new(Expr::Array(Array {
+        &Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Array(Array {
                 elem: vec![
                     Expr::Value(Value::SingleQuotedString("a".to_owned())),
                     Expr::Value(Value::SingleQuotedString("b".to_owned())),
@@ -639,9 +639,9 @@ fn test_array_index() {
                 ],
                 named: false
             })),
-            subscript: Box::new(Subscript::Index {
+            access_chain: vec![AccessExpr::Subscript(Subscript::Index {
                 index: Expr::Value(number("3"))
-            })
+            })]
         },
         expr
     );

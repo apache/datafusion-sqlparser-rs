@@ -234,6 +234,10 @@ impl Dialect for SnowflakeDialect {
             RESERVED_FOR_IDENTIFIER.contains(&kw)
         }
     }
+
+    fn supports_partiql(&self) -> bool {
+        true
+    }
 }
 
 /// Parse snowflake create table statement.

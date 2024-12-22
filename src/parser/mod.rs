@@ -1161,52 +1161,38 @@ impl<'a> Parser<'a> {
         w_span: Span,
     ) -> Result<Expr, ParserError> {
         match self.peek_token().token {
-            Token::LParen | Token::Period => {
-                let mut id_parts: Vec<Ident> = vec![w.to_ident(w_span)];
-                let mut ending_wildcard: Option<TokenWithSpan> = None;
-                while self.consume_token(&Token::Period) {
-                    let next_token = self.next_token();
-                    match next_token.token {
-                        Token::Word(w) => id_parts.push(w.to_ident(next_token.span)),
-                        Token::Mul => {
-                            // Postgres explicitly allows funcnm(tablenm.*) and the
-                            // function array_agg traverses this control flow
-                            if dialect_of!(self is PostgreSqlDialect) {
-                                ending_wildcard = Some(next_token);
-                                break;
-                            } else {
-                                return self.expected("an identifier after '.'", next_token);
-                            }
-                        }
-                        Token::SingleQuotedString(s) => id_parts.push(Ident::with_quote('\'', s)),
-                        _ => {
-                            return self.expected("an identifier or a '*' after '.'", next_token);
-                        }
-                    }
-                }
-
-                if let Some(wildcard_token) = ending_wildcard {
-                    Ok(Expr::QualifiedWildcard(
-                        ObjectName(id_parts),
-                        AttachedToken(wildcard_token),
-                    ))
-                } else if self.consume_token(&Token::LParen) {
-                    if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
-                        && self.consume_tokens(&[Token::Plus, Token::RParen])
-                    {
-                        Ok(Expr::OuterJoin(Box::new(
-                            match <[Ident; 1]>::try_from(id_parts) {
-                                Ok([ident]) => Expr::Identifier(ident),
-                                Err(parts) => Expr::CompoundIdentifier(parts),
-                            },
-                        )))
-                    } else {
-                        self.prev_token();
-                        self.parse_function(ObjectName(id_parts))
-                    }
+            Token::Period => {
+                self.parse_compound_field_access(Expr::Identifier(w.to_ident(w_span)), vec![])
+            }
+            Token::LParen => {
+                let id_parts = vec![w.to_ident(w_span)];
+                if let Some(expr) = self.parse_outer_join_expr(&id_parts) {
+                    Ok(expr)
                 } else {
-                    Ok(Expr::CompoundIdentifier(id_parts))
+                    let mut expr = self.parse_function(ObjectName(id_parts))?;
+                    // consume all period if it's a method chain
+                    expr = self.try_parse_method(expr)?;
+                    let fields = vec![];
+                    self.parse_compound_field_access(expr, fields)
                 }
+            }
+            Token::LBracket if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect) =>
+            {
+                let ident = Expr::Identifier(w.to_ident(w_span));
+                let mut fields = vec![];
+                self.parse_multi_dim_subscript(&mut fields)?;
+                self.parse_compound_field_access(ident, fields)
+            }
+            // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
+            Token::SingleQuotedString(_)
+            | Token::DoubleQuotedString(_)
+            | Token::HexStringLiteral(_)
+                if w.value.starts_with('_') =>
+            {
+                Ok(Expr::IntroducedString {
+                    introducer: w.value.clone(),
+                    value: self.parse_introduced_string_value()?,
+                })
             }
             // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
             Token::SingleQuotedString(_)
@@ -1423,6 +1409,144 @@ impl<'a> Parser<'a> {
             })
         } else {
             Ok(expr)
+        }
+    }
+
+    /// Try to parse an [Expr::CompoundFieldAccess] like `a.b.c` or `a.b[1].c`.
+    /// If all the fields are `Expr::Identifier`s, return an [Expr::CompoundIdentifier] instead.
+    /// If only the root exists, return the root.
+    /// If self supports [Dialect::supports_partiql], it will fall back when occurs [Token::LBracket] for JsonAccess parsing.
+    pub fn parse_compound_field_access(
+        &mut self,
+        root: Expr,
+        mut chain: Vec<AccessExpr>,
+    ) -> Result<Expr, ParserError> {
+        let mut ending_wildcard: Option<TokenWithSpan> = None;
+        let mut ending_lbracket = false;
+        while self.consume_token(&Token::Period) {
+            let next_token = self.next_token();
+            match next_token.token {
+                Token::Word(w) => {
+                    let expr = Expr::Identifier(w.to_ident(next_token.span));
+                    chain.push(AccessExpr::Dot(expr));
+                    if self.peek_token().token == Token::LBracket {
+                        if self.dialect.supports_partiql() {
+                            self.next_token();
+                            ending_lbracket = true;
+                            break;
+                        } else {
+                            self.parse_multi_dim_subscript(&mut chain)?
+                        }
+                    }
+                }
+                Token::Mul => {
+                    // Postgres explicitly allows funcnm(tablenm.*) and the
+                    // function array_agg traverses this control flow
+                    if dialect_of!(self is PostgreSqlDialect) {
+                        ending_wildcard = Some(next_token);
+                        break;
+                    } else {
+                        return self.expected("an identifier after '.'", next_token);
+                    }
+                }
+                Token::SingleQuotedString(s) => {
+                    let expr = Expr::Identifier(Ident::with_quote('\'', s));
+                    chain.push(AccessExpr::Dot(expr));
+                }
+                _ => {
+                    return self.expected("an identifier or a '*' after '.'", next_token);
+                }
+            }
+        }
+
+        // if dialect supports partiql, we need to go back one Token::LBracket for the JsonAccess parsing
+        if self.dialect.supports_partiql() && ending_lbracket {
+            self.prev_token();
+        }
+
+        if let Some(wildcard_token) = ending_wildcard {
+            if !Self::is_all_ident(&root, &chain) {
+                return self.expected("an identifier or a '*' after '.'", self.peek_token());
+            };
+            Ok(Expr::QualifiedWildcard(
+                ObjectName(Self::exprs_to_idents(root, chain)?),
+                AttachedToken(wildcard_token),
+            ))
+        } else if self.peek_token().token == Token::LParen {
+            if !Self::is_all_ident(&root, &chain) {
+                // consume LParen
+                self.next_token();
+                return self.expected("an identifier or a '*' after '.'", self.peek_token());
+            };
+            let id_parts = Self::exprs_to_idents(root, chain)?;
+            if let Some(expr) = self.parse_outer_join_expr(&id_parts) {
+                Ok(expr)
+            } else {
+                self.parse_function(ObjectName(id_parts))
+            }
+        } else {
+            if Self::is_all_ident(&root, &chain) {
+                return Ok(Expr::CompoundIdentifier(Self::exprs_to_idents(
+                    root, chain,
+                )?));
+            }
+            if chain.is_empty() {
+                return Ok(root);
+            }
+            Ok(Expr::CompoundFieldAccess {
+                root: Box::new(root),
+                access_chain: chain.clone(),
+            })
+        }
+    }
+
+    /// Check if the root is an identifier and all fields are identifiers.
+    fn is_all_ident(root: &Expr, fields: &[AccessExpr]) -> bool {
+        if !matches!(root, Expr::Identifier(_)) {
+            return false;
+        }
+        fields
+            .iter()
+            .all(|x| matches!(x, AccessExpr::Dot(Expr::Identifier(_))))
+    }
+
+    /// Convert a root and a list of fields to a list of identifiers.
+    fn exprs_to_idents(root: Expr, fields: Vec<AccessExpr>) -> Result<Vec<Ident>, ParserError> {
+        let mut idents = vec![];
+        if let Expr::Identifier(root) = root {
+            idents.push(root);
+            for x in fields {
+                if let AccessExpr::Dot(Expr::Identifier(ident)) = x {
+                    idents.push(ident);
+                } else {
+                    return parser_err!(
+                        format!("Expected identifier, found: {}", x),
+                        x.span().start
+                    );
+                }
+            }
+            Ok(idents)
+        } else {
+            parser_err!(
+                format!("Expected identifier, found: {}", root),
+                root.span().start
+            )
+        }
+    }
+
+    /// Try to parse OuterJoin expression `(+)`
+    fn parse_outer_join_expr(&mut self, id_parts: &[Ident]) -> Option<Expr> {
+        if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
+            && self.consume_tokens(&[Token::LParen, Token::Plus, Token::RParen])
+        {
+            Some(Expr::OuterJoin(Box::new(
+                match <[Ident; 1]>::try_from(id_parts.to_vec()) {
+                    Ok([ident]) => Expr::Identifier(ident),
+                    Err(parts) => Expr::CompoundIdentifier(parts),
+                },
+            )))
+        } else {
+            None
         }
     }
 
@@ -3042,13 +3166,18 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {
-            if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
-                self.parse_subscript(expr)
-            } else if dialect_of!(self is SnowflakeDialect) || self.dialect.supports_partiql() {
+            if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect)
+            {
+                let mut chain = vec![];
+                // back to LBracket
+                self.prev_token();
+                self.parse_multi_dim_subscript(&mut chain)?;
+                self.parse_compound_field_access(expr, chain)
+            } else if self.dialect.supports_partiql() {
                 self.prev_token();
                 self.parse_json_access(expr)
             } else {
-                self.parse_map_access(expr)
+                parser_err!("Array subscripting is not supported", tok.span.start)
             }
         } else if dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == tok {
             self.prev_token();
@@ -3144,15 +3273,24 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse a multi-dimension array accessing like `[1:3][1][1]`
+    pub fn parse_multi_dim_subscript(
+        &mut self,
+        chain: &mut Vec<AccessExpr>,
+    ) -> Result<(), ParserError> {
+        while self.consume_token(&Token::LBracket) {
+            self.parse_subscript(chain)?;
+        }
+        Ok(())
+    }
+
     /// Parses an array subscript like `[1:3]`
     ///
     /// Parser is right after `[`
-    pub fn parse_subscript(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+    fn parse_subscript(&mut self, chain: &mut Vec<AccessExpr>) -> Result<(), ParserError> {
         let subscript = self.parse_subscript_inner()?;
-        Ok(Expr::Subscript {
-            expr: Box::new(expr),
-            subscript: Box::new(subscript),
-        })
+        chain.push(AccessExpr::Subscript(subscript));
+        Ok(())
     }
 
     fn parse_json_path_object_key(&mut self) -> Result<JsonPathElem, ParserError> {
@@ -3212,46 +3350,6 @@ impl<'a> Parser<'a> {
 
         debug_assert!(!path.is_empty());
         Ok(JsonPath { path })
-    }
-
-    pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_expr()?;
-        self.expect_token(&Token::RBracket)?;
-
-        let mut keys = vec![MapAccessKey {
-            key,
-            syntax: MapAccessSyntax::Bracket,
-        }];
-        loop {
-            let key = match self.peek_token().token {
-                Token::LBracket => {
-                    self.next_token(); // consume `[`
-                    let key = self.parse_expr()?;
-                    self.expect_token(&Token::RBracket)?;
-                    MapAccessKey {
-                        key,
-                        syntax: MapAccessSyntax::Bracket,
-                    }
-                }
-                // Access on BigQuery nested and repeated expressions can
-                // mix notations in the same expression.
-                // https://cloud.google.com/bigquery/docs/nested-repeated#query_nested_and_repeated_columns
-                Token::Period if dialect_of!(self is BigQueryDialect) => {
-                    self.next_token(); // consume `.`
-                    MapAccessKey {
-                        key: self.parse_expr()?,
-                        syntax: MapAccessSyntax::Period,
-                    }
-                }
-                _ => break,
-            };
-            keys.push(key);
-        }
-
-        Ok(Expr::MapAccess {
-            column: Box::new(expr),
-            keys,
-        })
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator.

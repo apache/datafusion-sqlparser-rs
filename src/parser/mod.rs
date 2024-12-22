@@ -73,6 +73,9 @@ mod recursion {
     /// Note: Uses an [`std::rc::Rc`] and [`std::cell::Cell`] in order to satisfy the Rust
     /// borrow checker so the automatic [`DepthGuard`] decrement a
     /// reference to the counter.
+    ///
+    /// Note: when "recursive-protection" feature is enabled, this crate uses additional stack overflow protection
+    /// for some of its recursive methods. See [`recursive::recursive`] for more information.
     pub(crate) struct RecursionCounter {
         remaining_depth: Rc<Cell<usize>>,
     }
@@ -326,6 +329,9 @@ impl<'a> Parser<'a> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// Note: when "recursive-protection" feature is enabled, this crate uses additional stack overflow protection
+    //  for some of its recursive methods. See [`recursive::recursive`] for more information.
     pub fn with_recursion_limit(mut self, recursion_limit: usize) -> Self {
         self.recursion_counter = RecursionCounter::new(recursion_limit);
         self
@@ -851,7 +857,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::TABLE)?;
+        let has_table_keyword = self.parse_keyword(Keyword::TABLE);
         let table_name = self.parse_object_name(false)?;
         let mut for_columns = false;
         let mut cache_metadata = false;
@@ -896,6 +902,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Statement::Analyze {
+            has_table_keyword,
             table_name,
             for_columns,
             columns,
@@ -6155,22 +6162,11 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let on_commit: Option<OnCommit> =
-            if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT, Keyword::DELETE, Keyword::ROWS])
-            {
-                Some(OnCommit::DeleteRows)
-            } else if self.parse_keywords(&[
-                Keyword::ON,
-                Keyword::COMMIT,
-                Keyword::PRESERVE,
-                Keyword::ROWS,
-            ]) {
-                Some(OnCommit::PreserveRows)
-            } else if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT, Keyword::DROP]) {
-                Some(OnCommit::Drop)
-            } else {
-                None
-            };
+        let on_commit = if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT]) {
+            Some(self.parse_create_table_on_commit()?)
+        } else {
+            None
+        };
 
         let strict = self.parse_keyword(Keyword::STRICT);
 
@@ -6224,6 +6220,21 @@ impl<'a> Parser<'a> {
             .primary_key(primary_key)
             .strict(strict)
             .build())
+    }
+
+    pub(crate) fn parse_create_table_on_commit(&mut self) -> Result<OnCommit, ParserError> {
+        if self.parse_keywords(&[Keyword::DELETE, Keyword::ROWS]) {
+            Ok(OnCommit::DeleteRows)
+        } else if self.parse_keywords(&[Keyword::PRESERVE, Keyword::ROWS]) {
+            Ok(OnCommit::PreserveRows)
+        } else if self.parse_keywords(&[Keyword::DROP]) {
+            Ok(OnCommit::Drop)
+        } else {
+            parser_err!(
+                "Expecting DELETE ROWS, PRESERVE ROWS or DROP",
+                self.peek_token()
+            )
+        }
     }
 
     /// Parse configuration like partitioning, clustering information during the table creation.
@@ -6826,7 +6837,7 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
                 self.expect_keyword(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name(false)?;
-                let referred_columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+                let referred_columns = self.parse_parenthesized_column_list(Optional, false)?;
                 let mut on_delete = None;
                 let mut on_update = None;
                 loop {
@@ -8110,7 +8121,9 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::PRECISION) {
                         Ok(DataType::DoublePrecision)
                     } else {
-                        Ok(DataType::Double)
+                        Ok(DataType::Double(
+                            self.parse_exact_number_optional_precision_scale()?,
+                        ))
                     }
                 }
                 Keyword::TINYINT => {
@@ -8751,7 +8764,9 @@ impl<'a> Parser<'a> {
                             }
                             Token::Number(s, false) if s.chars().all(|c| c.is_ascii_digit()) => {
                                 ident.value.push_str(&s);
-                                true
+                                // If next token is period, then it is part of an ObjectName and we don't expect whitespace
+                                // after the number.
+                                !matches!(self.peek_token().token, Token::Period)
                             }
                             _ => {
                                 return self
@@ -9087,6 +9102,7 @@ impl<'a> Parser<'a> {
         let mut analyze = false;
         let mut verbose = false;
         let mut query_plan = false;
+        let mut estimate = false;
         let mut format = None;
         let mut options = None;
 
@@ -9099,6 +9115,8 @@ impl<'a> Parser<'a> {
             options = Some(self.parse_utility_options()?)
         } else if self.parse_keywords(&[Keyword::QUERY, Keyword::PLAN]) {
             query_plan = true;
+        } else if self.parse_keyword(Keyword::ESTIMATE) {
+            estimate = true;
         } else {
             analyze = self.parse_keyword(Keyword::ANALYZE);
             verbose = self.parse_keyword(Keyword::VERBOSE);
@@ -9116,6 +9134,7 @@ impl<'a> Parser<'a> {
                 analyze,
                 verbose,
                 query_plan,
+                estimate,
                 statement: Box::new(statement),
                 format,
                 options,

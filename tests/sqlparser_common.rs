@@ -563,6 +563,12 @@ fn parse_select_with_table_alias() {
 }
 
 #[test]
+fn parse_analyze() {
+    verified_stmt("ANALYZE TABLE test_table");
+    verified_stmt("ANALYZE test_table");
+}
+
+#[test]
 fn parse_invalid_table_name() {
     let ast = all_dialects().run_parser_method("db.public..customer", |parser| {
         parser.parse_object_name(false)
@@ -3003,7 +3009,7 @@ fn parse_create_table() {
                     },
                     ColumnDef {
                         name: "lat".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -3012,7 +3018,7 @@ fn parse_create_table() {
                     },
                     ColumnDef {
                         name: "lng".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![],
                     },
@@ -3192,7 +3198,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     ColumnDef {
                         name: "lat".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -3201,7 +3207,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     ColumnDef {
                         name: "lng".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![],
                     },
@@ -3832,7 +3838,7 @@ fn parse_create_external_table() {
                     },
                     ColumnDef {
                         name: "lat".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -3841,7 +3847,7 @@ fn parse_create_external_table() {
                     },
                     ColumnDef {
                         name: "lng".into(),
-                        data_type: DataType::Double,
+                        data_type: DataType::Double(ExactNumberInfo::None),
                         collation: None,
                         options: vec![],
                     },
@@ -4167,6 +4173,7 @@ fn parse_alter_table_constraints() {
     check_one("UNIQUE (id)");
     check_one("FOREIGN KEY (foo, bar) REFERENCES AnotherTable(foo, bar)");
     check_one("CHECK (end_date > start_date OR end_date IS NULL)");
+    check_one("CONSTRAINT fk FOREIGN KEY (lng) REFERENCES othertable4");
 
     fn check_one(constraint_text: &str) {
         match alter_table_op(verified_stmt(&format!(
@@ -4375,6 +4382,7 @@ fn run_explain_analyze(
             analyze,
             verbose,
             query_plan,
+            estimate,
             statement,
             format,
             options,
@@ -4384,6 +4392,7 @@ fn run_explain_analyze(
             assert_eq!(format, expected_format);
             assert_eq!(options, exepcted_options);
             assert!(!query_plan);
+            assert!(!estimate);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
         }
         _ => panic!("Unexpected Statement, must be Explain"),
@@ -4525,6 +4534,34 @@ fn parse_explain_query_plan() {
         all_dialects()
             .parse_sql_statements("EXPLAIN QUERY SELECT sqrt(id) FROM foo")
             .unwrap_err()
+    );
+}
+
+#[test]
+fn parse_explain_estimate() {
+    let statement = all_dialects().verified_stmt("EXPLAIN ESTIMATE SELECT sqrt(id) FROM foo");
+
+    match &statement {
+        Statement::Explain {
+            query_plan,
+            estimate,
+            analyze,
+            verbose,
+            statement,
+            ..
+        } => {
+            assert!(estimate);
+            assert!(!query_plan);
+            assert!(!analyze);
+            assert!(!verbose);
+            assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    assert_eq!(
+        "EXPLAIN ESTIMATE SELECT sqrt(id) FROM foo",
+        statement.to_string()
     );
 }
 
@@ -12395,6 +12432,19 @@ fn test_table_sample() {
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE BERNOULLI (50)");
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50)");
     dialects.verified_stmt("SELECT * FROM tbl AS t TABLESAMPLE SYSTEM (50) REPEATABLE (10)");
+}
+
+#[test]
+fn overflow() {
+    let expr = std::iter::repeat("1")
+        .take(1000)
+        .collect::<Vec<_>>()
+        .join(" + ");
+    let sql = format!("SELECT {}", expr);
+
+    let mut statements = Parser::parse_sql(&GenericDialect {}, sql.as_str()).unwrap();
+    let statement = statements.pop().unwrap();
+    assert_eq!(statement.to_string(), sql);
 }
 
 #[test]

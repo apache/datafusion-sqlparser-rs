@@ -1291,6 +1291,7 @@ impl fmt::Display for CastFormat {
 }
 
 impl fmt::Display for Expr {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Identifier(s) => write!(f, "{s}"),
@@ -2354,6 +2355,7 @@ pub enum Statement {
         cache_metadata: bool,
         noscan: bool,
         compute_statistics: bool,
+        has_table_keyword: bool,
     },
     /// ```sql
     /// TRUNCATE
@@ -3239,6 +3241,9 @@ pub enum Statement {
         ///
         /// [SQLite](https://sqlite.org/lang_explain.html)
         query_plan: bool,
+        /// `EXPLAIN ESTIMATE`
+        /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/statements/explain#explain-estimate)
+        estimate: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
         /// Optional output format of explain
@@ -3471,6 +3476,7 @@ impl fmt::Display for Statement {
                 verbose,
                 analyze,
                 query_plan,
+                estimate,
                 statement,
                 format,
                 options,
@@ -3482,6 +3488,9 @@ impl fmt::Display for Statement {
                 }
                 if *analyze {
                     write!(f, "ANALYZE ")?;
+                }
+                if *estimate {
+                    write!(f, "ESTIMATE ")?;
                 }
 
                 if *verbose {
@@ -3644,8 +3653,13 @@ impl fmt::Display for Statement {
                 cache_metadata,
                 noscan,
                 compute_statistics,
+                has_table_keyword,
             } => {
-                write!(f, "ANALYZE TABLE {table_name}")?;
+                write!(
+                    f,
+                    "ANALYZE{}{table_name}",
+                    if *has_table_keyword { " TABLE " } else { " " }
+                )?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;

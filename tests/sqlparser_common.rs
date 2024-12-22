@@ -12446,3 +12446,9 @@ fn overflow() {
     let statement = statements.pop().unwrap();
     assert_eq!(statement.to_string(), sql);
 }
+
+#[test]
+fn parse_select_without_projection() {
+    let dialects = all_dialects_where(|d| d.supports_empty_projections());
+    dialects.verified_stmt("SELECT FROM users");
+}

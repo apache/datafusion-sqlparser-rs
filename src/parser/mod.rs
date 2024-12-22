@@ -969,6 +969,14 @@ impl<'a> Parser<'a> {
         let _guard = self.recursion_counter.try_decrease()?;
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
+        // Attempt to parse composite access. Example `SELECT f(x).a`
+        while self.consume_token(&Token::Period) {
+            expr = Expr::CompositeAccess {
+                expr: Box::new(expr),
+                key: self.parse_identifier(false)?,
+            }
+        }
+
         debug!("prefix: {:?}", expr);
         loop {
             let next_precedence = self.get_next_precedence()?;
@@ -1393,25 +1401,7 @@ impl<'a> Parser<'a> {
                     }
                 };
                 self.expect_token(&Token::RParen)?;
-                let expr = self.try_parse_method(expr)?;
-                if !self.consume_token(&Token::Period) {
-                    Ok(expr)
-                } else {
-                    let tok = self.next_token();
-                    let key = match tok.token {
-                        Token::Word(word) => word.to_ident(tok.span),
-                        _ => {
-                            return parser_err!(
-                                format!("Expected identifier, found: {tok}"),
-                                tok.span.start
-                            )
-                        }
-                    };
-                    Ok(Expr::CompositeAccess {
-                        expr: Box::new(expr),
-                        key,
-                    })
-                }
+                self.try_parse_method(expr)
             }
             Token::Placeholder(_) | Token::Colon | Token::AtSign => {
                 self.prev_token();

@@ -128,6 +128,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_empty_projections(&self) -> bool {
+        true
+    }
+
     fn supports_user_host_grantee(&self) -> bool {
         true
     }

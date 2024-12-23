@@ -2791,13 +2791,15 @@ impl fmt::Display for ValueTableMode {
     }
 }
 
-/// The update table from options
+/// The `FROM` clause of an `UPDATE TABLE` statement
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum UpdateTableFromKind {
-    /// Table sample located before the table alias option
+    /// Update Statment where the 'FROM' clause is before the 'SET' keyword (Supported by Snowflake)
+    /// For Example: UPDATE FROM t1 SET t1.name='aaa'
     BeforeSet(TableWithJoins),
-    /// Table sample located after the table alias option
+    /// Update Statment where the 'FROM' clause is after the 'SET' keyword (Which is the standard way)
+    /// For Example: UPDATE SET t1.name='aaa' FROM t1
     AfterSet(TableWithJoins),
 }

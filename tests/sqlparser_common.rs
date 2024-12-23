@@ -12588,9 +12588,10 @@ fn parse_update_from_before_select() {
     all_dialects()
     .verified_stmt("UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id");
 
-    let res = all_dialects().parse_sql_statements(
-        "UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name FROM (SELECT name from t2) AS t2",
+    let query =
+    "UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name FROM (SELECT name from t2) AS t2";
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: FROM".to_string()),
+        parse_sql_statements(query).unwrap_err()
     );
-
-    assert!(res.is_err());
 }

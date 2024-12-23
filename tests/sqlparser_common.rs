@@ -12389,8 +12389,8 @@ fn parse_create_table_with_bit_types() {
 fn parse_composite_access_expr() {
     assert_eq!(
         verified_expr("f(a).b"),
-        Expr::CompositeAccess {
-            expr: Box::new(Expr::Function(Function {
+        Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("f")]),
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
@@ -12406,41 +12406,41 @@ fn parse_composite_access_expr() {
                 over: None,
                 within_group: vec![]
             })),
-            key: Ident::new("b")
+            access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("b")))]
         }
     );
 
     // Nested Composite Access
     assert_eq!(
         verified_expr("f(a).b.c"),
-        Expr::CompositeAccess {
-            expr: Box::new(Expr::CompositeAccess {
-                expr: Box::new(Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("f")]),
-                    uses_odbc_syntax: false,
-                    parameters: FunctionArguments::None,
-                    args: FunctionArguments::List(FunctionArgumentList {
-                        duplicate_treatment: None,
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                            Expr::Identifier(Ident::new("a"))
-                        ))],
-                        clauses: vec![],
-                    }),
-                    null_treatment: None,
-                    filter: None,
-                    over: None,
-                    within_group: vec![]
-                })),
-                key: Ident::new("b")
-            }),
-            key: Ident::new("c")
+        Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("f")]),
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::List(FunctionArgumentList {
+                    duplicate_treatment: None,
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                        Expr::Identifier(Ident::new("a"))
+                    ))],
+                    clauses: vec![],
+                }),
+                null_treatment: None,
+                filter: None,
+                over: None,
+                within_group: vec![]
+            })),
+            access_chain: vec![
+                AccessExpr::Dot(Expr::Identifier(Ident::new("b"))),
+                AccessExpr::Dot(Expr::Identifier(Ident::new("c"))),
+            ]
         }
     );
 
     // Composite Access in Select and Where Clauses
     let stmt = verified_only_select("SELECT f(a).b FROM t WHERE f(a).b IS NOT NULL");
-    let expr = Expr::CompositeAccess {
-        expr: Box::new(Expr::Function(Function {
+    let expr = Expr::CompoundFieldAccess {
+        root: Box::new(Expr::Function(Function {
             name: ObjectName(vec![Ident::new("f")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
@@ -12456,14 +12456,15 @@ fn parse_composite_access_expr() {
             over: None,
             within_group: vec![],
         })),
-        key: Ident::new("b"),
+        access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("b")))],
     };
 
     assert_eq!(stmt.projection[0], SelectItem::UnnamedExpr(expr.clone()));
     assert_eq!(stmt.selection.unwrap(), Expr::IsNotNull(Box::new(expr)));
 
-    // Composite Access with quoted identifier
-    verified_only_select("SELECT f(a).\"an id\"");
+    // Compound access with quoted identifier.
+    all_dialects_where(|d| d.is_delimited_identifier_start('"'))
+        .verified_only_select("SELECT f(a).\"an id\"");
 
     // Composite Access in struct literal
     all_dialects_where(|d| d.supports_struct_literal()).verified_stmt(
@@ -12575,6 +12576,11 @@ fn overflow() {
     let mut statements = Parser::parse_sql(&GenericDialect {}, sql.as_str()).unwrap();
     let statement = statements.pop().unwrap();
     assert_eq!(statement.to_string(), sql);
+}
+#[test]
+fn parse_select_without_projection() {
+    let dialects = all_dialects_where(|d| d.supports_empty_projections());
+    dialects.verified_stmt("SELECT FROM users");
 }
 
 #[test]

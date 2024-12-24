@@ -75,6 +75,15 @@ macro_rules! dialect_of {
     };
 }
 
+// Similar to above, but for applying directly against an instance of dialect
+// instead of a struct member named dialect. This avoids lifetime issues when
+// mixing match guards and token references.
+macro_rules! dialect_is {
+    ($dialect:ident is $($dialect_type:ty)|+) => {
+        ($($dialect.is::<$dialect_type>())||+)
+    }
+}
+
 /// Encapsulates the differences between SQL implementations.
 ///
 /// # SQL Dialects

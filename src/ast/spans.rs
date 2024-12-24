@@ -491,6 +491,7 @@ impl Spanned for Statement {
             Statement::NOTIFY { .. } => Span::empty(),
             Statement::LoadData { .. } => Span::empty(),
             Statement::UNLISTEN { .. } => Span::empty(),
+            Statement::RenameTable { .. } => Span::empty(),
         }
     }
 }

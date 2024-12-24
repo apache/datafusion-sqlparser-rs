@@ -11791,14 +11791,19 @@ impl<'a> Parser<'a> {
     pub fn parse_update(&mut self) -> Result<Statement, ParserError> {
         let or = self.parse_conflict_clause();
         let table = self.parse_table_and_joins()?;
-        self.expect_keyword(Keyword::SET)?;
-        let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
-        let from = if self.parse_keyword(Keyword::FROM)
-            && dialect_of!(self is GenericDialect | PostgreSqlDialect | DuckDbDialect | BigQueryDialect | SnowflakeDialect | RedshiftSqlDialect | MsSqlDialect | SQLiteDialect )
-        {
-            Some(self.parse_table_and_joins()?)
+        let from_before_set = if self.parse_keyword(Keyword::FROM) {
+            Some(UpdateTableFromKind::BeforeSet(
+                self.parse_table_and_joins()?,
+            ))
         } else {
             None
+        };
+        self.expect_keyword(Keyword::SET)?;
+        let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
+        let from = if from_before_set.is_none() && self.parse_keyword(Keyword::FROM) {
+            Some(UpdateTableFromKind::AfterSet(self.parse_table_and_joins()?))
+        } else {
+            from_before_set
         };
         let selection = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)

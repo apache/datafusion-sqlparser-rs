@@ -72,8 +72,8 @@ pub use self::query::{
     TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableSample,
     TableSampleBucket, TableSampleKind, TableSampleMethod, TableSampleModifier,
     TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier, TableSampleUnit, TableVersion,
-    TableWithJoins, Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With,
-    WithFill,
+    TableWithJoins, Top, TopQuantity, UpdateTableFromKind, ValueTableMode, Values,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 pub use self::trigger::{
@@ -2473,7 +2473,7 @@ pub enum Statement {
         /// Column assignments
         assignments: Vec<Assignment>,
         /// Table which provide value to be set
-        from: Option<TableWithJoins>,
+        from: Option<UpdateTableFromKind>,
         /// WHERE
         selection: Option<Expr>,
         /// RETURNING
@@ -3745,10 +3745,13 @@ impl fmt::Display for Statement {
                     write!(f, "{or} ")?;
                 }
                 write!(f, "{table}")?;
+                if let Some(UpdateTableFromKind::BeforeSet(from)) = from {
+                    write!(f, " FROM {from}")?;
+                }
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
-                if let Some(from) = from {
+                if let Some(UpdateTableFromKind::AfterSet(from)) = from {
                     write!(f, " FROM {from}")?;
                 }
                 if let Some(selection) = selection {

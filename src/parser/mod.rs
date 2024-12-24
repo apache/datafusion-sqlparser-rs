@@ -3961,11 +3961,7 @@ impl<'a> Parser<'a> {
             .is_some();
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
-        let create_view_params = if dialect_of!(self is MySqlDialect | GenericDialect) {
-            self.parse_create_view_params()?
-        } else {
-            None
-        };
+        let create_view_params = self.parse_create_view_params()?;
         if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
@@ -4944,7 +4940,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse optional algorithm, definer, and security context parameters for [MySQL]
+    /// Parse optional parameters for the `CREATE VIEW` statement supported by [MySQL].
     ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/create-view.html
     fn parse_create_view_params(&mut self) -> Result<Option<CreateViewParams>, ParserError> {
@@ -8731,8 +8727,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a possibly qualified, possibly quoted identifier, optionally allowing for wildcards,
-    /// e.g. *, `foo`.*, or "foo"."bar"
-    pub fn parse_object_name_with_wildcards(
+    /// e.g. *, *.*, `foo`.*, or "foo"."bar"
+    fn parse_object_name_with_wildcards(
         &mut self,
         in_table_clause: bool,
         allow_wildcards: bool,
@@ -11559,11 +11555,8 @@ impl<'a> Parser<'a> {
         } else {
             let object_type =
                 self.parse_one_of_keywords(&[Keyword::SEQUENCE, Keyword::SCHEMA, Keyword::TABLE]);
-            let objects = if dialect_of!(self is MySqlDialect | GenericDialect) {
-                self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true))
-            } else {
-                self.parse_comma_separated(|p| p.parse_object_name(false))
-            };
+            let objects =
+                self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true));
             match object_type {
                 Some(Keyword::SCHEMA) => GrantObjects::Schemas(objects?),
                 Some(Keyword::SEQUENCE) => GrantObjects::Sequences(objects?),

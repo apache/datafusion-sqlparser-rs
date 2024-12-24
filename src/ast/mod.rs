@@ -2760,6 +2760,9 @@ pub enum Statement {
     },
     /// ```sql
     /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    /// https://www.postgresql.org/docs/current/sql-dropextension.html
     /// ```
     DropExtension {
         names: Vec<Ident>,

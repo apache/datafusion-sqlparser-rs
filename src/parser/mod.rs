@@ -3562,7 +3562,8 @@ impl<'a> Parser<'a> {
 
     /// Advances to the next non-whitespace token and returns a copy.
     ///
-    /// See [`Self::next_token_ref`] to avoid the copy.
+    /// Please use [`Self::advance_token`] and [`Self::get_current_token`] to
+    /// avoid the copy.
     pub fn next_token(&mut self) -> TokenWithSpan {
         self.advance_token();
         self.get_current_token().clone()

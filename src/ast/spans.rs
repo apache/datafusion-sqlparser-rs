@@ -20,20 +20,20 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    dcl::SecondaryRoles, AlterColumnOperation, AlterIndexOperation, AlterTableOperation, Array,
-    Assignment, AssignmentTarget, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
-    ColumnOptionDef, ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex,
-    CreateTable, CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem,
-    Expr, ExprWithAlias, Fetch, FromTable, Function, FunctionArg, FunctionArgExpr,
-    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
-    IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint, JoinOperator,
-    JsonPath, JsonPathElem, LateralView, MatchRecognizePattern, Measure, NamedWindowDefinition,
-    ObjectName, Offset, OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, Partition,
-    PivotValueSource, ProjectionSelect, Query, ReferentialAction, RenameSelectItem,
-    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
-    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
-    TableFactor, TableOptionsClustered, TableWithJoins, Use, Value, Values, ViewColumnDef,
-    WildcardAdditionalOptions, With, WithFill,
+    dcl::SecondaryRoles, AccessExpr, AlterColumnOperation, AlterIndexOperation,
+    AlterTableOperation, Array, Assignment, AssignmentTarget, CloseCursor, ClusteredIndex,
+    ColumnDef, ColumnOption, ColumnOptionDef, ConflictTarget, ConnectBy, ConstraintCharacteristics,
+    CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate,
+    ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable, Function,
+    FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments,
+    GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
+    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
+    Measure, NamedWindowDefinition, ObjectName, Offset, OnConflict, OnConflictAction, OnInsert,
+    OrderBy, OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
+    TableConstraint, TableFactor, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
+    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -284,6 +284,7 @@ impl Spanned for Statement {
                 cache_metadata: _,
                 noscan: _,
                 compute_statistics: _,
+                has_table_keyword: _,
             } => union_spans(
                 core::iter::once(table_name.span())
                     .chain(partitions.iter().flat_map(|i| i.iter().map(|k| k.span())))
@@ -1261,6 +1262,9 @@ impl Spanned for Expr {
             Expr::Identifier(ident) => ident.span,
             Expr::CompoundIdentifier(vec) => union_spans(vec.iter().map(|i| i.span)),
             Expr::CompositeAccess { expr, key } => expr.span().union(&key.span),
+            Expr::CompoundFieldAccess { root, access_chain } => {
+                union_spans(iter::once(root.span()).chain(access_chain.iter().map(|i| i.span())))
+            }
             Expr::IsFalse(expr) => expr.span(),
             Expr::IsNotFalse(expr) => expr.span(),
             Expr::IsTrue(expr) => expr.span(),
@@ -1335,9 +1339,6 @@ impl Spanned for Expr {
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
             Expr::TypedString { .. } => Span::empty(),
-            Expr::MapAccess { column, keys } => column
-                .span()
-                .union(&union_spans(keys.iter().map(|i| i.key.span()))),
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))
@@ -1433,7 +1434,6 @@ impl Spanned for Expr {
             Expr::Named { .. } => Span::empty(),
             Expr::Dictionary(_) => Span::empty(),
             Expr::Map(_) => Span::empty(),
-            Expr::Subscript { expr, subscript } => expr.span().union(&subscript.span()),
             Expr::Interval(interval) => interval.value.span(),
             Expr::Wildcard(token) => token.0.span,
             Expr::QualifiedWildcard(object_name, token) => union_spans(
@@ -1468,6 +1468,15 @@ impl Spanned for Subscript {
                 .into_iter()
                 .flatten(),
             ),
+        }
+    }
+}
+
+impl Spanned for AccessExpr {
+    fn span(&self) -> Span {
+        match self {
+            AccessExpr::Dot(ident) => ident.span(),
+            AccessExpr::Subscript(subscript) => subscript.span(),
         }
     }
 }
@@ -1699,6 +1708,7 @@ impl Spanned for TableFactor {
                 with_ordinality: _,
                 partitions: _,
                 json_path: _,
+                sample: _,
             } => union_spans(
                 name.0
                     .iter()
@@ -2093,6 +2103,15 @@ impl Spanned for SelectInto {
         } = self;
 
         name.span()
+    }
+}
+
+impl Spanned for UpdateTableFromKind {
+    fn span(&self) -> Span {
+        match self {
+            UpdateTableFromKind::BeforeSet(from) => from.span(),
+            UpdateTableFromKind::AfterSet(from) => from.span(),
+        }
     }
 }
 

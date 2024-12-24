@@ -127,4 +127,8 @@ impl Dialect for GenericDialect {
     fn supports_struct_literal(&self) -> bool {
         true
     }
+
+    fn supports_empty_projections(&self) -> bool {
+        true
+    }
 }

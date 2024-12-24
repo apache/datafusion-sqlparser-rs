@@ -78,7 +78,10 @@ fn derive_visit(input: proc_macro::TokenStream, visit_type: &VisitType) -> proc_
 
     let expanded = quote! {
         // The generated impl.
+        // Note that it uses [`recursive::recursive`] to protect from stack overflow.
+        // See tests in https://github.com/apache/datafusion-sqlparser-rs/pull/1522/ for more info.
         impl #impl_generics sqlparser::ast::#visit_trait for #name #ty_generics #where_clause {
+             #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
             fn visit<V: sqlparser::ast::#visitor_trait>(
                 &#modifier self,
                 visitor: &mut V

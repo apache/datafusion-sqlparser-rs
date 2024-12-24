@@ -25,7 +25,7 @@ use helpers::attached_token::AttachedToken;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
 
-use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
+use sqlparser::ast::Expr::{BinaryOp, Identifier};
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Table;
 use sqlparser::ast::Value::Number;
@@ -44,35 +44,25 @@ fn parse_map_access_expr() {
             select_token: AttachedToken::empty(),
             top: None,
             top_before_distinct: false,
-            projection: vec![UnnamedExpr(MapAccess {
-                column: Box::new(Identifier(Ident {
+            projection: vec![UnnamedExpr(Expr::CompoundFieldAccess {
+                root: Box::new(Identifier(Ident {
                     value: "string_values".to_string(),
                     quote_style: None,
                     span: Span::empty(),
                 })),
-                keys: vec![MapAccessKey {
-                    key: call(
+                access_chain: vec![AccessExpr::Subscript(Subscript::Index {
+                    index: call(
                         "indexOf",
                         [
                             Expr::Identifier(Ident::new("string_names")),
                             Expr::Value(Value::SingleQuotedString("endpoint".to_string()))
                         ]
                     ),
-                    syntax: MapAccessSyntax::Bracket
-                }],
+                })],
             })],
             into: None,
             from: vec![TableWithJoins {
-                relation: Table {
-                    name: ObjectName(vec![Ident::new("foos")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(vec![Ident::new("foos")])),
                 joins: vec![],
             }],
             lateral_views: vec![],
@@ -85,18 +75,17 @@ fn parse_map_access_expr() {
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
-                    left: Box::new(MapAccess {
-                        column: Box::new(Identifier(Ident::new("string_value"))),
-                        keys: vec![MapAccessKey {
-                            key: call(
+                    left: Box::new(Expr::CompoundFieldAccess {
+                        root: Box::new(Identifier(Ident::new("string_value"))),
+                        access_chain: vec![AccessExpr::Subscript(Subscript::Index {
+                            index: call(
                                 "indexOf",
                                 [
                                     Expr::Identifier(Ident::new("string_name")),
                                     Expr::Value(Value::SingleQuotedString("app".to_string()))
                                 ]
                             ),
-                            syntax: MapAccessSyntax::Bracket
-                        }],
+                        })],
                     }),
                     op: BinaryOperator::NotEq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),
@@ -175,9 +164,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
-            with_ordinality: _,
-            partitions: _,
-            json_path: _,
+            ..
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -1623,6 +1610,14 @@ fn parse_explain_table() {
         }
         _ => panic!("Unexpected Statement, must be ExplainTable"),
     }
+}
+
+#[test]
+fn parse_table_sample() {
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 0.1");
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1000");
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1 / 10");
+    clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1 / 10 OFFSET 1 / 2");
 }
 
 fn clickhouse() -> TestedDialects {

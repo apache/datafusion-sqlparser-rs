@@ -23,7 +23,7 @@ use std::ops::Deref;
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[test]
@@ -222,16 +222,7 @@ fn parse_delete_statement() {
             ..
         }) => {
             assert_eq!(
-                TableFactor::Table {
-                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                table_from_name(ObjectName(vec![Ident::with_quote('"', "table")])),
                 from[0].relation
             );
         }
@@ -1379,16 +1370,7 @@ fn parse_table_identifiers() {
         assert_eq!(
             select.from,
             vec![TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(expected),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                    version: None,
-                    partitions: vec![],
-                    with_ordinality: false,
-                    json_path: None,
-                },
+                relation: table_from_name(ObjectName(expected)),
                 joins: vec![]
             },]
         );
@@ -1525,6 +1507,17 @@ fn parse_hyphenated_table_identifiers() {
     assert_eq!(
         bigquery()
             .verified_only_select_with_canonical(
+                "select * from foo-123.bar",
+                "SELECT * FROM foo-123.bar"
+            )
+            .from[0]
+            .relation,
+        table_from_name(ObjectName(vec![Ident::new("foo-123"), Ident::new("bar")])),
+    );
+
+    assert_eq!(
+        bigquery()
+            .verified_only_select_with_canonical(
                 "SELECT foo-bar.x FROM t",
                 "SELECT foo - bar.x FROM t"
             )
@@ -1562,6 +1555,7 @@ fn parse_table_time_travel() {
                 partitions: vec![],
                 with_ordinality: false,
                 json_path: None,
+                sample: None,
             },
             joins: vec![]
         },]
@@ -1661,6 +1655,7 @@ fn parse_merge() {
                     partitions: Default::default(),
                     with_ordinality: false,
                     json_path: None,
+                    sample: None,
                 },
                 table
             );
@@ -1677,6 +1672,7 @@ fn parse_merge() {
                     partitions: Default::default(),
                     with_ordinality: false,
                     json_path: None,
+                    sample: None,
                 },
                 source
             );
@@ -1969,27 +1965,47 @@ fn parse_map_access_expr() {
     let sql = "users[-1][safe_offset(2)].a.b";
     let expr = bigquery().verified_expr(sql);
 
-    fn map_access_key(key: Expr, syntax: MapAccessSyntax) -> MapAccessKey {
-        MapAccessKey { key, syntax }
-    }
-    let expected = Expr::MapAccess {
-        column: Expr::Identifier(Ident::new("users")).into(),
-        keys: vec![
-            map_access_key(
-                Expr::UnaryOp {
+    let expected = Expr::CompoundFieldAccess {
+        root: Box::new(Expr::Identifier(Ident::with_span(
+            Span::new(Location::of(1, 1), Location::of(1, 6)),
+            "users",
+        ))),
+        access_chain: vec![
+            AccessExpr::Subscript(Subscript::Index {
+                index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
                     expr: Expr::Value(number("1")).into(),
                 },
-                MapAccessSyntax::Bracket,
-            ),
-            map_access_key(
-                call("safe_offset", [Expr::Value(number("2"))]),
-                MapAccessSyntax::Bracket,
-            ),
-            map_access_key(
-                Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("b")]),
-                MapAccessSyntax::Period,
-            ),
+            }),
+            AccessExpr::Subscript(Subscript::Index {
+                index: Expr::Function(Function {
+                    name: ObjectName(vec![Ident::with_span(
+                        Span::new(Location::of(1, 11), Location::of(1, 22)),
+                        "safe_offset",
+                    )]),
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            number("2"),
+                        )))],
+                        clauses: vec![],
+                    }),
+                    filter: None,
+                    null_treatment: None,
+                    over: None,
+                    within_group: vec![],
+                    uses_odbc_syntax: false,
+                }),
+            }),
+            AccessExpr::Dot(Expr::Identifier(Ident::with_span(
+                Span::new(Location::of(1, 24), Location::of(1, 25)),
+                "a",
+            ))),
+            AccessExpr::Dot(Expr::Identifier(Ident::with_span(
+                Span::new(Location::of(1, 26), Location::of(1, 27)),
+                "b",
+            ))),
         ],
     };
     assert_eq!(expr, expected);
@@ -2211,4 +2227,20 @@ fn test_any_value() {
     );
     bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MAX sold)");
     bigquery_and_generic().verified_expr("ANY_VALUE(fruit HAVING MIN sold)");
+}
+
+#[test]
+fn test_any_type() {
+    bigquery().verified_stmt(concat!(
+        "CREATE OR REPLACE TEMPORARY FUNCTION ",
+        "my_function(param1 ANY TYPE) ",
+        "AS (",
+        "(SELECT 1)",
+        ")",
+    ));
+}
+
+#[test]
+fn test_any_type_dont_break_custom_type() {
+    bigquery_and_generic().verified_stmt("CREATE TABLE foo (x ANY)");
 }

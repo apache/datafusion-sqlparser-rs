@@ -69,8 +69,11 @@ pub use self::query::{
     OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
     SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Setting, SymbolDefinition, Table,
-    TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableVersion, TableWithJoins,
-    Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With, WithFill,
+    TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableSample,
+    TableSampleBucket, TableSampleKind, TableSampleMethod, TableSampleModifier,
+    TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier, TableSampleUnit, TableVersion,
+    TableWithJoins, Top, TopQuantity, UpdateTableFromKind, ValueTableMode, Values,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 pub use self::trigger::{
@@ -456,40 +459,6 @@ pub enum CastFormat {
     ValueAtTimeZone(Value, Value),
 }
 
-/// Represents the syntax/style used in a map access.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum MapAccessSyntax {
-    /// Access using bracket notation. `mymap[mykey]`
-    Bracket,
-    /// Access using period notation. `mymap.mykey`
-    Period,
-}
-
-/// Expression used to access a value in a nested structure.
-///
-/// Example: `SAFE_OFFSET(0)` in
-/// ```sql
-/// SELECT mymap[SAFE_OFFSET(0)];
-/// ```
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct MapAccessKey {
-    pub key: Expr,
-    pub syntax: MapAccessSyntax,
-}
-
-impl fmt::Display for MapAccessKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.syntax {
-            MapAccessSyntax::Bracket => write!(f, "[{}]", self.key),
-            MapAccessSyntax::Period => write!(f, ".{}", self.key),
-        }
-    }
-}
-
 /// An element of a JSON path.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -626,6 +595,28 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
+    /// Multi-part expression access.
+    ///
+    /// This structure represents an access chain in structured / nested types
+    /// such as maps, arrays, and lists:
+    /// - Array
+    ///     - A 1-dim array `a[1]` will be represented like:
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript(1)]`
+    ///     - A 2-dim array `a[1][2]` will be represented like:
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript(1), Subscript(2)]`
+    /// - Map or Struct (Bracket-style)
+    ///     - A map `a['field1']` will be represented like:
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript('field')]`
+    ///     - A 2-dim map `a['field1']['field2']` will be represented like:
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript('field1'), Subscript('field2')]`
+    /// - Struct (Dot-style) (only effect when the chain contains both subscript and expr)
+    ///     - A struct access `a[field1].field2` will be represented like:
+    ///         `CompoundFieldAccess(Ident('a'), vec![Subscript('field1'), Ident('field2')]`
+    /// - If a struct access likes `a.field1.field2`, it will be represented by CompoundIdentifier([a, field1, field2])
+    CompoundFieldAccess {
+        root: Box<Expr>,
+        access_chain: Vec<AccessExpr>,
+    },
     /// Access data nested in a value containing semi-structured data, such as
     /// the `VARIANT` type on Snowflake. for example `src:customer[0].name`.
     ///
@@ -637,7 +628,7 @@ pub enum Expr {
         /// The path to the data to extract.
         path: JsonPath,
     },
-    /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
+    /// CompositeAccess eg: SELECT foo(bar).z, (information_schema._pg_expandarray(array['i','i'])).n
     CompositeAccess {
         expr: Box<Expr>,
         key: Ident,
@@ -879,14 +870,6 @@ pub enum Expr {
         data_type: DataType,
         value: String,
     },
-    /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
-    /// Note that depending on the dialect, struct like accesses may be
-    /// parsed as [`Subscript`](Self::Subscript) or [`MapAccess`](Self::MapAccess)
-    /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
-    MapAccess {
-        column: Box<Expr>,
-        keys: Vec<MapAccessKey>,
-    },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// Arbitrary expr method call
@@ -975,11 +958,6 @@ pub enum Expr {
     /// ```
     /// [1]: https://duckdb.org/docs/sql/data_types/map#creating-maps
     Map(Map),
-    /// An access of nested data using subscript syntax, for example `array[2]`.
-    Subscript {
-        expr: Box<Expr>,
-        subscript: Box<Subscript>,
-    },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
     /// An interval expression e.g. `INTERVAL '1' YEAR`
@@ -1092,6 +1070,27 @@ impl fmt::Display for Subscript {
                 }
                 Ok(())
             }
+        }
+    }
+}
+
+/// An element of a [`Expr::CompoundFieldAccess`].
+/// It can be an expression or a subscript.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AccessExpr {
+    /// Accesses a field using dot notation, e.g. `foo.bar.baz`.
+    Dot(Expr),
+    /// Accesses a field or array element using bracket notation, e.g. `foo['bar']`.
+    Subscript(Subscript),
+}
+
+impl fmt::Display for AccessExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AccessExpr::Dot(expr) => write!(f, ".{}", expr),
+            AccessExpr::Subscript(subscript) => write!(f, "[{}]", subscript),
         }
     }
 }
@@ -1288,15 +1287,20 @@ impl fmt::Display for CastFormat {
 }
 
 impl fmt::Display for Expr {
+    #[cfg_attr(feature = "recursive-protection", recursive::recursive)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Identifier(s) => write!(f, "{s}"),
-            Expr::MapAccess { column, keys } => {
-                write!(f, "{column}{}", display_separated(keys, ""))
-            }
             Expr::Wildcard(_) => f.write_str("*"),
             Expr::QualifiedWildcard(prefix, _) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
+            Expr::CompoundFieldAccess { root, access_chain } => {
+                write!(f, "{}", root)?;
+                for field in access_chain {
+                    write!(f, "{}", field)?;
+                }
+                Ok(())
+            }
             Expr::IsTrue(ast) => write!(f, "{ast} IS TRUE"),
             Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
             Expr::IsFalse(ast) => write!(f, "{ast} IS FALSE"),
@@ -1715,12 +1719,6 @@ impl fmt::Display for Expr {
             }
             Expr::Map(map) => {
                 write!(f, "{map}")
-            }
-            Expr::Subscript {
-                expr,
-                subscript: key,
-            } => {
-                write!(f, "{expr}[{key}]")
             }
             Expr::Array(set) => {
                 write!(f, "{set}")
@@ -2351,6 +2349,7 @@ pub enum Statement {
         cache_metadata: bool,
         noscan: bool,
         compute_statistics: bool,
+        has_table_keyword: bool,
     },
     /// ```sql
     /// TRUNCATE
@@ -2474,7 +2473,7 @@ pub enum Statement {
         /// Column assignments
         assignments: Vec<Assignment>,
         /// Table which provide value to be set
-        from: Option<TableWithJoins>,
+        from: Option<UpdateTableFromKind>,
         /// WHERE
         selection: Option<Expr>,
         /// RETURNING
@@ -3236,6 +3235,9 @@ pub enum Statement {
         ///
         /// [SQLite](https://sqlite.org/lang_explain.html)
         query_plan: bool,
+        /// `EXPLAIN ESTIMATE`
+        /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/statements/explain#explain-estimate)
+        estimate: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
         /// Optional output format of explain
@@ -3468,6 +3470,7 @@ impl fmt::Display for Statement {
                 verbose,
                 analyze,
                 query_plan,
+                estimate,
                 statement,
                 format,
                 options,
@@ -3479,6 +3482,9 @@ impl fmt::Display for Statement {
                 }
                 if *analyze {
                     write!(f, "ANALYZE ")?;
+                }
+                if *estimate {
+                    write!(f, "ESTIMATE ")?;
                 }
 
                 if *verbose {
@@ -3641,8 +3647,13 @@ impl fmt::Display for Statement {
                 cache_metadata,
                 noscan,
                 compute_statistics,
+                has_table_keyword,
             } => {
-                write!(f, "ANALYZE TABLE {table_name}")?;
+                write!(
+                    f,
+                    "ANALYZE{}{table_name}",
+                    if *has_table_keyword { " TABLE " } else { " " }
+                )?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
@@ -3734,10 +3745,13 @@ impl fmt::Display for Statement {
                     write!(f, "{or} ")?;
                 }
                 write!(f, "{table}")?;
+                if let Some(UpdateTableFromKind::BeforeSet(from)) = from {
+                    write!(f, " FROM {from}")?;
+                }
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
-                if let Some(from) = from {
+                if let Some(UpdateTableFromKind::AfterSet(from)) = from {
                     write!(f, " FROM {from}")?;
                 }
                 if let Some(selection) = selection {

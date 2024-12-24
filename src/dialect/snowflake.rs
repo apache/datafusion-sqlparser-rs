@@ -234,6 +234,10 @@ impl Dialect for SnowflakeDialect {
             RESERVED_FOR_IDENTIFIER.contains(&kw)
         }
     }
+
+    fn supports_partiql(&self) -> bool {
+        true
+    }
 }
 
 /// Parse snowflake create table statement.
@@ -376,6 +380,10 @@ pub fn parse_create_table(
                     let tags = parser.parse_comma_separated(Parser::parse_tag)?;
                     parser.expect_token(&Token::RParen)?;
                     builder = builder.with_tags(Some(tags));
+                }
+                Keyword::ON if parser.parse_keyword(Keyword::COMMIT) => {
+                    let on_commit = Some(parser.parse_create_table_on_commit()?);
+                    builder = builder.on_commit(on_commit);
                 }
                 _ => {
                     return parser.expected("end of statement", next_token);

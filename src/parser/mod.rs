@@ -276,19 +276,58 @@ enum ParserState {
     ConnectBy,
 }
 
+/// A SQL Parser
+///
+/// This struct is the main entry point for parsing SQL queries.
+///
+/// # Functionality:
+/// * Parsing SQL: see examples on [`Parser::new`] and [`Parser::parse_sql`]
+/// * Controlling recursion: See [`Parser::with_recursion_limit`]
+/// * Controlling parser options: See [`Parser::with_options`]
+/// * Providing your own tokens: See [`Parser::with_tokens`]
+///
+/// # Internals
+///
+/// The parser uses a [`Tokenizer`] to tokenize the input SQL string into a
+/// `Vec` of [`TokenWithSpan`]s and maintains an `index` to the current token
+/// being processed. The token vec may contain multiple SQL statements.
+///
+/// * The "current" token is the token at `index - 1`
+/// * The "next" token is the token at `index`
+/// * The "previous" token is the token at `index - 2`
+///
+/// If `index` is equal to the length of the token stream, the 'next' token is
+/// [`Token::EOF`].
+///
+/// For example, the SQL string "SELECT * FROM foo" will be tokenized into
+/// following tokens:
+/// ```text
+///  [
+///    "SELECT", // token index 0
+///    " ",      // whitespace
+///    "*",
+///    " ",
+///    "FROM",
+///    " ",
+///    "foo"
+///   ]
+/// ```
+///
+///
 pub struct Parser<'a> {
+    /// The tokens
     tokens: Vec<TokenWithSpan>,
     /// The index of the first unprocessed token in [`Parser::tokens`].
     index: usize,
     /// The current state of the parser.
     state: ParserState,
-    /// The current dialect to use.
+    /// The SQL dialect to use.
     dialect: &'a dyn Dialect,
     /// Additional options that allow you to mix & match behavior
     /// otherwise constrained to certain dialects (e.g. trailing
     /// commas) and/or format of parse (e.g. unescaping).
     options: ParserOptions,
-    /// Ensure the stack does not overflow by limiting recursion depth.
+    /// Ensures the stack does not overflow by limiting recursion depth.
     recursion_counter: RecursionCounter,
 }
 

@@ -2109,8 +2109,8 @@ impl Spanned for SelectInto {
 impl Spanned for UpdateTableFromKind {
     fn span(&self) -> Span {
         match self {
-            UpdateTableFromKind::BeforeSet(vec) => vec.span(),
-            UpdateTableFromKind::AfterSet(vec) => vec.span(),
+            UpdateTableFromKind::BeforeSet(from) => from.span(),
+            UpdateTableFromKind::AfterSet(from) => from.span(),
         }
     }
 }

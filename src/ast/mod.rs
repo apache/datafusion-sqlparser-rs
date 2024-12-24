@@ -3401,6 +3401,13 @@ pub enum Statement {
         partitioned: Option<Vec<Expr>>,
         table_format: Option<HiveLoadDataFormat>,
     },
+    /// ```sql
+    /// Rename TABLE tbl_name TO new_tbl_name[, tbl_name2 TO new_tbl_name2] ...
+    /// ```
+    /// renames one or more tables
+    ///
+    /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
+    RenameTable { operations: Vec<RenameObjectDef> },
 }
 
 impl fmt::Display for Statement {
@@ -4939,6 +4946,9 @@ impl fmt::Display for Statement {
                     write!(f, ", '{payload}'")?;
                 }
                 Ok(())
+            }
+            Statement::RenameTable { operations } => {
+                write!(f, "RENAME TABLE {}", display_comma_separated(operations))
             }
         }
     }
@@ -7639,6 +7649,22 @@ impl Display for JsonNullClause {
             JsonNullClause::NullOnNull => write!(f, "NULL ON NULL"),
             JsonNullClause::AbsentOnNull => write!(f, "ABSENT ON NULL"),
         }
+    }
+}
+
+/// rename object definition
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RenameObjectDef {
+    pub old_name: ObjectName,
+    pub new_name: ObjectName,
+}
+
+impl fmt::Display for RenameObjectDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} TO {}", self.old_name, self.new_name)?;
+        Ok(())
     }
 }
 

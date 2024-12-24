@@ -33,8 +33,8 @@ use IsLateral::*;
 use IsOptional::*;
 
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
-use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
+use crate::ast::{RenameObjectDef, Statement::CreatePolicy};
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
@@ -547,6 +547,10 @@ impl<'a> Parser<'a> {
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),
+                // `RENAME TABLE` is mysql specific https://dev.mysql.com/doc/refman/9.1/en/rename-table.html
+                Keyword::RENAME if self.dialect.supports_rename_table() => {
+                    self.parse_rename_table()
+                }
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     self.parse_install()
@@ -1042,6 +1046,12 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(Statement::NOTIFY { channel, payload })
+    }
+
+    pub fn parse_rename_table(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::TABLE)?;
+        let operations = self.parse_comma_separated(Parser::parse_rename_object_def)?;
+        Ok(Statement::RenameTable { operations })
     }
 
     // Tries to parse an expression by matching the specified word to known keywords that have a special meaning in the dialect.
@@ -6680,6 +6690,14 @@ impl<'a> Parser<'a> {
         let value = self.parse_literal_string()?;
 
         Ok(Tag::new(name, value))
+    }
+
+    pub(crate) fn parse_rename_object_def(&mut self) -> Result<RenameObjectDef, ParserError> {
+        let old_name = self.parse_object_name(false)?;
+        self.expect_keyword(Keyword::TO)?;
+        let new_name = self.parse_object_name(false)?;
+
+        Ok(RenameObjectDef { old_name, new_name })
     }
 
     fn parse_optional_column_option_generated(

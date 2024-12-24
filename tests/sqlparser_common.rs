@@ -4027,6 +4027,111 @@ fn parse_alter_table() {
 }
 
 #[test]
+fn parse_rename_table() {
+    let dialects = all_dialects_where(|d| d.supports_rename_table());
+
+    match dialects.verified_stmt("RENAME TABLE `test`.`test1` TO `test_db`.`test2`") {
+        Statement::RenameTable { operations } => {
+            assert_eq!(
+                vec![RenameObjectDef {
+                    old_name: ObjectName(vec![
+                        Ident {
+                            value: "test".to_string(),
+                            quote_style: Some('`'),
+                            span: Span::empty(),
+                        },
+                        Ident {
+                            value: "test1".to_string(),
+                            quote_style: Some('`'),
+                            span: Span::empty(),
+                        }
+                    ]),
+                    new_name: ObjectName(vec![
+                        Ident {
+                            value: "test_db".to_string(),
+                            quote_style: Some('`'),
+                            span: Span::empty(),
+                        },
+                        Ident {
+                            value: "test2".to_string(),
+                            quote_style: Some('`'),
+                            span: Span::empty(),
+                        }
+                    ]),
+                }],
+                operations
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    match dialects.verified_stmt(
+        "RENAME TABLE old_table1 TO new_table1, old_table2 TO new_table2, old_table3 TO new_table3",
+    ) {
+        Statement::RenameTable { operations } => {
+            assert_eq!(
+                vec![
+                    RenameObjectDef {
+                        old_name: ObjectName(vec![Ident {
+                            value: "old_table1".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        }]),
+                        new_name: ObjectName(vec![Ident {
+                            value: "new_table1".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        }]),
+                    },
+                    RenameObjectDef {
+                        old_name: ObjectName(vec![Ident {
+                            value: "old_table2".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        }]),
+                        new_name: ObjectName(vec![Ident {
+                            value: "new_table2".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        }]),
+                    },
+                    RenameObjectDef {
+                        old_name: ObjectName(vec![Ident {
+                            value: "old_table3".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        }]),
+                        new_name: ObjectName(vec![Ident {
+                            value: "new_table3".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        }]),
+                    }
+                ],
+                operations
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("RENAME TABLE `old_table` TO new_table a")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: a".to_string())
+    );
+
+    let dialects = all_dialects_where(|d| !d.supports_rename_table());
+
+    assert_eq!(
+        dialects
+            .parse_sql_statements("RENAME TABLE `old_table` TO new_table")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an SQL statement, found: RENAME".to_string())
+    );
+}
+
+#[test]
 fn test_alter_table_with_on_cluster() {
     match all_dialects()
         .verified_stmt("ALTER TABLE t ON CLUSTER 'cluster' ADD CONSTRAINT bar PRIMARY KEY (baz)")

@@ -548,9 +548,7 @@ impl<'a> Parser<'a> {
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),
                 // `RENAME TABLE` is mysql specific https://dev.mysql.com/doc/refman/9.1/en/rename-table.html
-                Keyword::RENAME if self.dialect.supports_rename_table() => {
-                    self.parse_rename_table()
-                }
+                Keyword::RENAME => self.parse_rename(),
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     self.parse_install()
@@ -1048,10 +1046,14 @@ impl<'a> Parser<'a> {
         Ok(Statement::NOTIFY { channel, payload })
     }
 
-    pub fn parse_rename_table(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::TABLE)?;
-        let operations = self.parse_comma_separated(Parser::parse_rename_object_def)?;
-        Ok(Statement::RenameTable { operations })
+    pub fn parse_rename(&mut self) -> Result<Statement, ParserError> {
+        if self.dialect.supports_rename_table() && self.peek_keyword(Keyword::TABLE) {
+            self.expect_keyword(Keyword::TABLE)?;
+            let operations = self.parse_comma_separated(Parser::parse_rename_object_def)?;
+            Ok(Statement::RenameTable { operations })
+        } else {
+            self.expected("an object type after RENAME", self.peek_token())
+        }
     }
 
     // Tries to parse an expression by matching the specified word to known keywords that have a special meaning in the dialect.

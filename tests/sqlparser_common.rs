@@ -4121,13 +4121,22 @@ fn parse_rename_table() {
         ParserError::ParserError("Expected: end of statement, found: a".to_string())
     );
 
+    assert_eq!(
+        dialects
+            .parse_sql_statements("RENAME TABLE1 `old_table` TO new_table a")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: an object type after RENAME, found: TABLE1".to_string()
+        )
+    );
+
     let dialects = all_dialects_where(|d| !d.supports_rename_table());
 
     assert_eq!(
         dialects
             .parse_sql_statements("RENAME TABLE `old_table` TO new_table")
             .unwrap_err(),
-        ParserError::ParserError("Expected: an SQL statement, found: RENAME".to_string())
+        ParserError::ParserError("Expected: an object type after RENAME, found: TABLE".to_string())
     );
 }
 

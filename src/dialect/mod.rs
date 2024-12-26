@@ -636,6 +636,10 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    fn supports_dollar_quoted_string(&self) -> bool {
+        true
+    }
+
     /// Does the dialect support with clause in create index statement?
     /// e.g. `CREATE INDEX idx ON t WITH (key = value, key2)`
     fn supports_create_index_with_clause(&self) -> bool {

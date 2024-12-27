@@ -5458,7 +5458,7 @@ impl<'a> Parser<'a> {
             return self.parse_drop_extension();
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, DATABASE, FUNCTION, PROCEDURE, STAGE, TRIGGER, SECRET, SEQUENCE, TYPE, or EXTENSION after DROP",
+                "DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, or VIEW after DROP",
                 self.peek_token(),
             );
         };

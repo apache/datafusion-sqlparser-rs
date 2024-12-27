@@ -82,7 +82,7 @@ impl Dialect for SQLiteDialect {
         true
     }
 
-    fn supports_dollar_quoted_string(&self) -> bool {
-        false
+    fn supports_dollar_placeholder(&self) -> bool {
+        true
     }
 }

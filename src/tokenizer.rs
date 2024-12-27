@@ -1523,9 +1523,8 @@ impl<'a> Tokenizer<'a> {
 
         chars.next();
 
-        // Check if the second character is a dollar sign
-        let next_is_dollar = matches!(chars.peek(), Some('$'));
-        if next_is_dollar && self.dialect.supports_dollar_quoted_string() {
+        // If the dialect does not support dollar-quoted strings, then `$$` is rather a placeholder.
+        if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
             chars.next();
 
             let mut is_terminated = false;
@@ -1561,11 +1560,12 @@ impl<'a> Tokenizer<'a> {
             value.push_str(&peeking_take_while(chars, |ch| {
                 ch.is_alphanumeric()
                     || ch == '_'
-                    || matches!(ch, '$' if !self.dialect.supports_dollar_quoted_string())
+                    // Allow $ as a placeholder character if the dialect supports it
+                    || matches!(ch, '$' if self.dialect.supports_dollar_placeholder())
             }));
 
-            let next_is_dollar = matches!(chars.peek(), Some('$'));
-            if next_is_dollar && self.dialect.supports_dollar_quoted_string() {
+            // If the dialect does not support dollar-quoted strings, don't look for the end delimiter.
+            if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
                 chars.next();
 
                 'searching_for_end: loop {
@@ -2610,7 +2610,7 @@ mod tests {
     }
 
     #[test]
-    fn tokenize_dollar_placeholder_sqlite() {
+    fn tokenize_dollar_placeholder() {
         let sql = String::from("SELECT $$, $$ABC$$, $ABC$, $ABC");
         let dialect = SQLiteDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();

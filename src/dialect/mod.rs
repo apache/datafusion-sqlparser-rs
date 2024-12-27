@@ -636,10 +636,10 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if this dialect allows dollar quoted strings
-    /// e.g. `SELECT $$Hello, world!$$` or `SELECT $tag$Hello, world!$tag$`
-    fn supports_dollar_quoted_string(&self) -> bool {
-        true
+    /// Returns true if this dialect allows dollar placeholders
+    /// e.g. `SELECT $var` (SQLite)
+    fn supports_dollar_placeholder(&self) -> bool {
+        false
     }
 
     /// Does the dialect support with clause in create index statement?

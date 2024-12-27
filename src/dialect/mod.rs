@@ -636,6 +636,8 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if this dialect allows dollar quoted strings
+    /// e.g. `SELECT $$Hello, world!$$` or `SELECT $tag$Hello, world!$tag$`
     fn supports_dollar_quoted_string(&self) -> bool {
         true
     }

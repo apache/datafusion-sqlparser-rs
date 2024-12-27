@@ -5414,9 +5414,11 @@ impl<'a> Parser<'a> {
             return self.parse_drop_secret(temporary, persistent);
         } else if self.parse_keyword(Keyword::TRIGGER) {
             return self.parse_drop_trigger();
+        } else if self.parse_keyword(Keyword::EXTENSION) {
+            return self.parse_drop_extension();
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, DATABASE, FUNCTION, PROCEDURE, STAGE, TRIGGER, SECRET, SEQUENCE, or TYPE after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, DATABASE, FUNCTION, PROCEDURE, STAGE, TRIGGER, SECRET, SEQUENCE, TYPE, or EXTENSION after DROP",
                 self.peek_token(),
             );
         };
@@ -6076,6 +6078,25 @@ impl<'a> Parser<'a> {
             schema,
             version,
             cascade,
+        })
+    }
+
+    /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.
+    pub fn parse_drop_extension(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let names = self.parse_comma_separated(|p| p.parse_identifier(false))?;
+        let cascade_or_restrict =
+            self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]);
+        Ok(Statement::DropExtension {
+            names,
+            if_exists,
+            cascade_or_restrict: cascade_or_restrict
+                .map(|k| match k {
+                    Keyword::CASCADE => Ok(ReferentialAction::Cascade),
+                    Keyword::RESTRICT => Ok(ReferentialAction::Restrict),
+                    _ => self.expected("CASCADE or RESTRICT", self.peek_token()),
+                })
+                .transpose()?,
         })
     }
 

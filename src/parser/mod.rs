@@ -1046,7 +1046,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::NOTIFY { channel, payload })
     }
 
-    /// Parses a `RENAME TABLE` statement. See [Statement::Rename]
+    /// Parses a `RENAME TABLE` statement. See [Statement::RenameTable]
     pub fn parse_rename(&mut self) -> Result<Statement, ParserError> {
         if self.dialect.supports_rename_table() && self.peek_keyword(Keyword::TABLE) {
             self.expect_keyword(Keyword::TABLE)?;

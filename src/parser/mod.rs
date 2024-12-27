@@ -978,13 +978,6 @@ impl<'a> Parser<'a> {
         let _guard = self.recursion_counter.try_decrease()?;
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
-        // Attempt to parse composite access. Example `SELECT f(x).a`
-        while self.consume_token(&Token::Period) {
-            expr = Expr::CompositeAccess {
-                expr: Box::new(expr),
-                key: self.parse_identifier(false)?,
-            }
-        }
 
         debug!("prefix: {:?}", expr);
         loop {
@@ -1150,7 +1143,8 @@ impl<'a> Parser<'a> {
                 Ok(Some(self.parse_match_against()?))
             }
             Keyword::STRUCT if self.dialect.supports_struct_literal() => {
-                Ok(Some(self.parse_struct_literal()?))
+                let struct_expr = self.parse_struct_literal()?;
+                Ok(Some(self.parse_compound_field_access(struct_expr, vec![])?))
             }
             Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
                 let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
@@ -1397,7 +1391,25 @@ impl<'a> Parser<'a> {
                     }
                 };
                 self.expect_token(&Token::RParen)?;
-                self.try_parse_method(expr)
+                let expr = self.try_parse_method(expr)?;
+                if !self.consume_token(&Token::Period) {
+                    Ok(expr)
+                } else {
+                    let tok = self.next_token();
+                    let key = match tok.token {
+                        Token::Word(word) => word.to_ident(tok.span),
+                        _ => {
+                            return parser_err!(
+                                format!("Expected identifier, found: {tok}"),
+                                tok.span.start
+                            )
+                        }
+                    };
+                    Ok(Expr::CompositeAccess {
+                        expr: Box::new(expr),
+                        key,
+                    })
+                }
             }
             Token::Placeholder(_) | Token::Colon | Token::AtSign => {
                 self.prev_token();

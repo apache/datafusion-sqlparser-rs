@@ -12470,6 +12470,41 @@ fn parse_composite_access_expr() {
     all_dialects_where(|d| d.supports_struct_literal()).verified_stmt(
         "SELECT * FROM t WHERE STRUCT(STRUCT(1 AS a, NULL AS b) AS c, NULL AS d).c.a IS NOT NULL",
     );
+    let support_struct = all_dialects_where(|d| d.supports_struct_literal());
+    let stmt = support_struct
+        .verified_only_select("SELECT STRUCT(STRUCT(1 AS a, NULL AS b) AS c, NULL AS d).c.a");
+    let expected = SelectItem::UnnamedExpr(Expr::CompoundFieldAccess {
+        root: Box::new(Expr::Struct {
+            values: vec![
+                Expr::Named {
+                    name: Ident::new("c"),
+                    expr: Box::new(Expr::Struct {
+                        values: vec![
+                            Expr::Named {
+                                name: Ident::new("a"),
+                                expr: Box::new(Expr::Value(Number("1".parse().unwrap(), false))),
+                            },
+                            Expr::Named {
+                                name: Ident::new("b"),
+                                expr: Box::new(Expr::Value(Value::Null)),
+                            },
+                        ],
+                        fields: vec![],
+                    }),
+                },
+                Expr::Named {
+                    name: Ident::new("d"),
+                    expr: Box::new(Expr::Value(Value::Null)),
+                },
+            ],
+            fields: vec![],
+        }),
+        access_chain: vec![
+            AccessExpr::Dot(Expr::Identifier(Ident::new("c"))),
+            AccessExpr::Dot(Expr::Identifier(Ident::new("a"))),
+        ],
+    });
+    assert_eq!(stmt.projection[0], expected);
 }
 
 #[test]

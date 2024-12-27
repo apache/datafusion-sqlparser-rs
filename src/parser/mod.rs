@@ -33,8 +33,8 @@ use IsLateral::*;
 use IsOptional::*;
 
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
+use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
-use crate::ast::{RenameObjectDef, Statement::CreatePolicy};
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
@@ -1050,10 +1050,16 @@ impl<'a> Parser<'a> {
     pub fn parse_rename(&mut self) -> Result<Statement, ParserError> {
         if self.dialect.supports_rename_table() && self.peek_keyword(Keyword::TABLE) {
             self.expect_keyword(Keyword::TABLE)?;
-            let operations = self.parse_comma_separated(Parser::parse_rename_object_def)?;
-            Ok(Statement::RenameTable { operations })
+            let rename_object_defs = self.parse_comma_separated(|parser| {
+                let old_name = parser.parse_object_name(false)?;
+                parser.expect_keyword(Keyword::TO)?;
+                let new_name = parser.parse_object_name(false)?;
+
+                Ok(RenameObjectDef { old_name, new_name })
+            })?;
+            Ok(Statement::RenameTable(rename_object_defs))
         } else {
-            self.expected("an object type after RENAME", self.peek_token())
+            self.expected("KEYWORD `TABLE` after RENAME", self.peek_token())
         }
     }
 
@@ -6693,14 +6699,6 @@ impl<'a> Parser<'a> {
         let value = self.parse_literal_string()?;
 
         Ok(Tag::new(name, value))
-    }
-
-    pub(crate) fn parse_rename_object_def(&mut self) -> Result<RenameObjectDef, ParserError> {
-        let old_name = self.parse_object_name(false)?;
-        self.expect_keyword(Keyword::TO)?;
-        let new_name = self.parse_object_name(false)?;
-
-        Ok(RenameObjectDef { old_name, new_name })
     }
 
     fn parse_optional_column_option_generated(

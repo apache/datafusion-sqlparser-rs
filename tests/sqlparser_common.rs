@@ -4031,35 +4031,19 @@ fn parse_rename_table() {
     let dialects = all_dialects_where(|d| d.supports_rename_table());
 
     match dialects.verified_stmt("RENAME TABLE `test`.`test1` TO `test_db`.`test2`") {
-        Statement::RenameTable { operations } => {
+        Statement::RenameTable(rename_object_defs) => {
             assert_eq!(
                 vec![RenameObjectDef {
                     old_name: ObjectName(vec![
-                        Ident {
-                            value: "test".to_string(),
-                            quote_style: Some('`'),
-                            span: Span::empty(),
-                        },
-                        Ident {
-                            value: "test1".to_string(),
-                            quote_style: Some('`'),
-                            span: Span::empty(),
-                        }
+                        Ident::with_quote('`', "test".to_string()),
+                        Ident::with_quote('`', "test1".to_string()),
                     ]),
                     new_name: ObjectName(vec![
-                        Ident {
-                            value: "test_db".to_string(),
-                            quote_style: Some('`'),
-                            span: Span::empty(),
-                        },
-                        Ident {
-                            value: "test2".to_string(),
-                            quote_style: Some('`'),
-                            span: Span::empty(),
-                        }
+                        Ident::with_quote('`', "test_db".to_string()),
+                        Ident::with_quote('`', "test2".to_string()),
                     ]),
                 }],
-                operations
+                rename_object_defs
             );
         }
         _ => unreachable!(),
@@ -4068,47 +4052,23 @@ fn parse_rename_table() {
     match dialects.verified_stmt(
         "RENAME TABLE old_table1 TO new_table1, old_table2 TO new_table2, old_table3 TO new_table3",
     ) {
-        Statement::RenameTable { operations } => {
+        Statement::RenameTable(rename_object_defs) => {
             assert_eq!(
                 vec![
                     RenameObjectDef {
-                        old_name: ObjectName(vec![Ident {
-                            value: "old_table1".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        }]),
-                        new_name: ObjectName(vec![Ident {
-                            value: "new_table1".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        }]),
+                        old_name: ObjectName(vec![Ident::new("old_table1".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table1".to_string())]),
                     },
                     RenameObjectDef {
-                        old_name: ObjectName(vec![Ident {
-                            value: "old_table2".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        }]),
-                        new_name: ObjectName(vec![Ident {
-                            value: "new_table2".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        }]),
+                        old_name: ObjectName(vec![Ident::new("old_table2".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table2".to_string())]),
                     },
                     RenameObjectDef {
-                        old_name: ObjectName(vec![Ident {
-                            value: "old_table3".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        }]),
-                        new_name: ObjectName(vec![Ident {
-                            value: "new_table3".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        }]),
+                        old_name: ObjectName(vec![Ident::new("old_table3".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table3".to_string())]),
                     }
                 ],
-                operations
+                rename_object_defs
             );
         }
         _ => unreachable!(),
@@ -4126,7 +4086,7 @@ fn parse_rename_table() {
             .parse_sql_statements("RENAME TABLE1 `old_table` TO new_table a")
             .unwrap_err(),
         ParserError::ParserError(
-            "Expected: an object type after RENAME, found: TABLE1".to_string()
+            "Expected: KEYWORD `TABLE` after RENAME, found: TABLE1".to_string()
         )
     );
 
@@ -4136,7 +4096,9 @@ fn parse_rename_table() {
         dialects
             .parse_sql_statements("RENAME TABLE `old_table` TO new_table")
             .unwrap_err(),
-        ParserError::ParserError("Expected: an object type after RENAME, found: TABLE".to_string())
+        ParserError::ParserError(
+            "Expected: KEYWORD `TABLE` after RENAME, found: TABLE".to_string()
+        )
     );
 }
 

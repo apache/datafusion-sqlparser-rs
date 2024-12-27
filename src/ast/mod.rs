@@ -3404,10 +3404,10 @@ pub enum Statement {
     /// ```sql
     /// Rename TABLE tbl_name TO new_tbl_name[, tbl_name2 TO new_tbl_name2] ...
     /// ```
-    /// renames one or more tables
+    /// Renames one or more tables
     ///
     /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
-    RenameTable { operations: Vec<RenameObjectDef> },
+    RenameTable(Vec<RenameObjectDef>),
 }
 
 impl fmt::Display for Statement {
@@ -4947,8 +4947,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::RenameTable { operations } => {
-                write!(f, "RENAME TABLE {}", display_comma_separated(operations))
+            Statement::RenameTable(rename_object_defs) => {
+                write!(
+                    f,
+                    "RENAME TABLE {}",
+                    display_comma_separated(rename_object_defs)
+                )
             }
         }
     }

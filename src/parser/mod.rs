@@ -3688,7 +3688,6 @@ impl<'a> Parser<'a> {
 
     /// If the current token is the `expected` keyword, consume it and returns a reference to the next token.
     ///
-    // TODO remove this in favor of advance??
     #[must_use]
     pub fn parse_keyword_token_ref(&mut self, expected: Keyword) -> Option<&TokenWithSpan> {
         match &self.peek_token_ref().token {

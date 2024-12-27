@@ -3057,6 +3057,11 @@ fn gen_sign_number_case(value: &str, op: UnaryOperator) -> (Vec<String>, Vec<Sel
     (input, expected)
 }
 
+/// generate the test cases for signed and unsigned numbers
+/// For example, given "0.0", the test cases will be:
+/// - "0.0"
+/// - "+0.0"
+/// - "-0.0"
 fn gen_number_case_with_sign(number: &str) -> (Vec<String>, Vec<SelectItem>) {
     let (mut input, mut expected) = gen_number_case(number);
     for op in vec![UnaryOperator::Plus, UnaryOperator::Minus] {

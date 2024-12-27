@@ -763,6 +763,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports unquoted hyphenated identifiers
+    ///
+    /// For example, BigQuery supports the following identifier:
+    ///     `SELECT * FROM my-project.my_dataset.my_table`
+    /// The project name `my-project` is a hyphenated identifier.
     fn support_unquoted_hyphenated_identifiers(&self) -> bool {
         false
     }

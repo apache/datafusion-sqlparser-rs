@@ -77,4 +77,8 @@ impl Dialect for BigQueryDialect {
     fn supports_struct_literal(&self) -> bool {
         true
     }
+
+    fn support_unquoted_hyphenated_identifiers(&self) -> bool {
+        true
+    }
 }

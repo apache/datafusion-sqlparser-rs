@@ -762,6 +762,10 @@ pub trait Dialect: Debug + Any {
     fn supports_table_sample_before_alias(&self) -> bool {
         false
     }
+
+    fn support_unquoted_hyphenated_identifiers(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

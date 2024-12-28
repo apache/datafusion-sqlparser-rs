@@ -3708,7 +3708,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Report that the current token was found instead of `expected`.
+    /// Report that the token at `index` was found instead of `expected`.
     pub fn expected_at<T>(&self, expected: &str, index: usize) -> Result<T, ParserError> {
         let found = self.tokens.get(index).unwrap_or(&EOF_TOKEN);
         parser_err!(
@@ -3726,27 +3726,6 @@ impl<'a> Parser<'a> {
             true
         } else {
             false
-        }
-    }
-
-    /// If the current token is the `expected` keyword, consume it and returns
-    ///
-    /// See [`Self::parse_keyword_token_ref`] to avoid the copy.
-    #[must_use]
-    pub fn parse_keyword_token(&mut self, expected: Keyword) -> Option<TokenWithSpan> {
-        self.parse_keyword_token_ref(expected).cloned()
-    }
-
-    /// If the current token is the `expected` keyword, consume it and returns a reference to the next token.
-    ///
-    #[must_use]
-    pub fn parse_keyword_token_ref(&mut self, expected: Keyword) -> Option<&TokenWithSpan> {
-        match &self.peek_token_ref().token {
-            Token::Word(w) if expected == w.keyword => {
-                self.advance_token();
-                Some(self.get_current_token())
-            }
-            _ => None,
         }
     }
 
@@ -3832,9 +3811,11 @@ impl<'a> Parser<'a> {
 
     /// If the current token is the `expected` keyword, consume the token.
     /// Otherwise, return an error.
+    ///
+    // todo deprecate infavor of expected_keyword_is
     pub fn expect_keyword(&mut self, expected: Keyword) -> Result<TokenWithSpan, ParserError> {
-        if let Some(token) = self.parse_keyword_token_ref(expected) {
-            Ok(token.clone())
+        if self.parse_keyword(expected) {
+            Ok(self.get_current_token().clone())
         } else {
             self.expected_ref(format!("{:?}", &expected).as_str(), self.peek_token_ref())
         }
@@ -3846,7 +3827,7 @@ impl<'a> Parser<'a> {
     /// This differs from expect_keyword only in that the matched keyword
     /// token is not returned.
     pub fn expect_keyword_is(&mut self, expected: Keyword) -> Result<(), ParserError> {
-        if self.parse_keyword_token_ref(expected).is_some() {
+        if self.parse_keyword(expected) {
             Ok(())
         } else {
             self.expected_ref(format!("{:?}", &expected).as_str(), self.peek_token_ref())
@@ -9486,7 +9467,8 @@ impl<'a> Parser<'a> {
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Box<Query>, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
-        let with = if let Some(with_token) = self.parse_keyword_token_ref(Keyword::WITH) {
+        let with = if self.parse_keyword(Keyword::WITH) {
+            let with_token = self.get_current_token();
             Some(With {
                 with_token: with_token.clone().into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),

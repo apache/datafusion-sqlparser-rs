@@ -13477,7 +13477,7 @@ impl<'a> Parser<'a> {
 }
 
 impl Word {
-    #[deprecated(since = "0.55.0", note = "please use `into_ident` instead")]
+    #[deprecated(since = "0.54.0", note = "please use `into_ident` instead")]
     pub fn to_ident(&self, span: Span) -> Ident {
         Ident {
             value: self.value.clone(),

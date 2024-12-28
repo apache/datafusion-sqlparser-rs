@@ -2966,9 +2966,7 @@ fn test_compound_expr() {
 
 #[test]
 fn test_double_value() {
-    // TODO: support double value for dialect that supports unquoted hyphenated identifiers
-    // see issue: https://github.com/apache/datafusion-sqlparser-rs/issues/1622
-    let dialects = all_dialects_where(|dialect| !dialect.support_unquoted_hyphenated_identifiers());
+    let dialects = all_dialects();
     let test_cases = vec![
         gen_number_case_with_sign("0."),
         gen_number_case_with_sign("0.0"),

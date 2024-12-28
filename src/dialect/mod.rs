@@ -762,15 +762,6 @@ pub trait Dialect: Debug + Any {
     fn supports_table_sample_before_alias(&self) -> bool {
         false
     }
-
-    /// Returns true if the dialect supports unquoted hyphenated identifiers
-    ///
-    /// For example, BigQuery supports the following identifier:
-    ///     `SELECT * FROM my-project.my_dataset.my_table`
-    /// The project name `my-project` is a hyphenated identifier.
-    fn support_unquoted_hyphenated_identifiers(&self) -> bool {
-        false
-    }
 }
 
 /// This represents the operators for which precedence must be defined

@@ -300,7 +300,7 @@ pub fn parse_create_table(
                     parser.expect_keyword_is(Keyword::BY)?;
                     parser.expect_token(&Token::LParen)?;
                     let cluster_by = Some(WrappedCollection::Parentheses(
-                        parser.parse_comma_separated(|p| p.parse_identifier(false))?,
+                        parser.parse_comma_separated(|p| p.parse_identifier())?,
                     ));
                     parser.expect_token(&Token::RParen)?;
 
@@ -369,7 +369,7 @@ pub fn parse_create_table(
                     let policy = parser.parse_object_name(false)?;
                     parser.expect_keyword_is(Keyword::ON)?;
                     parser.expect_token(&Token::LParen)?;
-                    let columns = parser.parse_comma_separated(|p| p.parse_identifier(false))?;
+                    let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;
                     parser.expect_token(&Token::RParen)?;
 
                     builder =
@@ -887,10 +887,10 @@ fn parse_column_policy_property(
     parser: &mut Parser,
     with: bool,
 ) -> Result<ColumnPolicyProperty, ParserError> {
-    let policy_name = parser.parse_identifier(false)?;
+    let policy_name = parser.parse_identifier()?;
     let using_columns = if parser.parse_keyword(Keyword::USING) {
         parser.expect_token(&Token::LParen)?;
-        let columns = parser.parse_comma_separated(|p| p.parse_identifier(false))?;
+        let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;
         parser.expect_token(&Token::RParen)?;
         Some(columns)
     } else {

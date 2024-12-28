@@ -39,4 +39,4 @@ cargo flamegraph --bench sqlparser_bench
 [flamegraph]: https://crates.io/crates/flamegraph
 
 Here is an example flamegraph:
-[!flamegraph](src/flamegraph.svg)
+![flamegraph](img/flamegraph.svg)

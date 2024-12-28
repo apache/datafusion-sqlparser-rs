@@ -2965,6 +2965,113 @@ fn test_compound_expr() {
 }
 
 #[test]
+fn test_double_value() {
+    let dialects = all_dialects();
+    let test_cases = vec![
+        gen_number_case_with_sign("0."),
+        gen_number_case_with_sign("0.0"),
+        gen_number_case_with_sign("0000."),
+        gen_number_case_with_sign("0000.00"),
+        gen_number_case_with_sign(".0"),
+        gen_number_case_with_sign(".00"),
+        gen_number_case_with_sign("0e0"),
+        gen_number_case_with_sign("0e+0"),
+        gen_number_case_with_sign("0e-0"),
+        gen_number_case_with_sign("0.e-0"),
+        gen_number_case_with_sign("0.e+0"),
+        gen_number_case_with_sign(".0e-0"),
+        gen_number_case_with_sign(".0e+0"),
+        gen_number_case_with_sign("00.0e+0"),
+        gen_number_case_with_sign("00.0e-0"),
+    ];
+
+    for (input, expected) in test_cases {
+        for (i, expr) in input.iter().enumerate() {
+            if let Statement::Query(query) =
+                dialects.one_statement_parses_to(&format!("SELECT {}", expr), "")
+            {
+                if let SetExpr::Select(select) = *query.body {
+                    assert_eq!(expected[i], select.projection[0]);
+                } else {
+                    panic!("Expected a SELECT statement");
+                }
+            } else {
+                panic!("Expected a SELECT statement");
+            }
+        }
+    }
+}
+
+fn gen_number_case(value: &str) -> (Vec<String>, Vec<SelectItem>) {
+    let input = vec![
+        value.to_string(),
+        format!("{} col_alias", value),
+        format!("{} AS col_alias", value),
+    ];
+    let expected = vec![
+        SelectItem::UnnamedExpr(Expr::Value(number(value))),
+        SelectItem::ExprWithAlias {
+            expr: Expr::Value(number(value)),
+            alias: Ident::new("col_alias"),
+        },
+        SelectItem::ExprWithAlias {
+            expr: Expr::Value(number(value)),
+            alias: Ident::new("col_alias"),
+        },
+    ];
+    (input, expected)
+}
+
+fn gen_sign_number_case(value: &str, op: UnaryOperator) -> (Vec<String>, Vec<SelectItem>) {
+    match op {
+        UnaryOperator::Plus | UnaryOperator::Minus => {}
+        _ => panic!("Invalid sign"),
+    }
+
+    let input = vec![
+        format!("{}{}", op, value),
+        format!("{}{} col_alias", op, value),
+        format!("{}{} AS col_alias", op, value),
+    ];
+    let expected = vec![
+        SelectItem::UnnamedExpr(Expr::UnaryOp {
+            op,
+            expr: Box::new(Expr::Value(number(value))),
+        }),
+        SelectItem::ExprWithAlias {
+            expr: Expr::UnaryOp {
+                op,
+                expr: Box::new(Expr::Value(number(value))),
+            },
+            alias: Ident::new("col_alias"),
+        },
+        SelectItem::ExprWithAlias {
+            expr: Expr::UnaryOp {
+                op,
+                expr: Box::new(Expr::Value(number(value))),
+            },
+            alias: Ident::new("col_alias"),
+        },
+    ];
+    (input, expected)
+}
+
+/// generate the test cases for signed and unsigned numbers
+/// For example, given "0.0", the test cases will be:
+/// - "0.0"
+/// - "+0.0"
+/// - "-0.0"
+fn gen_number_case_with_sign(number: &str) -> (Vec<String>, Vec<SelectItem>) {
+    let (mut input, mut expected) = gen_number_case(number);
+    for op in [UnaryOperator::Plus, UnaryOperator::Minus] {
+        let (input_sign, expected_sign) = gen_sign_number_case(number, op);
+        input.extend(input_sign);
+        expected.extend(expected_sign);
+    }
+    (input, expected)
+}
+
+#[test]
 fn parse_negative_value() {
     let sql1 = "SELECT -1";
     one_statement_parses_to(sql1, "SELECT -1");
@@ -12470,6 +12577,41 @@ fn parse_composite_access_expr() {
     all_dialects_where(|d| d.supports_struct_literal()).verified_stmt(
         "SELECT * FROM t WHERE STRUCT(STRUCT(1 AS a, NULL AS b) AS c, NULL AS d).c.a IS NOT NULL",
     );
+    let support_struct = all_dialects_where(|d| d.supports_struct_literal());
+    let stmt = support_struct
+        .verified_only_select("SELECT STRUCT(STRUCT(1 AS a, NULL AS b) AS c, NULL AS d).c.a");
+    let expected = SelectItem::UnnamedExpr(Expr::CompoundFieldAccess {
+        root: Box::new(Expr::Struct {
+            values: vec![
+                Expr::Named {
+                    name: Ident::new("c"),
+                    expr: Box::new(Expr::Struct {
+                        values: vec![
+                            Expr::Named {
+                                name: Ident::new("a"),
+                                expr: Box::new(Expr::Value(Number("1".parse().unwrap(), false))),
+                            },
+                            Expr::Named {
+                                name: Ident::new("b"),
+                                expr: Box::new(Expr::Value(Value::Null)),
+                            },
+                        ],
+                        fields: vec![],
+                    }),
+                },
+                Expr::Named {
+                    name: Ident::new("d"),
+                    expr: Box::new(Expr::Value(Value::Null)),
+                },
+            ],
+            fields: vec![],
+        }),
+        access_chain: vec![
+            AccessExpr::Dot(Expr::Identifier(Ident::new("c"))),
+            AccessExpr::Dot(Expr::Identifier(Ident::new("a"))),
+        ],
+    });
+    assert_eq!(stmt.projection[0], expected);
 }
 
 #[test]

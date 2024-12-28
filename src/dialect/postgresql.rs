@@ -268,7 +268,7 @@ pub fn parse_create_type_as_enum(
         return parser.expected("'(' after CREATE TYPE AS ENUM", parser.peek_token());
     }
 
-    let labels = parser.parse_comma_separated0(|p| p.parse_identifier(false), Token::RParen)?;
+    let labels = parser.parse_comma_separated0(|p| p.parse_identifier(), Token::RParen)?;
     parser.expect_token(&Token::RParen)?;
 
     Ok(Statement::CreateType {

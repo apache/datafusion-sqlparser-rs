@@ -1144,29 +1144,15 @@ impl<'a> Tokenizer<'a> {
 
                     // match one period
                     if let Some('.') = chars.peek() {
-                        // Check if this actually is a float point number
-                        let mut char_clone = chars.peekable.clone();
-                        char_clone.next();
-                        // Next char should be a digit, otherwise, it is not a float point number
-                        if char_clone
-                            .peek()
-                            .map(|c| c.is_ascii_digit())
-                            .unwrap_or(false)
-                        {
-                            s.push('.');
-                            chars.next();
-                        } else if !s.is_empty() {
-                            // Number might be part of period separated construct. Keep the period for next token
-                            // e.g. a-12.b
-                            return Ok(Some(Token::Number(s, false)));
-                        } else {
-                            // No number -> Token::Period
-                            chars.next();
-                            return Ok(Some(Token::Period));
-                        }
+                        s.push('.');
+                        chars.next();
                     }
-
                     s += &peeking_take_while(chars, |ch| ch.is_ascii_digit());
+
+                    // No number -> Token::Period
+                    if s == "." {
+                        return Ok(Some(Token::Period));
+                    }
 
                     let mut exponent_part = String::new();
                     // Parse exponent as number
@@ -2196,23 +2182,6 @@ mod tests {
             Token::Number(String::from(".1"), false),
         ];
 
-        compare(expected, tokens);
-    }
-
-    #[test]
-    fn tokenize_select_float_hyphenated_identifier() {
-        let sql = String::from("SELECT a-12.b");
-        let dialect = GenericDialect {};
-        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
-        let expected = vec![
-            Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
-            Token::make_word("a", None),
-            Token::Minus,
-            Token::Number(String::from("12"), false),
-            Token::Period,
-            Token::make_word("b", None),
-        ];
         compare(expected, tokens);
     }
 

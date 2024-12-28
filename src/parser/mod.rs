@@ -4295,9 +4295,7 @@ impl<'a> Parser<'a> {
 
     fn parse_schema_name(&mut self) -> Result<SchemaName, ParserError> {
         if self.parse_keyword(Keyword::AUTHORIZATION) {
-            Ok(SchemaName::UnnamedAuthorization(
-                self.parse_identifier()?,
-            ))
+            Ok(SchemaName::UnnamedAuthorization(self.parse_identifier()?))
         } else {
             let name = self.parse_object_name(false)?;
 
@@ -4782,9 +4780,7 @@ impl<'a> Parser<'a> {
                 Keyword::INSERT => TriggerEvent::Insert,
                 Keyword::UPDATE => {
                     if self.parse_keyword(Keyword::OF) {
-                        let cols = self.parse_comma_separated(|ident| {
-                            Parser::parse_identifier(ident)
-                        })?;
+                        let cols = self.parse_comma_separated(Parser::parse_identifier)?;
                         TriggerEvent::Update(cols)
                     } else {
                         TriggerEvent::Update(vec![])
@@ -5606,7 +5602,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#declare
     pub fn parse_big_query_declare(&mut self) -> Result<Statement, ParserError> {
-        let names = self.parse_comma_separated(|parser| Parser::parse_identifier(parser))?;
+        let names = self.parse_comma_separated(Parser::parse_identifier)?;
 
         let data_type = match self.peek_token().token {
             Token::Word(w) if w.keyword == Keyword::DEFAULT => None,
@@ -10113,12 +10109,10 @@ impl<'a> Parser<'a> {
             && self.consume_token(&Token::LParen)
         {
             let variables = OneOrManyWithParens::Many(
-                self.parse_comma_separated(|parser: &mut Parser<'a>| {
-                    parser.parse_identifier()
-                })?
-                .into_iter()
-                .map(|ident| ObjectName(vec![ident]))
-                .collect(),
+                self.parse_comma_separated(|parser: &mut Parser<'a>| parser.parse_identifier())?
+                    .into_iter()
+                    .map(|ident| ObjectName(vec![ident]))
+                    .collect(),
             );
             self.expect_token(&Token::RParen)?;
             variables
@@ -11152,9 +11146,7 @@ impl<'a> Parser<'a> {
             }
             Token::LBrace => {
                 self.expect_token(&Token::Minus)?;
-                let symbol = self
-                    .parse_identifier()
-                    .map(MatchRecognizeSymbol::Named)?;
+                let symbol = self.parse_identifier().map(MatchRecognizeSymbol::Named)?;
                 self.expect_token(&Token::Minus)?;
                 self.expect_token(&Token::RBrace)?;
                 Ok(MatchRecognizePattern::Exclude(symbol))
@@ -12289,8 +12281,7 @@ impl<'a> Parser<'a> {
     ) -> Result<Option<ExcludeSelectItem>, ParserError> {
         let opt_exclude = if self.parse_keyword(Keyword::EXCLUDE) {
             if self.consume_token(&Token::LParen) {
-                let columns =
-                    self.parse_comma_separated(|parser| parser.parse_identifier())?;
+                let columns = self.parse_comma_separated(|parser| parser.parse_identifier())?;
                 self.expect_token(&Token::RParen)?;
                 Some(ExcludeSelectItem::Multiple(columns))
             } else {

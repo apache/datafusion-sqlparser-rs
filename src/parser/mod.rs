@@ -8940,13 +8940,13 @@ impl<'a> Parser<'a> {
     }
 
     /// On BigQuery, hyphens are permitted in unquoted identifiers inside of a FROM or
-    /// TABLE clause [0].
+    /// TABLE clause.
     ///
     /// The first segment must be an ordinary unquoted identifier, e.g. it must not start
     /// with a digit. Subsequent segments are either must either be valid identifiers or
     /// integers, e.g. foo-123 is allowed, but foo-123a is not.
     ///
-    /// [0] https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical
+    /// [BigQuery-lexical](https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical)
     ///
     /// Return a tuple of the identifier and a boolean indicating it ends with a period.
     fn parse_unquoted_hyphenated_identifier(&mut self) -> Result<(Ident, bool), ParserError> {

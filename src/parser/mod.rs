@@ -6132,7 +6132,7 @@ impl<'a> Parser<'a> {
     /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.
     pub fn parse_drop_extension(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let names = self.parse_comma_separated(|p| p.parse_identifier(false))?;
+        let names = self.parse_comma_separated(|p| p.parse_identifier())?;
         let cascade_or_restrict =
             self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]);
         Ok(Statement::DropExtension {

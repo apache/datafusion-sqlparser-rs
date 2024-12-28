@@ -276,19 +276,58 @@ enum ParserState {
     ConnectBy,
 }
 
+/// A SQL Parser
+///
+/// This struct is the main entry point for parsing SQL queries.
+///
+/// # Functionality:
+/// * Parsing SQL: see examples on [`Parser::new`] and [`Parser::parse_sql`]
+/// * Controlling recursion: See [`Parser::with_recursion_limit`]
+/// * Controlling parser options: See [`Parser::with_options`]
+/// * Providing your own tokens: See [`Parser::with_tokens`]
+///
+/// # Internals
+///
+/// The parser uses a [`Tokenizer`] to tokenize the input SQL string into a
+/// `Vec` of [`TokenWithSpan`]s and maintains an `index` to the current token
+/// being processed. The token vec may contain multiple SQL statements.
+///
+/// * The "current" token is the token at `index - 1`
+/// * The "next" token is the token at `index`
+/// * The "previous" token is the token at `index - 2`
+///
+/// If `index` is equal to the length of the token stream, the 'next' token is
+/// [`Token::EOF`].
+///
+/// For example, the SQL string "SELECT * FROM foo" will be tokenized into
+/// following tokens:
+/// ```text
+///  [
+///    "SELECT", // token index 0
+///    " ",      // whitespace
+///    "*",
+///    " ",
+///    "FROM",
+///    " ",
+///    "foo"
+///   ]
+/// ```
+///
+///
 pub struct Parser<'a> {
+    /// The tokens
     tokens: Vec<TokenWithSpan>,
     /// The index of the first unprocessed token in [`Parser::tokens`].
     index: usize,
     /// The current state of the parser.
     state: ParserState,
-    /// The current dialect to use.
+    /// The SQL dialect to use.
     dialect: &'a dyn Dialect,
     /// Additional options that allow you to mix & match behavior
     /// otherwise constrained to certain dialects (e.g. trailing
     /// commas) and/or format of parse (e.g. unescaping).
     options: ParserOptions,
-    /// Ensure the stack does not overflow by limiting recursion depth.
+    /// Ensures the stack does not overflow by limiting recursion depth.
     recursion_counter: RecursionCounter,
 }
 
@@ -1270,7 +1309,9 @@ impl<'a> Parser<'a> {
 
         let dialect = self.dialect;
 
-        let (next_token, next_token_index) = self.next_token_ref_with_index();
+        self.advance_token();
+        let next_token_index = self.get_current_index();
+        let next_token = self.get_current_token();
         let span = next_token.span;
         let expr = match &next_token.token {
             Token::Word(w) => {
@@ -2926,7 +2967,9 @@ impl<'a> Parser<'a> {
 
         let dialect = self.dialect;
 
-        let (tok, tok_index) = self.next_token_ref_with_index();
+        self.advance_token();
+        let tok = self.get_current_token();
+        let tok_index = self.get_current_index();
         let span = tok.span;
         let regular_binary_operator = match &tok.token {
             Token::Spaceship => Some(BinaryOperator::Spaceship),
@@ -3006,7 +3049,8 @@ impl<'a> Parser<'a> {
                     // See https://www.postgresql.org/docs/current/sql-createoperator.html
                     let mut idents = vec![];
                     loop {
-                        idents.push(self.next_token_ref().to_string());
+                        self.advance_token();
+                        idents.push(self.get_current_token().to_string());
                         if !self.consume_token(&Token::Period) {
                             break;
                         }
@@ -3453,6 +3497,8 @@ impl<'a> Parser<'a> {
 
     /// Return the first non-whitespace token that has not yet been processed
     /// or Token::EOF
+    ///
+    /// See [`Self::peek_token_ref`] to avoid the copy.
     pub fn peek_token(&self) -> TokenWithSpan {
         self.peek_nth_token(0)
     }
@@ -3567,21 +3613,31 @@ impl<'a> Parser<'a> {
 
     /// Advances to the next non-whitespace token and returns a copy.
     ///
-    /// See [`Self::next_token_ref`] to avoid the copy.
+    /// Please use [`Self::advance_token`] and [`Self::get_current_token`] to
+    /// avoid the copy.
     pub fn next_token(&mut self) -> TokenWithSpan {
-        self.next_token_ref().clone()
+        self.advance_token();
+        self.get_current_token().clone()
     }
 
-    pub fn next_token_ref(&mut self) -> &TokenWithSpan {
-        self.next_token_ref_with_index().0
-    }
-
-    /// Return the first non-whitespace token that has not yet been processed
-    /// and that tokens index and advances the tokens
+    /// Returns the index of the current token
     ///
-    /// # Notes:
-    /// OK to call repeatedly after reaching EOF.
-    pub fn next_token_ref_with_index(&mut self) -> (&TokenWithSpan, usize) {
+    /// This can be used with APIs that expect an index, such as
+    /// [`Self::token_at`]
+    pub fn get_current_index(&self) -> usize {
+        self.index.saturating_sub(1)
+    }
+
+    /// Return the next unprocessed token, possibly whitespace.
+    pub fn next_token_no_skip(&mut self) -> Option<&TokenWithSpan> {
+        self.index += 1;
+        self.tokens.get(self.index - 1)
+    }
+
+    /// Advances the current token to the next non-whitespace token
+    ///
+    /// See [`Self::get_current_token`] to get the current token after advancing
+    pub fn advance_token(&mut self) {
         loop {
             self.index += 1;
             match self.tokens.get(self.index - 1) {
@@ -3589,25 +3645,38 @@ impl<'a> Parser<'a> {
                     token: Token::Whitespace(_),
                     span: _,
                 }) => continue,
-                token => return (token.unwrap_or(&EOF_TOKEN), self.index - 1),
+                _ => break,
             }
         }
     }
 
     /// Returns a reference to the current token
-    pub fn current_token(&self) -> &TokenWithSpan {
-        self.tokens.get(self.index - 1).unwrap_or(&EOF_TOKEN)
+    ///
+    /// Does not advance the current token.
+    pub fn get_current_token(&self) -> &TokenWithSpan {
+        self.token_at(self.index.saturating_sub(1))
     }
 
-    /// Return the first unprocessed token, possibly whitespace.
-    pub fn next_token_no_skip(&mut self) -> Option<&TokenWithSpan> {
-        self.index += 1;
-        self.tokens.get(self.index - 1)
+    /// Returns a reference to the previous token
+    ///
+    /// Does not advance the current token.
+    pub fn get_previous_token(&self) -> &TokenWithSpan {
+        self.token_at(self.index.saturating_sub(2))
     }
 
-    /// Push back the last one non-whitespace token. Must be called after
-    /// `next_token()`, otherwise might panic. OK to call after
-    /// `next_token()` indicates an EOF.
+    /// Returns a reference to the next token
+    ///
+    /// Does not advance the current token.
+    pub fn get_next_token(&self) -> &TokenWithSpan {
+        self.token_at(self.index)
+    }
+
+    /// Seek back the last one non-whitespace token.
+    ///
+    /// Must be called after `next_token()`, otherwise might panic. OK to call
+    /// after `next_token()` indicates an EOF.
+    ///
+    // TODO rename to backup_token and deprecate prev_token?
     pub fn prev_token(&mut self) {
         loop {
             assert!(self.index > 0);
@@ -3653,22 +3722,30 @@ impl<'a> Parser<'a> {
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> bool {
         if self.peek_keyword(expected) {
-            self.next_token_ref();
+            self.advance_token();
             true
         } else {
             false
         }
     }
 
+    /// If the current token is the `expected` keyword, consume it and returns
+    ///
+    /// See [`Self::parse_keyword_token_ref`] to avoid the copy.
     #[must_use]
     pub fn parse_keyword_token(&mut self, expected: Keyword) -> Option<TokenWithSpan> {
         self.parse_keyword_token_ref(expected).cloned()
     }
 
+    /// If the current token is the `expected` keyword, consume it and returns a reference to the next token.
+    ///
     #[must_use]
     pub fn parse_keyword_token_ref(&mut self, expected: Keyword) -> Option<&TokenWithSpan> {
         match &self.peek_token_ref().token {
-            Token::Word(w) if expected == w.keyword => Some(self.next_token_ref()),
+            Token::Word(w) if expected == w.keyword => {
+                self.advance_token();
+                Some(self.get_current_token())
+            }
             _ => None,
         }
     }
@@ -3695,7 +3772,7 @@ impl<'a> Parser<'a> {
                 }
                 // consume all tokens
                 for _ in 0..(tokens.len() + 1) {
-                    self.next_token_ref();
+                    self.advance_token();
                 }
                 true
             }
@@ -3731,7 +3808,7 @@ impl<'a> Parser<'a> {
                     .iter()
                     .find(|keyword| **keyword == w.keyword)
                     .map(|keyword| {
-                        self.next_token_ref();
+                        self.advance_token();
                         *keyword
                     })
             }
@@ -3786,10 +3863,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Consume the next token if it matches the expected token, otherwise return false
+    ///
+    /// See [Self::advance_token] to consume the token unconditionally
     #[must_use]
     pub fn consume_token(&mut self, expected: &Token) -> bool {
         if self.peek_token_ref() == expected {
-            self.next_token_ref();
+            self.advance_token();
             true
         } else {
             false
@@ -5383,9 +5462,11 @@ impl<'a> Parser<'a> {
             return self.parse_drop_secret(temporary, persistent);
         } else if self.parse_keyword(Keyword::TRIGGER) {
             return self.parse_drop_trigger();
+        } else if self.parse_keyword(Keyword::EXTENSION) {
+            return self.parse_drop_extension();
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, DATABASE, FUNCTION, PROCEDURE, STAGE, TRIGGER, SECRET, SEQUENCE, or TYPE after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, DATABASE, FUNCTION, PROCEDURE, STAGE, TRIGGER, SECRET, SEQUENCE, TYPE, or EXTENSION after DROP",
                 self.peek_token(),
             );
         };
@@ -6045,6 +6126,25 @@ impl<'a> Parser<'a> {
             schema,
             version,
             cascade,
+        })
+    }
+
+    /// Parse a PostgreSQL-specific [Statement::DropExtension] statement.
+    pub fn parse_drop_extension(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let names = self.parse_comma_separated(|p| p.parse_identifier(false))?;
+        let cascade_or_restrict =
+            self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]);
+        Ok(Statement::DropExtension {
+            names,
+            if_exists,
+            cascade_or_restrict: cascade_or_restrict
+                .map(|k| match k {
+                    Keyword::CASCADE => Ok(ReferentialAction::Cascade),
+                    Keyword::RESTRICT => Ok(ReferentialAction::Restrict),
+                    _ => self.expected("CASCADE or RESTRICT", self.peek_token()),
+                })
+                .transpose()?,
         })
     }
 
@@ -8286,9 +8386,9 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let dialect = self.dialect;
-        let (next_token, next_token_index) = self.next_token_ref_with_index();
-        let _ = next_token; // release ref
-        let next_token = self.current_token();
+        self.advance_token();
+        let next_token = self.get_current_token();
+        let next_token_index = self.get_current_index();
 
         let mut trailing_bracket: MatchedTrailingBracket = false.into();
         let mut data = match &next_token.token {
@@ -8825,7 +8925,7 @@ impl<'a> Parser<'a> {
                 Token::EOF | Token::Eq => break,
                 _ => {}
             }
-            self.next_token_ref();
+            self.advance_token();
         }
         Ok(idents)
     }

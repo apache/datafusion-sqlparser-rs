@@ -430,6 +430,7 @@ impl Spanned for Statement {
             Statement::DropSecret { .. } => Span::empty(),
             Statement::Declare { .. } => Span::empty(),
             Statement::CreateExtension { .. } => Span::empty(),
+            Statement::DropExtension { .. } => Span::empty(),
             Statement::Fetch { .. } => Span::empty(),
             Statement::Flush { .. } => Span::empty(),
             Statement::Discard { .. } => Span::empty(),

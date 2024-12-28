@@ -18,3 +18,25 @@
 -->
 
 Benchmarks for sqlparser. See [the main README](../README.md) for more information.
+
+Note: this is in a separate, non workspace crate to avoid adding a dependency 
+on `criterion` to the main crate (which complicates testing without std).
+
+# Running Benchmarks
+
+```shell
+cargo bench --bench sqlparser_bench
+```
+
+# Profiling
+
+Note you can generate a [flamegraph] using the following command:
+
+```shell
+cargo flamegraph --bench sqlparser_bench
+```
+
+[flamegraph]: https://crates.io/crates/flamegraph
+
+Here is an example flamegraph:
+[!flamegraph](src/flamegraph.svg)

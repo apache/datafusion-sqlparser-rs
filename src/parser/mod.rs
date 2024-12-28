@@ -8769,17 +8769,28 @@ impl<'a> Parser<'a> {
     /// in this context on BigQuery.
     pub fn parse_object_name(&mut self, in_table_clause: bool) -> Result<ObjectName, ParserError> {
         let mut idents = vec![];
-        loop {
-            if self.dialect.supports_object_name_double_dot_notation()
-                && idents.len() == 1
-                && self.consume_token(&Token::Period)
-            {
-                // Empty string here means default schema
-                idents.push(Ident::new(""));
+
+        if dialect_of!(self is BigQueryDialect) && in_table_clause {
+            loop {
+                let (ident, end_with_period) = self.parse_unquoted_hyphenated_identifier()?;
+                idents.push(ident);
+                if !self.consume_token(&Token::Period) && !end_with_period {
+                    break;
+                }
             }
-            idents.push(self.parse_identifier(in_table_clause)?);
-            if !self.consume_token(&Token::Period) {
-                break;
+        } else {
+            loop {
+                if self.dialect.supports_object_name_double_dot_notation()
+                    && idents.len() == 1
+                    && self.consume_token(&Token::Period)
+                {
+                    // Empty string here means default schema
+                    idents.push(Ident::new(""));
+                }
+                idents.push(self.parse_identifier(in_table_clause)?);
+                if !self.consume_token(&Token::Period) {
+                    break;
+                }
             }
         }
 
@@ -8918,25 +8929,31 @@ impl<'a> Parser<'a> {
     /// The `in_table_clause` parameter indicates whether the identifier is a table in a FROM, JOIN, or
     /// similar table clause. Currently, this is used only to support unquoted hyphenated identifiers in
     //  this context on BigQuery.
-    pub fn parse_identifier(&mut self, in_table_clause: bool) -> Result<Ident, ParserError> {
+    pub fn parse_identifier(&mut self, _in_table_clause: bool) -> Result<Ident, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(w) => {
-                let mut ident = w.to_ident(next_token.span);
+            Token::Word(w) => Ok(w.to_ident(next_token.span)),
+            Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
+            Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
+            _ => self.expected("identifier", next_token),
+        }
+    }
 
-                // On BigQuery, hyphens are permitted in unquoted identifiers inside of a FROM or
-                // TABLE clause [0].
-                //
-                // The first segment must be an ordinary unquoted identifier, e.g. it must not start
-                // with a digit. Subsequent segments are either must either be valid identifiers or
-                // integers, e.g. foo-123 is allowed, but foo-123a is not.
-                //
-                // [0] https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical
-                if dialect_of!(self is BigQueryDialect)
-                    && w.quote_style.is_none()
-                    && in_table_clause
-                {
-                    let mut requires_whitespace = false;
+    /// On BigQuery, hyphens are permitted in unquoted identifiers inside of a FROM or
+    /// TABLE clause [0].
+    ///
+    /// The first segment must be an ordinary unquoted identifier, e.g. it must not start
+    /// with a digit. Subsequent segments are either must either be valid identifiers or
+    /// integers, e.g. foo-123 is allowed, but foo-123a is not.
+    ///
+    /// [0] https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical
+    fn parse_unquoted_hyphenated_identifier(&mut self) -> Result<(Ident, bool), ParserError> {
+        match self.peek_token().token {
+            Token::Word(w) => {
+                let next_token = self.next_token();
+                let mut requires_whitespace = false;
+                let mut ident = w.to_ident(next_token.span);
+                if w.quote_style.is_none() {
                     while matches!(self.peek_token_no_skip().token, Token::Minus) {
                         self.next_token();
                         ident.value.push('-');
@@ -8950,8 +8967,27 @@ impl<'a> Parser<'a> {
                                 ident.value.push_str(&next_word.value);
                                 false
                             }
-                            Token::Number(s, false) if s.chars().all(|c| c.is_ascii_digit()) => {
-                                ident.value.push_str(&s);
+                            Token::Number(s, false) => {
+                                // A number token can represent a decimal value ending with a period, e.g., `Number('123.')`.
+                                // However, for an [ObjectName], it is part of a hyphenated identifier, e.g., `foo-123.bar`.
+                                //
+                                // If a number token is followed by a period, it is part of an [ObjectName].
+                                // Return the identifier with `true` if the number token is followed by a period, indicating that
+                                // parsing should continue for the next part of the hyphenated identifier.
+                                if s.ends_with('.') {
+                                    let Some(s) = s.split('.').next().filter(|s| {
+                                        !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
+                                    }) else {
+                                        return self.expected(
+                                            "continuation of hyphenated identifier",
+                                            TokenWithSpan::new(Token::Number(s, false), token.span),
+                                        );
+                                    };
+                                    ident.value.push_str(s);
+                                    return Ok((ident, true));
+                                } else {
+                                    ident.value.push_str(&s);
+                                }
                                 // If next token is period, then it is part of an ObjectName and we don't expect whitespace
                                 // after the number.
                                 !matches!(self.peek_token().token, Token::Period)
@@ -8973,11 +9009,9 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-                Ok(ident)
+                Ok((ident, false))
             }
-            Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
-            Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
-            _ => self.expected("identifier", next_token),
+            _ => Ok((self.parse_identifier(false)?, false)),
         }
     }
 

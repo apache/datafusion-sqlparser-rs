@@ -8947,12 +8947,13 @@ impl<'a> Parser<'a> {
     /// integers, e.g. foo-123 is allowed, but foo-123a is not.
     ///
     /// [0] https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical
+    ///
+    /// Return a tuple of the identifier and a boolean indicating it ends with a period.
     fn parse_unquoted_hyphenated_identifier(&mut self) -> Result<(Ident, bool), ParserError> {
         match self.peek_token().token {
             Token::Word(w) => {
-                let next_token = self.next_token();
                 let mut requires_whitespace = false;
-                let mut ident = w.to_ident(next_token.span);
+                let mut ident = w.to_ident(self.next_token().span);
                 if w.quote_style.is_none() {
                     while matches!(self.peek_token_no_skip().token, Token::Minus) {
                         self.next_token();

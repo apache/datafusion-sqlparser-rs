@@ -970,7 +970,7 @@ impl<'a> Parser<'a> {
             t @ (Token::Word(_) | Token::SingleQuotedString(_)) => {
                 if self.peek_token().token == Token::Period {
                     let mut id_parts: Vec<Ident> = vec![match t {
-                        Token::Word(w) => w.to_ident(next_token.span),
+                        Token::Word(w) => w.into_ident(next_token.span),
                         Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
                         _ => unreachable!(), // We matched above
                     }];
@@ -978,7 +978,7 @@ impl<'a> Parser<'a> {
                     while self.consume_token(&Token::Period) {
                         let next_token = self.next_token();
                         match next_token.token {
-                            Token::Word(w) => id_parts.push(w.to_ident(next_token.span)),
+                            Token::Word(w) => id_parts.push(w.into_ident(next_token.span)),
                             Token::SingleQuotedString(s) => {
                                 // SQLite has single-quoted identifiers
                                 id_parts.push(Ident::with_quote('\'', s))
@@ -1108,7 +1108,7 @@ impl<'a> Parser<'a> {
             if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
                 {
                     Ok(Some(Expr::Function(Function {
-                        name: ObjectName(vec![w.to_ident(w_span)]),
+                        name: ObjectName(vec![w.clone().into_ident(w_span)]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::None,
@@ -1123,7 +1123,7 @@ impl<'a> Parser<'a> {
             | Keyword::CURRENT_DATE
             | Keyword::LOCALTIME
             | Keyword::LOCALTIMESTAMP => {
-                Ok(Some(self.parse_time_functions(ObjectName(vec![w.to_ident(w_span)]))?))
+                Ok(Some(self.parse_time_functions(ObjectName(vec![w.clone().into_ident(w_span)]))?))
             }
             Keyword::CASE => Ok(Some(self.parse_case_expr()?)),
             Keyword::CONVERT => Ok(Some(self.parse_convert_expr(false)?)),
@@ -1148,7 +1148,7 @@ impl<'a> Parser<'a> {
             Keyword::CEIL => Ok(Some(self.parse_ceil_floor_expr(true)?)),
             Keyword::FLOOR => Ok(Some(self.parse_ceil_floor_expr(false)?)),
             Keyword::POSITION if self.peek_token_ref().token == Token::LParen => {
-                Ok(Some(self.parse_position_expr(w.to_ident(w_span))?))
+                Ok(Some(self.parse_position_expr(w.clone().into_ident(w_span))?))
             }
             Keyword::SUBSTRING => Ok(Some(self.parse_substring_expr()?)),
             Keyword::OVERLAY => Ok(Some(self.parse_overlay_expr()?)),
@@ -1167,7 +1167,7 @@ impl<'a> Parser<'a> {
                     let query = self.parse_query()?;
                     self.expect_token(&Token::RParen)?;
                     Ok(Some(Expr::Function(Function {
-                        name: ObjectName(vec![w.to_ident(w_span)]),
+                        name: ObjectName(vec![w.clone().into_ident(w_span)]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::Subquery(query),
@@ -1203,11 +1203,12 @@ impl<'a> Parser<'a> {
         w_span: Span,
     ) -> Result<Expr, ParserError> {
         match self.peek_token().token {
-            Token::Period => {
-                self.parse_compound_field_access(Expr::Identifier(w.to_ident(w_span)), vec![])
-            }
+            Token::Period => self.parse_compound_field_access(
+                Expr::Identifier(w.clone().into_ident(w_span)),
+                vec![],
+            ),
             Token::LParen => {
-                let id_parts = vec![w.to_ident(w_span)];
+                let id_parts = vec![w.clone().into_ident(w_span)];
                 if let Some(expr) = self.parse_outer_join_expr(&id_parts) {
                     Ok(expr)
                 } else {
@@ -1220,7 +1221,7 @@ impl<'a> Parser<'a> {
             }
             Token::LBracket if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect) =>
             {
-                let ident = Expr::Identifier(w.to_ident(w_span));
+                let ident = Expr::Identifier(w.clone().into_ident(w_span));
                 let mut fields = vec![];
                 self.parse_multi_dim_subscript(&mut fields)?;
                 self.parse_compound_field_access(ident, fields)
@@ -1250,11 +1251,11 @@ impl<'a> Parser<'a> {
             Token::Arrow if self.dialect.supports_lambda_functions() => {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(w.to_ident(w_span)),
+                    params: OneOrManyWithParens::One(w.clone().into_ident(w_span)),
                     body: Box::new(self.parse_expr()?),
                 }))
             }
-            _ => Ok(Expr::Identifier(w.to_ident(w_span))),
+            _ => Ok(Expr::Identifier(w.clone().into_ident(w_span))),
         }
     }
 
@@ -1438,7 +1439,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let tok = self.next_token();
                     let key = match tok.token {
-                        Token::Word(word) => word.to_ident(tok.span),
+                        Token::Word(word) => word.into_ident(tok.span),
                         _ => {
                             return parser_err!(
                                 format!("Expected identifier, found: {tok}"),
@@ -1490,7 +1491,7 @@ impl<'a> Parser<'a> {
             let next_token = self.next_token();
             match next_token.token {
                 Token::Word(w) => {
-                    let expr = Expr::Identifier(w.to_ident(next_token.span));
+                    let expr = Expr::Identifier(w.into_ident(next_token.span));
                     chain.push(AccessExpr::Dot(expr));
                     if self.peek_token().token == Token::LBracket {
                         if self.dialect.supports_partiql() {
@@ -1670,7 +1671,7 @@ impl<'a> Parser<'a> {
             while p.consume_token(&Token::Period) {
                 let tok = p.next_token();
                 let name = match tok.token {
-                    Token::Word(word) => word.to_ident(tok.span),
+                    Token::Word(word) => word.into_ident(tok.span),
                     _ => return p.expected("identifier", tok),
                 };
                 let func = match p.parse_function(ObjectName(vec![name]))? {
@@ -3708,7 +3709,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Report that the current token was found instead of `expected`.
+    /// Report that the token at `index` was found instead of `expected`.
     pub fn expected_at<T>(&self, expected: &str, index: usize) -> Result<T, ParserError> {
         let found = self.tokens.get(index).unwrap_or(&EOF_TOKEN);
         parser_err!(
@@ -3726,27 +3727,6 @@ impl<'a> Parser<'a> {
             true
         } else {
             false
-        }
-    }
-
-    /// If the current token is the `expected` keyword, consume it and returns
-    ///
-    /// See [`Self::parse_keyword_token_ref`] to avoid the copy.
-    #[must_use]
-    pub fn parse_keyword_token(&mut self, expected: Keyword) -> Option<TokenWithSpan> {
-        self.parse_keyword_token_ref(expected).cloned()
-    }
-
-    /// If the current token is the `expected` keyword, consume it and returns a reference to the next token.
-    ///
-    #[must_use]
-    pub fn parse_keyword_token_ref(&mut self, expected: Keyword) -> Option<&TokenWithSpan> {
-        match &self.peek_token_ref().token {
-            Token::Word(w) if expected == w.keyword => {
-                self.advance_token();
-                Some(self.get_current_token())
-            }
-            _ => None,
         }
     }
 
@@ -3832,9 +3812,11 @@ impl<'a> Parser<'a> {
 
     /// If the current token is the `expected` keyword, consume the token.
     /// Otherwise, return an error.
+    ///
+    // todo deprecate infavor of expected_keyword_is
     pub fn expect_keyword(&mut self, expected: Keyword) -> Result<TokenWithSpan, ParserError> {
-        if let Some(token) = self.parse_keyword_token_ref(expected) {
-            Ok(token.clone())
+        if self.parse_keyword(expected) {
+            Ok(self.get_current_token().clone())
         } else {
             self.expected_ref(format!("{:?}", &expected).as_str(), self.peek_token_ref())
         }
@@ -3846,7 +3828,7 @@ impl<'a> Parser<'a> {
     /// This differs from expect_keyword only in that the matched keyword
     /// token is not returned.
     pub fn expect_keyword_is(&mut self, expected: Keyword) -> Result<(), ParserError> {
-        if self.parse_keyword_token_ref(expected).is_some() {
+        if self.parse_keyword(expected) {
             Ok(())
         } else {
             self.expected_ref(format!("{:?}", &expected).as_str(), self.peek_token_ref())
@@ -8242,7 +8224,7 @@ impl<'a> Parser<'a> {
                 // This because snowflake allows numbers as placeholders
                 let next_token = self.next_token();
                 let ident = match next_token.token {
-                    Token::Word(w) => Ok(w.to_ident(next_token.span)),
+                    Token::Word(w) => Ok(w.into_ident(next_token.span)),
                     Token::Number(w, false) => Ok(Ident::new(w)),
                     _ => self.expected("placeholder", next_token),
                 }?;
@@ -8753,7 +8735,7 @@ impl<'a> Parser<'a> {
             // (For example, in `FROM t1 JOIN` the `JOIN` will always be parsed as a keyword,
             // not an alias.)
             Token::Word(w) if after_as || !reserved_kwds.contains(&w.keyword) => {
-                Ok(Some(w.to_ident(next_token.span)))
+                Ok(Some(w.into_ident(next_token.span)))
             }
             // MSSQL supports single-quoted strings as aliases for columns
             // We accept them as table aliases too, although MSSQL does not.
@@ -8920,7 +8902,7 @@ impl<'a> Parser<'a> {
         loop {
             match &self.peek_token_ref().token {
                 Token::Word(w) => {
-                    idents.push(w.to_ident(self.peek_token_ref().span));
+                    idents.push(w.clone().into_ident(self.peek_token_ref().span));
                 }
                 Token::EOF | Token::Eq => break,
                 _ => {}
@@ -8975,7 +8957,7 @@ impl<'a> Parser<'a> {
         // expecting at least one word for identifier
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(w) => idents.push(w.to_ident(next_token.span)),
+            Token::Word(w) => idents.push(w.into_ident(next_token.span)),
             Token::EOF => {
                 return Err(ParserError::ParserError(
                     "Empty input when parsing identifier".to_string(),
@@ -8995,7 +8977,7 @@ impl<'a> Parser<'a> {
                 Token::Period => {
                     let next_token = self.next_token();
                     match next_token.token {
-                        Token::Word(w) => idents.push(w.to_ident(next_token.span)),
+                        Token::Word(w) => idents.push(w.into_ident(next_token.span)),
                         Token::EOF => {
                             return Err(ParserError::ParserError(
                                 "Trailing period in identifier".to_string(),
@@ -9024,7 +9006,7 @@ impl<'a> Parser<'a> {
     pub fn parse_identifier(&mut self) -> Result<Ident, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(w) => Ok(w.to_ident(next_token.span)),
+            Token::Word(w) => Ok(w.into_ident(next_token.span)),
             Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
             Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
             _ => self.expected("identifier", next_token),
@@ -9044,9 +9026,10 @@ impl<'a> Parser<'a> {
     fn parse_unquoted_hyphenated_identifier(&mut self) -> Result<(Ident, bool), ParserError> {
         match self.peek_token().token {
             Token::Word(w) => {
+                let quote_style_is_none = w.quote_style.is_none();
                 let mut requires_whitespace = false;
-                let mut ident = w.to_ident(self.next_token().span);
-                if w.quote_style.is_none() {
+                let mut ident = w.into_ident(self.next_token().span);
+                if quote_style_is_none {
                     while matches!(self.peek_token_no_skip().token, Token::Minus) {
                         self.next_token();
                         ident.value.push('-');
@@ -9486,7 +9469,8 @@ impl<'a> Parser<'a> {
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Box<Query>, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
-        let with = if let Some(with_token) = self.parse_keyword_token_ref(Keyword::WITH) {
+        let with = if self.parse_keyword(Keyword::WITH) {
+            let with_token = self.get_current_token();
             Some(With {
                 with_token: with_token.clone().into(),
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
@@ -13475,9 +13459,19 @@ impl<'a> Parser<'a> {
 }
 
 impl Word {
+    #[deprecated(since = "0.54.0", note = "please use `into_ident` instead")]
     pub fn to_ident(&self, span: Span) -> Ident {
         Ident {
             value: self.value.clone(),
+            quote_style: self.quote_style,
+            span,
+        }
+    }
+
+    /// Convert this word into an [`Ident`] identifier
+    pub fn into_ident(self, span: Span) -> Ident {
+        Ident {
+            value: self.value,
             quote_style: self.quote_style,
             span,
         }

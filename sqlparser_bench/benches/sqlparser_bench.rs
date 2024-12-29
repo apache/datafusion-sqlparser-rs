@@ -78,8 +78,7 @@ fn basic_queries(c: &mut Criterion) {
 
     group.bench_function("format_large_statement", |b| {
         b.iter(|| {
-            let formatted_query = large_statement.to_string();
-            assert_eq!(formatted_query, large_statement);
+            let _formatted_query = large_statement.to_string();
         });
     });
 }

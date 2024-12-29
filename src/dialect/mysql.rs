@@ -102,11 +102,6 @@ impl Dialect for MySqlDialect {
     fn supports_create_table_select(&self) -> bool {
         true
     }
-
-    /// see <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
-    fn supports_rename_table(&self) -> bool {
-        true
-    }
 }
 
 /// `LOCK TABLES`

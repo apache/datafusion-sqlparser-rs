@@ -715,11 +715,6 @@ pub trait Dialect: Debug + Any {
         true
     }
 
-    // Returns true if the dialect supports the `RENAME TABLE` statement
-    fn supports_rename_table(&self) -> bool {
-        false
-    }
-
     /// Returns true if this dialect supports the `LIKE 'pattern'` option in
     /// a `SHOW` statement before the `IN` option
     fn supports_show_like_before_in(&self) -> bool {

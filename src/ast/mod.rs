@@ -3407,7 +3407,7 @@ pub enum Statement {
     /// Renames one or more tables
     ///
     /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
-    RenameTable(Vec<RenameObjectDef>),
+    RenameTable(Vec<RenameTable>),
 }
 
 impl fmt::Display for Statement {
@@ -7660,12 +7660,12 @@ impl Display for JsonNullClause {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct RenameObjectDef {
+pub struct RenameTable {
     pub old_name: ObjectName,
     pub new_name: ObjectName,
 }
 
-impl fmt::Display for RenameObjectDef {
+impl fmt::Display for RenameTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} TO {}", self.old_name, self.new_name)?;
         Ok(())

@@ -1051,14 +1051,14 @@ impl<'a> Parser<'a> {
     pub fn parse_rename(&mut self) -> Result<Statement, ParserError> {
         if self.peek_keyword(Keyword::TABLE) {
             self.expect_keyword(Keyword::TABLE)?;
-            let rename_object_defs = self.parse_comma_separated(|parser| {
+            let rename_tables = self.parse_comma_separated(|parser| {
                 let old_name = parser.parse_object_name(false)?;
                 parser.expect_keyword(Keyword::TO)?;
                 let new_name = parser.parse_object_name(false)?;
 
                 Ok(RenameTable { old_name, new_name })
             })?;
-            Ok(Statement::RenameTable(rename_object_defs))
+            Ok(Statement::RenameTable(rename_tables))
         } else {
             self.expected("KEYWORD `TABLE` after RENAME", self.peek_token())
         }

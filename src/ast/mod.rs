@@ -4947,12 +4947,8 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::RenameTable(rename_object_defs) => {
-                write!(
-                    f,
-                    "RENAME TABLE {}",
-                    display_comma_separated(rename_object_defs)
-                )
+            Statement::RenameTable(rename_tables) => {
+                write!(f, "RENAME TABLE {}", display_comma_separated(rename_tables))
             }
         }
     }

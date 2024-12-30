@@ -1871,7 +1871,7 @@ impl<'a> Tokenizer<'a> {
                         let slash = chars.next();
                         nested -= 1;
                         if nested == 0 {
-                            s.pop(); // remove the last '/'
+                            s.pop(); // remove the last '*'
                             break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
                         }
                         s.push(slash.unwrap());

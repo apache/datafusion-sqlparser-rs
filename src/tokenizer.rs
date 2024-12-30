@@ -2777,16 +2777,16 @@ mod tests {
 
     #[test]
     fn tokenize_nested_multiline_comment_empty() {
-        let sql = "select 'foo' /*/**/*/";
+        let sql = "select 1/*/**/*/0";
 
         let dialect = GenericDialect {};
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
             Token::make_keyword("select"),
             Token::Whitespace(Whitespace::Space),
-            Token::SingleQuotedString("foo".to_string()),
-            Token::Whitespace(Whitespace::Space),
+            Token::Number("1".to_string(), false),
             Token::Whitespace(Whitespace::MultiLineComment("/**/".to_string())),
+            Token::Number("0".to_string(), false),
         ];
 
         compare(expected, tokens);

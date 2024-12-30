@@ -4430,7 +4430,9 @@ fn test_simple_postgres_insert_with_alias() {
             returning: None,
             replace_into: false,
             priority: None,
-            insert_alias: None
+            insert_alias: None,
+            settings: None,
+            format_clause: None,
         })
     )
 }
@@ -4500,7 +4502,9 @@ fn test_simple_postgres_insert_with_alias() {
             returning: None,
             replace_into: false,
             priority: None,
-            insert_alias: None
+            insert_alias: None,
+            settings: None,
+            format_clause: None,
         })
     )
 }
@@ -4567,6 +4571,8 @@ fn test_simple_insert_with_quoted_alias() {
             replace_into: false,
             priority: None,
             insert_alias: None,
+            settings: None,
+            format_clause: None,
         })
     )
 }

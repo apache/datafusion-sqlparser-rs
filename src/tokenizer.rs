@@ -1855,11 +1855,12 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<Option<Token>, TokenizerError> {
         let mut s = String::new();
         let mut nested = 1;
+        let supports_nested_comments = self.dialect.supports_nested_comments();
 
         loop {
             match chars.next() {
                 Some(ch) => {
-                    if ch == '/' && matches!(chars.peek(), Some('*')) {
+                    if ch == '/' && matches!(chars.peek(), Some('*')) && supports_nested_comments {
                         s.push(ch);
                         s.push(chars.next().unwrap()); // consume the '*'
                         nested += 1;
@@ -2790,6 +2791,26 @@ mod tests {
         ];
 
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_nested_comments_if_not_supported() {
+        let dialect = SQLiteDialect {};
+        let sql = "SELECT 1/*/* nested comment */*/0";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("1".to_string(), false),
+            Token::Whitespace(Whitespace::MultiLineComment(
+                "/* nested comment ".to_string(),
+            )),
+            Token::Mul,
+            Token::Div,
+            Token::Number("0".to_string(), false),
+        ];
+
+        compare(expected, tokens.unwrap());
     }
 
     #[test]

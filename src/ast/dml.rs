@@ -36,7 +36,7 @@ use super::{
     FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident,
     InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens,
     OrderByExpr, Query, RowAccessPolicy, SelectItem, SqlOption, SqliteOnConflict, TableEngine,
-    TableWithJoins, Tag, WrappedCollection,
+    TableObject, TableWithJoins, Tag, WrappedCollection,
 };
 
 /// CREATE INDEX statement.
@@ -470,8 +470,7 @@ pub struct Insert {
     /// INTO - optional keyword
     pub into: bool,
     /// TABLE
-    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-    pub table_name: ObjectName,
+    pub table_object: TableObject,
     /// table_name as foo (for PostgreSQL)
     pub table_alias: Option<Ident>,
     /// COLUMNS
@@ -503,9 +502,9 @@ pub struct Insert {
 impl Display for Insert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let table_name = if let Some(alias) = &self.table_alias {
-            format!("{0} AS {alias}", self.table_name)
+            format!("{0} AS {alias}", self.table_object)
         } else {
-            self.table_name.to_string()
+            self.table_object.to_string()
         };
 
         if let Some(on_conflict) = self.or {

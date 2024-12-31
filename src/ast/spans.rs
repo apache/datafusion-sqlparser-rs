@@ -32,8 +32,9 @@ use super::{
     OrderBy, OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
     RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
     SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
-    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
+    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
+    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WildcardAdditionalOptions, With,
+    WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -1141,7 +1142,7 @@ impl Spanned for Insert {
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool
-            table_name,
+            table_object,
             table_alias,
             columns,
             overwrite: _, // bool
@@ -1158,7 +1159,7 @@ impl Spanned for Insert {
         } = self;
 
         union_spans(
-            core::iter::once(table_name.span())
+            core::iter::once(table_object.span())
                 .chain(table_alias.as_ref().map(|i| i.span))
                 .chain(columns.iter().map(|i| i.span))
                 .chain(source.as_ref().map(|q| q.span()))
@@ -2117,6 +2118,17 @@ impl Spanned for UpdateTableFromKind {
         match self {
             UpdateTableFromKind::BeforeSet(from) => from.span(),
             UpdateTableFromKind::AfterSet(from) => from.span(),
+        }
+    }
+}
+
+impl Spanned for TableObject {
+    fn span(&self) -> Span {
+        match self {
+            TableObject::TableName(ObjectName(segments)) => {
+                union_spans(segments.iter().map(|i| i.span))
+            }
+            TableObject::TableFunction(func) => func.span(),
         }
     }
 }

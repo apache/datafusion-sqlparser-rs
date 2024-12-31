@@ -8937,6 +8937,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_table_object(
+        &mut self,
+        in_table_clause: bool,
+    ) -> Result<TableObject, ParserError> {
+        if dialect_of!(self is ClickHouseDialect) && self.parse_keyword(Keyword::FUNCTION) {
+            self.parse_table_function().map(TableObject::TableFunction)
+        } else {
+            self.parse_object_name(in_table_clause)
+                .map(TableObject::TableName)
+        }
+    }
+
+    pub fn parse_table_function(&mut self) -> Result<Function, ParserError> {
+        let fn_name = self.parse_object_name(false)?;
+        self.parse_function_call(fn_name)
+    }
+
     /// Parse a possibly qualified, possibly quoted identifier, optionally allowing for wildcards,
     /// e.g. *, *.*, `foo`.*, or "foo"."bar"
     fn parse_object_name_with_wildcards(
@@ -12010,7 +12027,7 @@ impl<'a> Parser<'a> {
         } else {
             // Hive lets you put table here regardless
             let table = self.parse_keyword(Keyword::TABLE);
-            let table_name = self.parse_object_name(false)?;
+            let table_object = self.parse_table_object(false)?;
 
             let table_alias =
                 if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
@@ -12118,7 +12135,7 @@ impl<'a> Parser<'a> {
 
             Ok(Statement::Insert(Insert {
                 or,
-                table_name,
+                table_object,
                 table_alias,
                 ignore,
                 into,

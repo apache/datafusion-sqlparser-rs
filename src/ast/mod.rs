@@ -7907,6 +7907,25 @@ impl fmt::Display for RenameTable {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableObject {
+    TableName(#[cfg_attr(feature = "visitor", visit(with = "visit_relation"))] ObjectName),
+
+    // Clickhouse: [Table functions](https://clickhouse.com/docs/en/sql-reference/table-functions)
+    TableFunction(Function),
+}
+
+impl fmt::Display for TableObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::TableName(table_name) => write!(f, "{}", display_separated(&table_name.0, ".")),
+            Self::TableFunction(func) => write!(f, "FUNCTION {}", func),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

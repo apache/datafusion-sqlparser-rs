@@ -50,6 +50,7 @@ mod test_utils;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 use sqlparser::ast::ColumnOption::Comment;
+use sqlparser::ast::DateTimeField::Seconds;
 use sqlparser::ast::Expr::{Identifier, UnaryOp};
 use sqlparser::ast::Value::Number;
 use sqlparser::test_utils::all_dialects_except;
@@ -5334,6 +5335,19 @@ fn parse_interval_all() {
         expr_from_projection(only(&select.projection)),
     );
 
+    let sql = "SELECT INTERVAL 5 DAYS";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(number("5"))),
+            leading_field: Some(DateTimeField::Days),
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -5361,10 +5375,18 @@ fn parse_interval_all() {
 
     verified_only_select("SELECT INTERVAL '1' YEAR");
     verified_only_select("SELECT INTERVAL '1' MONTH");
+    verified_only_select("SELECT INTERVAL '1' WEEK");
     verified_only_select("SELECT INTERVAL '1' DAY");
     verified_only_select("SELECT INTERVAL '1' HOUR");
     verified_only_select("SELECT INTERVAL '1' MINUTE");
     verified_only_select("SELECT INTERVAL '1' SECOND");
+    verified_only_select("SELECT INTERVAL '1' YEARS");
+    verified_only_select("SELECT INTERVAL '1' MONTHS");
+    verified_only_select("SELECT INTERVAL '1' WEEKS");
+    verified_only_select("SELECT INTERVAL '1' DAYS");
+    verified_only_select("SELECT INTERVAL '1' HOURS");
+    verified_only_select("SELECT INTERVAL '1' MINUTES");
+    verified_only_select("SELECT INTERVAL '1' SECONDS");
     verified_only_select("SELECT INTERVAL '1' YEAR TO MONTH");
     verified_only_select("SELECT INTERVAL '1' DAY TO HOUR");
     verified_only_select("SELECT INTERVAL '1' DAY TO MINUTE");
@@ -5374,10 +5396,21 @@ fn parse_interval_all() {
     verified_only_select("SELECT INTERVAL '1' MINUTE TO SECOND");
     verified_only_select("SELECT INTERVAL 1 YEAR");
     verified_only_select("SELECT INTERVAL 1 MONTH");
+    verified_only_select("SELECT INTERVAL 1 WEEK");
     verified_only_select("SELECT INTERVAL 1 DAY");
     verified_only_select("SELECT INTERVAL 1 HOUR");
     verified_only_select("SELECT INTERVAL 1 MINUTE");
     verified_only_select("SELECT INTERVAL 1 SECOND");
+    verified_only_select("SELECT INTERVAL 1 YEARS");
+    verified_only_select("SELECT INTERVAL 1 MONTHS");
+    verified_only_select("SELECT INTERVAL 1 WEEKS");
+    verified_only_select("SELECT INTERVAL 1 DAYS");
+    verified_only_select("SELECT INTERVAL 1 HOURS");
+    verified_only_select("SELECT INTERVAL 1 MINUTES");
+    verified_only_select("SELECT INTERVAL 1 SECONDS");
+    verified_only_select(
+        "SELECT '2 years 15 months 100 weeks 99 hours 123456789 milliseconds'::INTERVAL",
+    );
 }
 
 #[test]
@@ -11282,16 +11315,12 @@ fn test_group_by_nothing() {
 #[test]
 fn test_extract_seconds_ok() {
     let dialects = all_dialects_where(|d| d.allow_extract_custom());
-    let stmt = dialects.verified_expr("EXTRACT(seconds FROM '2 seconds'::INTERVAL)");
+    let stmt = dialects.verified_expr("EXTRACT(SECONDS FROM '2 seconds'::INTERVAL)");
 
     assert_eq!(
         stmt,
         Expr::Extract {
-            field: DateTimeField::Custom(Ident {
-                value: "seconds".to_string(),
-                quote_style: None,
-                span: Span::empty(),
-            }),
+            field: Seconds,
             syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
@@ -11302,7 +11331,59 @@ fn test_extract_seconds_ok() {
                 format: None,
             }),
         }
-    )
+    );
+
+    let actual_ast = dialects
+        .parse_sql_statements("SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)")
+        .unwrap();
+
+    let expected_ast = vec![Statement::Query(Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Select(Box::new(Select {
+            select_token: AttachedToken::empty(),
+            distinct: None,
+            top: None,
+            top_before_distinct: false,
+            projection: vec![UnnamedExpr(Expr::Extract {
+                field: Seconds,
+                syntax: ExtractSyntax::From,
+                expr: Box::new(Expr::Cast {
+                    kind: CastKind::DoubleColon,
+                    expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "2 seconds".to_string(),
+                    ))),
+                    data_type: DataType::Interval,
+                    format: None,
+                }),
+            })],
+            into: None,
+            from: vec![],
+            lateral_views: vec![],
+            prewhere: None,
+            selection: None,
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            qualify: None,
+            window_before_qualify: false,
+            value_table_mode: None,
+            connect_by: None,
+        }))),
+        order_by: None,
+        limit: None,
+        limit_by: vec![],
+        offset: None,
+        fetch: None,
+        locks: vec![],
+        for_clause: None,
+        settings: None,
+        format_clause: None,
+    }))];
+
+    assert_eq!(actual_ast, expected_ast);
 }
 
 #[test]
@@ -11329,17 +11410,6 @@ fn test_extract_seconds_single_quote_ok() {
             }),
         }
     )
-}
-
-#[test]
-fn test_extract_seconds_err() {
-    let sql = "SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)";
-    let dialects = all_dialects_except(|d| d.allow_extract_custom());
-    let err = dialects.parse_sql_statements(sql).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "sql parser error: Expected: date/time field, found: seconds"
-    );
 }
 
 #[test]

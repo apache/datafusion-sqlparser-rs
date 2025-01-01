@@ -547,7 +547,6 @@ impl<'a> Parser<'a> {
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),
-                // `RENAME TABLE` is mysql specific https://dev.mysql.com/doc/refman/9.1/en/rename-table.html
                 Keyword::RENAME => self.parse_rename(),
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
@@ -1047,7 +1046,6 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses a `RENAME TABLE` statement. See [Statement::RenameTable]
-    /// see <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
     pub fn parse_rename(&mut self) -> Result<Statement, ParserError> {
         if self.peek_keyword(Keyword::TABLE) {
             self.expect_keyword(Keyword::TABLE)?;

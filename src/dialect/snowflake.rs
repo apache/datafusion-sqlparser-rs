@@ -251,6 +251,50 @@ impl Dialect for SnowflakeDialect {
     fn supports_partiql(&self) -> bool {
         true
     }
+
+    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+        explicit
+            || match kw {
+            // The following keywords can be considered an alias as long as 
+            // they are not followed by other tokens that may change their meaning
+            // e.g. `SELECT * EXCEPT (col1) FROM tbl`
+            Keyword::EXCEPT
+            // e.g. `SELECT 1 LIMIT 5`
+            | Keyword::LIMIT
+            // e.g. `SELECT 1 OFFSET 5 ROWS`
+            | Keyword::OFFSET
+            // e.g. `INSERT INTO t SELECT 1 RETURNING *`
+            | Keyword::RETURNING if !matches!(parser.peek_token_ref().token, Token::Comma | Token::EOF) =>
+            {
+                false
+            }
+
+            // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
+            // which would give it a different meanins, for example: `SELECT 1 FETCH FIRST 10 ROWS` - not an alias
+            Keyword::FETCH
+                if parser.peek_keyword(Keyword::FIRST) || parser.peek_keyword(Keyword::NEXT) =>
+            {
+                false
+            }
+
+            // Reserved keywords by the Snowflake dialect, which seem to be less strictive 
+            // than what is listed in `keywords::RESERVED_FOR_COLUMN_ALIAS`. The following 
+            // keywords were tested with the this statement: `SELECT 1 <KW>`.
+            Keyword::FROM
+            | Keyword::GROUP
+            | Keyword::HAVING
+            | Keyword::INTERSECT
+            | Keyword::INTO
+            | Keyword::ORDER
+            | Keyword::SELECT
+            | Keyword::UNION
+            | Keyword::WHERE
+            | Keyword::WITH => false,
+
+            // Any other word is considered an alias
+            _ => true,
+        }
+    }
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {

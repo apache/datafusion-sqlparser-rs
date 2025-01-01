@@ -8837,6 +8837,34 @@ impl<'a> Parser<'a> {
         Ok(IdentWithAlias { ident, alias })
     }
 
+    // Optionally parses an alias for a select list item
+    fn maybe_parse_select_item_alias(&mut self) -> Result<Option<Ident>, ParserError> {
+        let after_as = self.parse_keyword(Keyword::AS);
+        let next_token = self.next_token();
+        match next_token.token {
+            // Dialect-specific behavior for words that may be reserved from parsed
+            // as select item aliases.
+            Token::Word(w)
+                if self
+                    .dialect
+                    .is_select_item_alias(after_as, &w.keyword, self) =>
+            {
+                Ok(Some(w.into_ident(next_token.span)))
+            }
+            // MSSQL supports single-quoted strings as aliases for columns
+            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
+            // Support for MySql dialect double-quoted string, `AS "HOUR"` for example
+            Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
+            _ => {
+                if after_as {
+                    return self.expected("an identifier after AS", next_token);
+                }
+                self.prev_token();
+                Ok(None) // no alias found
+            }
+        }
+    }
+
     /// Parse `AS identifier` (or simply `identifier` if it's not a reserved keyword)
     /// Some examples with aliases: `SELECT 1 foo`, `SELECT COUNT(*) AS cnt`,
     /// `SELECT ... FROM t1 foo, t2 bar`, `SELECT ... FROM (...) AS bar`
@@ -8855,6 +8883,8 @@ impl<'a> Parser<'a> {
             Token::Word(w) if after_as || !reserved_kwds.contains(&w.keyword) => {
                 Ok(Some(w.into_ident(next_token.span)))
             }
+            // Left the next two patterns for backwards-compatibility (despite not breaking
+            // any tests).
             // MSSQL supports single-quoted strings as aliases for columns
             // We accept them as table aliases too, although MSSQL does not.
             //
@@ -12613,7 +12643,7 @@ impl<'a> Parser<'a> {
                 })
             }
             expr => self
-                .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
+                .maybe_parse_select_item_alias()
                 .map(|alias| match alias {
                     Some(alias) => SelectItem::ExprWithAlias { expr, alias },
                     None => SelectItem::UnnamedExpr(expr),

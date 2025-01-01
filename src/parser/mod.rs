@@ -595,6 +595,7 @@ impl<'a> Parser<'a> {
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),
+                Keyword::RENAME => self.parse_rename(),
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     self.parse_install()
@@ -1083,6 +1084,23 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(Statement::NOTIFY { channel, payload })
+    }
+
+    /// Parses a `RENAME TABLE` statement. See [Statement::RenameTable]
+    pub fn parse_rename(&mut self) -> Result<Statement, ParserError> {
+        if self.peek_keyword(Keyword::TABLE) {
+            self.expect_keyword(Keyword::TABLE)?;
+            let rename_tables = self.parse_comma_separated(|parser| {
+                let old_name = parser.parse_object_name(false)?;
+                parser.expect_keyword(Keyword::TO)?;
+                let new_name = parser.parse_object_name(false)?;
+
+                Ok(RenameTable { old_name, new_name })
+            })?;
+            Ok(Statement::RenameTable(rename_tables))
+        } else {
+            self.expected("KEYWORD `TABLE` after RENAME", self.peek_token())
+        }
     }
 
     // Tries to parse an expression by matching the specified word to known keywords that have a special meaning in the dialect.

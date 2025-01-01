@@ -4134,6 +4134,65 @@ fn parse_alter_table() {
 }
 
 #[test]
+fn parse_rename_table() {
+    match verified_stmt("RENAME TABLE test.test1 TO test_db.test2") {
+        Statement::RenameTable(rename_tables) => {
+            assert_eq!(
+                vec![RenameTable {
+                    old_name: ObjectName(vec![
+                        Ident::new("test".to_string()),
+                        Ident::new("test1".to_string()),
+                    ]),
+                    new_name: ObjectName(vec![
+                        Ident::new("test_db".to_string()),
+                        Ident::new("test2".to_string()),
+                    ]),
+                }],
+                rename_tables
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    match verified_stmt(
+        "RENAME TABLE old_table1 TO new_table1, old_table2 TO new_table2, old_table3 TO new_table3",
+    ) {
+        Statement::RenameTable(rename_tables) => {
+            assert_eq!(
+                vec![
+                    RenameTable {
+                        old_name: ObjectName(vec![Ident::new("old_table1".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table1".to_string())]),
+                    },
+                    RenameTable {
+                        old_name: ObjectName(vec![Ident::new("old_table2".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table2".to_string())]),
+                    },
+                    RenameTable {
+                        old_name: ObjectName(vec![Ident::new("old_table3".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table3".to_string())]),
+                    }
+                ],
+                rename_tables
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        parse_sql_statements("RENAME TABLE old_table TO new_table a").unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: a".to_string())
+    );
+
+    assert_eq!(
+        parse_sql_statements("RENAME TABLE1 old_table TO new_table a").unwrap_err(),
+        ParserError::ParserError(
+            "Expected: KEYWORD `TABLE` after RENAME, found: TABLE1".to_string()
+        )
+    );
+}
+
+#[test]
 fn test_alter_table_with_on_cluster() {
     match all_dialects()
         .verified_stmt("ALTER TABLE t ON CLUSTER 'cluster' ADD CONSTRAINT bar PRIMARY KEY (baz)")

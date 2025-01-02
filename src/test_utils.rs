@@ -135,6 +135,26 @@ impl TestedDialects {
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }
 
+    /// Parses a single SQL string into multiple statements, ensuring
+    /// the result is the same for all tested dialects.
+    pub fn parse_sql_statements_with_locations(
+        &self,
+        sql: &str,
+    ) -> Result<Vec<Statement>, ParserError> {
+        self.one_of_identical_results(|dialect| {
+            let mut tokenizer = Tokenizer::new(dialect, sql);
+            if let Some(options) = &self.options {
+                tokenizer = tokenizer.with_unescape(options.unescape);
+            }
+            let tokens = tokenizer.tokenize_with_location()?;
+            self.new_parser(dialect)
+                .with_tokens_with_locations(tokens)
+                .parse_statements()
+        })
+        // To fail the `ensure_multiple_dialects_are_tested` test:
+        // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
+    }
+
     /// Ensures that `sql` parses as a single [Statement] for all tested
     /// dialects.
     ///
@@ -152,7 +172,7 @@ impl TestedDialects {
     /// 2. re-serializing the result of parsing `sql` produces the same
     ///    `canonical` sql string
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
-        let mut statements = self.parse_sql_statements(sql).expect(sql);
+        let mut statements = self.parse_sql_statements_with_locations(sql).expect(sql);
         assert_eq!(statements.len(), 1);
 
         if !canonical.is_empty() && sql != canonical {
@@ -161,6 +181,17 @@ impl TestedDialects {
 
         let only_statement = statements.pop().unwrap();
 
+        if !canonical.is_empty() {
+            assert_eq!(canonical, only_statement.to_string())
+        }
+        only_statement
+    }
+
+    /// Identical to `one_statement_parses_to`, but sets all locations to empty.
+    pub fn one_statement_parses_to_no_span(&self, sql: &str, canonical: &str) -> Statement {
+        let mut statements = self.parse_sql_statements(sql).expect(sql);
+        assert_eq!(statements.len(), 1);
+        let only_statement = statements.pop().unwrap();
         if !canonical.is_empty() {
             assert_eq!(canonical, only_statement.to_string())
         }
@@ -182,6 +213,11 @@ impl TestedDialects {
     /// string (is not modified after a serialization round-trip).
     pub fn verified_stmt(&self, sql: &str) -> Statement {
         self.one_statement_parses_to(sql, sql)
+    }
+
+    /// Identical to `verified_stmt`, but sets all locations to empty.
+    pub fn verified_stmt_no_span(&self, sql: &str) -> Statement {
+        self.one_statement_parses_to_no_span(sql, sql)
     }
 
     /// Ensures that `sql` parses as a single [Query], and that

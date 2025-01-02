@@ -145,6 +145,117 @@ where
     DisplaySeparated { slice, sep: ", " }
 }
 
+pub struct DisplaySeparatedWithNewlines<'a, T>
+where
+    T: fmt::Display + Spanned,
+{
+    slice: &'a [T],
+    sep: &'static str,
+    last_span: Span,
+}
+
+impl<T> fmt::Display for DisplaySeparatedWithNewlines<'_, T>
+where
+    T: fmt::Display + Spanned,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Initialize the last span to track where we left off in our previous display logic.
+        // We suppose we are at the start of a line, so we take the first item's starting position
+        let mut last_span = self.last_span;
+        if let Some(first) = self.slice.first() {
+            let first_span = first.span();
+            write_span_gap_lines(f, &mut last_span, first_span)?;
+        }
+        let mut delim = "";
+        for t in self.slice {
+            write!(f, "{delim}")?;
+            last_span.end.column += u64::try_from(delim.len()).unwrap_or(1);
+
+            let current_span = t.span();
+            write_span_gap(f, last_span, current_span)?;
+            write!(f, "{t}")?;
+            last_span = current_span;
+            delim = self.sep;
+        }
+        Ok(())
+    }
+}
+
+/// Write newlines and spaces between two spans
+pub fn write_span_gap(
+    f: &mut fmt::Formatter,
+    mut last_span: Span,
+    current_span: Span,
+) -> fmt::Result {
+    // write all the newlines between the last item and the current item
+    while last_span.end.line < current_span.start.line {
+        writeln!(f)?;
+        last_span.end.line += 1;
+        last_span.end.column = 1;
+    }
+    // write spaces between the last item and the current item
+    while last_span.end.column < current_span.start.column {
+        write!(f, " ")?;
+        last_span.end.column += 1;
+    }
+    Ok(())
+}
+
+/// Write newlines between two spans. If the two spans are on the same line, write a single space
+pub fn write_span_gap_lines(
+    f: &mut fmt::Formatter,
+    last_span: &mut Span,
+    current_span: Span,
+) -> fmt::Result {
+    let mut needs_space = true;
+    while last_span.end.line < current_span.start.line {
+        writeln!(f)?;
+        last_span.end.line += 1;
+        last_span.end.column = 1;
+        needs_space = false;
+    }
+    if needs_space {
+        write!(f, " ")?;
+        last_span.end.column += 1;
+    }
+    Ok(())
+}
+
+pub fn display_separated_with_newlines<'a, T>(
+    slice: &'a [T],
+    sep: &'static str,
+    last_span: Span,
+) -> DisplaySeparatedWithNewlines<'a, T>
+where
+    T: fmt::Display + Spanned,
+{
+    DisplaySeparatedWithNewlines {
+        slice,
+        sep,
+        last_span,
+    }
+}
+
+pub fn display_comma_separated_with_newlines<T>(
+    slice: &[T],
+    last_span: Span,
+) -> DisplaySeparatedWithNewlines<'_, T>
+where
+    T: fmt::Display + Spanned,
+{
+    // if we don't have span info, just add a space between the items
+    let sep = if slice.iter().all(|s| s.span() == Span::empty()) {
+        ", "
+    } else {
+        ","
+    };
+    DisplaySeparatedWithNewlines {
+        slice,
+        sep,
+        last_span,
+    }
+}
+
 /// An identifier, decomposed into its value or character data and the quote style.
 #[derive(Debug, Clone, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3763,21 +3874,44 @@ impl fmt::Display for Statement {
                 if let Some(or) = or {
                     write!(f, "{or} ")?;
                 }
+                let mut last_span = table.span();
                 write!(f, "{table}")?;
                 if let Some(UpdateTableFromKind::BeforeSet(from)) = from {
-                    write!(f, " FROM {from}")?;
+                    let from_span = from.span();
+                    write_span_gap_lines(f, &mut last_span, from_span)?;
+                    last_span = from_span;
+                    write!(f, "FROM {from}")?;
                 }
                 if !assignments.is_empty() {
-                    write!(f, " SET {}", display_comma_separated(assignments))?;
+                    let assign_span = assignments.first().unwrap().span();
+                    write_span_gap_lines(f, &mut last_span, assign_span)?;
+                    last_span.end.column += 3;
+                    write!(
+                        f,
+                        "SET{}",
+                        display_comma_separated_with_newlines(assignments, last_span)
+                    )?;
+                    last_span = assignments.last().unwrap().span();
                 }
                 if let Some(UpdateTableFromKind::AfterSet(from)) = from {
-                    write!(f, " FROM {from}")?;
+                    write_span_gap_lines(f, &mut last_span, from.span())?;
+                    last_span = from.span();
+                    write!(f, "FROM {from}")?;
                 }
                 if let Some(selection) = selection {
-                    write!(f, " WHERE {selection}")?;
+                    write_span_gap_lines(f, &mut last_span, selection.span())?;
+                    last_span = selection.span();
+                    write!(f, "WHERE {selection}")?;
                 }
                 if let Some(returning) = returning {
-                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                    let returning_span = returning.first().unwrap().span();
+                    write_span_gap_lines(f, &mut last_span, returning_span)?;
+                    last_span.end = returning_span.start;
+                    write!(
+                        f,
+                        "RETURNING{}",
+                        display_comma_separated_with_newlines(returning, last_span)
+                    )?;
                 }
                 Ok(())
             }
@@ -5420,6 +5554,7 @@ impl fmt::Display for GrantObjects {
 pub struct Assignment {
     pub target: AssignmentTarget,
     pub value: Expr,
+    pub span: Span,
 }
 
 impl fmt::Display for Assignment {

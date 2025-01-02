@@ -297,25 +297,30 @@ fn parse_update() {
     match verified_stmt(sql) {
         Statement::Update {
             table,
-            assignments,
+            mut assignments,
             selection,
             ..
         } => {
             assert_eq!(table.to_string(), "t".to_string());
+            // remove the span from the assignments before comparison
+            assignments.iter_mut().for_each(|a| a.span = Span::empty());
             assert_eq!(
                 assignments,
                 vec![
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName(vec!["a".into()])),
                         value: Expr::Value(number("1")),
+                        span: Span::empty(),
                     },
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName(vec!["b".into()])),
                         value: Expr::Value(number("2")),
+                        span: Span::empty(),
                     },
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName(vec!["c".into()])),
                         value: Expr::Value(number("3")),
+                        span: Span::empty(),
                     },
                 ]
             );
@@ -354,7 +359,7 @@ fn parse_update_set_from() {
         Box::new(MsSqlDialect {}),
         Box::new(SQLiteDialect {}),
     ]);
-    let stmt = dialects.verified_stmt(sql);
+    let stmt = dialects.verified_stmt_no_span(sql);
     assert_eq!(
         stmt,
         Statement::Update {
@@ -363,6 +368,7 @@ fn parse_update_set_from() {
                 joins: vec![],
             },
             assignments: vec![Assignment {
+                span: Span::empty(),
                 target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("name")])),
                 value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
             }],
@@ -439,7 +445,7 @@ fn parse_update_set_from() {
 #[test]
 fn parse_update_with_table_alias() {
     let sql = "UPDATE users AS u SET u.username = 'new_user' WHERE u.username = 'old_user'";
-    match verified_stmt(sql) {
+    match verified_stmt_no_span(sql) {
         Statement::Update {
             table,
             assignments,
@@ -470,6 +476,7 @@ fn parse_update_with_table_alias() {
             );
             assert_eq!(
                 vec![Assignment {
+                    span: Span::empty(),
                     target: AssignmentTarget::ColumnName(ObjectName(vec![
                         Ident::new("u"),
                         Ident::new("username")
@@ -8529,7 +8536,10 @@ fn test_revoke() {
 fn parse_merge() {
     let sql = "MERGE INTO s.bar AS dest USING (SELECT * FROM s.foo) AS stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
     let sql_no_into = "MERGE s.bar AS dest USING (SELECT * FROM s.foo) AS stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
-    match (verified_stmt(sql), verified_stmt(sql_no_into)) {
+    match (
+        verified_stmt_no_span(sql),
+        verified_stmt_no_span(sql_no_into),
+    ) {
         (
             Statement::Merge {
                 into,
@@ -8698,6 +8708,7 @@ fn parse_merge() {
                         action: MergeAction::Update {
                             assignments: vec![
                                 Assignment {
+                                    span: Span::empty(),
                                     target: AssignmentTarget::ColumnName(ObjectName(vec![
                                         Ident::new("dest"),
                                         Ident::new("F")
@@ -8708,6 +8719,7 @@ fn parse_merge() {
                                     ]),
                                 },
                                 Assignment {
+                                    span: Span::empty(),
                                     target: AssignmentTarget::ColumnName(ObjectName(vec![
                                         Ident::new("dest"),
                                         Ident::new("G")
@@ -8990,6 +9002,10 @@ fn one_statement_parses_to(sql: &str, canonical: &str) -> Statement {
 
 fn verified_stmt(query: &str) -> Statement {
     all_dialects().verified_stmt(query)
+}
+
+fn verified_stmt_no_span(query: &str) -> Statement {
+    all_dialects().verified_stmt_no_span(query)
 }
 
 fn verified_query(query: &str) -> Query {

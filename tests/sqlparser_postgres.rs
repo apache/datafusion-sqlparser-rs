@@ -1774,7 +1774,7 @@ fn parse_prepare() {
 
 #[test]
 fn parse_pg_on_conflict() {
-    let stmt = pg_and_generic().verified_stmt(
+    let stmt = pg_and_generic().verified_stmt_no_span(
         "INSERT INTO distributors (did, dname) \
         VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc') \
         ON CONFLICT(did) \
@@ -1793,6 +1793,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
+                        span: Span::empty(),
                         target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
                     },],
@@ -1804,7 +1805,7 @@ fn parse_pg_on_conflict() {
         _ => unreachable!(),
     };
 
-    let stmt = pg_and_generic().verified_stmt(
+    let stmt = pg_and_generic().verified_stmt_no_span(
         "INSERT INTO distributors (did, dname, area) \
         VALUES (5, 'Gizmo Transglobal', 'Mars'), (6, 'Associated Computing, Inc', 'Venus') \
         ON CONFLICT(did, area) \
@@ -1824,6 +1825,7 @@ fn parse_pg_on_conflict() {
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
                         Assignment {
+                            span: Span::empty(),
                             target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                             value: Expr::CompoundIdentifier(vec![
                                 "EXCLUDED".into(),
@@ -1831,6 +1833,7 @@ fn parse_pg_on_conflict() {
                             ])
                         },
                         Assignment {
+                            span: Span::empty(),
                             target: AssignmentTarget::ColumnName(ObjectName(vec!["area".into()])),
                             value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
                         },
@@ -1862,7 +1865,7 @@ fn parse_pg_on_conflict() {
         _ => unreachable!(),
     };
 
-    let stmt = pg_and_generic().verified_stmt(
+    let stmt = pg_and_generic().verified_stmt_no_span(
         "INSERT INTO distributors (did, dname, dsize) \
         VALUES (5, 'Gizmo Transglobal', 1000), (6, 'Associated Computing, Inc', 1010) \
         ON CONFLICT(did) \
@@ -1881,6 +1884,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
+                        span: Span::empty(),
                         target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
@@ -1900,7 +1904,7 @@ fn parse_pg_on_conflict() {
         _ => unreachable!(),
     };
 
-    let stmt = pg_and_generic().verified_stmt(
+    let stmt = pg_and_generic().verified_stmt_no_span(
         "INSERT INTO distributors (did, dname, dsize) \
         VALUES (5, 'Gizmo Transglobal', 1000), (6, 'Associated Computing, Inc', 1010) \
         ON CONFLICT ON CONSTRAINT distributors_did_pkey \
@@ -1919,6 +1923,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
+                        span: Span::empty(),
                         target: AssignmentTarget::ColumnName(ObjectName(vec!["dname".into()])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
@@ -3728,16 +3733,8 @@ fn parse_delimited_identifiers() {
 
 #[test]
 fn parse_update_has_keyword() {
-    pg().one_statement_parses_to(
-        r#"UPDATE test SET name=$1,
-                value=$2,
-                where=$3,
-                create=$4,
-                is_default=$5,
-                classification=$6,
-                sort=$7
-                WHERE id=$8"#,
-        r#"UPDATE test SET name = $1, value = $2, where = $3, create = $4, is_default = $5, classification = $6, sort = $7 WHERE id = $8"#
+    pg().verified_stmt(
+        r#"UPDATE test SET name = $1, value = $2, where = $3, create = $4, is_default = $5, classification = $6, sort = $7 WHERE id = $8"#,
     );
 }
 

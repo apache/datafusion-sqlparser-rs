@@ -1624,16 +1624,18 @@ fn parse_merge() {
     let update_action = MergeAction::Update {
         assignments: vec![
             Assignment {
+                span: Span::empty(),
                 target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("a")])),
                 value: Expr::Value(number("1")),
             },
             Assignment {
+                span: Span::empty(),
                 target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("b")])),
                 value: Expr::Value(number("2")),
             },
         ],
     };
-    match bigquery_and_generic().verified_stmt(sql) {
+    match bigquery_and_generic().verified_stmt_no_span(sql) {
         Statement::Merge {
             into,
             table,

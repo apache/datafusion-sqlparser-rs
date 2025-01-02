@@ -2368,7 +2368,7 @@ pub enum Statement {
         identity: Option<TruncateIdentityOption>,
         /// Postgres-specific option
         /// [ CASCADE | RESTRICT ]
-        cascade: Option<TruncateCascadeOption>,
+        cascade: Option<CascadeOption>,
         /// ClickHouse-specific option
         /// [ ON CLUSTER cluster_name ]
         ///
@@ -2509,6 +2509,8 @@ pub enum Statement {
         /// if not None, has Clickhouse `TO` clause, specify the table into which to insert results
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/view#materialized-view>
         to: Option<ObjectName>,
+        /// MySQL: Optional parameters for the view algorithm, definer, and security context
+        params: Option<CreateViewParams>,
     },
     /// ```sql
     /// CREATE TABLE
@@ -3159,7 +3161,7 @@ pub enum Statement {
     Grant {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
+        grantees: Vec<Grantee>,
         with_grant_option: bool,
         granted_by: Option<Ident>,
     },
@@ -3169,9 +3171,9 @@ pub enum Statement {
     Revoke {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
+        grantees: Vec<Grantee>,
         granted_by: Option<Ident>,
-        cascade: bool,
+        cascade: Option<CascadeOption>,
     },
     /// ```sql
     /// DEALLOCATE [ PREPARE ] { name | ALL }
@@ -3601,8 +3603,8 @@ impl fmt::Display for Statement {
                 }
                 if let Some(cascade) = cascade {
                     match cascade {
-                        TruncateCascadeOption::Cascade => write!(f, " CASCADE")?,
-                        TruncateCascadeOption::Restrict => write!(f, " RESTRICT")?,
+                        CascadeOption::Cascade => write!(f, " CASCADE")?,
+                        CascadeOption::Restrict => write!(f, " RESTRICT")?,
                     }
                 }
 
@@ -3931,11 +3933,19 @@ impl fmt::Display for Statement {
                 if_not_exists,
                 temporary,
                 to,
+                params,
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{materialized}{temporary}VIEW {if_not_exists}{name}{to}",
+                    "CREATE {or_replace}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                )?;
+                if let Some(params) = params {
+                    params.fmt(f)?;
+                }
+                write!(
+                    f,
+                    "{materialized}{temporary}VIEW {if_not_exists}{name}{to}",
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
                     name = name,
                     temporary = if *temporary { "TEMPORARY " } else { "" },
@@ -4671,7 +4681,9 @@ impl fmt::Display for Statement {
                 if let Some(grantor) = granted_by {
                     write!(f, " GRANTED BY {grantor}")?;
                 }
-                write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
+                if let Some(cascade) = cascade {
+                    write!(f, " {}", cascade)?;
+                }
                 Ok(())
             }
             Statement::Deallocate { name, prepare } => write!(
@@ -5071,14 +5083,23 @@ pub enum TruncateIdentityOption {
     Continue,
 }
 
-/// PostgreSQL cascade option for TRUNCATE table
+/// Cascade/restrict option for Postgres TRUNCATE table, MySQL GRANT/REVOKE, etc.
 /// [ CASCADE | RESTRICT ]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum TruncateCascadeOption {
+pub enum CascadeOption {
     Cascade,
     Restrict,
+}
+
+impl Display for CascadeOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CascadeOption::Cascade => write!(f, "CASCADE"),
+            CascadeOption::Restrict => write!(f, "RESTRICT"),
+        }
+    }
 }
 
 /// Transaction started with [ TRANSACTION | WORK ]
@@ -5408,6 +5429,28 @@ impl fmt::Display for GrantObjects {
                     "ALL TABLES IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
+            }
+        }
+    }
+}
+
+/// Users/roles designated in a GRANT/REVOKE
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Grantee {
+    /// A bare identifier
+    Ident(Ident),
+    /// A MySQL user/host pair such as 'root'@'%'
+    UserHost { user: Ident, host: Ident },
+}
+
+impl fmt::Display for Grantee {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Grantee::Ident(ident) => ident.fmt(f),
+            Grantee::UserHost { user, host } => {
+                write!(f, "{}@{}", user, host)
             }
         }
     }
@@ -7363,12 +7406,81 @@ pub enum MySQLColumnPosition {
 impl Display for MySQLColumnPosition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MySQLColumnPosition::First => Ok(write!(f, "FIRST")?),
+            MySQLColumnPosition::First => write!(f, "FIRST"),
             MySQLColumnPosition::After(ident) => {
                 let column_name = &ident.value;
-                Ok(write!(f, "AFTER {column_name}")?)
+                write!(f, "AFTER {column_name}")
             }
         }
+    }
+}
+
+/// MySQL `CREATE VIEW` algorithm parameter: [ALGORITHM = {UNDEFINED | MERGE | TEMPTABLE}]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateViewAlgorithm {
+    Undefined,
+    Merge,
+    TempTable,
+}
+
+impl Display for CreateViewAlgorithm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreateViewAlgorithm::Undefined => write!(f, "UNDEFINED"),
+            CreateViewAlgorithm::Merge => write!(f, "MERGE"),
+            CreateViewAlgorithm::TempTable => write!(f, "TEMPTABLE"),
+        }
+    }
+}
+/// MySQL `CREATE VIEW` security parameter: [SQL SECURITY { DEFINER | INVOKER }]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateViewSecurity {
+    Definer,
+    Invoker,
+}
+
+impl Display for CreateViewSecurity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreateViewSecurity::Definer => write!(f, "DEFINER"),
+            CreateViewSecurity::Invoker => write!(f, "INVOKER"),
+        }
+    }
+}
+
+/// [MySQL] `CREATE VIEW` additional parameters
+///
+/// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/create-view.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateViewParams {
+    pub algorithm: Option<CreateViewAlgorithm>,
+    pub definer: Option<Grantee>,
+    pub security: Option<CreateViewSecurity>,
+}
+
+impl Display for CreateViewParams {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let CreateViewParams {
+            algorithm,
+            definer,
+            security,
+        } = self;
+        if let Some(algorithm) = algorithm {
+            write!(f, "ALGORITHM = {algorithm} ")?;
+        }
+        if let Some(definers) = definer {
+            write!(f, "DEFINER = {definers} ")?;
+        }
+        if let Some(security) = security {
+            write!(f, "SQL SECURITY {security} ")?;
+        }
+        Ok(())
     }
 }
 

@@ -805,13 +805,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            cascade = if self.parse_keyword(Keyword::CASCADE) {
-                Some(TruncateCascadeOption::Cascade)
-            } else if self.parse_keyword(Keyword::RESTRICT) {
-                Some(TruncateCascadeOption::Restrict)
-            } else {
-                None
-            };
+            cascade = self.parse_cascade_option();
         };
 
         let on_cluster = self.parse_optional_on_cluster()?;
@@ -825,6 +819,16 @@ impl<'a> Parser<'a> {
             cascade,
             on_cluster,
         })
+    }
+
+    fn parse_cascade_option(&mut self) -> Option<CascadeOption> {
+        if self.parse_keyword(Keyword::CASCADE) {
+            Some(CascadeOption::Cascade)
+        } else if self.parse_keyword(Keyword::RESTRICT) {
+            Some(CascadeOption::Restrict)
+        } else {
+            None
+        }
     }
 
     pub fn parse_attach_duckdb_database_options(
@@ -4132,11 +4136,12 @@ impl<'a> Parser<'a> {
             .is_some();
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
+        let create_view_params = self.parse_create_view_params()?;
         if self.parse_keyword(Keyword::TABLE) {
             self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
-            self.parse_create_view(or_replace, temporary)
+            self.parse_create_view(or_replace, temporary, create_view_params)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy()
         } else if self.parse_keyword(Keyword::EXTERNAL) {
@@ -5024,6 +5029,7 @@ impl<'a> Parser<'a> {
         &mut self,
         or_replace: bool,
         temporary: bool,
+        create_view_params: Option<CreateViewParams>,
     ) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword_is(Keyword::VIEW)?;
@@ -5101,7 +5107,66 @@ impl<'a> Parser<'a> {
             if_not_exists,
             temporary,
             to,
+            params: create_view_params,
         })
+    }
+
+    /// Parse optional parameters for the `CREATE VIEW` statement supported by [MySQL].
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/create-view.html
+    fn parse_create_view_params(&mut self) -> Result<Option<CreateViewParams>, ParserError> {
+        let algorithm = if self.parse_keyword(Keyword::ALGORITHM) {
+            self.expect_token(&Token::Eq)?;
+            Some(
+                match self.expect_one_of_keywords(&[
+                    Keyword::UNDEFINED,
+                    Keyword::MERGE,
+                    Keyword::TEMPTABLE,
+                ])? {
+                    Keyword::UNDEFINED => CreateViewAlgorithm::Undefined,
+                    Keyword::MERGE => CreateViewAlgorithm::Merge,
+                    Keyword::TEMPTABLE => CreateViewAlgorithm::TempTable,
+                    _ => {
+                        self.prev_token();
+                        let found = self.next_token();
+                        return self
+                            .expected("UNDEFINED or MERGE or TEMPTABLE after ALGORITHM =", found);
+                    }
+                },
+            )
+        } else {
+            None
+        };
+        let definer = if self.parse_keyword(Keyword::DEFINER) {
+            self.expect_token(&Token::Eq)?;
+            Some(self.parse_grantee()?)
+        } else {
+            None
+        };
+        let security = if self.parse_keywords(&[Keyword::SQL, Keyword::SECURITY]) {
+            Some(
+                match self.expect_one_of_keywords(&[Keyword::DEFINER, Keyword::INVOKER])? {
+                    Keyword::DEFINER => CreateViewSecurity::Definer,
+                    Keyword::INVOKER => CreateViewSecurity::Invoker,
+                    _ => {
+                        self.prev_token();
+                        let found = self.next_token();
+                        return self.expected("DEFINER or INVOKER after SQL SECURITY", found);
+                    }
+                },
+            )
+        } else {
+            None
+        };
+        if algorithm.is_some() || definer.is_some() || security.is_some() {
+            Ok(Some(CreateViewParams {
+                algorithm,
+                definer,
+                security,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn parse_create_role(&mut self) -> Result<Statement, ParserError> {
@@ -8857,13 +8922,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a possibly qualified, possibly quoted identifier, e.g.
-    /// `foo` or `myschema."table"
-    ///
-    /// The `in_table_clause` parameter indicates whether the object name is a table in a FROM, JOIN,
-    /// or similar table clause. Currently, this is used only to support unquoted hyphenated identifiers
-    /// in this context on BigQuery.
-    pub fn parse_object_name(&mut self, in_table_clause: bool) -> Result<ObjectName, ParserError> {
+    /// Parse a possibly qualified, possibly quoted identifier, optionally allowing for wildcards,
+    /// e.g. *, *.*, `foo`.*, or "foo"."bar"
+    fn parse_object_name_with_wildcards(
+        &mut self,
+        in_table_clause: bool,
+        allow_wildcards: bool,
+    ) -> Result<ObjectName, ParserError> {
         let mut idents = vec![];
 
         if dialect_of!(self is BigQueryDialect) && in_table_clause {
@@ -8876,19 +8941,41 @@ impl<'a> Parser<'a> {
             }
         } else {
             loop {
-                if self.dialect.supports_object_name_double_dot_notation()
-                    && idents.len() == 1
-                    && self.consume_token(&Token::Period)
-                {
-                    // Empty string here means default schema
-                    idents.push(Ident::new(""));
-                }
-                idents.push(self.parse_identifier()?);
+                let ident = if allow_wildcards && self.peek_token().token == Token::Mul {
+                    let span = self.next_token().span;
+                    Ident {
+                        value: Token::Mul.to_string(),
+                        quote_style: None,
+                        span,
+                    }
+                } else {
+                    if self.dialect.supports_object_name_double_dot_notation()
+                        && idents.len() == 1
+                        && self.consume_token(&Token::Period)
+                    {
+                        // Empty string here means default schema
+                        idents.push(Ident::new(""));
+                    }
+                    self.parse_identifier()?
+                };
+                idents.push(ident);
                 if !self.consume_token(&Token::Period) {
                     break;
                 }
             }
         }
+        Ok(ObjectName(idents))
+    }
+
+    /// Parse a possibly qualified, possibly quoted identifier, e.g.
+    /// `foo` or `myschema."table"
+    ///
+    /// The `in_table_clause` parameter indicates whether the object name is a table in a FROM, JOIN,
+    /// or similar table clause. Currently, this is used only to support unquoted hyphenated identifiers
+    /// in this context on BigQuery.
+    pub fn parse_object_name(&mut self, in_table_clause: bool) -> Result<ObjectName, ParserError> {
+        let ObjectName(mut idents) =
+            self.parse_object_name_with_wildcards(in_table_clause, false)?;
 
         // BigQuery accepts any number of quoted identifiers of a table name.
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_identifiers
@@ -11611,7 +11698,7 @@ impl<'a> Parser<'a> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::TO)?;
-        let grantees = self.parse_comma_separated(|p| p.parse_identifier())?;
+        let grantees = self.parse_comma_separated(|p| p.parse_grantee())?;
 
         let with_grant_option =
             self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
@@ -11693,7 +11780,8 @@ impl<'a> Parser<'a> {
         } else {
             let object_type =
                 self.parse_one_of_keywords(&[Keyword::SEQUENCE, Keyword::SCHEMA, Keyword::TABLE]);
-            let objects = self.parse_comma_separated(|p| p.parse_object_name(false));
+            let objects =
+                self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true));
             match object_type {
                 Some(Keyword::SCHEMA) => GrantObjects::Schemas(objects?),
                 Some(Keyword::SEQUENCE) => GrantObjects::Sequences(objects?),
@@ -11737,23 +11825,28 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_grantee(&mut self) -> Result<Grantee, ParserError> {
+        let user = self.parse_identifier()?;
+        if self.dialect.supports_user_host_grantee() && self.consume_token(&Token::AtSign) {
+            let host = self.parse_identifier()?;
+            Ok(Grantee::UserHost { user, host })
+        } else {
+            Ok(Grantee::Ident(user))
+        }
+    }
+
     /// Parse a REVOKE statement
     pub fn parse_revoke(&mut self) -> Result<Statement, ParserError> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::FROM)?;
-        let grantees = self.parse_comma_separated(|p| p.parse_identifier())?;
+        let grantees = self.parse_comma_separated(|p| p.parse_grantee())?;
 
         let granted_by = self
             .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
             .then(|| self.parse_identifier().unwrap());
 
-        let loc = self.peek_token().span.start;
-        let cascade = self.parse_keyword(Keyword::CASCADE);
-        let restrict = self.parse_keyword(Keyword::RESTRICT);
-        if cascade && restrict {
-            return parser_err!("Cannot specify both CASCADE and RESTRICT in REVOKE", loc);
-        }
+        let cascade = self.parse_cascade_option();
 
         Ok(Statement::Revoke {
             privileges,

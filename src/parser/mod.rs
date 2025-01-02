@@ -12052,10 +12052,17 @@ impl<'a> Parser<'a> {
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement
     pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
+        let start = self.peek_token().span.start;
         let target = self.parse_assignment_target()?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_expr()?;
-        Ok(Assignment { target, value })
+        self.prev_token();
+        let end = self.next_token().span.end;
+        Ok(Assignment {
+            target,
+            value,
+            span: Span::new(start, end),
+        })
     }
 
     /// Parse the left-hand side of an assignment, used in an UPDATE statement

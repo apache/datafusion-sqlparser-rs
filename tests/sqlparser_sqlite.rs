@@ -30,7 +30,7 @@ use sqlparser::ast::Value::Placeholder;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Token;
+use sqlparser::tokenizer::{Span, Token};
 
 #[test]
 fn pragma_no_value() {
@@ -464,7 +464,7 @@ fn parse_attach_database() {
 fn parse_update_tuple_row_values() {
     // See https://github.com/sqlparser-rs/sqlparser-rs/issues/1311
     assert_eq!(
-        sqlite().verified_stmt("UPDATE x SET (a, b) = (1, 2)"),
+        sqlite().verified_stmt_no_span("UPDATE x SET (a, b) = (1, 2)"),
         Statement::Update {
             or: None,
             assignments: vec![Assignment {
@@ -475,7 +475,8 @@ fn parse_update_tuple_row_values() {
                 value: Expr::Tuple(vec![
                     Expr::Value(Value::Number("1".parse().unwrap(), false)),
                     Expr::Value(Value::Number("2".parse().unwrap(), false))
-                ])
+                ]),
+                span: Span::empty(),
             }],
             selection: None,
             table: TableWithJoins {

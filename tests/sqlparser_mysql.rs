@@ -1826,40 +1826,50 @@ fn parse_insert_with_on_duplicate_update() {
                 })),
                 source
             );
+            let Some(OnInsert::DuplicateKeyUpdate(mut assignments)) = on else {
+                unreachable!("expected duplicate key update");
+            };
+            // remove the span from the assignments before comparison
+            assignments.iter_mut().for_each(|a| a.span = Span::empty());
             assert_eq!(
-                Some(OnInsert::DuplicateKeyUpdate(vec![
+                vec![
                     Assignment {
+                        span: Span::empty(),
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "description".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("description"))]),
                     },
                     Assignment {
+                        span: Span::empty(),
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "perm_create".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_create"))]),
                     },
                     Assignment {
+                        span: Span::empty(),
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "perm_read".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_read"))]),
                     },
                     Assignment {
+                        span: Span::empty(),
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "perm_update".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_update"))]),
                     },
                     Assignment {
+                        span: Span::empty(),
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "perm_delete".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_delete"))]),
                     },
-                ])),
-                on
+                ],
+                assignments
             );
         }
         _ => unreachable!(),
@@ -1986,7 +1996,7 @@ fn parse_update_with_joins() {
     match mysql().verified_stmt(sql) {
         Statement::Update {
             table,
-            assignments,
+            mut assignments,
             from: _from,
             selection,
             returning,
@@ -2039,8 +2049,11 @@ fn parse_update_with_joins() {
                 },
                 table
             );
+            // remove the span from the assignments before comparison
+            assignments.iter_mut().for_each(|a| a.span = Span::empty());
             assert_eq!(
                 vec![Assignment {
+                    span: Span::empty(),
                     target: AssignmentTarget::ColumnName(ObjectName(vec![
                         Ident::new("o"),
                         Ident::new("completed")

@@ -1149,9 +1149,11 @@ impl Spanned for Insert {
             table: _, // bool
             on,
             returning,
-            replace_into: _, // bool
-            priority: _,     // todo, mysql specific
-            insert_alias: _, // todo, mysql specific
+            replace_into: _,  // bool
+            priority: _,      // todo, mysql specific
+            insert_alias: _,  // todo, mysql specific
+            settings: _,      // todo, clickhouse specific
+            format_clause: _, // todo, clickhouse specific
         } = self;
 
         union_spans(

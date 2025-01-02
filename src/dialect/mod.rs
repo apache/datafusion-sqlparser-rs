@@ -75,6 +75,15 @@ macro_rules! dialect_of {
     };
 }
 
+// Similar to above, but for applying directly against an instance of dialect
+// instead of a struct member named dialect. This avoids lifetime issues when
+// mixing match guards and token references.
+macro_rules! dialect_is {
+    ($dialect:ident is $($dialect_type:ty)|+) => {
+        ($($dialect.is::<$dialect_type>())||+)
+    }
+}
+
 /// Encapsulates the differences between SQL implementations.
 ///
 /// # SQL Dialects
@@ -629,6 +638,12 @@ pub trait Dialect: Debug + Any {
 
     /// Returns true if this dialect allows the `EXTRACT` function to use single quotes in the part being extracted.
     fn allow_extract_single_quotes(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect allows dollar placeholders
+    /// e.g. `SELECT $var` (SQLite)
+    fn supports_dollar_placeholder(&self) -> bool {
         false
     }
 

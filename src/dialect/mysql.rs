@@ -117,7 +117,7 @@ fn parse_lock_tables(parser: &mut Parser) -> Result<Statement, ParserError> {
 
 // tbl_name [[AS] alias] lock_type
 fn parse_lock_table(parser: &mut Parser) -> Result<LockTable, ParserError> {
-    let table = parser.parse_identifier(false)?;
+    let table = parser.parse_identifier()?;
     let alias =
         parser.parse_optional_alias(&[Keyword::READ, Keyword::WRITE, Keyword::LOW_PRIORITY])?;
     let lock_type = parse_lock_tables_type(parser)?;

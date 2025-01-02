@@ -51,13 +51,13 @@ impl Parser<'_> {
     ///
     /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-alterpolicy.html)
     pub fn parse_alter_policy(&mut self) -> Result<Statement, ParserError> {
-        let name = self.parse_identifier(false)?;
-        self.expect_keyword(Keyword::ON)?;
+        let name = self.parse_identifier()?;
+        self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
 
         if self.parse_keyword(Keyword::RENAME) {
-            self.expect_keyword(Keyword::TO)?;
-            let new_name = self.parse_identifier(false)?;
+            self.expect_keyword_is(Keyword::TO)?;
+            let new_name = self.parse_identifier()?;
             Ok(Statement::AlterPolicy {
                 name,
                 table_name,
@@ -100,17 +100,17 @@ impl Parser<'_> {
     }
 
     fn parse_mssql_alter_role(&mut self) -> Result<Statement, ParserError> {
-        let role_name = self.parse_identifier(false)?;
+        let role_name = self.parse_identifier()?;
 
         let operation = if self.parse_keywords(&[Keyword::ADD, Keyword::MEMBER]) {
-            let member_name = self.parse_identifier(false)?;
+            let member_name = self.parse_identifier()?;
             AlterRoleOperation::AddMember { member_name }
         } else if self.parse_keywords(&[Keyword::DROP, Keyword::MEMBER]) {
-            let member_name = self.parse_identifier(false)?;
+            let member_name = self.parse_identifier()?;
             AlterRoleOperation::DropMember { member_name }
         } else if self.parse_keywords(&[Keyword::WITH, Keyword::NAME]) {
             if self.consume_token(&Token::Eq) {
-                let role_name = self.parse_identifier(false)?;
+                let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
                 return self.expected("= after WITH NAME ", self.peek_token());
@@ -126,7 +126,7 @@ impl Parser<'_> {
     }
 
     fn parse_pg_alter_role(&mut self) -> Result<Statement, ParserError> {
-        let role_name = self.parse_identifier(false)?;
+        let role_name = self.parse_identifier()?;
 
         // [ IN DATABASE _`database_name`_ ]
         let in_database = if self.parse_keywords(&[Keyword::IN, Keyword::DATABASE]) {
@@ -137,7 +137,7 @@ impl Parser<'_> {
 
         let operation = if self.parse_keyword(Keyword::RENAME) {
             if self.parse_keyword(Keyword::TO) {
-                let role_name = self.parse_identifier(false)?;
+                let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
                 return self.expected("TO after RENAME", self.peek_token());
@@ -232,7 +232,7 @@ impl Parser<'_> {
             Some(Keyword::BYPASSRLS) => RoleOption::BypassRLS(true),
             Some(Keyword::NOBYPASSRLS) => RoleOption::BypassRLS(false),
             Some(Keyword::CONNECTION) => {
-                self.expect_keyword(Keyword::LIMIT)?;
+                self.expect_keyword_is(Keyword::LIMIT)?;
                 RoleOption::ConnectionLimit(Expr::Value(self.parse_number_value()?))
             }
             Some(Keyword::CREATEDB) => RoleOption::CreateDB(true),
@@ -256,7 +256,7 @@ impl Parser<'_> {
             Some(Keyword::SUPERUSER) => RoleOption::SuperUser(true),
             Some(Keyword::NOSUPERUSER) => RoleOption::SuperUser(false),
             Some(Keyword::VALID) => {
-                self.expect_keyword(Keyword::UNTIL)?;
+                self.expect_keyword_is(Keyword::UNTIL)?;
                 RoleOption::ValidUntil(Expr::Value(self.parse_value()?))
             }
             _ => self.expected("option", self.peek_token())?,

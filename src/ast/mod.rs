@@ -72,8 +72,8 @@ pub use self::query::{
     TableAlias, TableAliasColumnDef, TableFactor, TableFunctionArgs, TableSample,
     TableSampleBucket, TableSampleKind, TableSampleMethod, TableSampleModifier,
     TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier, TableSampleUnit, TableVersion,
-    TableWithJoins, Top, TopQuantity, ValueTableMode, Values, WildcardAdditionalOptions, With,
-    WithFill,
+    TableWithJoins, Top, TopQuantity, UpdateTableFromKind, ValueTableMode, Values,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 pub use self::trigger::{
@@ -2473,7 +2473,7 @@ pub enum Statement {
         /// Column assignments
         assignments: Vec<Assignment>,
         /// Table which provide value to be set
-        from: Option<TableWithJoins>,
+        from: Option<UpdateTableFromKind>,
         /// WHERE
         selection: Option<Expr>,
         /// RETURNING
@@ -2755,6 +2755,18 @@ pub enum Statement {
         cascade: bool,
         schema: Option<Ident>,
         version: Option<Ident>,
+    },
+    /// ```sql
+    /// DROP EXTENSION [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    /// https://www.postgresql.org/docs/current/sql-dropextension.html
+    /// ```
+    DropExtension {
+        names: Vec<Ident>,
+        if_exists: bool,
+        /// `CASCADE` or `RESTRICT`
+        cascade_or_restrict: Option<ReferentialAction>,
     },
     /// ```sql
     /// FETCH
@@ -3403,6 +3415,13 @@ pub enum Statement {
         partitioned: Option<Vec<Expr>>,
         table_format: Option<HiveLoadDataFormat>,
     },
+    /// ```sql
+    /// Rename TABLE tbl_name TO new_tbl_name[, tbl_name2 TO new_tbl_name2] ...
+    /// ```
+    /// Renames one or more tables
+    ///
+    /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
+    RenameTable(Vec<RenameTable>),
 }
 
 impl fmt::Display for Statement {
@@ -3747,10 +3766,13 @@ impl fmt::Display for Statement {
                     write!(f, "{or} ")?;
                 }
                 write!(f, "{table}")?;
+                if let Some(UpdateTableFromKind::BeforeSet(from)) = from {
+                    write!(f, " FROM {from}")?;
+                }
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
-                if let Some(from) = from {
+                if let Some(UpdateTableFromKind::AfterSet(from)) = from {
                     write!(f, " FROM {from}")?;
                 }
                 if let Some(selection) = selection {
@@ -4034,6 +4056,21 @@ impl fmt::Display for Statement {
                     }
                 }
 
+                Ok(())
+            }
+            Statement::DropExtension {
+                names,
+                if_exists,
+                cascade_or_restrict,
+            } => {
+                write!(f, "DROP EXTENSION")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {}", display_comma_separated(names))?;
+                if let Some(cascade_or_restrict) = cascade_or_restrict {
+                    write!(f, " {cascade_or_restrict}")?;
+                }
                 Ok(())
             }
             Statement::CreateRole {
@@ -4951,6 +4988,9 @@ impl fmt::Display for Statement {
                     write!(f, ", '{payload}'")?;
                 }
                 Ok(())
+            }
+            Statement::RenameTable(rename_tables) => {
+                write!(f, "RENAME TABLE {}", display_comma_separated(rename_tables))
             }
         }
     }
@@ -7751,6 +7791,22 @@ impl Display for JsonNullClause {
             JsonNullClause::NullOnNull => write!(f, "NULL ON NULL"),
             JsonNullClause::AbsentOnNull => write!(f, "ABSENT ON NULL"),
         }
+    }
+}
+
+/// rename object definition
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RenameTable {
+    pub old_name: ObjectName,
+    pub new_name: ObjectName,
+}
+
+impl fmt::Display for RenameTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} TO {}", self.old_name, self.new_name)?;
+        Ok(())
     }
 }
 

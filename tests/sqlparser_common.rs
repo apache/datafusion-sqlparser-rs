@@ -366,7 +366,7 @@ fn parse_update_set_from() {
                 target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("name")])),
                 value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
             }],
-            from: Some(TableWithJoins {
+            from: Some(UpdateTableFromKind::AfterSet(TableWithJoins {
                 relation: TableFactor::Derived {
                     lateral: false,
                     subquery: Box::new(Query {
@@ -417,8 +417,8 @@ fn parse_update_set_from() {
                         columns: vec![],
                     })
                 },
-                joins: vec![],
-            }),
+                joins: vec![]
+            })),
             selection: Some(Expr::BinaryOp {
                 left: Box::new(Expr::CompoundIdentifier(vec![
                     Ident::new("t1"),
@@ -2965,6 +2965,113 @@ fn test_compound_expr() {
 }
 
 #[test]
+fn test_double_value() {
+    let dialects = all_dialects();
+    let test_cases = vec![
+        gen_number_case_with_sign("0."),
+        gen_number_case_with_sign("0.0"),
+        gen_number_case_with_sign("0000."),
+        gen_number_case_with_sign("0000.00"),
+        gen_number_case_with_sign(".0"),
+        gen_number_case_with_sign(".00"),
+        gen_number_case_with_sign("0e0"),
+        gen_number_case_with_sign("0e+0"),
+        gen_number_case_with_sign("0e-0"),
+        gen_number_case_with_sign("0.e-0"),
+        gen_number_case_with_sign("0.e+0"),
+        gen_number_case_with_sign(".0e-0"),
+        gen_number_case_with_sign(".0e+0"),
+        gen_number_case_with_sign("00.0e+0"),
+        gen_number_case_with_sign("00.0e-0"),
+    ];
+
+    for (input, expected) in test_cases {
+        for (i, expr) in input.iter().enumerate() {
+            if let Statement::Query(query) =
+                dialects.one_statement_parses_to(&format!("SELECT {}", expr), "")
+            {
+                if let SetExpr::Select(select) = *query.body {
+                    assert_eq!(expected[i], select.projection[0]);
+                } else {
+                    panic!("Expected a SELECT statement");
+                }
+            } else {
+                panic!("Expected a SELECT statement");
+            }
+        }
+    }
+}
+
+fn gen_number_case(value: &str) -> (Vec<String>, Vec<SelectItem>) {
+    let input = vec![
+        value.to_string(),
+        format!("{} col_alias", value),
+        format!("{} AS col_alias", value),
+    ];
+    let expected = vec![
+        SelectItem::UnnamedExpr(Expr::Value(number(value))),
+        SelectItem::ExprWithAlias {
+            expr: Expr::Value(number(value)),
+            alias: Ident::new("col_alias"),
+        },
+        SelectItem::ExprWithAlias {
+            expr: Expr::Value(number(value)),
+            alias: Ident::new("col_alias"),
+        },
+    ];
+    (input, expected)
+}
+
+fn gen_sign_number_case(value: &str, op: UnaryOperator) -> (Vec<String>, Vec<SelectItem>) {
+    match op {
+        UnaryOperator::Plus | UnaryOperator::Minus => {}
+        _ => panic!("Invalid sign"),
+    }
+
+    let input = vec![
+        format!("{}{}", op, value),
+        format!("{}{} col_alias", op, value),
+        format!("{}{} AS col_alias", op, value),
+    ];
+    let expected = vec![
+        SelectItem::UnnamedExpr(Expr::UnaryOp {
+            op,
+            expr: Box::new(Expr::Value(number(value))),
+        }),
+        SelectItem::ExprWithAlias {
+            expr: Expr::UnaryOp {
+                op,
+                expr: Box::new(Expr::Value(number(value))),
+            },
+            alias: Ident::new("col_alias"),
+        },
+        SelectItem::ExprWithAlias {
+            expr: Expr::UnaryOp {
+                op,
+                expr: Box::new(Expr::Value(number(value))),
+            },
+            alias: Ident::new("col_alias"),
+        },
+    ];
+    (input, expected)
+}
+
+/// generate the test cases for signed and unsigned numbers
+/// For example, given "0.0", the test cases will be:
+/// - "0.0"
+/// - "+0.0"
+/// - "-0.0"
+fn gen_number_case_with_sign(number: &str) -> (Vec<String>, Vec<SelectItem>) {
+    let (mut input, mut expected) = gen_number_case(number);
+    for op in [UnaryOperator::Plus, UnaryOperator::Minus] {
+        let (input_sign, expected_sign) = gen_sign_number_case(number, op);
+        input.extend(input_sign);
+        expected.extend(expected_sign);
+    }
+    (input, expected)
+}
+
+#[test]
 fn parse_negative_value() {
     let sql1 = "SELECT -1";
     one_statement_parses_to(sql1, "SELECT -1");
@@ -4024,6 +4131,65 @@ fn parse_alter_table() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_rename_table() {
+    match verified_stmt("RENAME TABLE test.test1 TO test_db.test2") {
+        Statement::RenameTable(rename_tables) => {
+            assert_eq!(
+                vec![RenameTable {
+                    old_name: ObjectName(vec![
+                        Ident::new("test".to_string()),
+                        Ident::new("test1".to_string()),
+                    ]),
+                    new_name: ObjectName(vec![
+                        Ident::new("test_db".to_string()),
+                        Ident::new("test2".to_string()),
+                    ]),
+                }],
+                rename_tables
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    match verified_stmt(
+        "RENAME TABLE old_table1 TO new_table1, old_table2 TO new_table2, old_table3 TO new_table3",
+    ) {
+        Statement::RenameTable(rename_tables) => {
+            assert_eq!(
+                vec![
+                    RenameTable {
+                        old_name: ObjectName(vec![Ident::new("old_table1".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table1".to_string())]),
+                    },
+                    RenameTable {
+                        old_name: ObjectName(vec![Ident::new("old_table2".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table2".to_string())]),
+                    },
+                    RenameTable {
+                        old_name: ObjectName(vec![Ident::new("old_table3".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table3".to_string())]),
+                    }
+                ],
+                rename_tables
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        parse_sql_statements("RENAME TABLE old_table TO new_table a").unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: a".to_string())
+    );
+
+    assert_eq!(
+        parse_sql_statements("RENAME TABLE1 old_table TO new_table a").unwrap_err(),
+        ParserError::ParserError(
+            "Expected: KEYWORD `TABLE` after RENAME, found: TABLE1".to_string()
+        )
+    );
 }
 
 #[test]
@@ -12510,6 +12676,41 @@ fn parse_composite_access_expr() {
     all_dialects_where(|d| d.supports_struct_literal()).verified_stmt(
         "SELECT * FROM t WHERE STRUCT(STRUCT(1 AS a, NULL AS b) AS c, NULL AS d).c.a IS NOT NULL",
     );
+    let support_struct = all_dialects_where(|d| d.supports_struct_literal());
+    let stmt = support_struct
+        .verified_only_select("SELECT STRUCT(STRUCT(1 AS a, NULL AS b) AS c, NULL AS d).c.a");
+    let expected = SelectItem::UnnamedExpr(Expr::CompoundFieldAccess {
+        root: Box::new(Expr::Struct {
+            values: vec![
+                Expr::Named {
+                    name: Ident::new("c"),
+                    expr: Box::new(Expr::Struct {
+                        values: vec![
+                            Expr::Named {
+                                name: Ident::new("a"),
+                                expr: Box::new(Expr::Value(Number("1".parse().unwrap(), false))),
+                            },
+                            Expr::Named {
+                                name: Ident::new("b"),
+                                expr: Box::new(Expr::Value(Value::Null)),
+                            },
+                        ],
+                        fields: vec![],
+                    }),
+                },
+                Expr::Named {
+                    name: Ident::new("d"),
+                    expr: Box::new(Expr::Value(Value::Null)),
+                },
+            ],
+            fields: vec![],
+        }),
+        access_chain: vec![
+            AccessExpr::Dot(Expr::Identifier(Ident::new("c"))),
+            AccessExpr::Dot(Expr::Identifier(Ident::new("a"))),
+        ],
+    });
+    assert_eq!(stmt.projection[0], expected);
 }
 
 #[test]
@@ -12617,9 +12818,21 @@ fn overflow() {
     let statement = statements.pop().unwrap();
     assert_eq!(statement.to_string(), sql);
 }
-
 #[test]
 fn parse_select_without_projection() {
     let dialects = all_dialects_where(|d| d.supports_empty_projections());
     dialects.verified_stmt("SELECT FROM users");
+}
+
+#[test]
+fn parse_update_from_before_select() {
+    all_dialects()
+    .verified_stmt("UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id");
+
+    let query =
+    "UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name FROM (SELECT name from t2) AS t2";
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: FROM".to_string()),
+        parse_sql_statements(query).unwrap_err()
+    );
 }

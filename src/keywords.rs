@@ -946,6 +946,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     // Reserved for Snowflake table sample
     Keyword::SAMPLE,
     Keyword::TABLESAMPLE,
+    Keyword::FROM,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

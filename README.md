@@ -240,10 +240,13 @@ You can run them with:
 ```
 git checkout main
 cd sqlparser_bench
-cargo bench
+cargo bench -- --save-baseline main
 git checkout <your branch>
-cargo bench
+cargo bench -- --baseline main
 ```
+
+By adding the `--save-baseline main` and `--baseline main` you can track the
+progress of your improvements as you continue working on the feature branch.
 
 ## Licensing
 

@@ -37,6 +37,14 @@ jobs:
         uses: ./.github/actions/setup-builder
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
+  benchmark-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust Toolchain
+        uses: ./.github/actions/setup-builder
+      - run: cd sqlparser_bench && cargo clippy --all-targets --all-features -- -D warnings
+
   compile:
     runs-on: ubuntu-latest
     steps:

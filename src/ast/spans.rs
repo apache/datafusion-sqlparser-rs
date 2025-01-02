@@ -32,8 +32,8 @@ use super::{
     OrderBy, OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
     RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
     SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableOptionsClustered, TableWithJoins, Use, Value, Values,
-    ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
+    TableConstraint, TableFactor, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
+    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -431,6 +431,7 @@ impl Spanned for Statement {
             Statement::DropSecret { .. } => Span::empty(),
             Statement::Declare { .. } => Span::empty(),
             Statement::CreateExtension { .. } => Span::empty(),
+            Statement::DropExtension { .. } => Span::empty(),
             Statement::Fetch { .. } => Span::empty(),
             Statement::Flush { .. } => Span::empty(),
             Statement::Discard { .. } => Span::empty(),
@@ -492,6 +493,7 @@ impl Spanned for Statement {
             Statement::NOTIFY { .. } => Span::empty(),
             Statement::LoadData { .. } => Span::empty(),
             Statement::UNLISTEN { .. } => Span::empty(),
+            Statement::RenameTable { .. } => Span::empty(),
         }
     }
 }
@@ -2104,6 +2106,15 @@ impl Spanned for SelectInto {
         } = self;
 
         name.span()
+    }
+}
+
+impl Spanned for UpdateTableFromKind {
+    fn span(&self) -> Span {
+        match self {
+            UpdateTableFromKind::BeforeSet(from) => from.span(),
+            UpdateTableFromKind::AfterSet(from) => from.span(),
+        }
     }
 }
 

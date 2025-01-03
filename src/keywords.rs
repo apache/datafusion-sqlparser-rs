@@ -615,6 +615,7 @@ define_keywords!(
     PROCEDURE,
     PROGRAM,
     PROJECTION,
+    PUBLIC,
     PURGE,
     QUALIFY,
     QUARTER,

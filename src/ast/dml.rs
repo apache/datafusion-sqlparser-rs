@@ -32,8 +32,8 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, ClusteredBy, CommentDef, Expr, FileFormat,
-    FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident,
+    display_comma_separated, display_separated, Assignment, ClusteredBy, CommentDef, Expr,
+    FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident,
     InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens,
     OrderByExpr, Query, RowAccessPolicy, SelectItem, SqlOption, SqliteOnConflict, TableEngine,
     TableWithJoins, Tag, WrappedCollection,
@@ -480,6 +480,9 @@ pub struct Insert {
     pub overwrite: bool,
     /// A SQL query that specifies what to insert
     pub source: Option<Box<Query>>,
+    /// MySQL `INSERT INTO ... SET`
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
+    pub assignments: Vec<Assignment>,
     /// partitioned insert (Hive)
     pub partitioned: Option<Vec<Expr>>,
     /// Columns defined after PARTITION
@@ -545,9 +548,10 @@ impl Display for Insert {
 
         if let Some(source) = &self.source {
             write!(f, "{source}")?;
-        }
-
-        if self.source.is_none() && self.columns.is_empty() {
+        } else if !self.assignments.is_empty() {
+            write!(f, "SET ")?;
+            write!(f, "{}", display_comma_separated(&self.assignments))?;
+        } else if self.source.is_none() && self.columns.is_empty() {
             write!(f, "DEFAULT VALUES")?;
         }
 

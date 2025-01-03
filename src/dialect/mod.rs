@@ -768,6 +768,13 @@ pub trait Dialect: Debug + Any {
     fn supports_table_sample_before_alias(&self) -> bool {
         false
     }
+
+    /// Returns true if this dialect supports the `INSERT INTO ... SET col1 = 1, ...` syntax.
+    ///
+    /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
+    fn supports_insert_set(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

@@ -3159,7 +3159,7 @@ pub enum Statement {
     Grant {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
+        grantees: Vec<Grantee>,
         with_grant_option: bool,
         granted_by: Option<Ident>,
     },
@@ -5364,6 +5364,66 @@ impl fmt::Display for Action {
         };
         Ok(())
     }
+}
+
+/// The principal that receives the privileges
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Grantee {
+    pub grantee_type: GranteesType,
+    pub name: Option<ObjectName>,
+}
+
+impl fmt::Display for Grantee {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.grantee_type {
+            GranteesType::Role => {
+                write!(f, "ROLE ")?;
+            }
+            GranteesType::Share => {
+                write!(f, "SHARE ")?;
+            }
+            GranteesType::User => {
+                write!(f, "USER ")?;
+            }
+            GranteesType::Group => {
+                write!(f, "GROUP ")?;
+            }
+            GranteesType::Public => {
+                write!(f, "PUBLIC ")?;
+            }
+            GranteesType::DatabaseRole => {
+                write!(f, "DATABASE ROLE ")?;
+            }
+            GranteesType::Application => {
+                write!(f, "APPLICATION ")?;
+            }
+            GranteesType::ApplicationRole => {
+                write!(f, "APPLICATION ROLE ")?;
+            }
+            GranteesType::None => (),
+        }
+        if let Some(ref name) = self.name {
+            write!(f, "{}", name)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum GranteesType {
+    Role,
+    Share,
+    User,
+    Group,
+    Public,
+    DatabaseRole,
+    Application,
+    ApplicationRole,
+    None,
 }
 
 /// Objects on which privileges are granted in a GRANT statement.

@@ -3011,4 +3011,6 @@ fn parse_ls_and_rm() {
         }
         _ => unreachable!(),
     };
+
+    snowflake().verified_stmt(r#"LIST @"STAGE_WITH_QUOTES""#);
 }

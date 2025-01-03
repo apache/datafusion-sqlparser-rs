@@ -11842,9 +11842,9 @@ impl<'a> Parser<'a> {
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
-            let (columns, partitioned, after_columns, source) =
+            let (columns, partitioned, after_columns, source, assignments) =
                 if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
-                    (vec![], None, vec![], None)
+                    (vec![], None, vec![], None, vec![])
                 } else {
                     let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
                         let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
@@ -11861,9 +11861,14 @@ impl<'a> Parser<'a> {
                         Default::default()
                     };
 
-                    let source = Some(self.parse_query()?);
+                    let (source, assignments) =
+                        if self.dialect.supports_insert_set() && self.parse_keyword(Keyword::SET) {
+                            (None, self.parse_comma_separated(Parser::parse_assignment)?)
+                        } else {
+                            (Some(self.parse_query()?), vec![])
+                        };
 
-                    (columns, partitioned, after_columns, source)
+                    (columns, partitioned, after_columns, source, assignments)
                 };
 
             let insert_alias = if dialect_of!(self is MySqlDialect | GenericDialect)
@@ -11943,6 +11948,7 @@ impl<'a> Parser<'a> {
                 columns,
                 after_columns,
                 source,
+                assignments,
                 table,
                 on,
                 returning,
@@ -14169,16 +14175,6 @@ mod tests {
         let sql = "REPLACE INTO t (a) VALUES (&a)";
 
         assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
-    }
-
-    #[test]
-    fn test_replace_into_set() {
-        // NOTE: This is actually valid MySQL syntax, REPLACE and INSERT,
-        // but the parser does not yet support it.
-        // https://dev.mysql.com/doc/refman/8.3/en/insert.html
-        let sql = "REPLACE INTO t SET a='1'";
-
-        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
     }
 
     #[test]

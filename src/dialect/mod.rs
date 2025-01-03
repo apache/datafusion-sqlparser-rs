@@ -512,6 +512,7 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),

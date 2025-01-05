@@ -2782,6 +2782,14 @@ fn parse_use() {
     snowflake().verified_stmt("USE SECONDARY ROLES ALL");
     snowflake().verified_stmt("USE SECONDARY ROLES NONE");
     snowflake().verified_stmt("USE SECONDARY ROLES r1, r2, r3");
+
+    // The following is not documented by Snowflake but still works:
+    snowflake().one_statement_parses_to("USE SECONDARY ROLE ALL", "USE SECONDARY ROLES ALL");
+    snowflake().one_statement_parses_to("USE SECONDARY ROLE NONE", "USE SECONDARY ROLES NONE");
+    snowflake().one_statement_parses_to(
+        "USE SECONDARY ROLE r1, r2, r3",
+        "USE SECONDARY ROLES r1, r2, r3",
+    );
 }
 
 #[test]

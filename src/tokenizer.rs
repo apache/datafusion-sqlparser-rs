@@ -1859,33 +1859,29 @@ impl<'a> Tokenizer<'a> {
 
         loop {
             match chars.next() {
+                Some('/') if matches!(chars.peek(), Some('*')) && supports_nested_comments => {
+                    chars.next(); // consume the '*'
+                    s.push('/');
+                    s.push('*');
+                    nested += 1;
+                }
+                Some('*') if matches!(chars.peek(), Some('/')) => {
+                    chars.next(); // consume the '/'
+                    nested -= 1;
+                    if nested == 0 {
+                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                    }
+                    s.push('*');
+                    s.push('/');
+                }
                 Some(ch) => {
-                    if ch == '/' && matches!(chars.peek(), Some('*')) && supports_nested_comments {
-                        s.push(ch);
-                        s.push(chars.next().unwrap()); // consume the '*'
-                        nested += 1;
-                        continue;
-                    }
-
-                    if ch == '*' && matches!(chars.peek(), Some('/')) {
-                        s.push(ch);
-                        let slash = chars.next();
-                        nested -= 1;
-                        if nested == 0 {
-                            s.pop(); // remove the last '*'
-                            break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
-                        }
-                        s.push(slash.unwrap());
-                        continue;
-                    }
-
                     s.push(ch);
                 }
                 None => {
                     break self.tokenizer_error(
                         chars.location(),
                         "Unexpected EOF while in a multi-line comment",
-                    )
+                    );
                 }
             }
         }

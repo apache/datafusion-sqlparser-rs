@@ -8497,6 +8497,15 @@ fn parse_grant() {
         },
         _ => unreachable!(),
     }
+
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO ROLE role1 WITH GRANT OPTION");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO DATABASE ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO SHARE share1");
+    verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
+    verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
 }
 
 #[test]

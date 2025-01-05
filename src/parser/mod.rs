@@ -11611,7 +11611,7 @@ impl<'a> Parser<'a> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::TO)?;
-        let grantees = self.parse_comma_separated(|p| p.parse_identifier())?;
+        let grantees = self.parse_grantees()?;
 
         let with_grant_option =
             self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
@@ -11627,6 +11627,62 @@ impl<'a> Parser<'a> {
             with_grant_option,
             granted_by,
         })
+    }
+
+    fn parse_grantees(&mut self) -> Result<Vec<Grantee>, ParserError> {
+        let mut values = vec![];
+        let mut grantee_type = GranteesType::None;
+        loop {
+            grantee_type = if self.parse_keyword(Keyword::ROLE) {
+                GranteesType::Role
+            } else if self.parse_keyword(Keyword::USER) {
+                GranteesType::User
+            } else if self.parse_keyword(Keyword::SHARE) {
+                GranteesType::Share
+            } else if self.parse_keyword(Keyword::GROUP) {
+                GranteesType::Group
+            } else if self.parse_keyword(Keyword::PUBLIC) {
+                GranteesType::Public
+            } else if self.parse_keywords(&[Keyword::DATABASE, Keyword::ROLE]) {
+                GranteesType::DatabaseRole
+            } else if self.parse_keywords(&[Keyword::APPLICATION, Keyword::ROLE]) {
+                GranteesType::ApplicationRole
+            } else if self.parse_keyword(Keyword::APPLICATION) {
+                GranteesType::Application
+            } else {
+                grantee_type // keep from previous iteraton, if not specified
+            };
+
+            let grantee = if grantee_type == GranteesType::Public {
+                Grantee {
+                    grantee_type: grantee_type.clone(),
+                    name: None,
+                }
+            } else {
+                let mut name = self.parse_object_name(false)?;
+                if self.consume_token(&Token::Colon) {
+                    // Redshift supports namespace prefix for extenrnal users and groups:
+                    // <Namespace>:<GroupName> or <Namespace>:<UserName>
+                    // https://docs.aws.amazon.com/redshift/latest/mgmt/redshift-iam-access-control-native-idp.html
+                    let ident = self.parse_identifier()?;
+                    if let Some(n) = name.0.first() {
+                        name = ObjectName(vec![Ident::new(format!("{}:{}", n.value, ident.value))]);
+                    };
+                }
+                Grantee {
+                    grantee_type: grantee_type.clone(),
+                    name: Some(name),
+                }
+            };
+
+            values.push(grantee);
+
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        Ok(values)
     }
 
     pub fn parse_grant_revoke_privileges_objects(

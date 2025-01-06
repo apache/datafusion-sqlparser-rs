@@ -12805,3 +12805,8 @@ fn parse_update_from_before_select() {
         parse_sql_statements(query).unwrap_err()
     );
 }
+
+#[test]
+fn parse_overlaps() {
+    verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
+}

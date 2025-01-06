@@ -2356,7 +2356,7 @@ impl<'a> Parser<'a> {
                     Ok(DateTimeField::Week(week_day))
                 }
                 Keyword::WEEKS => {
-                    let week_day = if dialect_of!(self is BigQueryDialect | GenericDialect)
+                    let week_day = if dialect_of!(self is BigQueryDialect)
                         && self.consume_token(&Token::LParen)
                     {
                         let week_day = self.parse_identifier()?;

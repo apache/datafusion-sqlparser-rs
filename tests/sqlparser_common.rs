@@ -120,6 +120,12 @@ fn parse_insert_values() {
 }
 
 #[test]
+fn parse_insert_set() {
+    let dialects = all_dialects_where(|d| d.supports_insert_set());
+    dialects.verified_stmt("INSERT INTO tbl1 SET col1 = 1, col2 = 'abc', col3 = current_date()");
+}
+
+#[test]
 fn parse_replace_into() {
     let dialect = PostgreSqlDialect {};
     let sql = "REPLACE INTO public.customer (id, name, active) VALUES (1, 2, 3)";

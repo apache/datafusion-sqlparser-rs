@@ -399,6 +399,11 @@ pub trait Dialect: Debug + Any {
         self.supports_trailing_commas()
     }
 
+    /// Does the dialect support trailing commas in the FROM clause list?
+    fn supports_from_trailing_commas(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports double dot notation for object names
     ///
     /// Example
@@ -756,6 +761,11 @@ pub trait Dialect: Debug + Any {
     /// used as an identifier without special handling like quoting.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
+    }
+
+    // Returns list of keyword allowed after from
+    fn get_reserved_keyword_after_from(&self) -> &[Keyword] {
+        keywords::ALLOWED_KEYWORD_AFTER_FROM
     }
 
     /// Returns true if this dialect supports the `TABLESAMPLE` option

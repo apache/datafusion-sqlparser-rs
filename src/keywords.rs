@@ -975,6 +975,13 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::END,
 ];
 
+pub const ALLOWED_KEYWORD_AFTER_FROM: &[Keyword] = &[
+    Keyword::INTO,
+    Keyword::LIMIT,
+    Keyword::HAVING,
+    Keyword::WHERE,
+];
+
 /// Global list of reserved keywords that cannot be parsed as identifiers
 /// without special handling like quoting. Parser should call `Dialect::is_reserved_for_identifier`
 /// to allow for each dialect to customize the list.

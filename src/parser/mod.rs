@@ -10428,9 +10428,65 @@ impl<'a> Parser<'a> {
                 snapshot: None,
                 session: false,
             })
+        } else if self.dialect.supports_set_stmt_without_operator() {
+            self.prev_token();
+            self.parse_set_session_params()
         } else {
             self.expected("equals sign or TO", self.peek_token())
         }
+    }
+
+    pub fn parse_set_session_params(&mut self) -> Result<Statement, ParserError> {
+        let names = self.parse_comma_separated(Parser::parse_set_session_param_name)?;
+
+        let last_name = if let Some(last_name) = names.last() {
+            last_name.to_uppercase()
+        } else {
+            return self.expected("Session param name", self.peek_token());
+        };
+
+        let identity_insert_obj = if last_name == "IDENTITY_INSERT" {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+
+        let offsets_keywords = if last_name == "OFFSETS" {
+            Some(self.parse_comma_separated(|parser| {
+                let next_token = parser.next_token();
+                match &next_token.token {
+                    Token::Word(w) => Ok(w.to_string()),
+                    _ => parser.expected("SQL keyword", next_token),
+                }
+            })?)
+        } else {
+            None
+        };
+
+        let value = self.parse_expr()?.to_string();
+        Ok(Statement::SetSessionParam {
+            names,
+            identity_insert_obj,
+            offsets_keywords,
+            value,
+        })
+    }
+
+    pub fn parse_set_session_param_name(&mut self) -> Result<String, ParserError> {
+        if self.parse_keywords(&[Keyword::STATISTICS, Keyword::IO]) {
+            return Ok("STATISTICS IO".to_string());
+        } else if self.parse_keywords(&[Keyword::STATISTICS, Keyword::XML]) {
+            return Ok("STATISTICS XML".to_string());
+        } else if self.parse_keywords(&[Keyword::STATISTICS, Keyword::PROFILE]) {
+            return Ok("STATISTICS PROFILE".to_string());
+        } else if self.parse_keywords(&[Keyword::STATISTICS, Keyword::TIME]) {
+            return Ok("STATISTICS TIME".to_string());
+        }
+        let next_token = self.next_token();
+        if let Token::Word(w) = next_token.token {
+            return Ok(w.to_string());
+        }
+        self.expected("Session param name", next_token)
     }
 
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
@@ -13004,6 +13060,8 @@ impl<'a> Parser<'a> {
                     TransactionIsolationLevel::RepeatableRead
                 } else if self.parse_keyword(Keyword::SERIALIZABLE) {
                     TransactionIsolationLevel::Serializable
+                } else if self.parse_keyword(Keyword::SNAPSHOT) {
+                    TransactionIsolationLevel::Snapshot
                 } else {
                     self.expected("isolation level", self.peek_token())?
                 };

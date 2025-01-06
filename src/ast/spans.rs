@@ -496,6 +496,7 @@ impl Spanned for Statement {
             Statement::UNLISTEN { .. } => Span::empty(),
             Statement::RenameTable { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
+            Statement::SetSessionParam { .. } => Span::empty(),
         }
     }
 }

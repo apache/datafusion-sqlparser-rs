@@ -3437,6 +3437,15 @@ pub enum Statement {
     /// Snowflake `REMOVE`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
     Remove(FileStagingCommand),
+    /// MS-SQL session
+    ///
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/set-statements-transact-sql>
+    SetSessionParam {
+        names: Vec<String>,
+        identity_insert_obj: Option<ObjectName>,
+        offsets_keywords: Option<Vec<String>>,
+        value: String,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -5024,6 +5033,21 @@ impl fmt::Display for Statement {
             }
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
+            Statement::SetSessionParam {
+                names,
+                identity_insert_obj,
+                offsets_keywords,
+                value,
+            } => {
+                write!(f, "SET")?;
+                write!(f, " {}", display_comma_separated(names))?;
+                if let Some(obj) = identity_insert_obj {
+                    write!(f, " {obj}")?;
+                } else if let Some(keywords) = offsets_keywords {
+                    write!(f, " {}", display_comma_separated(keywords))?;
+                }
+                write!(f, " {value}")
+            }
         }
     }
 }
@@ -6441,6 +6465,7 @@ pub enum TransactionIsolationLevel {
     ReadCommitted,
     RepeatableRead,
     Serializable,
+    Snapshot,
 }
 
 impl fmt::Display for TransactionIsolationLevel {
@@ -6451,6 +6476,7 @@ impl fmt::Display for TransactionIsolationLevel {
             ReadCommitted => "READ COMMITTED",
             RepeatableRead => "REPEATABLE READ",
             Serializable => "SERIALIZABLE",
+            Snapshot => "SNAPSHOT",
         })
     }
 }

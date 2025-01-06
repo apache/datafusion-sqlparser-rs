@@ -29,7 +29,7 @@ use core::fmt::Formatter;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ast::Ident;
+use crate::ast::{Ident, ObjectName};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -152,6 +152,25 @@ impl fmt::Display for StageLoadSelectItem {
         }
         if self.item_as.is_some() {
             write!(f, " AS {}", self.item_as.as_ref().unwrap())?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct FileStagingCommand {
+    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+    pub stage: ObjectName,
+    pub pattern: Option<String>,
+}
+
+impl fmt::Display for FileStagingCommand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.stage)?;
+        if let Some(pattern) = self.pattern.as_ref() {
+            write!(f, " PATTERN='{pattern}'")?;
         }
         Ok(())
     }

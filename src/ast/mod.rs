@@ -23,7 +23,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use helpers::attached_token::AttachedToken;
+use helpers::{attached_token::AttachedToken, stmt_data_loading::FileStagingCommand};
 
 use core::ops::Deref;
 use core::{
@@ -3420,6 +3420,12 @@ pub enum Statement {
     ///
     /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
     RenameTable(Vec<RenameTable>),
+    /// Snowflake `LIST`
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/list>
+    List(FileStagingCommand),
+    /// Snowflake `REMOVE`
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
+    Remove(FileStagingCommand),
 }
 
 impl fmt::Display for Statement {
@@ -4980,6 +4986,8 @@ impl fmt::Display for Statement {
             Statement::RenameTable(rename_tables) => {
                 write!(f, "RENAME TABLE {}", display_comma_separated(rename_tables))
             }
+            Statement::List(command) => write!(f, "LIST {command}"),
+            Statement::Remove(command) => write!(f, "REMOVE {command}"),
         }
     }
 }

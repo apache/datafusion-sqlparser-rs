@@ -2991,3 +2991,34 @@ fn test_table_sample() {
     snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) REPEATABLE (1)");
     snowflake_and_generic().verified_stmt("SELECT id FROM mytable TABLESAMPLE (10) SEED (1)");
 }
+
+#[test]
+fn parse_ls_and_rm() {
+    snowflake().one_statement_parses_to("LS @~", "LIST @~");
+    snowflake().one_statement_parses_to("RM @~", "REMOVE @~");
+
+    let statement = snowflake()
+        .verified_stmt("LIST @SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/");
+    match statement {
+        Statement::List(command) => {
+            assert_eq!(command.stage, ObjectName(vec!["@SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/".into()]));
+            assert!(command.pattern.is_none());
+        }
+        _ => unreachable!(),
+    };
+
+    let statement =
+        snowflake().verified_stmt("REMOVE @my_csv_stage/analysis/ PATTERN='.*data_0.*'");
+    match statement {
+        Statement::Remove(command) => {
+            assert_eq!(
+                command.stage,
+                ObjectName(vec!["@my_csv_stage/analysis/".into()])
+            );
+            assert_eq!(command.pattern, Some(".*data_0.*".to_string()));
+        }
+        _ => unreachable!(),
+    };
+
+    snowflake().verified_stmt(r#"LIST @"STAGE_WITH_QUOTES""#);
+}

@@ -1621,11 +1621,17 @@ impl<'a> Tokenizer<'a> {
 
     // Consume characters until newline
     fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
-        let mut comment = peeking_take_while(chars, |ch| ch != '\n');
+        let mut comment = peeking_take_while(chars, |ch| match ch {
+            '\n' => false,                                           // Always stop at \n
+            '\r' if dialect_of!(self is PostgreSqlDialect) => false, // Stop at \r for Postgres
+            _ => true, // Keep consuming for other characters
+        });
+
         if let Some(ch) = chars.next() {
-            assert_eq!(ch, '\n');
+            assert!(ch == '\n' || ch == '\r');
             comment.push(ch);
         }
+
         comment
     }
 
@@ -2677,17 +2683,62 @@ mod tests {
 
     #[test]
     fn tokenize_comment() {
-        let sql = String::from("0--this is a comment\n1");
+        let test_cases = vec![
+            (
+                String::from("0--this is a comment\n1"),
+                vec![
+                    Token::Number("0".to_string(), false),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "this is a comment\n".to_string(),
+                    }),
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                String::from("0--this is a comment\r1"),
+                vec![
+                    Token::Number("0".to_string(), false),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "this is a comment\r1".to_string(),
+                    }),
+                ],
+            ),
+            (
+                String::from("0--this is a comment\r\n1"),
+                vec![
+                    Token::Number("0".to_string(), false),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "this is a comment\r\n".to_string(),
+                    }),
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+        ];
 
         let dialect = GenericDialect {};
+
+        for (sql, expected) in test_cases {
+            let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+            compare(expected, tokens);
+        }
+    }
+
+    #[test]
+    fn tokenize_comment_postgres() {
+        let sql = String::from("1--\r0");
+
+        let dialect = PostgreSqlDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
-            Token::Number("0".to_string(), false),
+            Token::Number("1".to_string(), false),
             Token::Whitespace(Whitespace::SingleLineComment {
                 prefix: "--".to_string(),
-                comment: "this is a comment\n".to_string(),
+                comment: "\r".to_string(),
             }),
-            Token::Number("1".to_string(), false),
+            Token::Number("0".to_string(), false),
         ];
         compare(expected, tokens);
     }

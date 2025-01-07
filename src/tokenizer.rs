@@ -2620,7 +2620,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn tokenize_dollar_placeholder() {
         let sql = String::from("SELECT $$, $$ABC$$, $ABC$, $ABC");

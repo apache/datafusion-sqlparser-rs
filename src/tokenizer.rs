@@ -1560,7 +1560,7 @@ impl<'a> Tokenizer<'a> {
                 loop {
                     match chars.next() {
                         Some(ch) => {
-                            temp.push(ch); // Collect all characters into `temp`
+                            temp.push(ch);
 
                             if temp.ends_with(&end_delimiter) {
                                 s.push_str(&temp[..temp.len() - end_delimiter.len()]);

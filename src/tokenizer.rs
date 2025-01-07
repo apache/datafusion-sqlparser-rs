@@ -1554,34 +1554,25 @@ impl<'a> Tokenizer<'a> {
             if matches!(chars.peek(), Some('$')) && !self.dialect.supports_dollar_placeholder() {
                 chars.next();
 
-                let mut end_tag_name = String::new();
+                let mut temp = String::new();
+                let end_delimiter = format!("${}$", value);
 
                 loop {
                     match chars.next() {
-                        Some('$') => {
-                            if !end_tag_name.is_empty() {
-                                if end_tag_name == value {
-                                    // We found the end delimiter
-                                    // Let's remove the tag name from the string content
-                                    // (plus the dollar sign of the end delimiter)
-                                    s.truncate(s.len() - value.len() - 1);
-                                    break;
-                                } else {
-                                    // Reset the tag name
-                                    end_tag_name.clear();
-                                }
-                            } else {
-                                // Start a new tag name
-                                end_tag_name.clear();
-                            }
-
-                            s.push('$');
-                        }
                         Some(ch) => {
-                            end_tag_name.push(ch);
-                            s.push(ch);
+                            temp.push(ch); // Collect all characters into `temp`
+
+                            if temp.ends_with(&end_delimiter) {
+                                s.push_str(&temp[..temp.len() - end_delimiter.len()]);
+                                break;
+                            }
                         }
                         None => {
+                            if temp.ends_with(&end_delimiter) {
+                                s.push_str(&temp[..temp.len() - end_delimiter.len()]);
+                                break;
+                            }
+
                             return self.tokenizer_error(
                                 chars.location(),
                                 "Unterminated dollar-quoted, expected $",
@@ -2566,6 +2557,28 @@ mod tests {
                     })
                 ]
             ),
+            (
+                String::from("SELECT $abc$$abc$"),
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::DollarQuotedString(DollarQuotedString {
+                        value: "".into(),
+                        tag: Some("abc".into()),
+                    })
+                ]
+            ),
+            (
+                String::from("0$abc$$abc$1"),
+                vec![
+                    Token::Number("0".into(), false),
+                    Token::DollarQuotedString(DollarQuotedString {
+                        value: "".into(),
+                        tag: Some("abc".into()),
+                    }),
+                    Token::Number("1".into(), false),
+                ]
+            ),
         ];
 
         let dialect = GenericDialect {};
@@ -2592,6 +2605,23 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_dollar_quoted_string_tagged_unterminated_mirror() {
+        let sql = String::from("SELECT $abc$abc$");
+        let dialect = GenericDialect {};
+        assert_eq!(
+            Tokenizer::new(&dialect, &sql).tokenize(),
+            Err(TokenizerError {
+                message: "Unterminated dollar-quoted, expected $".into(),
+                location: Location {
+                    line: 1,
+                    column: 17
+                }
+            })
+        );
+    }
+
+
+    #[test]
     fn tokenize_dollar_placeholder() {
         let sql = String::from("SELECT $$, $$ABC$$, $ABC$, $ABC");
         let dialect = SQLiteDialect {};
@@ -2613,6 +2643,38 @@ mod tests {
                 Token::Placeholder("$ABC".into()),
             ]
         );
+    }
+
+    #[test]
+    fn tokenize_nested_dollar_quoted_strings() {
+        let sql = String::from("SELECT $tag$dollar $nested$ string$tag$");
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::DollarQuotedString(DollarQuotedString {
+                value: "dollar $nested$ string".into(),
+                tag: Some("tag".into()),
+            }),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_dollar_quoted_string_untagged_empty() {
+        let sql = String::from("SELECT $$$$");
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::DollarQuotedString(DollarQuotedString {
+                value: "".into(),
+                tag: None,
+            }),
+        ];
+        compare(expected, tokens);
     }
 
     #[test]

@@ -569,7 +569,7 @@ impl Display for Insert {
             write!(f, "{}", display_comma_separated(&self.assignments))?;
         } else if let Some(format_clause) = &self.format_clause {
             write!(f, "{format_clause}")?;
-        } else if self.source.is_none() && self.columns.is_empty() {
+        } else if self.columns.is_empty() {
             write!(f, "DEFAULT VALUES")?;
         }
 

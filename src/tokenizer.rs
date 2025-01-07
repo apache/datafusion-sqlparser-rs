@@ -1561,7 +1561,9 @@ impl<'a> Tokenizer<'a> {
                         Some('$') => {
                             if !end_tag_name.is_empty() {
                                 if end_tag_name == value {
-                                    // Found the end delimiter, truncate the string
+                                    // We found the end delimiter
+                                    // Let's remove the tag name from the string content
+                                    // (plus the dollar sign of the end delimiter)
                                     s.truncate(s.len() - value.len() - 1);
                                     break;
                                 } else {

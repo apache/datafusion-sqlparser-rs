@@ -5411,6 +5411,34 @@ fn parse_interval_all() {
     verified_only_select(
         "SELECT '2 years 15 months 100 weeks 99 hours 123456789 milliseconds'::INTERVAL",
     );
+
+    // keep Generic/BigQuery extract week with weekday syntax success
+    let supported_dialects = TestedDialects::new(vec![
+        Box::new(GenericDialect {}),
+        Box::new(BigQueryDialect {}),
+    ]);
+
+    let sql = "SELECT EXTRACT(WEEK(a) FROM date)";
+    supported_dialects.verified_stmt(sql);
+
+    let all_other_dialects = TestedDialects::new(vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(MsSqlDialect {}),
+        Box::new(AnsiDialect {}),
+        Box::new(SnowflakeDialect {}),
+        Box::new(HiveDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(MySqlDialect {}),
+        Box::new(SQLiteDialect {}),
+        Box::new(DuckDbDialect {}),
+    ]);
+
+    assert_eq!(
+        ParserError::ParserError("Expected 'FROM' or ','".to_owned()),
+        all_other_dialects
+            .parse_sql_statements("SELECT EXTRACT(WEEK(a) FROM date)")
+            .unwrap_err()
+    );
 }
 
 #[test]

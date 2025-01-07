@@ -2467,14 +2467,25 @@ impl fmt::Display for GroupByExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FormatClause {
-    Identifier(Ident),
+    Identifier {
+        ident: Ident,
+        expr: Option<Vec<Expr>>,
+    },
     Null,
 }
 
 impl fmt::Display for FormatClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FormatClause::Identifier(ident) => write!(f, "FORMAT {}", ident),
+            FormatClause::Identifier { ident, expr } => {
+                write!(f, "FORMAT {}", ident)?;
+
+                if let Some(exprs) = expr {
+                    write!(f, " {}", display_comma_separated(exprs))?;
+                }
+
+                Ok(())
+            }
             FormatClause::Null => write!(f, "FORMAT NULL"),
         }
     }

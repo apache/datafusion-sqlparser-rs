@@ -54,4 +54,11 @@ impl Dialect for ClickHouseDialect {
     fn supports_insert_table_function(&self) -> bool {
         true
     }
+    // ClickHouse uses this for some FORMAT expressions in `INSERT` context, e.g. when inserting
+    // with FORMAT JSONEachRow a raw JSON key-value expression is valid and expected.
+    //
+    // [ClickHouse formats](https://clickhouse.com/docs/en/interfaces/formats)
+    fn supports_dictionary_syntax(&self) -> bool {
+        true
+    }
 }

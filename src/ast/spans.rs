@@ -1156,6 +1156,8 @@ impl Spanned for Insert {
             priority: _,     // todo, mysql specific
             insert_alias: _, // todo, mysql specific
             assignments,
+            settings: _,      // todo, clickhouse specific
+            format_clause: _, // todo, clickhouse specific
         } = self;
 
         union_spans(

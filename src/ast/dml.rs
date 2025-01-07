@@ -33,10 +33,10 @@ pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
     display_comma_separated, display_separated, Assignment, ClusteredBy, CommentDef, Expr,
-    FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident,
-    InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens,
-    OrderByExpr, Query, RowAccessPolicy, SelectItem, SqlOption, SqliteOnConflict, TableEngine,
-    TableObject, TableWithJoins, Tag, WrappedCollection,
+    FileFormat, FormatClause, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
+    HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert,
+    OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting, SqlOption,
+    SqliteOnConflict, TableEngine, TableObject, TableWithJoins, Tag, WrappedCollection,
 };
 
 /// CREATE INDEX statement.
@@ -497,6 +497,20 @@ pub struct Insert {
     pub priority: Option<MysqlInsertPriority>,
     /// Only for mysql
     pub insert_alias: Option<InsertAliases>,
+    /// Settings used in together with a specified `FORMAT`.
+    ///
+    /// ClickHouse syntax: `INSERT INTO tbl SETTINGS format_template_resultset = '/some/path/resultset.format'`
+    ///
+    /// [ClickHouse `INSERT INTO`](https://clickhouse.com/docs/en/sql-reference/statements/insert-into)
+    /// [ClickHouse Formats](https://clickhouse.com/docs/en/interfaces/formats)
+    pub settings: Option<Vec<Setting>>,
+    /// Format for `INSERT` statement when not using standard SQL format. Can be e.g. `CSV`,
+    /// `JSON`, `JSONAsString`, `LineAsString` and more.
+    ///
+    /// ClickHouse syntax: `INSERT INTO tbl FORMAT JSONEachRow {"foo": 1, "bar": 2}, {"foo": 3}`
+    ///
+    /// [ClickHouse formats JSON insert](https://clickhouse.com/docs/en/interfaces/formats#json-inserting-data)
+    pub format_clause: Option<FormatClause>,
 }
 
 impl Display for Insert {
@@ -545,11 +559,17 @@ impl Display for Insert {
             write!(f, "({}) ", display_comma_separated(&self.after_columns))?;
         }
 
+        if let Some(settings) = &self.settings {
+            write!(f, "SETTINGS {} ", display_comma_separated(settings))?;
+        }
+
         if let Some(source) = &self.source {
             write!(f, "{source}")?;
         } else if !self.assignments.is_empty() {
             write!(f, "SET ")?;
             write!(f, "{}", display_comma_separated(&self.assignments))?;
+        } else if let Some(format_clause) = &self.format_clause {
+            write!(f, "{format_clause}")?;
         } else if self.source.is_none() && self.columns.is_empty() {
             write!(f, "DEFAULT VALUES")?;
         }

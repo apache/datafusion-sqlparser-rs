@@ -120,6 +120,12 @@ fn parse_insert_values() {
 }
 
 #[test]
+fn parse_insert_set() {
+    let dialects = all_dialects_where(|d| d.supports_insert_set());
+    dialects.verified_stmt("INSERT INTO tbl1 SET col1 = 1, col2 = 'abc', col3 = current_date()");
+}
+
+#[test]
 fn parse_replace_into() {
     let dialect = PostgreSqlDialect {};
     let sql = "REPLACE INTO public.customer (id, name, active) VALUES (1, 2, 3)";
@@ -4131,6 +4137,65 @@ fn parse_alter_table() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_rename_table() {
+    match verified_stmt("RENAME TABLE test.test1 TO test_db.test2") {
+        Statement::RenameTable(rename_tables) => {
+            assert_eq!(
+                vec![RenameTable {
+                    old_name: ObjectName(vec![
+                        Ident::new("test".to_string()),
+                        Ident::new("test1".to_string()),
+                    ]),
+                    new_name: ObjectName(vec![
+                        Ident::new("test_db".to_string()),
+                        Ident::new("test2".to_string()),
+                    ]),
+                }],
+                rename_tables
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    match verified_stmt(
+        "RENAME TABLE old_table1 TO new_table1, old_table2 TO new_table2, old_table3 TO new_table3",
+    ) {
+        Statement::RenameTable(rename_tables) => {
+            assert_eq!(
+                vec![
+                    RenameTable {
+                        old_name: ObjectName(vec![Ident::new("old_table1".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table1".to_string())]),
+                    },
+                    RenameTable {
+                        old_name: ObjectName(vec![Ident::new("old_table2".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table2".to_string())]),
+                    },
+                    RenameTable {
+                        old_name: ObjectName(vec![Ident::new("old_table3".to_string())]),
+                        new_name: ObjectName(vec![Ident::new("new_table3".to_string())]),
+                    }
+                ],
+                rename_tables
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(
+        parse_sql_statements("RENAME TABLE old_table TO new_table a").unwrap_err(),
+        ParserError::ParserError("Expected: end of statement, found: a".to_string())
+    );
+
+    assert_eq!(
+        parse_sql_statements("RENAME TABLE1 old_table TO new_table a").unwrap_err(),
+        ParserError::ParserError(
+            "Expected: KEYWORD `TABLE` after RENAME, found: TABLE1".to_string()
+        )
+    );
 }
 
 #[test]
@@ -8438,6 +8503,15 @@ fn parse_grant() {
         },
         _ => unreachable!(),
     }
+
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO ROLE role1 WITH GRANT OPTION");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO DATABASE ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO SHARE share1");
+    verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
+    verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
 }
 
 #[test]
@@ -12736,4 +12810,9 @@ fn parse_update_from_before_select() {
         ParserError::ParserError("Expected: end of statement, found: FROM".to_string()),
         parse_sql_statements(query).unwrap_err()
     );
+}
+
+#[test]
+fn parse_overlaps() {
+    verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
 }

@@ -23,7 +23,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use helpers::attached_token::AttachedToken;
+use helpers::{attached_token::AttachedToken, stmt_data_loading::FileStagingCommand};
 
 use core::ops::Deref;
 use core::{
@@ -3159,7 +3159,7 @@ pub enum Statement {
     Grant {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
+        grantees: Vec<Grantee>,
         with_grant_option: bool,
         granted_by: Option<Ident>,
     },
@@ -3413,6 +3413,19 @@ pub enum Statement {
         partitioned: Option<Vec<Expr>>,
         table_format: Option<HiveLoadDataFormat>,
     },
+    /// ```sql
+    /// Rename TABLE tbl_name TO new_tbl_name[, tbl_name2 TO new_tbl_name2] ...
+    /// ```
+    /// Renames one or more tables
+    ///
+    /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
+    RenameTable(Vec<RenameTable>),
+    /// Snowflake `LIST`
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/list>
+    List(FileStagingCommand),
+    /// Snowflake `REMOVE`
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
+    Remove(FileStagingCommand),
 }
 
 impl fmt::Display for Statement {
@@ -4970,6 +4983,11 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::RenameTable(rename_tables) => {
+                write!(f, "RENAME TABLE {}", display_comma_separated(rename_tables))
+            }
+            Statement::List(command) => write!(f, "LIST {command}"),
+            Statement::Remove(command) => write!(f, "REMOVE {command}"),
         }
     }
 }
@@ -5354,6 +5372,66 @@ impl fmt::Display for Action {
         };
         Ok(())
     }
+}
+
+/// The principal that receives the privileges
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Grantee {
+    pub grantee_type: GranteesType,
+    pub name: Option<ObjectName>,
+}
+
+impl fmt::Display for Grantee {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.grantee_type {
+            GranteesType::Role => {
+                write!(f, "ROLE ")?;
+            }
+            GranteesType::Share => {
+                write!(f, "SHARE ")?;
+            }
+            GranteesType::User => {
+                write!(f, "USER ")?;
+            }
+            GranteesType::Group => {
+                write!(f, "GROUP ")?;
+            }
+            GranteesType::Public => {
+                write!(f, "PUBLIC ")?;
+            }
+            GranteesType::DatabaseRole => {
+                write!(f, "DATABASE ROLE ")?;
+            }
+            GranteesType::Application => {
+                write!(f, "APPLICATION ")?;
+            }
+            GranteesType::ApplicationRole => {
+                write!(f, "APPLICATION ROLE ")?;
+            }
+            GranteesType::None => (),
+        }
+        if let Some(ref name) = self.name {
+            write!(f, "{}", name)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum GranteesType {
+    Role,
+    Share,
+    User,
+    Group,
+    Public,
+    DatabaseRole,
+    Application,
+    ApplicationRole,
+    None,
 }
 
 /// Objects on which privileges are granted in a GRANT statement.
@@ -7669,6 +7747,22 @@ impl Display for JsonNullClause {
             JsonNullClause::NullOnNull => write!(f, "NULL ON NULL"),
             JsonNullClause::AbsentOnNull => write!(f, "ABSENT ON NULL"),
         }
+    }
+}
+
+/// rename object definition
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RenameTable {
+    pub old_name: ObjectName,
+    pub new_name: ObjectName,
+}
+
+impl fmt::Display for RenameTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} TO {}", self.old_name, self.new_name)?;
+        Ok(())
     }
 }
 

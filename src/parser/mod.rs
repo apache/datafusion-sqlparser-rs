@@ -595,6 +595,7 @@ impl<'a> Parser<'a> {
                 // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
                 Keyword::PRAGMA => self.parse_pragma(),
                 Keyword::UNLOAD => self.parse_unload(),
+                Keyword::RENAME => self.parse_rename(),
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                     self.parse_install()
@@ -1083,6 +1084,23 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(Statement::NOTIFY { channel, payload })
+    }
+
+    /// Parses a `RENAME TABLE` statement. See [Statement::RenameTable]
+    pub fn parse_rename(&mut self) -> Result<Statement, ParserError> {
+        if self.peek_keyword(Keyword::TABLE) {
+            self.expect_keyword(Keyword::TABLE)?;
+            let rename_tables = self.parse_comma_separated(|parser| {
+                let old_name = parser.parse_object_name(false)?;
+                parser.expect_keyword(Keyword::TO)?;
+                let new_name = parser.parse_object_name(false)?;
+
+                Ok(RenameTable { old_name, new_name })
+            })?;
+            Ok(Statement::RenameTable(rename_tables))
+        } else {
+            self.expected("KEYWORD `TABLE` after RENAME", self.peek_token())
+        }
     }
 
     // Tries to parse an expression by matching the specified word to known keywords that have a special meaning in the dialect.
@@ -3042,6 +3060,7 @@ impl<'a> Parser<'a> {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
                 Keyword::XOR => Some(BinaryOperator::Xor),
+                Keyword::OVERLAPS => Some(BinaryOperator::Overlaps),
                 Keyword::OPERATOR if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                     self.expect_token(&Token::LParen)?;
                     // there are special rules for operator names in
@@ -10511,7 +10530,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_secondary_roles(&mut self) -> Result<Use, ParserError> {
-        self.expect_keyword_is(Keyword::ROLES)?;
+        self.expect_one_of_keywords(&[Keyword::ROLES, Keyword::ROLE])?;
         if self.parse_keyword(Keyword::NONE) {
             Ok(Use::SecondaryRoles(SecondaryRoles::None))
         } else if self.parse_keyword(Keyword::ALL) {
@@ -11593,7 +11612,7 @@ impl<'a> Parser<'a> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::TO)?;
-        let grantees = self.parse_comma_separated(|p| p.parse_identifier())?;
+        let grantees = self.parse_grantees()?;
 
         let with_grant_option =
             self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
@@ -11609,6 +11628,62 @@ impl<'a> Parser<'a> {
             with_grant_option,
             granted_by,
         })
+    }
+
+    fn parse_grantees(&mut self) -> Result<Vec<Grantee>, ParserError> {
+        let mut values = vec![];
+        let mut grantee_type = GranteesType::None;
+        loop {
+            grantee_type = if self.parse_keyword(Keyword::ROLE) {
+                GranteesType::Role
+            } else if self.parse_keyword(Keyword::USER) {
+                GranteesType::User
+            } else if self.parse_keyword(Keyword::SHARE) {
+                GranteesType::Share
+            } else if self.parse_keyword(Keyword::GROUP) {
+                GranteesType::Group
+            } else if self.parse_keyword(Keyword::PUBLIC) {
+                GranteesType::Public
+            } else if self.parse_keywords(&[Keyword::DATABASE, Keyword::ROLE]) {
+                GranteesType::DatabaseRole
+            } else if self.parse_keywords(&[Keyword::APPLICATION, Keyword::ROLE]) {
+                GranteesType::ApplicationRole
+            } else if self.parse_keyword(Keyword::APPLICATION) {
+                GranteesType::Application
+            } else {
+                grantee_type // keep from previous iteraton, if not specified
+            };
+
+            let grantee = if grantee_type == GranteesType::Public {
+                Grantee {
+                    grantee_type: grantee_type.clone(),
+                    name: None,
+                }
+            } else {
+                let mut name = self.parse_object_name(false)?;
+                if self.consume_token(&Token::Colon) {
+                    // Redshift supports namespace prefix for extenrnal users and groups:
+                    // <Namespace>:<GroupName> or <Namespace>:<UserName>
+                    // https://docs.aws.amazon.com/redshift/latest/mgmt/redshift-iam-access-control-native-idp.html
+                    let ident = self.parse_identifier()?;
+                    if let Some(n) = name.0.first() {
+                        name = ObjectName(vec![Ident::new(format!("{}:{}", n.value, ident.value))]);
+                    };
+                }
+                Grantee {
+                    grantee_type: grantee_type.clone(),
+                    name: Some(name),
+                }
+            };
+
+            values.push(grantee);
+
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        Ok(values)
     }
 
     pub fn parse_grant_revoke_privileges_objects(
@@ -11824,9 +11899,9 @@ impl<'a> Parser<'a> {
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
-            let (columns, partitioned, after_columns, source) =
+            let (columns, partitioned, after_columns, source, assignments) =
                 if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
-                    (vec![], None, vec![], None)
+                    (vec![], None, vec![], None, vec![])
                 } else {
                     let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
                         let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
@@ -11843,9 +11918,14 @@ impl<'a> Parser<'a> {
                         Default::default()
                     };
 
-                    let source = Some(self.parse_query()?);
+                    let (source, assignments) =
+                        if self.dialect.supports_insert_set() && self.parse_keyword(Keyword::SET) {
+                            (None, self.parse_comma_separated(Parser::parse_assignment)?)
+                        } else {
+                            (Some(self.parse_query()?), vec![])
+                        };
 
-                    (columns, partitioned, after_columns, source)
+                    (columns, partitioned, after_columns, source, assignments)
                 };
 
             let insert_alias = if dialect_of!(self is MySqlDialect | GenericDialect)
@@ -11925,6 +12005,7 @@ impl<'a> Parser<'a> {
                 columns,
                 after_columns,
                 source,
+                assignments,
                 table,
                 on,
                 returning,
@@ -14151,16 +14232,6 @@ mod tests {
         let sql = "REPLACE INTO t (a) VALUES (&a)";
 
         assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
-    }
-
-    #[test]
-    fn test_replace_into_set() {
-        // NOTE: This is actually valid MySQL syntax, REPLACE and INSERT,
-        // but the parser does not yet support it.
-        // https://dev.mysql.com/doc/refman/8.3/en/insert.html
-        let sql = "REPLACE INTO t SET a='1'";
-
-        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
     }
 
     #[test]

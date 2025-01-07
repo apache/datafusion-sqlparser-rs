@@ -241,6 +241,10 @@ impl Dialect for PostgreSqlDialect {
     fn supports_empty_projections(&self) -> bool {
         true
     }
+
+    fn supports_nested_comments(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

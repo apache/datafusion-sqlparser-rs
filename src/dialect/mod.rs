@@ -512,6 +512,7 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
@@ -682,6 +683,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports nested comments
+    /// e.g. `/* /* nested */ */`
+    fn supports_nested_comments(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
     /// as an alias assignment operator, rather than a boolean expression.
     /// For example: the following statements are equivalent for such a dialect:
@@ -766,6 +773,13 @@ pub trait Dialect: Debug + Any {
     ///
     /// <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#_7_6_table_reference>
     fn supports_table_sample_before_alias(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `INSERT INTO ... SET col1 = 1, ...` syntax.
+    ///
+    /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
+    fn supports_insert_set(&self) -> bool {
         false
     }
 }

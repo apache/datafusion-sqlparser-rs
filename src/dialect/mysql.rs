@@ -98,8 +98,13 @@ impl Dialect for MySqlDialect {
         true
     }
 
-    /// see <https://dev.mysql.com/doc/refman/8.4/en/create-table-select.html>
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/create-table-select.html>
     fn supports_create_table_select(&self) -> bool {
+        true
+    }
+
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
+    fn supports_insert_set(&self) -> bool {
         true
     }
 }

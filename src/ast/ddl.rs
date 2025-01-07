@@ -1786,6 +1786,26 @@ impl fmt::Display for ReferentialAction {
     }
 }
 
+/// `<drop behavior> ::= CASCADE | RESTRICT`.
+///
+/// Used in `DROP` statements.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DropBehavior {
+    Restrict,
+    Cascade,
+}
+
+impl fmt::Display for DropBehavior {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            DropBehavior::Restrict => "RESTRICT",
+            DropBehavior::Cascade => "CASCADE",
+        })
+    }
+}
+
 /// SQL user defined type definition
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

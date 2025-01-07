@@ -49,12 +49,12 @@ pub use self::dcl::{
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateFunction, Deduplicate, DeferrableInitial, GeneratedAs,
-    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay,
-    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, TableConstraint,
-    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
-    ViewColumnDef,
+    ConstraintCharacteristics, CreateFunction, Deduplicate, DeferrableInitial, DropBehavior,
+    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexOption,
+    IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition, ProcedureParam,
+    ReferentialAction, TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2700,7 +2700,7 @@ pub enum Statement {
         /// One or more function to drop
         func_desc: Vec<FunctionDesc>,
         /// `CASCADE` or `RESTRICT`
-        option: Option<ReferentialAction>,
+        drop_behavior: Option<DropBehavior>,
     },
     /// ```sql
     /// DROP PROCEDURE
@@ -2710,7 +2710,7 @@ pub enum Statement {
         /// One or more function to drop
         proc_desc: Vec<FunctionDesc>,
         /// `CASCADE` or `RESTRICT`
-        option: Option<ReferentialAction>,
+        drop_behavior: Option<DropBehavior>,
     },
     /// ```sql
     /// DROP SECRET
@@ -2729,7 +2729,7 @@ pub enum Statement {
         if_exists: bool,
         name: Ident,
         table_name: ObjectName,
-        option: Option<ReferentialAction>,
+        drop_behavior: Option<DropBehavior>,
     },
     /// ```sql
     /// DECLARE
@@ -4317,7 +4317,7 @@ impl fmt::Display for Statement {
             Statement::DropFunction {
                 if_exists,
                 func_desc,
-                option,
+                drop_behavior,
             } => {
                 write!(
                     f,
@@ -4325,7 +4325,7 @@ impl fmt::Display for Statement {
                     if *if_exists { " IF EXISTS" } else { "" },
                     display_comma_separated(func_desc),
                 )?;
-                if let Some(op) = option {
+                if let Some(op) = drop_behavior {
                     write!(f, " {op}")?;
                 }
                 Ok(())
@@ -4333,7 +4333,7 @@ impl fmt::Display for Statement {
             Statement::DropProcedure {
                 if_exists,
                 proc_desc,
-                option,
+                drop_behavior,
             } => {
                 write!(
                     f,
@@ -4341,7 +4341,7 @@ impl fmt::Display for Statement {
                     if *if_exists { " IF EXISTS" } else { "" },
                     display_comma_separated(proc_desc),
                 )?;
-                if let Some(op) = option {
+                if let Some(op) = drop_behavior {
                     write!(f, " {op}")?;
                 }
                 Ok(())
@@ -4370,15 +4370,15 @@ impl fmt::Display for Statement {
                 if_exists,
                 name,
                 table_name,
-                option,
+                drop_behavior,
             } => {
                 write!(f, "DROP POLICY")?;
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
                 write!(f, " {name} ON {table_name}")?;
-                if let Some(option) = option {
-                    write!(f, " {option}")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
                 }
                 Ok(())
             }

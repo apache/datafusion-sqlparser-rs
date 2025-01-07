@@ -3805,7 +3805,7 @@ fn parse_drop_function() {
                 }]),
                 args: None
             }],
-            option: None
+            drop_behavior: None
         }
     );
 
@@ -3830,7 +3830,7 @@ fn parse_drop_function() {
                     }
                 ]),
             }],
-            option: None
+            drop_behavior: None
         }
     );
 
@@ -3879,7 +3879,7 @@ fn parse_drop_function() {
                     ]),
                 }
             ],
-            option: None
+            drop_behavior: None
         }
     );
 }
@@ -3899,7 +3899,7 @@ fn parse_drop_procedure() {
                 }]),
                 args: None
             }],
-            option: None
+            drop_behavior: None
         }
     );
 
@@ -3924,7 +3924,7 @@ fn parse_drop_procedure() {
                     }
                 ]),
             }],
-            option: None
+            drop_behavior: None
         }
     );
 
@@ -3973,7 +3973,7 @@ fn parse_drop_procedure() {
                     ]),
                 }
             ],
-            option: None
+            drop_behavior: None
         }
     );
 

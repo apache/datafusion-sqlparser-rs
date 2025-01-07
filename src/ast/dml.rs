@@ -497,12 +497,11 @@ pub struct Insert {
     pub priority: Option<MysqlInsertPriority>,
     /// Only for mysql
     pub insert_alias: Option<InsertAliases>,
-    /// Settings used in together with a specified `FORMAT`.
+    /// Settings used for ClickHouse.
     ///
     /// ClickHouse syntax: `INSERT INTO tbl SETTINGS format_template_resultset = '/some/path/resultset.format'`
     ///
     /// [ClickHouse `INSERT INTO`](https://clickhouse.com/docs/en/sql-reference/statements/insert-into)
-    /// [ClickHouse Formats](https://clickhouse.com/docs/en/interfaces/formats)
     pub settings: Option<Vec<Setting>>,
     /// Format for `INSERT` statement when not using standard SQL format. Can be e.g. `CSV`,
     /// `JSON`, `JSONAsString`, `LineAsString` and more.

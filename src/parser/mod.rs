@@ -12786,6 +12786,10 @@ impl<'a> Parser<'a> {
             Some(TransactionModifier::Immediate)
         } else if self.parse_keyword(Keyword::EXCLUSIVE) {
             Some(TransactionModifier::Exclusive)
+        } else if self.parse_keyword(Keyword::TRY) {
+            Some(TransactionModifier::Try)
+        } else if self.parse_keyword(Keyword::CATCH) {
+            Some(TransactionModifier::Catch)
         } else {
             None
         };
@@ -12803,8 +12807,19 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
+        let modifier = if !self.dialect.supports_end_transaction_modifier() {
+            None
+        } else if self.parse_keyword(Keyword::TRY) {
+            Some(TransactionModifier::Try)
+        } else if self.parse_keyword(Keyword::CATCH) {
+            Some(TransactionModifier::Catch)
+        } else {
+            None
+        };
         Ok(Statement::Commit {
             chain: self.parse_commit_rollback_chain()?,
+            end: true,
+            modifier,
         })
     }
 
@@ -12847,6 +12862,8 @@ impl<'a> Parser<'a> {
     pub fn parse_commit(&mut self) -> Result<Statement, ParserError> {
         Ok(Statement::Commit {
             chain: self.parse_commit_rollback_chain()?,
+            end: false,
+            modifier: None,
         })
     }
 

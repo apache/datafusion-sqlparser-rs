@@ -2958,7 +2958,6 @@ pub enum Statement {
         modes: Vec<TransactionMode>,
         begin: bool,
         transaction: Option<BeginTransactionKind>,
-        /// Only for SQLite
         modifier: Option<TransactionModifier>,
     },
     /// ```sql
@@ -2985,7 +2984,17 @@ pub enum Statement {
     /// ```sql
     /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
     /// ```
-    Commit { chain: bool },
+    /// If `end` is false
+    ///
+    /// ```sql
+    /// END [ TRY | CATCH ]
+    /// ```
+    /// If `end` is true
+    Commit {
+        chain: bool,
+        end: bool,
+        modifier: Option<TransactionModifier>,
+    },
     /// ```sql
     /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]
     /// ```
@@ -4614,8 +4623,23 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Commit { chain } => {
-                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
+            Statement::Commit {
+                chain,
+                end: end_syntax,
+                modifier,
+            } => {
+                if *end_syntax {
+                    write!(f, "END")?;
+                    if let Some(modifier) = *modifier {
+                        write!(f, " {}", modifier)?;
+                    }
+                    if *chain {
+                        write!(f, " AND CHAIN")?;
+                    }
+                } else {
+                    write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" })?;
+                }
+                Ok(())
             }
             Statement::Rollback { chain, savepoint } => {
                 write!(f, "ROLLBACK")?;
@@ -6388,9 +6412,10 @@ impl fmt::Display for TransactionIsolationLevel {
     }
 }
 
-/// SQLite specific syntax
+/// Modifier for the transaction in the `BEGIN` syntax
 ///
-/// <https://sqlite.org/lang_transaction.html>
+/// SQLite: <https://sqlite.org/lang_transaction.html>
+/// MS-SQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/try-catch-transact-sql>
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -6398,6 +6423,8 @@ pub enum TransactionModifier {
     Deferred,
     Immediate,
     Exclusive,
+    Try,
+    Catch,
 }
 
 impl fmt::Display for TransactionModifier {
@@ -6407,6 +6434,8 @@ impl fmt::Display for TransactionModifier {
             Deferred => "DEFERRED",
             Immediate => "IMMEDIATE",
             Exclusive => "EXCLUSIVE",
+            Try => "TRY",
+            Catch => "CATCH",
         })
     }
 }

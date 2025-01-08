@@ -7887,6 +7887,27 @@ fn parse_start_transaction() {
         ParserError::ParserError("Expected: transaction mode, found: EOF".to_string()),
         res.unwrap_err()
     );
+
+    // MS-SQL syntax
+    let dialects = all_dialects_where(|d| d.supports_start_transaction_modifier());
+    dialects.verified_stmt("BEGIN TRY");
+    dialects.verified_stmt("BEGIN CATCH");
+
+    let dialects = all_dialects_where(|d| {
+        d.supports_start_transaction_modifier() && d.supports_end_transaction_modifier()
+    });
+    dialects
+        .parse_sql_statements(
+            r#"
+        BEGIN TRY;
+            SELECT 1/0;
+        END TRY;
+        BEGIN CATCH;
+            EXECUTE foo;
+        END CATCH;
+    "#,
+        )
+        .unwrap();
 }
 
 #[test]
@@ -8102,12 +8123,12 @@ fn parse_set_time_zone_alias() {
 #[test]
 fn parse_commit() {
     match verified_stmt("COMMIT") {
-        Statement::Commit { chain: false } => (),
+        Statement::Commit { chain: false, .. } => (),
         _ => unreachable!(),
     }
 
     match verified_stmt("COMMIT AND CHAIN") {
-        Statement::Commit { chain: true } => (),
+        Statement::Commit { chain: true, .. } => (),
         _ => unreachable!(),
     }
 
@@ -8122,13 +8143,17 @@ fn parse_commit() {
 
 #[test]
 fn parse_end() {
-    one_statement_parses_to("END AND NO CHAIN", "COMMIT");
-    one_statement_parses_to("END WORK AND NO CHAIN", "COMMIT");
-    one_statement_parses_to("END TRANSACTION AND NO CHAIN", "COMMIT");
-    one_statement_parses_to("END WORK AND CHAIN", "COMMIT AND CHAIN");
-    one_statement_parses_to("END TRANSACTION AND CHAIN", "COMMIT AND CHAIN");
-    one_statement_parses_to("END WORK", "COMMIT");
-    one_statement_parses_to("END TRANSACTION", "COMMIT");
+    one_statement_parses_to("END AND NO CHAIN", "END");
+    one_statement_parses_to("END WORK AND NO CHAIN", "END");
+    one_statement_parses_to("END TRANSACTION AND NO CHAIN", "END");
+    one_statement_parses_to("END WORK AND CHAIN", "END AND CHAIN");
+    one_statement_parses_to("END TRANSACTION AND CHAIN", "END AND CHAIN");
+    one_statement_parses_to("END WORK", "END");
+    one_statement_parses_to("END TRANSACTION", "END");
+    // MS-SQL syntax
+    let dialects = all_dialects_where(|d| d.supports_end_transaction_modifier());
+    dialects.verified_stmt("END TRY");
+    dialects.verified_stmt("END CATCH");
 }
 
 #[test]

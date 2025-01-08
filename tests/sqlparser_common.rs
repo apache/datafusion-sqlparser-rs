@@ -11760,12 +11760,12 @@ fn test_drop_policy() {
             if_exists,
             name,
             table_name,
-            option,
+            drop_behavior,
         } => {
             assert_eq!(if_exists, true);
             assert_eq!(name.to_string(), "my_policy");
             assert_eq!(table_name.to_string(), "my_table");
-            assert_eq!(option, Some(ReferentialAction::Restrict));
+            assert_eq!(drop_behavior, Some(DropBehavior::Restrict));
         }
         _ => unreachable!(),
     }

@@ -5514,10 +5514,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_optional_referential_action(&mut self) -> Option<ReferentialAction> {
+    fn parse_optional_drop_behavior(&mut self) -> Option<DropBehavior> {
         match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
-            Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
-            Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
+            Some(Keyword::CASCADE) => Some(DropBehavior::Cascade),
+            Some(Keyword::RESTRICT) => Some(DropBehavior::Restrict),
             _ => None,
         }
     }
@@ -5529,11 +5529,11 @@ impl<'a> Parser<'a> {
     fn parse_drop_function(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let func_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
-        let option = self.parse_optional_referential_action();
+        let drop_behavior = self.parse_optional_drop_behavior();
         Ok(Statement::DropFunction {
             if_exists,
             func_desc,
-            option,
+            drop_behavior,
         })
     }
 
@@ -5547,12 +5547,12 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
-        let option = self.parse_optional_referential_action();
+        let drop_behavior = self.parse_optional_drop_behavior();
         Ok(Statement::DropPolicy {
             if_exists,
             name,
             table_name,
-            option,
+            drop_behavior,
         })
     }
 
@@ -5563,11 +5563,11 @@ impl<'a> Parser<'a> {
     fn parse_drop_procedure(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let proc_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
-        let option = self.parse_optional_referential_action();
+        let drop_behavior = self.parse_optional_drop_behavior();
         Ok(Statement::DropProcedure {
             if_exists,
             proc_desc,
-            option,
+            drop_behavior,
         })
     }
 

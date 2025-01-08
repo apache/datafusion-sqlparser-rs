@@ -2358,7 +2358,9 @@ impl<'a> Parser<'a> {
         match &next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::YEAR => Ok(DateTimeField::Year),
+                Keyword::YEARS => Ok(DateTimeField::Years),
                 Keyword::MONTH => Ok(DateTimeField::Month),
+                Keyword::MONTHS => Ok(DateTimeField::Months),
                 Keyword::WEEK => {
                     let week_day = if dialect_of!(self is BigQueryDialect | GenericDialect)
                         && self.consume_token(&Token::LParen)
@@ -2371,14 +2373,19 @@ impl<'a> Parser<'a> {
                     };
                     Ok(DateTimeField::Week(week_day))
                 }
+                Keyword::WEEKS => Ok(DateTimeField::Weeks),
                 Keyword::DAY => Ok(DateTimeField::Day),
                 Keyword::DAYOFWEEK => Ok(DateTimeField::DayOfWeek),
                 Keyword::DAYOFYEAR => Ok(DateTimeField::DayOfYear),
+                Keyword::DAYS => Ok(DateTimeField::Days),
                 Keyword::DATE => Ok(DateTimeField::Date),
                 Keyword::DATETIME => Ok(DateTimeField::Datetime),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
+                Keyword::HOURS => Ok(DateTimeField::Hours),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
+                Keyword::MINUTES => Ok(DateTimeField::Minutes),
                 Keyword::SECOND => Ok(DateTimeField::Second),
+                Keyword::SECONDS => Ok(DateTimeField::Seconds),
                 Keyword::CENTURY => Ok(DateTimeField::Century),
                 Keyword::DECADE => Ok(DateTimeField::Decade),
                 Keyword::DOY => Ok(DateTimeField::Doy),
@@ -2605,12 +2612,19 @@ impl<'a> Parser<'a> {
             matches!(
                 word.keyword,
                 Keyword::YEAR
+                    | Keyword::YEARS
                     | Keyword::MONTH
+                    | Keyword::MONTHS
                     | Keyword::WEEK
+                    | Keyword::WEEKS
                     | Keyword::DAY
+                    | Keyword::DAYS
                     | Keyword::HOUR
+                    | Keyword::HOURS
                     | Keyword::MINUTE
+                    | Keyword::MINUTES
                     | Keyword::SECOND
+                    | Keyword::SECONDS
                     | Keyword::CENTURY
                     | Keyword::DECADE
                     | Keyword::DOW

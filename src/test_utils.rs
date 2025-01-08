@@ -154,7 +154,7 @@ impl TestedDialects {
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
         let mut statements = self.parse_sql_statements(sql).expect(sql);
         assert_eq!(statements.len(), 1);
-
+        println!("sql: {}", sql);
         if !canonical.is_empty() && sql != canonical {
             assert_eq!(self.parse_sql_statements(canonical).unwrap(), statements);
         }

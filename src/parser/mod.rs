@@ -8937,15 +8937,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_table_object(
-        &mut self,
-        in_table_clause: bool,
-    ) -> Result<TableObject, ParserError> {
+    /// Parse a table object for insetion
+    /// e.g. `some_database.some_table` or `FUNCTION some_table_func(...)`
+    pub fn parse_table_object(&mut self) -> Result<TableObject, ParserError> {
         if dialect_of!(self is ClickHouseDialect) && self.parse_keyword(Keyword::FUNCTION) {
-            self.parse_table_function().map(TableObject::TableFunction)
+            let fn_name = self.parse_object_name(false)?;
+            self.parse_function_call(fn_name)
+                .map(TableObject::TableFunction)
         } else {
-            self.parse_object_name(in_table_clause)
-                .map(TableObject::TableName)
+            self.parse_object_name(false).map(TableObject::TableName)
         }
     }
 
@@ -12027,7 +12027,7 @@ impl<'a> Parser<'a> {
         } else {
             // Hive lets you put table here regardless
             let table = self.parse_keyword(Keyword::TABLE);
-            let table_object = self.parse_table_object(false)?;
+            let table_object = self.parse_table_object()?;
 
             let table_alias =
                 if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {

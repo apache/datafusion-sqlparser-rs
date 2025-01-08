@@ -7907,13 +7907,15 @@ impl fmt::Display for RenameTable {
     }
 }
 
+/// table object for insertion
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TableObject {
+    // for simple table name
     TableName(#[cfg_attr(feature = "visitor", visit(with = "visit_relation"))] ObjectName),
 
-    // Clickhouse: [Table functions](https://clickhouse.com/docs/en/sql-reference/table-functions)
+    // for Clickhouse [table functions](https://clickhouse.com/docs/en/sql-reference/table-functions)
     TableFunction(Function),
 }
 

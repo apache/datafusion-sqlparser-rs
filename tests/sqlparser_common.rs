@@ -4388,7 +4388,9 @@ fn parse_alter_table_constraints() {
 
 #[test]
 fn parse_alter_table_drop_column() {
+    check_one("DROP COLUMN IF EXISTS is_active");
     check_one("DROP COLUMN IF EXISTS is_active CASCADE");
+    check_one("DROP COLUMN IF EXISTS is_active RESTRICT");
     one_statement_parses_to(
         "ALTER TABLE tab DROP IF EXISTS is_active CASCADE",
         "ALTER TABLE tab DROP COLUMN IF EXISTS is_active CASCADE",
@@ -4403,11 +4405,15 @@ fn parse_alter_table_drop_column() {
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,
-                cascade,
+                drop_behavior,
             } => {
                 assert_eq!("is_active", column_name.to_string());
                 assert!(if_exists);
-                assert!(cascade);
+                match drop_behavior {
+                    None => assert!(constraint_text.ends_with(" is_active")),
+                    Some(DropBehavior::Restrict) => assert!(constraint_text.ends_with(" RESTRICT")),
+                    Some(DropBehavior::Cascade) => assert!(constraint_text.ends_with(" CASCADE")),
+                }
             }
             _ => unreachable!(),
         }
@@ -4497,37 +4503,29 @@ fn parse_alter_table_alter_column_type() {
 
 #[test]
 fn parse_alter_table_drop_constraint() {
-    let alter_stmt = "ALTER TABLE tab";
-    match alter_table_op(verified_stmt(
-        "ALTER TABLE tab DROP CONSTRAINT constraint_name CASCADE",
-    )) {
-        AlterTableOperation::DropConstraint {
-            name: constr_name,
-            if_exists,
-            cascade,
-        } => {
-            assert_eq!("constraint_name", constr_name.to_string());
-            assert!(!if_exists);
-            assert!(cascade);
+    check_one("DROP CONSTRAINT IF EXISTS constraint_name");
+    check_one("DROP CONSTRAINT IF EXISTS constraint_name RESTRICT");
+    check_one("DROP CONSTRAINT IF EXISTS constraint_name CASCADE");
+    fn check_one(constraint_text: &str) {
+        match alter_table_op(verified_stmt(&format!("ALTER TABLE tab {constraint_text}"))) {
+            AlterTableOperation::DropConstraint {
+                name: constr_name,
+                if_exists,
+                drop_behavior,
+            } => {
+                assert_eq!("constraint_name", constr_name.to_string());
+                assert!(if_exists);
+                match drop_behavior {
+                    None => assert!(constraint_text.ends_with(" constraint_name")),
+                    Some(DropBehavior::Restrict) => assert!(constraint_text.ends_with(" RESTRICT")),
+                    Some(DropBehavior::Cascade) => assert!(constraint_text.ends_with(" CASCADE")),
+                }
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
-    }
-    match alter_table_op(verified_stmt(
-        "ALTER TABLE tab DROP CONSTRAINT IF EXISTS constraint_name",
-    )) {
-        AlterTableOperation::DropConstraint {
-            name: constr_name,
-            if_exists,
-            cascade,
-        } => {
-            assert_eq!("constraint_name", constr_name.to_string());
-            assert!(if_exists);
-            assert!(!cascade);
-        }
-        _ => unreachable!(),
     }
 
-    let res = parse_sql_statements(&format!("{alter_stmt} DROP CONSTRAINT is_active TEXT"));
+    let res = parse_sql_statements("ALTER TABLE tab DROP CONSTRAINT is_active TEXT");
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: TEXT".to_string()),
         res.unwrap_err()

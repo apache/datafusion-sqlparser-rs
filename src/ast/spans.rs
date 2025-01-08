@@ -960,12 +960,12 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::DropConstraint {
                 if_exists: _,
                 name,
-                cascade: _,
+                drop_behavior: _,
             } => name.span,
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists: _,
-                cascade: _,
+                drop_behavior: _,
             } => column_name.span,
             AlterTableOperation::AttachPartition { partition } => partition.span(),
             AlterTableOperation::DetachPartition { partition } => partition.span(),

@@ -115,13 +115,13 @@ pub enum AlterTableOperation {
     DropConstraint {
         if_exists: bool,
         name: Ident,
-        cascade: bool,
+        drop_behavior: Option<DropBehavior>,
     },
     /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
     DropColumn {
         column_name: Ident,
         if_exists: bool,
-        cascade: bool,
+        drop_behavior: Option<DropBehavior>,
     },
     /// `ATTACH PART|PARTITION <partition_expr>`
     /// Note: this is a ClickHouse-specific operation, please refer to
@@ -451,27 +451,35 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::DropConstraint {
                 if_exists,
                 name,
-                cascade,
+                drop_behavior,
             } => {
                 write!(
                     f,
                     "DROP CONSTRAINT {}{}{}",
                     if *if_exists { "IF EXISTS " } else { "" },
                     name,
-                    if *cascade { " CASCADE" } else { "" },
+                    match drop_behavior {
+                        None => "",
+                        Some(DropBehavior::Restrict) => " RESTRICT",
+                        Some(DropBehavior::Cascade) => " CASCADE",
+                    }
                 )
             }
             AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,
-                cascade,
+                drop_behavior,
             } => write!(
                 f,
                 "DROP COLUMN {}{}{}",
                 if *if_exists { "IF EXISTS " } else { "" },
                 column_name,
-                if *cascade { " CASCADE" } else { "" }
+                match drop_behavior {
+                    None => "",
+                    Some(DropBehavior::Restrict) => " RESTRICT",
+                    Some(DropBehavior::Cascade) => " CASCADE",
+                }
             ),
             AlterTableOperation::AttachPartition { partition } => {
                 write!(f, "ATTACH {partition}")

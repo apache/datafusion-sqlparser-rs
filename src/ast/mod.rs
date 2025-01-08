@@ -23,7 +23,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use helpers::attached_token::AttachedToken;
+use helpers::{attached_token::AttachedToken, stmt_data_loading::FileStagingCommand};
 
 use core::ops::Deref;
 use core::{
@@ -49,12 +49,12 @@ pub use self::dcl::{
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateFunction, Deduplicate, DeferrableInitial, GeneratedAs,
-    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
-    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay,
-    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, TableConstraint,
-    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
-    ViewColumnDef,
+    ConstraintCharacteristics, CreateFunction, Deduplicate, DeferrableInitial, DropBehavior,
+    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexOption,
+    IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition, ProcedureParam,
+    ReferentialAction, TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2702,7 +2702,7 @@ pub enum Statement {
         /// One or more function to drop
         func_desc: Vec<FunctionDesc>,
         /// `CASCADE` or `RESTRICT`
-        option: Option<ReferentialAction>,
+        drop_behavior: Option<DropBehavior>,
     },
     /// ```sql
     /// DROP PROCEDURE
@@ -2712,7 +2712,7 @@ pub enum Statement {
         /// One or more function to drop
         proc_desc: Vec<FunctionDesc>,
         /// `CASCADE` or `RESTRICT`
-        option: Option<ReferentialAction>,
+        drop_behavior: Option<DropBehavior>,
     },
     /// ```sql
     /// DROP SECRET
@@ -2731,7 +2731,7 @@ pub enum Statement {
         if_exists: bool,
         name: Ident,
         table_name: ObjectName,
-        option: Option<ReferentialAction>,
+        drop_behavior: Option<DropBehavior>,
     },
     /// ```sql
     /// DECLARE
@@ -2960,7 +2960,6 @@ pub enum Statement {
         modes: Vec<TransactionMode>,
         begin: bool,
         transaction: Option<BeginTransactionKind>,
-        /// Only for SQLite
         modifier: Option<TransactionModifier>,
     },
     /// ```sql
@@ -2987,7 +2986,17 @@ pub enum Statement {
     /// ```sql
     /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
     /// ```
-    Commit { chain: bool },
+    /// If `end` is false
+    ///
+    /// ```sql
+    /// END [ TRY | CATCH ]
+    /// ```
+    /// If `end` is true
+    Commit {
+        chain: bool,
+        end: bool,
+        modifier: Option<TransactionModifier>,
+    },
     /// ```sql
     /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]
     /// ```
@@ -3422,6 +3431,12 @@ pub enum Statement {
     ///
     /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
     RenameTable(Vec<RenameTable>),
+    /// Snowflake `LIST`
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/list>
+    List(FileStagingCommand),
+    /// Snowflake `REMOVE`
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
+    Remove(FileStagingCommand),
 }
 
 impl fmt::Display for Statement {
@@ -4321,7 +4336,7 @@ impl fmt::Display for Statement {
             Statement::DropFunction {
                 if_exists,
                 func_desc,
-                option,
+                drop_behavior,
             } => {
                 write!(
                     f,
@@ -4329,7 +4344,7 @@ impl fmt::Display for Statement {
                     if *if_exists { " IF EXISTS" } else { "" },
                     display_comma_separated(func_desc),
                 )?;
-                if let Some(op) = option {
+                if let Some(op) = drop_behavior {
                     write!(f, " {op}")?;
                 }
                 Ok(())
@@ -4337,7 +4352,7 @@ impl fmt::Display for Statement {
             Statement::DropProcedure {
                 if_exists,
                 proc_desc,
-                option,
+                drop_behavior,
             } => {
                 write!(
                     f,
@@ -4345,7 +4360,7 @@ impl fmt::Display for Statement {
                     if *if_exists { " IF EXISTS" } else { "" },
                     display_comma_separated(proc_desc),
                 )?;
-                if let Some(op) = option {
+                if let Some(op) = drop_behavior {
                     write!(f, " {op}")?;
                 }
                 Ok(())
@@ -4374,15 +4389,15 @@ impl fmt::Display for Statement {
                 if_exists,
                 name,
                 table_name,
-                option,
+                drop_behavior,
             } => {
                 write!(f, "DROP POLICY")?;
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
                 write!(f, " {name} ON {table_name}")?;
-                if let Some(option) = option {
-                    write!(f, " {option}")?;
+                if let Some(drop_behavior) = drop_behavior {
+                    write!(f, " {drop_behavior}")?;
                 }
                 Ok(())
             }
@@ -4618,8 +4633,23 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Commit { chain } => {
-                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
+            Statement::Commit {
+                chain,
+                end: end_syntax,
+                modifier,
+            } => {
+                if *end_syntax {
+                    write!(f, "END")?;
+                    if let Some(modifier) = *modifier {
+                        write!(f, " {}", modifier)?;
+                    }
+                    if *chain {
+                        write!(f, " AND CHAIN")?;
+                    }
+                } else {
+                    write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" })?;
+                }
+                Ok(())
             }
             Statement::Rollback { chain, savepoint } => {
                 write!(f, "ROLLBACK")?;
@@ -4992,6 +5022,8 @@ impl fmt::Display for Statement {
             Statement::RenameTable(rename_tables) => {
                 write!(f, "RENAME TABLE {}", display_comma_separated(rename_tables))
             }
+            Statement::List(command) => write!(f, "LIST {command}"),
+            Statement::Remove(command) => write!(f, "REMOVE {command}"),
         }
     }
 }
@@ -5387,6 +5419,88 @@ impl fmt::Display for Action {
     }
 }
 
+/// The principal that receives the privileges
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Grantee {
+    pub grantee_type: GranteesType,
+    pub name: Option<GranteeName>,
+}
+
+impl fmt::Display for Grantee {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.grantee_type {
+            GranteesType::Role => {
+                write!(f, "ROLE ")?;
+            }
+            GranteesType::Share => {
+                write!(f, "SHARE ")?;
+            }
+            GranteesType::User => {
+                write!(f, "USER ")?;
+            }
+            GranteesType::Group => {
+                write!(f, "GROUP ")?;
+            }
+            GranteesType::Public => {
+                write!(f, "PUBLIC ")?;
+            }
+            GranteesType::DatabaseRole => {
+                write!(f, "DATABASE ROLE ")?;
+            }
+            GranteesType::Application => {
+                write!(f, "APPLICATION ")?;
+            }
+            GranteesType::ApplicationRole => {
+                write!(f, "APPLICATION ROLE ")?;
+            }
+            GranteesType::None => (),
+        }
+        if let Some(ref name) = self.name {
+            name.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum GranteesType {
+    Role,
+    Share,
+    User,
+    Group,
+    Public,
+    DatabaseRole,
+    Application,
+    ApplicationRole,
+    None,
+}
+
+/// Users/roles designated in a GRANT/REVOKE
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum GranteeName {
+    /// A bare identifier
+    ObjectName(ObjectName),
+    /// A MySQL user/host pair such as 'root'@'%'
+    UserHost { user: Ident, host: Ident },
+}
+
+impl fmt::Display for GranteeName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GranteeName::ObjectName(name) => name.fmt(f),
+            GranteeName::UserHost { user, host } => {
+                write!(f, "{}@{}", user, host)
+            }
+        }
+    }
+}
+
 /// Objects on which privileges are granted in a GRANT statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -5429,28 +5543,6 @@ impl fmt::Display for GrantObjects {
                     "ALL TABLES IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
-            }
-        }
-    }
-}
-
-/// Users/roles designated in a GRANT/REVOKE
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum Grantee {
-    /// A bare identifier
-    Ident(Ident),
-    /// A MySQL user/host pair such as 'root'@'%'
-    UserHost { user: Ident, host: Ident },
-}
-
-impl fmt::Display for Grantee {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Grantee::Ident(ident) => ident.fmt(f),
-            Grantee::UserHost { user, host } => {
-                write!(f, "{}@{}", user, host)
             }
         }
     }
@@ -6363,9 +6455,10 @@ impl fmt::Display for TransactionIsolationLevel {
     }
 }
 
-/// SQLite specific syntax
+/// Modifier for the transaction in the `BEGIN` syntax
 ///
-/// <https://sqlite.org/lang_transaction.html>
+/// SQLite: <https://sqlite.org/lang_transaction.html>
+/// MS-SQL: <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/try-catch-transact-sql>
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -6373,6 +6466,8 @@ pub enum TransactionModifier {
     Deferred,
     Immediate,
     Exclusive,
+    Try,
+    Catch,
 }
 
 impl fmt::Display for TransactionModifier {
@@ -6382,6 +6477,8 @@ impl fmt::Display for TransactionModifier {
             Deferred => "DEFERRED",
             Immediate => "IMMEDIATE",
             Exclusive => "EXCLUSIVE",
+            Try => "TRY",
+            Catch => "CATCH",
         })
     }
 }
@@ -7460,7 +7557,7 @@ impl Display for CreateViewSecurity {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateViewParams {
     pub algorithm: Option<CreateViewAlgorithm>,
-    pub definer: Option<Grantee>,
+    pub definer: Option<GranteeName>,
     pub security: Option<CreateViewSecurity>,
 }
 

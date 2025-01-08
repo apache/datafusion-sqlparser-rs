@@ -1633,11 +1633,17 @@ impl<'a> Tokenizer<'a> {
 
     // Consume characters until newline
     fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
-        let mut comment = peeking_take_while(chars, |ch| ch != '\n');
+        let mut comment = peeking_take_while(chars, |ch| match ch {
+            '\n' => false,                                           // Always stop at \n
+            '\r' if dialect_of!(self is PostgreSqlDialect) => false, // Stop at \r for Postgres
+            _ => true, // Keep consuming for other characters
+        });
+
         if let Some(ch) = chars.next() {
-            assert_eq!(ch, '\n');
+            assert!(ch == '\n' || ch == '\r');
             comment.push(ch);
         }
+
         comment
     }
 
@@ -1867,28 +1873,33 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<Option<Token>, TokenizerError> {
         let mut s = String::new();
         let mut nested = 1;
-        let mut last_ch = ' ';
+        let supports_nested_comments = self.dialect.supports_nested_comments();
 
         loop {
             match chars.next() {
-                Some(ch) => {
-                    if last_ch == '/' && ch == '*' {
-                        nested += 1;
-                    } else if last_ch == '*' && ch == '/' {
-                        nested -= 1;
-                        if nested == 0 {
-                            s.pop();
-                            break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
-                        }
+                Some('/') if matches!(chars.peek(), Some('*')) && supports_nested_comments => {
+                    chars.next(); // consume the '*'
+                    s.push('/');
+                    s.push('*');
+                    nested += 1;
+                }
+                Some('*') if matches!(chars.peek(), Some('/')) => {
+                    chars.next(); // consume the '/'
+                    nested -= 1;
+                    if nested == 0 {
+                        break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
                     }
+                    s.push('*');
+                    s.push('/');
+                }
+                Some(ch) => {
                     s.push(ch);
-                    last_ch = ch;
                 }
                 None => {
                     break self.tokenizer_error(
                         chars.location(),
                         "Unexpected EOF while in a multi-line comment",
-                    )
+                    );
                 }
             }
         }
@@ -2684,17 +2695,62 @@ mod tests {
 
     #[test]
     fn tokenize_comment() {
-        let sql = String::from("0--this is a comment\n1");
+        let test_cases = vec![
+            (
+                String::from("0--this is a comment\n1"),
+                vec![
+                    Token::Number("0".to_string(), false),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "this is a comment\n".to_string(),
+                    }),
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                String::from("0--this is a comment\r1"),
+                vec![
+                    Token::Number("0".to_string(), false),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "this is a comment\r1".to_string(),
+                    }),
+                ],
+            ),
+            (
+                String::from("0--this is a comment\r\n1"),
+                vec![
+                    Token::Number("0".to_string(), false),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "this is a comment\r\n".to_string(),
+                    }),
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+        ];
 
         let dialect = GenericDialect {};
+
+        for (sql, expected) in test_cases {
+            let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+            compare(expected, tokens);
+        }
+    }
+
+    #[test]
+    fn tokenize_comment_postgres() {
+        let sql = String::from("1--\r0");
+
+        let dialect = PostgreSqlDialect {};
         let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
         let expected = vec![
-            Token::Number("0".to_string(), false),
+            Token::Number("1".to_string(), false),
             Token::Whitespace(Whitespace::SingleLineComment {
                 prefix: "--".to_string(),
-                comment: "this is a comment\n".to_string(),
+                comment: "\r".to_string(),
             }),
-            Token::Number("1".to_string(), false),
+            Token::Number("0".to_string(), false),
         ];
         compare(expected, tokens);
     }
@@ -2730,18 +2786,90 @@ mod tests {
 
     #[test]
     fn tokenize_nested_multiline_comment() {
-        let sql = String::from("0/*multi-line\n* \n/* comment \n /*comment*/*/ */ /comment*/1");
+        let dialect = GenericDialect {};
+        let test_cases = vec![
+            (
+                "0/*multi-line\n* \n/* comment \n /*comment*/*/ */ /comment*/1",
+                vec![
+                    Token::Number("0".to_string(), false),
+                    Token::Whitespace(Whitespace::MultiLineComment(
+                        "multi-line\n* \n/* comment \n /*comment*/*/ ".into(),
+                    )),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Div,
+                    Token::Word(Word {
+                        value: "comment".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::COMMENT,
+                    }),
+                    Token::Mul,
+                    Token::Div,
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                "0/*multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/*/1",
+                vec![
+                    Token::Number("0".to_string(), false),
+                    Token::Whitespace(Whitespace::MultiLineComment(
+                        "multi-line\n* \n/* comment \n /*comment/**/ */ /comment*/".into(),
+                    )),
+                    Token::Number("1".to_string(), false),
+                ],
+            ),
+            (
+                "SELECT 1/* a /* b */ c */0",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Number("1".to_string(), false),
+                    Token::Whitespace(Whitespace::MultiLineComment(" a /* b */ c ".to_string())),
+                    Token::Number("0".to_string(), false),
+                ],
+            ),
+        ];
+
+        for (sql, expected) in test_cases {
+            let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+            compare(expected, tokens);
+        }
+    }
+
+    #[test]
+    fn tokenize_nested_multiline_comment_empty() {
+        let sql = "select 1/*/**/*/0";
 
         let dialect = GenericDialect {};
-        let tokens = Tokenizer::new(&dialect, &sql).tokenize().unwrap();
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![
-            Token::Number("0".to_string(), false),
-            Token::Whitespace(Whitespace::MultiLineComment(
-                "multi-line\n* \n/* comment \n /*comment*/*/ */ /comment".to_string(),
-            )),
+            Token::make_keyword("select"),
+            Token::Whitespace(Whitespace::Space),
             Token::Number("1".to_string(), false),
+            Token::Whitespace(Whitespace::MultiLineComment("/**/".to_string())),
+            Token::Number("0".to_string(), false),
         ];
+
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_nested_comments_if_not_supported() {
+        let dialect = SQLiteDialect {};
+        let sql = "SELECT 1/*/* nested comment */*/0";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("1".to_string(), false),
+            Token::Whitespace(Whitespace::MultiLineComment(
+                "/* nested comment ".to_string(),
+            )),
+            Token::Mul,
+            Token::Div,
+            Token::Number("0".to_string(), false),
+        ];
+
+        compare(expected, tokens.unwrap());
     }
 
     #[test]

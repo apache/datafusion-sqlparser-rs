@@ -3025,7 +3025,11 @@ fn parse_grant() {
         );
         assert!(!with_grant_option);
         assert!(granted_by.is_none());
-        if let [Grantee::UserHost { user, host }] = grantees.as_slice() {
+        if let [Grantee {
+            grantee_type: GranteesType::None,
+            name: Some(GranteeName::UserHost { user, host }),
+        }] = grantees.as_slice()
+        {
             assert_eq!(user.value, "jeffrey");
             assert_eq!(user.quote_style, Some('\''));
             assert_eq!(host.value, "%");
@@ -3060,7 +3064,11 @@ fn parse_revoke() {
             objects,
             GrantObjects::Tables(vec![ObjectName(vec!["db1".into(), "*".into()])])
         );
-        if let [Grantee::UserHost { user, host }] = grantees.as_slice() {
+        if let [Grantee {
+            grantee_type: GranteesType::None,
+            name: Some(GranteeName::UserHost { user, host }),
+        }] = grantees.as_slice()
+        {
             assert_eq!(user.value, "jeffrey");
             assert_eq!(user.quote_style, Some('\''));
             assert_eq!(host.value, "%");
@@ -3114,7 +3122,7 @@ fn parse_create_view_definer_param() {
     } = stmt
     {
         assert!(algorithm.is_none());
-        if let Some(Grantee::UserHost { user, host }) = definer {
+        if let Some(GranteeName::UserHost { user, host }) = definer {
             assert_eq!(user.value, "jeffrey");
             assert_eq!(user.quote_style, Some('\''));
             assert_eq!(host.value, "localhost");
@@ -3166,7 +3174,7 @@ fn parse_create_view_multiple_params() {
     } = stmt
     {
         assert_eq!(algorithm, Some(CreateViewAlgorithm::Undefined));
-        if let Some(Grantee::UserHost { user, host }) = definer {
+        if let Some(GranteeName::UserHost { user, host }) = definer {
             assert_eq!(user.value, "root");
             assert_eq!(user.quote_style, Some('`'));
             assert_eq!(host.value, "%");

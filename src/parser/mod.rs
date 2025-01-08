@@ -2362,7 +2362,9 @@ impl<'a> Parser<'a> {
         match &next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::YEAR => Ok(DateTimeField::Year),
+                Keyword::YEARS => Ok(DateTimeField::Years),
                 Keyword::MONTH => Ok(DateTimeField::Month),
+                Keyword::MONTHS => Ok(DateTimeField::Months),
                 Keyword::WEEK => {
                     let week_day = if dialect_of!(self is BigQueryDialect | GenericDialect)
                         && self.consume_token(&Token::LParen)
@@ -2375,14 +2377,19 @@ impl<'a> Parser<'a> {
                     };
                     Ok(DateTimeField::Week(week_day))
                 }
+                Keyword::WEEKS => Ok(DateTimeField::Weeks),
                 Keyword::DAY => Ok(DateTimeField::Day),
                 Keyword::DAYOFWEEK => Ok(DateTimeField::DayOfWeek),
                 Keyword::DAYOFYEAR => Ok(DateTimeField::DayOfYear),
+                Keyword::DAYS => Ok(DateTimeField::Days),
                 Keyword::DATE => Ok(DateTimeField::Date),
                 Keyword::DATETIME => Ok(DateTimeField::Datetime),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
+                Keyword::HOURS => Ok(DateTimeField::Hours),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
+                Keyword::MINUTES => Ok(DateTimeField::Minutes),
                 Keyword::SECOND => Ok(DateTimeField::Second),
+                Keyword::SECONDS => Ok(DateTimeField::Seconds),
                 Keyword::CENTURY => Ok(DateTimeField::Century),
                 Keyword::DECADE => Ok(DateTimeField::Decade),
                 Keyword::DOY => Ok(DateTimeField::Doy),
@@ -2609,12 +2616,19 @@ impl<'a> Parser<'a> {
             matches!(
                 word.keyword,
                 Keyword::YEAR
+                    | Keyword::YEARS
                     | Keyword::MONTH
+                    | Keyword::MONTHS
                     | Keyword::WEEK
+                    | Keyword::WEEKS
                     | Keyword::DAY
+                    | Keyword::DAYS
                     | Keyword::HOUR
+                    | Keyword::HOURS
                     | Keyword::MINUTE
+                    | Keyword::MINUTES
                     | Keyword::SECOND
+                    | Keyword::SECONDS
                     | Keyword::CENTURY
                     | Keyword::DECADE
                     | Keyword::DOW
@@ -3064,6 +3078,7 @@ impl<'a> Parser<'a> {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
                 Keyword::XOR => Some(BinaryOperator::Xor),
+                Keyword::OVERLAPS => Some(BinaryOperator::Overlaps),
                 Keyword::OPERATOR if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                     self.expect_token(&Token::LParen)?;
                     // there are special rules for operator names in
@@ -5139,7 +5154,7 @@ impl<'a> Parser<'a> {
         };
         let definer = if self.parse_keyword(Keyword::DEFINER) {
             self.expect_token(&Token::Eq)?;
-            Some(self.parse_grantee()?)
+            Some(self.parse_grantee_name()?)
         } else {
             None
         };
@@ -5564,10 +5579,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_optional_referential_action(&mut self) -> Option<ReferentialAction> {
+    fn parse_optional_drop_behavior(&mut self) -> Option<DropBehavior> {
         match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
-            Some(Keyword::CASCADE) => Some(ReferentialAction::Cascade),
-            Some(Keyword::RESTRICT) => Some(ReferentialAction::Restrict),
+            Some(Keyword::CASCADE) => Some(DropBehavior::Cascade),
+            Some(Keyword::RESTRICT) => Some(DropBehavior::Restrict),
             _ => None,
         }
     }
@@ -5579,11 +5594,11 @@ impl<'a> Parser<'a> {
     fn parse_drop_function(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let func_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
-        let option = self.parse_optional_referential_action();
+        let drop_behavior = self.parse_optional_drop_behavior();
         Ok(Statement::DropFunction {
             if_exists,
             func_desc,
-            option,
+            drop_behavior,
         })
     }
 
@@ -5597,12 +5612,12 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::ON)?;
         let table_name = self.parse_object_name(false)?;
-        let option = self.parse_optional_referential_action();
+        let drop_behavior = self.parse_optional_drop_behavior();
         Ok(Statement::DropPolicy {
             if_exists,
             name,
             table_name,
-            option,
+            drop_behavior,
         })
     }
 
@@ -5613,11 +5628,11 @@ impl<'a> Parser<'a> {
     fn parse_drop_procedure(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let proc_desc = self.parse_comma_separated(Parser::parse_function_desc)?;
-        let option = self.parse_optional_referential_action();
+        let drop_behavior = self.parse_optional_drop_behavior();
         Ok(Statement::DropProcedure {
             if_exists,
             proc_desc,
-            option,
+            drop_behavior,
         })
     }
 
@@ -10616,7 +10631,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_secondary_roles(&mut self) -> Result<Use, ParserError> {
-        self.expect_keyword_is(Keyword::ROLES)?;
+        self.expect_one_of_keywords(&[Keyword::ROLES, Keyword::ROLE])?;
         if self.parse_keyword(Keyword::NONE) {
             Ok(Use::SecondaryRoles(SecondaryRoles::None))
         } else if self.parse_keyword(Keyword::ALL) {
@@ -11698,7 +11713,7 @@ impl<'a> Parser<'a> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::TO)?;
-        let grantees = self.parse_comma_separated(|p| p.parse_grantee())?;
+        let grantees = self.parse_grantees()?;
 
         let with_grant_option =
             self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
@@ -11714,6 +11729,65 @@ impl<'a> Parser<'a> {
             with_grant_option,
             granted_by,
         })
+    }
+
+    fn parse_grantees(&mut self) -> Result<Vec<Grantee>, ParserError> {
+        let mut values = vec![];
+        let mut grantee_type = GranteesType::None;
+        loop {
+            grantee_type = if self.parse_keyword(Keyword::ROLE) {
+                GranteesType::Role
+            } else if self.parse_keyword(Keyword::USER) {
+                GranteesType::User
+            } else if self.parse_keyword(Keyword::SHARE) {
+                GranteesType::Share
+            } else if self.parse_keyword(Keyword::GROUP) {
+                GranteesType::Group
+            } else if self.parse_keyword(Keyword::PUBLIC) {
+                GranteesType::Public
+            } else if self.parse_keywords(&[Keyword::DATABASE, Keyword::ROLE]) {
+                GranteesType::DatabaseRole
+            } else if self.parse_keywords(&[Keyword::APPLICATION, Keyword::ROLE]) {
+                GranteesType::ApplicationRole
+            } else if self.parse_keyword(Keyword::APPLICATION) {
+                GranteesType::Application
+            } else {
+                grantee_type // keep from previous iteraton, if not specified
+            };
+
+            let grantee = if grantee_type == GranteesType::Public {
+                Grantee {
+                    grantee_type: grantee_type.clone(),
+                    name: None,
+                }
+            } else {
+                let mut name = self.parse_grantee_name()?;
+                if self.consume_token(&Token::Colon) {
+                    // Redshift supports namespace prefix for extenrnal users and groups:
+                    // <Namespace>:<GroupName> or <Namespace>:<UserName>
+                    // https://docs.aws.amazon.com/redshift/latest/mgmt/redshift-iam-access-control-native-idp.html
+                    let ident = self.parse_identifier()?;
+                    if let GranteeName::ObjectName(namespace) = name {
+                        name = GranteeName::ObjectName(ObjectName(vec![Ident::new(format!(
+                            "{}:{}",
+                            namespace, ident
+                        ))]));
+                    };
+                }
+                Grantee {
+                    grantee_type: grantee_type.clone(),
+                    name: Some(name),
+                }
+            };
+
+            values.push(grantee);
+
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        Ok(values)
     }
 
     pub fn parse_grant_revoke_privileges_objects(
@@ -11825,13 +11899,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_grantee(&mut self) -> Result<Grantee, ParserError> {
-        let user = self.parse_identifier()?;
-        if self.dialect.supports_user_host_grantee() && self.consume_token(&Token::AtSign) {
+    pub fn parse_grantee_name(&mut self) -> Result<GranteeName, ParserError> {
+        let name = self.parse_object_name(false)?;
+        if self.dialect.supports_user_host_grantee()
+            && name.0.len() == 1
+            && self.consume_token(&Token::AtSign)
+        {
+            let user = name.0[0].clone();
             let host = self.parse_identifier()?;
-            Ok(Grantee::UserHost { user, host })
+            Ok(GranteeName::UserHost { user, host })
         } else {
-            Ok(Grantee::Ident(user))
+            Ok(GranteeName::ObjectName(name))
         }
     }
 
@@ -11840,7 +11918,7 @@ impl<'a> Parser<'a> {
         let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
 
         self.expect_keyword_is(Keyword::FROM)?;
-        let grantees = self.parse_comma_separated(|p| p.parse_grantee())?;
+        let grantees = self.parse_grantees()?;
 
         let granted_by = self
             .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
@@ -11935,9 +12013,9 @@ impl<'a> Parser<'a> {
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
-            let (columns, partitioned, after_columns, source) =
+            let (columns, partitioned, after_columns, source, assignments) =
                 if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
-                    (vec![], None, vec![], None)
+                    (vec![], None, vec![], None, vec![])
                 } else {
                     let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
                         let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
@@ -11954,9 +12032,14 @@ impl<'a> Parser<'a> {
                         Default::default()
                     };
 
-                    let source = Some(self.parse_query()?);
+                    let (source, assignments) =
+                        if self.dialect.supports_insert_set() && self.parse_keyword(Keyword::SET) {
+                            (None, self.parse_comma_separated(Parser::parse_assignment)?)
+                        } else {
+                            (Some(self.parse_query()?), vec![])
+                        };
 
-                    (columns, partitioned, after_columns, source)
+                    (columns, partitioned, after_columns, source, assignments)
                 };
 
             let insert_alias = if dialect_of!(self is MySqlDialect | GenericDialect)
@@ -12036,6 +12119,7 @@ impl<'a> Parser<'a> {
                 columns,
                 after_columns,
                 source,
+                assignments,
                 table,
                 on,
                 returning,
@@ -12816,6 +12900,10 @@ impl<'a> Parser<'a> {
             Some(TransactionModifier::Immediate)
         } else if self.parse_keyword(Keyword::EXCLUSIVE) {
             Some(TransactionModifier::Exclusive)
+        } else if self.parse_keyword(Keyword::TRY) {
+            Some(TransactionModifier::Try)
+        } else if self.parse_keyword(Keyword::CATCH) {
+            Some(TransactionModifier::Catch)
         } else {
             None
         };
@@ -12833,8 +12921,19 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
+        let modifier = if !self.dialect.supports_end_transaction_modifier() {
+            None
+        } else if self.parse_keyword(Keyword::TRY) {
+            Some(TransactionModifier::Try)
+        } else if self.parse_keyword(Keyword::CATCH) {
+            Some(TransactionModifier::Catch)
+        } else {
+            None
+        };
         Ok(Statement::Commit {
             chain: self.parse_commit_rollback_chain()?,
+            end: true,
+            modifier,
         })
     }
 
@@ -12877,6 +12976,8 @@ impl<'a> Parser<'a> {
     pub fn parse_commit(&mut self) -> Result<Statement, ParserError> {
         Ok(Statement::Commit {
             chain: self.parse_commit_rollback_chain()?,
+            end: false,
+            modifier: None,
         })
     }
 
@@ -14262,16 +14363,6 @@ mod tests {
         let sql = "REPLACE INTO t (a) VALUES (&a)";
 
         assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
-    }
-
-    #[test]
-    fn test_replace_into_set() {
-        // NOTE: This is actually valid MySQL syntax, REPLACE and INSERT,
-        // but the parser does not yet support it.
-        // https://dev.mysql.com/doc/refman/8.3/en/insert.html
-        let sql = "REPLACE INTO t SET a='1'";
-
-        assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
     }
 
     #[test]

@@ -50,6 +50,7 @@ mod test_utils;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 use sqlparser::ast::ColumnOption::Comment;
+use sqlparser::ast::DateTimeField::Seconds;
 use sqlparser::ast::Expr::{Identifier, UnaryOp};
 use sqlparser::ast::Value::Number;
 use sqlparser::test_utils::all_dialects_except;
@@ -117,6 +118,12 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+}
+
+#[test]
+fn parse_insert_set() {
+    let dialects = all_dialects_where(|d| d.supports_insert_set());
+    dialects.verified_stmt("INSERT INTO tbl1 SET col1 = 1, col2 = 'abc', col3 = current_date()");
 }
 
 #[test]
@@ -5393,6 +5400,19 @@ fn parse_interval_all() {
         expr_from_projection(only(&select.projection)),
     );
 
+    let sql = "SELECT INTERVAL 5 DAYS";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(number("5"))),
+            leading_field: Some(DateTimeField::Days),
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -5420,10 +5440,18 @@ fn parse_interval_all() {
 
     verified_only_select("SELECT INTERVAL '1' YEAR");
     verified_only_select("SELECT INTERVAL '1' MONTH");
+    verified_only_select("SELECT INTERVAL '1' WEEK");
     verified_only_select("SELECT INTERVAL '1' DAY");
     verified_only_select("SELECT INTERVAL '1' HOUR");
     verified_only_select("SELECT INTERVAL '1' MINUTE");
     verified_only_select("SELECT INTERVAL '1' SECOND");
+    verified_only_select("SELECT INTERVAL '1' YEARS");
+    verified_only_select("SELECT INTERVAL '1' MONTHS");
+    verified_only_select("SELECT INTERVAL '1' WEEKS");
+    verified_only_select("SELECT INTERVAL '1' DAYS");
+    verified_only_select("SELECT INTERVAL '1' HOURS");
+    verified_only_select("SELECT INTERVAL '1' MINUTES");
+    verified_only_select("SELECT INTERVAL '1' SECONDS");
     verified_only_select("SELECT INTERVAL '1' YEAR TO MONTH");
     verified_only_select("SELECT INTERVAL '1' DAY TO HOUR");
     verified_only_select("SELECT INTERVAL '1' DAY TO MINUTE");
@@ -5433,10 +5461,21 @@ fn parse_interval_all() {
     verified_only_select("SELECT INTERVAL '1' MINUTE TO SECOND");
     verified_only_select("SELECT INTERVAL 1 YEAR");
     verified_only_select("SELECT INTERVAL 1 MONTH");
+    verified_only_select("SELECT INTERVAL 1 WEEK");
     verified_only_select("SELECT INTERVAL 1 DAY");
     verified_only_select("SELECT INTERVAL 1 HOUR");
     verified_only_select("SELECT INTERVAL 1 MINUTE");
     verified_only_select("SELECT INTERVAL 1 SECOND");
+    verified_only_select("SELECT INTERVAL 1 YEARS");
+    verified_only_select("SELECT INTERVAL 1 MONTHS");
+    verified_only_select("SELECT INTERVAL 1 WEEKS");
+    verified_only_select("SELECT INTERVAL 1 DAYS");
+    verified_only_select("SELECT INTERVAL 1 HOURS");
+    verified_only_select("SELECT INTERVAL 1 MINUTES");
+    verified_only_select("SELECT INTERVAL 1 SECONDS");
+    verified_only_select(
+        "SELECT '2 years 15 months 100 weeks 99 hours 123456789 milliseconds'::INTERVAL",
+    );
 }
 
 #[test]
@@ -7862,6 +7901,27 @@ fn parse_start_transaction() {
         ParserError::ParserError("Expected: transaction mode, found: EOF".to_string()),
         res.unwrap_err()
     );
+
+    // MS-SQL syntax
+    let dialects = all_dialects_where(|d| d.supports_start_transaction_modifier());
+    dialects.verified_stmt("BEGIN TRY");
+    dialects.verified_stmt("BEGIN CATCH");
+
+    let dialects = all_dialects_where(|d| {
+        d.supports_start_transaction_modifier() && d.supports_end_transaction_modifier()
+    });
+    dialects
+        .parse_sql_statements(
+            r#"
+        BEGIN TRY;
+            SELECT 1/0;
+        END TRY;
+        BEGIN CATCH;
+            EXECUTE foo;
+        END CATCH;
+    "#,
+        )
+        .unwrap();
 }
 
 #[test]
@@ -8077,12 +8137,12 @@ fn parse_set_time_zone_alias() {
 #[test]
 fn parse_commit() {
     match verified_stmt("COMMIT") {
-        Statement::Commit { chain: false } => (),
+        Statement::Commit { chain: false, .. } => (),
         _ => unreachable!(),
     }
 
     match verified_stmt("COMMIT AND CHAIN") {
-        Statement::Commit { chain: true } => (),
+        Statement::Commit { chain: true, .. } => (),
         _ => unreachable!(),
     }
 
@@ -8097,13 +8157,17 @@ fn parse_commit() {
 
 #[test]
 fn parse_end() {
-    one_statement_parses_to("END AND NO CHAIN", "COMMIT");
-    one_statement_parses_to("END WORK AND NO CHAIN", "COMMIT");
-    one_statement_parses_to("END TRANSACTION AND NO CHAIN", "COMMIT");
-    one_statement_parses_to("END WORK AND CHAIN", "COMMIT AND CHAIN");
-    one_statement_parses_to("END TRANSACTION AND CHAIN", "COMMIT AND CHAIN");
-    one_statement_parses_to("END WORK", "COMMIT");
-    one_statement_parses_to("END TRANSACTION", "COMMIT");
+    one_statement_parses_to("END AND NO CHAIN", "END");
+    one_statement_parses_to("END WORK AND NO CHAIN", "END");
+    one_statement_parses_to("END TRANSACTION AND NO CHAIN", "END");
+    one_statement_parses_to("END WORK AND CHAIN", "END AND CHAIN");
+    one_statement_parses_to("END TRANSACTION AND CHAIN", "END AND CHAIN");
+    one_statement_parses_to("END WORK", "END");
+    one_statement_parses_to("END TRANSACTION", "END");
+    // MS-SQL syntax
+    let dialects = all_dialects_where(|d| d.supports_end_transaction_modifier());
+    dialects.verified_stmt("END TRY");
+    dialects.verified_stmt("END CATCH");
 }
 
 #[test]
@@ -8511,6 +8575,15 @@ fn parse_grant() {
         },
         _ => unreachable!(),
     }
+
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO ROLE role1 WITH GRANT OPTION");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO DATABASE ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO SHARE share1");
+    verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
+    verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
 }
 
 #[test]
@@ -11381,16 +11454,12 @@ fn test_group_by_nothing() {
 #[test]
 fn test_extract_seconds_ok() {
     let dialects = all_dialects_where(|d| d.allow_extract_custom());
-    let stmt = dialects.verified_expr("EXTRACT(seconds FROM '2 seconds'::INTERVAL)");
+    let stmt = dialects.verified_expr("EXTRACT(SECONDS FROM '2 seconds'::INTERVAL)");
 
     assert_eq!(
         stmt,
         Expr::Extract {
-            field: DateTimeField::Custom(Ident {
-                value: "seconds".to_string(),
-                quote_style: None,
-                span: Span::empty(),
-            }),
+            field: Seconds,
             syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
@@ -11401,7 +11470,59 @@ fn test_extract_seconds_ok() {
                 format: None,
             }),
         }
-    )
+    );
+
+    let actual_ast = dialects
+        .parse_sql_statements("SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)")
+        .unwrap();
+
+    let expected_ast = vec![Statement::Query(Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Select(Box::new(Select {
+            select_token: AttachedToken::empty(),
+            distinct: None,
+            top: None,
+            top_before_distinct: false,
+            projection: vec![UnnamedExpr(Expr::Extract {
+                field: Seconds,
+                syntax: ExtractSyntax::From,
+                expr: Box::new(Expr::Cast {
+                    kind: CastKind::DoubleColon,
+                    expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "2 seconds".to_string(),
+                    ))),
+                    data_type: DataType::Interval,
+                    format: None,
+                }),
+            })],
+            into: None,
+            from: vec![],
+            lateral_views: vec![],
+            prewhere: None,
+            selection: None,
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            qualify: None,
+            window_before_qualify: false,
+            value_table_mode: None,
+            connect_by: None,
+        }))),
+        order_by: None,
+        limit: None,
+        limit_by: vec![],
+        offset: None,
+        fetch: None,
+        locks: vec![],
+        for_clause: None,
+        settings: None,
+        format_clause: None,
+    }))];
+
+    assert_eq!(actual_ast, expected_ast);
 }
 
 #[test]
@@ -11428,17 +11549,6 @@ fn test_extract_seconds_single_quote_ok() {
             }),
         }
     )
-}
-
-#[test]
-fn test_extract_seconds_err() {
-    let sql = "SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)";
-    let dialects = all_dialects_except(|d| d.allow_extract_custom());
-    let err = dialects.parse_sql_statements(sql).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "sql parser error: Expected: date/time field, found: seconds"
-    );
 }
 
 #[test]
@@ -11715,12 +11825,12 @@ fn test_drop_policy() {
             if_exists,
             name,
             table_name,
-            option,
+            drop_behavior,
         } => {
             assert_eq!(if_exists, true);
             assert_eq!(name.to_string(), "my_policy");
             assert_eq!(table_name.to_string(), "my_table");
-            assert_eq!(option, Some(ReferentialAction::Restrict));
+            assert_eq!(drop_behavior, Some(DropBehavior::Restrict));
         }
         _ => unreachable!(),
     }
@@ -12835,4 +12945,9 @@ fn parse_update_from_before_select() {
         ParserError::ParserError("Expected: end of statement, found: FROM".to_string()),
         parse_sql_statements(query).unwrap_err()
     );
+}
+
+#[test]
+fn parse_overlaps() {
+    verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
 }

@@ -78,4 +78,11 @@ impl Dialect for MsSqlDialect {
     fn supports_named_fn_args_with_rarrow_operator(&self) -> bool {
         false
     }
+
+    fn supports_start_transaction_modifier(&self) -> bool {
+        true
+    }
+    fn supports_end_transaction_modifier(&self) -> bool {
+        true
+    }
 }

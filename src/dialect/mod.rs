@@ -790,6 +790,8 @@ pub trait Dialect: Debug + Any {
     ///
     /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
     fn supports_insert_set(&self) -> bool {
+    fn supports_table_function_in_insertion(&self) -> bool {
+    /// Does the dialect support table function in insertion?
         false
     }
 }

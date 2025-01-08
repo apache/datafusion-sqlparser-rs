@@ -2355,18 +2355,7 @@ impl<'a> Parser<'a> {
                     };
                     Ok(DateTimeField::Week(week_day))
                 }
-                Keyword::WEEKS => {
-                    let week_day = if dialect_of!(self is GenericDialect)
-                        && self.consume_token(&Token::LParen)
-                    {
-                        let week_day = self.parse_identifier()?;
-                        self.expect_token(&Token::RParen)?;
-                        Some(week_day)
-                    } else {
-                        None
-                    };
-                    Ok(DateTimeField::Weeks(week_day))
-                }
+                Keyword::WEEKS => Ok(DateTimeField::Weeks),
                 Keyword::DAY => Ok(DateTimeField::Day),
                 Keyword::DAYOFWEEK => Ok(DateTimeField::DayOfWeek),
                 Keyword::DAYOFYEAR => Ok(DateTimeField::DayOfYear),

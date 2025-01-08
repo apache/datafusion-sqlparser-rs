@@ -166,7 +166,7 @@ pub enum DateTimeField {
     ///
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#extract)
     Week(Option<Ident>),
-    Weeks(Option<Ident>),
+    Weeks,
     Day,
     DayOfWeek,
     DayOfYear,
@@ -227,13 +227,7 @@ impl fmt::Display for DateTimeField {
                 }
                 Ok(())
             }
-            DateTimeField::Weeks(week_day) => {
-                write!(f, "WEEKS")?;
-                if let Some(week_day) = week_day {
-                    write!(f, "({week_day})")?
-                }
-                Ok(())
-            }
+            DateTimeField::Weeks => write!(f, "WEEKS"),
             DateTimeField::Day => write!(f, "DAY"),
             DateTimeField::DayOfWeek => write!(f, "DAYOFWEEK"),
             DateTimeField::DayOfYear => write!(f, "DAYOFYEAR"),

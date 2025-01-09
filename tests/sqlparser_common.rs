@@ -6860,7 +6860,7 @@ fn parse_derived_tables() {
 }
 
 #[test]
-fn parse_union_except_intersect() {
+fn parse_union_except_intersect_minus() {
     // TODO: add assertions
     verified_stmt("SELECT 1 UNION SELECT 2");
     verified_stmt("SELECT 1 UNION ALL SELECT 2");
@@ -6868,6 +6868,9 @@ fn parse_union_except_intersect() {
     verified_stmt("SELECT 1 EXCEPT SELECT 2");
     verified_stmt("SELECT 1 EXCEPT ALL SELECT 2");
     verified_stmt("SELECT 1 EXCEPT DISTINCT SELECT 1");
+    verified_stmt("SELECT 1 MINUS SELECT 2");
+    verified_stmt("SELECT 1 MINUS ALL SELECT 2");
+    verified_stmt("SELECT 1 MINUS DISTINCT SELECT 1");
     verified_stmt("SELECT 1 INTERSECT SELECT 2");
     verified_stmt("SELECT 1 INTERSECT ALL SELECT 2");
     verified_stmt("SELECT 1 INTERSECT DISTINCT SELECT 1");

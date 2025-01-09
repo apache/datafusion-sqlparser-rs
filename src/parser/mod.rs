@@ -9855,7 +9855,9 @@ impl<'a> Parser<'a> {
             let op = self.parse_set_operator(&self.peek_token().token);
             let next_precedence = match op {
                 // UNION and EXCEPT have the same binding power and evaluate left-to-right
-                Some(SetOperator::Union) | Some(SetOperator::Except) => 10,
+                Some(SetOperator::Union) | Some(SetOperator::Except) | Some(SetOperator::Minus) => {
+                    10
+                }
                 // INTERSECT has higher precedence than UNION/EXCEPT
                 Some(SetOperator::Intersect) => 20,
                 // Unexpected token or EOF => stop parsing the query body
@@ -9882,13 +9884,19 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::UNION => Some(SetOperator::Union),
             Token::Word(w) if w.keyword == Keyword::EXCEPT => Some(SetOperator::Except),
             Token::Word(w) if w.keyword == Keyword::INTERSECT => Some(SetOperator::Intersect),
+            Token::Word(w) if w.keyword == Keyword::MINUS => Some(SetOperator::Minus),
             _ => None,
         }
     }
 
     pub fn parse_set_quantifier(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
         match op {
-            Some(SetOperator::Except | SetOperator::Intersect | SetOperator::Union) => {
+            Some(
+                SetOperator::Except
+                | SetOperator::Intersect
+                | SetOperator::Union
+                | SetOperator::Minus,
+            ) => {
                 if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
                     SetQuantifier::DistinctByName
                 } else if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {

@@ -3440,12 +3440,7 @@ pub enum Statement {
     /// MS-SQL session
     ///
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/set-statements-transact-sql>
-    SetSessionParam {
-        names: Vec<String>,
-        identity_insert_obj: Option<ObjectName>,
-        offsets_keywords: Option<Vec<String>>,
-        value: String,
-    },
+    SetSessionParam(SetSessionParamKind),
 }
 
 impl fmt::Display for Statement {
@@ -5033,21 +5028,7 @@ impl fmt::Display for Statement {
             }
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
-            Statement::SetSessionParam {
-                names,
-                identity_insert_obj,
-                offsets_keywords,
-                value,
-            } => {
-                write!(f, "SET")?;
-                write!(f, " {}", display_comma_separated(names))?;
-                if let Some(obj) = identity_insert_obj {
-                    write!(f, " {obj}")?;
-                } else if let Some(keywords) = offsets_keywords {
-                    write!(f, " {}", display_comma_separated(keywords))?;
-                }
-                write!(f, " {value}")
-            }
+            Statement::SetSessionParam(kind) => write!(f, "SET {kind}"),
         }
     }
 }
@@ -7959,6 +7940,126 @@ impl fmt::Display for TableObject {
         match self {
             Self::TableName(table_name) => write!(f, "{table_name}"),
             Self::TableFunction(func) => write!(f, "FUNCTION {}", func),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SetSessionParamKind {
+    Generic(SetSessionParamGeneric),
+    IdentityInsert(SetSessionParamIdentityInsert),
+    Offsets(SetSessionParamOffsets),
+    Statistics(SetSessionParamStatistics),
+}
+
+impl fmt::Display for SetSessionParamKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SetSessionParamKind::Generic(x) => write!(f, "{x}"),
+            SetSessionParamKind::IdentityInsert(x) => write!(f, "{x}"),
+            SetSessionParamKind::Offsets(x) => write!(f, "{x}"),
+            SetSessionParamKind::Statistics(x) => write!(f, "{x}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SetSessionParamGeneric {
+    pub names: Vec<String>,
+    pub value: String,
+}
+
+impl fmt::Display for SetSessionParamGeneric {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", display_comma_separated(&self.names), self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SetSessionParamIdentityInsert {
+    pub obj: ObjectName,
+    pub value: SessionParamValue,
+}
+
+impl fmt::Display for SetSessionParamIdentityInsert {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "IDENTITY_INSERT {} {}", self.obj, self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SetSessionParamOffsets {
+    pub keywords: Vec<String>,
+    pub value: SessionParamValue,
+}
+
+impl fmt::Display for SetSessionParamOffsets {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "OFFSETS {} {}",
+            display_comma_separated(&self.keywords),
+            self.value
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SetSessionParamStatistics {
+    pub topic: SessionParamStatsTopic,
+    pub value: SessionParamValue,
+}
+
+impl fmt::Display for SetSessionParamStatistics {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "STATISTICS {} {}", self.topic, self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SessionParamStatsTopic {
+    IO,
+    Profile,
+    Time,
+    Xml,
+}
+
+impl fmt::Display for SessionParamStatsTopic {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SessionParamStatsTopic::IO => write!(f, "IO"),
+            SessionParamStatsTopic::Profile => write!(f, "PROFILE"),
+            SessionParamStatsTopic::Time => write!(f, "TIME"),
+            SessionParamStatsTopic::Xml => write!(f, "XML"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SessionParamValue {
+    On,
+    Off,
+}
+
+impl fmt::Display for SessionParamValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SessionParamValue::On => write!(f, "ON"),
+            SessionParamValue::Off => write!(f, "OFF"),
         }
     }
 }

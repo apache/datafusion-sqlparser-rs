@@ -10437,56 +10437,64 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_set_session_params(&mut self) -> Result<Statement, ParserError> {
-        let names = self.parse_comma_separated(Parser::parse_set_session_param_name)?;
-
-        let last_name = if let Some(last_name) = names.last() {
-            last_name.to_uppercase()
-        } else {
-            return self.expected("Session param name", self.peek_token());
-        };
-
-        let identity_insert_obj = if last_name == "IDENTITY_INSERT" {
-            Some(self.parse_object_name(false)?)
-        } else {
-            None
-        };
-
-        let offsets_keywords = if last_name == "OFFSETS" {
-            Some(self.parse_comma_separated(|parser| {
+        if self.parse_keyword(Keyword::STATISTICS) {
+            let topic = match self.parse_one_of_keywords(&[
+                Keyword::IO,
+                Keyword::PROFILE,
+                Keyword::TIME,
+                Keyword::XML,
+            ]) {
+                Some(Keyword::IO) => SessionParamStatsTopic::IO,
+                Some(Keyword::PROFILE) => SessionParamStatsTopic::Profile,
+                Some(Keyword::TIME) => SessionParamStatsTopic::Time,
+                Some(Keyword::XML) => SessionParamStatsTopic::Xml,
+                _ => return self.expected("IO, PROFILE, TIME or XML", self.peek_token()),
+            };
+            let value = self.parse_session_param_value()?;
+            Ok(Statement::SetSessionParam(SetSessionParamKind::Statistics(
+                SetSessionParamStatistics { topic, value },
+            )))
+        } else if self.parse_keyword(Keyword::IDENTITY_INSERT) {
+            let obj = self.parse_object_name(false)?;
+            let value = self.parse_session_param_value()?;
+            Ok(Statement::SetSessionParam(
+                SetSessionParamKind::IdentityInsert(SetSessionParamIdentityInsert { obj, value }),
+            ))
+        } else if self.parse_keyword(Keyword::OFFSETS) {
+            let keywords = self.parse_comma_separated(|parser| {
                 let next_token = parser.next_token();
                 match &next_token.token {
                     Token::Word(w) => Ok(w.to_string()),
                     _ => parser.expected("SQL keyword", next_token),
                 }
-            })?)
+            })?;
+            let value = self.parse_session_param_value()?;
+            Ok(Statement::SetSessionParam(SetSessionParamKind::Offsets(
+                SetSessionParamOffsets { keywords, value },
+            )))
         } else {
-            None
-        };
-
-        let value = self.parse_expr()?.to_string();
-        Ok(Statement::SetSessionParam {
-            names,
-            identity_insert_obj,
-            offsets_keywords,
-            value,
-        })
+            let names = self.parse_comma_separated(|parser| {
+                let next_token = parser.next_token();
+                match next_token.token {
+                    Token::Word(w) => Ok(w.to_string()),
+                    _ => parser.expected("Session param name", next_token),
+                }
+            })?;
+            let value = self.parse_expr()?.to_string();
+            Ok(Statement::SetSessionParam(SetSessionParamKind::Generic(
+                SetSessionParamGeneric { names, value },
+            )))
+        }
     }
 
-    pub fn parse_set_session_param_name(&mut self) -> Result<String, ParserError> {
-        if self.parse_keywords(&[Keyword::STATISTICS, Keyword::IO]) {
-            return Ok("STATISTICS IO".to_string());
-        } else if self.parse_keywords(&[Keyword::STATISTICS, Keyword::XML]) {
-            return Ok("STATISTICS XML".to_string());
-        } else if self.parse_keywords(&[Keyword::STATISTICS, Keyword::PROFILE]) {
-            return Ok("STATISTICS PROFILE".to_string());
-        } else if self.parse_keywords(&[Keyword::STATISTICS, Keyword::TIME]) {
-            return Ok("STATISTICS TIME".to_string());
+    fn parse_session_param_value(&mut self) -> Result<SessionParamValue, ParserError> {
+        if self.parse_keyword(Keyword::ON) {
+            Ok(SessionParamValue::On)
+        } else if self.parse_keyword(Keyword::OFF) {
+            Ok(SessionParamValue::Off)
+        } else {
+            self.expected("ON or OFF", self.peek_token())
         }
-        let next_token = self.next_token();
-        if let Token::Word(w) = next_token.token {
-            return Ok(w.to_string());
-        }
-        self.expected("Session param name", next_token)
     }
 
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {

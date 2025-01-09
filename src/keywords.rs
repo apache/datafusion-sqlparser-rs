@@ -503,6 +503,7 @@ define_keywords!(
     MILLISECOND,
     MILLISECONDS,
     MIN,
+    MINUS,
     MINUTE,
     MINUTES,
     MINVALUE,
@@ -921,6 +922,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::UNION,
     Keyword::EXCEPT,
     Keyword::INTERSECT,
+    Keyword::MINUS,
     // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
     Keyword::ON,
     Keyword::JOIN,
@@ -984,6 +986,7 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::UNION,
     Keyword::EXCEPT,
     Keyword::INTERSECT,
+    Keyword::MINUS,
     Keyword::CLUSTER,
     Keyword::DISTRIBUTE,
     Keyword::RETURNING,

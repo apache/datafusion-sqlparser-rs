@@ -208,6 +208,7 @@ pub enum SetOperator {
     Union,
     Except,
     Intersect,
+    Minus,
 }
 
 impl fmt::Display for SetOperator {
@@ -216,6 +217,7 @@ impl fmt::Display for SetOperator {
             SetOperator::Union => "UNION",
             SetOperator::Except => "EXCEPT",
             SetOperator::Intersect => "INTERSECT",
+            SetOperator::Minus => "MINUS",
         })
     }
 }

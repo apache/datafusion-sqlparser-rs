@@ -7915,7 +7915,12 @@ pub enum TableObject {
     // for simple table name
     TableName(#[cfg_attr(feature = "visitor", visit(with = "visit_relation"))] ObjectName),
 
-    // for Clickhouse [table functions](https://clickhouse.com/docs/en/sql-reference/table-functions)
+    /// Table specified as a function.
+    /// Example:
+    /// ```sql
+    /// INSERT INTO TABLE FUNCTION remote('localhost', default.simple_table)
+    /// ```
+    /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/table-functions)
     TableFunction(Function),
 }
 

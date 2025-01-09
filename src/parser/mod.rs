@@ -11900,12 +11900,12 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_grantee_name(&mut self) -> Result<GranteeName, ParserError> {
-        let name = self.parse_object_name(false)?;
+        let mut name = self.parse_object_name(false)?;
         if self.dialect.supports_user_host_grantee()
             && name.0.len() == 1
             && self.consume_token(&Token::AtSign)
         {
-            let user = name.0[0].clone();
+            let user = name.0.pop().unwrap();
             let host = self.parse_identifier()?;
             Ok(GranteeName::UserHost { user, host })
         } else {

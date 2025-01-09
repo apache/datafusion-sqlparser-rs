@@ -1432,6 +1432,18 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some(' ') => Ok(Some(Token::AtSign)),
+                        // We break on quotes here, because no dialect allows identifiers starting
+                        // with @ and containing quotation marks (e.g. `@'foo'`) unless they are
+                        // quoted, which is tokenized as a quoted string, not here (e.g.
+                        // `"@'foo'"`). Further, at least two dialects parse `@` followed by a
+                        // quoted string as two separate tokens, which this allows. For example,
+                        // Postgres parses `@'1'` as the absolute value of '1' which is implicitly
+                        // cast to a numeric type. And when parsing MySQL-style grantees (e.g.
+                        // `GRANT ALL ON *.* to 'root'@'localhost'`), we also want separate tokens
+                        // for the user, the `@`, and the host.
+                        Some('\'') => Ok(Some(Token::AtSign)),
+                        Some('\"') => Ok(Some(Token::AtSign)),
+                        Some('`') => Ok(Some(Token::AtSign)),
                         Some(sch) if self.dialect.is_identifier_start('@') => {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
@@ -1459,7 +1471,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 '$' => Ok(Some(self.tokenize_dollar_preceded_value(chars)?)),
 
-                //whitespace check (including unicode chars) should be last as it covers some of the chars above
+                // whitespace check (including unicode chars) should be last as it covers some of the chars above
                 ch if ch.is_whitespace() => {
                     self.consume_and_return(chars, Token::Whitespace(Whitespace::Space))
                 }
@@ -3394,6 +3406,58 @@ mod tests {
         let sql = r#"''''''"#;
         let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
         let expected = vec![Token::SingleQuotedString("''".to_string())];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn test_mysql_users_grantees() {
+        let dialect = MySqlDialect {};
+
+        let sql = "CREATE USER `root`@`%`";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("CREATE"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("USER"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("root", Some('`')),
+            Token::AtSign,
+            Token::make_word("%", Some('`')),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn test_postgres_abs_without_space_and_string_literal() {
+        let dialect = MySqlDialect {};
+
+        let sql = "SELECT @'1'";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::AtSign,
+            Token::SingleQuotedString("1".to_string()),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn test_postgres_abs_without_space_and_quoted_column() {
+        let dialect = MySqlDialect {};
+
+        let sql = r#"SELECT @"bar" FROM foo"#;
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::AtSign,
+            Token::DoubleQuotedString("bar".to_string()),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("FROM"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("foo", None),
+        ];
         compare(expected, tokens);
     }
 }

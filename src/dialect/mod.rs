@@ -434,6 +434,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
+    fn supports_user_host_grantee(&self) -> bool {
+        false
+    }
+
     /// Dialect-specific infix parser override
     ///
     /// This method is called to parse the next infix expression.

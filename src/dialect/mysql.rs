@@ -107,6 +107,10 @@ impl Dialect for MySqlDialect {
     fn supports_insert_set(&self) -> bool {
         true
     }
+
+    fn supports_user_host_grantee(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

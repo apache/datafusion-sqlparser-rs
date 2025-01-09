@@ -7912,7 +7912,11 @@ impl fmt::Display for RenameTable {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TableObject {
-    // for simple table name
+    /// Table specified by name.
+    /// Example:
+    /// ```sql
+    /// INSERT INTO my_table
+    /// ```
     TableName(#[cfg_attr(feature = "visitor", visit(with = "visit_relation"))] ObjectName),
 
     /// Table specified as a function.

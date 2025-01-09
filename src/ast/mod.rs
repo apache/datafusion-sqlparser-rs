@@ -7931,7 +7931,7 @@ pub enum TableObject {
 impl fmt::Display for TableObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::TableName(table_name) => write!(f, "{}", display_separated(&table_name.0, ".")),
+            Self::TableName(table_name) => write!(f, "{table_name}"),
             Self::TableFunction(func) => write!(f, "FUNCTION {}", func),
         }
     }

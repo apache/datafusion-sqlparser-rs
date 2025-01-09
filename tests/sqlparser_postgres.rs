@@ -4449,7 +4449,7 @@ fn test_simple_postgres_insert_with_alias() {
             or: None,
             ignore: false,
             into: true,
-            table_object: TableObject::TableName(ObjectName(vec![Ident {
+            table: TableObject::TableName(ObjectName(vec![Ident {
                 value: "test_tables".to_string(),
                 quote_style: None,
                 span: Span::empty(),
@@ -4497,7 +4497,7 @@ fn test_simple_postgres_insert_with_alias() {
             assignments: vec![],
             partitioned: None,
             after_columns: vec![],
-            table: false,
+            has_table_keyword: false,
             on: None,
             returning: None,
             replace_into: false,

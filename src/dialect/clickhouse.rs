@@ -51,7 +51,7 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
-    fn supports_table_function_in_insertion(&self) -> bool {
+    fn supports_insert_table_function(&self) -> bool {
         true
     }
 }

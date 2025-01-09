@@ -8940,9 +8940,7 @@ impl<'a> Parser<'a> {
     /// Parse a table object for insetion
     /// e.g. `some_database.some_table` or `FUNCTION some_table_func(...)`
     pub fn parse_table_object(&mut self) -> Result<TableObject, ParserError> {
-        if self.dialect.supports_table_function_in_insertion()
-            && self.parse_keyword(Keyword::FUNCTION)
-        {
+        if self.dialect.supports_insert_table_function() && self.parse_keyword(Keyword::FUNCTION) {
             let fn_name = self.parse_object_name(false)?;
             self.parse_function_call(fn_name)
                 .map(TableObject::TableFunction)

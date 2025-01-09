@@ -470,7 +470,7 @@ pub struct Insert {
     /// INTO - optional keyword
     pub into: bool,
     /// TABLE
-    pub table_object: TableObject,
+    pub table: TableObject,
     /// table_name as foo (for PostgreSQL)
     pub table_alias: Option<Ident>,
     /// COLUMNS
@@ -487,7 +487,7 @@ pub struct Insert {
     /// Columns defined after PARTITION
     pub after_columns: Vec<Ident>,
     /// whether the insert has the table keyword (Hive)
-    pub table: bool,
+    pub has_table_keyword: bool,
     pub on: Option<OnInsert>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
@@ -502,9 +502,9 @@ pub struct Insert {
 impl Display for Insert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let table_name = if let Some(alias) = &self.table_alias {
-            format!("{0} AS {alias}", self.table_object)
+            format!("{0} AS {alias}", self.table)
         } else {
-            self.table_object.to_string()
+            self.table.to_string()
         };
 
         if let Some(on_conflict) = self.or {
@@ -530,7 +530,7 @@ impl Display for Insert {
                 ignore = if self.ignore { " IGNORE" } else { "" },
                 over = if self.overwrite { " OVERWRITE" } else { "" },
                 int = if self.into { " INTO" } else { "" },
-                tbl = if self.table { " TABLE" } else { "" },
+                tbl = if self.has_table_keyword { " TABLE" } else { "" },
             )?;
         }
         if !self.columns.is_empty() {

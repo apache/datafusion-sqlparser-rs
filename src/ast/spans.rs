@@ -1142,14 +1142,14 @@ impl Spanned for Insert {
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool
-            table_object,
+            table: table_object,
             table_alias,
             columns,
             overwrite: _, // bool
             source,
             partitioned,
             after_columns,
-            table: _, // bool
+            has_table_keyword: _, // bool
             on,
             returning,
             replace_into: _, // bool

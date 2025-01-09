@@ -1725,7 +1725,7 @@ fn parse_prepare() {
     };
     match sub_stmt.as_ref() {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source: Some(source),
             ..
@@ -4381,7 +4381,7 @@ fn test_simple_postgres_insert_with_alias() {
             or: None,
             ignore: false,
             into: true,
-            table_object: TableObject::TableName(ObjectName(vec![Ident {
+            table: TableObject::TableName(ObjectName(vec![Ident {
                 value: "test_tables".to_string(),
                 quote_style: None,
                 span: Span::empty(),
@@ -4426,7 +4426,7 @@ fn test_simple_postgres_insert_with_alias() {
             assignments: vec![],
             partitioned: None,
             after_columns: vec![],
-            table: false,
+            has_table_keyword: false,
             on: None,
             returning: None,
             replace_into: false,
@@ -4519,7 +4519,7 @@ fn test_simple_insert_with_quoted_alias() {
             or: None,
             ignore: false,
             into: true,
-            table_object: TableObject::TableName(ObjectName(vec![Ident {
+            table: TableObject::TableName(ObjectName(vec![Ident {
                 value: "test_tables".to_string(),
                 quote_style: None,
                 span: Span::empty(),
@@ -4564,7 +4564,7 @@ fn test_simple_insert_with_quoted_alias() {
             assignments: vec![],
             partitioned: None,
             after_columns: vec![],
-            table: false,
+            has_table_keyword: false,
             on: None,
             returning: None,
             replace_into: false,

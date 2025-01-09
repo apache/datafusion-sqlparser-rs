@@ -96,7 +96,7 @@ fn parse_insert_values() {
     ) {
         match verified_stmt(sql) {
             Statement::Insert(Insert {
-                table_object: table_name,
+                table: table_name,
                 columns,
                 source: Some(source),
                 ..
@@ -149,7 +149,7 @@ fn parse_insert_default_values() {
             partitioned,
             returning,
             source,
-            table_object: table_name,
+            table: table_name,
             ..
         }) => {
             assert_eq!(columns, vec![]);
@@ -177,7 +177,7 @@ fn parse_insert_default_values() {
             partitioned,
             returning,
             source,
-            table_object: table_name,
+            table: table_name,
             ..
         }) => {
             assert_eq!(after_columns, vec![]);
@@ -205,7 +205,7 @@ fn parse_insert_default_values() {
             partitioned,
             returning,
             source,
-            table_object: table_name,
+            table: table_name,
             ..
         }) => {
             assert_eq!(after_columns, vec![]);

@@ -1406,7 +1406,7 @@ fn parse_simple_insert() {
 
     match mysql().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source,
             on,
@@ -1463,7 +1463,7 @@ fn parse_ignore_insert() {
 
     match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source,
             on,
@@ -1510,7 +1510,7 @@ fn parse_priority_insert() {
 
     match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source,
             on,
@@ -1554,7 +1554,7 @@ fn parse_priority_insert() {
 
     match mysql().verified_stmt(sql2) {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source,
             on,
@@ -1600,7 +1600,7 @@ fn parse_insert_as() {
     let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias`";
     match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source,
             insert_alias,
@@ -1652,7 +1652,7 @@ fn parse_insert_as() {
     let sql = r"INSERT INTO `table` (`id`, `date`) VALUES (1, '2024-01-01') AS `alias` (`mek_id`, `mek_date`)";
     match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source,
             insert_alias,
@@ -1710,7 +1710,7 @@ fn parse_replace_insert() {
     let sql = r"REPLACE DELAYED INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
     match mysql().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source,
             on,
@@ -1759,7 +1759,7 @@ fn parse_empty_row_insert() {
 
     match mysql().one_statement_parses_to(sql, "INSERT INTO tb VALUES (), ()") {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source,
             on,
@@ -1801,7 +1801,7 @@ fn parse_insert_with_on_duplicate_update() {
 
     match mysql().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             source,
             on,
@@ -1992,7 +1992,7 @@ fn parse_insert_with_numeric_prefix_column_name() {
     let sql = "INSERT INTO s1.t1 (123col_$@length123) VALUES (67.654)";
     match mysql().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_object: table_name,
+            table: table_name,
             columns,
             ..
         }) => {

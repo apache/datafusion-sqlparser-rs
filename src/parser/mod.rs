@@ -12137,7 +12137,7 @@ impl<'a> Parser<'a> {
 
             Ok(Statement::Insert(Insert {
                 or,
-                table_object,
+                table: table_object,
                 table_alias,
                 ignore,
                 into,
@@ -12147,7 +12147,7 @@ impl<'a> Parser<'a> {
                 after_columns,
                 source,
                 assignments,
-                table,
+                has_table_keyword: table,
                 on,
                 returning,
                 replace_into,

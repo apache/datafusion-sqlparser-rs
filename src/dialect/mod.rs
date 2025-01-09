@@ -794,7 +794,7 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Does the dialect support table function in insertion?
-    fn supports_table_function_in_insertion(&self) -> bool {
+    fn supports_insert_table_function(&self) -> bool {
         false
     }
 }

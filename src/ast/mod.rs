@@ -7907,7 +7907,7 @@ impl fmt::Display for RenameTable {
     }
 }
 
-/// table object for insertion
+/// Represents the referenced table in an `INSERT INTO` statement
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

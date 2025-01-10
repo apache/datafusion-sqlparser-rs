@@ -1420,7 +1420,7 @@ fn test_insert_query_with_format_clause() {
     ];
 
     for sql in &cases {
-        clickhouse_and_generic().verified_stmt(sql);
+        clickhouse().verified_stmt(sql);
     }
 }
 

@@ -12066,8 +12066,7 @@ impl<'a> Parser<'a> {
                 (columns, partitioned, after_columns, source, assignments)
             };
 
-            let (format_clause, settings) = if dialect_of!(self is ClickHouseDialect | GenericDialect)
-            {
+            let (format_clause, settings) = if self.dialect.supports_insert_format() {
                 // Settings always comes before `FORMAT` for ClickHouse:
                 // <https://clickhouse.com/docs/en/sql-reference/statements/insert-into>
                 let settings = self.parse_settings()?;
@@ -12080,7 +12079,7 @@ impl<'a> Parser<'a> {
 
                 (format, settings)
             } else {
-                (None, None)
+                Default::default()
             };
 
             let insert_alias = if dialect_of!(self is MySqlDialect | GenericDialect)
@@ -12173,15 +12172,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Parses format clause used for [ClickHouse]. Formats are different when using `SELECT` and
-    // `INSERT` and also when using the CLI for pipes. For `INSERT` it can take an optional values
-    // list which we try to parse here.
+    // Parses input format clause used for [ClickHouse].
     //
     // <https://clickhouse.com/docs/en/interfaces/formats>
     pub fn parse_input_format_clause(&mut self) -> Result<InputFormatClause, ParserError> {
         let ident = self.parse_identifier()?;
         let values = self
-            .try_parse(|p| p.parse_comma_separated(|p| p.parse_expr()))
+            .maybe_parse(|p| p.parse_comma_separated(|p| p.parse_expr()))?
             .unwrap_or_default();
 
         Ok(InputFormatClause { ident, values })

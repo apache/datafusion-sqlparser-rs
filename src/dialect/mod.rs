@@ -797,6 +797,11 @@ pub trait Dialect: Debug + Any {
     fn supports_insert_table_function(&self) -> bool {
         false
     }
+
+    /// Does the dialect support insert formats, e.g. `INSERT INTO ... FORMAT <format>`
+    fn supports_insert_format(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

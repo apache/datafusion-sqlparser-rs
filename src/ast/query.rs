@@ -2480,6 +2480,29 @@ impl fmt::Display for FormatClause {
     }
 }
 
+/// FORMAT identifier in input context, specific to ClickHouse.
+///
+/// [ClickHouse]: <https://clickhouse.com/docs/en/interfaces/formats>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct InputFormatClause {
+    pub ident: Ident,
+    pub values: Vec<Expr>,
+}
+
+impl fmt::Display for InputFormatClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "FORMAT {}", self.ident)?;
+
+        if !self.values.is_empty() {
+            write!(f, " {}", display_comma_separated(self.values.as_slice()))?;
+        }
+
+        Ok(())
+    }
+}
+
 /// FOR XML or FOR JSON clause, specific to MSSQL
 /// (formats the output of a query as XML or JSON)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

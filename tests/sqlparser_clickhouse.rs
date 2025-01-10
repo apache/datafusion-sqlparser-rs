@@ -1405,6 +1405,26 @@ fn test_query_with_format_clause() {
 }
 
 #[test]
+fn test_insert_query_with_format_clause() {
+    let cases = [
+        r#"INSERT INTO tbl FORMAT JSONEachRow {"id": 1, "value": "foo"}, {"id": 2, "value": "bar"}"#,
+        r#"INSERT INTO tbl FORMAT JSONEachRow ["first", "second", "third"]"#,
+        r#"INSERT INTO tbl FORMAT JSONEachRow [{"first": 1}]"#,
+        r#"INSERT INTO tbl (foo) FORMAT JSONAsObject {"foo": {"bar": {"x": "y"}, "baz": 1}}"#,
+        r#"INSERT INTO tbl (foo, bar) FORMAT JSON {"foo": 1, "bar": 2}"#,
+        r#"INSERT INTO tbl FORMAT CSV col1, col2, col3"#,
+        r#"INSERT INTO tbl FORMAT LineAsString "I love apple", "I love banana", "I love orange""#,
+        r#"INSERT INTO tbl (foo) SETTINGS input_format_json_read_bools_as_numbers = true FORMAT JSONEachRow {"id": 1, "value": "foo"}"#,
+        r#"INSERT INTO tbl SETTINGS format_template_resultset = '/some/path/resultset.format', format_template_row = '/some/path/row.format' FORMAT Template"#,
+        r#"INSERT INTO tbl SETTINGS input_format_json_read_bools_as_numbers = true FORMAT JSONEachRow {"id": 1, "value": "foo"}"#,
+    ];
+
+    for sql in &cases {
+        clickhouse().verified_stmt(sql);
+    }
+}
+
+#[test]
 fn parse_create_table_on_commit_and_as_query() {
     let sql = r#"CREATE LOCAL TEMPORARY TABLE test ON COMMIT PRESERVE ROWS AS SELECT 1"#;
     match clickhouse_and_generic().verified_stmt(sql) {

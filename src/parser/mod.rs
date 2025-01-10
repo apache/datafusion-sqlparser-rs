@@ -12033,34 +12033,54 @@ impl<'a> Parser<'a> {
 
             let is_mysql = dialect_of!(self is MySqlDialect);
 
-            let (columns, partitioned, after_columns, source, assignments) =
-                if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
-                    (vec![], None, vec![], None, vec![])
-                } else {
-                    let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
-                        let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+            let (columns, partitioned, after_columns, source, assignments) = if self
+                .parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES])
+            {
+                (vec![], None, vec![], None, vec![])
+            } else {
+                let (columns, partitioned, after_columns) = if !self.peek_subquery_start() {
+                    let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
-                        let partitioned = self.parse_insert_partition()?;
-                        // Hive allows you to specify columns after partitions as well if you want.
-                        let after_columns = if dialect_of!(self is HiveDialect) {
-                            self.parse_parenthesized_column_list(Optional, false)?
-                        } else {
-                            vec![]
-                        };
-                        (columns, partitioned, after_columns)
+                    let partitioned = self.parse_insert_partition()?;
+                    // Hive allows you to specify columns after partitions as well if you want.
+                    let after_columns = if dialect_of!(self is HiveDialect) {
+                        self.parse_parenthesized_column_list(Optional, false)?
                     } else {
-                        Default::default()
+                        vec![]
                     };
-
-                    let (source, assignments) =
-                        if self.dialect.supports_insert_set() && self.parse_keyword(Keyword::SET) {
-                            (None, self.parse_comma_separated(Parser::parse_assignment)?)
-                        } else {
-                            (Some(self.parse_query()?), vec![])
-                        };
-
-                    (columns, partitioned, after_columns, source, assignments)
+                    (columns, partitioned, after_columns)
+                } else {
+                    Default::default()
                 };
+
+                let (source, assignments) = if self.peek_keyword(Keyword::FORMAT)
+                    || self.peek_keyword(Keyword::SETTINGS)
+                {
+                    (None, vec![])
+                } else if self.dialect.supports_insert_set() && self.parse_keyword(Keyword::SET) {
+                    (None, self.parse_comma_separated(Parser::parse_assignment)?)
+                } else {
+                    (Some(self.parse_query()?), vec![])
+                };
+
+                (columns, partitioned, after_columns, source, assignments)
+            };
+
+            let (format_clause, settings) = if self.dialect.supports_insert_format() {
+                // Settings always comes before `FORMAT` for ClickHouse:
+                // <https://clickhouse.com/docs/en/sql-reference/statements/insert-into>
+                let settings = self.parse_settings()?;
+
+                let format = if self.parse_keyword(Keyword::FORMAT) {
+                    Some(self.parse_input_format_clause()?)
+                } else {
+                    None
+                };
+
+                (format, settings)
+            } else {
+                Default::default()
+            };
 
             let insert_alias = if dialect_of!(self is MySqlDialect | GenericDialect)
                 && self.parse_keyword(Keyword::AS)
@@ -12146,8 +12166,22 @@ impl<'a> Parser<'a> {
                 replace_into,
                 priority,
                 insert_alias,
+                settings,
+                format_clause,
             }))
         }
+    }
+
+    // Parses input format clause used for [ClickHouse].
+    //
+    // <https://clickhouse.com/docs/en/interfaces/formats>
+    pub fn parse_input_format_clause(&mut self) -> Result<InputFormatClause, ParserError> {
+        let ident = self.parse_identifier()?;
+        let values = self
+            .maybe_parse(|p| p.parse_comma_separated(|p| p.parse_expr()))?
+            .unwrap_or_default();
+
+        Ok(InputFormatClause { ident, values })
     }
 
     /// Returns true if the immediate tokens look like the

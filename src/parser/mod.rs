@@ -7680,11 +7680,11 @@ impl<'a> Parser<'a> {
             } else if self.parse_keyword(Keyword::CONSTRAINT) {
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let name = self.parse_identifier()?;
-                let cascade = self.parse_keyword(Keyword::CASCADE);
+                let drop_behavior = self.parse_optional_drop_behavior();
                 AlterTableOperation::DropConstraint {
                     if_exists,
                     name,
-                    cascade,
+                    drop_behavior,
                 }
             } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY])
                 && dialect_of!(self is MySqlDialect | GenericDialect)
@@ -7702,11 +7702,11 @@ impl<'a> Parser<'a> {
                 let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let column_name = self.parse_identifier()?;
-                let cascade = self.parse_keyword(Keyword::CASCADE);
+                let drop_behavior = self.parse_optional_drop_behavior();
                 AlterTableOperation::DropColumn {
                     column_name,
                     if_exists,
-                    cascade,
+                    drop_behavior,
                 }
             }
         } else if self.parse_keyword(Keyword::PARTITION) {

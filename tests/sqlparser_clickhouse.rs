@@ -223,6 +223,12 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_insert_into_function() {
+    clickhouse().verified_stmt(r#"INSERT INTO TABLE FUNCTION remote('localhost', default.simple_table) VALUES (100, 'inserted via remote()')"#);
+    clickhouse().verified_stmt(r#"INSERT INTO FUNCTION remote('localhost', default.simple_table) VALUES (100, 'inserted via remote()')"#);
+}
+
+#[test]
 fn parse_alter_table_attach_and_detach_partition() {
     for operation in &["ATTACH", "DETACH"] {
         match clickhouse_and_generic()

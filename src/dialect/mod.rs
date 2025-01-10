@@ -792,6 +792,11 @@ pub trait Dialect: Debug + Any {
     fn supports_insert_set(&self) -> bool {
         false
     }
+
+    /// Does the dialect support table function in insertion?
+    fn supports_insert_table_function(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

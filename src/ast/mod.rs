@@ -7907,6 +7907,36 @@ impl fmt::Display for RenameTable {
     }
 }
 
+/// Represents the referenced table in an `INSERT INTO` statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableObject {
+    /// Table specified by name.
+    /// Example:
+    /// ```sql
+    /// INSERT INTO my_table
+    /// ```
+    TableName(#[cfg_attr(feature = "visitor", visit(with = "visit_relation"))] ObjectName),
+
+    /// Table specified as a function.
+    /// Example:
+    /// ```sql
+    /// INSERT INTO TABLE FUNCTION remote('localhost', default.simple_table)
+    /// ```
+    /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/table-functions)
+    TableFunction(Function),
+}
+
+impl fmt::Display for TableObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::TableName(table_name) => write!(f, "{table_name}"),
+            Self::TableFunction(func) => write!(f, "FUNCTION {}", func),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

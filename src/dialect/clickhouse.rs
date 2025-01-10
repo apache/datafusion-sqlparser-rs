@@ -50,4 +50,8 @@ impl Dialect for ClickHouseDialect {
     fn supports_limit_comma(&self) -> bool {
         true
     }
+
+    fn supports_insert_table_function(&self) -> bool {
+        true
+    }
 }

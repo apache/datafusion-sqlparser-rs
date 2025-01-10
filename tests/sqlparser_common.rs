@@ -96,7 +96,7 @@ fn parse_insert_values() {
     ) {
         match verified_stmt(sql) {
             Statement::Insert(Insert {
-                table_name,
+                table: table_name,
                 columns,
                 source: Some(source),
                 ..
@@ -149,7 +149,7 @@ fn parse_insert_default_values() {
             partitioned,
             returning,
             source,
-            table_name,
+            table: table_name,
             ..
         }) => {
             assert_eq!(columns, vec![]);
@@ -158,7 +158,10 @@ fn parse_insert_default_values() {
             assert_eq!(partitioned, None);
             assert_eq!(returning, None);
             assert_eq!(source, None);
-            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+            assert_eq!(
+                table_name,
+                TableObject::TableName(ObjectName(vec!["test_table".into()]))
+            );
         }
         _ => unreachable!(),
     }
@@ -174,7 +177,7 @@ fn parse_insert_default_values() {
             partitioned,
             returning,
             source,
-            table_name,
+            table: table_name,
             ..
         }) => {
             assert_eq!(after_columns, vec![]);
@@ -183,7 +186,10 @@ fn parse_insert_default_values() {
             assert_eq!(partitioned, None);
             assert!(returning.is_some());
             assert_eq!(source, None);
-            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+            assert_eq!(
+                table_name,
+                TableObject::TableName(ObjectName(vec!["test_table".into()]))
+            );
         }
         _ => unreachable!(),
     }
@@ -199,7 +205,7 @@ fn parse_insert_default_values() {
             partitioned,
             returning,
             source,
-            table_name,
+            table: table_name,
             ..
         }) => {
             assert_eq!(after_columns, vec![]);
@@ -208,7 +214,10 @@ fn parse_insert_default_values() {
             assert_eq!(partitioned, None);
             assert_eq!(returning, None);
             assert_eq!(source, None);
-            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+            assert_eq!(
+                table_name,
+                TableObject::TableName(ObjectName(vec!["test_table".into()]))
+            );
         }
         _ => unreachable!(),
     }

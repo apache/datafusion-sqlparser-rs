@@ -8937,6 +8937,18 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a table object for insetion
+    /// e.g. `some_database.some_table` or `FUNCTION some_table_func(...)`
+    pub fn parse_table_object(&mut self) -> Result<TableObject, ParserError> {
+        if self.dialect.supports_insert_table_function() && self.parse_keyword(Keyword::FUNCTION) {
+            let fn_name = self.parse_object_name(false)?;
+            self.parse_function_call(fn_name)
+                .map(TableObject::TableFunction)
+        } else {
+            self.parse_object_name(false).map(TableObject::TableName)
+        }
+    }
+
     /// Parse a possibly qualified, possibly quoted identifier, optionally allowing for wildcards,
     /// e.g. *, *.*, `foo`.*, or "foo"."bar"
     fn parse_object_name_with_wildcards(
@@ -12010,7 +12022,7 @@ impl<'a> Parser<'a> {
         } else {
             // Hive lets you put table here regardless
             let table = self.parse_keyword(Keyword::TABLE);
-            let table_name = self.parse_object_name(false)?;
+            let table_object = self.parse_table_object()?;
 
             let table_alias =
                 if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
@@ -12118,7 +12130,7 @@ impl<'a> Parser<'a> {
 
             Ok(Statement::Insert(Insert {
                 or,
-                table_name,
+                table: table_object,
                 table_alias,
                 ignore,
                 into,
@@ -12128,7 +12140,7 @@ impl<'a> Parser<'a> {
                 after_columns,
                 source,
                 assignments,
-                table,
+                has_table_keyword: table,
                 on,
                 returning,
                 replace_into,

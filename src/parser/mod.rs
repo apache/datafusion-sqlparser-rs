@@ -9702,7 +9702,12 @@ impl<'a> Parser<'a> {
             let format_clause = if dialect_of!(self is ClickHouseDialect | GenericDialect)
                 && self.parse_keyword(Keyword::FORMAT)
             {
-                Some(self.parse_format_clause(false)?)
+                if self.parse_keyword(Keyword::NULL) {
+                    Some(FormatClause::Null)
+                } else {
+                    let ident = self.parse_identifier()?;
+                    Some(FormatClause::Identifier(ident))
+                }
             } else {
                 None
             };
@@ -12068,7 +12073,7 @@ impl<'a> Parser<'a> {
                 let settings = self.parse_settings()?;
 
                 let format = if self.parse_keyword(Keyword::FORMAT) {
-                    Some(self.parse_format_clause(true)?)
+                    Some(self.parse_input_format_clause()?)
                 } else {
                     None
                 };
@@ -12169,32 +12174,17 @@ impl<'a> Parser<'a> {
     }
 
     // Parses format clause used for [ClickHouse]. Formats are different when using `SELECT` and
-    // `INSERT` and also when using the CLI for pipes. It may or may not take an additional
-    // expression after the format so we try to parse the expression but allow failure.
-    //
-    // Since we know we never take an additional expression in `SELECT` context we never only try
-    // to parse if `can_have_expression` is true.
+    // `INSERT` and also when using the CLI for pipes. For `INSERT` it can take an optional values
+    // list which we try to parse here.
     //
     // <https://clickhouse.com/docs/en/interfaces/formats>
-    pub fn parse_format_clause(
-        &mut self,
-        can_have_expression: bool,
-    ) -> Result<FormatClause, ParserError> {
-        if self.parse_keyword(Keyword::NULL) {
-            Ok(FormatClause::Null)
-        } else {
-            let ident = self.parse_identifier()?;
-            let expr = if can_have_expression {
-                match self.try_parse(|p| p.parse_comma_separated(|p| p.parse_expr())) {
-                    Ok(expr) => Some(expr),
-                    _ => None,
-                }
-            } else {
-                None
-            };
+    pub fn parse_input_format_clause(&mut self) -> Result<InputFormatClause, ParserError> {
+        let ident = self.parse_identifier()?;
+        let values = self
+            .try_parse(|p| p.parse_comma_separated(|p| p.parse_expr()))
+            .unwrap_or_default();
 
-            Ok(FormatClause::Identifier { ident, expr })
-        }
+        Ok(InputFormatClause { ident, values })
     }
 
     /// Returns true if the immediate tokens look like the

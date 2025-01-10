@@ -2467,27 +2467,39 @@ impl fmt::Display for GroupByExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FormatClause {
-    Identifier {
-        ident: Ident,
-        expr: Option<Vec<Expr>>,
-    },
+    Identifier(Ident),
     Null,
 }
 
 impl fmt::Display for FormatClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FormatClause::Identifier { ident, expr } => {
-                write!(f, "FORMAT {}", ident)?;
-
-                if let Some(exprs) = expr {
-                    write!(f, " {}", display_comma_separated(exprs))?;
-                }
-
-                Ok(())
-            }
+            FormatClause::Identifier(ident) => write!(f, "FORMAT {}", ident),
             FormatClause::Null => write!(f, "FORMAT NULL"),
         }
+    }
+}
+
+/// FORMAT identifier in input context, specific to ClickHouse.
+///
+/// [ClickHouse]: <https://clickhouse.com/docs/en/interfaces/formats>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct InputFormatClause {
+    pub ident: Ident,
+    pub values: Vec<Expr>,
+}
+
+impl fmt::Display for InputFormatClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "FORMAT {}", self.ident)?;
+
+        if !self.values.is_empty() {
+            write!(f, " {}", display_comma_separated(self.values.as_slice()))?;
+        }
+
+        Ok(())
     }
 }
 

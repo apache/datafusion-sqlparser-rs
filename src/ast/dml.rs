@@ -32,8 +32,8 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, Assignment, ClusteredBy, CommentDef, Expr,
-    FileFormat, FormatClause, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
+    display_comma_separated, display_separated, query::InputFormatClause, Assignment, ClusteredBy,
+    CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
     HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert,
     OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting, SqlOption,
     SqliteOnConflict, TableEngine, TableObject, TableWithJoins, Tag, WrappedCollection,
@@ -509,7 +509,7 @@ pub struct Insert {
     /// ClickHouse syntax: `INSERT INTO tbl FORMAT JSONEachRow {"foo": 1, "bar": 2}, {"foo": 3}`
     ///
     /// [ClickHouse formats JSON insert](https://clickhouse.com/docs/en/interfaces/formats#json-inserting-data)
-    pub format_clause: Option<FormatClause>,
+    pub format_clause: Option<InputFormatClause>,
 }
 
 impl Display for Insert {

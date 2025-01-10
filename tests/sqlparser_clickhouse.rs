@@ -1384,10 +1384,7 @@ fn test_query_with_format_clause() {
                 } else {
                     assert_eq!(
                         query.format_clause,
-                        Some(FormatClause::Identifier {
-                            ident: Ident::new(*format),
-                            expr: None
-                        })
+                        Some(FormatClause::Identifier(Ident::new(*format)))
                     );
                 }
             }

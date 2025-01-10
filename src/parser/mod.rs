@@ -8949,11 +8949,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_table_function(&mut self) -> Result<Function, ParserError> {
-        let fn_name = self.parse_object_name(false)?;
-        self.parse_function_call(fn_name)
-    }
-
     /// Parse a possibly qualified, possibly quoted identifier, optionally allowing for wildcards,
     /// e.g. *, *.*, `foo`.*, or "foo"."bar"
     fn parse_object_name_with_wildcards(

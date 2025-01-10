@@ -1142,7 +1142,7 @@ impl Spanned for Insert {
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool
-            table: table_object,
+            table,
             table_alias,
             columns,
             overwrite: _, // bool
@@ -1159,7 +1159,7 @@ impl Spanned for Insert {
         } = self;
 
         union_spans(
-            core::iter::once(table_object.span())
+            core::iter::once(table.span())
                 .chain(table_alias.as_ref().map(|i| i.span))
                 .chain(columns.iter().map(|i| i.span))
                 .chain(source.as_ref().map(|q| q.span()))

@@ -54,6 +54,10 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    fn supports_from_trailing_commas(&self) -> bool {
+        true
+    }
+
     // Snowflake supports double-dot notation when the schema name is not specified
     // In this case the default PUBLIC schema is used
     //

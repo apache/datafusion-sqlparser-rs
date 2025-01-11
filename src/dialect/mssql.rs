@@ -85,4 +85,9 @@ impl Dialect for MsSqlDialect {
     fn supports_end_transaction_modifier(&self) -> bool {
         true
     }
+
+    /// See: <https://learn.microsoft.com/en-us/sql/t-sql/statements/set-statements-transact-sql>
+    fn supports_set_stmt_without_operator(&self) -> bool {
+        true
+    }
 }

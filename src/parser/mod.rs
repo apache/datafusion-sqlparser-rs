@@ -10428,8 +10428,72 @@ impl<'a> Parser<'a> {
                 snapshot: None,
                 session: false,
             })
+        } else if self.dialect.supports_set_stmt_without_operator() {
+            self.prev_token();
+            self.parse_set_session_params()
         } else {
             self.expected("equals sign or TO", self.peek_token())
+        }
+    }
+
+    pub fn parse_set_session_params(&mut self) -> Result<Statement, ParserError> {
+        if self.parse_keyword(Keyword::STATISTICS) {
+            let topic = match self.parse_one_of_keywords(&[
+                Keyword::IO,
+                Keyword::PROFILE,
+                Keyword::TIME,
+                Keyword::XML,
+            ]) {
+                Some(Keyword::IO) => SessionParamStatsTopic::IO,
+                Some(Keyword::PROFILE) => SessionParamStatsTopic::Profile,
+                Some(Keyword::TIME) => SessionParamStatsTopic::Time,
+                Some(Keyword::XML) => SessionParamStatsTopic::Xml,
+                _ => return self.expected("IO, PROFILE, TIME or XML", self.peek_token()),
+            };
+            let value = self.parse_session_param_value()?;
+            Ok(Statement::SetSessionParam(SetSessionParamKind::Statistics(
+                SetSessionParamStatistics { topic, value },
+            )))
+        } else if self.parse_keyword(Keyword::IDENTITY_INSERT) {
+            let obj = self.parse_object_name(false)?;
+            let value = self.parse_session_param_value()?;
+            Ok(Statement::SetSessionParam(
+                SetSessionParamKind::IdentityInsert(SetSessionParamIdentityInsert { obj, value }),
+            ))
+        } else if self.parse_keyword(Keyword::OFFSETS) {
+            let keywords = self.parse_comma_separated(|parser| {
+                let next_token = parser.next_token();
+                match &next_token.token {
+                    Token::Word(w) => Ok(w.to_string()),
+                    _ => parser.expected("SQL keyword", next_token),
+                }
+            })?;
+            let value = self.parse_session_param_value()?;
+            Ok(Statement::SetSessionParam(SetSessionParamKind::Offsets(
+                SetSessionParamOffsets { keywords, value },
+            )))
+        } else {
+            let names = self.parse_comma_separated(|parser| {
+                let next_token = parser.next_token();
+                match next_token.token {
+                    Token::Word(w) => Ok(w.to_string()),
+                    _ => parser.expected("Session param name", next_token),
+                }
+            })?;
+            let value = self.parse_expr()?.to_string();
+            Ok(Statement::SetSessionParam(SetSessionParamKind::Generic(
+                SetSessionParamGeneric { names, value },
+            )))
+        }
+    }
+
+    fn parse_session_param_value(&mut self) -> Result<SessionParamValue, ParserError> {
+        if self.parse_keyword(Keyword::ON) {
+            Ok(SessionParamValue::On)
+        } else if self.parse_keyword(Keyword::OFF) {
+            Ok(SessionParamValue::Off)
+        } else {
+            self.expected("ON or OFF", self.peek_token())
         }
     }
 
@@ -13004,6 +13068,8 @@ impl<'a> Parser<'a> {
                     TransactionIsolationLevel::RepeatableRead
                 } else if self.parse_keyword(Keyword::SERIALIZABLE) {
                     TransactionIsolationLevel::Serializable
+                } else if self.parse_keyword(Keyword::SNAPSHOT) {
+                    TransactionIsolationLevel::Snapshot
                 } else {
                     self.expected("isolation level", self.peek_token())?
                 };

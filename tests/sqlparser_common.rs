@@ -12796,3 +12796,9 @@ fn parse_update_from_before_select() {
         parse_sql_statements(query).unwrap_err()
     );
 }
+
+#[test]
+fn test_trailing_commas_in_from() {
+    let dialects = all_dialects_where(|d| d.supports_from_trailing_commas());
+    dialects.verified_only_select_with_canonical("SELECT 1, 2 FROM t,", "SELECT 1, 2 FROM t");
+}

@@ -3924,7 +3924,7 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated_with_trailing_commas(
             |p| p.parse_select_item(),
             trailing_commas,
-            self.default_reserved_keywords(),
+            None,
         )
     }
 
@@ -3951,14 +3951,14 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
-    //Parse a 'FROM' statment. support trailing comma
-    pub fn parse_from(&mut self) -> Result<Vec<TableWithJoins>, ParserError> {
+    //Parse a list of [TableWithJoins]
+    fn parse_table_with_joins(&mut self) -> Result<Vec<TableWithJoins>, ParserError> {
         let trailing_commas = self.dialect.supports_from_trailing_commas();
 
         self.parse_comma_separated_with_trailing_commas(
             Parser::parse_table_and_joins,
             trailing_commas,
-            self.dialect.get_reserved_keyword_after_from(),
+            Some(self.dialect.get_reserved_keywords_for_table_factor()),
         )
     }
 
@@ -3968,8 +3968,9 @@ impl<'a> Parser<'a> {
     fn is_parse_comma_separated_end_with_trailing_commas(
         &mut self,
         trailing_commas: bool,
-        reserved_keywords: &[Keyword],
+        reserved_keywords: Option<&[Keyword]>,
     ) -> bool {
+        let reserved_keywords = reserved_keywords.unwrap_or(keywords::RESERVED_FOR_COLUMN_ALIAS);
         if !self.consume_token(&Token::Comma) {
             true
         } else if trailing_commas {
@@ -3989,14 +3990,7 @@ impl<'a> Parser<'a> {
     /// Parse the comma of a comma-separated syntax element.
     /// Returns true if there is a next element
     fn is_parse_comma_separated_end(&mut self) -> bool {
-        self.is_parse_comma_separated_end_with_trailing_commas(
-            self.options.trailing_commas,
-            self.default_reserved_keywords(),
-        )
-    }
-
-    fn default_reserved_keywords(&self) -> &'static [Keyword] {
-        keywords::RESERVED_FOR_COLUMN_ALIAS
+        self.is_parse_comma_separated_end_with_trailing_commas(self.options.trailing_commas, None)
     }
 
     /// Parse a comma-separated list of 1+ items accepted by `F`
@@ -4004,11 +3998,7 @@ impl<'a> Parser<'a> {
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
-        self.parse_comma_separated_with_trailing_commas(
-            f,
-            self.options.trailing_commas,
-            self.default_reserved_keywords(),
-        )
+        self.parse_comma_separated_with_trailing_commas(f, self.options.trailing_commas, None)
     }
 
     /// Parse a comma-separated list of 1+ items accepted by `F`
@@ -4017,7 +4007,7 @@ impl<'a> Parser<'a> {
         &mut self,
         mut f: F,
         trailing_commas: bool,
-        reserved_keywords: &[Keyword],
+        reserved_keywords: Option<&[Keyword]>,
     ) -> Result<Vec<T>, ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
@@ -9981,7 +9971,7 @@ impl<'a> Parser<'a> {
         // or `from`.
 
         let from = if self.parse_keyword(Keyword::FROM) {
-            self.parse_from()?
+            self.parse_table_with_joins()?
         } else {
             vec![]
         };

@@ -399,7 +399,8 @@ pub trait Dialect: Debug + Any {
         self.supports_trailing_commas()
     }
 
-    /// Does the dialect support trailing commas in the FROM clause list?
+    /// Returns true if the dialect supports trailing commas in the `FROM` clause of a `SELECT` statement.
+    /// /// Example: `SELECT 1 FROM T, U, LIMIT 1`
     fn supports_from_trailing_commas(&self) -> bool {
         false
     }
@@ -763,9 +764,10 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
-    // Returns list of keyword allowed after from
-    fn get_reserved_keyword_after_from(&self) -> &[Keyword] {
-        keywords::ALLOWED_KEYWORD_AFTER_FROM
+    // Returns reserved keywords when looking to parse a [TableFactor].
+    /// See [Self::supports_from_trailing_commas]
+    fn get_reserved_keywords_for_table_factor(&self) -> &[Keyword] {
+        keywords::RESERVED_FOR_TABLE_FACTOR
     }
 
     /// Returns true if this dialect supports the `TABLESAMPLE` option

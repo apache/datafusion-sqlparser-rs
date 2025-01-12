@@ -1565,7 +1565,6 @@ impl<'a> Tokenizer<'a> {
                             if temp.ends_with(&end_delimiter) {
                                 if let Some(temp) = temp.strip_suffix(&end_delimiter) {
                                     s.push_str(temp);
-                                    break;
                                 }
                                 break;
                             }
@@ -1574,7 +1573,6 @@ impl<'a> Tokenizer<'a> {
                             if temp.ends_with(&end_delimiter) {
                                 if let Some(temp) = temp.strip_suffix(&end_delimiter) {
                                     s.push_str(temp);
-                                    break;
                                 }
                                 break;
                             }

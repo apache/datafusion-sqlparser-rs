@@ -1563,13 +1563,19 @@ impl<'a> Tokenizer<'a> {
                             temp.push(ch);
 
                             if temp.ends_with(&end_delimiter) {
-                                s.push_str(&temp[..temp.len() - end_delimiter.len()]);
+                                if let Some(temp) = temp.strip_suffix(&end_delimiter) {
+                                    s.push_str(temp);
+                                    break;
+                                }
                                 break;
                             }
                         }
                         None => {
                             if temp.ends_with(&end_delimiter) {
-                                s.push_str(&temp[..temp.len() - end_delimiter.len()]);
+                                if let Some(temp) = temp.strip_suffix(&end_delimiter) {
+                                    s.push_str(temp);
+                                    break;
+                                }
                                 break;
                             }
 
@@ -2577,6 +2583,15 @@ mod tests {
                         tag: Some("abc".into()),
                     }),
                     Token::Number("1".into(), false),
+                ]
+            ),
+            (
+                String::from("$function$abc$q$data$q$$function$"),
+                vec![
+                    Token::DollarQuotedString(DollarQuotedString {
+                        value: "abc$q$data$q$".into(),
+                        tag: Some("function".into()),
+                    }),
                 ]
             ),
         ];

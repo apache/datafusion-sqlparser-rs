@@ -8886,7 +8886,7 @@ impl<'a> Parser<'a> {
             };
 
             let mut modifiers = vec![];
-            if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+            if self.dialect.supports_group_by_with_modifier() {
                 loop {
                     if !self.parse_keyword(Keyword::WITH) {
                         break;
@@ -10127,6 +10127,17 @@ impl<'a> Parser<'a> {
             .parse_optional_group_by()?
             .unwrap_or_else(|| GroupByExpr::Expressions(vec![], vec![]));
 
+        let grouping_sets = if self.dialect.supports_select_grouping_sets()
+            && self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS])
+        {
+            self.expect_token(&Token::LParen)?;
+            let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+            self.expect_token(&Token::RParen)?;
+            Some(Expr::GroupingSets(result))
+        } else {
+            None
+        };
+
         let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?
         } else {
@@ -10198,6 +10209,7 @@ impl<'a> Parser<'a> {
             prewhere,
             selection,
             group_by,
+            grouping_sets,
             cluster_by,
             distribute_by,
             sort_by,

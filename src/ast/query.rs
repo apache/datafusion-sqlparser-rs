@@ -328,6 +328,10 @@ pub struct Select {
     pub value_table_mode: Option<ValueTableMode>,
     /// STARTING WITH .. CONNECT BY
     pub connect_by: Option<ConnectBy>,
+    /// Hive syntax: `SELECT ... GROUP BY .. GROUPING SETS`
+    ///
+    /// [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=30151323#EnhancedAggregation,Cube,GroupingandRollup-GROUPINGSETSclause)
+    pub grouping_sets: Option<Expr>,
 }
 
 impl fmt::Display for Select {
@@ -382,6 +386,23 @@ impl fmt::Display for Select {
                 }
             }
         }
+
+        if let Some(ref grouping_sets) = self.grouping_sets {
+            match grouping_sets {
+                Expr::GroupingSets(sets) => {
+                    write!(f, " GROUPING SETS (")?;
+                    let mut sep = "";
+                    for set in sets {
+                        write!(f, "{sep}")?;
+                        sep = ", ";
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
+                    write!(f, ")")?
+                }
+                _ => unreachable!(),
+            }
+        }
+
         if !self.cluster_by.is_empty() {
             write!(
                 f,

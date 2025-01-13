@@ -245,6 +245,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialects supports `with rollup/cube/all` expressions.
+    fn supports_group_by_with_modifier(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialects supports `select .. grouping sets` expressions.
+    fn supports_select_grouping_sets(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports CONNECT BY.
     fn supports_connect_by(&self) -> bool {
         false

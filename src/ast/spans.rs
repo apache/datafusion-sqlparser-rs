@@ -2030,6 +2030,7 @@ impl Spanned for Select {
             prewhere,
             selection,
             group_by,
+            grouping_sets,
             cluster_by,
             distribute_by,
             sort_by,
@@ -2051,6 +2052,7 @@ impl Spanned for Select {
                 .chain(prewhere.iter().map(|item| item.span()))
                 .chain(selection.iter().map(|item| item.span()))
                 .chain(core::iter::once(group_by.span()))
+                .chain(grouping_sets.iter().map(|item| item.span()))
                 .chain(cluster_by.iter().map(|item| item.span()))
                 .chain(distribute_by.iter().map(|item| item.span()))
                 .chain(sort_by.iter().map(|item| item.span()))

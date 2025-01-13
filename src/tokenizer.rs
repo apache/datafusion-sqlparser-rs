@@ -40,13 +40,13 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::DollarQuotedString;
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
     SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use crate::{ast::DollarQuotedString, dialect::HiveDialect};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1372,7 +1372,8 @@ impl<'a> Tokenizer<'a> {
                 }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect) => {
+                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect | HiveDialect) =>
+                {
                     chars.next(); // consume the '#', starting a snowflake single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {

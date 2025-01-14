@@ -12957,8 +12957,38 @@ fn parse_update_from_before_select() {
         parse_sql_statements(query).unwrap_err()
     );
 }
-
 #[test]
 fn parse_overlaps() {
     verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
+}
+
+#[test]
+fn test_trailing_commas_in_from() {
+    let dialects = all_dialects_where(|d| d.supports_from_trailing_commas());
+    dialects.verified_only_select_with_canonical("SELECT 1, 2 FROM t,", "SELECT 1, 2 FROM t");
+
+    dialects
+        .verified_only_select_with_canonical("SELECT 1, 2 FROM t1, t2,", "SELECT 1, 2 FROM t1, t2");
+
+    let sql = "SELECT a, FROM b, LIMIT 1";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    let sql = "INSERT INTO a SELECT b FROM c,";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    let sql = "SELECT a FROM b, HAVING COUNT(*) > 1";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    let sql = "SELECT a FROM b, WHERE c = 1";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    // nasted
+    let sql = "SELECT 1, 2 FROM (SELECT * FROM t,),";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    // multiple_subqueries
+    dialects.verified_only_select_with_canonical(
+        "SELECT 1, 2 FROM (SELECT * FROM t1), (SELECT * FROM t2),",
+        "SELECT 1, 2 FROM (SELECT * FROM t1), (SELECT * FROM t2)",
+    );
 }

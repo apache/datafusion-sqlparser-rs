@@ -404,6 +404,12 @@ pub trait Dialect: Debug + Any {
         self.supports_trailing_commas()
     }
 
+    /// Returns true if the dialect supports trailing commas in the `FROM` clause of a `SELECT` statement.
+    /// /// Example: `SELECT 1 FROM T, U, LIMIT 1`
+    fn supports_from_trailing_commas(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports double dot notation for object names
     ///
     /// Example
@@ -773,6 +779,12 @@ pub trait Dialect: Debug + Any {
     /// used as an identifier without special handling like quoting.
     fn is_reserved_for_identifier(&self, kw: Keyword) -> bool {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
+    }
+
+    // Returns reserved keywords when looking to parse a [TableFactor].
+    /// See [Self::supports_from_trailing_commas]
+    fn get_reserved_keywords_for_table_factor(&self) -> &[Keyword] {
+        keywords::RESERVED_FOR_TABLE_FACTOR
     }
 
     /// Returns true if this dialect supports the `TABLESAMPLE` option

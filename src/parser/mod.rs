@@ -3940,7 +3940,11 @@ impl<'a> Parser<'a> {
         let trailing_commas =
             self.options.trailing_commas | self.dialect.supports_projection_trailing_commas();
 
-        self.parse_comma_separated_with_trailing_commas(|p| p.parse_select_item(), trailing_commas)
+        self.parse_comma_separated_with_trailing_commas(
+            |p| p.parse_select_item(),
+            trailing_commas,
+            None,
+        )
     }
 
     pub fn parse_actions_list(&mut self) -> Result<Vec<ParsedAction>, ParserError> {
@@ -3966,20 +3970,32 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
+    /// Parse a list of [TableWithJoins]
+    fn parse_table_with_joins(&mut self) -> Result<Vec<TableWithJoins>, ParserError> {
+        let trailing_commas = self.dialect.supports_from_trailing_commas();
+
+        self.parse_comma_separated_with_trailing_commas(
+            Parser::parse_table_and_joins,
+            trailing_commas,
+            Some(self.dialect.get_reserved_keywords_for_table_factor()),
+        )
+    }
+
     /// Parse the comma of a comma-separated syntax element.
     /// Allows for control over trailing commas
     /// Returns true if there is a next element
-    fn is_parse_comma_separated_end_with_trailing_commas(&mut self, trailing_commas: bool) -> bool {
+    fn is_parse_comma_separated_end_with_trailing_commas(
+        &mut self,
+        trailing_commas: bool,
+        reserved_keywords: Option<&[Keyword]>,
+    ) -> bool {
+        let reserved_keywords = reserved_keywords.unwrap_or(keywords::RESERVED_FOR_COLUMN_ALIAS);
         if !self.consume_token(&Token::Comma) {
             true
         } else if trailing_commas {
             let token = self.peek_token().token;
             match token {
-                Token::Word(ref kw)
-                    if keywords::RESERVED_FOR_COLUMN_ALIAS.contains(&kw.keyword) =>
-                {
-                    true
-                }
+                Token::Word(ref kw) if reserved_keywords.contains(&kw.keyword) => true,
                 Token::RParen | Token::SemiColon | Token::EOF | Token::RBracket | Token::RBrace => {
                     true
                 }
@@ -3993,7 +4009,7 @@ impl<'a> Parser<'a> {
     /// Parse the comma of a comma-separated syntax element.
     /// Returns true if there is a next element
     fn is_parse_comma_separated_end(&mut self) -> bool {
-        self.is_parse_comma_separated_end_with_trailing_commas(self.options.trailing_commas)
+        self.is_parse_comma_separated_end_with_trailing_commas(self.options.trailing_commas, None)
     }
 
     /// Parse a comma-separated list of 1+ items accepted by `F`
@@ -4001,7 +4017,7 @@ impl<'a> Parser<'a> {
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
-        self.parse_comma_separated_with_trailing_commas(f, self.options.trailing_commas)
+        self.parse_comma_separated_with_trailing_commas(f, self.options.trailing_commas, None)
     }
 
     /// Parse a comma-separated list of 1+ items accepted by `F`
@@ -4010,6 +4026,7 @@ impl<'a> Parser<'a> {
         &mut self,
         mut f: F,
         trailing_commas: bool,
+        reserved_keywords: Option<&[Keyword]>,
     ) -> Result<Vec<T>, ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
@@ -4017,7 +4034,10 @@ impl<'a> Parser<'a> {
         let mut values = vec![];
         loop {
             values.push(f(self)?);
-            if self.is_parse_comma_separated_end_with_trailing_commas(trailing_commas) {
+            if self.is_parse_comma_separated_end_with_trailing_commas(
+                trailing_commas,
+                reserved_keywords,
+            ) {
                 break;
             }
         }
@@ -10073,7 +10093,7 @@ impl<'a> Parser<'a> {
         // or `from`.
 
         let from = if self.parse_keyword(Keyword::FROM) {
-            self.parse_comma_separated(Parser::parse_table_and_joins)?
+            self.parse_table_with_joins()?
         } else {
             vec![]
         };

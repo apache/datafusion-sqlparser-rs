@@ -33,6 +33,14 @@ use test_utils::*;
 #[macro_use]
 mod test_utils;
 
+fn mysql() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MySqlDialect {})])
+}
+
+fn mysql_and_generic() -> TestedDialects {
+    TestedDialects::new(vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})])
+}
+
 #[test]
 fn parse_identifiers() {
     mysql().verified_stmt("SELECT $a$, àà");
@@ -1398,13 +1406,16 @@ fn parse_simple_insert() {
 
     match mysql().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             source,
             on,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(
+                TableObject::TableName(ObjectName(vec![Ident::new("tasks")])),
+                table_name
+            );
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert_eq!(
@@ -1452,14 +1463,17 @@ fn parse_ignore_insert() {
 
     match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             source,
             on,
             ignore,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(
+                TableObject::TableName(ObjectName(vec![Ident::new("tasks")])),
+                table_name
+            );
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert!(ignore);
@@ -1496,14 +1510,17 @@ fn parse_priority_insert() {
 
     match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             source,
             on,
             priority,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(
+                TableObject::TableName(ObjectName(vec![Ident::new("tasks")])),
+                table_name
+            );
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert_eq!(priority, Some(HighPriority));
@@ -1537,14 +1554,17 @@ fn parse_priority_insert() {
 
     match mysql().verified_stmt(sql2) {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             source,
             on,
             priority,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(
+                TableObject::TableName(ObjectName(vec![Ident::new("tasks")])),
+                table_name
+            );
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert_eq!(priority, Some(LowPriority));
@@ -1580,14 +1600,14 @@ fn parse_insert_as() {
     let sql = r"INSERT INTO `table` (`date`) VALUES ('2024-01-01') AS `alias`";
     match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             source,
             insert_alias,
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "table")]),
+                TableObject::TableName(ObjectName(vec![Ident::with_quote('`', "table")])),
                 table_name
             );
             assert_eq!(vec![Ident::with_quote('`', "date")], columns);
@@ -1632,14 +1652,14 @@ fn parse_insert_as() {
     let sql = r"INSERT INTO `table` (`id`, `date`) VALUES (1, '2024-01-01') AS `alias` (`mek_id`, `mek_date`)";
     match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             source,
             insert_alias,
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "table")]),
+                TableObject::TableName(ObjectName(vec![Ident::with_quote('`', "table")])),
                 table_name
             );
             assert_eq!(
@@ -1690,7 +1710,7 @@ fn parse_replace_insert() {
     let sql = r"REPLACE DELAYED INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
     match mysql().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             source,
             on,
@@ -1698,7 +1718,10 @@ fn parse_replace_insert() {
             priority,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(
+                TableObject::TableName(ObjectName(vec![Ident::new("tasks")])),
+                table_name
+            );
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert!(replace_into);
@@ -1736,13 +1759,16 @@ fn parse_empty_row_insert() {
 
     match mysql().one_statement_parses_to(sql, "INSERT INTO tb VALUES (), ()") {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             source,
             on,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tb")]), table_name);
+            assert_eq!(
+                TableObject::TableName(ObjectName(vec![Ident::new("tb")])),
+                table_name
+            );
             assert!(columns.is_empty());
             assert!(on.is_none());
             assert_eq!(
@@ -1775,14 +1801,14 @@ fn parse_insert_with_on_duplicate_update() {
 
     match mysql().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             source,
             on,
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::new("permission_groups")]),
+                TableObject::TableName(ObjectName(vec![Ident::new("permission_groups")])),
                 table_name
             );
             assert_eq!(
@@ -1966,12 +1992,12 @@ fn parse_insert_with_numeric_prefix_column_name() {
     let sql = "INSERT INTO s1.t1 (123col_$@length123) VALUES (67.654)";
     match mysql().verified_stmt(sql) {
         Statement::Insert(Insert {
-            table_name,
+            table: table_name,
             columns,
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::new("s1"), Ident::new("t1")]),
+                TableObject::TableName(ObjectName(vec![Ident::new("s1"), Ident::new("t1")])),
                 table_name
             );
             assert_eq!(vec![Ident::new("123col_$@length123")], columns);
@@ -2732,14 +2758,6 @@ fn parse_create_table_with_fulltext_definition_should_not_accept_constraint_name
     mysql_and_generic().verified_stmt("CREATE TABLE tb (c1 INT, CONSTRAINT cons FULLTEXT (c1))");
 }
 
-fn mysql() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(MySqlDialect {})])
-}
-
-fn mysql_and_generic() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})])
-}
-
 #[test]
 fn parse_values() {
     mysql().verified_stmt("VALUES ROW(1, true, 'a')");
@@ -2999,6 +3017,193 @@ fn parse_bitstring_literal() {
             Value::SingleQuotedByteStringLiteral("111".to_string())
         ))]
     );
+}
+
+#[test]
+fn parse_grant() {
+    let sql = "GRANT ALL ON *.* TO 'jeffrey'@'%'";
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::Grant {
+        privileges,
+        objects,
+        grantees,
+        with_grant_option,
+        granted_by,
+    } = stmt
+    {
+        assert_eq!(
+            privileges,
+            Privileges::All {
+                with_privileges_keyword: false
+            }
+        );
+        assert_eq!(
+            objects,
+            GrantObjects::Tables(vec![ObjectName(vec!["*".into(), "*".into()])])
+        );
+        assert!(!with_grant_option);
+        assert!(granted_by.is_none());
+        if let [Grantee {
+            grantee_type: GranteesType::None,
+            name: Some(GranteeName::UserHost { user, host }),
+        }] = grantees.as_slice()
+        {
+            assert_eq!(user.value, "jeffrey");
+            assert_eq!(user.quote_style, Some('\''));
+            assert_eq!(host.value, "%");
+            assert_eq!(host.quote_style, Some('\''));
+        } else {
+            unreachable!()
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+#[test]
+fn parse_revoke() {
+    let sql = "REVOKE ALL ON db1.* FROM 'jeffrey'@'%'";
+    let stmt = mysql_and_generic().verified_stmt(sql);
+    if let Statement::Revoke {
+        privileges,
+        objects,
+        grantees,
+        granted_by,
+        cascade,
+    } = stmt
+    {
+        assert_eq!(
+            privileges,
+            Privileges::All {
+                with_privileges_keyword: false
+            }
+        );
+        assert_eq!(
+            objects,
+            GrantObjects::Tables(vec![ObjectName(vec!["db1".into(), "*".into()])])
+        );
+        if let [Grantee {
+            grantee_type: GranteesType::None,
+            name: Some(GranteeName::UserHost { user, host }),
+        }] = grantees.as_slice()
+        {
+            assert_eq!(user.value, "jeffrey");
+            assert_eq!(user.quote_style, Some('\''));
+            assert_eq!(host.value, "%");
+            assert_eq!(host.quote_style, Some('\''));
+        } else {
+            unreachable!()
+        }
+        assert!(granted_by.is_none());
+        assert!(cascade.is_none());
+    } else {
+        unreachable!()
+    }
+}
+
+#[test]
+fn parse_create_view_algorithm_param() {
+    let sql = "CREATE ALGORITHM = MERGE VIEW foo AS SELECT 1";
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::CreateView {
+        params:
+            Some(CreateViewParams {
+                algorithm,
+                definer,
+                security,
+            }),
+        ..
+    } = stmt
+    {
+        assert_eq!(algorithm, Some(CreateViewAlgorithm::Merge));
+        assert!(definer.is_none());
+        assert!(security.is_none());
+    } else {
+        unreachable!()
+    }
+    mysql().verified_stmt("CREATE ALGORITHM = UNDEFINED VIEW foo AS SELECT 1");
+    mysql().verified_stmt("CREATE ALGORITHM = TEMPTABLE VIEW foo AS SELECT 1");
+}
+
+#[test]
+fn parse_create_view_definer_param() {
+    let sql = "CREATE DEFINER = 'jeffrey'@'localhost' VIEW foo AS SELECT 1";
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::CreateView {
+        params:
+            Some(CreateViewParams {
+                algorithm,
+                definer,
+                security,
+            }),
+        ..
+    } = stmt
+    {
+        assert!(algorithm.is_none());
+        if let Some(GranteeName::UserHost { user, host }) = definer {
+            assert_eq!(user.value, "jeffrey");
+            assert_eq!(user.quote_style, Some('\''));
+            assert_eq!(host.value, "localhost");
+            assert_eq!(host.quote_style, Some('\''));
+        } else {
+            unreachable!()
+        }
+        assert!(security.is_none());
+    } else {
+        unreachable!()
+    }
+}
+
+#[test]
+fn parse_create_view_security_param() {
+    let sql = "CREATE SQL SECURITY DEFINER VIEW foo AS SELECT 1";
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::CreateView {
+        params:
+            Some(CreateViewParams {
+                algorithm,
+                definer,
+                security,
+            }),
+        ..
+    } = stmt
+    {
+        assert!(algorithm.is_none());
+        assert!(definer.is_none());
+        assert_eq!(security, Some(CreateViewSecurity::Definer));
+    } else {
+        unreachable!()
+    }
+    mysql().verified_stmt("CREATE SQL SECURITY INVOKER VIEW foo AS SELECT 1");
+}
+
+#[test]
+fn parse_create_view_multiple_params() {
+    let sql = "CREATE ALGORITHM = UNDEFINED DEFINER = `root`@`%` SQL SECURITY INVOKER VIEW foo AS SELECT 1";
+    let stmt = mysql().verified_stmt(sql);
+    if let Statement::CreateView {
+        params:
+            Some(CreateViewParams {
+                algorithm,
+                definer,
+                security,
+            }),
+        ..
+    } = stmt
+    {
+        assert_eq!(algorithm, Some(CreateViewAlgorithm::Undefined));
+        if let Some(GranteeName::UserHost { user, host }) = definer {
+            assert_eq!(user.value, "root");
+            assert_eq!(user.quote_style, Some('`'));
+            assert_eq!(host.value, "%");
+            assert_eq!(host.quote_style, Some('`'));
+        } else {
+            unreachable!()
+        }
+        assert_eq!(security, Some(CreateViewSecurity::Invoker));
+    } else {
+        unreachable!()
+    }
 }
 
 #[test]

@@ -50,6 +50,7 @@ mod test_utils;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 use sqlparser::ast::ColumnOption::Comment;
+use sqlparser::ast::DateTimeField::Seconds;
 use sqlparser::ast::Expr::{Identifier, UnaryOp};
 use sqlparser::ast::Value::Number;
 use sqlparser::test_utils::all_dialects_except;
@@ -95,7 +96,7 @@ fn parse_insert_values() {
     ) {
         match verified_stmt(sql) {
             Statement::Insert(Insert {
-                table_name,
+                table: table_name,
                 columns,
                 source: Some(source),
                 ..
@@ -117,6 +118,12 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+}
+
+#[test]
+fn parse_insert_set() {
+    let dialects = all_dialects_where(|d| d.supports_insert_set());
+    dialects.verified_stmt("INSERT INTO tbl1 SET col1 = 1, col2 = 'abc', col3 = current_date()");
 }
 
 #[test]
@@ -142,7 +149,7 @@ fn parse_insert_default_values() {
             partitioned,
             returning,
             source,
-            table_name,
+            table: table_name,
             ..
         }) => {
             assert_eq!(columns, vec![]);
@@ -151,7 +158,10 @@ fn parse_insert_default_values() {
             assert_eq!(partitioned, None);
             assert_eq!(returning, None);
             assert_eq!(source, None);
-            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+            assert_eq!(
+                table_name,
+                TableObject::TableName(ObjectName(vec!["test_table".into()]))
+            );
         }
         _ => unreachable!(),
     }
@@ -167,7 +177,7 @@ fn parse_insert_default_values() {
             partitioned,
             returning,
             source,
-            table_name,
+            table: table_name,
             ..
         }) => {
             assert_eq!(after_columns, vec![]);
@@ -176,7 +186,10 @@ fn parse_insert_default_values() {
             assert_eq!(partitioned, None);
             assert!(returning.is_some());
             assert_eq!(source, None);
-            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+            assert_eq!(
+                table_name,
+                TableObject::TableName(ObjectName(vec!["test_table".into()]))
+            );
         }
         _ => unreachable!(),
     }
@@ -192,7 +205,7 @@ fn parse_insert_default_values() {
             partitioned,
             returning,
             source,
-            table_name,
+            table: table_name,
             ..
         }) => {
             assert_eq!(after_columns, vec![]);
@@ -201,7 +214,10 @@ fn parse_insert_default_values() {
             assert_eq!(partitioned, None);
             assert_eq!(returning, None);
             assert_eq!(source, None);
-            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+            assert_eq!(
+                table_name,
+                TableObject::TableName(ObjectName(vec!["test_table".into()]))
+            );
         }
         _ => unreachable!(),
     }
@@ -4381,7 +4397,9 @@ fn parse_alter_table_constraints() {
 
 #[test]
 fn parse_alter_table_drop_column() {
+    check_one("DROP COLUMN IF EXISTS is_active");
     check_one("DROP COLUMN IF EXISTS is_active CASCADE");
+    check_one("DROP COLUMN IF EXISTS is_active RESTRICT");
     one_statement_parses_to(
         "ALTER TABLE tab DROP IF EXISTS is_active CASCADE",
         "ALTER TABLE tab DROP COLUMN IF EXISTS is_active CASCADE",
@@ -4396,11 +4414,15 @@ fn parse_alter_table_drop_column() {
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,
-                cascade,
+                drop_behavior,
             } => {
                 assert_eq!("is_active", column_name.to_string());
                 assert!(if_exists);
-                assert!(cascade);
+                match drop_behavior {
+                    None => assert!(constraint_text.ends_with(" is_active")),
+                    Some(DropBehavior::Restrict) => assert!(constraint_text.ends_with(" RESTRICT")),
+                    Some(DropBehavior::Cascade) => assert!(constraint_text.ends_with(" CASCADE")),
+                }
             }
             _ => unreachable!(),
         }
@@ -4490,37 +4512,29 @@ fn parse_alter_table_alter_column_type() {
 
 #[test]
 fn parse_alter_table_drop_constraint() {
-    let alter_stmt = "ALTER TABLE tab";
-    match alter_table_op(verified_stmt(
-        "ALTER TABLE tab DROP CONSTRAINT constraint_name CASCADE",
-    )) {
-        AlterTableOperation::DropConstraint {
-            name: constr_name,
-            if_exists,
-            cascade,
-        } => {
-            assert_eq!("constraint_name", constr_name.to_string());
-            assert!(!if_exists);
-            assert!(cascade);
+    check_one("DROP CONSTRAINT IF EXISTS constraint_name");
+    check_one("DROP CONSTRAINT IF EXISTS constraint_name RESTRICT");
+    check_one("DROP CONSTRAINT IF EXISTS constraint_name CASCADE");
+    fn check_one(constraint_text: &str) {
+        match alter_table_op(verified_stmt(&format!("ALTER TABLE tab {constraint_text}"))) {
+            AlterTableOperation::DropConstraint {
+                name: constr_name,
+                if_exists,
+                drop_behavior,
+            } => {
+                assert_eq!("constraint_name", constr_name.to_string());
+                assert!(if_exists);
+                match drop_behavior {
+                    None => assert!(constraint_text.ends_with(" constraint_name")),
+                    Some(DropBehavior::Restrict) => assert!(constraint_text.ends_with(" RESTRICT")),
+                    Some(DropBehavior::Cascade) => assert!(constraint_text.ends_with(" CASCADE")),
+                }
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
-    }
-    match alter_table_op(verified_stmt(
-        "ALTER TABLE tab DROP CONSTRAINT IF EXISTS constraint_name",
-    )) {
-        AlterTableOperation::DropConstraint {
-            name: constr_name,
-            if_exists,
-            cascade,
-        } => {
-            assert_eq!("constraint_name", constr_name.to_string());
-            assert!(if_exists);
-            assert!(!cascade);
-        }
-        _ => unreachable!(),
     }
 
-    let res = parse_sql_statements(&format!("{alter_stmt} DROP CONSTRAINT is_active TEXT"));
+    let res = parse_sql_statements("ALTER TABLE tab DROP CONSTRAINT is_active TEXT");
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: TEXT".to_string()),
         res.unwrap_err()
@@ -5393,6 +5407,19 @@ fn parse_interval_all() {
         expr_from_projection(only(&select.projection)),
     );
 
+    let sql = "SELECT INTERVAL 5 DAYS";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Interval(Interval {
+            value: Box::new(Expr::Value(number("5"))),
+            leading_field: Some(DateTimeField::Days),
+            leading_precision: None,
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -5420,10 +5447,18 @@ fn parse_interval_all() {
 
     verified_only_select("SELECT INTERVAL '1' YEAR");
     verified_only_select("SELECT INTERVAL '1' MONTH");
+    verified_only_select("SELECT INTERVAL '1' WEEK");
     verified_only_select("SELECT INTERVAL '1' DAY");
     verified_only_select("SELECT INTERVAL '1' HOUR");
     verified_only_select("SELECT INTERVAL '1' MINUTE");
     verified_only_select("SELECT INTERVAL '1' SECOND");
+    verified_only_select("SELECT INTERVAL '1' YEARS");
+    verified_only_select("SELECT INTERVAL '1' MONTHS");
+    verified_only_select("SELECT INTERVAL '1' WEEKS");
+    verified_only_select("SELECT INTERVAL '1' DAYS");
+    verified_only_select("SELECT INTERVAL '1' HOURS");
+    verified_only_select("SELECT INTERVAL '1' MINUTES");
+    verified_only_select("SELECT INTERVAL '1' SECONDS");
     verified_only_select("SELECT INTERVAL '1' YEAR TO MONTH");
     verified_only_select("SELECT INTERVAL '1' DAY TO HOUR");
     verified_only_select("SELECT INTERVAL '1' DAY TO MINUTE");
@@ -5433,10 +5468,21 @@ fn parse_interval_all() {
     verified_only_select("SELECT INTERVAL '1' MINUTE TO SECOND");
     verified_only_select("SELECT INTERVAL 1 YEAR");
     verified_only_select("SELECT INTERVAL 1 MONTH");
+    verified_only_select("SELECT INTERVAL 1 WEEK");
     verified_only_select("SELECT INTERVAL 1 DAY");
     verified_only_select("SELECT INTERVAL 1 HOUR");
     verified_only_select("SELECT INTERVAL 1 MINUTE");
     verified_only_select("SELECT INTERVAL 1 SECOND");
+    verified_only_select("SELECT INTERVAL 1 YEARS");
+    verified_only_select("SELECT INTERVAL 1 MONTHS");
+    verified_only_select("SELECT INTERVAL 1 WEEKS");
+    verified_only_select("SELECT INTERVAL 1 DAYS");
+    verified_only_select("SELECT INTERVAL 1 HOURS");
+    verified_only_select("SELECT INTERVAL 1 MINUTES");
+    verified_only_select("SELECT INTERVAL 1 SECONDS");
+    verified_only_select(
+        "SELECT '2 years 15 months 100 weeks 99 hours 123456789 milliseconds'::INTERVAL",
+    );
 }
 
 #[test]
@@ -6821,7 +6867,7 @@ fn parse_derived_tables() {
 }
 
 #[test]
-fn parse_union_except_intersect() {
+fn parse_union_except_intersect_minus() {
     // TODO: add assertions
     verified_stmt("SELECT 1 UNION SELECT 2");
     verified_stmt("SELECT 1 UNION ALL SELECT 2");
@@ -6829,6 +6875,9 @@ fn parse_union_except_intersect() {
     verified_stmt("SELECT 1 EXCEPT SELECT 2");
     verified_stmt("SELECT 1 EXCEPT ALL SELECT 2");
     verified_stmt("SELECT 1 EXCEPT DISTINCT SELECT 1");
+    verified_stmt("SELECT 1 MINUS SELECT 2");
+    verified_stmt("SELECT 1 MINUS ALL SELECT 2");
+    verified_stmt("SELECT 1 MINUS DISTINCT SELECT 1");
     verified_stmt("SELECT 1 INTERSECT SELECT 2");
     verified_stmt("SELECT 1 INTERSECT ALL SELECT 2");
     verified_stmt("SELECT 1 INTERSECT DISTINCT SELECT 1");
@@ -7153,6 +7202,7 @@ fn parse_create_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7165,7 +7215,8 @@ fn parse_create_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7213,6 +7264,7 @@ fn parse_create_view_with_columns() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(
@@ -7235,7 +7287,8 @@ fn parse_create_view_with_columns() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7258,6 +7311,7 @@ fn parse_create_view_temporary() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7270,7 +7324,8 @@ fn parse_create_view_temporary() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7293,6 +7348,7 @@ fn parse_create_or_replace_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -7305,7 +7361,8 @@ fn parse_create_or_replace_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7332,6 +7389,7 @@ fn parse_create_or_replace_materialized_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -7344,7 +7402,8 @@ fn parse_create_or_replace_materialized_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7367,6 +7426,7 @@ fn parse_create_materialized_view() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7379,7 +7439,8 @@ fn parse_create_materialized_view() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7402,6 +7463,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             if_not_exists,
             temporary,
             to,
+            params,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
@@ -7414,7 +7476,8 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert!(!late_binding);
             assert!(!if_not_exists);
             assert!(!temporary);
-            assert!(to.is_none())
+            assert!(to.is_none());
+            assert!(params.is_none());
         }
         _ => unreachable!(),
     }
@@ -7848,6 +7911,27 @@ fn parse_start_transaction() {
         ParserError::ParserError("Expected: transaction mode, found: EOF".to_string()),
         res.unwrap_err()
     );
+
+    // MS-SQL syntax
+    let dialects = all_dialects_where(|d| d.supports_start_transaction_modifier());
+    dialects.verified_stmt("BEGIN TRY");
+    dialects.verified_stmt("BEGIN CATCH");
+
+    let dialects = all_dialects_where(|d| {
+        d.supports_start_transaction_modifier() && d.supports_end_transaction_modifier()
+    });
+    dialects
+        .parse_sql_statements(
+            r#"
+        BEGIN TRY;
+            SELECT 1/0;
+        END TRY;
+        BEGIN CATCH;
+            EXECUTE foo;
+        END CATCH;
+    "#,
+        )
+        .unwrap();
 }
 
 #[test]
@@ -8063,12 +8147,12 @@ fn parse_set_time_zone_alias() {
 #[test]
 fn parse_commit() {
     match verified_stmt("COMMIT") {
-        Statement::Commit { chain: false } => (),
+        Statement::Commit { chain: false, .. } => (),
         _ => unreachable!(),
     }
 
     match verified_stmt("COMMIT AND CHAIN") {
-        Statement::Commit { chain: true } => (),
+        Statement::Commit { chain: true, .. } => (),
         _ => unreachable!(),
     }
 
@@ -8083,13 +8167,17 @@ fn parse_commit() {
 
 #[test]
 fn parse_end() {
-    one_statement_parses_to("END AND NO CHAIN", "COMMIT");
-    one_statement_parses_to("END WORK AND NO CHAIN", "COMMIT");
-    one_statement_parses_to("END TRANSACTION AND NO CHAIN", "COMMIT");
-    one_statement_parses_to("END WORK AND CHAIN", "COMMIT AND CHAIN");
-    one_statement_parses_to("END TRANSACTION AND CHAIN", "COMMIT AND CHAIN");
-    one_statement_parses_to("END WORK", "COMMIT");
-    one_statement_parses_to("END TRANSACTION", "COMMIT");
+    one_statement_parses_to("END AND NO CHAIN", "END");
+    one_statement_parses_to("END WORK AND NO CHAIN", "END");
+    one_statement_parses_to("END TRANSACTION AND NO CHAIN", "END");
+    one_statement_parses_to("END WORK AND CHAIN", "END AND CHAIN");
+    one_statement_parses_to("END TRANSACTION AND CHAIN", "END AND CHAIN");
+    one_statement_parses_to("END WORK", "END");
+    one_statement_parses_to("END TRANSACTION", "END");
+    // MS-SQL syntax
+    let dialects = all_dialects_where(|d| d.supports_end_transaction_modifier());
+    dialects.verified_stmt("END TRY");
+    dialects.verified_stmt("END CATCH");
 }
 
 #[test]
@@ -8497,18 +8585,27 @@ fn parse_grant() {
         },
         _ => unreachable!(),
     }
+
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO ROLE role1 WITH GRANT OPTION");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO DATABASE ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO APPLICATION ROLE role1");
+    verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO SHARE share1");
+    verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
+    verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
 }
 
 #[test]
 fn test_revoke() {
-    let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
+    let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst";
     match verified_stmt(sql) {
         Statement::Revoke {
             privileges,
             objects: GrantObjects::Tables(tables),
             grantees,
-            cascade,
             granted_by,
+            cascade,
         } => {
             assert_eq!(
                 Privileges::All {
@@ -8518,7 +8615,33 @@ fn test_revoke() {
             );
             assert_eq_vec(&["users", "auth"], &tables);
             assert_eq_vec(&["analyst"], &grantees);
-            assert!(cascade);
+            assert_eq!(cascade, None);
+            assert_eq!(None, granted_by);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_revoke_with_cascade() {
+    let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
+    match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
+        Statement::Revoke {
+            privileges,
+            objects: GrantObjects::Tables(tables),
+            grantees,
+            granted_by,
+            cascade,
+        } => {
+            assert_eq!(
+                Privileges::All {
+                    with_privileges_keyword: true
+                },
+                privileges
+            );
+            assert_eq_vec(&["users", "auth"], &tables);
+            assert_eq_vec(&["analyst"], &grantees);
+            assert_eq!(cascade, Some(CascadeOption::Cascade));
             assert_eq!(None, granted_by);
         }
         _ => unreachable!(),
@@ -10300,6 +10423,7 @@ fn test_comment_hash_syntax() {
         Box::new(BigQueryDialect {}),
         Box::new(SnowflakeDialect {}),
         Box::new(MySqlDialect {}),
+        Box::new(HiveDialect {}),
     ]);
     let sql = r#"
     # comment
@@ -11341,16 +11465,12 @@ fn test_group_by_nothing() {
 #[test]
 fn test_extract_seconds_ok() {
     let dialects = all_dialects_where(|d| d.allow_extract_custom());
-    let stmt = dialects.verified_expr("EXTRACT(seconds FROM '2 seconds'::INTERVAL)");
+    let stmt = dialects.verified_expr("EXTRACT(SECONDS FROM '2 seconds'::INTERVAL)");
 
     assert_eq!(
         stmt,
         Expr::Extract {
-            field: DateTimeField::Custom(Ident {
-                value: "seconds".to_string(),
-                quote_style: None,
-                span: Span::empty(),
-            }),
+            field: Seconds,
             syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
@@ -11361,7 +11481,59 @@ fn test_extract_seconds_ok() {
                 format: None,
             }),
         }
-    )
+    );
+
+    let actual_ast = dialects
+        .parse_sql_statements("SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)")
+        .unwrap();
+
+    let expected_ast = vec![Statement::Query(Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Select(Box::new(Select {
+            select_token: AttachedToken::empty(),
+            distinct: None,
+            top: None,
+            top_before_distinct: false,
+            projection: vec![UnnamedExpr(Expr::Extract {
+                field: Seconds,
+                syntax: ExtractSyntax::From,
+                expr: Box::new(Expr::Cast {
+                    kind: CastKind::DoubleColon,
+                    expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "2 seconds".to_string(),
+                    ))),
+                    data_type: DataType::Interval,
+                    format: None,
+                }),
+            })],
+            into: None,
+            from: vec![],
+            lateral_views: vec![],
+            prewhere: None,
+            selection: None,
+            group_by: GroupByExpr::Expressions(vec![], vec![]),
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![],
+            qualify: None,
+            window_before_qualify: false,
+            value_table_mode: None,
+            connect_by: None,
+        }))),
+        order_by: None,
+        limit: None,
+        limit_by: vec![],
+        offset: None,
+        fetch: None,
+        locks: vec![],
+        for_clause: None,
+        settings: None,
+        format_clause: None,
+    }))];
+
+    assert_eq!(actual_ast, expected_ast);
 }
 
 #[test]
@@ -11388,17 +11560,6 @@ fn test_extract_seconds_single_quote_ok() {
             }),
         }
     )
-}
-
-#[test]
-fn test_extract_seconds_err() {
-    let sql = "SELECT EXTRACT(seconds FROM '2 seconds'::INTERVAL)";
-    let dialects = all_dialects_except(|d| d.allow_extract_custom());
-    let err = dialects.parse_sql_statements(sql).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "sql parser error: Expected: date/time field, found: seconds"
-    );
 }
 
 #[test]
@@ -11675,12 +11836,12 @@ fn test_drop_policy() {
             if_exists,
             name,
             table_name,
-            option,
+            drop_behavior,
         } => {
             assert_eq!(if_exists, true);
             assert_eq!(name.to_string(), "my_policy");
             assert_eq!(table_name.to_string(), "my_table");
-            assert_eq!(option, Some(ReferentialAction::Restrict));
+            assert_eq!(drop_behavior, Some(DropBehavior::Restrict));
         }
         _ => unreachable!(),
     }
@@ -12796,7 +12957,10 @@ fn parse_update_from_before_select() {
         parse_sql_statements(query).unwrap_err()
     );
 }
-
+#[test]
+fn parse_overlaps() {
+    verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
+  
 #[test]
 fn test_trailing_commas_in_from() {
     let dialects = all_dialects_where(|d| d.supports_from_trailing_commas());

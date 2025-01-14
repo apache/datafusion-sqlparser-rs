@@ -78,4 +78,16 @@ impl Dialect for MsSqlDialect {
     fn supports_named_fn_args_with_rarrow_operator(&self) -> bool {
         false
     }
+
+    fn supports_start_transaction_modifier(&self) -> bool {
+        true
+    }
+    fn supports_end_transaction_modifier(&self) -> bool {
+        true
+    }
+
+    /// See: <https://learn.microsoft.com/en-us/sql/t-sql/statements/set-statements-transact-sql>
+    fn supports_set_stmt_without_operator(&self) -> bool {
+        true
+    }
 }

@@ -223,6 +223,12 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_insert_into_function() {
+    clickhouse().verified_stmt(r#"INSERT INTO TABLE FUNCTION remote('localhost', default.simple_table) VALUES (100, 'inserted via remote()')"#);
+    clickhouse().verified_stmt(r#"INSERT INTO FUNCTION remote('localhost', default.simple_table) VALUES (100, 'inserted via remote()')"#);
+}
+
+#[test]
 fn parse_alter_table_attach_and_detach_partition() {
     for operation in &["ATTACH", "DETACH"] {
         match clickhouse_and_generic()
@@ -1395,6 +1401,26 @@ fn test_query_with_format_clause() {
         clickhouse_and_generic()
             .parse_sql_statements(sql)
             .expect_err("Expected: FORMAT {identifier}, found: ");
+    }
+}
+
+#[test]
+fn test_insert_query_with_format_clause() {
+    let cases = [
+        r#"INSERT INTO tbl FORMAT JSONEachRow {"id": 1, "value": "foo"}, {"id": 2, "value": "bar"}"#,
+        r#"INSERT INTO tbl FORMAT JSONEachRow ["first", "second", "third"]"#,
+        r#"INSERT INTO tbl FORMAT JSONEachRow [{"first": 1}]"#,
+        r#"INSERT INTO tbl (foo) FORMAT JSONAsObject {"foo": {"bar": {"x": "y"}, "baz": 1}}"#,
+        r#"INSERT INTO tbl (foo, bar) FORMAT JSON {"foo": 1, "bar": 2}"#,
+        r#"INSERT INTO tbl FORMAT CSV col1, col2, col3"#,
+        r#"INSERT INTO tbl FORMAT LineAsString "I love apple", "I love banana", "I love orange""#,
+        r#"INSERT INTO tbl (foo) SETTINGS input_format_json_read_bools_as_numbers = true FORMAT JSONEachRow {"id": 1, "value": "foo"}"#,
+        r#"INSERT INTO tbl SETTINGS format_template_resultset = '/some/path/resultset.format', format_template_row = '/some/path/row.format' FORMAT Template"#,
+        r#"INSERT INTO tbl SETTINGS input_format_json_read_bools_as_numbers = true FORMAT JSONEachRow {"id": 1, "value": "foo"}"#,
+    ];
+
+    for sql in &cases {
+        clickhouse().verified_stmt(sql);
     }
 }
 

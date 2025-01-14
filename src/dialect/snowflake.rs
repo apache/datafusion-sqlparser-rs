@@ -19,8 +19,8 @@
 use crate::alloc::string::ToString;
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::helpers::stmt_data_loading::{
-    DataLoadingOption, DataLoadingOptionType, DataLoadingOptions, StageLoadSelectItem,
-    StageParamsObject,
+    DataLoadingOption, DataLoadingOptionType, DataLoadingOptions, FileStagingCommand,
+    StageLoadSelectItem, StageParamsObject,
 };
 use crate::ast::{
     ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, IdentityParameters, IdentityProperty,
@@ -169,6 +169,15 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_copy_into(parser));
         }
 
+        if let Some(kw) = parser.parse_one_of_keywords(&[
+            Keyword::LIST,
+            Keyword::LS,
+            Keyword::REMOVE,
+            Keyword::RM,
+        ]) {
+            return Some(parse_file_staging_command(kw, parser));
+        }
+
         None
     }
 
@@ -241,6 +250,26 @@ impl Dialect for SnowflakeDialect {
 
     fn supports_partiql(&self) -> bool {
         true
+    }
+}
+
+fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {
+    let stage = parse_snowflake_stage_name(parser)?;
+    let pattern = if parser.parse_keyword(Keyword::PATTERN) {
+        parser.expect_token(&Token::Eq)?;
+        Some(parser.parse_literal_string()?)
+    } else {
+        None
+    };
+
+    match kw {
+        Keyword::LIST | Keyword::LS => Ok(Statement::List(FileStagingCommand { stage, pattern })),
+        Keyword::REMOVE | Keyword::RM => {
+            Ok(Statement::Remove(FileStagingCommand { stage, pattern }))
+        }
+        _ => Err(ParserError::ParserError(
+            "unexpected stage command, expecting LIST, LS, REMOVE or RM".to_string(),
+        )),
     }
 }
 
@@ -505,7 +534,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             Token::Tilde => ident.push('~'),
             Token::Mod => ident.push('%'),
             Token::Div => ident.push('/'),
-            Token::Word(w) => ident.push_str(&w.value),
+            Token::Word(w) => ident.push_str(&w.to_string()),
             _ => return parser.expected("stage name identifier", parser.peek_token()),
         }
     }

@@ -12961,7 +12961,7 @@ fn parse_update_from_before_select() {
 fn parse_overlaps() {
     verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
 }
-  
+
 #[test]
 fn test_trailing_commas_in_from() {
     let dialects = all_dialects_where(|d| d.supports_from_trailing_commas());

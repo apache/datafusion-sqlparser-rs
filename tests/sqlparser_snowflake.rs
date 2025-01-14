@@ -853,16 +853,16 @@ fn test_snowflake_create_table_with_several_column_options() {
 fn test_snowflake_create_iceberg_table_all_options() {
     match snowflake().verified_stmt("CREATE ICEBERG TABLE my_table (a INT, b INT) \
     CLUSTER BY (a, b) EXTERNAL_VOLUME = 'volume' CATALOG = 'SNOWFLAKE' BASE_LOCATION = 'relative/path' CATALOG_SYNC = 'OPEN_CATALOG' \
-    STORAGE_SERIALIZATION_POLICY = COMPATIBLE COPY GRANTS CHANGE_TRACKING = TRUE DATA_RETENTION_TIME_IN_DAYS = 5 MAX_DATA_EXTENSION_TIME_IN_DAYS = 10 \
+    STORAGE_SERIALIZATION_POLICY = COMPATIBLE COPY GRANTS CHANGE_TRACKING=TRUE DATA_RETENTION_TIME_IN_DAYS=5 MAX_DATA_EXTENSION_TIME_IN_DAYS=10 \
     WITH AGGREGATION POLICY policy_name WITH ROW ACCESS POLICY policy_name ON (a) WITH TAG (A='TAG A', B='TAG B')") {
-        Statement::CreateIcebergTable {
+        Statement::CreateTable(CreateTable {
             name, cluster_by, base_location,
             external_volume, catalog, catalog_sync,
             storage_serialization_policy, change_tracking,
             copy_grants, data_retention_time_in_days,
             max_data_extension_time_in_days, with_aggregation_policy,
             with_row_access_policy, with_tags, ..
-        } => {
+        }) => {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(WrappedCollection::Parentheses(vec![
@@ -871,7 +871,7 @@ fn test_snowflake_create_iceberg_table_all_options() {
                 ])),
                 cluster_by
             );
-            assert_eq!("relative/path", base_location);
+            assert_eq!("relative/path", base_location.unwrap());
             assert_eq!("volume", external_volume.unwrap());
             assert_eq!("SNOWFLAKE", catalog.unwrap());
             assert_eq!("OPEN_CATALOG", catalog_sync.unwrap());
@@ -903,13 +903,13 @@ fn test_snowflake_create_iceberg_table() {
     match snowflake()
         .verified_stmt("CREATE ICEBERG TABLE my_table (a INT) BASE_LOCATION = 'relative_path'")
     {
-        Statement::CreateIcebergTable {
+        Statement::CreateTable(CreateTable {
             name,
             base_location,
             ..
-        } => {
+        }) => {
             assert_eq!("my_table", name.to_string());
-            assert_eq!("relative_path", base_location);
+            assert_eq!("relative_path", base_location.unwrap());
         }
         _ => unreachable!(),
     }
@@ -919,7 +919,7 @@ fn test_snowflake_create_iceberg_table() {
 fn test_snowflake_create_iceberg_table_without_location() {
     let res = snowflake().parse_sql_statements("CREATE ICEBERG TABLE my_table (a INT)");
     assert_eq!(
-        ParserError::ParserError("BASE_LOCATION is required".to_string()),
+        ParserError::ParserError("BASE_LOCATION is required for ICEBERG tables".to_string()),
         res.unwrap_err()
     );
 }

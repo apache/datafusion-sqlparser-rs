@@ -36,7 +36,8 @@ use super::{
     CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
     HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert,
     OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting, SqlOption,
-    SqliteOnConflict, TableEngine, TableObject, TableWithJoins, Tag, WrappedCollection,
+    SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject, TableWithJoins, Tag,
+    WrappedCollection,
 };
 
 /// CREATE INDEX statement.
@@ -117,6 +118,7 @@ pub struct CreateTable {
     pub if_not_exists: bool,
     pub transient: bool,
     pub volatile: bool,
+    pub iceberg: bool,
     /// Table name
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
@@ -192,6 +194,21 @@ pub struct CreateTable {
     /// Snowflake "WITH TAG" clause
     /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
     pub with_tags: Option<Vec<Tag>>,
+    /// Snowflake "EXTERNAL_VOLUME" clause for Iceberg tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
+    pub external_volume: Option<String>,
+    /// Snowflake "BASE_LOCATION" clause for Iceberg tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
+    pub base_location: Option<String>,
+    /// Snowflake "CATALOG" clause for Iceberg tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
+    pub catalog: Option<String>,
+    /// Snowflake "CATALOG_SYNC" clause for Iceberg tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
+    pub catalog_sync: Option<String>,
+    /// Snowflake "STORAGE_SERIALIZATION_POLICY" clause for Iceberg tables
+    /// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
+    pub storage_serialization_policy: Option<StorageSerializationPolicy>,
 }
 
 impl Display for CreateTable {
@@ -205,7 +222,7 @@ impl Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{iceberg}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             global = self.global
@@ -221,6 +238,8 @@ impl Display for CreateTable {
             temporary = if self.temporary { "TEMPORARY " } else { "" },
             transient = if self.transient { "TRANSIENT " } else { "" },
             volatile = if self.volatile { "VOLATILE " } else { "" },
+            // Only for Snowflake
+            iceberg = if self.iceberg { "ICEBERG " } else { "" },
             name = self.name,
         )?;
         if let Some(on_cluster) = &self.on_cluster {
@@ -379,6 +398,31 @@ impl Display for CreateTable {
                 f,
                 " OPTIONS({})",
                 display_comma_separated(options.as_slice())
+            )?;
+        }
+
+        if let Some(external_volume) = self.external_volume.as_ref() {
+            write!(f, " EXTERNAL_VOLUME = '{external_volume}'")?;
+        }
+
+        if let Some(catalog) = self.catalog.as_ref() {
+            write!(f, " CATALOG = '{catalog}'")?;
+        }
+
+        if self.iceberg {
+            if let Some(base_location) = self.base_location.as_ref() {
+                write!(f, " BASE_LOCATION = '{base_location}'")?;
+            }
+        }
+
+        if let Some(catalog_sync) = self.catalog_sync.as_ref() {
+            write!(f, " CATALOG_SYNC = '{catalog_sync}'")?;
+        }
+
+        if let Some(storage_serialization_policy) = self.storage_serialization_policy.as_ref() {
+            write!(
+                f,
+                " STORAGE_SERIALIZATION_POLICY = {storage_serialization_policy}"
             )?;
         }
 

@@ -5043,6 +5043,7 @@ fn parse_trigger_related_functions() {
             if_not_exists: false,
             transient: false,
             volatile: false,
+            iceberg: false,
             name: ObjectName(vec![Ident::new("emp")]),
             columns: vec![
                 ColumnDef {
@@ -5109,6 +5110,11 @@ fn parse_trigger_related_functions() {
             with_aggregation_policy: None,
             with_row_access_policy: None,
             with_tags: None,
+            base_location: None,
+            external_volume: None,
+            catalog: None,
+            catalog_sync: None,
+            storage_serialization_policy: None,
         }
     );
 

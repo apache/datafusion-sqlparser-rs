@@ -1001,6 +1001,11 @@ pub enum Expr {
     OuterJoin(Box<Expr>),
     /// A reference to the prior level in a CONNECT BY clause.
     Prior(Box<Expr>),
+    /// Scalar variable creation e.g. `[@]foo INT`
+    ScalarVariable {
+        data_type: DataType,
+        name: String,
+    },
     /// A lambda function.
     ///
     /// Syntax:
@@ -1757,6 +1762,9 @@ impl fmt::Display for Expr {
                 write!(f, "{expr} (+)")
             }
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
+            Expr::ScalarVariable { data_type, name } => {
+                write!(f, "{name} {data_type}")
+            }
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
         }
     }
@@ -8158,6 +8166,24 @@ mod tests {
             vec![Expr::Identifier(Ident::new("d"))],
         ]);
         assert_eq!("CUBE (a, (b, c), d)", format!("{cube}"));
+    }
+
+    #[test]
+    fn test_scalar_variable_display() {
+        let scalar_variable = Expr::ScalarVariable {
+            data_type: DataType::Boolean,
+            name: "foo".to_string(),
+        };
+        assert_eq!("foo BOOLEAN", format!("{scalar_variable}"));
+    }
+
+    #[test]
+    fn test_scalar_variable_display_int() {
+        let scalar_variable = Expr::ScalarVariable {
+            data_type: DataType::Int(None),
+            name: "foo".to_string(),
+        };
+        assert_eq!("foo INT", format!("{scalar_variable}"));
     }
 
     #[test]

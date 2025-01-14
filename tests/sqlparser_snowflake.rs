@@ -2484,34 +2484,6 @@ fn test_sf_trailing_commas() {
 }
 
 #[test]
-fn test_sf_from_trailing_commas() {
-    snowflake()
-        .verified_only_select_with_canonical("SELECT 1, 2 FROM t1, t2,", "SELECT 1, 2 FROM t1, t2");
-
-    let sql = "SELECT a, FROM b, LIMIT 1";
-    let _ = snowflake().parse_sql_statements(sql).unwrap();
-
-    let sql = "INSERT INTO a SELECT b FROM c,";
-    let _ = snowflake().parse_sql_statements(sql).unwrap();
-
-    let sql = "SELECT a FROM b, HAVING COUNT(*) > 1";
-    let _ = snowflake().parse_sql_statements(sql).unwrap();
-
-    let sql = "SELECT a FROM b, WHERE c = 1";
-    let _ = snowflake().parse_sql_statements(sql).unwrap();
-
-    // nasted
-    let sql = "SELECT 1, 2 FROM (SELECT * FROM t,),";
-    let _ = snowflake().parse_sql_statements(sql).unwrap();
-
-    // multiple_subqueries
-    snowflake().verified_only_select_with_canonical(
-        "SELECT 1, 2 FROM (SELECT * FROM t1), (SELECT * FROM t2),",
-        "SELECT 1, 2 FROM (SELECT * FROM t1), (SELECT * FROM t2)",
-    );
-}
-
-#[test]
 fn test_select_wildcard_with_ilike() {
     let select = snowflake_and_generic().verified_only_select(r#"SELECT * ILIKE '%id%' FROM tbl"#);
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {

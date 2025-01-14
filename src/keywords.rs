@@ -539,6 +539,7 @@ define_keywords!(
     NOORDER,
     NOREPLICATION,
     NORMALIZE,
+    NORMALIZED,
     NOSCAN,
     NOSUPERUSER,
     NOT,

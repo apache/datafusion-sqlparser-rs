@@ -270,6 +270,27 @@ impl fmt::Display for DateTimeField {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum NormalizationForm {
+    NFC,
+    NFD,
+    NFKC,
+    NFKD,
+}
+
+impl fmt::Display for NormalizationForm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NormalizationForm::NFC => write!(f, "NFC"),
+            NormalizationForm::NFD => write!(f, "NFD"),
+            NormalizationForm::NFKC => write!(f, "NFKC"),
+            NormalizationForm::NFKD => write!(f, "NFKD"),
+        }
+    }
+}
+
 pub struct EscapeQuotedString<'a> {
     string: &'a str,
     quote: char,

@@ -3183,9 +3183,15 @@ impl<'a> Parser<'a> {
                     {
                         let expr2 = self.parse_expr()?;
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if let Ok((form, negated)) = self.parse_unicode_is_normalized() {
+                        Ok(Expr::IsNormalized {
+                            expr: Box::new(expr),
+                            form,
+                            negated,
+                        })
                     } else {
                         self.expected(
-                            "[NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS",
+                            "[NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS",
                             self.peek_token(),
                         )
                     }
@@ -3850,7 +3856,7 @@ impl<'a> Parser<'a> {
     /// If the current token is the `expected` keyword, consume the token.
     /// Otherwise, return an error.
     ///
-    // todo deprecate infavor of expected_keyword_is
+    // todo deprecate in favor of expected_keyword_is
     pub fn expect_keyword(&mut self, expected: Keyword) -> Result<TokenWithSpan, ParserError> {
         if self.parse_keyword(expected) {
             Ok(self.get_current_token().clone())
@@ -8452,6 +8458,42 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a literal unicode normalization clause
+    pub fn parse_unicode_is_normalized(
+        &mut self,
+    ) -> Result<(Option<NormalizationForm>, bool), ParserError> {
+        let neg = self.parse_keyword(Keyword::NOT);
+        if self.parse_keyword(Keyword::NORMALIZED) {
+            return Ok((None, neg));
+        }
+        let index = self.index;
+        let next_token = self.next_token();
+        let normalized_form = if let Token::Word(Word {
+            value: ref s,
+            quote_style: None,
+            keyword: Keyword::NoKeyword,
+        }) = next_token.token
+        {
+            match s.to_uppercase().as_str() {
+                "NFC" => Some(NormalizationForm::NFC),
+                "NFD" => Some(NormalizationForm::NFD),
+                "NFKC" => Some(NormalizationForm::NFKC),
+                "NFKD" => Some(NormalizationForm::NFKD),
+                _ => {
+                    self.index = index;
+                    return self.expected("unicode normalization", next_token);
+                }
+            }
+        } else {
+            None
+        };
+        if self.parse_keyword(Keyword::NORMALIZED) {
+            return Ok((normalized_form, neg));
+        }
+        self.index = index;
+        self.expected("unicode normalization", self.peek_token())
+    }
+
     pub fn parse_enum_values(&mut self) -> Result<Vec<EnumMember>, ParserError> {
         self.expect_token(&Token::LParen)?;
         let values = self.parse_comma_separated(|parser| {
@@ -8957,7 +8999,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a table object for insetion
+    /// Parse a table object for insertion
     /// e.g. `some_database.some_table` or `FUNCTION some_table_func(...)`
     pub fn parse_table_object(&mut self) -> Result<TableObject, ParserError> {
         if self.dialect.supports_insert_table_function() && self.parse_keyword(Keyword::FUNCTION) {
@@ -11867,7 +11909,7 @@ impl<'a> Parser<'a> {
             } else {
                 let mut name = self.parse_grantee_name()?;
                 if self.consume_token(&Token::Colon) {
-                    // Redshift supports namespace prefix for extenrnal users and groups:
+                    // Redshift supports namespace prefix for external users and groups:
                     // <Namespace>:<GroupName> or <Namespace>:<UserName>
                     // https://docs.aws.amazon.com/redshift/latest/mgmt/redshift-iam-access-control-native-idp.html
                     let ident = self.parse_identifier()?;
@@ -12863,7 +12905,7 @@ impl<'a> Parser<'a> {
         Ok(WithFill { from, to, step })
     }
 
-    // Parse a set of comma seperated INTERPOLATE expressions (ClickHouse dialect)
+    // Parse a set of comma separated INTERPOLATE expressions (ClickHouse dialect)
     // that follow the INTERPOLATE keyword in an ORDER BY clause with the WITH FILL modifier
     pub fn parse_interpolations(&mut self) -> Result<Option<Interpolate>, ParserError> {
         if !self.parse_keyword(Keyword::INTERPOLATE) {
@@ -14372,7 +14414,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
-                "Expected: [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column: 16"
+                "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: a at Line: 1, Column: 16"
                     .to_string()
             ))
         );

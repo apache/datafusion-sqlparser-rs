@@ -83,7 +83,7 @@ pub use self::trigger::{
 
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    TrimWhereField, Value,
+    NormalizationForm, TrimWhereField, Value,
 };
 
 use crate::ast::helpers::stmt_data_loading::{
@@ -653,6 +653,12 @@ pub enum Expr {
     IsDistinctFrom(Box<Expr>, Box<Expr>),
     /// `IS NOT DISTINCT FROM` operator
     IsNotDistinctFrom(Box<Expr>, Box<Expr>),
+    /// `<expr> IS [ NOT ] [ form ] NORMALIZED`
+    IsNormalized {
+        expr: Box<Expr>,
+        form: Option<NormalizationForm>,
+        negated: bool,
+    },
     /// `[ NOT ] IN (val1, val2, ...)`
     InList {
         expr: Box<Expr>,
@@ -1118,7 +1124,7 @@ impl fmt::Display for LambdaFunction {
 /// `OneOrManyWithParens` implements `Deref<Target = [T]>` and `IntoIterator`,
 /// so you can call slice methods on it and iterate over items
 /// # Examples
-/// Acessing as a slice:
+/// Accessing as a slice:
 /// ```
 /// # use sqlparser::ast::OneOrManyWithParens;
 /// let one = OneOrManyWithParens::One("a");
@@ -1419,6 +1425,24 @@ impl fmt::Display for Expr {
                 if *regexp { "REGEXP" } else { "RLIKE" },
                 pattern
             ),
+            Expr::IsNormalized {
+                expr,
+                form,
+                negated,
+            } => {
+                let not_ = if *negated { "NOT " } else { "" };
+                if form.is_none() {
+                    write!(f, "{} IS {}NORMALIZED", expr, not_)
+                } else {
+                    write!(
+                        f,
+                        "{} IS {}{} NORMALIZED",
+                        expr,
+                        not_,
+                        form.as_ref().unwrap()
+                    )
+                }
+            }
             Expr::SimilarTo {
                 negated,
                 expr,
@@ -7749,7 +7773,7 @@ where
 /// ```sql
 /// EXPLAIN (ANALYZE, VERBOSE TRUE, FORMAT TEXT) SELECT * FROM my_table;
 ///
-/// VACCUM (VERBOSE, ANALYZE ON, PARALLEL 10) my_table;
+/// VACUUM (VERBOSE, ANALYZE ON, PARALLEL 10) my_table;
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

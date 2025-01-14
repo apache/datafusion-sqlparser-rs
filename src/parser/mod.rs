@@ -3951,7 +3951,7 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
-    //Parse a list of [TableWithJoins]
+    /// Parse a list of [TableWithJoins]
     fn parse_table_with_joins(&mut self) -> Result<Vec<TableWithJoins>, ParserError> {
         let trailing_commas = self.dialect.supports_from_trailing_commas();
 

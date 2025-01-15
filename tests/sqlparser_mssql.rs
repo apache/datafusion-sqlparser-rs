@@ -1700,6 +1700,67 @@ fn parse_true_false_as_identifiers() {
     );
 }
 
+#[test]
+fn parse_mssql_set_session_value() {
+    ms().verified_stmt(
+        "SET OFFSETS SELECT, FROM, ORDER, TABLE, PROCEDURE, STATEMENT, PARAM, EXECUTE ON",
+    );
+    ms().verified_stmt("SET IDENTITY_INSERT dbo.Tool ON");
+    ms().verified_stmt("SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+    ms().verified_stmt("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    ms().verified_stmt("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+    ms().verified_stmt("SET TRANSACTION ISOLATION LEVEL SNAPSHOT");
+    ms().verified_stmt("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+    ms().verified_stmt("SET STATISTICS IO ON");
+    ms().verified_stmt("SET STATISTICS XML ON");
+    ms().verified_stmt("SET STATISTICS PROFILE ON");
+    ms().verified_stmt("SET STATISTICS TIME ON");
+    ms().verified_stmt("SET DATEFIRST 7");
+    ms().verified_stmt("SET DATEFIRST @xxx");
+    ms().verified_stmt("SET DATEFIRST @@xxx");
+    ms().verified_stmt("SET DATEFORMAT dmy");
+    ms().verified_stmt("SET DATEFORMAT @datevar");
+    ms().verified_stmt("SET DATEFORMAT @@datevar");
+    ms().verified_stmt("SET DEADLOCK_PRIORITY 'LOW'");
+    ms().verified_stmt("SET DEADLOCK_PRIORITY LOW");
+    ms().verified_stmt("SET DEADLOCK_PRIORITY 8");
+    ms().verified_stmt("SET DEADLOCK_PRIORITY -8");
+    ms().verified_stmt("SET DEADLOCK_PRIORITY @xxx");
+    ms().verified_stmt("SET DEADLOCK_PRIORITY @@xxx");
+    ms().verified_stmt("SET LOCK_TIMEOUT 1800");
+    ms().verified_stmt("SET CONCAT_NULL_YIELDS_NULL ON");
+    ms().verified_stmt("SET CURSOR_CLOSE_ON_COMMIT ON");
+    ms().verified_stmt("SET FIPS_FLAGGER 'level'");
+    ms().verified_stmt("SET FIPS_FLAGGER OFF");
+    ms().verified_stmt("SET LANGUAGE Italian");
+    ms().verified_stmt("SET QUOTED_IDENTIFIER ON");
+    ms().verified_stmt("SET ARITHABORT ON");
+    ms().verified_stmt("SET ARITHIGNORE OFF");
+    ms().verified_stmt("SET FMTONLY ON");
+    ms().verified_stmt("SET NOCOUNT OFF");
+    ms().verified_stmt("SET NOEXEC ON");
+    ms().verified_stmt("SET NUMERIC_ROUNDABORT ON");
+    ms().verified_stmt("SET QUERY_GOVERNOR_COST_LIMIT 11");
+    ms().verified_stmt("SET ROWCOUNT 4");
+    ms().verified_stmt("SET ROWCOUNT @xxx");
+    ms().verified_stmt("SET ROWCOUNT @@xxx");
+    ms().verified_stmt("SET TEXTSIZE 11");
+    ms().verified_stmt("SET ANSI_DEFAULTS ON");
+    ms().verified_stmt("SET ANSI_NULL_DFLT_OFF ON");
+    ms().verified_stmt("SET ANSI_NULL_DFLT_ON ON");
+    ms().verified_stmt("SET ANSI_NULLS ON");
+    ms().verified_stmt("SET ANSI_PADDING ON");
+    ms().verified_stmt("SET ANSI_WARNINGS ON");
+    ms().verified_stmt("SET FORCEPLAN ON");
+    ms().verified_stmt("SET SHOWPLAN_ALL ON");
+    ms().verified_stmt("SET SHOWPLAN_TEXT ON");
+    ms().verified_stmt("SET SHOWPLAN_XML ON");
+    ms().verified_stmt("SET IMPLICIT_TRANSACTIONS ON");
+    ms().verified_stmt("SET REMOTE_PROC_TRANSACTIONS ON");
+    ms().verified_stmt("SET XACT_ABORT ON");
+    ms().verified_stmt("SET ANSI_NULLS, ANSI_PADDING ON");
+}
+
 fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }

@@ -32,11 +32,11 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, ClusteredBy, CommentDef, Expr, FileFormat,
-    FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident,
-    InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens,
-    OrderByExpr, Query, RowAccessPolicy, SelectItem, SqlOption, SqliteOnConflict, TableEngine,
-    TableWithJoins, Tag, WrappedCollection,
+    display_comma_separated, display_separated, query::InputFormatClause, Assignment, ClusteredBy,
+    CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
+    HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert,
+    OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting, SqlOption,
+    SqliteOnConflict, TableEngine, TableObject, TableWithJoins, Tag, WrappedCollection,
 };
 
 /// CREATE INDEX statement.
@@ -470,8 +470,7 @@ pub struct Insert {
     /// INTO - optional keyword
     pub into: bool,
     /// TABLE
-    #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-    pub table_name: ObjectName,
+    pub table: TableObject,
     /// table_name as foo (for PostgreSQL)
     pub table_alias: Option<Ident>,
     /// COLUMNS
@@ -480,12 +479,15 @@ pub struct Insert {
     pub overwrite: bool,
     /// A SQL query that specifies what to insert
     pub source: Option<Box<Query>>,
+    /// MySQL `INSERT INTO ... SET`
+    /// See: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
+    pub assignments: Vec<Assignment>,
     /// partitioned insert (Hive)
     pub partitioned: Option<Vec<Expr>>,
     /// Columns defined after PARTITION
     pub after_columns: Vec<Ident>,
     /// whether the insert has the table keyword (Hive)
-    pub table: bool,
+    pub has_table_keyword: bool,
     pub on: Option<OnInsert>,
     /// RETURNING
     pub returning: Option<Vec<SelectItem>>,
@@ -495,14 +497,27 @@ pub struct Insert {
     pub priority: Option<MysqlInsertPriority>,
     /// Only for mysql
     pub insert_alias: Option<InsertAliases>,
+    /// Settings used for ClickHouse.
+    ///
+    /// ClickHouse syntax: `INSERT INTO tbl SETTINGS format_template_resultset = '/some/path/resultset.format'`
+    ///
+    /// [ClickHouse `INSERT INTO`](https://clickhouse.com/docs/en/sql-reference/statements/insert-into)
+    pub settings: Option<Vec<Setting>>,
+    /// Format for `INSERT` statement when not using standard SQL format. Can be e.g. `CSV`,
+    /// `JSON`, `JSONAsString`, `LineAsString` and more.
+    ///
+    /// ClickHouse syntax: `INSERT INTO tbl FORMAT JSONEachRow {"foo": 1, "bar": 2}, {"foo": 3}`
+    ///
+    /// [ClickHouse formats JSON insert](https://clickhouse.com/docs/en/interfaces/formats#json-inserting-data)
+    pub format_clause: Option<InputFormatClause>,
 }
 
 impl Display for Insert {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let table_name = if let Some(alias) = &self.table_alias {
-            format!("{0} AS {alias}", self.table_name)
+            format!("{0} AS {alias}", self.table)
         } else {
-            self.table_name.to_string()
+            self.table.to_string()
         };
 
         if let Some(on_conflict) = self.or {
@@ -528,7 +543,7 @@ impl Display for Insert {
                 ignore = if self.ignore { " IGNORE" } else { "" },
                 over = if self.overwrite { " OVERWRITE" } else { "" },
                 int = if self.into { " INTO" } else { "" },
-                tbl = if self.table { " TABLE" } else { "" },
+                tbl = if self.has_table_keyword { " TABLE" } else { "" },
             )?;
         }
         if !self.columns.is_empty() {
@@ -543,11 +558,18 @@ impl Display for Insert {
             write!(f, "({}) ", display_comma_separated(&self.after_columns))?;
         }
 
-        if let Some(source) = &self.source {
-            write!(f, "{source}")?;
+        if let Some(settings) = &self.settings {
+            write!(f, "SETTINGS {} ", display_comma_separated(settings))?;
         }
 
-        if self.source.is_none() && self.columns.is_empty() {
+        if let Some(source) = &self.source {
+            write!(f, "{source}")?;
+        } else if !self.assignments.is_empty() {
+            write!(f, "SET ")?;
+            write!(f, "{}", display_comma_separated(&self.assignments))?;
+        } else if let Some(format_clause) = &self.format_clause {
+            write!(f, "{format_clause}")?;
+        } else if self.columns.is_empty() {
             write!(f, "DEFAULT VALUES")?;
         }
 

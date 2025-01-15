@@ -32,8 +32,9 @@ use super::{
     OrderBy, OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
     RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
     SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
-    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
+    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
+    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WildcardAdditionalOptions, With,
+    WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -373,6 +374,7 @@ impl Spanned for Statement {
                 if_not_exists: _,
                 temporary: _,
                 to,
+                params: _,
             } => union_spans(
                 core::iter::once(name.span())
                     .chain(columns.iter().map(|i| i.span()))
@@ -494,6 +496,8 @@ impl Spanned for Statement {
             Statement::UNLISTEN { .. } => Span::empty(),
             Statement::RenameTable { .. } => Span::empty(),
             Statement::RaisError { .. } => Span::empty(),
+            Statement::List(..) | Statement::Remove(..) => Span::empty(),
+            Statement::SetSessionParam { .. } => Span::empty(),
         }
     }
 }
@@ -960,12 +964,12 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::DropConstraint {
                 if_exists: _,
                 name,
-                cascade: _,
+                drop_behavior: _,
             } => name.span,
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists: _,
-                cascade: _,
+                drop_behavior: _,
             } => column_name.span,
             AlterTableOperation::AttachPartition { partition } => partition.span(),
             AlterTableOperation::DetachPartition { partition } => partition.span(),
@@ -1140,26 +1144,30 @@ impl Spanned for Insert {
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool
-            table_name,
+            table,
             table_alias,
             columns,
             overwrite: _, // bool
             source,
             partitioned,
             after_columns,
-            table: _, // bool
+            has_table_keyword: _, // bool
             on,
             returning,
             replace_into: _, // bool
             priority: _,     // todo, mysql specific
             insert_alias: _, // todo, mysql specific
+            assignments,
+            settings: _,      // todo, clickhouse specific
+            format_clause: _, // todo, clickhouse specific
         } = self;
 
         union_spans(
-            core::iter::once(table_name.span())
+            core::iter::once(table.span())
                 .chain(table_alias.as_ref().map(|i| i.span))
                 .chain(columns.iter().map(|i| i.span))
                 .chain(source.as_ref().map(|q| q.span()))
+                .chain(assignments.iter().map(|i| i.span()))
                 .chain(partitioned.iter().flat_map(|i| i.iter().map(|k| k.span())))
                 .chain(after_columns.iter().map(|i| i.span))
                 .chain(on.as_ref().map(|i| i.span()))
@@ -2114,6 +2122,17 @@ impl Spanned for UpdateTableFromKind {
         match self {
             UpdateTableFromKind::BeforeSet(from) => from.span(),
             UpdateTableFromKind::AfterSet(from) => from.span(),
+        }
+    }
+}
+
+impl Spanned for TableObject {
+    fn span(&self) -> Span {
+        match self {
+            TableObject::TableName(ObjectName(segments)) => {
+                union_spans(segments.iter().map(|i| i.span))
+            }
+            TableObject::TableFunction(func) => func.span(),
         }
     }
 }

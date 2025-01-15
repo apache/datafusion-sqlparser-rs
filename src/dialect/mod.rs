@@ -260,8 +260,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE} [TRANSACTION]` statements
+    /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE | TRY | CATCH} [TRANSACTION]` statements
     fn supports_start_transaction_modifier(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `END {TRY | CATCH}` statements
+    fn supports_end_transaction_modifier(&self) -> bool {
         false
     }
 
@@ -399,6 +404,12 @@ pub trait Dialect: Debug + Any {
         self.supports_trailing_commas()
     }
 
+    /// Returns true if the dialect supports trailing commas in the `FROM` clause of a `SELECT` statement.
+    /// /// Example: `SELECT 1 FROM T, U, LIMIT 1`
+    fn supports_from_trailing_commas(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports double dot notation for object names
     ///
     /// Example
@@ -426,6 +437,11 @@ pub trait Dialect: Debug + Any {
     /// SELECT from table_name
     /// ```
     fn supports_empty_projections(&self) -> bool {
+        false
+    }
+
+    /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
+    fn supports_user_host_grantee(&self) -> bool {
         false
     }
 
@@ -512,6 +528,7 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::IS => Ok(p!(Is)),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(p!(Between)),
+            Token::Word(w) if w.keyword == Keyword::OVERLAPS => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(p!(Like)),
@@ -682,6 +699,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports nested comments
+    /// e.g. `/* /* nested */ */`
+    fn supports_nested_comments(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports treating the equals operator `=` within a `SelectItem`
     /// as an alias assignment operator, rather than a boolean expression.
     /// For example: the following statements are equivalent for such a dialect:
@@ -758,6 +781,12 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
+    // Returns reserved keywords when looking to parse a [TableFactor].
+    /// See [Self::supports_from_trailing_commas]
+    fn get_reserved_keywords_for_table_factor(&self) -> &[Keyword] {
+        keywords::RESERVED_FOR_TABLE_FACTOR
+    }
+
     /// Returns true if this dialect supports the `TABLESAMPLE` option
     /// before the table alias option. For example:
     ///
@@ -766,6 +795,29 @@ pub trait Dialect: Debug + Any {
     ///
     /// <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#_7_6_table_reference>
     fn supports_table_sample_before_alias(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the `INSERT INTO ... SET col1 = 1, ...` syntax.
+    ///
+    /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
+    fn supports_insert_set(&self) -> bool {
+        false
+    }
+
+    /// Does the dialect support table function in insertion?
+    fn supports_insert_table_function(&self) -> bool {
+        false
+    }
+
+    /// Does the dialect support insert formats, e.g. `INSERT INTO ... FORMAT <format>`
+    fn supports_insert_format(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports `SET` statements without an explicit
+    /// assignment operator such as `=`. For example: `SET SHOWPLAN_XML ON`.
+    fn supports_set_stmt_without_operator(&self) -> bool {
         false
     }
 }

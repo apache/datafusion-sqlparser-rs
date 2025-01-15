@@ -548,7 +548,11 @@ mod tests {
 
     #[test]
     pub fn test_from_invalid_statement() {
-        let stmt = Statement::Commit { chain: false };
+        let stmt = Statement::Commit {
+            chain: false,
+            end: false,
+            modifier: None,
+        };
 
         assert_eq!(
             CreateTableBuilder::try_from(stmt).unwrap_err(),

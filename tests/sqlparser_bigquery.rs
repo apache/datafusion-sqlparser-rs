@@ -2244,3 +2244,15 @@ fn test_any_type() {
 fn test_any_type_dont_break_custom_type() {
     bigquery_and_generic().verified_stmt("CREATE TABLE foo (x ANY)");
 }
+
+#[test]
+fn parse_create_table_with_empty_table_options() {
+    let sql = "CREATE TABLE foo (x INT64) OPTIONS()";
+    bigquery().verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_table_with_empty_table_options_and_column_options() {
+    let sql = "CREATE TABLE db.schema.test (x INT64 OPTIONS(description = 'An optional INTEGER field')) OPTIONS()";
+    bigquery().verified_stmt(sql);
+}

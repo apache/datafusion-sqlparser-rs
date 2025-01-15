@@ -8895,7 +8895,7 @@ impl<'a> Parser<'a> {
             // By default, if a word is located after the `AS` keyword we consider it an alias
             // as long as it's not reserved.
             Token::Word(w)
-                if after_as || reserved_kwds.map_or(false, |x| !x.contains(&w.keyword)) =>
+                if after_as || reserved_kwds.is_some_and(|x| !x.contains(&w.keyword)) =>
             {
                 Ok(Some(w.into_ident(next_token.span)))
             }

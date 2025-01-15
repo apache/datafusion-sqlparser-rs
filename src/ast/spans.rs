@@ -384,6 +384,33 @@ impl Spanned for Statement {
                     .chain(to.iter().map(|i| i.span())),
             ),
             Statement::CreateTable(create_table) => create_table.span(),
+            Statement::CreateIcebergTable {
+                or_replace: _,
+                if_not_exists: _,
+                name,
+                columns,
+                constraints,
+                with_options,
+                comment: _,
+                cluster_by: _,
+                external_volume: _,
+                catalog: _,
+                base_location: _,
+                catalog_sync: _,
+                storage_serialization_policy: _,
+                data_retention_time_in_days: _,
+                max_data_extension_time_in_days: _,
+                change_tracking: _,
+                copy_grants: _,
+                with_row_access_policy: _,
+                with_aggregation_policy: _,
+                with_tags: _,
+            } => union_spans(
+                core::iter::once(name.span())
+                    .chain(columns.iter().map(|i| i.span()))
+                    .chain(constraints.iter().map(|i| i.span()))
+                    .chain(with_options.iter().map(|i| i.span())),
+            ),
             Statement::CreateVirtualTable {
                 name,
                 if_not_exists: _,

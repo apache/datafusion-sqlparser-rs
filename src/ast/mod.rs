@@ -3420,6 +3420,37 @@ pub enum Statement {
     ///
     /// See Mysql <https://dev.mysql.com/doc/refman/9.1/en/rename-table.html>
     RenameTable(Vec<RenameTable>),
+    /// RaiseError (MSSQL)
+    /// RAISERROR ( { msg_id | msg_str | @local_variable }
+    /// { , severity , state }
+    /// [ , argument [ , ...n ] ] )
+    /// [ WITH option [ , ...n ] ]
+    RaisError {
+        message: Box<Expr>,
+        severity: Box<Expr>,
+        state: Box<Expr>,
+        arguments: Vec<Expr>,
+        options: Vec<RaisErrorOption>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RaisErrorOption {
+    Log,
+    NoWait,
+    SetError,
+}
+
+impl fmt::Display for RaisErrorOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RaisErrorOption::Log => write!(f, "LOG"),
+            RaisErrorOption::NoWait => write!(f, "NOWAIT"),
+            RaisErrorOption::SetError => write!(f, "SETERROR"),
+        }
+    }
 }
 
 impl fmt::Display for Statement {
@@ -4979,6 +5010,23 @@ impl fmt::Display for Statement {
             }
             Statement::RenameTable(rename_tables) => {
                 write!(f, "RENAME TABLE {}", display_comma_separated(rename_tables))
+            }
+            Statement::RaisError {
+                message,
+                severity,
+                state,
+                arguments,
+                options,
+            } => {
+                write!(f, "RAISERROR({message}, {severity}, {state}")?;
+                if !arguments.is_empty() {
+                    write!(f, ", {}", display_comma_separated(arguments))?;
+                }
+                write!(f, ")")?;
+                if !options.is_empty() {
+                    write!(f, " WITH {}", display_comma_separated(options))?;
+                }
+                Ok(())
             }
         }
     }

@@ -8837,93 +8837,84 @@ impl<'a> Parser<'a> {
         Ok(IdentWithAlias { ident, alias })
     }
 
-    // Optionally parses an alias for a select list item
+    /// Optionally parses an alias for a select list item
     fn maybe_parse_select_item_alias(&mut self) -> Result<Option<Ident>, ParserError> {
-        let after_as = self.parse_keyword(Keyword::AS);
-        let next_token = self.next_token();
-        match next_token.token {
-            // Dialect-specific behavior for words that may be reserved from parsed
-            // as select item aliases.
-            Token::Word(w)
-                if self
-                    .dialect
-                    .is_select_item_alias(after_as, &w.keyword, self) =>
-            {
-                Ok(Some(w.into_ident(next_token.span)))
-            }
-            // MSSQL supports single-quoted strings as aliases for columns
-            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
-            // Support for MySql dialect double-quoted string, `AS "HOUR"` for example
-            Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
-            _ => {
-                if after_as {
-                    return self.expected("an identifier after AS", next_token);
-                }
-                self.prev_token();
-                Ok(None) // no alias found
-            }
+        fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+            parser.dialect.is_select_item_alias(explicit, kw, parser)
         }
+        self.parse_optional_alias_inner(None, validator)
     }
 
-    /// Parse `AS identifier` (or simply `identifier` if it's not a reserved keyword)
-    /// Some examples with aliases: `SELECT 1 foo`, `SELECT COUNT(*) AS cnt`,
-    /// `SELECT ... FROM t1 foo, t2 bar`, `SELECT ... FROM (...) AS bar`
-    pub fn parse_optional_alias(
-        &mut self,
-        reserved_kwds: &[Keyword],
-    ) -> Result<Option<Ident>, ParserError> {
-        let after_as = self.parse_keyword(Keyword::AS);
-        let next_token = self.next_token();
-        match next_token.token {
-            // Accept any identifier after `AS` (though many dialects have restrictions on
-            // keywords that may appear here). If there's no `AS`: don't parse keywords,
-            // which may start a construct allowed in this position, to be parsed as aliases.
-            // (For example, in `FROM t1 JOIN` the `JOIN` will always be parsed as a keyword,
-            // not an alias.)
-            Token::Word(w) if after_as || !reserved_kwds.contains(&w.keyword) => {
-                Ok(Some(w.into_ident(next_token.span)))
-            }
-            // Left the next two patterns for backwards-compatibility (despite not breaking
-            // any tests).
-            // MSSQL supports single-quoted strings as aliases for columns
-            // We accept them as table aliases too, although MSSQL does not.
-            //
-            // Note, that this conflicts with an obscure rule from the SQL
-            // standard, which we don't implement:
-            // https://crate.io/docs/sql-99/en/latest/chapters/07.html#character-string-literal-s
-            //    "[Obscure Rule] SQL allows you to break a long <character
-            //    string literal> up into two or more smaller <character string
-            //    literal>s, split by a <separator> that includes a newline
-            //    character. When it sees such a <literal>, your DBMS will
-            //    ignore the <separator> and treat the multiple strings as
-            //    a single <literal>."
-            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
-            // Support for MySql dialect double-quoted string, `AS "HOUR"` for example
-            Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
-            _ => {
-                if after_as {
-                    return self.expected("an identifier after AS", next_token);
-                }
-                self.prev_token();
-                Ok(None) // no alias found
-            }
-        }
-    }
-
-    /// Parse `AS identifier` when the AS is describing a table-valued object,
-    /// like in `... FROM generate_series(1, 10) AS t (col)`. In this case
-    /// the alias is allowed to optionally name the columns in the table, in
+    /// Optionally parses an alias for a table like in `... FROM generate_series(1, 10) AS t (col)`.
+    /// In this case, the alias is allowed to optionally name the columns in the table, in
     /// addition to the table itself.
-    pub fn parse_optional_table_alias(
-        &mut self,
-        reserved_kwds: &[Keyword],
-    ) -> Result<Option<TableAlias>, ParserError> {
-        match self.parse_optional_alias(reserved_kwds)? {
+    pub fn maybe_parse_table_alias(&mut self) -> Result<Option<TableAlias>, ParserError> {
+        fn validator(explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+            parser.dialect.is_table_factor_alias(explicit, kw, parser)
+        }
+        match self.parse_optional_alias_inner(None, validator)? {
             Some(name) => {
                 let columns = self.parse_table_alias_column_defs()?;
                 Ok(Some(TableAlias { name, columns }))
             }
             None => Ok(None),
+        }
+    }
+
+    /// Wrapper for parse_optional_alias_inner, left for backwards-compatibility
+    /// but new flows should use the context-specific methods such as `maybe_parse_select_item_alias`
+    /// and `maybe_parse_table_alias`.
+    pub fn parse_optional_alias(
+        &mut self,
+        reserved_kwds: &[Keyword],
+    ) -> Result<Option<Ident>, ParserError> {
+        fn validator(_explicit: bool, _kw: &Keyword, _parser: &mut Parser) -> bool {
+            false
+        }
+        self.parse_optional_alias_inner(Some(reserved_kwds), validator)
+    }
+
+    /// Parses an optional alias after a SQL element such as a select list item
+    /// or a table name.
+    ///
+    /// This method accepts an optional list of reserved keywords or a function
+    /// to call to validate if a keyword should be parsed as an alias, to allow
+    /// callers to customize the parsing logic based on their context.
+    fn parse_optional_alias_inner<F>(
+        &mut self,
+        reserved_kwds: Option<&[Keyword]>,
+        validator: F,
+    ) -> Result<Option<Ident>, ParserError>
+    where
+        F: Fn(bool, &Keyword, &mut Parser) -> bool,
+    {
+        let after_as = self.parse_keyword(Keyword::AS);
+
+        let next_token = self.next_token();
+        match next_token.token {
+            // By default, if a word is located after the `AS` keyword we consider it an alias
+            // as long as it's not reserved.
+            Token::Word(w)
+                if after_as || reserved_kwds.map_or(false, |x| !x.contains(&w.keyword)) =>
+            {
+                Ok(Some(w.into_ident(next_token.span)))
+            }
+            // This pattern allows for customizing the acceptance of words as aliases based on the caller's
+            // context, such as to what SQL element this word is a potential alias of (select item alias, table name
+            // alias, etc.) or dialect-specific logic that goes beyond a simple list of reserved keywords.
+            Token::Word(w) if validator(after_as, &w.keyword, self) => {
+                Ok(Some(w.into_ident(next_token.span)))
+            }
+            // For backwards-compatibility, we accept quoted strings as aliases regardless of the context.
+            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
+            Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
+            _ => {
+                if after_as {
+                    return self.expected("an identifier after AS", next_token);
+                }
+                self.prev_token();
+                Ok(None) // no alias found
+            }
         }
     }
 
@@ -10928,7 +10919,7 @@ impl<'a> Parser<'a> {
                 let name = self.parse_object_name(false)?;
                 self.expect_token(&Token::LParen)?;
                 let args = self.parse_optional_args()?;
-                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                let alias = self.maybe_parse_table_alias()?;
                 Ok(TableFactor::Function {
                     lateral: true,
                     name,
@@ -10941,7 +10932,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::LParen)?;
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
-            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            let alias = self.maybe_parse_table_alias()?;
             Ok(TableFactor::TableFunction { expr, alias })
         } else if self.consume_token(&Token::LParen) {
             // A left paren introduces either a derived table (i.e., a subquery)
@@ -10990,7 +10981,7 @@ impl<'a> Parser<'a> {
             #[allow(clippy::if_same_then_else)]
             if !table_and_joins.joins.is_empty() {
                 self.expect_token(&Token::RParen)?;
-                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                let alias = self.maybe_parse_table_alias()?;
                 Ok(TableFactor::NestedJoin {
                     table_with_joins: Box::new(table_and_joins),
                     alias,
@@ -11003,7 +10994,7 @@ impl<'a> Parser<'a> {
                 // (B): `table_and_joins` (what we found inside the parentheses)
                 // is a nested join `(foo JOIN bar)`, not followed by other joins.
                 self.expect_token(&Token::RParen)?;
-                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                let alias = self.maybe_parse_table_alias()?;
                 Ok(TableFactor::NestedJoin {
                     table_with_joins: Box::new(table_and_joins),
                     alias,
@@ -11017,9 +11008,7 @@ impl<'a> Parser<'a> {
                 // [AS alias])`) as well.
                 self.expect_token(&Token::RParen)?;
 
-                if let Some(outer_alias) =
-                    self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?
-                {
+                if let Some(outer_alias) = self.maybe_parse_table_alias()? {
                     // Snowflake also allows specifying an alias *after* parens
                     // e.g. `FROM (mytable) AS alias`
                     match &mut table_and_joins.relation {
@@ -11072,7 +11061,7 @@ impl<'a> Parser<'a> {
             // SELECT * FROM VALUES (1, 'a'), (2, 'b') AS t (col1, col2)
             // where there are no parentheses around the VALUES clause.
             let values = SetExpr::Values(self.parse_values(false)?);
-            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            let alias = self.maybe_parse_table_alias()?;
             Ok(TableFactor::Derived {
                 lateral: false,
                 subquery: Box::new(Query {
@@ -11098,7 +11087,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
 
             let with_ordinality = self.parse_keywords(&[Keyword::WITH, Keyword::ORDINALITY]);
-            let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
+            let alias = match self.maybe_parse_table_alias() {
                 Ok(Some(alias)) => Some(alias),
                 Ok(None) => None,
                 Err(e) => return Err(e),
@@ -11135,7 +11124,7 @@ impl<'a> Parser<'a> {
             let columns = self.parse_comma_separated(Parser::parse_json_table_column_def)?;
             self.expect_token(&Token::RParen)?;
             self.expect_token(&Token::RParen)?;
-            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            let alias = self.maybe_parse_table_alias()?;
             Ok(TableFactor::JsonTable {
                 json_expr,
                 json_path,
@@ -11180,7 +11169,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            let alias = self.maybe_parse_table_alias()?;
 
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
@@ -11358,7 +11347,7 @@ impl<'a> Parser<'a> {
         } else {
             Vec::new()
         };
-        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        let alias = self.maybe_parse_table_alias()?;
         Ok(TableFactor::OpenJsonTable {
             json_expr,
             json_path,
@@ -11457,7 +11446,7 @@ impl<'a> Parser<'a> {
 
         self.expect_token(&Token::RParen)?;
 
-        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        let alias = self.maybe_parse_table_alias()?;
 
         Ok(TableFactor::MatchRecognize {
             table: Box::new(table),
@@ -11701,7 +11690,7 @@ impl<'a> Parser<'a> {
     ) -> Result<TableFactor, ParserError> {
         let subquery = self.parse_query()?;
         self.expect_token(&Token::RParen)?;
-        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        let alias = self.maybe_parse_table_alias()?;
         Ok(TableFactor::Derived {
             lateral: match lateral {
                 Lateral => true,
@@ -11795,7 +11784,7 @@ impl<'a> Parser<'a> {
             };
 
         self.expect_token(&Token::RParen)?;
-        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        let alias = self.maybe_parse_table_alias()?;
         Ok(TableFactor::Pivot {
             table: Box::new(table),
             aggregate_functions,
@@ -11817,7 +11806,7 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::IN)?;
         let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
         self.expect_token(&Token::RParen)?;
-        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        let alias = self.maybe_parse_table_alias()?;
         Ok(TableFactor::Unpivot {
             table: Box::new(table),
             value,

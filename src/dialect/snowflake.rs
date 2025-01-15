@@ -285,6 +285,7 @@ impl Dialect for SnowflakeDialect {
             | Keyword::HAVING
             | Keyword::INTERSECT
             | Keyword::INTO
+            | Keyword::MINUS
             | Keyword::ORDER
             | Keyword::SELECT
             | Keyword::UNION

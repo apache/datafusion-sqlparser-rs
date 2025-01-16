@@ -473,6 +473,12 @@ fn parse_create_table_with_options() {
         r#"description = "table option description")"#
     );
     bigquery().verified_stmt(sql);
+
+    let sql = "CREATE TABLE foo (x INT64) OPTIONS()";
+    bigquery().verified_stmt(sql);
+
+    let sql = "CREATE TABLE db.schema.test (x INT64 OPTIONS(description = 'An optional INTEGER field')) OPTIONS()";
+    bigquery().verified_stmt(sql);
 }
 
 #[test]

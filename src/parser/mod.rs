@@ -13151,6 +13151,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a 'RAISERROR' statement
     pub fn parse_raiserror(&mut self) -> Result<Statement, ParserError> {
         self.expect_token(&Token::LParen)?;
         let message = Box::new(self.parse_expr()?);
@@ -13158,15 +13159,17 @@ impl<'a> Parser<'a> {
         let severity = Box::new(self.parse_expr()?);
         self.expect_token(&Token::Comma)?;
         let state = Box::new(self.parse_expr()?);
-        let mut arguments = vec![];
-        if self.consume_token(&Token::Comma) {
-            arguments = self.parse_comma_separated(Parser::parse_expr)?;
-        }
+        let arguments = if self.consume_token(&Token::Comma) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
         self.expect_token(&Token::RParen)?;
-        let mut options = vec![];
-        if self.parse_keyword(Keyword::WITH) {
-            options = self.parse_comma_separated(Parser::parse_raiserror_option)?;
-        }
+        let options = if self.parse_keyword(Keyword::WITH) {
+            self.parse_comma_separated(Parser::parse_raiserror_option)?
+        } else {
+            vec![]
+        };
         Ok(Statement::RaisError {
             message,
             severity,
@@ -13181,7 +13184,10 @@ impl<'a> Parser<'a> {
             Keyword::LOG => Ok(RaisErrorOption::Log),
             Keyword::NOWAIT => Ok(RaisErrorOption::NoWait),
             Keyword::SETERROR => Ok(RaisErrorOption::SetError),
-            _ => unreachable!(),
+            _ => self.expected(
+                "LOG, NOWAIT OR SETERROR raiserror option",
+                self.peek_token(),
+            ),
         }
     }
 

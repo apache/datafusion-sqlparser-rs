@@ -1253,7 +1253,17 @@ fn parse_mssql_declare() {
 #[test]
 fn test_parse_raiserror() {
     let sql = r#"RAISERROR('This is a test', 16, 1)"#;
-    let _ = ms().verified_stmt(sql);
+    let s = ms().verified_stmt(sql);
+    assert_eq!(
+        s,
+        Statement::RaisError {
+            message: Box::new(Expr::Value(Value::SingleQuotedString("This is a test".to_string()))),
+            severity: Box::new(Expr::Value(Value::Number("16".to_string(), false))),
+            state: Box::new(Expr::Value(Value::Number("1".to_string(), false))),
+            arguments: vec![],
+            options: vec![],
+        }
+    );
 
     let sql = r#"RAISERROR('This is a test', 16, 1) WITH NOWAIT"#;
     let _ = ms().verified_stmt(sql);

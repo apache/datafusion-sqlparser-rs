@@ -579,6 +579,7 @@ impl<'a> Parser<'a> {
                 Keyword::SAVEPOINT => self.parse_savepoint(),
                 Keyword::RELEASE => self.parse_release(),
                 Keyword::COMMIT => self.parse_commit(),
+                Keyword::RAISERROR => Ok(self.parse_raiserror()?),
                 Keyword::ROLLBACK => self.parse_rollback(),
                 Keyword::ASSERT => self.parse_assert(),
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
@@ -13147,6 +13148,46 @@ impl<'a> Parser<'a> {
             Ok(Some(savepoint))
         } else {
             Ok(None)
+        }
+    }
+
+    /// Parse a 'RAISERROR' statement
+    pub fn parse_raiserror(&mut self) -> Result<Statement, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let message = Box::new(self.parse_expr()?);
+        self.expect_token(&Token::Comma)?;
+        let severity = Box::new(self.parse_expr()?);
+        self.expect_token(&Token::Comma)?;
+        let state = Box::new(self.parse_expr()?);
+        let arguments = if self.consume_token(&Token::Comma) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+        self.expect_token(&Token::RParen)?;
+        let options = if self.parse_keyword(Keyword::WITH) {
+            self.parse_comma_separated(Parser::parse_raiserror_option)?
+        } else {
+            vec![]
+        };
+        Ok(Statement::RaisError {
+            message,
+            severity,
+            state,
+            arguments,
+            options,
+        })
+    }
+
+    pub fn parse_raiserror_option(&mut self) -> Result<RaisErrorOption, ParserError> {
+        match self.expect_one_of_keywords(&[Keyword::LOG, Keyword::NOWAIT, Keyword::SETERROR])? {
+            Keyword::LOG => Ok(RaisErrorOption::Log),
+            Keyword::NOWAIT => Ok(RaisErrorOption::NoWait),
+            Keyword::SETERROR => Ok(RaisErrorOption::SetError),
+            _ => self.expected(
+                "LOG, NOWAIT OR SETERROR raiserror option",
+                self.peek_token(),
+            ),
         }
     }
 

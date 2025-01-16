@@ -495,6 +495,7 @@ impl Spanned for Statement {
             Statement::LoadData { .. } => Span::empty(),
             Statement::UNLISTEN { .. } => Span::empty(),
             Statement::RenameTable { .. } => Span::empty(),
+            Statement::RaisError { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
             Statement::SetSessionParam { .. } => Span::empty(),
         }

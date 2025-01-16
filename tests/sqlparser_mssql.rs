@@ -1251,6 +1251,39 @@ fn parse_mssql_declare() {
 }
 
 #[test]
+fn test_parse_raiserror() {
+    let sql = r#"RAISERROR('This is a test', 16, 1)"#;
+    let s = ms().verified_stmt(sql);
+    assert_eq!(
+        s,
+        Statement::RaisError {
+            message: Box::new(Expr::Value(Value::SingleQuotedString(
+                "This is a test".to_string()
+            ))),
+            severity: Box::new(Expr::Value(Value::Number("16".parse().unwrap(), false))),
+            state: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+            arguments: vec![],
+            options: vec![],
+        }
+    );
+
+    let sql = r#"RAISERROR('This is a test', 16, 1) WITH NOWAIT"#;
+    let _ = ms().verified_stmt(sql);
+
+    let sql = r#"RAISERROR('This is a test', 16, 1, 'ARG') WITH SETERROR, LOG"#;
+    let _ = ms().verified_stmt(sql);
+
+    let sql = r#"RAISERROR(N'This is message %s %d.', 10, 1, N'number', 5)"#;
+    let _ = ms().verified_stmt(sql);
+
+    let sql = r#"RAISERROR(N'<<%*.*s>>', 10, 1, 7, 3, N'abcde')"#;
+    let _ = ms().verified_stmt(sql);
+
+    let sql = r#"RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState)"#;
+    let _ = ms().verified_stmt(sql);
+}
+
+#[test]
 fn parse_use() {
     let valid_object_names = [
         "mydb",

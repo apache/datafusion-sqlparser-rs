@@ -1260,8 +1260,8 @@ fn test_parse_raiserror() {
             message: Box::new(Expr::Value(Value::SingleQuotedString(
                 "This is a test".to_string()
             ))),
-            severity: Box::new(Expr::Value(Value::Number("16".to_string(), false))),
-            state: Box::new(Expr::Value(Value::Number("1".to_string(), false))),
+            severity: Box::new(Expr::Value(Value::Number("16".parse().unwrap(), false))),
+            state: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
             arguments: vec![],
             options: vec![],
         }

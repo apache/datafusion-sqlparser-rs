@@ -7341,11 +7341,7 @@ impl<'a> Parser<'a> {
     pub fn parse_options(&mut self, keyword: Keyword) -> Result<Vec<SqlOption>, ParserError> {
         if self.parse_keyword(keyword) {
             self.expect_token(&Token::LParen)?;
-            if self.peek_token() == Token::RParen {
-                self.next_token();
-                return Ok(vec![]);
-            }
-            let options = self.parse_comma_separated(Parser::parse_sql_option)?;
+            let options = self.parse_comma_separated0(Parser::parse_sql_option, Token::RParen)?;
             self.expect_token(&Token::RParen)?;
             Ok(options)
         } else {

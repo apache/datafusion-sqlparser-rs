@@ -1257,7 +1257,9 @@ fn test_parse_raiserror() {
     assert_eq!(
         s,
         Statement::RaisError {
-            message: Box::new(Expr::Value(Value::SingleQuotedString("This is a test".to_string()))),
+            message: Box::new(Expr::Value(Value::SingleQuotedString(
+                "This is a test".to_string()
+            ))),
             severity: Box::new(Expr::Value(Value::Number("16".to_string(), false))),
             state: Box::new(Expr::Value(Value::Number("1".to_string(), false))),
             arguments: vec![],

@@ -340,7 +340,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let statements = Parser::new(&dialect)
     ///   .try_with_sql("SELECT * FROM foo")?
     ///   .parse_statements()?;
@@ -368,7 +368,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let result = Parser::new(&dialect)
     ///   .with_recursion_limit(1)
     ///   .try_with_sql("SELECT * FROM foo WHERE (a OR (b OR (c OR d)))")?
@@ -395,7 +395,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError, ParserOptions}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let options = ParserOptions::new()
     ///    .with_trailing_commas(true)
     ///    .with_unescape(false);
@@ -452,7 +452,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let statements = Parser::new(&dialect)
     ///   // Parse a SQL string with 2 separate statements
     ///   .try_with_sql("SELECT * FROM foo; SELECT * FROM bar;")?
@@ -500,7 +500,7 @@ impl<'a> Parser<'a> {
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
-    /// let dialect = GenericDialect{};
+    /// let dialect = GenericDialect::default();
     /// let statements = Parser::parse_sql(
     ///   &dialect, "SELECT * FROM foo"
     /// )?;
@@ -1124,11 +1124,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Some(Expr::Value(self.parse_value()?)))
             }
-            Keyword::CURRENT_CATALOG
-            | Keyword::CURRENT_USER
-            | Keyword::SESSION_USER
-            | Keyword::USER
-            if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+            _ if self.dialect.is_function_keywords(&w.keyword) =>
                 {
                     Ok(Some(Expr::Function(Function {
                         name: ObjectName(vec![w.clone().into_ident(w_span)]),
@@ -1141,11 +1137,7 @@ impl<'a> Parser<'a> {
                         within_group: vec![],
                     })))
                 }
-            Keyword::CURRENT_TIMESTAMP
-            | Keyword::CURRENT_TIME
-            | Keyword::CURRENT_DATE
-            | Keyword::LOCALTIME
-            | Keyword::LOCALTIMESTAMP => {
+            _ if self.dialect.is_time_function_keywords(&w.keyword) => {
                 Ok(Some(self.parse_time_functions(ObjectName(vec![w.clone().into_ident(w_span)]))?))
             }
             Keyword::CASE => Ok(Some(self.parse_case_expr()?)),
@@ -3557,7 +3549,7 @@ impl<'a> Parser<'a> {
     /// # use sqlparser::parser::Parser;
     /// # use sqlparser::keywords::Keyword;
     /// # use sqlparser::tokenizer::{Token, Word};
-    /// let dialect = GenericDialect {};
+    /// let dialect = GenericDialect::default();
     /// let mut parser = Parser::new(&dialect).try_with_sql("ORDER BY foo, bar").unwrap();
     ///
     /// // Note that Rust infers the number of tokens to peek based on the
@@ -9099,7 +9091,7 @@ impl<'a> Parser<'a> {
     /// use sqlparser::dialect::GenericDialect;
     /// use sqlparser::parser::Parser;
     ///
-    /// let dialect = GenericDialect {};
+    /// let dialect = GenericDialect::default();
     /// let expected = vec![Ident::new("one"), Ident::new("two")];
     ///
     /// // expected usage
@@ -11733,7 +11725,8 @@ impl<'a> Parser<'a> {
     /// # use sqlparser::dialect::GenericDialect;
     /// # fn main() ->Result<(), ParserError> {
     /// let sql = r#"SUM("a") as "b""#;
-    /// let mut parser = Parser::new(&GenericDialect).try_with_sql(sql)?;
+    /// let dialect = GenericDialect::default();
+    /// let mut parser = Parser::new(&dialect).try_with_sql(sql)?;
     /// let expr_with_alias = parser.parse_expr_with_alias()?;
     /// assert_eq!(Some("b".to_string()), expr_with_alias.alias.map(|x|x.value));
     /// # Ok(())
@@ -13983,8 +13976,10 @@ mod tests {
         #[test]
         fn test_ansii_character_string_types() {
             // Character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-string-type>
-            let dialect =
-                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let dialect = TestedDialects::new(vec![
+                Box::new(GenericDialect::default()),
+                Box::new(AnsiDialect {}),
+            ]);
 
             test_parse_data_type!(dialect, "CHARACTER", DataType::Character(None));
 
@@ -14111,8 +14106,10 @@ mod tests {
         #[test]
         fn test_ansii_character_large_object_types() {
             // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
-            let dialect =
-                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let dialect = TestedDialects::new(vec![
+                Box::new(GenericDialect::default()),
+                Box::new(AnsiDialect {}),
+            ]);
 
             test_parse_data_type!(
                 dialect,
@@ -14142,8 +14139,10 @@ mod tests {
 
         #[test]
         fn test_parse_custom_types() {
-            let dialect =
-                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let dialect = TestedDialects::new(vec![
+                Box::new(GenericDialect::default()),
+                Box::new(AnsiDialect {}),
+            ]);
 
             test_parse_data_type!(
                 dialect,
@@ -14173,8 +14172,10 @@ mod tests {
         #[test]
         fn test_ansii_exact_numeric_types() {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
-            let dialect =
-                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let dialect = TestedDialects::new(vec![
+                Box::new(GenericDialect::default()),
+                Box::new(AnsiDialect {}),
+            ]);
 
             test_parse_data_type!(dialect, "NUMERIC", DataType::Numeric(ExactNumberInfo::None));
 
@@ -14222,8 +14223,10 @@ mod tests {
         #[test]
         fn test_ansii_date_type() {
             // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
-            let dialect =
-                TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})]);
+            let dialect = TestedDialects::new(vec![
+                Box::new(GenericDialect::default()),
+                Box::new(AnsiDialect {}),
+            ]);
 
             test_parse_data_type!(dialect, "DATE", DataType::Date);
 
@@ -14332,8 +14335,10 @@ mod tests {
             }};
         }
 
-        let dialect =
-            TestedDialects::new(vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})]);
+        let dialect = TestedDialects::new(vec![
+            Box::new(GenericDialect::default()),
+            Box::new(MySqlDialect {}),
+        ]);
 
         test_parse_table_constraint!(
             dialect,
@@ -14416,7 +14421,7 @@ mod tests {
     #[test]
     fn test_tokenizer_error_loc() {
         let sql = "foo '";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
+        let ast = Parser::parse_sql(&GenericDialect::default(), sql);
         assert_eq!(
             ast,
             Err(ParserError::TokenizerError(
@@ -14428,7 +14433,7 @@ mod tests {
     #[test]
     fn test_parser_error_loc() {
         let sql = "SELECT this is a syntax error";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
+        let ast = Parser::parse_sql(&GenericDialect::default(), sql);
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
@@ -14441,7 +14446,7 @@ mod tests {
     #[test]
     fn test_nested_explain_error() {
         let sql = "EXPLAIN EXPLAIN SELECT 1";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
+        let ast = Parser::parse_sql(&GenericDialect::default(), sql);
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
@@ -14452,7 +14457,7 @@ mod tests {
 
     #[test]
     fn test_parse_multipart_identifier_positive() {
-        let dialect = TestedDialects::new(vec![Box::new(GenericDialect {})]);
+        let dialect = TestedDialects::new(vec![Box::new(GenericDialect::default())]);
 
         // parse multipart with quotes
         let expected = vec![
@@ -14562,14 +14567,14 @@ mod tests {
     fn test_replace_into_placeholders() {
         let sql = "REPLACE INTO t (a) VALUES (&a)";
 
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+        assert!(Parser::parse_sql(&GenericDialect::default(), sql).is_err());
     }
 
     #[test]
     fn test_replace_into_set_placeholder() {
         let sql = "REPLACE INTO t SET ?";
 
-        assert!(Parser::parse_sql(&GenericDialect {}, sql).is_err());
+        assert!(Parser::parse_sql(&GenericDialect::default(), sql).is_err());
     }
 
     #[test]
@@ -14577,5 +14582,27 @@ mod tests {
         let sql = r#"REPLACE"#;
 
         assert!(Parser::parse_sql(&MySqlDialect {}, sql).is_err());
+    }
+
+    #[test]
+    fn test_keyword() {
+        let sql = "select * from t where user = 'test';";
+        let mut dialect = GenericDialect::default();
+        dialect.with_function_keywords(None);
+        let statements = Parser::parse_sql(&dialect, sql).unwrap();
+        let statement = &(statements[0]);
+        let Statement::Query(query) = statement else {
+            panic!("fail to parse query");
+        };
+        let Some(select) = query.body.as_select() else {
+            panic!("fail to parse select");
+        };
+        let Some(Expr::BinaryOp { left, .. }) = select.selection.clone() else {
+            panic!("fail to parse binary operator");
+        };
+
+        if let Expr::Function(_func) = left.as_ref() {
+            panic!("fail to parse function");
+        };
     }
 }

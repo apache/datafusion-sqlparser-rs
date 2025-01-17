@@ -242,7 +242,7 @@ impl TestedDialects {
 /// Returns all available dialects.
 pub fn all_dialects() -> TestedDialects {
     TestedDialects::new(vec![
-        Box::new(GenericDialect {}),
+        Box::new(GenericDialect::default()),
         Box::new(PostgreSqlDialect {}),
         Box::new(MsSqlDialect {}),
         Box::new(AnsiDialect {}),

@@ -32,7 +32,7 @@ fn duckdb() -> TestedDialects {
 fn duckdb_and_generic() -> TestedDialects {
     TestedDialects::new(vec![
         Box::new(DuckDbDialect {}),
-        Box::new(GenericDialect {}),
+        Box::new(GenericDialect::default()),
     ])
 }
 

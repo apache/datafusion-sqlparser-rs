@@ -1962,7 +1962,7 @@ fn bigquery() -> TestedDialects {
 fn bigquery_and_generic() -> TestedDialects {
     TestedDialects::new(vec![
         Box::new(BigQueryDialect {}),
-        Box::new(GenericDialect {}),
+        Box::new(GenericDialect::default()),
     ])
 }
 

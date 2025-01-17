@@ -34,6 +34,8 @@ use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
+use super::generic::FUNCTION_KEYWORDS;
+
 /// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
 #[derive(Debug)]
 pub struct PostgreSqlDialect {}
@@ -56,6 +58,10 @@ const AND_PREC: u8 = 20;
 const OR_PREC: u8 = 10;
 
 impl Dialect for PostgreSqlDialect {
+    fn function_keywords(&self) -> Option<&[Keyword]> {
+        Some(FUNCTION_KEYWORDS)
+    }
+
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')
     }

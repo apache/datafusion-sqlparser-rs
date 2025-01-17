@@ -30,7 +30,7 @@ fn databricks() -> TestedDialects {
 fn databricks_and_generic() -> TestedDialects {
     TestedDialects::new(vec![
         Box::new(DatabricksDialect {}),
-        Box::new(GenericDialect {}),
+        Box::new(GenericDialect::default()),
     ])
 }
 

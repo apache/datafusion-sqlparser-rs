@@ -38,7 +38,10 @@ fn mysql() -> TestedDialects {
 }
 
 fn mysql_and_generic() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})])
+    TestedDialects::new(vec![
+        Box::new(MySqlDialect {}),
+        Box::new(GenericDialect::default()),
+    ])
 }
 
 #[test]

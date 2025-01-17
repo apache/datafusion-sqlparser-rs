@@ -1777,5 +1777,8 @@ fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }
 fn ms_and_generic() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
+    TestedDialects::new(vec![
+        Box::new(MsSqlDialect {}),
+        Box::new(GenericDialect::default()),
+    ])
 }

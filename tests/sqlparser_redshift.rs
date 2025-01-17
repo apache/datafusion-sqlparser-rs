@@ -170,7 +170,7 @@ fn redshift() -> TestedDialects {
 fn redshift_and_generic() -> TestedDialects {
     TestedDialects::new(vec![
         Box::new(RedshiftSqlDialect {}),
-        Box::new(GenericDialect {}),
+        Box::new(GenericDialect::default()),
     ])
 }
 

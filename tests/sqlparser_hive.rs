@@ -552,5 +552,8 @@ fn hive() -> TestedDialects {
 }
 
 fn hive_and_generic() -> TestedDialects {
-    TestedDialects::new(vec![Box::new(HiveDialect {}), Box::new(GenericDialect {})])
+    TestedDialects::new(vec![
+        Box::new(HiveDialect {}),
+        Box::new(GenericDialect::default()),
+    ])
 }

@@ -35,7 +35,7 @@
 //! use sqlparser::dialect::GenericDialect;
 //! use sqlparser::parser::Parser;
 //!
-//! let dialect = GenericDialect {}; // or AnsiDialect
+//! let dialect = GenericDialect::default(); // or AnsiDialect
 //!
 //! let sql = "SELECT a, b, 123, myfunc(b) \
 //!            FROM table_1 \
@@ -59,7 +59,7 @@
 //! let sql = "SELECT a FROM table_1";
 //!
 //! // parse to a Vec<Statement>
-//! let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
+//! let ast = Parser::parse_sql(&GenericDialect::default(), sql).unwrap();
 //!
 //! // The original SQL text can be generated from the AST
 //! assert_eq!(ast[0].to_string(), sql);

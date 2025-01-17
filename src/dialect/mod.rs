@@ -83,6 +83,13 @@ macro_rules! dialect_is {
         ($($dialect.is::<$dialect_type>())||+)
     }
 }
+const DEFAULT_TIME_FUNCTION_KEYWORDS: &[Keyword] = &[
+    Keyword::CURRENT_TIMESTAMP,
+    Keyword::CURRENT_TIME,
+    Keyword::CURRENT_DATE,
+    Keyword::LOCALTIME,
+    Keyword::LOCALTIMESTAMP,
+];
 
 /// Encapsulates the differences between SQL implementations.
 ///
@@ -126,6 +133,30 @@ pub trait Dialect: Debug + Any {
     /// (for example when wrapping a dialect).
     fn dialect(&self) -> TypeId {
         self.type_id()
+    }
+
+    fn is_function_keywords(&self, keyword: &Keyword) -> bool {
+        if let Some(keywords) = self.function_keywords() {
+            return keywords.contains(keyword);
+        }
+        false
+    }
+
+    fn is_time_function_keywords(&self, keyword: &Keyword) -> bool {
+        if let Some(keywords) = self.time_function_keywords() {
+            return keywords.contains(keyword);
+        }
+        false
+    }
+
+    /// keywords that can be parsed as a function call
+    fn function_keywords(&self) -> Option<&[Keyword]> {
+        None
+    }
+
+    /// keywords that can be parsed as a time function call
+    fn time_function_keywords(&self) -> Option<&[Keyword]> {
+        Some(DEFAULT_TIME_FUNCTION_KEYWORDS)
     }
 
     /// Determine if a character starts a quoted identifier. The default
@@ -873,7 +904,7 @@ impl dyn Dialect {
 pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect>> {
     let dialect_name = dialect_name.as_ref();
     match dialect_name.to_lowercase().as_str() {
-        "generic" => Some(Box::new(GenericDialect)),
+        "generic" => Some(Box::new(GenericDialect::default())),
         "mysql" => Some(Box::new(MySqlDialect {})),
         "postgresql" | "postgres" => Some(Box::new(PostgreSqlDialect {})),
         "hive" => Some(Box::new(HiveDialect {})),
@@ -900,7 +931,7 @@ mod tests {
 
     #[test]
     fn test_is_dialect() {
-        let generic_dialect: &dyn Dialect = &GenericDialect {};
+        let generic_dialect: &dyn Dialect = &GenericDialect::default();
         let ansi_dialect: &dyn Dialect = &AnsiDialect {};
 
         let generic_holder = DialectHolder {
@@ -951,8 +982,9 @@ mod tests {
 
     #[test]
     fn identifier_quote_style() {
+        let dialect = GenericDialect::default();
         let tests: Vec<(&dyn Dialect, &str, Option<char>)> = vec![
-            (&GenericDialect {}, "id", None),
+            (&dialect, "id", None),
             (&SQLiteDialect {}, "id", Some('`')),
             (&PostgreSqlDialect {}, "id", Some('"')),
         ];

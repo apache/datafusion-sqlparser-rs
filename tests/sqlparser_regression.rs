@@ -29,7 +29,7 @@ macro_rules! tpch_tests {
 
         #[test]
         fn $name() {
-            let dialect = GenericDialect {};
+            let dialect = GenericDialect::default();
             let res = Parser::parse_sql(&dialect, QUERIES[$value -1]);
                 assert!(res.is_ok());
         }

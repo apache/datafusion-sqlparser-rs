@@ -43,7 +43,7 @@ let sql = "SELECT a, b, 123, myfunc(b) \
            WHERE a > b AND b < 100 \
            ORDER BY a DESC, b";
 
-let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
+let dialect = GenericDialect::default(); // or AnsiDialect, or your own dialect ...
 
 let ast = Parser::parse_sql(&dialect, sql).unwrap();
 
@@ -63,7 +63,7 @@ The following optional [crate  features](https://doc.rust-lang.org/cargo/referen
 
 * `serde`: Adds [Serde](https://serde.rs/) support by implementing  `Serialize` and `Deserialize` for all AST nodes.
 * `visitor`: Adds a `Visitor` capable of recursively walking the AST tree.
-* `recursive-protection` (enabled by default), uses [recursive](https://docs.rs/recursive/latest/recursive/) for stack overflow protection. 
+* `recursive-protection` (enabled by default), uses [recursive](https://docs.rs/recursive/latest/recursive/) for stack overflow protection.
 
 ## Syntax vs Semantics
 
@@ -78,7 +78,7 @@ This crate avoids semantic analysis because it varies drastically
 between dialects and implementations. If you want to do semantic
 analysis, feel free to use this project as a base.
 
-## Preserves Syntax Round Trip 
+## Preserves Syntax Round Trip
 
 This crate allows users to recover the original SQL text (with comments removed,
 normalized whitespace and keyword capitalization), which is useful for tools
@@ -193,7 +193,7 @@ maintain this crate is limited. Please read the following sections carefully.
 The most commonly accepted PRs add support for or fix a bug in a feature in the
 SQL standard, or a popular RDBMS, such as Microsoft SQL
 Server or PostgreSQL, will likely be accepted after a brief
-review.  Any SQL feature that is dialect specific should be parsed by *both* the relevant [`Dialect`] 
+review.  Any SQL feature that is dialect specific should be parsed by *both* the relevant [`Dialect`]
 as well as [`GenericDialect`].
 
 ### Major API Changes
@@ -234,7 +234,7 @@ implementations ourselves, as we simply don't have the resources.
 
 ### Benchmarking
 
-There are several micro benchmarks in the `sqlparser_bench` directory. 
+There are several micro benchmarks in the `sqlparser_bench` directory.
 You can run them with:
 
 ```

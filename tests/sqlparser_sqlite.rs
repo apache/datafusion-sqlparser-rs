@@ -578,6 +578,6 @@ fn sqlite_with_options(options: ParserOptions) -> TestedDialects {
 fn sqlite_and_generic() -> TestedDialects {
     TestedDialects::new(vec![
         Box::new(SQLiteDialect {}),
-        Box::new(GenericDialect {}),
+        Box::new(GenericDialect::default()),
     ])
 }

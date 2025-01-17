@@ -63,7 +63,7 @@ fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
 /// # use sqlparser::dialect::GenericDialect;
 /// # use sqlparser::tokenizer::Location;
 /// # fn main() -> Result<(), ParserError> {
-/// let dialect = GenericDialect {};
+/// let dialect = GenericDialect::default();
 /// let sql = r#"SELECT *
 ///   FROM table_1"#;
 /// let statements = Parser::new(&dialect)
@@ -2162,7 +2162,7 @@ pub mod tests {
 
     #[test]
     fn test_join() {
-        let dialect = &GenericDialect;
+        let dialect = &GenericDialect::default();
         let mut test = SpanTest::new(
             dialect,
             "SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id",
@@ -2187,7 +2187,7 @@ pub mod tests {
 
     #[test]
     pub fn test_union() {
-        let dialect = &GenericDialect;
+        let dialect = &GenericDialect::default();
         let mut test = SpanTest::new(
             dialect,
             "SELECT a FROM postgres.public.source UNION SELECT a FROM postgres.public.source",
@@ -2204,7 +2204,7 @@ pub mod tests {
 
     #[test]
     pub fn test_subquery() {
-        let dialect = &GenericDialect;
+        let dialect = &GenericDialect::default();
         let mut test = SpanTest::new(
             dialect,
             "SELECT a FROM (SELECT a FROM postgres.public.source) AS b",
@@ -2229,7 +2229,7 @@ pub mod tests {
 
     #[test]
     pub fn test_cte() {
-        let dialect = &GenericDialect;
+        let dialect = &GenericDialect::default();
         let mut test = SpanTest::new(dialect, "WITH cte_outer AS (SELECT a FROM postgres.public.source), cte_ignored AS (SELECT a FROM cte_outer), cte_inner AS (SELECT a FROM cte_outer) SELECT a FROM cte_inner");
 
         let query = test.0.parse_query().unwrap();
@@ -2253,7 +2253,7 @@ pub mod tests {
 
     #[test]
     pub fn test_wildcard_from_cte() {
-        let dialect = &GenericDialect;
+        let dialect = &GenericDialect::default();
         let mut test = SpanTest::new(
             dialect,
             "WITH cte AS (SELECT a FROM postgres.public.source) SELECT cte.* FROM cte",

@@ -21,7 +21,7 @@ use sqlparser::parser::Parser;
 
 fn basic_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("sqlparser-rs parsing benchmark");
-    let dialect = GenericDialect {};
+    let dialect = GenericDialect::default();
 
     let string = "SELECT * FROM my_table WHERE 1 = 1";
     group.bench_function("sqlparser::select", |b| {

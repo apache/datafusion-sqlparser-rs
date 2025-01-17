@@ -17,12 +17,57 @@
 
 use crate::dialect::Dialect;
 
+use super::{keywords::Keyword, DEFAULT_TIME_FUNCTION_KEYWORDS};
+
 /// A permissive, general purpose [`Dialect`], which parses a wide variety of SQL
 /// statements, from many different dialects.
-#[derive(Debug, Default)]
-pub struct GenericDialect;
+#[derive(Debug)]
+pub struct GenericDialect {
+    function_keywords: Option<Vec<Keyword>>,
+    time_function_keywords: Option<Vec<Keyword>>,
+}
+
+impl GenericDialect {
+    pub fn with_function_keywords(&mut self, function_keywords: Option<Vec<Keyword>>) {
+        self.function_keywords = function_keywords;
+    }
+
+    pub fn with_time_function_keywords(&mut self, function_keywords: Option<Vec<Keyword>>) {
+        self.time_function_keywords = function_keywords;
+    }
+}
+
+impl Default for GenericDialect {
+    fn default() -> Self {
+        Self {
+            function_keywords: Some(FUNCTION_KEYWORDS.to_vec()),
+            time_function_keywords: Some(DEFAULT_TIME_FUNCTION_KEYWORDS.to_vec()),
+        }
+    }
+}
+
+pub const FUNCTION_KEYWORDS: &[Keyword] = &[
+    Keyword::CURRENT_CATALOG,
+    Keyword::CURRENT_USER,
+    Keyword::SESSION_USER,
+    Keyword::USER,
+];
 
 impl Dialect for GenericDialect {
+    fn function_keywords(&self) -> Option<&[Keyword]> {
+        match &self.function_keywords {
+            Some(k) => Some(k.as_slice()),
+            None => None,
+        }
+    }
+
+    fn time_function_keywords(&self) -> Option<&[Keyword]> {
+        match &self.time_function_keywords {
+            Some(k) => Some(k.as_slice()),
+            None => None,
+        }
+    }
+
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '`'
     }

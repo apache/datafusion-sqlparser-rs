@@ -3183,12 +3183,8 @@ impl<'a> Parser<'a> {
                     {
                         let expr2 = self.parse_expr()?;
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
-                    } else if let Ok((form, negated)) = self.parse_unicode_is_normalized() {
-                        Ok(Expr::IsNormalized {
-                            expr: Box::new(expr),
-                            form,
-                            negated,
-                        })
+                    } else if let Ok(is_normalized) = self.parse_unicode_is_normalized(expr) {
+                        Ok(is_normalized)
                     } else {
                         self.expected(
                             "[NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS",
@@ -8459,9 +8455,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a literal unicode normalization clause
-    pub fn parse_unicode_is_normalized(
-        &mut self,
-    ) -> Result<(Option<NormalizationForm>, bool), ParserError> {
+    pub fn parse_unicode_is_normalized(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let neg = self.parse_keyword(Keyword::NOT);
         let normalized_form = self.maybe_parse(|parser| {
             match parser.parse_one_of_keywords(&[
@@ -8478,7 +8472,11 @@ impl<'a> Parser<'a> {
             }
         })?;
         if self.parse_keyword(Keyword::NORMALIZED) {
-            return Ok((normalized_form, neg));
+            return Ok(Expr::IsNormalized {
+                expr: Box::new(expr),
+                form: normalized_form,
+                negated: neg,
+            });
         }
         self.expected("unicode normalization form", self.peek_token())
     }

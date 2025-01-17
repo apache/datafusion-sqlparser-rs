@@ -23,20 +23,22 @@ use crate::ast::helpers::stmt_data_loading::{
     StageLoadSelectItem, StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
-    RowAccessPolicy, Statement, TagsColumnOption, WrappedCollection,
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, CreateTable, FileFormat, Ident,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, ObjectName, RowAccessPolicy, Statement, TagsColumnOption,
+    WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Token;
+use crate::tokenizer::{Token, TokenWithSpan};
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec};
+use sqlparser::ast::StorageSerializationPolicy;
 
 use super::keywords::RESERVED_FOR_IDENTIFIER;
 
@@ -142,6 +144,8 @@ impl Dialect for SnowflakeDialect {
             if parser.parse_keyword(Keyword::STAGE) {
                 // OK - this is CREATE STAGE statement
                 return Some(parse_create_stage(or_replace, temporary, parser));
+            } else if parser.parse_keyword(Keyword::ICEBERG) {
+                return Some(parse_create_iceberg_table(or_replace, parser));
             } else if parser.parse_keyword(Keyword::TABLE) {
                 return Some(parse_create_table(
                     or_replace, global, temporary, volatile, transient, parser,
@@ -269,6 +273,174 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CreateIcebergTableBuilder {
+    pub base: CreateTableBuilder,
+    pub external_volume: Option<String>,
+    pub catalog: Option<String>,
+    pub base_location: Option<String>,
+    pub catalog_sync: Option<String>,
+    pub storage_serialization_policy: Option<StorageSerializationPolicy>,
+}
+
+impl CreateIcebergTableBuilder {
+    pub fn build(self) -> Statement {
+        Statement::CreateIcebergTable {
+            or_replace: self.base.or_replace,
+            if_not_exists: self.base.if_not_exists,
+            name: self.base.name,
+            columns: self.base.columns,
+            constraints: self.base.constraints,
+            with_options: self.base.with_options,
+            comment: self.base.comment,
+            cluster_by: self.base.cluster_by,
+            external_volume: self.external_volume,
+            catalog: self.catalog,
+            base_location: self.base_location.unwrap(),
+            catalog_sync: self.catalog_sync,
+            storage_serialization_policy: self.storage_serialization_policy,
+            data_retention_time_in_days: self.base.data_retention_time_in_days,
+            max_data_extension_time_in_days: self.base.max_data_extension_time_in_days,
+            change_tracking: self.base.change_tracking,
+            copy_grants: self.base.copy_grants,
+            with_aggregation_policy: self.base.with_aggregation_policy,
+            with_row_access_policy: self.base.with_row_access_policy,
+            with_tags: self.base.with_tags,
+        }
+    }
+}
+
+pub fn parse_create_table_common_token(
+    parser: &mut Parser,
+    builder: CreateTableBuilder,
+    token: TokenWithSpan,
+    should_break: &mut bool,
+) -> Result<CreateTableBuilder, ParserError> {
+    match &token.token {
+        Token::Word(word) => match word.keyword {
+            Keyword::COPY => {
+                parser.expect_keyword_is(Keyword::GRANTS)?;
+                Ok(builder.copy_grants(true))
+            }
+            Keyword::COMMENT => {
+                // Rewind the COMMENT keyword
+                parser.prev_token();
+                Ok(builder.comment(parser.parse_optional_inline_comment()?))
+            }
+            Keyword::AS => {
+                let query = parser.parse_query()?;
+                *should_break = true;
+                Ok(builder.query(Some(query)))
+            }
+            Keyword::CLONE => {
+                let clone = parser.parse_object_name(false).ok();
+                *should_break = true;
+                Ok(builder.clone_clause(clone))
+            }
+            Keyword::LIKE => {
+                let like = parser.parse_object_name(false).ok();
+                *should_break = true;
+                Ok(builder.like(like))
+            }
+            Keyword::CLUSTER => {
+                parser.expect_keyword_is(Keyword::BY)?;
+                parser.expect_token(&Token::LParen)?;
+                let cluster_by = Some(WrappedCollection::Parentheses(
+                    parser.parse_comma_separated(|p| p.parse_identifier())?,
+                ));
+                parser.expect_token(&Token::RParen)?;
+
+                Ok(builder.cluster_by(cluster_by))
+            }
+            Keyword::CHANGE_TRACKING => {
+                parser.expect_token(&Token::Eq)?;
+                let change_tracking =
+                    match parser.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
+                        Some(Keyword::TRUE) => true,
+                        Some(Keyword::FALSE) => false,
+                        _ => {
+                            return parser.expected("TRUE or FALSE", token);
+                        }
+                    };
+
+                Ok(builder.change_tracking(Some(change_tracking)))
+            }
+            Keyword::DATA_RETENTION_TIME_IN_DAYS => {
+                parser.expect_token(&Token::Eq)?;
+                let data_retention_time_in_days = parser.parse_literal_uint()?;
+                Ok(builder.data_retention_time_in_days(Some(data_retention_time_in_days)))
+            }
+            Keyword::MAX_DATA_EXTENSION_TIME_IN_DAYS => {
+                parser.expect_token(&Token::Eq)?;
+                let max_data_extension_time_in_days = parser.parse_literal_uint()?;
+                Ok(builder.max_data_extension_time_in_days(Some(max_data_extension_time_in_days)))
+            }
+            // WITH is optional, we just verify that next token is one of the expected ones and
+            // fallback to the default match statement
+            Keyword::WITH => {
+                parser.expect_one_of_keywords(&[
+                    Keyword::AGGREGATION,
+                    Keyword::TAG,
+                    Keyword::ROW,
+                ])?;
+                parser.prev_token();
+                Ok(builder)
+            }
+            Keyword::AGGREGATION => {
+                parser.expect_keyword_is(Keyword::POLICY)?;
+                let aggregation_policy = parser.parse_object_name(false)?;
+                Ok(builder.with_aggregation_policy(Some(aggregation_policy)))
+            }
+            Keyword::ROW => {
+                parser.expect_keywords(&[Keyword::ACCESS, Keyword::POLICY])?;
+                let policy = parser.parse_object_name(false)?;
+                parser.expect_keyword_is(Keyword::ON)?;
+                parser.expect_token(&Token::LParen)?;
+                let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;
+                parser.expect_token(&Token::RParen)?;
+
+                Ok(builder.with_row_access_policy(Some(RowAccessPolicy::new(policy, columns))))
+            }
+            Keyword::TAG => {
+                parser.expect_token(&Token::LParen)?;
+                let tags = parser.parse_comma_separated(Parser::parse_tag)?;
+                parser.expect_token(&Token::RParen)?;
+                Ok(builder.with_tags(Some(tags)))
+            }
+            Keyword::ON if parser.parse_keyword(Keyword::COMMIT) => {
+                let on_commit = Some(parser.parse_create_table_on_commit()?);
+                Ok(builder.on_commit(on_commit))
+            }
+            _ => parser.expected("end of statement", token),
+        },
+        Token::LParen => {
+            parser.prev_token();
+            let (columns, constraints) = parser.parse_columns()?;
+            Ok(builder.columns(columns).constraints(constraints))
+        }
+        Token::EOF => {
+            if builder.columns.is_empty() {
+                return Err(ParserError::ParserError(
+                    "unexpected end of input".to_string(),
+                ));
+            }
+            *should_break = true;
+            Ok(builder)
+        }
+        Token::SemiColon => {
+            if builder.columns.is_empty() {
+                return Err(ParserError::ParserError(
+                    "unexpected end of input".to_string(),
+                ));
+            }
+            *should_break = true;
+            parser.prev_token();
+            Ok(builder)
+        }
+        _ => parser.expected("end of statement", token),
+    }
+}
+
 /// Parse snowflake create table statement.
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
 pub fn parse_create_table(
@@ -299,42 +471,9 @@ pub fn parse_create_table(
 
     loop {
         let next_token = parser.next_token();
+        let mut should_break = false;
         match &next_token.token {
             Token::Word(word) => match word.keyword {
-                Keyword::COPY => {
-                    parser.expect_keyword_is(Keyword::GRANTS)?;
-                    builder = builder.copy_grants(true);
-                }
-                Keyword::COMMENT => {
-                    // Rewind the COMMENT keyword
-                    parser.prev_token();
-                    builder = builder.comment(parser.parse_optional_inline_comment()?);
-                }
-                Keyword::AS => {
-                    let query = parser.parse_query()?;
-                    builder = builder.query(Some(query));
-                    break;
-                }
-                Keyword::CLONE => {
-                    let clone = parser.parse_object_name(false).ok();
-                    builder = builder.clone_clause(clone);
-                    break;
-                }
-                Keyword::LIKE => {
-                    let like = parser.parse_object_name(false).ok();
-                    builder = builder.like(like);
-                    break;
-                }
-                Keyword::CLUSTER => {
-                    parser.expect_keyword_is(Keyword::BY)?;
-                    parser.expect_token(&Token::LParen)?;
-                    let cluster_by = Some(WrappedCollection::Parentheses(
-                        parser.parse_comma_separated(|p| p.parse_identifier())?,
-                    ));
-                    parser.expect_token(&Token::RParen)?;
-
-                    builder = builder.cluster_by(cluster_by)
-                }
                 Keyword::ENABLE_SCHEMA_EVOLUTION => {
                     parser.expect_token(&Token::Eq)?;
                     let enable_schema_evolution =
@@ -348,104 +487,135 @@ pub fn parse_create_table(
 
                     builder = builder.enable_schema_evolution(Some(enable_schema_evolution));
                 }
-                Keyword::CHANGE_TRACKING => {
-                    parser.expect_token(&Token::Eq)?;
-                    let change_tracking =
-                        match parser.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
-                            Some(Keyword::TRUE) => true,
-                            Some(Keyword::FALSE) => false,
-                            _ => {
-                                return parser.expected("TRUE or FALSE", next_token);
-                            }
-                        };
-
-                    builder = builder.change_tracking(Some(change_tracking));
-                }
-                Keyword::DATA_RETENTION_TIME_IN_DAYS => {
-                    parser.expect_token(&Token::Eq)?;
-                    let data_retention_time_in_days = parser.parse_literal_uint()?;
-                    builder =
-                        builder.data_retention_time_in_days(Some(data_retention_time_in_days));
-                }
-                Keyword::MAX_DATA_EXTENSION_TIME_IN_DAYS => {
-                    parser.expect_token(&Token::Eq)?;
-                    let max_data_extension_time_in_days = parser.parse_literal_uint()?;
-                    builder = builder
-                        .max_data_extension_time_in_days(Some(max_data_extension_time_in_days));
-                }
                 Keyword::DEFAULT_DDL_COLLATION => {
                     parser.expect_token(&Token::Eq)?;
                     let default_ddl_collation = parser.parse_literal_string()?;
                     builder = builder.default_ddl_collation(Some(default_ddl_collation));
                 }
-                // WITH is optional, we just verify that next token is one of the expected ones and
-                // fallback to the default match statement
-                Keyword::WITH => {
-                    parser.expect_one_of_keywords(&[
-                        Keyword::AGGREGATION,
-                        Keyword::TAG,
-                        Keyword::ROW,
-                    ])?;
-                    parser.prev_token();
-                }
-                Keyword::AGGREGATION => {
-                    parser.expect_keyword_is(Keyword::POLICY)?;
-                    let aggregation_policy = parser.parse_object_name(false)?;
-                    builder = builder.with_aggregation_policy(Some(aggregation_policy));
-                }
-                Keyword::ROW => {
-                    parser.expect_keywords(&[Keyword::ACCESS, Keyword::POLICY])?;
-                    let policy = parser.parse_object_name(false)?;
-                    parser.expect_keyword_is(Keyword::ON)?;
-                    parser.expect_token(&Token::LParen)?;
-                    let columns = parser.parse_comma_separated(|p| p.parse_identifier())?;
-                    parser.expect_token(&Token::RParen)?;
-
-                    builder =
-                        builder.with_row_access_policy(Some(RowAccessPolicy::new(policy, columns)))
-                }
-                Keyword::TAG => {
-                    parser.expect_token(&Token::LParen)?;
-                    let tags = parser.parse_comma_separated(Parser::parse_tag)?;
-                    parser.expect_token(&Token::RParen)?;
-                    builder = builder.with_tags(Some(tags));
-                }
-                Keyword::ON if parser.parse_keyword(Keyword::COMMIT) => {
-                    let on_commit = Some(parser.parse_create_table_on_commit()?);
-                    builder = builder.on_commit(on_commit);
-                }
                 _ => {
-                    return parser.expected("end of statement", next_token);
+                    builder = parse_create_table_common_token(
+                        parser,
+                        builder,
+                        next_token,
+                        &mut should_break,
+                    )?;
+                    if should_break {
+                        break;
+                    };
                 }
             },
-            Token::LParen => {
-                parser.prev_token();
-                let (columns, constraints) = parser.parse_columns()?;
-                builder = builder.columns(columns).constraints(constraints);
-            }
-            Token::EOF => {
-                if builder.columns.is_empty() {
-                    return Err(ParserError::ParserError(
-                        "unexpected end of input".to_string(),
-                    ));
-                }
-
-                break;
-            }
-            Token::SemiColon => {
-                if builder.columns.is_empty() {
-                    return Err(ParserError::ParserError(
-                        "unexpected end of input".to_string(),
-                    ));
-                }
-
-                parser.prev_token();
-                break;
-            }
             _ => {
-                return parser.expected("end of statement", next_token);
+                builder = parse_create_table_common_token(
+                    parser,
+                    builder,
+                    next_token,
+                    &mut should_break,
+                )?;
+                if should_break {
+                    break;
+                }
             }
         }
+    }
+
+    Ok(builder.build())
+}
+
+pub fn parse_storage_serialization_policy(
+    parser: &mut Parser,
+) -> Result<StorageSerializationPolicy, ParserError> {
+    let next_token = parser.next_token();
+    match &next_token.token {
+        Token::Word(w) => match w.keyword {
+            Keyword::COMPATIBLE => Ok(StorageSerializationPolicy::Compatible),
+            Keyword::OPTIMIZED => Ok(StorageSerializationPolicy::Optimized),
+            _ => parser.expected("storage_serialization_policy", next_token),
+        },
+        _ => parser.expected("storage_serialization_policy", next_token),
+    }
+}
+
+/// Parse snowflake create iceberg table statement.
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
+pub fn parse_create_iceberg_table(
+    or_replace: bool,
+    parser: &mut Parser,
+) -> Result<Statement, ParserError> {
+    if !parser.parse_keyword(Keyword::TABLE) {
+        return parser.expected("TABLE", parser.peek_token());
+    }
+
+    let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+    let table_name = parser.parse_object_name(false)?;
+
+    let mut builder = CreateIcebergTableBuilder {
+        base: CreateTableBuilder::new(table_name)
+            .or_replace(or_replace)
+            .if_not_exists(if_not_exists),
+        external_volume: None,
+        catalog: None,
+        base_location: None,
+        catalog_sync: None,
+        storage_serialization_policy: None,
+    };
+
+    let mut should_break = false;
+    loop {
+        let next_token = parser.next_token();
+        match &next_token.token {
+            Token::Word(word) => match word.keyword {
+                Keyword::EXTERNAL_VOLUME => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder.external_volume = Some(parser.parse_literal_string()?);
+                }
+                Keyword::CATALOG => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder.catalog = Some(parser.parse_literal_string()?);
+                }
+                Keyword::BASE_LOCATION => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder.base_location = Some(parser.parse_literal_string()?);
+                }
+                Keyword::CATALOG_SYNC => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder.catalog_sync = Some(parser.parse_literal_string()?);
+                }
+                Keyword::STORAGE_SERIALIZATION_POLICY => {
+                    parser.expect_token(&Token::Eq)?;
+
+                    builder.storage_serialization_policy =
+                        Some(parse_storage_serialization_policy(parser)?);
+                }
+                _ => {
+                    builder.base = parse_create_table_common_token(
+                        parser,
+                        builder.base,
+                        next_token,
+                        &mut should_break,
+                    )?;
+                    if should_break {
+                        break;
+                    }
+                }
+            },
+            _ => {
+                builder.base = parse_create_table_common_token(
+                    parser,
+                    builder.base,
+                    next_token,
+                    &mut should_break,
+                )?;
+                if should_break {
+                    break;
+                }
+            }
+        }
+    }
+
+    if builder.base_location.is_none() {
+        return Err(ParserError::ParserError(
+            "BASE_LOCATION is required".to_string(),
+        ));
     }
 
     Ok(builder.build())

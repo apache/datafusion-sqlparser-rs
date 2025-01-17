@@ -266,6 +266,27 @@ fn parse_insert_select_returning() {
 }
 
 #[test]
+fn parse_insert_select_from_returning() {
+    let sql = "INSERT INTO table1 SELECT * FROM table2 RETURNING id";
+    match verified_stmt(sql) {
+        Statement::Insert(Insert {
+            table: TableObject::TableName(table_name),
+            source: Some(source),
+            returning: Some(returning),
+            ..
+        }) => {
+            assert_eq!("table1", table_name.to_string());
+            assert!(matches!(*source.body, SetExpr::Select(_)));
+            assert_eq!(
+                returning,
+                vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),]
+            );
+        }
+        bad_stmt => unreachable!("Expected valid insert, got {:?}", bad_stmt),
+    }
+}
+
+#[test]
 fn parse_returning_as_column_alias() {
     verified_stmt("SELECT 1 AS RETURNING");
 }

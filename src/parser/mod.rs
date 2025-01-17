@@ -8463,35 +8463,24 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<(Option<NormalizationForm>, bool), ParserError> {
         let neg = self.parse_keyword(Keyword::NOT);
-        if self.parse_keyword(Keyword::NORMALIZED) {
-            return Ok((None, neg));
-        }
-        let index = self.index;
-        let next_token = self.next_token();
-        let normalized_form = if let Token::Word(Word {
-            value: ref s,
-            quote_style: None,
-            keyword: Keyword::NoKeyword,
-        }) = next_token.token
-        {
-            match s.to_uppercase().as_str() {
-                "NFC" => Some(NormalizationForm::NFC),
-                "NFD" => Some(NormalizationForm::NFD),
-                "NFKC" => Some(NormalizationForm::NFKC),
-                "NFKD" => Some(NormalizationForm::NFKD),
-                _ => {
-                    self.index = index;
-                    return self.expected("unicode normalization", next_token);
-                }
+        let normalized_form = self.maybe_parse(|parser| {
+            match parser.parse_one_of_keywords(&[
+                Keyword::NFC,
+                Keyword::NFD,
+                Keyword::NFKC,
+                Keyword::NFKD,
+            ]) {
+                Some(Keyword::NFC) => Ok(NormalizationForm::NFC),
+                Some(Keyword::NFD) => Ok(NormalizationForm::NFD),
+                Some(Keyword::NFKC) => Ok(NormalizationForm::NFKC),
+                Some(Keyword::NFKD) => Ok(NormalizationForm::NFKD),
+                _ => parser.expected("unicode normalization form", parser.peek_token()),
             }
-        } else {
-            None
-        };
+        })?;
         if self.parse_keyword(Keyword::NORMALIZED) {
             return Ok((normalized_form, neg));
         }
-        self.index = index;
-        self.expected("unicode normalization", self.peek_token())
+        self.expected("unicode normalization form", self.peek_token())
     }
 
     pub fn parse_enum_values(&mut self) -> Result<Vec<EnumMember>, ParserError> {

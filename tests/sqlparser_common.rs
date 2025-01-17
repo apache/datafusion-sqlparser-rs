@@ -9387,7 +9387,7 @@ fn parse_is_boolean() {
     let res = parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
-            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: NFKC"
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: FROM"
                 .to_string()
         ),
         res.unwrap_err()

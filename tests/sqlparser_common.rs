@@ -6541,7 +6541,7 @@ fn parse_joins_using() {
                 sample: None,
             },
             global: false,
-            join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
+            join_operator: f(JoinConstraint::Using(vec![ObjectName(vec!["c1".into()])])),
         }
     }
     // Test parsing of aliases

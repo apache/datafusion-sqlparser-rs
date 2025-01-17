@@ -9342,12 +9342,37 @@ impl<'a> Parser<'a> {
         optional: IsOptional,
         allow_empty: bool,
     ) -> Result<Vec<Ident>, ParserError> {
+        self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| p.parse_identifier())
+    }
+
+    /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers
+    pub fn parse_parenthesized_qualified_column_list(
+        &mut self,
+        optional: IsOptional,
+        allow_empty: bool,
+    ) -> Result<Vec<ObjectName>, ParserError> {
+        self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
+            p.parse_object_name(false)
+        })
+    }
+
+    /// Parses a parenthesized comma-separated list of columns using
+    /// the provided function to parse each element.
+    fn parse_parenthesized_column_list_inner<F, T>(
+        &mut self,
+        optional: IsOptional,
+        allow_empty: bool,
+        mut f: F,
+    ) -> Result<Vec<T>, ParserError>
+    where
+        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+    {
         if self.consume_token(&Token::LParen) {
             if allow_empty && self.peek_token().token == Token::RParen {
                 self.next_token();
                 Ok(vec![])
             } else {
-                let cols = self.parse_comma_separated(|p| p.parse_identifier())?;
+                let cols = self.parse_comma_separated(|p| f(p))?;
                 self.expect_token(&Token::RParen)?;
                 Ok(cols)
             }
@@ -9358,7 +9383,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a parenthesized comma-separated list of table alias column definitions.
+    /// Parses a parenthesized comma-separated list of table alias column definitions.
     fn parse_table_alias_column_defs(&mut self) -> Result<Vec<TableAliasColumnDef>, ParserError> {
         if self.consume_token(&Token::LParen) {
             let cols = self.parse_comma_separated(|p| {
@@ -11853,7 +11878,7 @@ impl<'a> Parser<'a> {
             let constraint = self.parse_expr()?;
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword(Keyword::USING) {
-            let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+            let columns = self.parse_parenthesized_qualified_column_list(Mandatory, false)?;
             Ok(JoinConstraint::Using(columns))
         } else {
             Ok(JoinConstraint::None)

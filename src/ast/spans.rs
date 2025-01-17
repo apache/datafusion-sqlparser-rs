@@ -2008,7 +2008,7 @@ impl Spanned for JoinConstraint {
     fn span(&self) -> Span {
         match self {
             JoinConstraint::On(expr) => expr.span(),
-            JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span)),
+            JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span())),
             JoinConstraint::Natural => Span::empty(),
             JoinConstraint::None => Span::empty(),
         }

@@ -4600,7 +4600,7 @@ fn run_explain_analyze(
     expected_verbose: bool,
     expected_analyze: bool,
     expected_format: Option<AnalyzeFormat>,
-    exepcted_options: Option<Vec<UtilityOption>>,
+    expected_options: Option<Vec<UtilityOption>>,
 ) {
     match dialect.verified_stmt(query) {
         Statement::Explain {
@@ -4616,7 +4616,7 @@ fn run_explain_analyze(
             assert_eq!(verbose, expected_verbose);
             assert_eq!(analyze, expected_analyze);
             assert_eq!(format, expected_format);
-            assert_eq!(options, exepcted_options);
+            assert_eq!(options, expected_options);
             assert!(!query_plan);
             assert!(!estimate);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
@@ -9317,6 +9317,46 @@ fn parse_is_boolean() {
         verified_expr(sql)
     );
 
+    let sql = "a IS NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: None,
+            negated: false,
+        },
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: None,
+            negated: true,
+        },
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NFKC NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: Some(NormalizationForm::NFKC),
+            negated: false,
+        },
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT NFKD NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: Some(NormalizationForm::NFKD),
+            negated: true,
+        },
+        verified_expr(sql)
+    );
+
     let sql = "a IS UNKNOWN";
     assert_eq!(
         IsUnknown(Box::new(Identifier(Ident::new("a")))),
@@ -9335,6 +9375,12 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS FALSE");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT FALSE");
 
+    verified_stmt("SELECT f FROM foo WHERE field IS NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NFC NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NFD NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT NFKC NORMALIZED");
+
     verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
@@ -9342,7 +9388,37 @@ fn parse_is_boolean() {
     let res = parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
-            "Expected: [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: 0"
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: 0"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT s, s IS XYZ NORMALIZED FROM foo";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: XYZ"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT s, s IS NFKC FROM foo";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: FROM"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT s, s IS TRIM(' NFKC ') FROM foo";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: TRIM"
                 .to_string()
         ),
         res.unwrap_err()
@@ -13003,7 +13079,7 @@ fn test_trailing_commas_in_from() {
     let sql = "SELECT a FROM b, WHERE c = 1";
     let _ = dialects.parse_sql_statements(sql).unwrap();
 
-    // nasted
+    // nested
     let sql = "SELECT 1, 2 FROM (SELECT * FROM t,),";
     let _ = dialects.parse_sql_statements(sql).unwrap();
 

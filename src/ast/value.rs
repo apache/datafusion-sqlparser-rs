@@ -270,6 +270,35 @@ impl fmt::Display for DateTimeField {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The Unicode Standard defines four normalization forms, which are intended to eliminate
+/// certain distinctions between visually or functionally identical characters.
+///
+/// See [Unicode Normalization Forms](https://unicode.org/reports/tr15/) for details.
+pub enum NormalizationForm {
+    /// Canonical Decomposition, followed by Canonical Composition.
+    NFC,
+    /// Canonical Decomposition.
+    NFD,
+    /// Compatibility Decomposition, followed by Canonical Composition.
+    NFKC,
+    /// Compatibility Decomposition.
+    NFKD,
+}
+
+impl fmt::Display for NormalizationForm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NormalizationForm::NFC => write!(f, "NFC"),
+            NormalizationForm::NFD => write!(f, "NFD"),
+            NormalizationForm::NFKC => write!(f, "NFKC"),
+            NormalizationForm::NFKD => write!(f, "NFKD"),
+        }
+    }
+}
+
 pub struct EscapeQuotedString<'a> {
     string: &'a str,
     quote: char,

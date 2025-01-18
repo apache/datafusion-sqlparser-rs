@@ -3051,3 +3051,10 @@ fn test_sql_keywords_as_select_item_aliases() {
             .is_err());
     }
 }
+
+#[test]
+fn test_timetravel_at_before() {
+    snowflake().verified_only_select("SELECT * FROM tbl AT(TIMESTAMP => '2024-12-15 00:00:00')");
+    snowflake()
+        .verified_only_select("SELECT * FROM tbl BEFORE(TIMESTAMP => '2024-12-15 00:00:00')");
+}

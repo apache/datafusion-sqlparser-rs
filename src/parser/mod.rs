@@ -11181,7 +11181,7 @@ impl<'a> Parser<'a> {
             };
 
             // Parse potential version qualifier
-            let version = self.parse_table_version()?;
+            let version = self.maybe_parse_table_version()?;
 
             // Postgres, MSSQL, ClickHouse: table-valued functions:
             let args = if self.consume_token(&Token::LParen) {
@@ -11612,18 +11612,20 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a given table version specifier.
-    ///
-    /// For now it only supports timestamp versioning for BigQuery and MSSQL dialects.
-    pub fn parse_table_version(&mut self) -> Result<Option<TableVersion>, ParserError> {
-        if dialect_of!(self is BigQueryDialect | MsSqlDialect)
-            && self.parse_keywords(&[Keyword::FOR, Keyword::SYSTEM_TIME, Keyword::AS, Keyword::OF])
-        {
-            let expr = self.parse_expr()?;
-            Ok(Some(TableVersion::ForSystemTimeAsOf(expr)))
-        } else {
-            Ok(None)
+    /// Parses a the timestamp version specifier (i.e. query historical data)
+    pub fn maybe_parse_table_version(&mut self) -> Result<Option<TableVersion>, ParserError> {
+        if self.dialect.supports_timestamp_versioning() {
+            if self.parse_keywords(&[Keyword::FOR, Keyword::SYSTEM_TIME, Keyword::AS, Keyword::OF])
+            {
+                let expr = self.parse_expr()?;
+                return Ok(Some(TableVersion::ForSystemTimeAsOf(expr)));
+            } else if self.peek_keyword(Keyword::AT) || self.peek_keyword(Keyword::BEFORE) {
+                let func_name = self.parse_object_name(true)?;
+                let func = self.parse_function(func_name)?;
+                return Ok(Some(TableVersion::Function(func)));
+            }
         }
+        Ok(None)
     }
 
     /// Parses MySQL's JSON_TABLE column definition.

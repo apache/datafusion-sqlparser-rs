@@ -3058,3 +3058,109 @@ fn test_timetravel_at_before() {
     snowflake()
         .verified_only_select("SELECT * FROM tbl BEFORE(TIMESTAMP => '2024-12-15 00:00:00')");
 }
+
+#[test]
+fn test_grant_account_privileges() {
+    let privileges = vec![
+        "ALL",
+        "ALL PRIVILEGES",
+        "ATTACH POLICY",
+        "AUDIT",
+        "BIND SERVICE ENDPOINT",
+        "IMPORT SHARE",
+        "OVERRIDE SHARE RESTRICTIONS",
+        "PURCHASE DATA EXCHANGE LISTING",
+        "RESOLVE ALL",
+        "READ SESSION",
+    ];
+    let with_grant_options = vec!["", " WITH GRANT OPTION"];
+
+    for p in &privileges {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT {p} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let create_object_types = vec![
+        "ACCOUNT",
+        "APPLICATION",
+        "APPLICATION PACKAGE",
+        "COMPUTE POOL",
+        "DATA EXCHANGE LISTING",
+        "DATABASE",
+        "EXTERNAL VOLUME",
+        "FAILOVER GROUP",
+        "INTEGRATION",
+        "NETWORK POLICY",
+        "ORGANIZATION LISTING",
+        "REPLICATION GROUP",
+        "ROLE",
+        "SHARE",
+        "USER",
+        "WAREHOUSE",
+    ];
+    for t in &create_object_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT CREATE {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let apply_types = vec![
+        "AGGREGATION POLICY",
+        "AUTHENTICATION POLICY",
+        "JOIN POLICY",
+        "MASKING POLICY",
+        "PACKAGES POLICY",
+        "PASSWORD POLICY",
+        "PROJECTION POLICY",
+        "ROW ACCESS POLICY",
+        "SESSION POLICY",
+        "TAG",
+    ];
+    for t in &apply_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT APPLY {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let execute_types = vec![
+        "ALERT",
+        "DATA METRIC FUNCTION",
+        "MANAGED ALERT",
+        "MANAGED TASK",
+        "TASK",
+    ];
+    for t in &execute_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT EXECUTE {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let manage_types = vec![
+        "ACCOUNT SUPPORT CASES",
+        "EVENT SHARING",
+        "GRANTS",
+        "LISTING AUTO FULFILLMENT",
+        "ORGANIZATION SUPPORT CASES",
+        "USER SUPPORT CASES",
+        "WAREHOUSES",
+    ];
+    for t in &manage_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT MANAGE {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let monitor_types = vec!["EXECUTION", "SECURITY", "USAGE"];
+    for t in &monitor_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT MONITOR {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+}

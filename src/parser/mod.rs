@@ -48,9 +48,6 @@ pub enum ParserError {
     RecursionLimitExceeded,
 }
 
-// avoid clippy type_complexity warnings
-type ParsedAction = (Keyword, Option<Vec<Ident>>);
-
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr, $loc:expr) => {
@@ -3950,7 +3947,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    pub fn parse_actions_list(&mut self) -> Result<Vec<ParsedAction>, ParserError> {
+    pub fn parse_actions_list(&mut self) -> Result<Vec<Action>, ParserError> {
         let mut values = vec![];
         loop {
             values.push(self.parse_grant_permission()?);
@@ -11980,37 +11977,8 @@ impl<'a> Parser<'a> {
                 with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
             }
         } else {
-            let (actions, err): (Vec<_>, Vec<_>) = self
-                .parse_actions_list()?
-                .into_iter()
-                .map(|(kw, columns)| match kw {
-                    Keyword::DELETE => Ok(Action::Delete),
-                    Keyword::INSERT => Ok(Action::Insert { columns }),
-                    Keyword::REFERENCES => Ok(Action::References { columns }),
-                    Keyword::SELECT => Ok(Action::Select { columns }),
-                    Keyword::TRIGGER => Ok(Action::Trigger),
-                    Keyword::TRUNCATE => Ok(Action::Truncate),
-                    Keyword::UPDATE => Ok(Action::Update { columns }),
-                    Keyword::USAGE => Ok(Action::Usage),
-                    Keyword::CONNECT => Ok(Action::Connect),
-                    Keyword::CREATE => Ok(Action::Create),
-                    Keyword::EXECUTE => Ok(Action::Execute),
-                    Keyword::TEMPORARY => Ok(Action::Temporary),
-                    // This will cover all future added keywords to
-                    // parse_grant_permission and unhandled in this
-                    // match
-                    _ => Err(kw),
-                })
-                .partition(Result::is_ok);
-
-            if !err.is_empty() {
-                let errors: Vec<Keyword> = err.into_iter().filter_map(|x| x.err()).collect();
-                return Err(ParserError::ParserError(format!(
-                    "INTERNAL ERROR: GRANT/REVOKE unexpected keyword(s) - {errors:?}"
-                )));
-            }
-            let act = actions.into_iter().filter_map(|x| x.ok()).collect();
-            Privileges::Actions(act)
+            let actions = self.parse_actions_list()?;
+            Privileges::Actions(actions)
         };
 
         self.expect_keyword_is(Keyword::ON)?;
@@ -12049,35 +12017,241 @@ impl<'a> Parser<'a> {
         Ok((privileges, objects))
     }
 
-    pub fn parse_grant_permission(&mut self) -> Result<ParsedAction, ParserError> {
-        if let Some(kw) = self.parse_one_of_keywords(&[
-            Keyword::CONNECT,
-            Keyword::CREATE,
-            Keyword::DELETE,
-            Keyword::EXECUTE,
-            Keyword::INSERT,
-            Keyword::REFERENCES,
-            Keyword::SELECT,
-            Keyword::TEMPORARY,
-            Keyword::TRIGGER,
-            Keyword::TRUNCATE,
-            Keyword::UPDATE,
-            Keyword::USAGE,
+    pub fn parse_grant_permission(&mut self) -> Result<Action, ParserError> {
+        fn parse_columns(parser: &mut Parser) -> Result<Option<Vec<Ident>>, ParserError> {
+            let columns = parser.parse_parenthesized_column_list(Optional, false)?;
+            if columns.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(columns))
+            }
+        }
+
+        // Multi-word privileges
+        if self.parse_keywords(&[Keyword::IMPORTED, Keyword::PRIVILEGES]) {
+            Ok(Action::ImportedPrivileges)
+        } else if self.parse_keywords(&[Keyword::ADD, Keyword::SEARCH, Keyword::OPTIMIZATION]) {
+            Ok(Action::AddSearchOptimization)
+        } else if self.parse_keywords(&[Keyword::ATTACH, Keyword::LISTING]) {
+            Ok(Action::AttachListing)
+        } else if self.parse_keywords(&[Keyword::ATTACH, Keyword::POLICY]) {
+            Ok(Action::AttachPolicy)
+        } else if self.parse_keywords(&[Keyword::BIND, Keyword::SERVICE, Keyword::ENDPOINT]) {
+            Ok(Action::BindServiceEndpoint)
+        } else if self.parse_keywords(&[Keyword::EVOLVE, Keyword::SCHEMA]) {
+            Ok(Action::EvolveSchema)
+        } else if self.parse_keywords(&[Keyword::IMPORT, Keyword::SHARE]) {
+            Ok(Action::ImportShare)
+        } else if self.parse_keywords(&[Keyword::MANAGE, Keyword::VERSIONS]) {
+            Ok(Action::ManageVersions)
+        } else if self.parse_keywords(&[Keyword::MANAGE, Keyword::RELEASES]) {
+            Ok(Action::ManageReleases)
+        } else if self.parse_keywords(&[Keyword::OVERRIDE, Keyword::SHARE, Keyword::RESTRICTIONS]) {
+            Ok(Action::OverrideShareRestrictions)
+        } else if self.parse_keywords(&[
+            Keyword::PURCHASE,
+            Keyword::DATA,
+            Keyword::EXCHANGE,
+            Keyword::LISTING,
         ]) {
-            let columns = match kw {
-                Keyword::INSERT | Keyword::REFERENCES | Keyword::SELECT | Keyword::UPDATE => {
-                    let columns = self.parse_parenthesized_column_list(Optional, false)?;
-                    if columns.is_empty() {
-                        None
-                    } else {
-                        Some(columns)
-                    }
-                }
-                _ => None,
-            };
-            Ok((kw, columns))
+            Ok(Action::PurchaseDataExchangeListing)
+        } else if self.parse_keywords(&[Keyword::RESOLVE, Keyword::ALL]) {
+            Ok(Action::ResolveAll)
+        } else if self.parse_keywords(&[Keyword::READ, Keyword::SESSION]) {
+            Ok(Action::ReadSession)
+
+        // Single-word privileges
+        } else if self.parse_keyword(Keyword::APPLY) {
+            let apply_type = self.parse_action_apply_type()?;
+            Ok(Action::Apply { apply_type })
+        } else if self.parse_keyword(Keyword::APPLYBUDGET) {
+            Ok(Action::ApplyBudget)
+        } else if self.parse_keyword(Keyword::AUDIT) {
+            Ok(Action::Audit)
+        } else if self.parse_keyword(Keyword::CONNECT) {
+            Ok(Action::Connect)
+        } else if self.parse_keyword(Keyword::CREATE) {
+            let obj_type = self.maybe_parse_action_create_object_type();
+            Ok(Action::Create { obj_type })
+        } else if self.parse_keyword(Keyword::DELETE) {
+            Ok(Action::Delete)
+        } else if self.parse_keyword(Keyword::EXECUTE) {
+            let obj_type = self.maybe_parse_action_execute_obj_type();
+            Ok(Action::Execute { obj_type })
+        } else if self.parse_keyword(Keyword::FAILOVER) {
+            Ok(Action::Failover)
+        } else if self.parse_keyword(Keyword::INSERT) {
+            Ok(Action::Insert {
+                columns: parse_columns(self)?,
+            })
+        } else if self.parse_keyword(Keyword::MANAGE) {
+            let manage_type = self.parse_action_manage_type()?;
+            Ok(Action::Manage { manage_type })
+        } else if self.parse_keyword(Keyword::MODIFY) {
+            let modify_type = self.parse_action_modify_type()?;
+            Ok(Action::Modify { modify_type })
+        } else if self.parse_keyword(Keyword::MONITOR) {
+            let monitor_type = self.parse_action_monitor_type()?;
+            Ok(Action::Monitor { monitor_type })
+        } else if self.parse_keyword(Keyword::OPERATE) {
+            Ok(Action::Operate)
+        } else if self.parse_keyword(Keyword::REFERENCES) {
+            Ok(Action::References {
+                columns: parse_columns(self)?,
+            })
+        } else if self.parse_keyword(Keyword::READ) {
+            Ok(Action::Read)
+        } else if self.parse_keyword(Keyword::REPLICATE) {
+            Ok(Action::Replicate)
+        } else if self.parse_keyword(Keyword::SELECT) {
+            Ok(Action::Select {
+                columns: parse_columns(self)?,
+            })
+        } else if self.parse_keyword(Keyword::TEMPORARY) {
+            Ok(Action::Temporary)
+        } else if self.parse_keyword(Keyword::TRIGGER) {
+            Ok(Action::Trigger)
+        } else if self.parse_keyword(Keyword::TRUNCATE) {
+            Ok(Action::Truncate)
+        } else if self.parse_keyword(Keyword::UPDATE) {
+            Ok(Action::Update {
+                columns: parse_columns(self)?,
+            })
+        } else if self.parse_keyword(Keyword::USAGE) {
+            Ok(Action::Usage)
+        } else if self.parse_keyword(Keyword::OWNERSHIP) {
+            Ok(Action::Ownership)
         } else {
             self.expected("a privilege keyword", self.peek_token())?
+        }
+    }
+
+    fn maybe_parse_action_create_object_type(&mut self) -> Option<ActionCreateObjectType> {
+        // Multi-word object types
+        if self.parse_keywords(&[Keyword::APPLICATION, Keyword::PACKAGE]) {
+            Some(ActionCreateObjectType::ApplicationPackage)
+        } else if self.parse_keywords(&[Keyword::COMPUTE, Keyword::POOL]) {
+            Some(ActionCreateObjectType::ComputePool)
+        } else if self.parse_keywords(&[Keyword::DATA, Keyword::EXCHANGE, Keyword::LISTING]) {
+            Some(ActionCreateObjectType::DataExchangeListing)
+        } else if self.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUME]) {
+            Some(ActionCreateObjectType::ExternalVolume)
+        } else if self.parse_keywords(&[Keyword::FAILOVER, Keyword::GROUP]) {
+            Some(ActionCreateObjectType::FailoverGroup)
+        } else if self.parse_keywords(&[Keyword::NETWORK, Keyword::POLICY]) {
+            Some(ActionCreateObjectType::NetworkPolicy)
+        } else if self.parse_keywords(&[Keyword::ORGANIZATION, Keyword::LISTING]) {
+            Some(ActionCreateObjectType::OrganiationListing)
+        } else if self.parse_keywords(&[Keyword::REPLICATION, Keyword::GROUP]) {
+            Some(ActionCreateObjectType::ReplicationGroup)
+        }
+        // Single-word object types
+        else if self.parse_keyword(Keyword::ACCOUNT) {
+            Some(ActionCreateObjectType::Account)
+        } else if self.parse_keyword(Keyword::APPLICATION) {
+            Some(ActionCreateObjectType::Application)
+        } else if self.parse_keyword(Keyword::DATABASE) {
+            Some(ActionCreateObjectType::Database)
+        } else if self.parse_keyword(Keyword::INTEGRATION) {
+            Some(ActionCreateObjectType::Integration)
+        } else if self.parse_keyword(Keyword::ROLE) {
+            Some(ActionCreateObjectType::Role)
+        } else if self.parse_keyword(Keyword::SHARE) {
+            Some(ActionCreateObjectType::Share)
+        } else if self.parse_keyword(Keyword::USER) {
+            Some(ActionCreateObjectType::User)
+        } else if self.parse_keyword(Keyword::WAREHOUSE) {
+            Some(ActionCreateObjectType::Warehouse)
+        } else {
+            None
+        }
+    }
+
+    fn parse_action_apply_type(&mut self) -> Result<ActionApplyType, ParserError> {
+        if self.parse_keywords(&[Keyword::AGGREGATION, Keyword::POLICY]) {
+            Ok(ActionApplyType::AggregationPolicy)
+        } else if self.parse_keywords(&[Keyword::AUTHENTICATION, Keyword::POLICY]) {
+            Ok(ActionApplyType::AuthenticationPolicy)
+        } else if self.parse_keywords(&[Keyword::JOIN, Keyword::POLICY]) {
+            Ok(ActionApplyType::JoinPolicy)
+        } else if self.parse_keywords(&[Keyword::MASKING, Keyword::POLICY]) {
+            Ok(ActionApplyType::MaskingPolicy)
+        } else if self.parse_keywords(&[Keyword::PACKAGES, Keyword::POLICY]) {
+            Ok(ActionApplyType::PackagesPolicy)
+        } else if self.parse_keywords(&[Keyword::PASSWORD, Keyword::POLICY]) {
+            Ok(ActionApplyType::PasswordPolicy)
+        } else if self.parse_keywords(&[Keyword::PROJECTION, Keyword::POLICY]) {
+            Ok(ActionApplyType::ProjectionPolicy)
+        } else if self.parse_keywords(&[Keyword::ROW, Keyword::ACCESS, Keyword::POLICY]) {
+            Ok(ActionApplyType::RowAccessPolicy)
+        } else if self.parse_keywords(&[Keyword::SESSION, Keyword::POLICY]) {
+            Ok(ActionApplyType::SessionPolicy)
+        } else if self.parse_keyword(Keyword::TAG) {
+            Ok(ActionApplyType::Tag)
+        } else {
+            self.expected("GRANT APPLY type", self.peek_token())
+        }
+    }
+
+    fn maybe_parse_action_execute_obj_type(&mut self) -> Option<ActionExecuteObjectType> {
+        if self.parse_keywords(&[Keyword::DATA, Keyword::METRIC, Keyword::FUNCTION]) {
+            Some(ActionExecuteObjectType::DataMetricFunction)
+        } else if self.parse_keywords(&[Keyword::MANAGED, Keyword::ALERT]) {
+            Some(ActionExecuteObjectType::ManagedAlert)
+        } else if self.parse_keywords(&[Keyword::MANAGED, Keyword::TASK]) {
+            Some(ActionExecuteObjectType::ManagedTask)
+        } else if self.parse_keyword(Keyword::ALERT) {
+            Some(ActionExecuteObjectType::Alert)
+        } else if self.parse_keyword(Keyword::TASK) {
+            Some(ActionExecuteObjectType::Task)
+        } else {
+            None
+        }
+    }
+
+    fn parse_action_manage_type(&mut self) -> Result<ActionManageType, ParserError> {
+        if self.parse_keywords(&[Keyword::ACCOUNT, Keyword::SUPPORT, Keyword::CASES]) {
+            Ok(ActionManageType::AccountSupportCases)
+        } else if self.parse_keywords(&[Keyword::EVENT, Keyword::SHARING]) {
+            Ok(ActionManageType::EventSharing)
+        } else if self.parse_keywords(&[Keyword::LISTING, Keyword::AUTO, Keyword::FULFILLMENT]) {
+            Ok(ActionManageType::ListingAutoFulfillment)
+        } else if self.parse_keywords(&[Keyword::ORGANIZATION, Keyword::SUPPORT, Keyword::CASES]) {
+            Ok(ActionManageType::OrganizationSupportCases)
+        } else if self.parse_keywords(&[Keyword::USER, Keyword::SUPPORT, Keyword::CASES]) {
+            Ok(ActionManageType::UserSupportCases)
+        } else if self.parse_keyword(Keyword::GRANTS) {
+            Ok(ActionManageType::Grants)
+        } else if self.parse_keyword(Keyword::WAREHOUSES) {
+            Ok(ActionManageType::Warehouses)
+        } else {
+            self.expected("GRANT MANAGE type", self.peek_token())
+        }
+    }
+
+    fn parse_action_modify_type(&mut self) -> Result<ActionModifyType, ParserError> {
+        if self.parse_keywords(&[Keyword::LOG, Keyword::LEVEL]) {
+            Ok(ActionModifyType::LogLevel)
+        } else if self.parse_keywords(&[Keyword::TRACE, Keyword::LEVEL]) {
+            Ok(ActionModifyType::TraceLevel)
+        } else if self.parse_keywords(&[Keyword::SESSION, Keyword::LOG, Keyword::LEVEL]) {
+            Ok(ActionModifyType::SessionLogLevel)
+        } else if self.parse_keywords(&[Keyword::SESSION, Keyword::TRACE, Keyword::LEVEL]) {
+            Ok(ActionModifyType::SessionTraceLevel)
+        } else {
+            self.expected("GRANT MODIFY type", self.peek_token())
+        }
+    }
+
+    fn parse_action_monitor_type(&mut self) -> Result<ActionMonitorType, ParserError> {
+        if self.parse_keyword(Keyword::EXECUTION) {
+            Ok(ActionMonitorType::Execution)
+        } else if self.parse_keyword(Keyword::SECURITY) {
+            Ok(ActionMonitorType::Security)
+        } else if self.parse_keyword(Keyword::USAGE) {
+            Ok(ActionMonitorType::Usage)
+        } else {
+            self.expected("GRANT MONITOR type", self.peek_token())
         }
     }
 

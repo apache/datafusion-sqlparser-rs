@@ -8500,8 +8500,8 @@ fn parse_grant() {
                         Action::References { columns: None },
                         Action::Trigger,
                         Action::Connect,
-                        Action::Create,
-                        Action::Execute,
+                        Action::Create { obj_type: None },
+                        Action::Execute { obj_type: None },
                         Action::Temporary,
                     ],
                     actions
@@ -8616,6 +8616,7 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO SHARE share1");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
+    verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
 }
 
 #[test]

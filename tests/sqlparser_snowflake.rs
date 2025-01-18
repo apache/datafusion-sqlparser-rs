@@ -2650,9 +2650,6 @@ fn asof_joins() {
               "ON s.state = p.state ",
           "ORDER BY s.observed",
     ));
-
-    // Snowflake allows fully-qualified column names inside USING
-    snowflake().verified_stmt("SELECT * FROM tbl1 AS t1 JOIN tbl2 AS t2 USING(t2.col1)");
 }
 
 #[test]

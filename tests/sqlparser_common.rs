@@ -6598,6 +6598,7 @@ fn parse_joins_using() {
         only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
+    verified_stmt("SELECT * FROM tbl1 AS t1 JOIN tbl2 AS t2 USING(t2.col1)");
 }
 
 #[test]

@@ -9336,7 +9336,8 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a parenthesized comma-separated list of unqualified, possibly quoted identifiers
+    /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers.
+    /// For example: `(col1, "col 2", ...)`
     pub fn parse_parenthesized_column_list(
         &mut self,
         optional: IsOptional,
@@ -9345,14 +9346,15 @@ impl<'a> Parser<'a> {
         self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| p.parse_identifier())
     }
 
-    /// Parses a parenthesized comma-separated list of unqualified, possibly quoted identifiers
+    /// Parses a parenthesized comma-separated list of qualified, possibly quoted identifiers.
+    /// For example: `(db1.sc1.tbl1.col1, db1.sc1.tbl1."col 2", ...)`
     pub fn parse_parenthesized_qualified_column_list(
         &mut self,
         optional: IsOptional,
         allow_empty: bool,
     ) -> Result<Vec<ObjectName>, ParserError> {
         self.parse_parenthesized_column_list_inner(optional, allow_empty, |p| {
-            p.parse_object_name(false)
+            p.parse_object_name(true)
         })
     }
 

@@ -77,4 +77,9 @@ impl Dialect for BigQueryDialect {
     fn supports_struct_literal(&self) -> bool {
         true
     }
+
+    // See <https://cloud.google.com/bigquery/docs/access-historical-data>
+    fn supports_timestamp_versioning(&self) -> bool {
+        true
+    }
 }

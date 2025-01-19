@@ -834,6 +834,12 @@ pub trait Dialect: Debug + Any {
     fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
         explicit || !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
     }
+
+    /// Returns true if this dialect supports querying historical table data
+    /// by specifying which version of the data to query.
+    fn supports_timestamp_versioning(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

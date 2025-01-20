@@ -211,7 +211,8 @@ impl Spanned for Values {
 /// # partial span
 ///
 /// Missing spans:
-/// - [Statement::CopyIntoSnowflake]
+/// - [Statement::CopyIntoSnowflakeTable]
+/// - [Statement::CopyIntoSnowflakeLocation]
 /// - [Statement::CreateSecret]
 /// - [Statement::CreateRole]
 /// - [Statement::AlterRole]

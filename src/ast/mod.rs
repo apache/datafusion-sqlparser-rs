@@ -5453,29 +5453,107 @@ impl fmt::Display for FetchDirection {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Action {
+    AddSearchOptimization,
+    Apply {
+        apply_type: ActionApplyType,
+    },
+    ApplyBudget,
+    AttachListing,
+    AttachPolicy,
+    Audit,
+    BindServiceEndpoint,
     Connect,
-    Create,
+    Create {
+        obj_type: Option<ActionCreateObjectType>,
+    },
     Delete,
-    Execute,
-    Insert { columns: Option<Vec<Ident>> },
-    References { columns: Option<Vec<Ident>> },
-    Select { columns: Option<Vec<Ident>> },
+    EvolveSchema,
+    Execute {
+        obj_type: Option<ActionExecuteObjectType>,
+    },
+    Failover,
+    ImportedPrivileges,
+    ImportShare,
+    Insert {
+        columns: Option<Vec<Ident>>,
+    },
+    Manage {
+        manage_type: ActionManageType,
+    },
+    ManageReleases,
+    ManageVersions,
+    Modify {
+        modify_type: ActionModifyType,
+    },
+    Monitor {
+        monitor_type: ActionMonitorType,
+    },
+    Operate,
+    OverrideShareRestrictions,
+    Ownership,
+    PurchaseDataExchangeListing,
+    Read,
+    ReadSession,
+    References {
+        columns: Option<Vec<Ident>>,
+    },
+    Replicate,
+    ResolveAll,
+    Select {
+        columns: Option<Vec<Ident>>,
+    },
     Temporary,
     Trigger,
     Truncate,
-    Update { columns: Option<Vec<Ident>> },
+    Update {
+        columns: Option<Vec<Ident>>,
+    },
     Usage,
 }
 
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Action::AddSearchOptimization => f.write_str("ADD SEARCH OPTIMIZATION")?,
+            Action::Apply { apply_type } => write!(f, "APPLY {apply_type}")?,
+            Action::ApplyBudget => f.write_str("APPLY BUDGET")?,
+            Action::AttachListing => f.write_str("ATTACH LISTING")?,
+            Action::AttachPolicy => f.write_str("ATTACH POLICY")?,
+            Action::Audit => f.write_str("AUDIT")?,
+            Action::BindServiceEndpoint => f.write_str("BIND SERVICE ENDPOINT")?,
             Action::Connect => f.write_str("CONNECT")?,
-            Action::Create => f.write_str("CREATE")?,
+            Action::Create { obj_type } => {
+                f.write_str("CREATE")?;
+                if let Some(obj_type) = obj_type {
+                    write!(f, " {obj_type}")?
+                }
+            }
             Action::Delete => f.write_str("DELETE")?,
-            Action::Execute => f.write_str("EXECUTE")?,
+            Action::EvolveSchema => f.write_str("EVOLVE SCHEMA")?,
+            Action::Execute { obj_type } => {
+                f.write_str("EXECUTE")?;
+                if let Some(obj_type) = obj_type {
+                    write!(f, " {obj_type}")?
+                }
+            }
+            Action::Failover => f.write_str("FAILOVER")?,
+            Action::ImportedPrivileges => f.write_str("IMPORTED PRIVILEGES")?,
+            Action::ImportShare => f.write_str("IMPORT SHARE")?,
             Action::Insert { .. } => f.write_str("INSERT")?,
+            Action::Manage { manage_type } => write!(f, "MANAGE {manage_type}")?,
+            Action::ManageReleases => f.write_str("MANAGE RELEASES")?,
+            Action::ManageVersions => f.write_str("MANAGE VERSIONS")?,
+            Action::Modify { modify_type } => write!(f, "MODIFY {modify_type}")?,
+            Action::Monitor { monitor_type } => write!(f, "MONITOR {monitor_type}")?,
+            Action::Operate => f.write_str("OPERATE")?,
+            Action::OverrideShareRestrictions => f.write_str("OVERRIDE SHARE RESTRICTIONS")?,
+            Action::Ownership => f.write_str("OWNERSHIP")?,
+            Action::PurchaseDataExchangeListing => f.write_str("PURCHASE DATA EXCHANGE LISTING")?,
+            Action::Read => f.write_str("READ")?,
+            Action::ReadSession => f.write_str("READ SESSION")?,
             Action::References { .. } => f.write_str("REFERENCES")?,
+            Action::Replicate => f.write_str("REPLICATE")?,
+            Action::ResolveAll => f.write_str("RESOLVE ALL")?,
             Action::Select { .. } => f.write_str("SELECT")?,
             Action::Temporary => f.write_str("TEMPORARY")?,
             Action::Trigger => f.write_str("TRIGGER")?,
@@ -5495,6 +5573,186 @@ impl fmt::Display for Action {
             _ => (),
         };
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
+/// under `globalPrivileges` in the `CREATE` privilege.
+pub enum ActionCreateObjectType {
+    Account,
+    Application,
+    ApplicationPackage,
+    ComputePool,
+    DataExchangeListing,
+    Database,
+    ExternalVolume,
+    FailoverGroup,
+    Integration,
+    NetworkPolicy,
+    OrganiationListing,
+    ReplicationGroup,
+    Role,
+    Share,
+    User,
+    Warehouse,
+}
+
+impl fmt::Display for ActionCreateObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActionCreateObjectType::Account => write!(f, "ACCOUNT"),
+            ActionCreateObjectType::Application => write!(f, "APPLICATION"),
+            ActionCreateObjectType::ApplicationPackage => write!(f, "APPLICATION PACKAGE"),
+            ActionCreateObjectType::ComputePool => write!(f, "COMPUTE POOL"),
+            ActionCreateObjectType::DataExchangeListing => write!(f, "DATA EXCHANGE LISTING"),
+            ActionCreateObjectType::Database => write!(f, "DATABASE"),
+            ActionCreateObjectType::ExternalVolume => write!(f, "EXTERNAL VOLUME"),
+            ActionCreateObjectType::FailoverGroup => write!(f, "FAILOVER GROUP"),
+            ActionCreateObjectType::Integration => write!(f, "INTEGRATION"),
+            ActionCreateObjectType::NetworkPolicy => write!(f, "NETWORK POLICY"),
+            ActionCreateObjectType::OrganiationListing => write!(f, "ORGANIZATION LISTING"),
+            ActionCreateObjectType::ReplicationGroup => write!(f, "REPLICATION GROUP"),
+            ActionCreateObjectType::Role => write!(f, "ROLE"),
+            ActionCreateObjectType::Share => write!(f, "SHARE"),
+            ActionCreateObjectType::User => write!(f, "USER"),
+            ActionCreateObjectType::Warehouse => write!(f, "WAREHOUSE"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
+/// under `globalPrivileges` in the `APPLY` privilege.
+pub enum ActionApplyType {
+    AggregationPolicy,
+    AuthenticationPolicy,
+    JoinPolicy,
+    MaskingPolicy,
+    PackagesPolicy,
+    PasswordPolicy,
+    ProjectionPolicy,
+    RowAccessPolicy,
+    SessionPolicy,
+    Tag,
+}
+
+impl fmt::Display for ActionApplyType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActionApplyType::AggregationPolicy => write!(f, "AGGREGATION POLICY"),
+            ActionApplyType::AuthenticationPolicy => write!(f, "AUTHENTICATION POLICY"),
+            ActionApplyType::JoinPolicy => write!(f, "JOIN POLICY"),
+            ActionApplyType::MaskingPolicy => write!(f, "MASKING POLICY"),
+            ActionApplyType::PackagesPolicy => write!(f, "PACKAGES POLICY"),
+            ActionApplyType::PasswordPolicy => write!(f, "PASSWORD POLICY"),
+            ActionApplyType::ProjectionPolicy => write!(f, "PROJECTION POLICY"),
+            ActionApplyType::RowAccessPolicy => write!(f, "ROW ACCESS POLICY"),
+            ActionApplyType::SessionPolicy => write!(f, "SESSION POLICY"),
+            ActionApplyType::Tag => write!(f, "TAG"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
+/// under `globalPrivileges` in the `EXECUTE` privilege.
+pub enum ActionExecuteObjectType {
+    Alert,
+    DataMetricFunction,
+    ManagedAlert,
+    ManagedTask,
+    Task,
+}
+
+impl fmt::Display for ActionExecuteObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActionExecuteObjectType::Alert => write!(f, "ALERT"),
+            ActionExecuteObjectType::DataMetricFunction => write!(f, "DATA METRIC FUNCTION"),
+            ActionExecuteObjectType::ManagedAlert => write!(f, "MANAGED ALERT"),
+            ActionExecuteObjectType::ManagedTask => write!(f, "MANAGED TASK"),
+            ActionExecuteObjectType::Task => write!(f, "TASK"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
+/// under `globalPrivileges` in the `MANAGE` privilege.
+pub enum ActionManageType {
+    AccountSupportCases,
+    EventSharing,
+    Grants,
+    ListingAutoFulfillment,
+    OrganizationSupportCases,
+    UserSupportCases,
+    Warehouses,
+}
+
+impl fmt::Display for ActionManageType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActionManageType::AccountSupportCases => write!(f, "ACCOUNT SUPPORT CASES"),
+            ActionManageType::EventSharing => write!(f, "EVENT SHARING"),
+            ActionManageType::Grants => write!(f, "GRANTS"),
+            ActionManageType::ListingAutoFulfillment => write!(f, "LISTING AUTO FULFILLMENT"),
+            ActionManageType::OrganizationSupportCases => write!(f, "ORGANIZATION SUPPORT CASES"),
+            ActionManageType::UserSupportCases => write!(f, "USER SUPPORT CASES"),
+            ActionManageType::Warehouses => write!(f, "WAREHOUSES"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
+/// under `globalPrivileges` in the `MODIFY` privilege.
+pub enum ActionModifyType {
+    LogLevel,
+    TraceLevel,
+    SessionLogLevel,
+    SessionTraceLevel,
+}
+
+impl fmt::Display for ActionModifyType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActionModifyType::LogLevel => write!(f, "LOG LEVEL"),
+            ActionModifyType::TraceLevel => write!(f, "TRACE LEVEL"),
+            ActionModifyType::SessionLogLevel => write!(f, "SESSION LOG LEVEL"),
+            ActionModifyType::SessionTraceLevel => write!(f, "SESSION TRACE LEVEL"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// See <https://docs.snowflake.com/en/sql-reference/sql/grant-privilege>
+/// under `globalPrivileges` in the `MONITOR` privilege.
+pub enum ActionMonitorType {
+    Execution,
+    Security,
+    Usage,
+}
+
+impl fmt::Display for ActionMonitorType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActionMonitorType::Execution => write!(f, "EXECUTION"),
+            ActionMonitorType::Security => write!(f, "SECURITY"),
+            ActionMonitorType::Usage => write!(f, "USAGE"),
+        }
     }
 }
 

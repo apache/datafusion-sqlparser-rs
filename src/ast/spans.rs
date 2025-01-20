@@ -330,7 +330,7 @@ impl Spanned for Statement {
                 legacy_options: _,
                 values: _,
             } => source.span(),
-            Statement::CopyIntoSnowflake {
+            Statement::CopyIntoSnowflakeTable {
                 into: _,
                 from_stage: _,
                 from_stage_alias: _,
@@ -341,6 +341,15 @@ impl Spanned for Statement {
                 file_format: _,
                 copy_options: _,
                 validation_mode: _,
+            } => Span::empty(),
+            Statement::CopyIntoSnowflakeLocation {
+                into: _,
+                from_table: _,
+                from_query: _,
+                stage_params: _,
+                partition: _,
+                file_format: _,
+                copy_options: _,
             } => Span::empty(),
             Statement::Close { cursor } => match cursor {
                 CloseCursor::All => Span::empty(),

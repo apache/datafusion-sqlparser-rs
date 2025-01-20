@@ -2491,14 +2491,14 @@ pub enum Statement {
         values: Vec<Option<String>>,
     },
     /// ```sql
-    /// COPY INTO
+    /// COPY INTO <table>
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/copy-into-table>
     /// Copy Into syntax available for Snowflake is different than the one implemented in
     /// Postgres. Although they share common prefix, it is reasonable to implement them
     /// in different enums. This can be refactored later once custom dialects
     /// are allowed to have custom Statements.
-    CopyIntoSnowflake {
+    CopyIntoSnowflakeTable {
         into: ObjectName,
         from_stage: ObjectName,
         from_stage_alias: Option<Ident>,
@@ -2509,6 +2509,19 @@ pub enum Statement {
         file_format: DataLoadingOptions,
         copy_options: DataLoadingOptions,
         validation_mode: Option<String>,
+    },
+    /// ```sql
+    /// COPY INTO <location>
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/copy-into-location>
+    CopyIntoSnowflakeLocation {
+        into: ObjectName,
+        from_table: Option<ObjectName>,
+        from_query: Option<Box<Query>>,
+        stage_params: StageParamsObject,
+        partition: Option<Expr>,
+        file_format: DataLoadingOptions,
+        copy_options: DataLoadingOptions,
     },
     /// ```sql
     /// CLOSE
@@ -4981,7 +4994,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CopyIntoSnowflake {
+            Statement::CopyIntoSnowflakeTable {
                 into,
                 from_stage,
                 from_stage_alias,
@@ -5036,6 +5049,33 @@ impl fmt::Display for Statement {
                         " VALIDATION_MODE = {}",
                         validation_mode.as_ref().unwrap()
                     )?;
+                }
+                Ok(())
+            }
+            Statement::CopyIntoSnowflakeLocation {
+                into,
+                from_table,
+                from_query,
+                stage_params,
+                partition,
+                file_format,
+                copy_options,
+            } => {
+                write!(f, "COPY INTO {into} FROM")?;
+                if let Some(from_table) = from_table {
+                    write!(f, " {from_table}")?;
+                } else if let Some(from_query) = from_query {
+                    write!(f, " ({from_query})")?;
+                }
+                write!(f, "{stage_params}")?;
+                if let Some(partition) = partition {
+                    write!(f, " PARTITION BY {partition}")?;
+                }
+                if !file_format.options.is_empty() {
+                    write!(f, " FILE_FORMAT=({})", file_format)?;
+                }
+                if !copy_options.options.is_empty() {
+                    write!(f, " {}", copy_options)?;
                 }
                 Ok(())
             }

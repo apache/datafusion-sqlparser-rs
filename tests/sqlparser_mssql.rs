@@ -1539,6 +1539,7 @@ fn parse_create_table_with_valid_options() {
                 clustered_by: None,
                 options: None,
                 strict: false,
+                iceberg: false,
                 copy_grants: false,
                 enable_schema_evolution: None,
                 change_tracking: None,
@@ -1548,6 +1549,11 @@ fn parse_create_table_with_valid_options() {
                 with_aggregation_policy: None,
                 with_row_access_policy: None,
                 with_tags: None,
+                base_location: None,
+                external_volume: None,
+                catalog: None,
+                catalog_sync: None,
+                storage_serialization_policy: None,
             })
         );
     }
@@ -1641,6 +1647,7 @@ fn parse_create_table_with_identity_column() {
                 if_not_exists: false,
                 transient: false,
                 volatile: false,
+                iceberg: false,
                 name: ObjectName(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
@@ -1695,6 +1702,11 @@ fn parse_create_table_with_identity_column() {
                 with_aggregation_policy: None,
                 with_row_access_policy: None,
                 with_tags: None,
+                base_location: None,
+                external_volume: None,
+                catalog: None,
+                catalog_sync: None,
+                storage_serialization_policy: None,
             }),
         );
     }

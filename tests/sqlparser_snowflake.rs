@@ -850,6 +850,81 @@ fn test_snowflake_create_table_with_several_column_options() {
 }
 
 #[test]
+fn test_snowflake_create_iceberg_table_all_options() {
+    match snowflake().verified_stmt("CREATE ICEBERG TABLE my_table (a INT, b INT) \
+    CLUSTER BY (a, b) EXTERNAL_VOLUME = 'volume' CATALOG = 'SNOWFLAKE' BASE_LOCATION = 'relative/path' CATALOG_SYNC = 'OPEN_CATALOG' \
+    STORAGE_SERIALIZATION_POLICY = COMPATIBLE COPY GRANTS CHANGE_TRACKING=TRUE DATA_RETENTION_TIME_IN_DAYS=5 MAX_DATA_EXTENSION_TIME_IN_DAYS=10 \
+    WITH AGGREGATION POLICY policy_name WITH ROW ACCESS POLICY policy_name ON (a) WITH TAG (A='TAG A', B='TAG B')") {
+        Statement::CreateTable(CreateTable {
+            name, cluster_by, base_location,
+            external_volume, catalog, catalog_sync,
+            storage_serialization_policy, change_tracking,
+            copy_grants, data_retention_time_in_days,
+            max_data_extension_time_in_days, with_aggregation_policy,
+            with_row_access_policy, with_tags, ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some(WrappedCollection::Parentheses(vec![
+                    Ident::new("a"),
+                    Ident::new("b"),
+                ])),
+                cluster_by
+            );
+            assert_eq!("relative/path", base_location.unwrap());
+            assert_eq!("volume", external_volume.unwrap());
+            assert_eq!("SNOWFLAKE", catalog.unwrap());
+            assert_eq!("OPEN_CATALOG", catalog_sync.unwrap());
+            assert_eq!(StorageSerializationPolicy::Compatible, storage_serialization_policy.unwrap());
+            assert!(change_tracking.unwrap());
+            assert!(copy_grants);
+            assert_eq!(Some(5), data_retention_time_in_days);
+            assert_eq!(Some(10), max_data_extension_time_in_days);
+            assert_eq!(
+                Some("WITH ROW ACCESS POLICY policy_name ON (a)".to_string()),
+                with_row_access_policy.map(|policy| policy.to_string())
+            );
+            assert_eq!(
+                Some("policy_name".to_string()),
+                with_aggregation_policy.map(|name| name.to_string())
+            );
+            assert_eq!(Some(vec![
+                                        Tag::new("A".into(), "TAG A".into()),
+                                        Tag::new("B".into(), "TAG B".into()),
+                                    ]), with_tags);
+
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_iceberg_table() {
+    match snowflake()
+        .verified_stmt("CREATE ICEBERG TABLE my_table (a INT) BASE_LOCATION = 'relative_path'")
+    {
+        Statement::CreateTable(CreateTable {
+            name,
+            base_location,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!("relative_path", base_location.unwrap());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_iceberg_table_without_location() {
+    let res = snowflake().parse_sql_statements("CREATE ICEBERG TABLE my_table (a INT)");
+    assert_eq!(
+        ParserError::ParserError("BASE_LOCATION is required for ICEBERG tables".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
     assert!(snowflake_and_generic()
         .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1")

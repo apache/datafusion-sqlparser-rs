@@ -8396,6 +8396,29 @@ impl fmt::Display for SessionParamValue {
     }
 }
 
+/// Snowflake StorageSerializationPolicy for Iceberg Tables
+/// ```sql
+/// [ STORAGE_SERIALIZATION_POLICY = { COMPATIBLE | OPTIMIZED } ]
+/// ```
+///
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum StorageSerializationPolicy {
+    Compatible,
+    Optimized,
+}
+
+impl Display for StorageSerializationPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StorageSerializationPolicy::Compatible => write!(f, "COMPATIBLE"),
+            StorageSerializationPolicy::Optimized => write!(f, "OPTIMIZED"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

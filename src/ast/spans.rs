@@ -532,6 +532,7 @@ impl Spanned for CreateTable {
             if_not_exists: _, // bool
             transient: _,     // bool
             volatile: _,      // bool
+            iceberg: _,       // bool, Snowflake specific
             name,
             columns,
             constraints,
@@ -568,6 +569,11 @@ impl Spanned for CreateTable {
             with_aggregation_policy: _,         // todo, Snowflake specific
             with_row_access_policy: _,          // todo, Snowflake specific
             with_tags: _,                       // todo, Snowflake specific
+            external_volume: _,                 // todo, Snowflake specific
+            base_location: _,                   // todo, Snowflake specific
+            catalog: _,                         // todo, Snowflake specific
+            catalog_sync: _,                    // todo, Snowflake specific
+            storage_serialization_policy: _,    // todo, Snowflake specific
         } = self;
 
         union_spans(

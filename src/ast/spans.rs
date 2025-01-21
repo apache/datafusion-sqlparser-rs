@@ -1244,9 +1244,7 @@ impl Spanned for DoUpdate {
 
 impl Spanned for Assignment {
     fn span(&self) -> Span {
-        let Assignment { target, value } = self;
-
-        target.span().union(&value.span())
+        self.span
     }
 }
 

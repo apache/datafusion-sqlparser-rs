@@ -43,7 +43,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
-    SnowflakeDialect,
+    RedshiftSqlDialect, SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use crate::{ast::DollarQuotedString, dialect::HiveDialect};
@@ -982,7 +982,8 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
-                x @ 'e' | x @ 'E' => {
+                x @ 'e' | x @ 'E' if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect | GenericDialect) =>
+                {
                     let starting_loc = chars.location();
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
@@ -3540,6 +3541,20 @@ mod tests {
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn test_mysql_escape_literal() {
+        let dialect = MySqlDialect {};
+        let sql = "select e'\\u'";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("select"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("e", None),
+            Token::SingleQuotedString("u".to_string()),
         ];
         compare(expected, tokens);
     }

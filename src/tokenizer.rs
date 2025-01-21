@@ -971,8 +971,10 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('\'') => {
                             // N'...' - a <national character string literal>
-                            let backslash_escape = self.dialect.supports_string_literal_backslash_escape();
-                            let s = self.tokenize_single_quoted_string(chars, '\'', backslash_escape)?;
+                            let backslash_escape =
+                                self.dialect.supports_string_literal_backslash_escape();
+                            let s =
+                                self.tokenize_single_quoted_string(chars, '\'', backslash_escape)?;
                             Ok(Some(Token::NationalStringLiteral(s)))
                         }
                         _ => {

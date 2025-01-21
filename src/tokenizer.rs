@@ -971,7 +971,8 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('\'') => {
                             // N'...' - a <national character string literal>
-                            let s = self.tokenize_single_quoted_string(chars, '\'', true)?;
+                            let backslash_escape = self.dialect.supports_string_literal_backslash_escape();
+                            let s = self.tokenize_single_quoted_string(chars, '\'', backslash_escape)?;
                             Ok(Some(Token::NationalStringLiteral(s)))
                         }
                         _ => {
@@ -3540,6 +3541,19 @@ mod tests {
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn test_national_strings() {
+        let dialect = PostgreSqlDialect {};
+        let sql = "select n'''''\\'";
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("select"),
+            Token::Whitespace(Whitespace::Space),
+            Token::NationalStringLiteral("''\\".to_string()),
         ];
         compare(expected, tokens);
     }

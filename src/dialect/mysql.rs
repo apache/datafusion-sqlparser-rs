@@ -27,8 +27,7 @@ use crate::{
 
 use super::keywords;
 
-const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] =
-    &[Keyword::USE, Keyword::IGNORE, Keyword::FORCE];
+const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] = &[Keyword::USE, Keyword::IGNORE, Keyword::FORCE];
 
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
 #[derive(Debug)]

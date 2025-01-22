@@ -8910,7 +8910,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_table_index_hints(&mut self) -> Result<Vec<TableIndexHints>, ParserError> {
+    fn parse_table_index_hints(&mut self) -> Result<Vec<TableIndexHints>, ParserError> {
         let mut hints = vec![];
         while let Some(hint_type) =
             self.parse_one_of_keywords(&[Keyword::USE, Keyword::IGNORE, Keyword::FORCE])
@@ -11315,7 +11315,10 @@ impl<'a> Parser<'a> {
 
             let alias = self.maybe_parse_table_alias()?;
 
-            let index_hints = self.parse_table_index_hints()?;
+            // maybe parse so we will still support queries like 'SELECT * FROM T USE LIMIT 1' in BigQuery, for example
+            let index_hints = self
+                .maybe_parse(|p| p.parse_table_index_hints())?
+                .unwrap_or(vec![]);
 
             // MSSQL-specific table hints:
             let mut with_hints = vec![];

@@ -27,7 +27,7 @@ use crate::{
 
 use super::keywords;
 
-pub const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] =
+const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] =
     &[Keyword::USE, Keyword::IGNORE, Keyword::FORCE];
 
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
@@ -117,9 +117,6 @@ impl Dialect for MySqlDialect {
         true
     }
 
-    /// Returns true if the specified keyword should be parsed as a table factor alias.
-    /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
-    /// to enable looking ahead if needed.
     fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
         explicit
             || (!keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)

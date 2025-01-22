@@ -500,6 +500,7 @@ fn parse_update_with_table_alias() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
+                        index_hints: vec![],
                     },
                     joins: vec![],
                 },
@@ -593,6 +594,7 @@ fn parse_select_with_table_alias() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             joins: vec![],
         }]
@@ -789,6 +791,7 @@ fn parse_where_delete_with_alias_statement() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
+                    index_hints: vec![],
                 },
                 from[0].relation,
             );
@@ -807,6 +810,7 @@ fn parse_where_delete_with_alias_statement() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
+                        index_hints: vec![],
                     },
                     joins: vec![],
                 }]),
@@ -6413,6 +6417,7 @@ fn parse_joins_on() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -6542,6 +6547,7 @@ fn parse_joins_using() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
@@ -6620,6 +6626,7 @@ fn parse_natural_join() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -8715,6 +8722,7 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
+                    index_hints: vec![],
                 }
             );
             assert_eq!(table, table_no_into);
@@ -9898,6 +9906,7 @@ fn parse_pivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -9974,6 +9983,7 @@ fn parse_unpivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             }),
             value: Ident {
                 value: "quantity".to_string(),
@@ -10045,6 +10055,7 @@ fn parse_pivot_unpivot_table() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
+                    index_hints: vec![],
                 }),
                 value: Ident {
                     value: "population".to_string(),

@@ -74,6 +74,7 @@ fn parse_table_time_travel() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![]
             },
             joins: vec![]
         },]
@@ -223,6 +224,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
+                index_hints: vec![]
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -282,6 +284,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
+                index_hints: vec![]
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -341,6 +344,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
+                index_hints: vec![]
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -400,6 +404,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {
@@ -439,6 +444,7 @@ fn parse_mssql_openjson() {
                 partitions: vec![],
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             joins: vec![Join {
                 relation: TableFactor::OpenJsonTable {

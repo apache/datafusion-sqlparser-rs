@@ -2036,6 +2036,7 @@ fn parse_update_with_joins() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
+                        index_hints: vec![],
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -2051,6 +2052,7 @@ fn parse_update_with_joins() {
                             with_ordinality: false,
                             json_path: None,
                             sample: None,
+                            index_hints: vec![],
                         },
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -2901,6 +2903,21 @@ fn parse_lock_tables() {
     mysql().verified_stmt("LOCK TABLES trans AS t READ LOCAL, customer WRITE");
     mysql().verified_stmt("LOCK TABLES trans AS t READ, customer LOW_PRIORITY WRITE");
     mysql().verified_stmt("UNLOCK TABLES");
+}
+
+#[test]
+fn parse_select_table_with_index_hints() {
+    mysql()
+        .verified_stmt("SELECT * FROM t1 USE INDEX (i1) IGNORE INDEX FOR ORDER BY (i2) ORDER BY a");
+    mysql().verified_stmt("SELECT * FROM t1 USE INDEX (i1) USE INDEX (i1, i1)");
+    mysql().verified_stmt(
+        "SELECT * FROM t1 USE INDEX () IGNORE INDEX (i2) USE INDEX (i1) USE INDEX (i2)",
+    );
+    mysql().verified_stmt("SELECT * FROM t1 FORCE INDEX FOR JOIN (i2)");
+    mysql().verified_stmt("SELECT * FROM t1 IGNORE INDEX FOR JOIN (i2)");
+    mysql().verified_stmt(
+        "SELECT * FROM t USE INDEX (index1) IGNORE INDEX FOR ORDER BY (index1) IGNORE INDEX FOR GROUP BY (index1) WHERE A = B",
+    );
 }
 
 #[test]

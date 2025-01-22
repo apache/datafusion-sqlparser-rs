@@ -8920,9 +8920,9 @@ impl<'a> Parser<'a> {
                 Keyword::IGNORE => TableIndexHintType::Ignore,
                 Keyword::FORCE => TableIndexHintType::Force,
                 _ => {
-                    return parser_err!(
+                    return self.expected(
                         "expected to match USE/IGNORE/FORCE keyword",
-                        self.peek_token().span.start
+                        self.peek_token(),
                     )
                 }
             };
@@ -8930,10 +8930,7 @@ impl<'a> Parser<'a> {
                 Some(Keyword::INDEX) => TableIndexType::Index,
                 Some(Keyword::KEY) => TableIndexType::Key,
                 _ => {
-                    return parser_err!(
-                        "expected to match INDEX/KEY keyword",
-                        self.peek_token().span.start
-                    )
+                    return self.expected("expected to match INDEX/KEY keyword", self.peek_token())
                 }
             };
             let for_clause = if self.parse_keyword(Keyword::FOR) {
@@ -8944,9 +8941,9 @@ impl<'a> Parser<'a> {
                 } else if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
                     TableIndexHintForClause::GroupBy
                 } else {
-                    return parser_err!(
+                    return self.expected(
                         "expected to match FOR/ORDER BY/GROUP BY table hint in for clause",
-                        self.peek_token().span.start
+                        self.peek_token(),
                     );
                 };
                 Some(clause)

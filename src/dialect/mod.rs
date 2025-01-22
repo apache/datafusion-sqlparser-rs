@@ -788,7 +788,7 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
-    // Returns reserved keywords when looking to parse a [TableFactor].
+    /// Returns reserved keywords when looking to parse a `TableFactor`.
     /// See [Self::supports_from_trailing_commas]
     fn get_reserved_keywords_for_table_factor(&self) -> &[Keyword] {
         keywords::RESERVED_FOR_TABLE_FACTOR
@@ -828,11 +828,17 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the specified keyword should be parsed as a column identifier.
+    /// See [keywords::RESERVED_FOR_COLUMN_ALIAS]
+    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw)
+    }
+
     /// Returns true if the specified keyword should be parsed as a select item alias.
     /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
     /// to enable looking ahead if needed.
-    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
-        explicit || !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw)
+    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+        explicit || self.is_column_alias(kw, parser)
     }
 
     /// Returns true if the specified keyword should be parsed as a table factor alias.

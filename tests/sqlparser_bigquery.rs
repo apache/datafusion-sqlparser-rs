@@ -214,6 +214,15 @@ fn parse_raw_literal() {
 }
 
 #[test]
+fn parse_big_query_non_reserved_column_alias() {
+    let sql = r#"SELECT OFFSET, EXPLAIN, ANALYZE, SORT, TOP, VIEW FROM T"#;
+    bigquery().verified_stmt(sql);
+
+    let sql = r#"SELECT 1 AS OFFSET, 2 AS EXPLAIN, 3 AS ANALYZE FROM T"#;
+    bigquery().verified_stmt(sql);
+}
+
+#[test]
 fn parse_delete_statement() {
     let sql = "DELETE \"table\" WHERE 1";
     match bigquery_and_generic().verified_stmt(sql) {

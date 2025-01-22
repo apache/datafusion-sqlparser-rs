@@ -1646,6 +1646,19 @@ fn parse_table_sample() {
     clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1 / 10 OFFSET 1 / 2");
 }
 
+#[test]
+fn parse_numbers_with_underscore() {
+    let statement = clickhouse()
+        .parse_sql_statements("SELECT 10_000")
+        .unwrap()
+        .pop()
+        .unwrap();
+
+    // Formatting the statement does not give exactly the same SQL back
+    // as the tokenizer simply ignores underscores in numbers.
+    assert_eq!(statement.to_string(), "SELECT 10000");
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

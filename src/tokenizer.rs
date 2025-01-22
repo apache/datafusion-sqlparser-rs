@@ -1147,7 +1147,16 @@ impl<'a> Tokenizer<'a> {
                         s.push('.');
                         chars.next();
                     }
-                    s += &peeking_take_while(chars, |ch| ch.is_ascii_digit());
+
+                    let is_ascii_digit = |ch: char| ch.is_ascii_digit();
+                    s += &peeking_take_while(chars, is_ascii_digit);
+                    // In some dialects, numbers can include underscores that should be ignored
+                    if self.dialect.supports_underscore_separator() {
+                        while let Some('_') = chars.peek() {
+                            chars.next();
+                            s += &peeking_take_while(chars, is_ascii_digit);
+                        }
+                    }
 
                     // No number -> Token::Period
                     if s == "." {
@@ -2218,6 +2227,22 @@ mod tests {
             }),
             Token::DoubleEq,
             Token::SingleQuotedString("1".to_string()),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_clickhouse_underscore_separator() {
+        let sql = String::from("SELECT 10_000");
+        let dialect = ClickHouseDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("10000".to_string(), false),
         ];
 
         compare(expected, tokens);

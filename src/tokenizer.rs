@@ -1148,15 +1148,10 @@ impl<'a> Tokenizer<'a> {
                         chars.next();
                     }
 
-                    let is_ascii_digit = |ch: char| ch.is_ascii_digit();
-                    s += &peeking_take_while(chars, is_ascii_digit);
-                    // In some dialects, numbers can include underscores that should be ignored
-                    if self.dialect.supports_underscore_separator() {
-                        while let Some('_') = chars.peek() {
-                            chars.next();
-                            s += &peeking_take_while(chars, is_ascii_digit);
-                        }
-                    }
+                    s += &peeking_take_while(chars, |ch| {
+                        ch.is_ascii_digit()
+                            || self.dialect.supports_underscore_separator() && ch == '_'
+                    });
 
                     // No number -> Token::Period
                     if s == "." {
@@ -2242,7 +2237,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number("10000".to_string(), false),
+            Token::Number("10_000".to_string(), false),
         ];
 
         compare(expected, tokens);

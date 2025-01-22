@@ -1648,15 +1648,15 @@ fn parse_table_sample() {
 
 #[test]
 fn parse_numbers_with_underscore() {
-    let statement = clickhouse()
-        .parse_sql_statements("SELECT 10_000")
-        .unwrap()
-        .pop()
-        .unwrap();
+    let select = clickhouse().verified_only_select("SELECT 10_000");
 
-    // Formatting the statement does not give exactly the same SQL back
-    // as the tokenizer simply ignores underscores in numbers.
-    assert_eq!(statement.to_string(), "SELECT 10000");
+    assert_eq!(
+        select.projection,
+        vec![SelectItem::UnnamedExpr(Expr::Value(Value::Number(
+            "10_000".to_string(),
+            false
+        ))),]
+    )
 }
 
 fn clickhouse() -> TestedDialects {

@@ -39,7 +39,7 @@ fn parse_literal_string() {
         r#"'''triple-single'unescaped''', "#,
         r#""double\"escaped", "#,
         r#""""triple-double\"escaped""", "#,
-        r#""""triple-double"unescaped""""#,
+        r#""""triple-double"un'escaped""""#,
     );
     let dialect = TestedDialects::new_with_options(
         vec![Box::new(BigQueryDialect {})],
@@ -91,7 +91,7 @@ fn parse_literal_string() {
     );
     assert_eq!(
         &Expr::Value(Value::TripleDoubleQuotedString(
-            r#"triple-double"unescaped"#.to_string()
+            r#"triple-double"un'escaped"#.to_string()
         )),
         expr_from_projection(&select.projection[9])
     );
@@ -2212,6 +2212,23 @@ fn test_select_as_value() {
     );
     let select = bigquery().verified_only_select("SELECT AS VALUE STRUCT(1 AS a, 2 AS b) AS xyz");
     assert_eq!(Some(ValueTableMode::AsValue), select.value_table_mode);
+}
+
+#[test]
+fn test_typed_strings() {
+    bigquery().verified_expr(r#"JSON """{"foo":"bar's"}""""#);
+    bigquery().verified_expr(r#"JSON '''{"foo":"bar's"}'''"#);
+    bigquery().verified_expr(r#"JSON '{"foo":"bar\'s"}'"#);
+    bigquery().verified_expr(r#"JSON "{\"foo\":\"bar's\"}""#);
+
+    let select = bigquery().verified_only_select(r#"SELECT JSON """{\"foo\":\"bar\"}""""#);
+    assert_eq!(
+        vec![SelectItem::UnnamedExpr(Expr::TypedString {
+            data_type: DataType::JSON,
+            value: r#"{"foo":"bar's"}"#.to_string()
+        }),],
+        select.projection
+    );
 }
 
 #[test]

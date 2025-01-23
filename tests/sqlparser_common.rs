@@ -5295,7 +5295,7 @@ fn parse_literal_date() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Date,
-            value: "1999-01-01".into(),
+            value: Value::SingleQuotedString("1999-01-01".into()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5308,7 +5308,7 @@ fn parse_literal_time() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Time(None, TimezoneInfo::None),
-            value: "01:23:34".into(),
+            value: Value::SingleQuotedString("01:23:34".to_string()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5321,7 +5321,7 @@ fn parse_literal_datetime() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Datetime(None),
-            value: "1999-01-01 01:23:34.45".into(),
+            value: Value::SingleQuotedString("1999-01-01 01:23:34.45".to_string()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5334,7 +5334,7 @@ fn parse_literal_timestamp_without_time_zone() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::None),
-            value: "1999-01-01 01:23:34".into(),
+            value: Value::SingleQuotedString("1999-01-01 01:23:34".to_string()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5349,7 +5349,7 @@ fn parse_literal_timestamp_with_time_zone() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::Tz),
-            value: "1999-01-01 01:23:34Z".into(),
+            value: Value::SingleQuotedString("1999-01-01 01:23:34Z".to_string()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5901,7 +5901,8 @@ fn parse_json_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::JSON,
-            value: r#"{
+            value: Value::SingleQuotedString(
+                r#"{
   "id": 10,
   "type": "fruit",
   "name": "apple",
@@ -5921,7 +5922,8 @@ fn parse_json_keyword() {
       ]
     }
 }"#
-            .into()
+                .to_string()
+            )
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5934,7 +5936,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"0"#.into()
+            value: Value::SingleQuotedString(r#"0"#.to_string())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5945,7 +5947,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"123456"#.into()
+            value: Value::SingleQuotedString(r#"123456"#.to_string())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5956,7 +5958,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"-3.14"#.into()
+            value: Value::SingleQuotedString(r#"-3.14"#.to_string())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5967,7 +5969,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"-0.54321"#.into()
+            value: Value::SingleQuotedString(r#"-0.54321"#.to_string())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5978,7 +5980,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"1.23456e05"#.into()
+            value: Value::SingleQuotedString(r#"1.23456e05"#.to_string())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5989,7 +5991,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"-9.876e-3"#.into()
+            value: Value::SingleQuotedString(r#"-9.876e-3"#.to_string())
         },
         expr_from_projection(only(&select.projection)),
     );

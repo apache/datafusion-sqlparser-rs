@@ -1316,7 +1316,7 @@ impl<'a> Parser<'a> {
                 DataType::Custom(..) => parser_err!("dummy", loc),
                 data_type => Ok(Expr::TypedString {
                     data_type,
-                    value: parser.parse_literal_string()?,
+                    value: parser.parse_value()?,
                 }),
             }
         })?;

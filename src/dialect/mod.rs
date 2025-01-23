@@ -820,6 +820,13 @@ pub trait Dialect: Debug + Any {
     fn supports_set_stmt_without_operator(&self) -> bool {
         false
     }
+
+    /// Returns true if this dialect supports the E'...' syntax for string literals
+    ///
+    /// Postgres: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE>
+    fn supports_string_escape_constant(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

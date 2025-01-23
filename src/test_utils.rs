@@ -33,7 +33,7 @@ use core::fmt::Debug;
 
 use crate::dialect::*;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Tokenizer;
+use crate::tokenizer::{Token, Tokenizer};
 use crate::{ast::*, parser::ParserOptions};
 
 #[cfg(test)]
@@ -236,6 +236,18 @@ impl TestedDialects {
     /// string (is not modified after a serialization round-trip).
     pub fn verified_expr(&self, sql: &str) -> Expr {
         self.expr_parses_to(sql, sql)
+    }
+
+    /// Check that the tokenizer returns the expected tokens for the given SQL.
+    pub fn tokenizes_to(&self, sql: &str, expected: Vec<Token>) {
+        self.dialects.iter().for_each(|dialect| {
+            let mut tokenizer = Tokenizer::new(&**dialect, sql);
+            if let Some(options) = &self.options {
+                tokenizer = tokenizer.with_unescape(options.unescape);
+            }
+            let tokens = tokenizer.tokenize().unwrap();
+            assert_eq!(expected, tokens);
+        });
     }
 }
 

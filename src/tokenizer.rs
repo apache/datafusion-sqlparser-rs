@@ -982,8 +982,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
-                x @ 'e' | x @ 'E' if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect | GenericDialect) =>
-                {
+                x @ 'e' | x @ 'E' if self.dialect.supports_string_escape_constant() => {
                     let starting_loc = chars.location();
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
@@ -2156,6 +2155,7 @@ mod tests {
     use crate::dialect::{
         BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect, SQLiteDialect,
     };
+    use crate::test_utils::all_dialects_where;
     use core::fmt::Debug;
 
     #[test]
@@ -3546,16 +3546,46 @@ mod tests {
     }
 
     #[test]
-    fn test_mysql_escape_literal() {
-        let dialect = MySqlDialect {};
-        let sql = "select e'\\u'";
-        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
-        let expected = vec![
-            Token::make_keyword("select"),
-            Token::Whitespace(Whitespace::Space),
-            Token::make_word("e", None),
-            Token::SingleQuotedString("u".to_string()),
-        ];
-        compare(expected, tokens);
+    fn test_string_escape_constant_not_supported() {
+        all_dialects_where(|dialect| !dialect.supports_string_escape_constant()).tokenizes_to(
+            "select e'...'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("e", None),
+                Token::SingleQuotedString("...".to_string()),
+            ],
+        );
+
+        all_dialects_where(|dialect| !dialect.supports_string_escape_constant()).tokenizes_to(
+            "select E'...'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("E", None),
+                Token::SingleQuotedString("...".to_string()),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_string_escape_constant_supported() {
+        all_dialects_where(|dialect| dialect.supports_string_escape_constant()).tokenizes_to(
+            "select e'...'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::EscapedStringLiteral("...".to_string()),
+            ],
+        );
+
+        all_dialects_where(|dialect| dialect.supports_string_escape_constant()).tokenizes_to(
+            "select E'...'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::EscapedStringLiteral("...".to_string()),
+            ],
+        );
     }
 }

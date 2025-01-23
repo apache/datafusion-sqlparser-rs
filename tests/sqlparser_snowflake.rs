@@ -850,6 +850,81 @@ fn test_snowflake_create_table_with_several_column_options() {
 }
 
 #[test]
+fn test_snowflake_create_iceberg_table_all_options() {
+    match snowflake().verified_stmt("CREATE ICEBERG TABLE my_table (a INT, b INT) \
+    CLUSTER BY (a, b) EXTERNAL_VOLUME = 'volume' CATALOG = 'SNOWFLAKE' BASE_LOCATION = 'relative/path' CATALOG_SYNC = 'OPEN_CATALOG' \
+    STORAGE_SERIALIZATION_POLICY = COMPATIBLE COPY GRANTS CHANGE_TRACKING=TRUE DATA_RETENTION_TIME_IN_DAYS=5 MAX_DATA_EXTENSION_TIME_IN_DAYS=10 \
+    WITH AGGREGATION POLICY policy_name WITH ROW ACCESS POLICY policy_name ON (a) WITH TAG (A='TAG A', B='TAG B')") {
+        Statement::CreateTable(CreateTable {
+            name, cluster_by, base_location,
+            external_volume, catalog, catalog_sync,
+            storage_serialization_policy, change_tracking,
+            copy_grants, data_retention_time_in_days,
+            max_data_extension_time_in_days, with_aggregation_policy,
+            with_row_access_policy, with_tags, ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!(
+                Some(WrappedCollection::Parentheses(vec![
+                    Ident::new("a"),
+                    Ident::new("b"),
+                ])),
+                cluster_by
+            );
+            assert_eq!("relative/path", base_location.unwrap());
+            assert_eq!("volume", external_volume.unwrap());
+            assert_eq!("SNOWFLAKE", catalog.unwrap());
+            assert_eq!("OPEN_CATALOG", catalog_sync.unwrap());
+            assert_eq!(StorageSerializationPolicy::Compatible, storage_serialization_policy.unwrap());
+            assert!(change_tracking.unwrap());
+            assert!(copy_grants);
+            assert_eq!(Some(5), data_retention_time_in_days);
+            assert_eq!(Some(10), max_data_extension_time_in_days);
+            assert_eq!(
+                Some("WITH ROW ACCESS POLICY policy_name ON (a)".to_string()),
+                with_row_access_policy.map(|policy| policy.to_string())
+            );
+            assert_eq!(
+                Some("policy_name".to_string()),
+                with_aggregation_policy.map(|name| name.to_string())
+            );
+            assert_eq!(Some(vec![
+                                        Tag::new("A".into(), "TAG A".into()),
+                                        Tag::new("B".into(), "TAG B".into()),
+                                    ]), with_tags);
+
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_iceberg_table() {
+    match snowflake()
+        .verified_stmt("CREATE ICEBERG TABLE my_table (a INT) BASE_LOCATION = 'relative_path'")
+    {
+        Statement::CreateTable(CreateTable {
+            name,
+            base_location,
+            ..
+        }) => {
+            assert_eq!("my_table", name.to_string());
+            assert_eq!("relative_path", base_location.unwrap());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_snowflake_create_iceberg_table_without_location() {
+    let res = snowflake().parse_sql_statements("CREATE ICEBERG TABLE my_table (a INT)");
+    assert_eq!(
+        ParserError::ParserError("BASE_LOCATION is required for ICEBERG tables".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
     assert!(snowflake_and_generic()
         .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1")
@@ -3021,4 +3096,146 @@ fn parse_ls_and_rm() {
     };
 
     snowflake().verified_stmt(r#"LIST @"STAGE_WITH_QUOTES""#);
+}
+
+#[test]
+fn test_sql_keywords_as_select_item_aliases() {
+    // Some keywords that should be parsed as an alias
+    let unreserved_kws = vec!["CLUSTER", "FETCH", "RETURNING", "LIMIT", "EXCEPT"];
+    for kw in unreserved_kws {
+        snowflake()
+            .one_statement_parses_to(&format!("SELECT 1 {kw}"), &format!("SELECT 1 AS {kw}"));
+    }
+
+    // Some keywords that should not be parsed as an alias
+    let reserved_kws = vec![
+        "FROM",
+        "GROUP",
+        "HAVING",
+        "INTERSECT",
+        "INTO",
+        "ORDER",
+        "SELECT",
+        "UNION",
+        "WHERE",
+        "WITH",
+    ];
+    for kw in reserved_kws {
+        assert!(snowflake()
+            .parse_sql_statements(&format!("SELECT 1 {kw}"))
+            .is_err());
+    }
+}
+
+#[test]
+fn test_timetravel_at_before() {
+    snowflake().verified_only_select("SELECT * FROM tbl AT(TIMESTAMP => '2024-12-15 00:00:00')");
+    snowflake()
+        .verified_only_select("SELECT * FROM tbl BEFORE(TIMESTAMP => '2024-12-15 00:00:00')");
+}
+
+#[test]
+fn test_grant_account_privileges() {
+    let privileges = vec![
+        "ALL",
+        "ALL PRIVILEGES",
+        "ATTACH POLICY",
+        "AUDIT",
+        "BIND SERVICE ENDPOINT",
+        "IMPORT SHARE",
+        "OVERRIDE SHARE RESTRICTIONS",
+        "PURCHASE DATA EXCHANGE LISTING",
+        "RESOLVE ALL",
+        "READ SESSION",
+    ];
+    let with_grant_options = vec!["", " WITH GRANT OPTION"];
+
+    for p in &privileges {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT {p} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let create_object_types = vec![
+        "ACCOUNT",
+        "APPLICATION",
+        "APPLICATION PACKAGE",
+        "COMPUTE POOL",
+        "DATA EXCHANGE LISTING",
+        "DATABASE",
+        "EXTERNAL VOLUME",
+        "FAILOVER GROUP",
+        "INTEGRATION",
+        "NETWORK POLICY",
+        "ORGANIZATION LISTING",
+        "REPLICATION GROUP",
+        "ROLE",
+        "SHARE",
+        "USER",
+        "WAREHOUSE",
+    ];
+    for t in &create_object_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT CREATE {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let apply_types = vec![
+        "AGGREGATION POLICY",
+        "AUTHENTICATION POLICY",
+        "JOIN POLICY",
+        "MASKING POLICY",
+        "PACKAGES POLICY",
+        "PASSWORD POLICY",
+        "PROJECTION POLICY",
+        "ROW ACCESS POLICY",
+        "SESSION POLICY",
+        "TAG",
+    ];
+    for t in &apply_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT APPLY {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let execute_types = vec![
+        "ALERT",
+        "DATA METRIC FUNCTION",
+        "MANAGED ALERT",
+        "MANAGED TASK",
+        "TASK",
+    ];
+    for t in &execute_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT EXECUTE {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let manage_types = vec![
+        "ACCOUNT SUPPORT CASES",
+        "EVENT SHARING",
+        "GRANTS",
+        "LISTING AUTO FULFILLMENT",
+        "ORGANIZATION SUPPORT CASES",
+        "USER SUPPORT CASES",
+        "WAREHOUSES",
+    ];
+    for t in &manage_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT MANAGE {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let monitor_types = vec!["EXECUTION", "SECURITY", "USAGE"];
+    for t in &monitor_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT MONITOR {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
 }

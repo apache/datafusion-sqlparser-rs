@@ -1873,13 +1873,19 @@ impl fmt::Display for TableAliasColumnDef {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TableVersion {
+    /// When the table version is defined using `FOR SYSTEM_TIME AS OF`.
+    /// For example: `SELECT * FROM tbl FOR SYSTEM_TIME AS OF TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR)`
     ForSystemTimeAsOf(Expr),
+    /// When the table version is defined using a function.
+    /// For example: `SELECT * FROM tbl AT(TIMESTAMP => '2020-08-14 09:30:00')`
+    Function(Expr),
 }
 
 impl Display for TableVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TableVersion::ForSystemTimeAsOf(e) => write!(f, " FOR SYSTEM_TIME AS OF {e}")?,
+            TableVersion::Function(func) => write!(f, " {func}")?,
         }
         Ok(())
     }
@@ -2050,7 +2056,7 @@ pub enum JoinOperator {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum JoinConstraint {
     On(Expr),
-    Using(Vec<Ident>),
+    Using(Vec<ObjectName>),
     Natural,
     None,
 }
@@ -2821,10 +2827,10 @@ impl fmt::Display for ValueTableMode {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum UpdateTableFromKind {
-    /// Update Statment where the 'FROM' clause is before the 'SET' keyword (Supported by Snowflake)
+    /// Update Statement where the 'FROM' clause is before the 'SET' keyword (Supported by Snowflake)
     /// For Example: `UPDATE FROM t1 SET t1.name='aaa'`
     BeforeSet(TableWithJoins),
-    /// Update Statment where the 'FROM' clause is after the 'SET' keyword (Which is the standard way)
+    /// Update Statement where the 'FROM' clause is after the 'SET' keyword (Which is the standard way)
     /// For Example: `UPDATE SET t1.name='aaa' FROM t1`
     AfterSet(TableWithJoins),
 }

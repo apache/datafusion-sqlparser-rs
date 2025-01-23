@@ -266,6 +266,27 @@ fn parse_insert_select_returning() {
 }
 
 #[test]
+fn parse_insert_select_from_returning() {
+    let sql = "INSERT INTO table1 SELECT * FROM table2 RETURNING id";
+    match verified_stmt(sql) {
+        Statement::Insert(Insert {
+            table: TableObject::TableName(table_name),
+            source: Some(source),
+            returning: Some(returning),
+            ..
+        }) => {
+            assert_eq!("table1", table_name.to_string());
+            assert!(matches!(*source.body, SetExpr::Select(_)));
+            assert_eq!(
+                returning,
+                vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),]
+            );
+        }
+        bad_stmt => unreachable!("Expected valid insert, got {:?}", bad_stmt),
+    }
+}
+
+#[test]
 fn parse_returning_as_column_alias() {
     verified_stmt("SELECT 1 AS RETURNING");
 }
@@ -4579,7 +4600,7 @@ fn run_explain_analyze(
     expected_verbose: bool,
     expected_analyze: bool,
     expected_format: Option<AnalyzeFormat>,
-    exepcted_options: Option<Vec<UtilityOption>>,
+    expected_options: Option<Vec<UtilityOption>>,
 ) {
     match dialect.verified_stmt(query) {
         Statement::Explain {
@@ -4595,7 +4616,7 @@ fn run_explain_analyze(
             assert_eq!(verbose, expected_verbose);
             assert_eq!(analyze, expected_analyze);
             assert_eq!(format, expected_format);
-            assert_eq!(options, exepcted_options);
+            assert_eq!(options, expected_options);
             assert!(!query_plan);
             assert!(!estimate);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
@@ -6520,7 +6541,7 @@ fn parse_joins_using() {
                 sample: None,
             },
             global: false,
-            join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
+            join_operator: f(JoinConstraint::Using(vec![ObjectName(vec!["c1".into()])])),
         }
     }
     // Test parsing of aliases
@@ -6577,6 +6598,7 @@ fn parse_joins_using() {
         only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
+    verified_stmt("SELECT * FROM tbl1 AS t1 JOIN tbl2 AS t2 USING(t2.col1)");
 }
 
 #[test]
@@ -8478,8 +8500,8 @@ fn parse_grant() {
                         Action::References { columns: None },
                         Action::Trigger,
                         Action::Connect,
-                        Action::Create,
-                        Action::Execute,
+                        Action::Create { obj_type: None },
+                        Action::Execute { obj_type: None },
                         Action::Temporary,
                     ],
                     actions
@@ -8594,6 +8616,7 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO SHARE share1");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
+    verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
 }
 
 #[test]
@@ -9296,6 +9319,46 @@ fn parse_is_boolean() {
         verified_expr(sql)
     );
 
+    let sql = "a IS NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: None,
+            negated: false,
+        },
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: None,
+            negated: true,
+        },
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NFKC NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: Some(NormalizationForm::NFKC),
+            negated: false,
+        },
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT NFKD NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: Some(NormalizationForm::NFKD),
+            negated: true,
+        },
+        verified_expr(sql)
+    );
+
     let sql = "a IS UNKNOWN";
     assert_eq!(
         IsUnknown(Box::new(Identifier(Ident::new("a")))),
@@ -9314,6 +9377,12 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS FALSE");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT FALSE");
 
+    verified_stmt("SELECT f FROM foo WHERE field IS NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NFC NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NFD NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT NFKC NORMALIZED");
+
     verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
@@ -9321,7 +9390,37 @@ fn parse_is_boolean() {
     let res = parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
-            "Expected: [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: 0"
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: 0"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT s, s IS XYZ NORMALIZED FROM foo";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: XYZ"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT s, s IS NFKC FROM foo";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: FROM"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT s, s IS TRIM(' NFKC ') FROM foo";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: TRIM"
                 .to_string()
         ),
         res.unwrap_err()
@@ -12982,7 +13081,7 @@ fn test_trailing_commas_in_from() {
     let sql = "SELECT a FROM b, WHERE c = 1";
     let _ = dialects.parse_sql_statements(sql).unwrap();
 
-    // nasted
+    // nested
     let sql = "SELECT 1, 2 FROM (SELECT * FROM t,),";
     let _ = dialects.parse_sql_statements(sql).unwrap();
 

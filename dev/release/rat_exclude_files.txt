@@ -3,4 +3,5 @@
 .tool-versions
 dev/release/rat_exclude_files.txt
 fuzz/.gitignore
+sqlparser_bench/img/flamegraph.svg
 

@@ -18,13 +18,17 @@
 -->
 
 # Changelog
-All notable changes to this project will be documented in this file.
+All notable changes to this project will be documented in one of the linked
+files. 
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 Given that the parser produces a typed AST, any changes to the AST will
 technically be breaking and thus will result in a `0.(N+1)` version. 
 
 
 - Unreleased: Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
+- `0.54.0`: [changelog/0.54.0.md](changelog/0.54.0.md)
+- `0.53.0`: [changelog/0.53.0.md](changelog/0.53.0.md)
 - `0.52.0`: [changelog/0.52.0.md](changelog/0.52.0.md)
 - `0.51.0` and earlier: [changelog/0.51.0-pre.md](changelog/0.51.0-pre.md)

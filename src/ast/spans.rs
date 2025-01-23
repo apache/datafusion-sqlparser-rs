@@ -532,6 +532,7 @@ impl Spanned for CreateTable {
             if_not_exists: _, // bool
             transient: _,     // bool
             volatile: _,      // bool
+            iceberg: _,       // bool, Snowflake specific
             name,
             columns,
             constraints,
@@ -568,6 +569,11 @@ impl Spanned for CreateTable {
             with_aggregation_policy: _,         // todo, Snowflake specific
             with_row_access_policy: _,          // todo, Snowflake specific
             with_tags: _,                       // todo, Snowflake specific
+            external_volume: _,                 // todo, Snowflake specific
+            base_location: _,                   // todo, Snowflake specific
+            catalog: _,                         // todo, Snowflake specific
+            catalog_sync: _,                    // todo, Snowflake specific
+            storage_serialization_policy: _,    // todo, Snowflake specific
         } = self;
 
         union_spans(
@@ -1325,6 +1331,12 @@ impl Spanned for Expr {
                 escape_char: _,
                 any: _,
             } => expr.span().union(&pattern.span()),
+            Expr::RLike { .. } => Span::empty(),
+            Expr::IsNormalized {
+                expr,
+                form: _,
+                negated: _,
+            } => expr.span(),
             Expr::SimilarTo {
                 negated: _,
                 expr,
@@ -1360,7 +1372,6 @@ impl Spanned for Expr {
             Expr::Array(array) => array.span(),
             Expr::MatchAgainst { .. } => Span::empty(),
             Expr::JsonAccess { value, path } => value.span().union(&path.span()),
-            Expr::RLike { .. } => Span::empty(),
             Expr::AnyOp {
                 left,
                 compare_op: _,
@@ -2003,7 +2014,7 @@ impl Spanned for JoinConstraint {
     fn span(&self) -> Span {
         match self {
             JoinConstraint::On(expr) => expr.span(),
-            JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span)),
+            JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span())),
             JoinConstraint::Natural => Span::empty(),
             JoinConstraint::None => Span::empty(),
         }

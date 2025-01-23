@@ -37,6 +37,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec};
+use sqlparser::ast::StorageSerializationPolicy;
 
 use super::keywords::RESERVED_FOR_IDENTIFIER;
 
@@ -130,16 +131,19 @@ impl Dialect for SnowflakeDialect {
             let mut temporary = false;
             let mut volatile = false;
             let mut transient = false;
+            let mut iceberg = false;
 
             match parser.parse_one_of_keywords(&[
                 Keyword::TEMP,
                 Keyword::TEMPORARY,
                 Keyword::VOLATILE,
                 Keyword::TRANSIENT,
+                Keyword::ICEBERG,
             ]) {
                 Some(Keyword::TEMP | Keyword::TEMPORARY) => temporary = true,
                 Some(Keyword::VOLATILE) => volatile = true,
                 Some(Keyword::TRANSIENT) => transient = true,
+                Some(Keyword::ICEBERG) => iceberg = true,
                 _ => {}
             }
 
@@ -148,7 +152,7 @@ impl Dialect for SnowflakeDialect {
                 return Some(parse_create_stage(or_replace, temporary, parser));
             } else if parser.parse_keyword(Keyword::TABLE) {
                 return Some(parse_create_table(
-                    or_replace, global, temporary, volatile, transient, parser,
+                    or_replace, global, temporary, volatile, transient, iceberg, parser,
                 ));
             } else {
                 // need to go back with the cursor
@@ -251,6 +255,56 @@ impl Dialect for SnowflakeDialect {
     fn supports_partiql(&self) -> bool {
         true
     }
+
+    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+        explicit
+            || match kw {
+            // The following keywords can be considered an alias as long as 
+            // they are not followed by other tokens that may change their meaning
+            // e.g. `SELECT * EXCEPT (col1) FROM tbl`
+            Keyword::EXCEPT
+            // e.g. `SELECT 1 LIMIT 5`
+            | Keyword::LIMIT
+            // e.g. `SELECT 1 OFFSET 5 ROWS`
+            | Keyword::OFFSET
+            // e.g. `INSERT INTO t SELECT 1 RETURNING *`
+            | Keyword::RETURNING if !matches!(parser.peek_token_ref().token, Token::Comma | Token::EOF) =>
+            {
+                false
+            }
+
+            // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
+            // which would give it a different meanins, for example: `SELECT 1 FETCH FIRST 10 ROWS` - not an alias
+            Keyword::FETCH
+                if parser.peek_keyword(Keyword::FIRST) || parser.peek_keyword(Keyword::NEXT) =>
+            {
+                false
+            }
+
+            // Reserved keywords by the Snowflake dialect, which seem to be less strictive 
+            // than what is listed in `keywords::RESERVED_FOR_COLUMN_ALIAS`. The following 
+            // keywords were tested with the this statement: `SELECT 1 <KW>`.
+            Keyword::FROM
+            | Keyword::GROUP
+            | Keyword::HAVING
+            | Keyword::INTERSECT
+            | Keyword::INTO
+            | Keyword::MINUS
+            | Keyword::ORDER
+            | Keyword::SELECT
+            | Keyword::UNION
+            | Keyword::WHERE
+            | Keyword::WITH => false,
+
+            // Any other word is considered an alias
+            _ => true,
+        }
+    }
+
+    /// See: <https://docs.snowflake.com/en/sql-reference/constructs/at-before>
+    fn supports_timestamp_versioning(&self) -> bool {
+        true
+    }
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {
@@ -275,12 +329,14 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
 
 /// Parse snowflake create table statement.
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
+/// <https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table>
 pub fn parse_create_table(
     or_replace: bool,
     global: Option<bool>,
     temporary: bool,
     volatile: bool,
     transient: bool,
+    iceberg: bool,
     parser: &mut Parser,
 ) -> Result<Statement, ParserError> {
     let if_not_exists = parser.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -292,6 +348,7 @@ pub fn parse_create_table(
         .temporary(temporary)
         .transient(transient)
         .volatile(volatile)
+        .iceberg(iceberg)
         .global(global)
         .hive_formats(Some(Default::default()));
 
@@ -418,6 +475,28 @@ pub fn parse_create_table(
                     let on_commit = Some(parser.parse_create_table_on_commit()?);
                     builder = builder.on_commit(on_commit);
                 }
+                Keyword::EXTERNAL_VOLUME => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder.external_volume = Some(parser.parse_literal_string()?);
+                }
+                Keyword::CATALOG => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder.catalog = Some(parser.parse_literal_string()?);
+                }
+                Keyword::BASE_LOCATION => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder.base_location = Some(parser.parse_literal_string()?);
+                }
+                Keyword::CATALOG_SYNC => {
+                    parser.expect_token(&Token::Eq)?;
+                    builder.catalog_sync = Some(parser.parse_literal_string()?);
+                }
+                Keyword::STORAGE_SERIALIZATION_POLICY => {
+                    parser.expect_token(&Token::Eq)?;
+
+                    builder.storage_serialization_policy =
+                        Some(parse_storage_serialization_policy(parser)?);
+                }
                 _ => {
                     return parser.expected("end of statement", next_token);
                 }
@@ -452,7 +531,27 @@ pub fn parse_create_table(
         }
     }
 
+    if iceberg && builder.base_location.is_none() {
+        return Err(ParserError::ParserError(
+            "BASE_LOCATION is required for ICEBERG tables".to_string(),
+        ));
+    }
+
     Ok(builder.build())
+}
+
+pub fn parse_storage_serialization_policy(
+    parser: &mut Parser,
+) -> Result<StorageSerializationPolicy, ParserError> {
+    let next_token = parser.next_token();
+    match &next_token.token {
+        Token::Word(w) => match w.keyword {
+            Keyword::COMPATIBLE => Ok(StorageSerializationPolicy::Compatible),
+            Keyword::OPTIMIZED => Ok(StorageSerializationPolicy::Optimized),
+            _ => parser.expected("storage_serialization_policy", next_token),
+        },
+        _ => parser.expected("storage_serialization_policy", next_token),
+    }
 }
 
 pub fn parse_create_stage(

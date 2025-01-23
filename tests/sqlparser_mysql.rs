@@ -2572,7 +2572,7 @@ fn parse_kill() {
 }
 
 #[test]
-fn parse_table_colum_option_on_update() {
+fn parse_table_column_option_on_update() {
     let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE CURRENT_TIMESTAMP())";
     match mysql().verified_stmt(sql1) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {

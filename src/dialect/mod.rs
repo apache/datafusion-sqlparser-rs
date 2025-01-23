@@ -821,6 +821,26 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the specified keyword should be parsed as a select item alias.
+    /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
+    /// to enable looking ahead if needed.
+    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
+        explicit || !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw)
+    }
+
+    /// Returns true if the specified keyword should be parsed as a table factor alias.
+    /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
+    /// to enable looking ahead if needed.
+    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
+        explicit || !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
+    }
+
+    /// Returns true if this dialect supports querying historical table data
+    /// by specifying which version of the data to query.
+    fn supports_timestamp_versioning(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the E'...' syntax for string literals
     ///
     /// Postgres: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE>

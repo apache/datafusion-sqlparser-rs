@@ -2159,6 +2159,7 @@ mod tests {
         BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect, SQLiteDialect,
     };
     use core::fmt::Debug;
+    use crate::test_utils::all_dialects_where;
 
     #[test]
     fn tokenizer_error_impl() {
@@ -3548,15 +3549,30 @@ mod tests {
     }
 
     #[test]
-    fn test_national_strings() {
-        let dialect = PostgreSqlDialect {};
-        let sql = "select n'''''\\'";
-        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
-        let expected = vec![
-            Token::make_keyword("select"),
-            Token::Whitespace(Whitespace::Space),
-            Token::NationalStringLiteral("''\\".to_string()),
-        ];
-        compare(expected, tokens);
+    fn test_national_strings_backslash_escape_not_supported() {
+        all_dialects_where(
+            |dialect| !dialect.supports_string_literal_backslash_escape(),
+        ).tokenizes_to(
+            "select n'''''\\'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::NationalStringLiteral("''\\".to_string()),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_national_strings_backslash_escape_supported() {
+        all_dialects_where(
+            |dialect| dialect.supports_string_literal_backslash_escape(),
+        ).tokenizes_to(
+            "select n'''''\\''",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::NationalStringLiteral("'''".to_string()),
+            ],
+        );
     }
 }

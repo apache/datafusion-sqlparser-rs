@@ -8442,12 +8442,12 @@ impl<'a> Parser<'a> {
                 keyword: Keyword::NoKeyword,
                 ..
             }) => Ok(value),
-            Token::SingleQuotedString(s)
-            | Token::DoubleQuotedString(s)
-            | Token::UnicodeStringLiteral(s) => Ok(s),
+            Token::SingleQuotedString(s) => Ok(s),
+            Token::DoubleQuotedString(s) => Ok(s),
             Token::EscapedStringLiteral(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
                 Ok(s)
             }
+            Token::UnicodeStringLiteral(s) => Ok(s),
             _ => self.expected("literal string", next_token),
         }
     }

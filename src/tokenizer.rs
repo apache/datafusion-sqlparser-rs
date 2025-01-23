@@ -43,7 +43,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
-    RedshiftSqlDialect, SnowflakeDialect,
+    SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use crate::{ast::DollarQuotedString, dialect::HiveDialect};

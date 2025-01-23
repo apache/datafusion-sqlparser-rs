@@ -3872,13 +3872,13 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "{table}")?;
                 if let Some(UpdateTableFromKind::BeforeSet(from)) = from {
-                    write!(f, " FROM {from}")?;
+                    write!(f, " FROM {}", display_comma_separated(from))?;
                 }
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
                 if let Some(UpdateTableFromKind::AfterSet(from)) = from {
-                    write!(f, " FROM {from}")?;
+                    write!(f, " FROM {}", display_comma_separated(from))?;
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {selection}")?;

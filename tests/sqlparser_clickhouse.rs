@@ -1652,10 +1652,7 @@ fn parse_numbers_with_underscore() {
 
     assert_eq!(
         select.projection,
-        vec![SelectItem::UnnamedExpr(Expr::Value(Value::Number(
-            "10_000".to_string(),
-            false
-        ))),]
+        vec![SelectItem::UnnamedExpr(Expr::Value(number("10_000")))]
     )
 }
 

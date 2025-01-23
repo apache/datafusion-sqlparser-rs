@@ -240,7 +240,7 @@ impl TestedDialects {
 
     /// Check that the tokenizer returns the expected tokens for the given SQL.
     pub fn tokenizes_to(&self, sql: &str, expected: Vec<Token>) {
-        if self.dialects.len() == 0 {
+        if self.dialects.is_empty() {
             panic!("No dialects to test");
         }
 

@@ -3547,42 +3547,30 @@ mod tests {
 
     #[test]
     fn test_string_escape_constant_not_supported() {
-        all_dialects_where(|dialect| {
-            !dialect.supports_string_escape_constant()
-                && !dialect.supports_string_literal_backslash_escape()
-        })
-        .tokenizes_to(
-            "select e'\\n'",
+        all_dialects_where(|dialect| !dialect.supports_string_escape_constant()).tokenizes_to(
+            "select e'...'",
             vec![
                 Token::make_keyword("select"),
                 Token::Whitespace(Whitespace::Space),
                 Token::make_word("e", None),
-                Token::SingleQuotedString("\\n".to_string()),
+                Token::SingleQuotedString("...".to_string()),
             ],
         );
 
-        all_dialects_where(|dialect| {
-            !dialect.supports_string_escape_constant()
-                && !dialect.supports_string_literal_backslash_escape()
-        })
-        .tokenizes_to(
-            "select E'\\n'",
+        all_dialects_where(|dialect| !dialect.supports_string_escape_constant()).tokenizes_to(
+            "select E'...'",
             vec![
                 Token::make_keyword("select"),
                 Token::Whitespace(Whitespace::Space),
                 Token::make_word("E", None),
-                Token::SingleQuotedString("\\n".to_string()),
+                Token::SingleQuotedString("...".to_string()),
             ],
         );
     }
 
     #[test]
     fn test_string_escape_constant_supported() {
-        all_dialects_where(|dialect| {
-            dialect.supports_string_escape_constant()
-                && !dialect.supports_string_literal_backslash_escape()
-        })
-        .tokenizes_to(
+        all_dialects_where(|dialect| dialect.supports_string_escape_constant()).tokenizes_to(
             "select e'\\''",
             vec![
                 Token::make_keyword("select"),
@@ -3591,11 +3579,7 @@ mod tests {
             ],
         );
 
-        all_dialects_where(|dialect| {
-            dialect.supports_string_escape_constant()
-                && !dialect.supports_string_literal_backslash_escape()
-        })
-        .tokenizes_to(
+        all_dialects_where(|dialect| dialect.supports_string_escape_constant()).tokenizes_to(
             "select E'\\''",
             vec![
                 Token::make_keyword("select"),

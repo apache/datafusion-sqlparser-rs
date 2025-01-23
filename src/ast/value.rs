@@ -97,6 +97,32 @@ pub enum Value {
     Placeholder(String),
 }
 
+impl Into<String> for Value {
+    fn into(self) -> String {
+        match self {
+            Value::SingleQuotedString(s) => s,
+            Value::TripleSingleQuotedString(s) => s,
+            Value::TripleDoubleQuotedString(s) => s,
+            Value::EscapedStringLiteral(s) => s,
+            Value::UnicodeStringLiteral(s) => s,
+            Value::SingleQuotedByteStringLiteral(s) => s,
+            Value::DoubleQuotedByteStringLiteral(s) => s,
+            Value::TripleSingleQuotedByteStringLiteral(s) => s,
+            Value::TripleDoubleQuotedByteStringLiteral(s) => s,
+            Value::SingleQuotedRawStringLiteral(s) => s,
+            Value::DoubleQuotedRawStringLiteral(s) => s,
+            Value::TripleSingleQuotedRawStringLiteral(s) => s,
+            Value::TripleDoubleQuotedRawStringLiteral(s) => s,
+            Value::NationalStringLiteral(s) => s,
+            Value::HexStringLiteral(s) => s,
+            Value::DoubleQuotedString(s) => s,
+            Value::Placeholder(s) => s,
+            Value::DollarQuotedString(s) => s.value,
+            _ => panic!("not a string value"),
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

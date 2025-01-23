@@ -1540,9 +1540,6 @@ fn parse_hyphenated_table_identifiers() {
             ]))
         })
     );
-
-    let error_sql = "select foo-bar.* from foo-bar";
-    assert!(bigquery().parse_sql_statements(error_sql).is_err());
 }
 
 #[test]
@@ -2202,6 +2199,14 @@ fn parse_extract_weekday() {
         },
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn bigquery_select_expr_star() {
+    bigquery()
+        .verified_only_select("SELECT STRUCT<STRING>((SELECT foo FROM T WHERE true)).* FROM T");
+    bigquery().verified_only_select("SELECT [STRUCT<STRING>('foo')][0].* EXCEPT (foo) FROM T");
+    bigquery().verified_only_select("SELECT myfunc()[0].* FROM T");
 }
 
 #[test]

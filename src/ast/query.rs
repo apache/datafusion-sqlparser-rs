@@ -586,6 +586,20 @@ impl fmt::Display for Cte {
     }
 }
 
+/// Represents an expression behind a wildcard expansion in a projection.
+/// `SELECT T.* FROM T;
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SelectItemQualifiedWildcardKind {
+    /// Expression is an object name.
+    /// e.g. `alias.*` or even `schema.table.*`
+    ObjectName(ObjectName),
+    /// Select star on an arbitrary expression.
+    /// e.g. `STRUCT<STRING>('foo').*`
+    Expr(Expr),
+}
+
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -595,10 +609,22 @@ pub enum SelectItem {
     UnnamedExpr(Expr),
     /// An expression, followed by `[ AS ] alias`
     ExprWithAlias { expr: Expr, alias: Ident },
-    /// `alias.*` or even `schema.table.*`
-    QualifiedWildcard(ObjectName, WildcardAdditionalOptions),
+    /// An expression, followed by a wildcard expansion.
+    /// e.g. `alias.*`, `STRUCT<STRING>('foo').*`
+    QualifiedWildcard(SelectItemQualifiedWildcardKind, WildcardAdditionalOptions),
     /// An unqualified `*`
     Wildcard(WildcardAdditionalOptions),
+}
+
+impl fmt::Display for SelectItemQualifiedWildcardKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self {
+            SelectItemQualifiedWildcardKind::ObjectName(object_name) => {
+                write!(f, "{object_name}.*")
+            }
+            SelectItemQualifiedWildcardKind::Expr(expr) => write!(f, "{expr}.*"),
+        }
+    }
 }
 
 /// Single aliased identifier
@@ -867,8 +893,8 @@ impl fmt::Display for SelectItem {
         match &self {
             SelectItem::UnnamedExpr(expr) => write!(f, "{expr}"),
             SelectItem::ExprWithAlias { expr, alias } => write!(f, "{expr} AS {alias}"),
-            SelectItem::QualifiedWildcard(prefix, additional_options) => {
-                write!(f, "{prefix}.*")?;
+            SelectItem::QualifiedWildcard(kind, additional_options) => {
+                write!(f, "{kind}")?;
                 write!(f, "{additional_options}")?;
                 Ok(())
             }

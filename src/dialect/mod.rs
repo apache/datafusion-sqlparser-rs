@@ -447,6 +447,17 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports wildcard expansion on
+    /// arbitrary expressions in projections.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT STRUCT<STRING>('foo').* FROM T
+    /// ```
+    fn supports_select_expr_star(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
     fn supports_user_host_grantee(&self) -> bool {
         false

@@ -33,7 +33,7 @@ use core::fmt::Debug;
 
 use crate::dialect::*;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::{Tokenizer, Token};
+use crate::tokenizer::{Token, Tokenizer};
 use crate::{ast::*, parser::ParserOptions};
 
 #[cfg(test)]

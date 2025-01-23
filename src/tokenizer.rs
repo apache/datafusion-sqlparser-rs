@@ -1150,7 +1150,7 @@ impl<'a> Tokenizer<'a> {
 
                     s += &peeking_take_while(chars, |ch| {
                         ch.is_ascii_digit()
-                            || self.dialect.supports_underscore_separator() && ch == '_'
+                            || self.dialect.supports_numeric_literal_underscores() && ch == '_'
                     });
 
                     // No number -> Token::Period
@@ -2228,7 +2228,7 @@ mod tests {
     }
 
     #[test]
-    fn tokenize_clickhouse_underscore_separator() {
+    fn tokenize_numeric_literal_underscore() {
         let sql = String::from("SELECT 10_000");
         let dialect = ClickHouseDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);

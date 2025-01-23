@@ -304,8 +304,8 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports numbers containing underscores
-    fn supports_underscore_separator(&self) -> bool {
+    /// Returns true if the dialect supports numbers containing underscores, e.g. `10_000_000`
+    fn supports_numeric_literal_underscores(&self) -> bool {
         false
     }
 

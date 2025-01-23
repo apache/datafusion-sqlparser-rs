@@ -59,7 +59,7 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
-    fn supports_underscore_separator(&self) -> bool {
+    fn supports_numeric_literal_underscores(&self) -> bool {
         true
     }
 

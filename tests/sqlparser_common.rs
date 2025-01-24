@@ -10189,15 +10189,19 @@ fn parse_trailing_comma() {
             "Expected: column name or constraint definition, found: )".to_string()
         )
     );
+
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_trailing_commas());
+    assert_eq!(
+        unsupported_dialects
+            .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
+    );
 }
 
 #[test]
 fn parse_projection_trailing_comma() {
-    // Some dialects allow trailing commas only in the projection
-    let trailing_commas = TestedDialects::new(vec![
-        Box::new(SnowflakeDialect {}),
-        Box::new(BigQueryDialect {}),
-    ]);
+    let trailing_commas = all_dialects_where(|d| d.supports_projection_trailing_commas());
 
     trailing_commas.one_statement_parses_to(
         "SELECT album_id, name, FROM track",
@@ -10210,20 +10214,14 @@ fn parse_projection_trailing_comma() {
 
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
 
+    let unsupported_dialects = all_dialects_where(|d| {
+        !d.supports_projection_trailing_commas() && !d.supports_trailing_commas()
+    });
     assert_eq!(
-        trailing_commas
-            .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
+        unsupported_dialects
+            .parse_sql_statements("SELECT album_id, name, FROM track")
             .unwrap_err(),
-        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
-    );
-
-    assert_eq!(
-        trailing_commas
-            .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
-            .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: column name or constraint definition, found: )".to_string()
-        ),
+        ParserError::ParserError("Expected an expression, found: FROM".to_string())
     );
 }
 
@@ -13059,6 +13057,33 @@ fn parse_update_from_before_select() {
 #[test]
 fn parse_overlaps() {
     verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
+}
+
+#[test]
+fn parse_column_definition_trailing_commas() {
+    let dialects = all_dialects_where(|d| d.supports_column_definition_trailing_commas());
+
+    dialects.one_statement_parses_to("CREATE TABLE T (x INT64,)", "CREATE TABLE T (x INT64)");
+    dialects.one_statement_parses_to(
+        "CREATE TABLE T (x INT64, y INT64, )",
+        "CREATE TABLE T (x INT64, y INT64)",
+    );
+    dialects.one_statement_parses_to(
+        "CREATE VIEW T (x, y, ) AS SELECT 1",
+        "CREATE VIEW T (x, y) AS SELECT 1",
+    );
+
+    let unsupported_dialects = all_dialects_where(|d| {
+        !d.supports_projection_trailing_commas() && !d.supports_trailing_commas()
+    });
+    assert_eq!(
+        unsupported_dialects
+            .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: column name or constraint definition, found: )".to_string()
+        ),
+    );
 }
 
 #[test]

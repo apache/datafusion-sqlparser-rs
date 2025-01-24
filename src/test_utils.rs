@@ -240,13 +240,17 @@ impl TestedDialects {
 
     /// Check that the tokenizer returns the expected tokens for the given SQL.
     pub fn tokenizes_to(&self, sql: &str, expected: Vec<Token>) {
+        if self.dialects.is_empty() {
+            panic!("No dialects to test");
+        }
+
         self.dialects.iter().for_each(|dialect| {
             let mut tokenizer = Tokenizer::new(&**dialect, sql);
             if let Some(options) = &self.options {
                 tokenizer = tokenizer.with_unescape(options.unescape);
             }
             let tokens = tokenizer.tokenize().unwrap();
-            assert_eq!(expected, tokens);
+            assert_eq!(expected, tokens, "Tokenized differently for {:?}", dialect);
         });
     }
 }

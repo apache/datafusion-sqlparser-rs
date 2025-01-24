@@ -985,7 +985,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
-                x @ 'e' | x @ 'E' => {
+                x @ 'e' | x @ 'E' if self.dialect.supports_string_escape_constant() => {
                     let starting_loc = chars.location();
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
@@ -3572,5 +3572,49 @@ mod tests {
                     Token::NationalStringLiteral("'''".to_string()),
                 ],
             );
+    }
+
+    #[test]
+    fn test_string_escape_constant_not_supported() {
+        all_dialects_where(|dialect| !dialect.supports_string_escape_constant()).tokenizes_to(
+            "select e'...'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("e", None),
+                Token::SingleQuotedString("...".to_string()),
+            ],
+        );
+
+        all_dialects_where(|dialect| !dialect.supports_string_escape_constant()).tokenizes_to(
+            "select E'...'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("E", None),
+                Token::SingleQuotedString("...".to_string()),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_string_escape_constant_supported() {
+        all_dialects_where(|dialect| dialect.supports_string_escape_constant()).tokenizes_to(
+            "select e'\\''",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::EscapedStringLiteral("'".to_string()),
+            ],
+        );
+
+        all_dialects_where(|dialect| dialect.supports_string_escape_constant()).tokenizes_to(
+            "select E'\\''",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::EscapedStringLiteral("'".to_string()),
+            ],
+        );
     }
 }

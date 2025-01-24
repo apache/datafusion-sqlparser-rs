@@ -2491,37 +2491,30 @@ pub enum Statement {
         values: Vec<Option<String>>,
     },
     /// ```sql
-    /// COPY INTO <table>
+    /// COPY INTO <table> | <location>
     /// ```
-    /// See <https://docs.snowflake.com/en/sql-reference/sql/copy-into-table>
+    /// See:
+    /// <https://docs.snowflake.com/en/sql-reference/sql/copy-into-table>
+    /// <https://docs.snowflake.com/en/sql-reference/sql/copy-into-location>
+    ///
     /// Copy Into syntax available for Snowflake is different than the one implemented in
     /// Postgres. Although they share common prefix, it is reasonable to implement them
     /// in different enums. This can be refactored later once custom dialects
     /// are allowed to have custom Statements.
-    CopyIntoSnowflakeTable {
+    CopyIntoSnowflake {
+        kind: CopyIntoSnowflakeKind,
         into: ObjectName,
-        from_stage: ObjectName,
-        from_stage_alias: Option<Ident>,
+        from_obj: Option<ObjectName>,
+        from_obj_alias: Option<Ident>,
         stage_params: StageParamsObject,
         from_transformations: Option<Vec<StageLoadSelectItem>>,
+        from_query: Option<Box<Query>>,
         files: Option<Vec<String>>,
         pattern: Option<String>,
         file_format: DataLoadingOptions,
         copy_options: DataLoadingOptions,
         validation_mode: Option<String>,
-    },
-    /// ```sql
-    /// COPY INTO <location>
-    /// ```
-    /// See <https://docs.snowflake.com/en/sql-reference/sql/copy-into-location>
-    CopyIntoSnowflakeLocation {
-        into: ObjectName,
-        from_table: Option<ObjectName>,
-        from_query: Option<Box<Query>>,
-        stage_params: StageParamsObject,
-        partition: Option<Expr>,
-        file_format: DataLoadingOptions,
-        copy_options: DataLoadingOptions,
+        partition: Option<Box<Expr>>,
     },
     /// ```sql
     /// CLOSE
@@ -4994,80 +4987,54 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CopyIntoSnowflakeTable {
+            Statement::CopyIntoSnowflake {
+                kind,
                 into,
-                from_stage,
-                from_stage_alias,
+                from_obj,
+                from_obj_alias,
                 stage_params,
                 from_transformations,
+                from_query,
                 files,
                 pattern,
                 file_format,
                 copy_options,
                 validation_mode,
+                partition,
             } => {
                 write!(f, "COPY INTO {}", into)?;
-                if from_transformations.is_none() {
-                    // Standard data load
-                    write!(f, " FROM {}{}", from_stage, stage_params)?;
-                    if from_stage_alias.as_ref().is_some() {
-                        write!(f, " AS {}", from_stage_alias.as_ref().unwrap())?;
-                    }
-                } else {
+                if let Some(from_transformations) = from_transformations {
                     // Data load with transformation
-                    write!(
-                        f,
-                        " FROM (SELECT {} FROM {}{}",
-                        display_separated(from_transformations.as_ref().unwrap(), ", "),
-                        from_stage,
-                        stage_params,
-                    )?;
-                    if from_stage_alias.as_ref().is_some() {
-                        write!(f, " AS {}", from_stage_alias.as_ref().unwrap())?;
+                    if let Some(from_stage) = from_obj {
+                        write!(
+                            f,
+                            " FROM (SELECT {} FROM {}{}",
+                            display_separated(from_transformations, ", "),
+                            from_stage,
+                            stage_params
+                        )?;
+                    }
+                    if let Some(from_obj_alias) = from_obj_alias {
+                        write!(f, " AS {}", from_obj_alias)?;
                     }
                     write!(f, ")")?;
-                }
-                if files.is_some() {
-                    write!(
-                        f,
-                        " FILES = ('{}')",
-                        display_separated(files.as_ref().unwrap(), "', '")
-                    )?;
-                }
-                if pattern.is_some() {
-                    write!(f, " PATTERN = '{}'", pattern.as_ref().unwrap())?;
-                }
-                if !file_format.options.is_empty() {
-                    write!(f, " FILE_FORMAT=({})", file_format)?;
-                }
-                if !copy_options.options.is_empty() {
-                    write!(f, " COPY_OPTIONS=({})", copy_options)?;
-                }
-                if validation_mode.is_some() {
-                    write!(
-                        f,
-                        " VALIDATION_MODE = {}",
-                        validation_mode.as_ref().unwrap()
-                    )?;
-                }
-                Ok(())
-            }
-            Statement::CopyIntoSnowflakeLocation {
-                into,
-                from_table,
-                from_query,
-                stage_params,
-                partition,
-                file_format,
-                copy_options,
-            } => {
-                write!(f, "COPY INTO {into} FROM")?;
-                if let Some(from_table) = from_table {
-                    write!(f, " {from_table}")?;
+                } else if let Some(from_obj) = from_obj {
+                    // Standard data load
+                    write!(f, " FROM {}{}", from_obj, stage_params)?;
+                    if let Some(from_obj_alias) = from_obj_alias {
+                        write!(f, " AS {from_obj_alias}")?;
+                    }
                 } else if let Some(from_query) = from_query {
-                    write!(f, " ({from_query})")?;
+                    // Data unload from query
+                    write!(f, " FROM ({from_query})")?;
                 }
-                write!(f, "{stage_params}")?;
+
+                if let Some(files) = files {
+                    write!(f, " FILES = ('{}')", display_separated(files, "', '"))?;
+                }
+                if let Some(pattern) = pattern {
+                    write!(f, " PATTERN = '{}'", pattern)?;
+                }
                 if let Some(partition) = partition {
                     write!(f, " PARTITION BY {partition}")?;
                 }
@@ -5075,7 +5042,15 @@ impl fmt::Display for Statement {
                     write!(f, " FILE_FORMAT=({})", file_format)?;
                 }
                 if !copy_options.options.is_empty() {
-                    write!(f, " {}", copy_options)?;
+                    match kind {
+                        CopyIntoSnowflakeKind::Table => {
+                            write!(f, " COPY_OPTIONS=({})", copy_options)?
+                        }
+                        CopyIntoSnowflakeKind::Location => write!(f, " {copy_options}")?,
+                    }
+                }
+                if let Some(validation_mode) = validation_mode {
+                    write!(f, " VALIDATION_MODE = {}", validation_mode)?;
                 }
                 Ok(())
             }
@@ -8487,6 +8462,19 @@ impl Display for StorageSerializationPolicy {
             StorageSerializationPolicy::Optimized => write!(f, "OPTIMIZED"),
         }
     }
+}
+
+/// Variants of the Snowflake `COPY INTO` statement
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CopyIntoSnowflakeKind {
+    /// Loads data from files to a table
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/copy-into-table>
+    Table,
+    /// Unloads data from a table or query to external files
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/copy-into-location>
+    Location,
 }
 
 #[cfg(test)]

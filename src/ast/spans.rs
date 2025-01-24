@@ -211,8 +211,7 @@ impl Spanned for Values {
 /// # partial span
 ///
 /// Missing spans:
-/// - [Statement::CopyIntoSnowflakeTable]
-/// - [Statement::CopyIntoSnowflakeLocation]
+/// - [Statement::CopyIntoSnowflake]
 /// - [Statement::CreateSecret]
 /// - [Statement::CreateRole]
 /// - [Statement::AlterRole]
@@ -331,10 +330,10 @@ impl Spanned for Statement {
                 legacy_options: _,
                 values: _,
             } => source.span(),
-            Statement::CopyIntoSnowflakeTable {
+            Statement::CopyIntoSnowflake {
                 into: _,
-                from_stage: _,
-                from_stage_alias: _,
+                from_obj: _,
+                from_obj_alias: _,
                 stage_params: _,
                 from_transformations: _,
                 files: _,
@@ -342,15 +341,9 @@ impl Spanned for Statement {
                 file_format: _,
                 copy_options: _,
                 validation_mode: _,
-            } => Span::empty(),
-            Statement::CopyIntoSnowflakeLocation {
-                into: _,
-                from_table: _,
+                kind: _,
                 from_query: _,
-                stage_params: _,
                 partition: _,
-                file_format: _,
-                copy_options: _,
             } => Span::empty(),
             Statement::Close { cursor } => match cursor {
                 CloseCursor::All => Span::empty(),

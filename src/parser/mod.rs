@@ -9099,21 +9099,19 @@ impl<'a> Parser<'a> {
         {
             idents = idents
                 .into_iter()
-                .flat_map(|part| {
-                    match part.as_ident() {
-                        Some(ident) => ident
-                            .value
-                            .split('.')
-                            .map(|value| {
-                                ObjectNamePart::Identifier(Ident {
-                                    value: value.into(),
-                                    quote_style: ident.quote_style,
-                                    span: ident.span,
-                                })
+                .flat_map(|part| match part.as_ident() {
+                    Some(ident) => ident
+                        .value
+                        .split('.')
+                        .map(|value| {
+                            ObjectNamePart::Identifier(Ident {
+                                value: value.into(),
+                                quote_style: ident.quote_style,
+                                span: ident.span,
                             })
-                            .collect::<Vec<_>>(),
-                        None => vec![part],
-                    }
+                        })
+                        .collect::<Vec<_>>(),
+                    None => vec![part],
                 })
                 .collect()
         }

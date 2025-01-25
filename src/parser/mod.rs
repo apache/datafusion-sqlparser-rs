@@ -1553,7 +1553,7 @@ impl<'a> Parser<'a> {
                 return self.expected("an identifier or a '*' after '.'", self.peek_token());
             };
             Ok(Expr::QualifiedWildcard(
-                ObjectName(Self::exprs_to_idents(root, chain)?),
+                ObjectName::from(Self::exprs_to_idents(root, chain)?),
                 AttachedToken(wildcard_token),
             ))
         } else if self.peek_token().token == Token::LParen {
@@ -1566,7 +1566,7 @@ impl<'a> Parser<'a> {
             if let Some(expr) = self.parse_outer_join_expr(&id_parts) {
                 Ok(expr)
             } else {
-                self.parse_function(ObjectName(id_parts))
+                self.parse_function(ObjectName::from(id_parts))
             }
         } else {
             if Self::is_all_ident(&root, &chain) {
@@ -9076,7 +9076,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(ObjectName(idents))
+        Ok(ObjectName::from(idents))
     }
 
     /// Parse a possibly qualified, possibly quoted identifier, e.g.
@@ -9092,25 +9092,33 @@ impl<'a> Parser<'a> {
         // BigQuery accepts any number of quoted identifiers of a table name.
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_identifiers
         if dialect_of!(self is BigQueryDialect)
-            && idents.iter().any(|ident| ident.value.contains('.'))
+            && idents.iter().any(|part| {
+                part.as_ident()
+                    .is_some_and(|ident| ident.value.contains('.'))
+            })
         {
             idents = idents
                 .into_iter()
-                .flat_map(|ident| {
-                    ident
-                        .value
-                        .split('.')
-                        .map(|value| Ident {
-                            value: value.into(),
-                            quote_style: ident.quote_style,
-                            span: ident.span,
-                        })
-                        .collect::<Vec<_>>()
+                .flat_map(|part| {
+                    match part.as_ident() {
+                        Some(ident) => ident
+                            .value
+                            .split('.')
+                            .map(|value| {
+                                ObjectNamePart::Identifier(Ident {
+                                    value: value.into(),
+                                    quote_style: ident.quote_style,
+                                    span: ident.span,
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                        None => vec![part],
+                    }
                 })
                 .collect()
         }
 
-        Ok(ObjectName::from(idents))
+        Ok(ObjectName(idents))
     }
 
     /// Parse identifiers
@@ -11828,7 +11836,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let aggregate_functions = self.parse_comma_separated(Self::parse_aliased_function_call)?;
         self.expect_keyword_is(Keyword::FOR)?;
-        let value_column = self.parse_period_separated(|p| p.parse_identifier(false))?;
+        let value_column = self.parse_period_separated(|p| p.parse_identifier())?;
         self.expect_keyword_is(Keyword::IN)?;
 
         self.expect_token(&Token::LParen)?;
@@ -11964,10 +11972,9 @@ impl<'a> Parser<'a> {
                     // https://docs.aws.amazon.com/redshift/latest/mgmt/redshift-iam-access-control-native-idp.html
                     let ident = self.parse_identifier()?;
                     if let GranteeName::ObjectName(namespace) = name {
-                        name = GranteeName::ObjectName(ObjectName(vec![Ident::new(format!(
-                            "{}:{}",
-                            namespace, ident
-                        ))]));
+                        name = GranteeName::ObjectName(ObjectName::from(vec![Ident::new(
+                            format!("{}:{}", namespace, ident),
+                        )]));
                     };
                 }
                 Grantee {
@@ -12276,9 +12283,10 @@ impl<'a> Parser<'a> {
         let mut name = self.parse_object_name(false)?;
         if self.dialect.supports_user_host_grantee()
             && name.0.len() == 1
+            && name.0[0].as_ident().is_some()
             && self.consume_token(&Token::AtSign)
         {
-            let user = name.0.pop().unwrap();
+            let user = name.0.pop().unwrap().as_ident().unwrap().clone();
             let host = self.parse_identifier()?;
             Ok(GranteeName::UserHost { user, host })
         } else {

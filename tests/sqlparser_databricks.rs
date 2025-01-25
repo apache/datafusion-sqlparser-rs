@@ -185,7 +185,9 @@ fn test_values_clause() {
         "SELECT * FROM values",
     ));
     assert_eq!(
-        Some(&table_from_name(ObjectName::from(vec![Ident::new("values")]))),
+        Some(&table_from_name(ObjectName::from(vec![Ident::new(
+            "values"
+        )]))),
         query
             .body
             .as_select()

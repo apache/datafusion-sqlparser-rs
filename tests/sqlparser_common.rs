@@ -4179,11 +4179,11 @@ fn parse_rename_table() {
         Statement::RenameTable(rename_tables) => {
             assert_eq!(
                 vec![RenameTable {
-                    old_name: ObjectName(vec![
+                    old_name: ObjectName::from(vec![
                         Ident::new("test".to_string()),
                         Ident::new("test1".to_string()),
                     ]),
-                    new_name: ObjectName(vec![
+                    new_name: ObjectName::from(vec![
                         Ident::new("test_db".to_string()),
                         Ident::new("test2".to_string()),
                     ]),
@@ -4201,16 +4201,16 @@ fn parse_rename_table() {
             assert_eq!(
                 vec![
                     RenameTable {
-                        old_name: ObjectName(vec![Ident::new("old_table1".to_string())]),
-                        new_name: ObjectName(vec![Ident::new("new_table1".to_string())]),
+                        old_name: ObjectName::from(vec![Ident::new("old_table1".to_string())]),
+                        new_name: ObjectName::from(vec![Ident::new("new_table1".to_string())]),
                     },
                     RenameTable {
-                        old_name: ObjectName(vec![Ident::new("old_table2".to_string())]),
-                        new_name: ObjectName(vec![Ident::new("new_table2".to_string())]),
+                        old_name: ObjectName::from(vec![Ident::new("old_table2".to_string())]),
+                        new_name: ObjectName::from(vec![Ident::new("new_table2".to_string())]),
                     },
                     RenameTable {
-                        old_name: ObjectName(vec![Ident::new("old_table3".to_string())]),
-                        new_name: ObjectName(vec![Ident::new("new_table3".to_string())]),
+                        old_name: ObjectName::from(vec![Ident::new("old_table3".to_string())]),
+                        new_name: ObjectName::from(vec![Ident::new("new_table3".to_string())]),
                     }
                 ],
                 rename_tables
@@ -6544,7 +6544,9 @@ fn parse_joins_using() {
                 sample: None,
             },
             global: false,
-            join_operator: f(JoinConstraint::Using(vec![ObjectName(vec!["c1".into()])])),
+            join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
+                "c1".into()
+            ])])),
         }
     }
     // Test parsing of aliases
@@ -8733,10 +8735,9 @@ fn parse_merge() {
                             )],
                             into: None,
                             from: vec![TableWithJoins {
-                                relation: table_from_name( ObjectName::from(vec![
-                                        Ident::new("s"),
-                                        Ident::new("foo")
-
+                                relation: table_from_name(ObjectName::from(vec![
+                                    Ident::new("s"),
+                                    Ident::new("foo")
                                 ])),
                                 joins: vec![],
                             }],
@@ -10606,7 +10607,7 @@ fn parse_map_access_expr() {
             }),
             AccessExpr::Subscript(Subscript::Index {
                 index: Expr::Function(Function {
-                    name: ObjectName(vec![Ident::with_span(
+                    name: ObjectName::from(vec![Ident::with_span(
                         Span::new(Location::of(1, 11), Location::of(1, 22)),
                         "safe_offset",
                     )]),
@@ -11266,7 +11267,7 @@ fn parse_odbc_scalar_function() {
     else {
         unreachable!("expected function")
     };
-    assert_eq!(name, &ObjectName(vec![Ident::new("my_func")]));
+    assert_eq!(name, &ObjectName::from(vec![Ident::new("my_func")]));
     assert!(uses_odbc_syntax);
     matches!(args, FunctionArguments::List(l) if l.args.len() == 2);
 
@@ -12821,7 +12822,7 @@ fn parse_composite_access_expr() {
         verified_expr("f(a).b"),
         Expr::CompoundFieldAccess {
             root: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("f")]),
+                name: ObjectName::from(vec![Ident::new("f")]),
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
@@ -12845,7 +12846,7 @@ fn parse_composite_access_expr() {
         verified_expr("f(a).b.c"),
         Expr::CompoundFieldAccess {
             root: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("f")]),
+                name: ObjectName::from(vec![Ident::new("f")]),
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
@@ -12871,7 +12872,7 @@ fn parse_composite_access_expr() {
     let stmt = verified_only_select("SELECT f(a).b FROM t WHERE f(a).b IS NOT NULL");
     let expr = Expr::CompoundFieldAccess {
         root: Box::new(Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("f")]),
+            name: ObjectName::from(vec![Ident::new("f")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {

@@ -1508,7 +1508,7 @@ fn test_alter_table_clustering() {
                     Expr::Identifier(Ident::new("c1")),
                     Expr::Identifier(Ident::with_quote('"', "c2")),
                     Expr::Function(Function {
-                        name: ObjectName(vec![Ident::new("TO_DATE")]),
+                        name: ObjectName::from(vec![Ident::new("TO_DATE")]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
@@ -2837,14 +2837,14 @@ fn parse_use() {
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE ROLE {0}my_role{0}", quote)),
-            Statement::Use(Use::Role(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Role(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_role".to_string(),
             )])))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE WAREHOUSE {0}my_wh{0}", quote)),
-            Statement::Use(Use::Warehouse(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Warehouse(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_wh".to_string(),
             )])))
@@ -3082,7 +3082,7 @@ fn parse_ls_and_rm() {
         .verified_stmt("LIST @SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/");
     match statement {
         Statement::List(command) => {
-            assert_eq!(command.stage, ObjectName(vec!["@SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/".into()]));
+            assert_eq!(command.stage, ObjectName::from(vec!["@SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/".into()]));
             assert!(command.pattern.is_none());
         }
         _ => unreachable!(),
@@ -3094,7 +3094,7 @@ fn parse_ls_and_rm() {
         Statement::Remove(command) => {
             assert_eq!(
                 command.stage,
-                ObjectName(vec!["@my_csv_stage/analysis/".into()])
+                ObjectName::from(vec!["@my_csv_stage/analysis/".into()])
             );
             assert_eq!(command.pattern, Some(".*data_0.*".to_string()));
         }

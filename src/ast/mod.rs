@@ -289,6 +289,14 @@ pub enum ObjectNamePart {
     Identifier(Ident),
 }
 
+impl ObjectNamePart {
+    pub fn as_ident(&self) -> Option<&Ident> {
+        match self {
+            ObjectNamePart::Identifier(ident) => Some(ident),
+        }
+    }
+}
+
 impl fmt::Display for ObjectNamePart {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

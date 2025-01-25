@@ -3044,7 +3044,7 @@ fn parse_grant() {
         );
         assert_eq!(
             objects,
-            GrantObjects::Tables(vec![ObjectName(vec!["*".into(), "*".into()])])
+            GrantObjects::Tables(vec![ObjectName::from(vec!["*".into(), "*".into()])])
         );
         assert!(!with_grant_option);
         assert!(granted_by.is_none());
@@ -3085,7 +3085,7 @@ fn parse_revoke() {
         );
         assert_eq!(
             objects,
-            GrantObjects::Tables(vec![ObjectName(vec!["db1".into(), "*".into()])])
+            GrantObjects::Tables(vec![ObjectName::from(vec!["db1".into(), "*".into()])])
         );
         if let [Grantee {
             grantee_type: GranteesType::None,

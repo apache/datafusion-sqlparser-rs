@@ -28,13 +28,13 @@ use super::{
     FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments,
     GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
-    Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OrderBy,
-    OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
-    UpdateTableFromKind, Use, Value, Values,
-    ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
+    Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OrderBy, OrderByExpr, Partition, PivotValueSource,
+    ProjectionSelect, Query, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -2149,7 +2149,7 @@ impl Spanned for TableObject {
     fn span(&self) -> Span {
         match self {
             TableObject::TableName(ObjectName(segments)) => {
-                union_spans(segments.iter().map(|i| i.span))
+                union_spans(segments.iter().map(|i| i.span()))
             }
             TableObject::TableFunction(func) => func.span(),
         }

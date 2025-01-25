@@ -1518,7 +1518,10 @@ fn parse_hyphenated_table_identifiers() {
             )
             .from[0]
             .relation,
-        table_from_name(ObjectName(vec![Ident::new("foo-123"), Ident::new("bar")])),
+        table_from_name(ObjectName::from(vec![
+            Ident::new("foo-123"),
+            Ident::new("bar")
+        ])),
     );
 
     assert_eq!(
@@ -1985,7 +1988,7 @@ fn parse_map_access_expr() {
             }),
             AccessExpr::Subscript(Subscript::Index {
                 index: Expr::Function(Function {
-                    name: ObjectName(vec![Ident::with_span(
+                    name: ObjectName::from(vec![Ident::with_span(
                         Span::new(Location::of(1, 11), Location::of(1, 22)),
                         "safe_offset",
                     )]),

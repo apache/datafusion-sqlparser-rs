@@ -405,8 +405,15 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports trailing commas in the `FROM` clause of a `SELECT` statement.
-    /// /// Example: `SELECT 1 FROM T, U, LIMIT 1`
+    /// Example: `SELECT 1 FROM T, U, LIMIT 1`
     fn supports_from_trailing_commas(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports trailing commas in the
+    /// column definitions list of a `CREATE` statement.
+    /// Example: `CREATE TABLE T (x INT, y TEXT,)`
+    fn supports_column_definition_trailing_commas(&self) -> bool {
         false
     }
 

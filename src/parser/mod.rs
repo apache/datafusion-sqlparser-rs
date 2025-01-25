@@ -6718,7 +6718,11 @@ impl<'a> Parser<'a> {
                 return self.expected("',' or ')' after column definition", self.peek_token());
             };
 
-            if rparen && (!comma || self.options.trailing_commas) {
+            if rparen
+                && (!comma
+                    || self.dialect.supports_column_definition_trailing_commas()
+                    || self.options.trailing_commas)
+            {
                 let _ = self.consume_token(&Token::RParen);
                 break;
             }
@@ -9298,7 +9302,11 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 Ok(vec![])
             } else {
-                let cols = self.parse_comma_separated(Parser::parse_view_column)?;
+                let cols = self.parse_comma_separated_with_trailing_commas(
+                    Parser::parse_view_column,
+                    self.dialect.supports_column_definition_trailing_commas(),
+                    None,
+                )?;
                 self.expect_token(&Token::RParen)?;
                 Ok(cols)
             }

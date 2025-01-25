@@ -11288,6 +11288,8 @@ fn test_dictionary_syntax() {
         );
     }
 
+    check("{}", Expr::Dictionary(vec![]));
+
     check(
         "{'Alberta': 'Edmonton', 'Manitoba': 'Winnipeg'}",
         Expr::Dictionary(vec![

@@ -11315,10 +11315,13 @@ impl<'a> Parser<'a> {
 
             let alias = self.maybe_parse_table_alias()?;
 
-            // maybe parse so we will still support queries like 'SELECT * FROM T USE LIMIT 1' in BigQuery, for example
-            let index_hints = self
-                .maybe_parse(|p| p.parse_table_index_hints())?
-                .unwrap_or(vec![]);
+            // MYSQL-specific table hints:
+            let index_hints = if self.dialect.supports_table_hints() {
+                self.maybe_parse(|p| p.parse_table_index_hints())?
+                    .unwrap_or(vec![])
+            } else {
+                vec![]
+            };
 
             // MSSQL-specific table hints:
             let mut with_hints = vec![];

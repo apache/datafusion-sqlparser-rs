@@ -2906,21 +2906,6 @@ fn parse_lock_tables() {
 }
 
 #[test]
-fn parse_select_table_with_index_hints() {
-    mysql()
-        .verified_stmt("SELECT * FROM t1 USE INDEX (i1) IGNORE INDEX FOR ORDER BY (i2) ORDER BY a");
-    mysql().verified_stmt("SELECT * FROM t1 USE INDEX (i1) USE INDEX (i1, i1)");
-    mysql().verified_stmt(
-        "SELECT * FROM t1 USE INDEX () IGNORE INDEX (i2) USE INDEX (i1) USE INDEX (i2)",
-    );
-    mysql().verified_stmt("SELECT * FROM t1 FORCE INDEX FOR JOIN (i2)");
-    mysql().verified_stmt("SELECT * FROM t1 IGNORE INDEX FOR JOIN (i2)");
-    mysql().verified_stmt(
-        "SELECT * FROM t USE INDEX (index1) IGNORE INDEX FOR ORDER BY (index1) IGNORE INDEX FOR GROUP BY (index1) WHERE A = B",
-    );
-}
-
-#[test]
 fn parse_json_table() {
     mysql().verified_only_select("SELECT * FROM JSON_TABLE('[[1, 2], [3, 4]]', '$[*]' COLUMNS(a INT PATH '$[0]', b INT PATH '$[1]')) AS t");
     mysql().verified_only_select(

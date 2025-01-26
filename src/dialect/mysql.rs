@@ -121,6 +121,10 @@ impl Dialect for MySqlDialect {
             || (!keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
                 && !RESERVED_FOR_TABLE_ALIAS_MYSQL.contains(kw))
     }
+
+    fn supports_table_hints(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

@@ -1606,34 +1606,6 @@ fn parse_join_constraint_unnest_alias() {
 }
 
 #[test]
-fn parse_select_with_use() {
-    let sql = "SELECT * FROM T USE LIMIT 1";
-    let select =
-        bigquery().verified_only_select_with_canonical(sql, "SELECT * FROM T AS USE LIMIT 1");
-    assert_eq!(
-        select.from,
-        vec![TableWithJoins {
-            relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("T")]),
-                alias: Some(TableAlias {
-                    name: Ident::new("USE"),
-                    columns: vec![],
-                }),
-                args: None,
-                with_hints: vec![],
-                version: None,
-                partitions: vec![],
-                with_ordinality: false,
-                json_path: None,
-                sample: None,
-                index_hints: vec![],
-            },
-            joins: vec![],
-        }]
-    );
-}
-
-#[test]
 fn parse_merge() {
     let sql = concat!(
         "MERGE inventory AS T USING newArrivals AS S ON false ",

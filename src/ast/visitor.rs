@@ -403,7 +403,7 @@ where
 /// ```
 /// # use sqlparser::parser::Parser;
 /// # use sqlparser::dialect::GenericDialect;
-/// # use sqlparser::ast::{ObjectName, visit_relations_mut};
+/// # use sqlparser::ast::{ObjectName, ObjectNamePart, Ident, visit_relations_mut};
 /// # use core::ops::ControlFlow;
 /// let sql = "SELECT a FROM foo";
 /// let mut statements = Parser::parse_sql(&GenericDialect{}, sql)
@@ -411,7 +411,7 @@ where
 ///
 /// // visit statements, renaming table foo to bar
 /// visit_relations_mut(&mut statements, |table| {
-///   table.0[0].value = table.0[0].value.replace("foo", "bar");
+///   table.0[0] = ObjectNamePart::Identifier(Ident::new("bar"));
 ///   ControlFlow::<()>::Continue(())
 /// });
 ///
@@ -529,7 +529,7 @@ where
 ///   if matches!(expr, Expr::Identifier(col_name) if col_name.value == "x") {
 ///     let old_expr = std::mem::replace(expr, Expr::Value(Value::Null));
 ///     *expr = Expr::Function(Function {
-///           name: ObjectName(vec![Ident::new("f")]),
+///           name: ObjectName::from(vec![Ident::new("f")]),
 ///           uses_odbc_syntax: false,
 ///           args: FunctionArguments::List(FunctionArgumentList {
 ///               duplicate_treatment: None,

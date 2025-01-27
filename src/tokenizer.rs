@@ -2262,12 +2262,22 @@ mod tests {
 
     #[test]
     fn tokenize_numeric_literal_underscore() {
-        let dialect = ClickHouseDialect {};
+        let dialect = GenericDialect {};
+        let sql = String::from("SELECT 10_000");
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("10".to_string(), false),
+            Token::make_word("_000", None),
+        ];
+        compare(expected, tokens);
 
+        let dialect = ClickHouseDialect {};
         let sql = String::from("SELECT 10_000, _10_000, 10_00_, 10___0");
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
@@ -2284,7 +2294,6 @@ mod tests {
             Token::Number("10".to_string(), false),
             Token::make_word("___0", None), // multiple underscores tokenizes as a word (syntax error in some dialects)
         ];
-
         compare(expected, tokens);
     }
 

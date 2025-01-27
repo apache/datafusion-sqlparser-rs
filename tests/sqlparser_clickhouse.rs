@@ -1648,7 +1648,12 @@ fn parse_table_sample() {
 
 #[test]
 fn parse_numbers_with_underscore() {
-    let select = clickhouse().verified_only_select("SELECT 10_000");
+    let canonical = if cfg!(feature = "bigdecimal") {
+        "SELECT 10000"
+    } else {
+        "SELECT 10_000"
+    };
+    let select = clickhouse().verified_only_select_with_canonical("SELECT 10_000", canonical);
 
     assert_eq!(
         select.projection,

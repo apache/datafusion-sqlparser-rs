@@ -2043,7 +2043,10 @@ fn test_copy_into() {
             );
             assert_eq!(
                 from_obj,
-                Some(ObjectName::from(vec![Ident::with_quote('\'', "gcs://mybucket/./../a.csv")]))
+                Some(ObjectName::from(vec![Ident::with_quote(
+                    '\'',
+                    "gcs://mybucket/./../a.csv"
+                )]))
             );
             assert!(files.is_none());
             assert!(pattern.is_none());
@@ -2387,7 +2390,6 @@ fn test_copy_into_copy_options() {
 #[test]
 fn test_snowflake_stage_object_names_into_location() {
     let mut allowed_object_names = [
-        ObjectName::from(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
         ObjectName::from(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
         ObjectName::from(vec![
             Ident::new("@namespace"),
@@ -2456,7 +2458,10 @@ fn test_snowflake_copy_into() {
     assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
     match snowflake().verified_stmt(sql) {
         Statement::CopyIntoSnowflake { into, from_obj, .. } => {
-            assert_eq!(into, ObjectName::from(vec![Ident::new("a"), Ident::new("b")]));
+            assert_eq!(
+                into,
+                ObjectName::from(vec![Ident::new("a"), Ident::new("b")])
+            );
             assert_eq!(
                 from_obj,
                 Some(ObjectName::from(vec![

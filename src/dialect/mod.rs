@@ -410,8 +410,15 @@ pub trait Dialect: Debug + Any {
     }
 
     /// Returns true if the dialect supports trailing commas in the `FROM` clause of a `SELECT` statement.
-    /// /// Example: `SELECT 1 FROM T, U, LIMIT 1`
+    /// Example: `SELECT 1 FROM T, U, LIMIT 1`
     fn supports_from_trailing_commas(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports trailing commas in the
+    /// column definitions list of a `CREATE` statement.
+    /// Example: `CREATE TABLE T (x INT, y TEXT,)`
+    fn supports_column_definition_trailing_commas(&self) -> bool {
         false
     }
 
@@ -843,6 +850,13 @@ pub trait Dialect: Debug + Any {
     /// Returns true if this dialect supports querying historical table data
     /// by specifying which version of the data to query.
     fn supports_timestamp_versioning(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the E'...' syntax for string literals
+    ///
+    /// Postgres: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE>
+    fn supports_string_escape_constant(&self) -> bool {
         false
     }
 }

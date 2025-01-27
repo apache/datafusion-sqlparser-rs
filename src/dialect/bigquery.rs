@@ -31,6 +31,11 @@ impl Dialect for BigQueryDialect {
         true
     }
 
+    /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_statement>
+    fn supports_column_definition_trailing_commas(&self) -> bool {
+        true
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }

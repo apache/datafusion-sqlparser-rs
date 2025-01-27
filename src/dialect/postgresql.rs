@@ -246,6 +246,10 @@ impl Dialect for PostgreSqlDialect {
         true
     }
 
+    fn supports_string_escape_constant(&self) -> bool {
+        true
+    }
+
     fn supports_numeric_literal_underscores(&self) -> bool {
         true
     }

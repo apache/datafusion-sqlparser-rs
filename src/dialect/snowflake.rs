@@ -305,6 +305,11 @@ impl Dialect for SnowflakeDialect {
     fn supports_timestamp_versioning(&self) -> bool {
         true
     }
+
+    /// See: <https://docs.snowflake.com/en/sql-reference/constructs/group-by>
+    fn supports_group_by_expr(&self) -> bool {
+        true
+    }
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {
@@ -651,7 +656,7 @@ pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, Par
                     break;
                 }
             }
-            Ok(ObjectName(idents))
+            Ok(ObjectName::from(idents))
         }
         _ => {
             parser.prev_token();

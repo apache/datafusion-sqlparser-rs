@@ -2274,27 +2274,25 @@ mod tests {
         ];
         compare(expected, tokens);
 
-        let dialect = ClickHouseDialect {};
-        let sql = String::from("SELECT 10_000, _10_000, 10_00_, 10___0");
-        let mut tokenizer = Tokenizer::new(&dialect, &sql);
-        let tokens = tokenizer.tokenize().unwrap();
-        let expected = vec![
-            Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
-            Token::Number("10_000".to_string(), false),
-            Token::Comma,
-            Token::Whitespace(Whitespace::Space),
-            Token::make_word("_10_000", None), // leading underscore tokenizes as a word (parsed as column identifier)
-            Token::Comma,
-            Token::Whitespace(Whitespace::Space),
-            Token::Number("10_00".to_string(), false),
-            Token::make_word("_", None), // trailing underscores tokenizes as a word (syntax error in some dialects)
-            Token::Comma,
-            Token::Whitespace(Whitespace::Space),
-            Token::Number("10".to_string(), false),
-            Token::make_word("___0", None), // multiple underscores tokenizes as a word (syntax error in some dialects)
-        ];
-        compare(expected, tokens);
+        all_dialects_where(|dialect| dialect.supports_numeric_literal_underscores()).tokenizes_to(
+            "SELECT 10_000, _10_000, 10_00_, 10___0",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("10_000".to_string(), false),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("_10_000", None), // leading underscore tokenizes as a word (parsed as column identifier)
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("10_00".to_string(), false),
+                Token::make_word("_", None), // trailing underscores tokenizes as a word (syntax error in some dialects)
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("10".to_string(), false),
+                Token::make_word("___0", None), // multiple underscores tokenizes as a word (syntax error in some dialects)
+            ],
+        );
     }
 
     #[test]

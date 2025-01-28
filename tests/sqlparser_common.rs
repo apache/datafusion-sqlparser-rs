@@ -1002,7 +1002,7 @@ fn parse_select_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &SelectItem::QualifiedWildcard(
-            ObjectName::from(vec![Ident::new("foo")]),
+            SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("foo")])),
             WildcardAdditionalOptions::default()
         ),
         only(&select.projection)
@@ -1012,7 +1012,10 @@ fn parse_select_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &SelectItem::QualifiedWildcard(
-            ObjectName::from(vec![Ident::new("myschema"), Ident::new("mytable"),]),
+            SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![
+                Ident::new("myschema"),
+                Ident::new("mytable"),
+            ])),
             WildcardAdditionalOptions::default(),
         ),
         only(&select.projection)
@@ -1055,6 +1058,84 @@ fn parse_column_aliases() {
 
     // alias without AS is parsed correctly:
     one_statement_parses_to("SELECT a.col + 1 newname FROM foo AS a", sql);
+}
+
+#[test]
+fn parse_select_expr_star() {
+    let dialects = all_dialects_where(|d| d.supports_select_expr_star());
+
+    // Identifier wildcard expansion.
+    let select = dialects.verified_only_select("SELECT foo.bar.* FROM T");
+    let SelectItem::QualifiedWildcard(SelectItemQualifiedWildcardKind::ObjectName(object_name), _) =
+        only(&select.projection)
+    else {
+        unreachable!(
+            "expected wildcard select item: got {:?}",
+            &select.projection[0]
+        )
+    };
+    assert_eq!(
+        &ObjectName::from(
+            ["foo", "bar"]
+                .into_iter()
+                .map(Ident::new)
+                .collect::<Vec<_>>()
+        ),
+        object_name
+    );
+
+    // Arbitrary compound expression with wildcard expansion.
+    let select = dialects.verified_only_select("SELECT foo - bar.* FROM T");
+    let SelectItem::QualifiedWildcard(
+        SelectItemQualifiedWildcardKind::Expr(Expr::BinaryOp { left, op, right }),
+        _,
+    ) = only(&select.projection)
+    else {
+        unreachable!(
+            "expected wildcard select item: got {:?}",
+            &select.projection[0]
+        )
+    };
+    let (Expr::Identifier(left), BinaryOperator::Minus, Expr::Identifier(right)) =
+        (left.as_ref(), op, right.as_ref())
+    else {
+        unreachable!("expected binary op expr: got {:?}", &select.projection[0])
+    };
+    assert_eq!(&Ident::new("foo"), left);
+    assert_eq!(&Ident::new("bar"), right);
+
+    // Arbitrary expression wildcard expansion.
+    let select = dialects.verified_only_select("SELECT myfunc().foo.* FROM T");
+    let SelectItem::QualifiedWildcard(
+        SelectItemQualifiedWildcardKind::Expr(Expr::CompoundFieldAccess { root, access_chain }),
+        _,
+    ) = only(&select.projection)
+    else {
+        unreachable!("expected wildcard expr: got {:?}", &select.projection[0])
+    };
+    assert!(matches!(root.as_ref(), Expr::Function(_)));
+    assert_eq!(1, access_chain.len());
+    assert!(matches!(
+        &access_chain[0],
+        AccessExpr::Dot(Expr::Identifier(_))
+    ));
+
+    dialects.one_statement_parses_to(
+        "SELECT 2. * 3 FROM T",
+        #[cfg(feature = "bigdecimal")]
+        "SELECT 2 * 3 FROM T",
+        #[cfg(not(feature = "bigdecimal"))]
+        "SELECT 2. * 3 FROM T",
+    );
+    dialects.verified_only_select("SELECT myfunc().* FROM T");
+    dialects.verified_only_select("SELECT myfunc().* EXCEPT (foo) FROM T");
+
+    // Invalid
+    let res = dialects.parse_sql_statements("SELECT foo.*.* FROM T");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: .".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

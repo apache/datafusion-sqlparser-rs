@@ -1528,10 +1528,17 @@ impl<'a> Parser<'a> {
                     // function array_agg traverses this control flow
                     if dialect_of!(self is PostgreSqlDialect) {
                         ending_wildcard = Some(next_token);
-                        break;
                     } else {
-                        return self.expected("an identifier after '.'", next_token);
+                        // Put back the consumed .* tokens before exiting.
+                        // If this expression is being parsed in the
+                        // context of a projection, then this could imply
+                        // a wildcard expansion. For example:
+                        // `SELECT STRUCT('foo').* FROM T`
+                        self.prev_token(); // *
+                        self.prev_token(); // .
                     }
+
+                    break;
                 }
                 Token::SingleQuotedString(s) => {
                     let expr = Expr::Identifier(Ident::with_quote('\'', s));
@@ -1568,18 +1575,18 @@ impl<'a> Parser<'a> {
             } else {
                 self.parse_function(ObjectName::from(id_parts))
             }
+        } else if chain.is_empty() {
+            Ok(root)
         } else {
             if Self::is_all_ident(&root, &chain) {
                 return Ok(Expr::CompoundIdentifier(Self::exprs_to_idents(
                     root, chain,
                 )?));
             }
-            if chain.is_empty() {
-                return Ok(root);
-            }
+
             Ok(Expr::CompoundFieldAccess {
                 root: Box::new(root),
-                access_chain: chain.clone(),
+                access_chain: chain,
             })
         }
     }
@@ -12935,7 +12942,7 @@ impl<'a> Parser<'a> {
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
         match self.parse_wildcard_expr()? {
             Expr::QualifiedWildcard(prefix, token) => Ok(SelectItem::QualifiedWildcard(
-                prefix,
+                SelectItemQualifiedWildcardKind::ObjectName(prefix),
                 self.parse_wildcard_additional_options(token.0)?,
             )),
             Expr::Wildcard(token) => Ok(SelectItem::Wildcard(
@@ -12964,6 +12971,15 @@ impl<'a> Parser<'a> {
                     expr: *right,
                     alias,
                 })
+            }
+            expr if self.dialect.supports_select_expr_star()
+                && self.consume_tokens(&[Token::Period, Token::Mul]) =>
+            {
+                let wildcard_token = self.get_previous_token().clone();
+                Ok(SelectItem::QualifiedWildcard(
+                    SelectItemQualifiedWildcardKind::Expr(expr),
+                    self.parse_wildcard_additional_options(wildcard_token)?,
+                ))
             }
             expr => self
                 .maybe_parse_select_item_alias()

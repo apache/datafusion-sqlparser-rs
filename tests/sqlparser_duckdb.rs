@@ -160,7 +160,7 @@ fn test_select_wildcard_with_exclude() {
     let select =
         duckdb().verified_only_select("SELECT name.* EXCLUDE department_id FROM employee_table");
     let expected = SelectItem::QualifiedWildcard(
-        ObjectName(vec![Ident::new("name")]),
+        SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("name")])),
         WildcardAdditionalOptions {
             opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
             ..Default::default()
@@ -191,7 +191,7 @@ fn test_create_macro() {
     let expected = Statement::CreateMacro {
         or_replace: false,
         temporary: false,
-        name: ObjectName(vec![Ident::new("schema"), Ident::new("add")]),
+        name: ObjectName::from(vec![Ident::new("schema"), Ident::new("add")]),
         args: Some(vec![MacroArg::new("a"), MacroArg::new("b")]),
         definition: MacroDefinition::Expr(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("a"))),
@@ -208,7 +208,7 @@ fn test_create_macro_default_args() {
     let expected = Statement::CreateMacro {
         or_replace: false,
         temporary: false,
-        name: ObjectName(vec![Ident::new("add_default")]),
+        name: ObjectName::from(vec![Ident::new("add_default")]),
         args: Some(vec![
             MacroArg::new("a"),
             MacroArg {
@@ -236,7 +236,7 @@ fn test_create_table_macro() {
     let expected = Statement::CreateMacro {
         or_replace: true,
         temporary: true,
-        name: ObjectName(vec![Ident::new("dynamic_table")]),
+        name: ObjectName::from(vec![Ident::new("dynamic_table")]),
         args: Some(vec![
             MacroArg::new("col1_value"),
             MacroArg::new("col2_value"),
@@ -268,7 +268,7 @@ fn test_select_union_by_name() {
                 top_before_distinct: false,
                 into: None,
                 from: vec![TableWithJoins {
-                    relation: table_from_name(ObjectName(vec![Ident {
+                    relation: table_from_name(ObjectName::from(vec![Ident {
                         value: "capitals".to_string(),
                         quote_style: None,
                         span: Span::empty(),
@@ -297,7 +297,7 @@ fn test_select_union_by_name() {
                 top_before_distinct: false,
                 into: None,
                 from: vec![TableWithJoins {
-                    relation: table_from_name(ObjectName(vec![Ident {
+                    relation: table_from_name(ObjectName::from(vec![Ident {
                         value: "weather".to_string(),
                         quote_style: None,
                         span: Span::empty(),
@@ -587,7 +587,7 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
     let select = duckdb_and_generic().verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("FUN")]),
+            name: ObjectName::from(vec![Ident::new("FUN")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -661,7 +661,7 @@ fn test_duckdb_union_datatype() {
             transient: Default::default(),
             volatile: Default::default(),
             iceberg: Default::default(),
-            name: ObjectName(vec!["tbl1".into()]),
+            name: ObjectName::from(vec!["tbl1".into()]),
             columns: vec![
                 ColumnDef {
                     name: "one".into(),
@@ -765,7 +765,7 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             duckdb().verified_stmt(&format!("USE {}", object_name)),
-            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
         );
@@ -773,7 +773,7 @@ fn parse_use() {
             // Test single identifier with different type of quotes
             assert_eq!(
                 duckdb().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
-                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
                 )])))
@@ -785,7 +785,7 @@ fn parse_use() {
         // Test double identifier with different type of quotes
         assert_eq!(
             duckdb().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
-            Statement::Use(Use::Object(ObjectName(vec![
+            Statement::Use(Use::Object(ObjectName::from(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
             ])))
@@ -794,7 +794,7 @@ fn parse_use() {
     // Test double identifier without quotes
     assert_eq!(
         duckdb().verified_stmt("USE mydb.my_schema"),
-        Statement::Use(Use::Object(ObjectName(vec![
+        Statement::Use(Use::Object(ObjectName::from(vec![
             Ident::new("mydb"),
             Ident::new("my_schema")
         ])))

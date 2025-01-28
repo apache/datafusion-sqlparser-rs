@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use crate::ast::query::SelectItemQualifiedWildcardKind;
 use core::iter;
 
 use crate::tokenizer::Span;
@@ -28,13 +29,13 @@ use super::{
     FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments,
     GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
-    Measure, NamedWindowDefinition, ObjectName, Offset, OnConflict, OnConflictAction, OnInsert,
-    OrderBy, OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
-    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WildcardAdditionalOptions, With,
-    WithFill,
+    Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OrderBy, OrderByExpr, Partition, PivotValueSource,
+    ProjectionSelect, Query, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -1358,7 +1359,7 @@ impl Spanned for Expr {
                 .union_opt(&overlay_for.as_ref().map(|i| i.span())),
             Expr::Collate { expr, collation } => expr
                 .span()
-                .union(&union_spans(collation.0.iter().map(|i| i.span))),
+                .union(&union_spans(collation.0.iter().map(|i| i.span()))),
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
             Expr::TypedString { value, .. } => value.span(),
@@ -1462,7 +1463,7 @@ impl Spanned for Expr {
                 object_name
                     .0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(iter::once(token.0.span)),
             ),
             Expr::OuterJoin(expr) => expr.span(),
@@ -1507,7 +1508,15 @@ impl Spanned for ObjectName {
     fn span(&self) -> Span {
         let ObjectName(segments) = self;
 
-        union_spans(segments.iter().map(|i| i.span))
+        union_spans(segments.iter().map(|i| i.span()))
+    }
+}
+
+impl Spanned for ObjectNamePart {
+    fn span(&self) -> Span {
+        match self {
+            ObjectNamePart::Identifier(ident) => ident.span,
+        }
     }
 }
 
@@ -1538,7 +1547,7 @@ impl Spanned for Function {
         union_spans(
             name.0
                 .iter()
-                .map(|i| i.span)
+                .map(|i| i.span())
                 .chain(iter::once(args.span()))
                 .chain(iter::once(parameters.span()))
                 .chain(filter.iter().map(|i| i.span()))
@@ -1615,16 +1624,23 @@ impl Spanned for JsonPathElem {
     }
 }
 
+impl Spanned for SelectItemQualifiedWildcardKind {
+    fn span(&self) -> Span {
+        match self {
+            SelectItemQualifiedWildcardKind::ObjectName(object_name) => object_name.span(),
+            SelectItemQualifiedWildcardKind::Expr(expr) => expr.span(),
+        }
+    }
+}
+
 impl Spanned for SelectItem {
     fn span(&self) -> Span {
         match self {
             SelectItem::UnnamedExpr(expr) => expr.span(),
             SelectItem::ExprWithAlias { expr, alias } => expr.span().union(&alias.span),
-            SelectItem::QualifiedWildcard(object_name, wildcard_additional_options) => union_spans(
-                object_name
-                    .0
-                    .iter()
-                    .map(|i| i.span)
+            SelectItem::QualifiedWildcard(kind, wildcard_additional_options) => union_spans(
+                [kind.span()]
+                    .into_iter()
                     .chain(iter::once(wildcard_additional_options.span())),
             ),
             SelectItem::Wildcard(wildcard_additional_options) => wildcard_additional_options.span(),
@@ -1731,10 +1747,11 @@ impl Spanned for TableFactor {
                 partitions: _,
                 json_path: _,
                 sample: _,
+                index_hints: _,
             } => union_spans(
                 name.0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(alias.as_ref().map(|alias| {
                         union_spans(
                             iter::once(alias.name.span)
@@ -1779,7 +1796,7 @@ impl Spanned for TableFactor {
             } => union_spans(
                 name.0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(args.iter().map(|i| i.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
@@ -1930,7 +1947,7 @@ impl Spanned for FunctionArgExpr {
         match self {
             FunctionArgExpr::Expr(expr) => expr.span(),
             FunctionArgExpr::QualifiedWildcard(object_name) => {
-                union_spans(object_name.0.iter().map(|i| i.span))
+                union_spans(object_name.0.iter().map(|i| i.span()))
             }
             FunctionArgExpr::Wildcard => Span::empty(),
         }
@@ -2130,10 +2147,11 @@ impl Spanned for SelectInto {
 
 impl Spanned for UpdateTableFromKind {
     fn span(&self) -> Span {
-        match self {
-            UpdateTableFromKind::BeforeSet(from) => from.span(),
-            UpdateTableFromKind::AfterSet(from) => from.span(),
-        }
+        let from = match self {
+            UpdateTableFromKind::BeforeSet(from) => from,
+            UpdateTableFromKind::AfterSet(from) => from,
+        };
+        union_spans(from.iter().map(|t| t.span()))
     }
 }
 
@@ -2141,7 +2159,7 @@ impl Spanned for TableObject {
     fn span(&self) -> Span {
         match self {
             TableObject::TableName(ObjectName(segments)) => {
-                union_spans(segments.iter().map(|i| i.span))
+                union_spans(segments.iter().map(|i| i.span()))
             }
             TableObject::TableFunction(func) => func.span(),
         }

@@ -109,4 +109,8 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_partiql(&self) -> bool {
         true
     }
+
+    fn supports_string_escape_constant(&self) -> bool {
+        true
+    }
 }

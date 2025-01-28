@@ -59,6 +59,10 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    fn supports_numeric_literal_underscores(&self) -> bool {
+        true
+    }
+
     // ClickHouse uses this for some FORMAT expressions in `INSERT` context, e.g. when inserting
     // with FORMAT JSONEachRow a raw JSON key-value expression is valid and expected.
     //

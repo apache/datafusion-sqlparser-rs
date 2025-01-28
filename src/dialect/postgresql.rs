@@ -249,6 +249,10 @@ impl Dialect for PostgreSqlDialect {
     fn supports_string_escape_constant(&self) -> bool {
         true
     }
+
+    fn supports_numeric_literal_underscores(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

@@ -1136,12 +1136,24 @@ impl<'a> Tokenizer<'a> {
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
-                    let mut s = peeking_take_while(chars, |ch| ch.is_ascii_digit());
+                    // Some dialects support underscore as number separator
+                    // There can only be one at a time and it must be followed by another digit
+                    let is_number_separator = |ch: char, next_char: Option<char>| {
+                        self.dialect.supports_numeric_literal_underscores()
+                            && ch == '_'
+                            && next_char.is_some_and(|next_ch| next_ch.is_ascii_hexdigit())
+                    };
+
+                    let mut s = peeking_next_take_while(chars, |ch, next_ch| {
+                        ch.is_ascii_digit() || is_number_separator(ch, next_ch)
+                    });
 
                     // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
                         chars.next();
-                        let s2 = peeking_take_while(chars, |ch| ch.is_ascii_hexdigit());
+                        let s2 = peeking_next_take_while(chars, |ch, next_ch| {
+                            ch.is_ascii_hexdigit() || is_number_separator(ch, next_ch)
+                        });
                         return Ok(Some(Token::HexStringLiteral(s2)));
                     }
 
@@ -1150,7 +1162,10 @@ impl<'a> Tokenizer<'a> {
                         s.push('.');
                         chars.next();
                     }
-                    s += &peeking_take_while(chars, |ch| ch.is_ascii_digit());
+
+                    s += &peeking_next_take_while(chars, |ch, next_ch| {
+                        ch.is_ascii_digit() || is_number_separator(ch, next_ch)
+                    });
 
                     // No number -> Token::Period
                     if s == "." {
@@ -1946,6 +1961,24 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
     s
 }
 
+/// Same as peeking_take_while, but also passes the next character to the predicate.
+fn peeking_next_take_while(
+    chars: &mut State,
+    mut predicate: impl FnMut(char, Option<char>) -> bool,
+) -> String {
+    let mut s = String::new();
+    while let Some(&ch) = chars.peek() {
+        let next_char = chars.peekable.clone().nth(1);
+        if predicate(ch, next_char) {
+            chars.next(); // consume
+            s.push(ch);
+        } else {
+            break;
+        }
+    }
+    s
+}
+
 fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {
     Unescape::new(chars).unescape()
 }
@@ -2225,6 +2258,41 @@ mod tests {
         ];
 
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_numeric_literal_underscore() {
+        let dialect = GenericDialect {};
+        let sql = String::from("SELECT 10_000");
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("10".to_string(), false),
+            Token::make_word("_000", None),
+        ];
+        compare(expected, tokens);
+
+        all_dialects_where(|dialect| dialect.supports_numeric_literal_underscores()).tokenizes_to(
+            "SELECT 10_000, _10_000, 10_00_, 10___0",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("10_000".to_string(), false),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("_10_000", None), // leading underscore tokenizes as a word (parsed as column identifier)
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("10_00".to_string(), false),
+                Token::make_word("_", None), // trailing underscores tokenizes as a word (syntax error in some dialects)
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("10".to_string(), false),
+                Token::make_word("___0", None), // multiple underscores tokenizes as a word (syntax error in some dialects)
+            ],
+        );
     }
 
     #[test]

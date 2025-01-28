@@ -10076,7 +10076,9 @@ fn parse_select_table_with_index_hints() {
         select.from,
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("T")]),
+                name: ObjectName(vec![sqlparser::ast::ObjectNamePart::Identifier(
+                    Ident::new("T")
+                )]),
                 alias: Some(TableAlias {
                     name: Ident::new("USE"),
                     columns: vec![],

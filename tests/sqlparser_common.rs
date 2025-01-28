@@ -503,6 +503,7 @@ fn parse_update_with_table_alias() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
+                        index_hints: vec![],
                     },
                     joins: vec![],
                 },
@@ -596,6 +597,7 @@ fn parse_select_with_table_alias() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             joins: vec![],
         }]
@@ -792,6 +794,7 @@ fn parse_where_delete_with_alias_statement() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
+                    index_hints: vec![],
                 },
                 from[0].relation,
             );
@@ -810,6 +813,7 @@ fn parse_where_delete_with_alias_statement() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
+                        index_hints: vec![],
                     },
                     joins: vec![],
                 }]),
@@ -6416,6 +6420,7 @@ fn parse_joins_on() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -6545,6 +6550,7 @@ fn parse_joins_using() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
@@ -6623,6 +6629,7 @@ fn parse_natural_join() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
@@ -8718,6 +8725,7 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
+                    index_hints: vec![],
                 }
             );
             assert_eq!(table, table_no_into);
@@ -9901,6 +9909,7 @@ fn parse_pivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -9977,6 +9986,7 @@ fn parse_unpivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             }),
             value: Ident {
                 value: "quantity".to_string(),
@@ -10024,6 +10034,73 @@ fn parse_unpivot_table() {
 }
 
 #[test]
+fn parse_select_table_with_index_hints() {
+    let supported_dialects = all_dialects_where(|d| d.supports_table_hints());
+    let s = supported_dialects.verified_only_select(
+        "SELECT * FROM t1 USE INDEX (i1) IGNORE INDEX FOR ORDER BY (i2) ORDER BY a",
+    );
+    if let TableFactor::Table { index_hints, .. } = &s.from[0].relation {
+        assert_eq!(
+            vec![
+                TableIndexHints {
+                    hint_type: TableIndexHintType::Use,
+                    index_names: vec!["i1".into()],
+                    index_type: TableIndexType::Index,
+                    for_clause: None,
+                },
+                TableIndexHints {
+                    hint_type: TableIndexHintType::Ignore,
+                    index_names: vec!["i2".into()],
+                    index_type: TableIndexType::Index,
+                    for_clause: Some(TableIndexHintForClause::OrderBy),
+                },
+            ],
+            *index_hints
+        );
+    } else {
+        panic!("Expected TableFactor::Table");
+    }
+    supported_dialects.verified_stmt("SELECT * FROM t1 USE INDEX (i1) USE INDEX (i1, i1)");
+    supported_dialects.verified_stmt(
+        "SELECT * FROM t1 USE INDEX () IGNORE INDEX (i2) USE INDEX (i1) USE INDEX (i2)",
+    );
+    supported_dialects.verified_stmt("SELECT * FROM t1 FORCE INDEX FOR JOIN (i2)");
+    supported_dialects.verified_stmt("SELECT * FROM t1 IGNORE INDEX FOR JOIN (i2)");
+    supported_dialects.verified_stmt(
+        "SELECT * FROM t USE INDEX (index1) IGNORE INDEX FOR ORDER BY (index1) IGNORE INDEX FOR GROUP BY (index1) WHERE A = B",
+    );
+
+    // Test that dialects that don't support table hints will keep parsing the USE as table alias
+    let sql = "SELECT * FROM T USE LIMIT 1";
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_table_hints());
+    let select = unsupported_dialects
+        .verified_only_select_with_canonical(sql, "SELECT * FROM T AS USE LIMIT 1");
+    assert_eq!(
+        select.from,
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![sqlparser::ast::ObjectNamePart::Identifier(
+                    Ident::new("T")
+                )]),
+                alias: Some(TableAlias {
+                    name: Ident::new("USE"),
+                    columns: vec![],
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+                with_ordinality: false,
+                json_path: None,
+                sample: None,
+                index_hints: vec![],
+            },
+            joins: vec![],
+        }]
+    );
+}
+
+#[test]
 fn parse_pivot_unpivot_table() {
     let sql = concat!(
         "SELECT * FROM census AS c ",
@@ -10048,6 +10125,7 @@ fn parse_pivot_unpivot_table() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
+                    index_hints: vec![],
                 }),
                 value: Ident {
                     value: "population".to_string(),

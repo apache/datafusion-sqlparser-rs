@@ -25,6 +25,10 @@ use crate::{
     parser::{Parser, ParserError},
 };
 
+use super::keywords;
+
+const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] = &[Keyword::USE, Keyword::IGNORE, Keyword::FORCE];
+
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
 #[derive(Debug)]
 pub struct MySqlDialect {}
@@ -109,6 +113,16 @@ impl Dialect for MySqlDialect {
     }
 
     fn supports_user_host_grantee(&self) -> bool {
+        true
+    }
+
+    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
+        explicit
+            || (!keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
+                && !RESERVED_FOR_TABLE_ALIAS_MYSQL.contains(kw))
+    }
+
+    fn supports_table_hints(&self) -> bool {
         true
     }
 }

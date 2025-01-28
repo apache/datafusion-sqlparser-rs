@@ -8910,6 +8910,64 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_table_index_hints(&mut self) -> Result<Vec<TableIndexHints>, ParserError> {
+        let mut hints = vec![];
+        while let Some(hint_type) =
+            self.parse_one_of_keywords(&[Keyword::USE, Keyword::IGNORE, Keyword::FORCE])
+        {
+            let hint_type = match hint_type {
+                Keyword::USE => TableIndexHintType::Use,
+                Keyword::IGNORE => TableIndexHintType::Ignore,
+                Keyword::FORCE => TableIndexHintType::Force,
+                _ => {
+                    return self.expected(
+                        "expected to match USE/IGNORE/FORCE keyword",
+                        self.peek_token(),
+                    )
+                }
+            };
+            let index_type = match self.parse_one_of_keywords(&[Keyword::INDEX, Keyword::KEY]) {
+                Some(Keyword::INDEX) => TableIndexType::Index,
+                Some(Keyword::KEY) => TableIndexType::Key,
+                _ => {
+                    return self.expected("expected to match INDEX/KEY keyword", self.peek_token())
+                }
+            };
+            let for_clause = if self.parse_keyword(Keyword::FOR) {
+                let clause = if self.parse_keyword(Keyword::JOIN) {
+                    TableIndexHintForClause::Join
+                } else if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                    TableIndexHintForClause::OrderBy
+                } else if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
+                    TableIndexHintForClause::GroupBy
+                } else {
+                    return self.expected(
+                        "expected to match FOR/ORDER BY/GROUP BY table hint in for clause",
+                        self.peek_token(),
+                    );
+                };
+                Some(clause)
+            } else {
+                None
+            };
+
+            self.expect_token(&Token::LParen)?;
+            let index_names = if self.peek_token().token != Token::RParen {
+                self.parse_comma_separated(Parser::parse_identifier)?
+            } else {
+                vec![]
+            };
+            self.expect_token(&Token::RParen)?;
+            hints.push(TableIndexHints {
+                hint_type,
+                index_type,
+                for_clause,
+                index_names,
+            });
+        }
+        Ok(hints)
+    }
+
     /// Wrapper for parse_optional_alias_inner, left for backwards-compatibility
     /// but new flows should use the context-specific methods such as `maybe_parse_select_item_alias`
     /// and `maybe_parse_table_alias`.
@@ -11257,6 +11315,14 @@ impl<'a> Parser<'a> {
 
             let alias = self.maybe_parse_table_alias()?;
 
+            // MYSQL-specific table hints:
+            let index_hints = if self.dialect.supports_table_hints() {
+                self.maybe_parse(|p| p.parse_table_index_hints())?
+                    .unwrap_or(vec![])
+            } else {
+                vec![]
+            };
+
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
             if self.parse_keyword(Keyword::WITH) {
@@ -11285,6 +11351,7 @@ impl<'a> Parser<'a> {
                 with_ordinality,
                 json_path,
                 sample,
+                index_hints,
             };
 
             while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {

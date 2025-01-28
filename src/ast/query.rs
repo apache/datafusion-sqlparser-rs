@@ -975,6 +975,81 @@ pub struct TableFunctionArgs {
     pub settings: Option<Vec<Setting>>,
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableIndexHintType {
+    Use,
+    Ignore,
+    Force,
+}
+
+impl fmt::Display for TableIndexHintType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            TableIndexHintType::Use => "USE",
+            TableIndexHintType::Ignore => "IGNORE",
+            TableIndexHintType::Force => "FORCE",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableIndexType {
+    Index,
+    Key,
+}
+
+impl fmt::Display for TableIndexType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            TableIndexType::Index => "INDEX",
+            TableIndexType::Key => "KEY",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableIndexHintForClause {
+    Join,
+    OrderBy,
+    GroupBy,
+}
+
+impl fmt::Display for TableIndexHintForClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            TableIndexHintForClause::Join => "JOIN",
+            TableIndexHintForClause::OrderBy => "ORDER BY",
+            TableIndexHintForClause::GroupBy => "GROUP BY",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableIndexHints {
+    pub hint_type: TableIndexHintType,
+    pub index_type: TableIndexType,
+    pub for_clause: Option<TableIndexHintForClause>,
+    pub index_names: Vec<Ident>,
+}
+
+impl fmt::Display for TableIndexHints {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {} ", self.hint_type, self.index_type)?;
+        if let Some(for_clause) = &self.for_clause {
+            write!(f, "FOR {} ", for_clause)?;
+        }
+        write!(f, "({})", display_comma_separated(&self.index_names))
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1009,6 +1084,9 @@ pub enum TableFactor {
         /// Optional table sample modifier
         /// See: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#sample-clause>
         sample: Option<TableSampleKind>,
+        /// Optional index hints(mysql)
+        /// See: <https://dev.mysql.com/doc/refman/8.4/en/index-hints.html>
+        index_hints: Vec<TableIndexHints>,
     },
     Derived {
         lateral: bool,
@@ -1590,6 +1668,7 @@ impl fmt::Display for TableFactor {
                 with_ordinality,
                 json_path,
                 sample,
+                index_hints,
             } => {
                 write!(f, "{name}")?;
                 if let Some(json_path) = json_path {
@@ -1617,6 +1696,9 @@ impl fmt::Display for TableFactor {
                 }
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+                if !index_hints.is_empty() {
+                    write!(f, " {}", display_separated(index_hints, " "))?;
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;

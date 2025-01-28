@@ -1961,7 +1961,7 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
     s
 }
 
-// Same as peeking_take_while, but also passes the next character to the predicate.
+/// Same as peeking_take_while, but also passes the next character to the predicate.
 fn peeking_next_take_while(
     chars: &mut State,
     mut predicate: impl FnMut(char, Option<char>) -> bool,

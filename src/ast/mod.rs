@@ -898,6 +898,8 @@ pub enum Expr {
     /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
     IntroducedString {
         introducer: String,
+        /// The value of the constant.
+        /// Hint: you can unwrap the string value using `value.as_str()`.
         value: Value,
     },
     /// A constant of form `<data_type> 'value'`.
@@ -905,6 +907,8 @@ pub enum Expr {
     /// as well as constants of other types (a non-standard PostgreSQL extension).
     TypedString {
         data_type: DataType,
+        /// The value of the constant.
+        /// Hint: you can unwrap the string value using `value.as_str()`.
         value: Value,
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`

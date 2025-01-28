@@ -97,14 +97,19 @@ pub enum Value {
     Placeholder(String),
 }
 
-impl Into<String> for Value {
-    fn into(self) -> String {
+impl Value {
+    /// Get the string value of a `Value` wrapping a string.
+    /// This includes all quotation styles
+    /// `{Single,Double,TripleSingle,TripleDouble}{QuotedString,RawString,ByteString}`
+    /// as well as `EscapedStringLiteral`, `UnicodeStringLiteral`, `NationalStringLiteral`,
+    /// `HexStringLiteral`, `DollarQuotedString`.
+    /// This will panic if called on a non-string variant like `Value::Number`` or `Value::Null`.
+    pub fn as_str(self) -> String {
         match self {
             Value::SingleQuotedString(s) => s,
+            Value::DoubleQuotedString(s) => s,
             Value::TripleSingleQuotedString(s) => s,
             Value::TripleDoubleQuotedString(s) => s,
-            Value::EscapedStringLiteral(s) => s,
-            Value::UnicodeStringLiteral(s) => s,
             Value::SingleQuotedByteStringLiteral(s) => s,
             Value::DoubleQuotedByteStringLiteral(s) => s,
             Value::TripleSingleQuotedByteStringLiteral(s) => s,
@@ -113,10 +118,10 @@ impl Into<String> for Value {
             Value::DoubleQuotedRawStringLiteral(s) => s,
             Value::TripleSingleQuotedRawStringLiteral(s) => s,
             Value::TripleDoubleQuotedRawStringLiteral(s) => s,
+            Value::EscapedStringLiteral(s) => s,
+            Value::UnicodeStringLiteral(s) => s,
             Value::NationalStringLiteral(s) => s,
             Value::HexStringLiteral(s) => s,
-            Value::DoubleQuotedString(s) => s,
-            Value::Placeholder(s) => s,
             Value::DollarQuotedString(s) => s.value,
             _ => panic!("not a string value"),
         }

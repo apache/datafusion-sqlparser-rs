@@ -39,14 +39,16 @@ fn parse_literal_string() {
         r#"'''triple-single'unescaped''', "#,
         r#""double\"escaped", "#,
         r#""""triple-double\"escaped""", "#,
-        r#""""triple-double"un'escaped""""#,
+        r#""""triple-double"unescaped""", "#,
+        r#""""triple-double'unescaped""", "#,
+        r#"'''triple-single"unescaped'''"#,
     );
     let dialect = TestedDialects::new_with_options(
         vec![Box::new(BigQueryDialect {})],
         ParserOptions::new().with_unescape(false),
     );
     let select = dialect.verified_only_select(sql);
-    assert_eq!(10, select.projection.len());
+    assert_eq!(12, select.projection.len());
     assert_eq!(
         &Expr::Value(Value::SingleQuotedString("single".into())),
         expr_from_projection(&select.projection[0])
@@ -91,9 +93,21 @@ fn parse_literal_string() {
     );
     assert_eq!(
         &Expr::Value(Value::TripleDoubleQuotedString(
-            r#"triple-double"un'escaped"#.to_string()
+            r#"triple-double"unescaped"#.to_string()
         )),
         expr_from_projection(&select.projection[9])
+    );
+    assert_eq!(
+        &Expr::Value(Value::TripleDoubleQuotedString(
+            r#"triple-double'unescaped"#.to_string()
+        )),
+        expr_from_projection(&select.projection[10])
+    );
+    assert_eq!(
+        &Expr::Value(Value::TripleSingleQuotedString(
+            r#"triple-single"unescaped"#.to_string()
+        )),
+        expr_from_projection(&select.projection[11])
     );
 }
 
@@ -2239,14 +2253,8 @@ fn test_typed_strings() {
     let expr = bigquery().verified_expr(r#"JSON '''{"foo":"bar's"}'''"#);
     if let Expr::TypedString { data_type, value } = expr {
         assert_eq!(DataType::JSON, data_type);
-        let string_value: String = value.into();
-        assert_eq!(r#"{"foo":"bar's"}"#, string_value);
+        assert_eq!(r#"{"foo":"bar's"}"#, value.as_str());
     }
-
-    // SingleQuotedString and DoubleQuotedString are currently not correctly formatted by `fmt::Display for Value`.
-    // BigQuery does not support double escaping, should be \' or \" instead.
-    //bigquery().verified_expr(r#"JSON '{"foo":"bar\'s"}'"#);
-    //bigquery().verified_expr(r#"JSON "{\"foo\":\"bar's\"}""#);
 }
 
 #[test]

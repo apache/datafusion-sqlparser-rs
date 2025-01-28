@@ -12617,7 +12617,7 @@ impl<'a> Parser<'a> {
         let table = self.parse_table_and_joins()?;
         let from_before_set = if self.parse_keyword(Keyword::FROM) {
             Some(UpdateTableFromKind::BeforeSet(
-                self.parse_table_and_joins()?,
+                self.parse_table_with_joins()?,
             ))
         } else {
             None
@@ -12625,7 +12625,9 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
         let from = if from_before_set.is_none() && self.parse_keyword(Keyword::FROM) {
-            Some(UpdateTableFromKind::AfterSet(self.parse_table_and_joins()?))
+            Some(UpdateTableFromKind::AfterSet(
+                self.parse_table_with_joins()?,
+            ))
         } else {
             from_before_set
         };

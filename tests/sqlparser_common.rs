@@ -403,7 +403,7 @@ fn parse_update_set_from() {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("name")])),
                 value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
             }],
-            from: Some(UpdateTableFromKind::AfterSet(TableWithJoins {
+            from: Some(UpdateTableFromKind::AfterSet(vec![TableWithJoins {
                 relation: TableFactor::Derived {
                     lateral: false,
                     subquery: Box::new(Query {
@@ -455,7 +455,7 @@ fn parse_update_set_from() {
                     })
                 },
                 joins: vec![]
-            })),
+            }])),
             selection: Some(Expr::BinaryOp {
                 left: Box::new(Expr::CompoundIdentifier(vec![
                     Ident::new("t1"),
@@ -471,6 +471,9 @@ fn parse_update_set_from() {
             or: None,
         }
     );
+
+    let sql = "UPDATE T SET a = b FROM U, (SELECT foo FROM V) AS W WHERE 1 = 1";
+    dialects.verified_stmt(sql);
 }
 
 #[test]
@@ -13051,8 +13054,8 @@ fn parse_select_without_projection() {
 
 #[test]
 fn parse_update_from_before_select() {
-    all_dialects()
-    .verified_stmt("UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id");
+    verified_stmt("UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id");
+    verified_stmt("UPDATE t1 FROM U, (SELECT id FROM V) AS W SET a = b WHERE 1 = 1");
 
     let query =
     "UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name FROM (SELECT name from t2) AS t2";

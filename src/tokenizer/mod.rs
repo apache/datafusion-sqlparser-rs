@@ -40,13 +40,13 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::dialect::Dialect;
+use crate::ast::DollarQuotedString;
+#[cfg(feature = "parser")]
 use crate::dialect::{
-    BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
-    SnowflakeDialect,
+    BigQueryDialect, Dialect, DuckDbDialect, GenericDialect, HiveDialect, MySqlDialect,
+    PostgreSqlDialect, SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
-use crate::{ast::DollarQuotedString, dialect::HiveDialect};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -690,12 +690,14 @@ impl fmt::Display for TokenizerError {
 #[cfg(feature = "std")]
 impl std::error::Error for TokenizerError {}
 
+#[allow(unused)]
 struct State<'a> {
     peekable: Peekable<Chars<'a>>,
     pub line: u64,
     pub col: u64,
 }
 
+#[allow(unused)]
 impl State<'_> {
     /// return the next character and advance the stream
     pub fn next(&mut self) -> Option<char> {
@@ -727,6 +729,7 @@ impl State<'_> {
 }
 
 /// Represents how many quote characters enclose a string literal.
+#[allow(unused)]
 #[derive(Copy, Clone)]
 enum NumStringQuoteChars {
     /// e.g. `"abc"`, `'abc'`, `r'abc'`
@@ -736,6 +739,7 @@ enum NumStringQuoteChars {
 }
 
 /// Settings for tokenizing a quoted string literal.
+#[allow(unused)]
 struct TokenizeQuotedStringSettings {
     /// The character used to quote the string.
     quote_style: char,
@@ -753,6 +757,7 @@ struct TokenizeQuotedStringSettings {
 }
 
 /// SQL Tokenizer
+#[cfg(feature = "parser")]
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
     query: &'a str,
@@ -761,6 +766,7 @@ pub struct Tokenizer<'a> {
     unescape: bool,
 }
 
+#[cfg(feature = "parser")]
 impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
     ///
@@ -1948,6 +1954,7 @@ impl<'a> Tokenizer<'a> {
 /// Read from `chars` until `predicate` returns `false` or EOF is hit.
 /// Return the characters read as String, and keep the first non-matching
 /// char available as `chars.next()`.
+#[cfg(feature = "parser")]
 fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool) -> String {
     let mut s = String::new();
     while let Some(&ch) = chars.peek() {
@@ -1962,6 +1969,7 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
 }
 
 /// Same as peeking_take_while, but also passes the next character to the predicate.
+#[cfg(feature = "parser")]
 fn peeking_next_take_while(
     chars: &mut State,
     mut predicate: impl FnMut(char, Option<char>) -> bool,
@@ -1979,14 +1987,17 @@ fn peeking_next_take_while(
     s
 }
 
+#[cfg(feature = "parser")]
 fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {
     Unescape::new(chars).unescape()
 }
 
+#[cfg(feature = "parser")]
 struct Unescape<'a: 'b, 'b> {
     chars: &'b mut State<'a>,
 }
 
+#[cfg(feature = "parser")]
 impl<'a: 'b, 'b> Unescape<'a, 'b> {
     fn new(chars: &'b mut State<'a>) -> Self {
         Self { chars }
@@ -2127,6 +2138,7 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
     }
 }
 
+#[cfg(feature = "parser")]
 fn unescape_unicode_single_quoted_string(chars: &mut State<'_>) -> Result<String, TokenizerError> {
     let mut unescaped = String::new();
     chars.next(); // consume the opening quote
@@ -2162,6 +2174,7 @@ fn unescape_unicode_single_quoted_string(chars: &mut State<'_>) -> Result<String
     })
 }
 
+#[cfg(feature = "parser")]
 fn take_char_from_hex_digits(
     chars: &mut State<'_>,
     max_digits: usize,

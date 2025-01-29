@@ -21,7 +21,6 @@
 //
 // It's re-exported in `src/test_utils.rs` and used in integration tests
 // via `tests::test_utils::*`.
-
 use core::fmt::Debug;
 
 use crate::ast::*;

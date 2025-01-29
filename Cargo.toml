@@ -65,3 +65,11 @@ pretty_assertions = "1"
 [package.metadata.docs.rs]
 # Document these features on docs.rs
 features = ["parser", "serde", "visitor"]
+
+[[example]]
+name = "cli"
+required-features = ["parser"]
+
+[[example]]
+name = "parse_select"
+required-features = ["parser"]

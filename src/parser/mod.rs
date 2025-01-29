@@ -20,25 +20,36 @@ use alloc::{
     vec,
     vec::Vec,
 };
+#[allow(unused_imports)]
 use core::{
     fmt::{self, Display},
     str::FromStr,
 };
+#[allow(unused_imports)]
 use helpers::attached_token::AttachedToken;
 
+#[allow(unused_imports)]
 use log::debug;
 
+#[cfg(feature = "parser")]
 use recursion::RecursionCounter;
+#[allow(unused_imports)]
 use IsLateral::*;
+#[allow(unused_imports)]
 use IsOptional::*;
 
+#[cfg(feature = "parser")]
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
+#[allow(unused_imports)]
 use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
+#[cfg(feature = "parser")]
 use crate::dialect::*;
+#[allow(unused_imports)]
 use crate::keywords::{Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
 
+#[cfg(feature = "parser")]
 mod alter;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +60,7 @@ pub enum ParserError {
 }
 
 // Use `Parser::expected` instead, if possible
+#[allow(unused_macros)]
 macro_rules! parser_err {
     ($MSG:expr, $loc:expr) => {
         Err(ParserError::ParserError(format!("{}{}", $MSG, $loc)))
@@ -56,6 +68,7 @@ macro_rules! parser_err {
 }
 
 #[cfg(feature = "std")]
+#[cfg(feature = "parser")]
 /// Implementation [`RecursionCounter`] if std is available
 mod recursion {
     use std::cell::Cell;
@@ -184,9 +197,11 @@ impl fmt::Display for ParserError {
 impl std::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
+#[allow(unused)]
 const DEFAULT_REMAINING_DEPTH: usize = 50;
 
 // A constant EOF token that can be referenced.
+#[allow(unused)]
 const EOF_TOKEN: TokenWithSpan = TokenWithSpan {
     token: Token::EOF,
     span: Span {
@@ -207,8 +222,10 @@ const EOF_TOKEN: TokenWithSpan = TokenWithSpan {
 /// child type.
 ///
 /// See [Parser::parse_data_type] for details
+#[cfg(feature = "parser")]
 struct MatchedTrailingBracket(bool);
 
+#[cfg(feature = "parser")]
 impl From<bool> for MatchedTrailingBracket {
     fn from(value: bool) -> Self {
         Self(value)
@@ -264,6 +281,7 @@ impl ParserOptions {
 }
 
 #[derive(Copy, Clone)]
+#[allow(unused)]
 enum ParserState {
     /// The default state of the parser.
     Normal,
@@ -309,8 +327,7 @@ enum ParserState {
 ///    "foo"
 ///   ]
 /// ```
-///
-///
+#[cfg(feature = "parser")]
 pub struct Parser<'a> {
     /// The tokens
     tokens: Vec<TokenWithSpan>,
@@ -328,6 +345,7 @@ pub struct Parser<'a> {
     recursion_counter: RecursionCounter,
 }
 
+#[cfg(feature = "parser")]
 impl<'a> Parser<'a> {
     /// Create a parser for a [`Dialect`]
     ///

@@ -32,9 +32,12 @@
 //! # Example parsing SQL text
 //!
 //! ```
+//! # #[cfg(feature = "parser")]
 //! use sqlparser::dialect::GenericDialect;
+//! # #[cfg(feature = "parser")]
 //! use sqlparser::parser::Parser;
 //!
+//! # #[cfg(feature = "parser")]
 //! let dialect = GenericDialect {}; // or AnsiDialect
 //!
 //! let sql = "SELECT a, b, 123, myfunc(b) \
@@ -42,8 +45,10 @@
 //!            WHERE a > b AND b < 100 \
 //!            ORDER BY a DESC, b";
 //!
+//! # #[cfg(feature = "parser")]
 //! let ast = Parser::parse_sql(&dialect, sql).unwrap();
 //!
+//! # #[cfg(feature = "parser")]
 //! println!("AST: {:?}", ast);
 //! ```
 //!
@@ -54,13 +59,17 @@
 //! useful for tools that analyze and manipulate SQL.
 //!
 //! ```
+//! # #[cfg(feature = "parser")]
 //! # use sqlparser::dialect::GenericDialect;
+//! # #[cfg(feature = "parser")]
 //! # use sqlparser::parser::Parser;
 //! let sql = "SELECT a FROM table_1";
 //!
+//! # #[cfg(feature = "parser")]
 //! // parse to a Vec<Statement>
 //! let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
 //!
+//! # #[cfg(feature = "parser")]
 //! // The original SQL text can be generated from the AST
 //! assert_eq!(ast[0].to_string(), sql);
 //! ```
@@ -141,13 +150,17 @@ extern crate pretty_assertions;
 
 pub mod ast;
 #[macro_use]
+#[cfg(feature = "parser")]
 pub mod dialect;
 pub mod keywords;
 pub mod parser;
 pub mod tokenizer;
 
-#[doc(hidden)]
 // This is required to make utilities accessible by both the crate-internal
 // unit-tests and by the integration tests <https://stackoverflow.com/a/44541071/1026>
-// External users are not supposed to rely on this module.
+// External users are not supposed to rely on these modules.
+#[doc(hidden)]
+#[cfg(feature = "parser")]
+pub mod test_dialect_utils;
+#[doc(hidden)]
 pub mod test_utils;

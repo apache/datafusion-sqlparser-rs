@@ -588,6 +588,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
 
 /// Helper return type when parsing configuration for a `CREATE TABLE` statement.
 #[derive(Default)]
+#[cfg(feature = "parser")]
 pub(crate) struct CreateTableConfiguration {
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,

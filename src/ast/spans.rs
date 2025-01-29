@@ -59,10 +59,13 @@ fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
 ///
 /// # Example
 /// ```
+/// # #[cfg(feature = "parser")]
 /// # use sqlparser::parser::{Parser, ParserError};
 /// # use sqlparser::ast::Spanned;
+/// # #[cfg(feature = "parser")]
 /// # use sqlparser::dialect::GenericDialect;
 /// # use sqlparser::tokenizer::Location;
+/// # #[cfg(feature = "parser")]
 /// # fn main() -> Result<(), ParserError> {
 /// let dialect = GenericDialect {};
 /// let sql = r#"SELECT *
@@ -78,6 +81,9 @@ fn union_spans<I: Iterator<Item = Span>>(iter: I) -> Span {
 /// assert_eq!(span.end, Location::new(2, 15));
 /// # Ok(())
 /// # }
+/// #
+/// # #[cfg(not(feature = "parser"))]
+/// # fn main() {}
 /// ```
 ///
 pub trait Spanned {
@@ -2167,6 +2173,7 @@ impl Spanned for TableObject {
 }
 
 #[cfg(test)]
+#[cfg(feature = "parser")]
 pub mod tests {
     use crate::dialect::{Dialect, GenericDialect, SnowflakeDialect};
     use crate::parser::Parser;

@@ -65,7 +65,7 @@ impl Dialect for DuckDbDialect {
         true
     }
 
-    /// See https://duckdb.org/docs/sql/functions/lambda.html
+    /// See <https://duckdb.org/docs/sql/functions/lambda.html>
     fn supports_lambda_functions(&self) -> bool {
         true
     }

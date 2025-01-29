@@ -13362,9 +13362,9 @@ fn test_parensless_lambdas() {
                 call(
                     "array",
                     [
-                        Expr::Value(Value::Number("1".to_owned(), false)),
-                        Expr::Value(Value::Number("2".to_owned(), false)),
-                        Expr::Value(Value::Number("3".to_owned(), false)),
+                        Expr::Value(number("1")),
+                        Expr::Value(number("2")),
+                        Expr::Value(number("3")),
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
@@ -13372,7 +13372,7 @@ fn test_parensless_lambdas() {
                     body: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("x"))),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Value(Value::Number("1".to_owned(), false)))
+                        right: Box::new(Expr::Value(number("1")))
                     })
                 })
             ]

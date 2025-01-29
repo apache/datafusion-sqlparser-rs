@@ -12141,12 +12141,7 @@ impl<'a> Parser<'a> {
         };
 
         let objects = if self.parse_keyword(Keyword::ON) {
-            if self.parse_keywords(&[
-                Keyword::ALL,
-                Keyword::TABLES,
-                Keyword::IN,
-                Keyword::SCHEMA,
-            ]) {
+            if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
                 GrantObjects::AllTablesInSchema {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 }
@@ -12184,7 +12179,7 @@ impl<'a> Parser<'a> {
         } else {
             GrantObjects::None
         };
-        
+
         Ok((privileges, objects))
     }
 
@@ -12279,7 +12274,7 @@ impl<'a> Parser<'a> {
             Ok(Action::Replicate)
         } else if self.parse_keyword(Keyword::ROLE) {
             let role = self.parse_identifier()?;
-            Ok(Action::Role{ role })
+            Ok(Action::Role { role })
         } else if self.parse_keyword(Keyword::SELECT) {
             Ok(Action::Select {
                 columns: parse_columns(self)?,

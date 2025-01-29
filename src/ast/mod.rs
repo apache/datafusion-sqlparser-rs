@@ -5505,7 +5505,9 @@ pub enum Action {
     Create {
         obj_type: Option<ActionCreateObjectType>,
     },
-    DatabaseRole{ role: ObjectName },
+    DatabaseRole {
+        role: ObjectName,
+    },
     Delete,
     EvolveSchema,
     Execute {
@@ -5539,7 +5541,9 @@ pub enum Action {
     },
     Replicate,
     ResolveAll,
-    Role { role: Ident },
+    Role {
+        role: Ident,
+    },
     Select {
         columns: Option<Vec<Ident>>,
     },
@@ -5943,8 +5947,8 @@ impl fmt::Display for GrantObjects {
                     "ALL TABLES IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
-            },
-            GrantObjects::None => Ok(())
+            }
+            GrantObjects::None => Ok(()),
         }
     }
 }

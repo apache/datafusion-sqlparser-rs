@@ -4563,14 +4563,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
-            if dialect_of!(self is PostgreSqlDialect | GenericDialect)
-                && self.parse_keyword(Keyword::TABLE)
-            {
-                let columns = self.parse_parenthesized_columns()?;
-                Some(DataType::Table(columns))
-            } else {
-                Some(self.parse_data_type()?)
-            }
+            Some(self.parse_data_type()?)
         } else {
             None
         };
@@ -8873,6 +8866,10 @@ impl<'a> Parser<'a> {
                 Keyword::ANY if self.peek_keyword(Keyword::TYPE) => {
                     let _ = self.parse_keyword(Keyword::TYPE);
                     Ok(DataType::AnyType)
+                }
+                Keyword::TABLE => {
+                    let columns = self.parse_returns_table_columns()?;
+                    Ok(DataType::Table(columns))
                 }
                 _ => {
                     self.prev_token();

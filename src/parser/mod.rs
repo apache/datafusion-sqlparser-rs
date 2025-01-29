@@ -4563,7 +4563,14 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
-            Some(self.parse_data_type()?)
+            if dialect_of!(self is PostgreSqlDialect | GenericDialect)
+                && self.parse_keyword(Keyword::TABLE)
+            {
+                let columns = self.parse_parenthesized_columns()?;
+                Some(DataType::Table(columns))
+            } else {
+                Some(self.parse_data_type()?)
+            }
         } else {
             None
         };
@@ -8892,6 +8899,24 @@ impl<'a> Parser<'a> {
             data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
         }
         Ok((data, trailing_bracket))
+    }
+
+    fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = self.parse_data_type()?;
+        Ok(ColumnDef {
+            name,
+            data_type,
+            collation: None,
+            options: Vec::new(), // No constraints expected here
+        })
+    }
+
+    fn parse_parenthesized_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let columns = self.parse_comma_separated(Parser::parse_returns_table_column)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(columns)
     }
 
     pub fn parse_string_values(&mut self) -> Result<Vec<String>, ParserError> {

@@ -45,6 +45,10 @@ pub enum EnumMember {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DataType {
+    /// Table type in [postgresql]. e.g. CREATE FUNCTION RETURNS TABLE(...)
+    ///
+    /// [postgresql]: https://www.postgresql.org/docs/15/sql-createfunction.html
+    Table(Vec<ColumnDef>),
     /// Fixed-length character type e.g. CHARACTER(10)
     Character(Option<CharacterLength>),
     /// Fixed-length char type e.g. CHAR(10)
@@ -630,6 +634,7 @@ impl fmt::Display for DataType {
             DataType::Unspecified => Ok(()),
             DataType::Trigger => write!(f, "TRIGGER"),
             DataType::AnyType => write!(f, "ANY TYPE"),
+            DataType::Table(fields) => write!(f, "TABLE({})", display_comma_separated(fields)),
         }
     }
 }

@@ -340,9 +340,18 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports lambda functions, for example:
     ///
     /// ```sql
-    /// SELECT transform(array(1, 2, 3), x -> x + 1); -- returns [2,3,4]
+    /// SELECT transform(array(1, 2, 3), (x) -> x + 1); -- returns [2,3,4]
     /// ```
     fn supports_lambda_functions(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports lambda functions without parentheses for a single argument, for example:
+    ///
+    /// ```sql
+    /// SELECT transform(array(1, 2, 3), x -> x + 1); -- returns [2,3,4]
+    /// ```
+    fn supports_parensless_lambda_functions(&self) -> bool {
         false
     }
 

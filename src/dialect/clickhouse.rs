@@ -75,4 +75,8 @@ impl Dialect for ClickHouseDialect {
     fn supports_lambda_functions(&self) -> bool {
         true
     }
+
+    fn supports_parensless_lambda_functions(&self) -> bool {
+        true
+    }
 }

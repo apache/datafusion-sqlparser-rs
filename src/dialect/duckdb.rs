@@ -70,6 +70,10 @@ impl Dialect for DuckDbDialect {
         true
     }
 
+    fn supports_parensless_lambda_functions(&self) -> bool {
+        true
+    }
+
     // DuckDB is compatible with PostgreSQL syntax for this statement,
     // although not all features may be implemented.
     fn supports_explain_with_utility_options(&self) -> bool {

@@ -2749,7 +2749,7 @@ fn test_json() {
     );
 
     let sql = "SELECT params -> 'name' FROM events";
-    let select = pg().verified_only_select(sql);
+    let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("params"))),
@@ -2760,7 +2760,7 @@ fn test_json() {
     );
 
     let sql = "SELECT info -> 'items' ->> 'product' FROM orders";
-    let select = pg().verified_only_select(sql);
+    let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
             left: Box::new(Expr::BinaryOp {
@@ -2778,7 +2778,7 @@ fn test_json() {
 
     // the RHS can be a number (array element access)
     let sql = "SELECT obj -> 42";
-    let select = pg().verified_only_select(sql);
+    let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("obj"))),
@@ -2790,7 +2790,7 @@ fn test_json() {
 
     // the RHS can be an identifier
     let sql = "SELECT obj -> key";
-    let select = pg().verified_only_select(sql);
+    let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("obj"))),
@@ -2802,7 +2802,7 @@ fn test_json() {
 
     // -> operator has lower precedence than arithmetic ops
     let sql = "SELECT obj -> 3 * 2";
-    let select = pg().verified_only_select(sql);
+    let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("obj"))),

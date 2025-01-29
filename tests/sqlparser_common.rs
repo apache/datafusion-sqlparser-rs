@@ -13285,3 +13285,68 @@ fn test_trailing_commas_in_from() {
         "SELECT 1, 2 FROM (SELECT * FROM t1), (SELECT * FROM t2)",
     );
 }
+
+#[test]
+fn test_lambdas() {
+    let dialects = all_dialects_where(|d| d.supports_lambda_functions());
+
+    #[rustfmt::skip]
+    let sql = concat!(
+        "SELECT array_sort(array('Hello', 'World'), ",
+            "(p1, p2) -> CASE WHEN p1 = p2 THEN 0 ",
+                        "WHEN reverse(p1) < reverse(p2) THEN -1 ",
+                        "ELSE 1 END)",
+    );
+    pretty_assertions::assert_eq!(
+        SelectItem::UnnamedExpr(call(
+            "array_sort",
+            [
+                call(
+                    "array",
+                    [
+                        Expr::Value(Value::SingleQuotedString("Hello".to_owned())),
+                        Expr::Value(Value::SingleQuotedString("World".to_owned()))
+                    ]
+                ),
+                Expr::Lambda(LambdaFunction {
+                    params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
+                    body: Box::new(Expr::Case {
+                        operand: None,
+                        conditions: vec![
+                            Expr::BinaryOp {
+                                left: Box::new(Expr::Identifier(Ident::new("p1"))),
+                                op: BinaryOperator::Eq,
+                                right: Box::new(Expr::Identifier(Ident::new("p2")))
+                            },
+                            Expr::BinaryOp {
+                                left: Box::new(call(
+                                    "reverse",
+                                    [Expr::Identifier(Ident::new("p1"))]
+                                )),
+                                op: BinaryOperator::Lt,
+                                right: Box::new(call(
+                                    "reverse",
+                                    [Expr::Identifier(Ident::new("p2"))]
+                                ))
+                            }
+                        ],
+                        results: vec![
+                            Expr::Value(number("0")),
+                            Expr::UnaryOp {
+                                op: UnaryOperator::Minus,
+                                expr: Box::new(Expr::Value(number("1")))
+                            }
+                        ],
+                        else_result: Some(Box::new(Expr::Value(number("1"))))
+                    })
+                })
+            ]
+        )),
+        dialects.verified_only_select(sql).projection[0]
+    );
+
+    dialects.verified_expr(
+        "map_zip_with(map(1, 'a', 2, 'b'), map(1, 'x', 2, 'y'), (k, v1, v2) -> concat(v1, v2))",
+    );
+    dialects.verified_expr("transform(array(1, 2, 3), x -> x + 1)");
+}

@@ -84,6 +84,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_lambda_functions(&self) -> bool {
+        true
+    }
+
     fn allow_extract_custom(&self) -> bool {
         true
     }

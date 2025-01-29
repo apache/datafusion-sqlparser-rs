@@ -4785,7 +4785,9 @@ impl fmt::Display for Statement {
                 granted_by,
             } => {
                 write!(f, "GRANT {privileges} ")?;
-                write!(f, "ON {objects} ")?;
+                if !matches!(objects, GrantObjects::None) {
+                    write!(f, "ON {objects} ")?;
+                }
                 write!(f, "TO {}", display_comma_separated(grantees))?;
                 if *with_grant_option {
                     write!(f, " WITH GRANT OPTION")?;
@@ -5503,6 +5505,7 @@ pub enum Action {
     Create {
         obj_type: Option<ActionCreateObjectType>,
     },
+    DatabaseRole{ role: ObjectName },
     Delete,
     EvolveSchema,
     Execute {
@@ -5536,6 +5539,7 @@ pub enum Action {
     },
     Replicate,
     ResolveAll,
+    Role { role: Ident },
     Select {
         columns: Option<Vec<Ident>>,
     },
@@ -5565,6 +5569,7 @@ impl fmt::Display for Action {
                     write!(f, " {obj_type}")?
                 }
             }
+            Action::DatabaseRole { role } => write!(f, "DATABASE ROLE {role}")?,
             Action::Delete => f.write_str("DELETE")?,
             Action::EvolveSchema => f.write_str("EVOLVE SCHEMA")?,
             Action::Execute { obj_type } => {
@@ -5591,6 +5596,7 @@ impl fmt::Display for Action {
             Action::References { .. } => f.write_str("REFERENCES")?,
             Action::Replicate => f.write_str("REPLICATE")?,
             Action::ResolveAll => f.write_str("RESOLVE ALL")?,
+            Action::Role { role } => write!(f, "ROLE {role}")?,
             Action::Select { .. } => f.write_str("SELECT")?,
             Action::Temporary => f.write_str("TEMPORARY")?,
             Action::Trigger => f.write_str("TRIGGER")?,
@@ -5937,7 +5943,8 @@ impl fmt::Display for GrantObjects {
                     "ALL TABLES IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
-            }
+            },
+            GrantObjects::None => Ok(())
         }
     }
 }

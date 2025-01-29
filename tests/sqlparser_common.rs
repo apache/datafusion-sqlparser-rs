@@ -253,8 +253,13 @@ fn parse_insert_default_values() {
 
 #[test]
 fn parse_insert_select_returning() {
-    verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
-    let stmt = verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
+    // Dialects that support `RETURNING` as a column identifier do
+    // not support this syntax.
+    let dialects =
+        all_dialects_where(|d| !d.is_column_alias(&Keyword::RETURNING, &mut Parser::new(d)));
+
+    dialects.verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
+    let stmt = dialects.verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
     match stmt {
         Statement::Insert(Insert {
             returning: Some(ret),
@@ -6993,9 +6998,6 @@ fn parse_union_except_intersect_minus() {
     verified_stmt("SELECT 1 EXCEPT SELECT 2");
     verified_stmt("SELECT 1 EXCEPT ALL SELECT 2");
     verified_stmt("SELECT 1 EXCEPT DISTINCT SELECT 1");
-    verified_stmt("SELECT 1 MINUS SELECT 2");
-    verified_stmt("SELECT 1 MINUS ALL SELECT 2");
-    verified_stmt("SELECT 1 MINUS DISTINCT SELECT 1");
     verified_stmt("SELECT 1 INTERSECT SELECT 2");
     verified_stmt("SELECT 1 INTERSECT ALL SELECT 2");
     verified_stmt("SELECT 1 INTERSECT DISTINCT SELECT 1");
@@ -7014,6 +7016,13 @@ fn parse_union_except_intersect_minus() {
     verified_stmt("SELECT 1 AS x, 2 AS y INTERSECT BY NAME SELECT 9 AS y, 8 AS x");
     verified_stmt("SELECT 1 AS x, 2 AS y INTERSECT ALL BY NAME SELECT 9 AS y, 8 AS x");
     verified_stmt("SELECT 1 AS x, 2 AS y INTERSECT DISTINCT BY NAME SELECT 9 AS y, 8 AS x");
+
+    // Dialects that support `MINUS` as column identifier
+    // do not support `MINUS` as a set operator.
+    let dialects = all_dialects_where(|d| !d.is_column_alias(&Keyword::MINUS, &mut Parser::new(d)));
+    dialects.verified_stmt("SELECT 1 MINUS SELECT 2");
+    dialects.verified_stmt("SELECT 1 MINUS ALL SELECT 2");
+    dialects.verified_stmt("SELECT 1 MINUS DISTINCT SELECT 1");
 }
 
 #[test]
@@ -7690,19 +7699,26 @@ fn parse_invalid_subquery_without_parens() {
 
 #[test]
 fn parse_offset() {
+    // Dialects that support `OFFSET` as column identifiers
+    // don't support this syntax.
+    let dialects =
+        all_dialects_where(|d| !d.is_column_alias(&Keyword::OFFSET, &mut Parser::new(d)));
+
     let expect = Some(Offset {
         value: Expr::Value(number("2")),
         rows: OffsetRows::Rows,
     });
-    let ast = verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
+    let ast = dialects.verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
+    let ast = dialects.verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
+    let ast = dialects.verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
+    let ast =
+        dialects.verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
+    let ast =
+        dialects.verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
     match *ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
@@ -7713,7 +7729,7 @@ fn parse_offset() {
         },
         _ => panic!("Test broke"),
     }
-    let ast = verified_query("SELECT 'foo' OFFSET 0 ROWS");
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 0 ROWS");
     assert_eq!(
         ast.offset,
         Some(Offset {
@@ -7721,7 +7737,7 @@ fn parse_offset() {
             rows: OffsetRows::Rows,
         })
     );
-    let ast = verified_query("SELECT 'foo' OFFSET 1 ROW");
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 1 ROW");
     assert_eq!(
         ast.offset,
         Some(Offset {
@@ -7729,7 +7745,7 @@ fn parse_offset() {
             rows: OffsetRows::Row,
         })
     );
-    let ast = verified_query("SELECT 'foo' OFFSET 1");
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 1");
     assert_eq!(
         ast.offset,
         Some(Offset {

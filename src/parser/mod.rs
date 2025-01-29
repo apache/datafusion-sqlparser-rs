@@ -14271,6 +14271,7 @@ impl Word {
 }
 
 #[cfg(test)]
+#[cfg(feature = "parser")]
 mod tests {
     use crate::test_utils::{all_dialects, TestedDialects};
 

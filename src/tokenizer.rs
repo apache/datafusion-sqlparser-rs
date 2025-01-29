@@ -2186,6 +2186,7 @@ fn take_char_from_hex_digits(
 }
 
 #[cfg(test)]
+#[cfg(feature = "parser")]
 mod tests {
     use super::*;
     use crate::dialect::{

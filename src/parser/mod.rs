@@ -8912,7 +8912,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_parenthesized_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
+    fn parse_returns_table_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
         self.expect_token(&Token::LParen)?;
         let columns = self.parse_comma_separated(Parser::parse_returns_table_column)?;
         self.expect_token(&Token::RParen)?;

@@ -56,6 +56,24 @@ use sqlparser::ast::Value::Number;
 use sqlparser::test_utils::all_dialects_except;
 
 #[test]
+fn parse_numeric_literal_underscore() {
+    let dialects = all_dialects_where(|d| d.supports_numeric_literal_underscores());
+
+    let canonical = if cfg!(feature = "bigdecimal") {
+        "SELECT 10000"
+    } else {
+        "SELECT 10_000"
+    };
+
+    let select = dialects.verified_only_select_with_canonical("SELECT 10_000", canonical);
+
+    assert_eq!(
+        select.projection,
+        vec![UnnamedExpr(Expr::Value(number("10_000")))]
+    );
+}
+
+#[test]
 fn parse_insert_values() {
     let row = vec![
         Expr::Value(number("1")),

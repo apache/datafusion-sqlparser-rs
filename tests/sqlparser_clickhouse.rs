@@ -1649,21 +1649,6 @@ fn parse_table_sample() {
     clickhouse().verified_stmt("SELECT * FROM tbl SAMPLE 1 / 10 OFFSET 1 / 2");
 }
 
-#[test]
-fn parse_numbers_with_underscore() {
-    let canonical = if cfg!(feature = "bigdecimal") {
-        "SELECT 10000"
-    } else {
-        "SELECT 10_000"
-    };
-    let select = clickhouse().verified_only_select_with_canonical("SELECT 10_000", canonical);
-
-    assert_eq!(
-        select.projection,
-        vec![SelectItem::UnnamedExpr(Expr::Value(number("10_000")))]
-    )
-}
-
 fn clickhouse() -> TestedDialects {
     TestedDialects::new(vec![Box::new(ClickHouseDialect {})])
 }

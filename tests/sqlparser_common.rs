@@ -13348,35 +13348,5 @@ fn test_lambdas() {
     dialects.verified_expr(
         "map_zip_with(map(1, 'a', 2, 'b'), map(1, 'x', 2, 'y'), (k, v1, v2) -> concat(v1, v2))",
     );
-    dialects.verified_expr("transform(array(1, 2, 3), (x) -> x + 1)");
-}
-
-#[test]
-fn test_parensless_lambdas() {
-    let dialects = all_dialects_where(|d| d.supports_parensless_lambda_functions());
-
-    pretty_assertions::assert_eq!(
-        call(
-            "transform",
-            [
-                call(
-                    "array",
-                    [
-                        Expr::Value(Value::Number("1".to_owned(), false)),
-                        Expr::Value(Value::Number("2".to_owned(), false)),
-                        Expr::Value(Value::Number("3".to_owned(), false)),
-                    ]
-                ),
-                Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(Ident::new("x")),
-                    body: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("x"))),
-                        op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Value(Value::Number("1".to_owned(), false)))
-                    })
-                })
-            ]
-        ),
-        dialects.verified_expr("transform(array(1, 2, 3), x -> x + 1)")
-    );
+    dialects.verified_expr("transform(array(1, 2, 3), x -> x + 1)");
 }

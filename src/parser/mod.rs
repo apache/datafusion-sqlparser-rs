@@ -1268,7 +1268,7 @@ impl<'a> Parser<'a> {
                     value: self.parse_introduced_string_value()?,
                 })
             }
-            Token::Arrow if self.dialect.supports_parensless_lambda_functions() => {
+            Token::Arrow if self.dialect.supports_lambda_functions() => {
                 self.expect_token(&Token::Arrow)?;
                 Ok(Expr::Lambda(LambdaFunction {
                     params: OneOrManyWithParens::One(w.clone().into_ident(w_span)),

@@ -2001,6 +2001,7 @@ impl Spanned for Join {
 impl Spanned for JoinOperator {
     fn span(&self) -> Span {
         match self {
+            JoinOperator::Join(join_constraint) => join_constraint.span(),
             JoinOperator::Inner(join_constraint) => join_constraint.span(),
             JoinOperator::LeftOuter(join_constraint) => join_constraint.span(),
             JoinOperator::RightOuter(join_constraint) => join_constraint.span(),

@@ -4371,7 +4371,7 @@ fn parse_join_constraint_unnest_alias() {
                 with_ordinality: false,
             },
             global: false,
-            join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
+            join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Identifier("c2".into())),

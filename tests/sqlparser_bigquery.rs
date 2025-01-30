@@ -2240,7 +2240,9 @@ fn test_select_as_value() {
 }
 
 #[test]
-fn test_typed_strings() {
+fn test_triple_quote_typed_strings() {
+    bigquery().verified_expr(r#"JSON '''{"foo":"bar's"}'''"#);
+
     let expr = bigquery().verified_expr(r#"JSON """{"foo":"bar's"}""""#);
     assert_eq!(
         Expr::TypedString {
@@ -2249,12 +2251,6 @@ fn test_typed_strings() {
         },
         expr
     );
-
-    let expr = bigquery().verified_expr(r#"JSON '''{"foo":"bar's"}'''"#);
-    if let Expr::TypedString { data_type, value } = expr {
-        assert_eq!(DataType::JSON, data_type);
-        assert_eq!(r#"{"foo":"bar's"}"#, value.into_string().unwrap());
-    }
 }
 
 #[test]

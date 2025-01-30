@@ -6021,6 +6021,23 @@ fn parse_json_keyword() {
 }
 
 #[test]
+fn parse_typed_strings() {
+    let expr = verified_expr(r#"JSON '{"foo":"bar"}'"#);
+    assert_eq!(
+        Expr::TypedString {
+            data_type: DataType::JSON,
+            value: Value::SingleQuotedString(r#"{"foo":"bar"}"#.into())
+        },
+        expr
+    );
+
+    if let Expr::TypedString { data_type, value } = expr {
+        assert_eq!(DataType::JSON, data_type);
+        assert_eq!(r#"{"foo":"bar"}"#, value.into_string().unwrap());
+    }
+}
+
+#[test]
 fn parse_bignumeric_keyword() {
     let sql = r#"SELECT BIGNUMERIC '0'"#;
     let select = verified_only_select(sql);

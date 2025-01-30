@@ -98,32 +98,27 @@ pub enum Value {
 }
 
 impl Value {
-    /// Get the string value of a `Value` wrapping a string.
-    /// This includes all quotation styles
-    /// `{Single,Double,TripleSingle,TripleDouble}{QuotedString,RawString,ByteString}`
-    /// as well as `EscapedStringLiteral`, `UnicodeStringLiteral`, `NationalStringLiteral`,
-    /// `HexStringLiteral`, `DollarQuotedString`.
-    /// This will panic if called on a non-string variant like `Value::Number`` or `Value::Null`.
-    pub fn as_str(self) -> String {
+    /// If the underlying literal is a string, regardless of quote style, returns the associated string value
+    pub fn into_string(self) -> Option<String> {
         match self {
-            Value::SingleQuotedString(s) => s,
-            Value::DoubleQuotedString(s) => s,
-            Value::TripleSingleQuotedString(s) => s,
-            Value::TripleDoubleQuotedString(s) => s,
-            Value::SingleQuotedByteStringLiteral(s) => s,
-            Value::DoubleQuotedByteStringLiteral(s) => s,
-            Value::TripleSingleQuotedByteStringLiteral(s) => s,
-            Value::TripleDoubleQuotedByteStringLiteral(s) => s,
-            Value::SingleQuotedRawStringLiteral(s) => s,
-            Value::DoubleQuotedRawStringLiteral(s) => s,
-            Value::TripleSingleQuotedRawStringLiteral(s) => s,
-            Value::TripleDoubleQuotedRawStringLiteral(s) => s,
-            Value::EscapedStringLiteral(s) => s,
-            Value::UnicodeStringLiteral(s) => s,
-            Value::NationalStringLiteral(s) => s,
-            Value::HexStringLiteral(s) => s,
-            Value::DollarQuotedString(s) => s.value,
-            _ => panic!("not a string value"),
+            Value::SingleQuotedString(s)
+            | Value::DoubleQuotedString(s)
+            | Value::TripleSingleQuotedString(s)
+            | Value::TripleDoubleQuotedString(s)
+            | Value::SingleQuotedByteStringLiteral(s)
+            | Value::DoubleQuotedByteStringLiteral(s)
+            | Value::TripleSingleQuotedByteStringLiteral(s)
+            | Value::TripleDoubleQuotedByteStringLiteral(s)
+            | Value::SingleQuotedRawStringLiteral(s)
+            | Value::DoubleQuotedRawStringLiteral(s)
+            | Value::TripleSingleQuotedRawStringLiteral(s)
+            | Value::TripleDoubleQuotedRawStringLiteral(s)
+            | Value::EscapedStringLiteral(s)
+            | Value::UnicodeStringLiteral(s)
+            | Value::NationalStringLiteral(s)
+            | Value::HexStringLiteral(s) => Some(s),
+            Value::DollarQuotedString(s) => Some(s.value),
+            _ => None,
         }
     }
 }

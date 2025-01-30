@@ -2253,7 +2253,7 @@ fn test_typed_strings() {
     let expr = bigquery().verified_expr(r#"JSON '''{"foo":"bar's"}'''"#);
     if let Expr::TypedString { data_type, value } = expr {
         assert_eq!(DataType::JSON, data_type);
-        assert_eq!(r#"{"foo":"bar's"}"#, value.as_str());
+        assert_eq!(r#"{"foo":"bar's"}"#, value.into_string().unwrap());
     }
 }
 

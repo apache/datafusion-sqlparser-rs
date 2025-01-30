@@ -11000,9 +11000,13 @@ impl<'a> Parser<'a> {
 
                 let join_operator_type = match peek_keyword {
                     Keyword::INNER | Keyword::JOIN => {
-                        let _ = self.parse_keyword(Keyword::INNER); // [ INNER ]
+                        let inner = self.parse_keyword(Keyword::INNER); // [ INNER ]
                         self.expect_keyword_is(Keyword::JOIN)?;
-                        JoinOperator::Inner
+                        if inner {
+                            JoinOperator::Inner
+                        } else {
+                            JoinOperator::Join
+                        }
                     }
                     kw @ Keyword::LEFT | kw @ Keyword::RIGHT => {
                         let _ = self.next_token(); // consume LEFT/RIGHT

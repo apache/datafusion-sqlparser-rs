@@ -403,7 +403,7 @@ pub fn join(relation: TableFactor) -> Join {
     Join {
         relation,
         global: false,
-        join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+        join_operator: JoinOperator::Join(JoinConstraint::Natural),
     }
 }
 

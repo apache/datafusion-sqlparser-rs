@@ -6457,7 +6457,7 @@ fn parse_implicit_join() {
                 joins: vec![Join {
                     relation: table_from_name(ObjectName::from(vec!["t1b".into()])),
                     global: false,
-                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                    join_operator: JoinOperator::Join(JoinConstraint::Natural),
                 }],
             },
             TableWithJoins {
@@ -6465,7 +6465,7 @@ fn parse_implicit_join() {
                 joins: vec![Join {
                     relation: table_from_name(ObjectName::from(vec!["t2b".into()])),
                     global: false,
-                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                    join_operator: JoinOperator::Join(JoinConstraint::Natural),
                 }],
             },
         ],
@@ -6523,7 +6523,7 @@ fn parse_joins_on() {
             "t2",
             table_alias("foo"),
             false,
-            JoinOperator::Inner,
+            JoinOperator::Join,
         )]
     );
     one_statement_parses_to(
@@ -6533,7 +6533,7 @@ fn parse_joins_on() {
     // Test parsing of different join operators
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, false, JoinOperator::Inner)]
+        vec![join_with_constraint("t2", None, false, JoinOperator::Join)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").from).joins,
@@ -6650,7 +6650,7 @@ fn parse_joins_using() {
         vec![join_with_constraint(
             "t2",
             table_alias("foo"),
-            JoinOperator::Inner,
+            JoinOperator::Join,
         )]
     );
     one_statement_parses_to(
@@ -6660,6 +6660,10 @@ fn parse_joins_using() {
     // Test parsing of different join operators
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Join)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 INNER JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
@@ -6722,9 +6726,14 @@ fn parse_natural_join() {
         }
     }
 
-    // if not specified, inner join as default
+    // unspecified join
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").from).joins,
+        vec![natural_join(JoinOperator::Join, None)]
+    );
+    // inner join explicitly
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 NATURAL INNER JOIN t2").from).joins,
         vec![natural_join(JoinOperator::Inner, None)]
     );
     // left join explicitly
@@ -6748,7 +6757,7 @@ fn parse_natural_join() {
     // natural join another table with alias
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2 AS t3").from).joins,
-        vec![natural_join(JoinOperator::Inner, table_alias("t3"))]
+        vec![natural_join(JoinOperator::Join, table_alias("t3"))]
     );
 
     let sql = "SELECT * FROM t1 natural";
@@ -6816,8 +6825,12 @@ fn parse_join_nesting() {
 #[test]
 fn parse_join_syntax_variants() {
     one_statement_parses_to(
-        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 JOIN t2 USING(c1)",
+    );
+    one_statement_parses_to(
+        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
     );
     one_statement_parses_to(
         "SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)",
@@ -6981,7 +6994,7 @@ fn parse_derived_tables() {
                 joins: vec![Join {
                     relation: table_from_name(ObjectName::from(vec!["t2".into()])),
                     global: false,
-                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                    join_operator: JoinOperator::Join(JoinConstraint::Natural),
                 }],
             }),
             alias: None,

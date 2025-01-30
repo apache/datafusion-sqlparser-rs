@@ -899,7 +899,7 @@ pub enum Expr {
     IntroducedString {
         introducer: String,
         /// The value of the constant.
-        /// Hint: you can unwrap the string value using `value.as_str()`.
+        /// Hint: you can unwrap the string value using `value.into_string()`.
         value: Value,
     },
     /// A constant of form `<data_type> 'value'`.
@@ -908,7 +908,7 @@ pub enum Expr {
     TypedString {
         data_type: DataType,
         /// The value of the constant.
-        /// Hint: you can unwrap the string value using `value.as_str()`.
+        /// Hint: you can unwrap the string value using `value.into_string()`.
         value: Value,
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`

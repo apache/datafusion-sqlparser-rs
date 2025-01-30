@@ -5147,7 +5147,7 @@ fn parse_trigger_related_functions() {
             temporary: false,
             if_not_exists: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-            args: None,
+            args: Some(vec![]),
             return_type: Some(DataType::Trigger),
             function_body: Some(
                 CreateFunctionBody::AsBeforeOptions(

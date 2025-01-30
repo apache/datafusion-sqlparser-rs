@@ -2011,8 +2011,6 @@ impl fmt::Display for CreateFunction {
         )?;
         if let Some(args) = &self.args {
             write!(f, "({})", display_comma_separated(args))?;
-        } else {
-            write!(f, "()")?;
         }
         if let Some(return_type) = &self.return_type {
             write!(f, " RETURNS {return_type}")?;

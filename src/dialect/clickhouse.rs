@@ -70,4 +70,9 @@ impl Dialect for ClickHouseDialect {
     fn supports_dictionary_syntax(&self) -> bool {
         true
     }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/functions#higher-order-functions---operator-and-lambdaparams-expr-function>
+    fn supports_lambda_functions(&self) -> bool {
+        true
+    }
 }

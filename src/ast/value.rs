@@ -97,6 +97,32 @@ pub enum Value {
     Placeholder(String),
 }
 
+impl Value {
+    /// If the underlying literal is a string, regardless of quote style, returns the associated string value
+    pub fn into_string(self) -> Option<String> {
+        match self {
+            Value::SingleQuotedString(s)
+            | Value::DoubleQuotedString(s)
+            | Value::TripleSingleQuotedString(s)
+            | Value::TripleDoubleQuotedString(s)
+            | Value::SingleQuotedByteStringLiteral(s)
+            | Value::DoubleQuotedByteStringLiteral(s)
+            | Value::TripleSingleQuotedByteStringLiteral(s)
+            | Value::TripleDoubleQuotedByteStringLiteral(s)
+            | Value::SingleQuotedRawStringLiteral(s)
+            | Value::DoubleQuotedRawStringLiteral(s)
+            | Value::TripleSingleQuotedRawStringLiteral(s)
+            | Value::TripleDoubleQuotedRawStringLiteral(s)
+            | Value::EscapedStringLiteral(s)
+            | Value::UnicodeStringLiteral(s)
+            | Value::NationalStringLiteral(s)
+            | Value::HexStringLiteral(s) => Some(s),
+            Value::DollarQuotedString(s) => Some(s.value),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

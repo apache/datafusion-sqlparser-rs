@@ -10533,8 +10533,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
-        let modifier =
-            self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
+        let modifier_keywords = if self.dialect.supports_global_variable_modifier() {
+            &[
+                Keyword::SESSION,
+                Keyword::LOCAL,
+                Keyword::GLOBAL,
+                Keyword::HIVEVAR,
+            ][..]
+        } else {
+            &[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR][..]
+        };
+        let modifier = self.parse_one_of_keywords(modifier_keywords);
         if let Some(Keyword::HIVEVAR) = modifier {
             self.expect_token(&Token::Colon)?;
         } else if let Some(set_role_stmt) =
@@ -10605,8 +10614,14 @@ impl<'a> Parser<'a> {
                 if parenthesized_assignment {
                     self.expect_token(&Token::RParen)?;
                 }
+                let scope = match modifier {
+                    Some(Keyword::LOCAL) => SetVariableScope::Local,
+                    Some(Keyword::GLOBAL) => SetVariableScope::Global,
+                    Some(Keyword::SESSION) => SetVariableScope::Session,
+                    _ => SetVariableScope::None,
+                };
                 return Ok(Statement::SetVariable {
-                    local: modifier == Some(Keyword::LOCAL),
+                    scope,
                     hivevar: Some(Keyword::HIVEVAR) == modifier,
                     variables,
                     value: values,

@@ -143,4 +143,8 @@ impl Dialect for GenericDialect {
     fn supports_string_escape_constant(&self) -> bool {
         true
     }
+
+    fn supports_global_variable_modifier(&self) -> bool {
+        true
+    }
 }

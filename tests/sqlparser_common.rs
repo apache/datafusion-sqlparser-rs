@@ -8148,12 +8148,12 @@ fn parse_set_transaction() {
 fn parse_set_variable() {
     match verified_stmt("SET SOMETHING = '1'") {
         Statement::SetVariable {
-            local,
+            scope,
             hivevar,
             variables,
             value,
         } => {
-            assert!(!local);
+            assert_eq!(scope, SetVariableScope::None);
             assert!(!hivevar);
             assert_eq!(
                 variables,
@@ -8171,12 +8171,12 @@ fn parse_set_variable() {
     let sql = r#"SET (a, b, c) = (1, 2, 3)"#;
     match multi_variable_dialects.verified_stmt(sql) {
         Statement::SetVariable {
-            local,
+            scope,
             hivevar,
             variables,
             value,
         } => {
-            assert!(!local);
+            assert_eq!(scope, SetVariableScope::None);
             assert!(!hivevar);
             assert_eq!(
                 variables,
@@ -8248,12 +8248,12 @@ fn parse_set_variable() {
 fn parse_set_role_as_variable() {
     match verified_stmt("SET role = 'foobar'") {
         Statement::SetVariable {
-            local,
+            scope,
             hivevar,
             variables,
             value,
         } => {
-            assert!(!local);
+            assert_eq!(scope, SetVariableScope::None);
             assert!(!hivevar);
             assert_eq!(
                 variables,
@@ -8295,12 +8295,12 @@ fn parse_double_colon_cast_at_timezone() {
 fn parse_set_time_zone() {
     match verified_stmt("SET TIMEZONE = 'UTC'") {
         Statement::SetVariable {
-            local,
+            scope,
             hivevar,
             variables: variable,
             value,
         } => {
-            assert!(!local);
+            assert_eq!(scope, SetVariableScope::None);
             assert!(!hivevar);
             assert_eq!(
                 variable,

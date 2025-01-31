@@ -2889,7 +2889,7 @@ pub enum Statement {
     /// least MySQL and PostgreSQL. Not all MySQL-specific syntactic forms are
     /// supported yet.
     SetVariable {
-        local: bool,
+        scope: SetVariableScope,
         hivevar: bool,
         variables: OneOrManyWithParens<ObjectName>,
         value: Vec<Expr>,
@@ -4510,15 +4510,12 @@ impl fmt::Display for Statement {
                 write!(f, "SET{context_modifier} ROLE {role_name}")
             }
             Statement::SetVariable {
-                local,
+                scope,
                 variables,
                 hivevar,
                 value,
             } => {
-                f.write_str("SET ")?;
-                if *local {
-                    f.write_str("LOCAL ")?;
-                }
+                write!(f, "SET{scope} ")?;
                 let parenthesized = matches!(variables, OneOrManyWithParens::Many(_));
                 write!(
                     f,
@@ -8429,6 +8426,31 @@ impl fmt::Display for SessionParamValue {
         match self {
             SessionParamValue::On => write!(f, "ON"),
             SessionParamValue::Off => write!(f, "OFF"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SetVariableScope {
+    /// LOCAL (transaction or function) scope
+    Local,
+    /// SESSION scope
+    Session,
+    /// MySQL-specific `GLOBAL` scope
+    Global,
+    /// Not specified; usually implies SESSION
+    None,
+}
+
+impl fmt::Display for SetVariableScope {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Local => write!(f, " LOCAL"),
+            Self::Session => write!(f, " SESSION"),
+            Self::Global => write!(f, " GLOBAL"),
+            Self::None => write!(f, ""),
         }
     }
 }

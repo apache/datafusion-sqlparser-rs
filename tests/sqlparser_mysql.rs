@@ -618,7 +618,7 @@ fn parse_set_variables() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SET LOCAL autocommit = 1"),
         Statement::SetVariable {
-            local: true,
+            scope: SetVariableScope::Local,
             hivevar: false,
             variables: OneOrManyWithParens::One(ObjectName::from(vec!["autocommit".into()])),
             value: vec![Expr::Value(number("1"))],
@@ -3243,4 +3243,10 @@ fn parse_double_precision() {
         "CREATE TABLE foo (bar DOUBLE(11, 0))",
         "CREATE TABLE foo (bar DOUBLE(11,0))",
     );
+}
+
+#[test]
+fn parse_set_global() {
+    mysql_and_generic().verified_stmt("SET GLOBAL max_connections = 1000");
+    mysql_and_generic().verified_stmt("SET @@GLOBAL.max_connections = 1000");
 }

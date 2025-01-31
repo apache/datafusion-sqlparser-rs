@@ -23,8 +23,8 @@
 use sqlparser::ast::{
     ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
     Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName,
-    OneOrManyWithParens, OrderByExpr, SelectItem, Statement, TableFactor, UnaryOperator, Use,
-    Value,
+    OneOrManyWithParens, OrderByExpr, SelectItem, SetVariableScope, Statement, TableFactor,
+    UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::ParserError;
@@ -366,7 +366,7 @@ fn set_statement_with_minus() {
     assert_eq!(
         hive().verified_stmt("SET hive.tez.java.opts = -Xmx4g"),
         Statement::SetVariable {
-            local: false,
+            scope: SetVariableScope::None,
             hivevar: false,
             variables: OneOrManyWithParens::One(ObjectName::from(vec![
                 Ident::new("hive"),

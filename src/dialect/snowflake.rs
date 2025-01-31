@@ -1065,6 +1065,8 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
 /// Parse snowflake show objects.
 /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
 fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
+    //TODO: Copy some functionality of parse_show_stmt_options() into another function, 
+    // since it has more statemtns that we sholdun'ts support
     let options = parser.parse_show_stmt_options()?;
     Ok(
         Statement::ShowObjects { 

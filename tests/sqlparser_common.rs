@@ -56,6 +56,24 @@ use sqlparser::ast::Value::Number;
 use sqlparser::test_utils::all_dialects_except;
 
 #[test]
+fn parse_numeric_literal_underscore() {
+    let dialects = all_dialects_where(|d| d.supports_numeric_literal_underscores());
+
+    let canonical = if cfg!(feature = "bigdecimal") {
+        "SELECT 10000"
+    } else {
+        "SELECT 10_000"
+    };
+
+    let select = dialects.verified_only_select_with_canonical("SELECT 10_000", canonical);
+
+    assert_eq!(
+        select.projection,
+        vec![UnnamedExpr(Expr::Value(number("10_000")))]
+    );
+}
+
+#[test]
 fn parse_insert_values() {
     let row = vec![
         Expr::Value(number("1")),
@@ -253,8 +271,13 @@ fn parse_insert_default_values() {
 
 #[test]
 fn parse_insert_select_returning() {
-    verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
-    let stmt = verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
+    // Dialects that support `RETURNING` as a column identifier do
+    // not support this syntax.
+    let dialects =
+        all_dialects_where(|d| !d.is_column_alias(&Keyword::RETURNING, &mut Parser::new(d)));
+
+    dialects.verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
+    let stmt = dialects.verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
     match stmt {
         Statement::Insert(Insert {
             returning: Some(ret),
@@ -6452,7 +6475,7 @@ fn parse_implicit_join() {
                 joins: vec![Join {
                     relation: table_from_name(ObjectName::from(vec!["t1b".into()])),
                     global: false,
-                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                    join_operator: JoinOperator::Join(JoinConstraint::Natural),
                 }],
             },
             TableWithJoins {
@@ -6460,7 +6483,7 @@ fn parse_implicit_join() {
                 joins: vec![Join {
                     relation: table_from_name(ObjectName::from(vec!["t2b".into()])),
                     global: false,
-                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                    join_operator: JoinOperator::Join(JoinConstraint::Natural),
                 }],
             },
         ],
@@ -6518,7 +6541,7 @@ fn parse_joins_on() {
             "t2",
             table_alias("foo"),
             false,
-            JoinOperator::Inner,
+            JoinOperator::Join,
         )]
     );
     one_statement_parses_to(
@@ -6528,7 +6551,7 @@ fn parse_joins_on() {
     // Test parsing of different join operators
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, false, JoinOperator::Inner)]
+        vec![join_with_constraint("t2", None, false, JoinOperator::Join)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").from).joins,
@@ -6645,7 +6668,7 @@ fn parse_joins_using() {
         vec![join_with_constraint(
             "t2",
             table_alias("foo"),
-            JoinOperator::Inner,
+            JoinOperator::Join,
         )]
     );
     one_statement_parses_to(
@@ -6655,6 +6678,10 @@ fn parse_joins_using() {
     // Test parsing of different join operators
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Join)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 INNER JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
@@ -6717,9 +6744,14 @@ fn parse_natural_join() {
         }
     }
 
-    // if not specified, inner join as default
+    // unspecified join
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").from).joins,
+        vec![natural_join(JoinOperator::Join, None)]
+    );
+    // inner join explicitly
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 NATURAL INNER JOIN t2").from).joins,
         vec![natural_join(JoinOperator::Inner, None)]
     );
     // left join explicitly
@@ -6743,7 +6775,7 @@ fn parse_natural_join() {
     // natural join another table with alias
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2 AS t3").from).joins,
-        vec![natural_join(JoinOperator::Inner, table_alias("t3"))]
+        vec![natural_join(JoinOperator::Join, table_alias("t3"))]
     );
 
     let sql = "SELECT * FROM t1 natural";
@@ -6811,8 +6843,12 @@ fn parse_join_nesting() {
 #[test]
 fn parse_join_syntax_variants() {
     one_statement_parses_to(
-        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 JOIN t2 USING(c1)",
+    );
+    one_statement_parses_to(
+        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
     );
     one_statement_parses_to(
         "SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)",
@@ -6976,7 +7012,7 @@ fn parse_derived_tables() {
                 joins: vec![Join {
                     relation: table_from_name(ObjectName::from(vec!["t2".into()])),
                     global: false,
-                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                    join_operator: JoinOperator::Join(JoinConstraint::Natural),
                 }],
             }),
             alias: None,
@@ -6993,9 +7029,6 @@ fn parse_union_except_intersect_minus() {
     verified_stmt("SELECT 1 EXCEPT SELECT 2");
     verified_stmt("SELECT 1 EXCEPT ALL SELECT 2");
     verified_stmt("SELECT 1 EXCEPT DISTINCT SELECT 1");
-    verified_stmt("SELECT 1 MINUS SELECT 2");
-    verified_stmt("SELECT 1 MINUS ALL SELECT 2");
-    verified_stmt("SELECT 1 MINUS DISTINCT SELECT 1");
     verified_stmt("SELECT 1 INTERSECT SELECT 2");
     verified_stmt("SELECT 1 INTERSECT ALL SELECT 2");
     verified_stmt("SELECT 1 INTERSECT DISTINCT SELECT 1");
@@ -7014,6 +7047,13 @@ fn parse_union_except_intersect_minus() {
     verified_stmt("SELECT 1 AS x, 2 AS y INTERSECT BY NAME SELECT 9 AS y, 8 AS x");
     verified_stmt("SELECT 1 AS x, 2 AS y INTERSECT ALL BY NAME SELECT 9 AS y, 8 AS x");
     verified_stmt("SELECT 1 AS x, 2 AS y INTERSECT DISTINCT BY NAME SELECT 9 AS y, 8 AS x");
+
+    // Dialects that support `MINUS` as column identifier
+    // do not support `MINUS` as a set operator.
+    let dialects = all_dialects_where(|d| !d.is_column_alias(&Keyword::MINUS, &mut Parser::new(d)));
+    dialects.verified_stmt("SELECT 1 MINUS SELECT 2");
+    dialects.verified_stmt("SELECT 1 MINUS ALL SELECT 2");
+    dialects.verified_stmt("SELECT 1 MINUS DISTINCT SELECT 1");
 }
 
 #[test]
@@ -7690,19 +7730,26 @@ fn parse_invalid_subquery_without_parens() {
 
 #[test]
 fn parse_offset() {
+    // Dialects that support `OFFSET` as column identifiers
+    // don't support this syntax.
+    let dialects =
+        all_dialects_where(|d| !d.is_column_alias(&Keyword::OFFSET, &mut Parser::new(d)));
+
     let expect = Some(Offset {
         value: Expr::Value(number("2")),
         rows: OffsetRows::Rows,
     });
-    let ast = verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
+    let ast = dialects.verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
+    let ast = dialects.verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
+    let ast = dialects.verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
+    let ast =
+        dialects.verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
+    let ast =
+        dialects.verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
     match *ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
@@ -7713,7 +7760,7 @@ fn parse_offset() {
         },
         _ => panic!("Test broke"),
     }
-    let ast = verified_query("SELECT 'foo' OFFSET 0 ROWS");
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 0 ROWS");
     assert_eq!(
         ast.offset,
         Some(Offset {
@@ -7721,7 +7768,7 @@ fn parse_offset() {
             rows: OffsetRows::Rows,
         })
     );
-    let ast = verified_query("SELECT 'foo' OFFSET 1 ROW");
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 1 ROW");
     assert_eq!(
         ast.offset,
         Some(Offset {
@@ -7729,7 +7776,7 @@ fn parse_offset() {
             rows: OffsetRows::Row,
         })
     );
-    let ast = verified_query("SELECT 'foo' OFFSET 1");
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 1");
     assert_eq!(
         ast.offset,
         Some(Offset {

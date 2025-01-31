@@ -2055,7 +2055,7 @@ fn parse_update_with_joins() {
                             index_hints: vec![],
                         },
                         global: false,
-                        join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
+                        join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
                                 Ident::new("o"),
                                 Ident::new("customer_id")

@@ -3802,6 +3802,7 @@ fn parse_create_function_detailed() {
     pg_and_generic().verified_stmt("CREATE OR REPLACE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL STABLE PARALLEL UNSAFE RETURN a + b");
     pg_and_generic().verified_stmt("CREATE OR REPLACE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL STABLE CALLED ON NULL INPUT PARALLEL UNSAFE RETURN a + b");
     pg_and_generic().verified_stmt(r#"CREATE OR REPLACE FUNCTION increment(i INTEGER) RETURNS INTEGER LANGUAGE plpgsql AS $$ BEGIN RETURN i + 1; END; $$"#);
+    pg_and_generic().verified_stmt(r#"CREATE OR REPLACE FUNCTION no_arg() RETURNS VOID LANGUAGE plpgsql AS $$ BEGIN DELETE FROM my_table; END; $$"#);
 }
 #[test]
 fn parse_incorrect_create_function_parallel() {
@@ -4371,7 +4372,7 @@ fn parse_join_constraint_unnest_alias() {
                 with_ordinality: false,
             },
             global: false,
-            join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
+            join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Identifier("c2".into())),
@@ -5146,7 +5147,7 @@ fn parse_trigger_related_functions() {
             temporary: false,
             if_not_exists: false,
             name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-            args: None,
+            args: Some(vec![]),
             return_type: Some(DataType::Trigger),
             function_body: Some(
                 CreateFunctionBody::AsBeforeOptions(

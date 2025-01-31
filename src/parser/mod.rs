@@ -3951,7 +3951,7 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated_with_trailing_commas(
             |p| p.parse_select_item(),
             trailing_commas,
-            None,
+            Self::is_reserved_for_column_alias,
         )
     }
 
@@ -3985,30 +3985,42 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated_with_trailing_commas(
             Parser::parse_table_and_joins,
             trailing_commas,
-            Some(self.dialect.get_reserved_keywords_for_table_factor()),
+            |kw, _parser| {
+                self.dialect
+                    .get_reserved_keywords_for_table_factor()
+                    .contains(kw)
+            },
         )
     }
 
     /// Parse the comma of a comma-separated syntax element.
+    /// `R` is a predicate that should return true if the next
+    /// keyword is a reserved keyword.
     /// Allows for control over trailing commas
+    ///
     /// Returns true if there is a next element
-    fn is_parse_comma_separated_end_with_trailing_commas(
+    fn is_parse_comma_separated_end_with_trailing_commas<R>(
         &mut self,
         trailing_commas: bool,
-        reserved_keywords: Option<&[Keyword]>,
-    ) -> bool {
-        let reserved_keywords = reserved_keywords.unwrap_or(keywords::RESERVED_FOR_COLUMN_ALIAS);
+        is_reserved_keyword: &R,
+    ) -> bool
+    where
+        R: Fn(&Keyword, &mut Parser) -> bool,
+    {
         if !self.consume_token(&Token::Comma) {
             true
         } else if trailing_commas {
-            let token = self.peek_token().token;
-            match token {
-                Token::Word(ref kw) if reserved_keywords.contains(&kw.keyword) => true,
+            let token = self.next_token().token;
+            let is_end = match token {
+                Token::Word(ref kw) if is_reserved_keyword(&kw.keyword, self) => true,
                 Token::RParen | Token::SemiColon | Token::EOF | Token::RBracket | Token::RBrace => {
                     true
                 }
                 _ => false,
-            }
+            };
+            self.prev_token();
+
+            is_end
         } else {
             false
         }
@@ -4017,7 +4029,10 @@ impl<'a> Parser<'a> {
     /// Parse the comma of a comma-separated syntax element.
     /// Returns true if there is a next element
     fn is_parse_comma_separated_end(&mut self) -> bool {
-        self.is_parse_comma_separated_end_with_trailing_commas(self.options.trailing_commas, None)
+        self.is_parse_comma_separated_end_with_trailing_commas(
+            self.options.trailing_commas,
+            &Self::is_reserved_for_column_alias,
+        )
     }
 
     /// Parse a comma-separated list of 1+ items accepted by `F`
@@ -4025,26 +4040,33 @@ impl<'a> Parser<'a> {
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
-        self.parse_comma_separated_with_trailing_commas(f, self.options.trailing_commas, None)
+        self.parse_comma_separated_with_trailing_commas(
+            f,
+            self.options.trailing_commas,
+            Self::is_reserved_for_column_alias,
+        )
     }
 
-    /// Parse a comma-separated list of 1+ items accepted by `F`
-    /// Allows for control over trailing commas
-    fn parse_comma_separated_with_trailing_commas<T, F>(
+    /// Parse a comma-separated list of 1+ items accepted by `F`.
+    /// `R` is a predicate that should return true if the next
+    /// keyword is a reserved keyword.
+    /// Allows for control over trailing commas.
+    fn parse_comma_separated_with_trailing_commas<T, F, R>(
         &mut self,
         mut f: F,
         trailing_commas: bool,
-        reserved_keywords: Option<&[Keyword]>,
+        is_reserved_keyword: R,
     ) -> Result<Vec<T>, ParserError>
     where
         F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+        R: Fn(&Keyword, &mut Parser) -> bool,
     {
         let mut values = vec![];
         loop {
             values.push(f(self)?);
             if self.is_parse_comma_separated_end_with_trailing_commas(
                 trailing_commas,
-                reserved_keywords,
+                &is_reserved_keyword,
             ) {
                 break;
             }
@@ -4116,6 +4138,13 @@ impl<'a> Parser<'a> {
         }
 
         self.parse_comma_separated(f)
+    }
+
+    /// Default implementation of a predicate that returns true if
+    /// the specified keyword is reserved for column alias.
+    /// See [Dialect::is_column_alias]
+    fn is_reserved_for_column_alias(kw: &Keyword, parser: &mut Parser) -> bool {
+        !parser.dialect.is_column_alias(kw, parser)
     }
 
     /// Run a parser method `f`, reverting back to the current position if unsuccessful.
@@ -4524,14 +4553,13 @@ impl<'a> Parser<'a> {
         temporary: bool,
     ) -> Result<Statement, ParserError> {
         let name = self.parse_object_name(false)?;
-        self.expect_token(&Token::LParen)?;
-        let args = if self.consume_token(&Token::RParen) {
-            self.prev_token();
-            None
-        } else {
-            Some(self.parse_comma_separated(Parser::parse_function_arg)?)
-        };
 
+        self.expect_token(&Token::LParen)?;
+        let args = if Token::RParen != self.peek_token_ref().token {
+            self.parse_comma_separated(Parser::parse_function_arg)?
+        } else {
+            vec![]
+        };
         self.expect_token(&Token::RParen)?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
@@ -4627,7 +4655,7 @@ impl<'a> Parser<'a> {
             or_replace,
             temporary,
             name,
-            args,
+            args: Some(args),
             return_type,
             behavior: body.behavior,
             called_on_null: body.called_on_null,
@@ -9394,7 +9422,7 @@ impl<'a> Parser<'a> {
                 let cols = self.parse_comma_separated_with_trailing_commas(
                     Parser::parse_view_column,
                     self.dialect.supports_column_definition_trailing_commas(),
-                    None,
+                    Self::is_reserved_for_column_alias,
                 )?;
                 self.expect_token(&Token::RParen)?;
                 Ok(cols)
@@ -10971,9 +10999,13 @@ impl<'a> Parser<'a> {
 
                 let join_operator_type = match peek_keyword {
                     Keyword::INNER | Keyword::JOIN => {
-                        let _ = self.parse_keyword(Keyword::INNER); // [ INNER ]
+                        let inner = self.parse_keyword(Keyword::INNER); // [ INNER ]
                         self.expect_keyword_is(Keyword::JOIN)?;
-                        JoinOperator::Inner
+                        if inner {
+                            JoinOperator::Inner
+                        } else {
+                            JoinOperator::Join
+                        }
                     }
                     kw @ Keyword::LEFT | kw @ Keyword::RIGHT => {
                         let _ = self.next_token(); // consume LEFT/RIGHT

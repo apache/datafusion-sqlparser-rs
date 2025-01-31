@@ -3102,6 +3102,10 @@ fn parse_ls_and_rm() {
     };
 
     snowflake().verified_stmt(r#"LIST @"STAGE_WITH_QUOTES""#);
+    // Semi-colon after stage name - should terminate the stage name
+    snowflake()
+        .parse_sql_statements("LIST @db1.schema1.stage1/dir1/;")
+        .unwrap();
 }
 
 #[test]

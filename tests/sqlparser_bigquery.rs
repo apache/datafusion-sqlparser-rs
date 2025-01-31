@@ -214,6 +214,15 @@ fn parse_raw_literal() {
 }
 
 #[test]
+fn parse_big_query_non_reserved_column_alias() {
+    let sql = r#"SELECT OFFSET, EXPLAIN, ANALYZE, SORT, TOP, VIEW FROM T"#;
+    bigquery().verified_stmt(sql);
+
+    let sql = r#"SELECT 1 AS OFFSET, 2 AS EXPLAIN, 3 AS ANALYZE FROM T"#;
+    bigquery().verified_stmt(sql);
+}
+
+#[test]
 fn parse_delete_statement() {
     let sql = "DELETE \"table\" WHERE 1";
     match bigquery_and_generic().verified_stmt(sql) {
@@ -1593,7 +1602,7 @@ fn parse_join_constraint_unnest_alias() {
                 with_ordinality: false,
             },
             global: false,
-            join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
+            join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Identifier("c2".into())),

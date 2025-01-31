@@ -3003,7 +3003,7 @@ pub enum Statement {
     /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
     ShowObjects {
         terse: bool,
-        options: ShowStatementOptions,
+        show_options: ShowStatementOptions,
     },
     /// ```sql
     /// SHOW TABLES

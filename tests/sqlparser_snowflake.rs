@@ -2731,6 +2731,20 @@ fn asof_joins() {
               "ON s.state = p.state ",
           "ORDER BY s.observed",
     ));
+
+    // Test without explicit aliases
+    #[rustfmt::skip]
+    snowflake_and_generic().verified_query(concat!(
+        "SELECT * ",
+          "FROM snowtime ",
+            "ASOF JOIN raintime ",
+              "MATCH_CONDITION (snowtime.observed >= raintime.observed) ",
+              "ON snowtime.state = raintime.state ",
+            "ASOF JOIN preciptime ",
+              "MATCH_CONDITION (showtime.observed >= preciptime.observed) ",
+              "ON showtime.state = preciptime.state ",
+          "ORDER BY showtime.observed",
+    ));
 }
 
 #[test]

@@ -12139,13 +12139,24 @@ impl<'a> Parser<'a> {
                 schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
             }
         } else {
-            let object_type =
-                self.parse_one_of_keywords(&[Keyword::SEQUENCE, Keyword::SCHEMA, Keyword::TABLE]);
+            let object_type = self.parse_one_of_keywords(&[
+                Keyword::SEQUENCE,
+                Keyword::DATABASE,
+                Keyword::SCHEMA,
+                Keyword::TABLE,
+                Keyword::VIEW,
+                Keyword::WAREHOUSE,
+                Keyword::INTEGRATION,
+            ]);
             let objects =
                 self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true));
             match object_type {
+                Some(Keyword::DATABASE) => GrantObjects::Databases(objects?),
                 Some(Keyword::SCHEMA) => GrantObjects::Schemas(objects?),
                 Some(Keyword::SEQUENCE) => GrantObjects::Sequences(objects?),
+                Some(Keyword::WAREHOUSE) => GrantObjects::Warehouses(objects?),
+                Some(Keyword::INTEGRATION) => GrantObjects::Integrations(objects?),
+                Some(Keyword::VIEW) => GrantObjects::Views(objects?),
                 Some(Keyword::TABLE) | None => GrantObjects::Tables(objects?),
                 _ => unreachable!(),
             }

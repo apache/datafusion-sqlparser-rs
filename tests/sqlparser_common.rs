@@ -2504,7 +2504,7 @@ fn parse_group_by_with_modifier() {
 }
 
 #[test]
-fn parse_select_grouping_sets() {
+fn parse_group_by_special_grouping_sets() {
     let dialects = all_dialects_where(|d| d.supports_group_by_special_grouping_sets());
 
     let sql = "SELECT a, b, SUM(c) FROM tab1 GROUP BY a, b GROUPING SETS ((a, b), (a), (b), ())";

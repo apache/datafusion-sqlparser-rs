@@ -58,6 +58,7 @@ pub enum DataLoadingOptionType {
     STRING,
     BOOLEAN,
     ENUM,
+    NUMBER,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -128,12 +129,9 @@ impl fmt::Display for DataLoadingOption {
             DataLoadingOptionType::STRING => {
                 write!(f, "{}='{}'", self.option_name, self.value)?;
             }
-            DataLoadingOptionType::ENUM => {
-                // single quote is omitted
-                write!(f, "{}={}", self.option_name, self.value)?;
-            }
-            DataLoadingOptionType::BOOLEAN => {
-                // single quote is omitted
+            DataLoadingOptionType::ENUM
+            | DataLoadingOptionType::BOOLEAN
+            | DataLoadingOptionType::NUMBER => {
                 write!(f, "{}={}", self.option_name, self.value)?;
             }
         }

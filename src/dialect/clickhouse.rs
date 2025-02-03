@@ -59,11 +59,20 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
+    fn supports_numeric_literal_underscores(&self) -> bool {
+        true
+    }
+
     // ClickHouse uses this for some FORMAT expressions in `INSERT` context, e.g. when inserting
     // with FORMAT JSONEachRow a raw JSON key-value expression is valid and expected.
     //
     // [ClickHouse formats](https://clickhouse.com/docs/en/interfaces/formats)
     fn supports_dictionary_syntax(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/functions#higher-order-functions---operator-and-lambdaparams-expr-function>
+    fn supports_lambda_functions(&self) -> bool {
         true
     }
 }

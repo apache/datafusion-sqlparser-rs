@@ -97,6 +97,32 @@ pub enum Value {
     Placeholder(String),
 }
 
+impl Value {
+    /// If the underlying literal is a string, regardless of quote style, returns the associated string value
+    pub fn into_string(self) -> Option<String> {
+        match self {
+            Value::SingleQuotedString(s)
+            | Value::DoubleQuotedString(s)
+            | Value::TripleSingleQuotedString(s)
+            | Value::TripleDoubleQuotedString(s)
+            | Value::SingleQuotedByteStringLiteral(s)
+            | Value::DoubleQuotedByteStringLiteral(s)
+            | Value::TripleSingleQuotedByteStringLiteral(s)
+            | Value::TripleDoubleQuotedByteStringLiteral(s)
+            | Value::SingleQuotedRawStringLiteral(s)
+            | Value::DoubleQuotedRawStringLiteral(s)
+            | Value::TripleSingleQuotedRawStringLiteral(s)
+            | Value::TripleDoubleQuotedRawStringLiteral(s)
+            | Value::EscapedStringLiteral(s)
+            | Value::UnicodeStringLiteral(s)
+            | Value::NationalStringLiteral(s)
+            | Value::HexStringLiteral(s) => Some(s),
+            Value::DollarQuotedString(s) => Some(s.value),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -266,6 +292,35 @@ impl fmt::Display for DateTimeField {
             DateTimeField::TimezoneRegion => write!(f, "TIMEZONE_REGION"),
             DateTimeField::NoDateTime => write!(f, "NODATETIME"),
             DateTimeField::Custom(custom) => write!(f, "{custom}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// The Unicode Standard defines four normalization forms, which are intended to eliminate
+/// certain distinctions between visually or functionally identical characters.
+///
+/// See [Unicode Normalization Forms](https://unicode.org/reports/tr15/) for details.
+pub enum NormalizationForm {
+    /// Canonical Decomposition, followed by Canonical Composition.
+    NFC,
+    /// Canonical Decomposition.
+    NFD,
+    /// Compatibility Decomposition, followed by Canonical Composition.
+    NFKC,
+    /// Compatibility Decomposition.
+    NFKD,
+}
+
+impl fmt::Display for NormalizationForm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NormalizationForm::NFC => write!(f, "NFC"),
+            NormalizationForm::NFD => write!(f, "NFD"),
+            NormalizationForm::NFKC => write!(f, "NFKC"),
+            NormalizationForm::NFKD => write!(f, "NFKD"),
         }
     }
 }

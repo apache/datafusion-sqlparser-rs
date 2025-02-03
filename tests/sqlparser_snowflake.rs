@@ -634,7 +634,7 @@ fn test_snowflake_create_table_with_collated_column() {
                 vec![ColumnDef {
                     name: "a".into(),
                     data_type: DataType::Text,
-                    collation: Some(ObjectName(vec![Ident::with_quote('\'', "de_DE")])),
+                    collation: Some(ObjectName::from(vec![Ident::with_quote('\'', "de_DE")])),
                     options: vec![]
                 },]
             );
@@ -818,7 +818,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                     ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Text,
-                        collation: Some(ObjectName(vec![Ident::with_quote('\'', "de_DE")])),
+                        collation: Some(ObjectName::from(vec![Ident::with_quote('\'', "de_DE")])),
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -853,16 +853,16 @@ fn test_snowflake_create_table_with_several_column_options() {
 fn test_snowflake_create_iceberg_table_all_options() {
     match snowflake().verified_stmt("CREATE ICEBERG TABLE my_table (a INT, b INT) \
     CLUSTER BY (a, b) EXTERNAL_VOLUME = 'volume' CATALOG = 'SNOWFLAKE' BASE_LOCATION = 'relative/path' CATALOG_SYNC = 'OPEN_CATALOG' \
-    STORAGE_SERIALIZATION_POLICY = COMPATIBLE COPY GRANTS CHANGE_TRACKING = TRUE DATA_RETENTION_TIME_IN_DAYS = 5 MAX_DATA_EXTENSION_TIME_IN_DAYS = 10 \
+    STORAGE_SERIALIZATION_POLICY = COMPATIBLE COPY GRANTS CHANGE_TRACKING=TRUE DATA_RETENTION_TIME_IN_DAYS=5 MAX_DATA_EXTENSION_TIME_IN_DAYS=10 \
     WITH AGGREGATION POLICY policy_name WITH ROW ACCESS POLICY policy_name ON (a) WITH TAG (A='TAG A', B='TAG B')") {
-        Statement::CreateIcebergTable {
+        Statement::CreateTable(CreateTable {
             name, cluster_by, base_location,
             external_volume, catalog, catalog_sync,
             storage_serialization_policy, change_tracking,
             copy_grants, data_retention_time_in_days,
             max_data_extension_time_in_days, with_aggregation_policy,
             with_row_access_policy, with_tags, ..
-        } => {
+        }) => {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(WrappedCollection::Parentheses(vec![
@@ -871,7 +871,7 @@ fn test_snowflake_create_iceberg_table_all_options() {
                 ])),
                 cluster_by
             );
-            assert_eq!("relative/path", base_location);
+            assert_eq!("relative/path", base_location.unwrap());
             assert_eq!("volume", external_volume.unwrap());
             assert_eq!("SNOWFLAKE", catalog.unwrap());
             assert_eq!("OPEN_CATALOG", catalog_sync.unwrap());
@@ -903,13 +903,13 @@ fn test_snowflake_create_iceberg_table() {
     match snowflake()
         .verified_stmt("CREATE ICEBERG TABLE my_table (a INT) BASE_LOCATION = 'relative_path'")
     {
-        Statement::CreateIcebergTable {
+        Statement::CreateTable(CreateTable {
             name,
             base_location,
             ..
-        } => {
+        }) => {
             assert_eq!("my_table", name.to_string());
-            assert_eq!("relative_path", base_location);
+            assert_eq!("relative_path", base_location.unwrap());
         }
         _ => unreachable!(),
     }
@@ -919,7 +919,7 @@ fn test_snowflake_create_iceberg_table() {
 fn test_snowflake_create_iceberg_table_without_location() {
     let res = snowflake().parse_sql_statements("CREATE ICEBERG TABLE my_table (a INT)");
     assert_eq!(
-        ParserError::ParserError("BASE_LOCATION is required".to_string()),
+        ParserError::ParserError("BASE_LOCATION is required for ICEBERG tables".to_string()),
         res.unwrap_err()
     );
 }
@@ -1274,7 +1274,10 @@ fn parse_delimited_identifiers() {
             version,
             ..
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
+            assert_eq!(
+                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                name
+            );
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
@@ -1293,7 +1296,7 @@ fn parse_delimited_identifiers() {
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -1365,7 +1368,7 @@ fn test_select_wildcard_with_exclude() {
     let select = snowflake_and_generic()
         .verified_only_select("SELECT name.* EXCLUDE department_id FROM employee_table");
     let expected = SelectItem::QualifiedWildcard(
-        ObjectName(vec![Ident::new("name")]),
+        SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("name")])),
         WildcardAdditionalOptions {
             opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
             ..Default::default()
@@ -1402,7 +1405,7 @@ fn test_select_wildcard_with_rename() {
         "SELECT name.* RENAME (department_id AS new_dep, employee_id AS new_emp) FROM employee_table",
     );
     let expected = SelectItem::QualifiedWildcard(
-        ObjectName(vec![Ident::new("name")]),
+        SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("name")])),
         WildcardAdditionalOptions {
             opt_rename: Some(RenameSelectItem::Multiple(vec![
                 IdentWithAlias {
@@ -1505,7 +1508,7 @@ fn test_alter_table_clustering() {
                     Expr::Identifier(Ident::new("c1")),
                     Expr::Identifier(Ident::with_quote('"', "c2")),
                     Expr::Function(Function {
-                        name: ObjectName(vec![Ident::new("TO_DATE")]),
+                        name: ObjectName::from(vec![Ident::new("TO_DATE")]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
@@ -2034,11 +2037,11 @@ fn test_copy_into() {
         } => {
             assert_eq!(
                 into,
-                ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")])
+                ObjectName::from(vec![Ident::new("my_company"), Ident::new("emp_basic")])
             );
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::with_quote('\'', "gcs://mybucket/./../a.csv")])
+                ObjectName::from(vec![Ident::with_quote('\'', "gcs://mybucket/./../a.csv")])
             );
             assert!(files.is_none());
             assert!(pattern.is_none());
@@ -2069,7 +2072,7 @@ fn test_copy_into_with_stage_params() {
             //assert_eq!("s3://load/files/", stage_params.url.unwrap());
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::with_quote('\'', "s3://load/files/")])
+                ObjectName::from(vec![Ident::with_quote('\'', "s3://load/files/")])
             );
             assert_eq!("myint", stage_params.storage_integration.unwrap());
             assert_eq!(
@@ -2128,7 +2131,7 @@ fn test_copy_into_with_stage_params() {
         } => {
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::with_quote('\'', "s3://load/files/")])
+                ObjectName::from(vec![Ident::with_quote('\'', "s3://load/files/")])
             );
             assert_eq!("myint", stage_params.storage_integration.unwrap());
         }
@@ -2182,7 +2185,7 @@ fn test_copy_into_with_transformations() {
         } => {
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
+                ObjectName::from(vec![Ident::new("@schema"), Ident::new("general_finished")])
             );
             assert_eq!(
                 from_transformations.as_ref().unwrap()[0],
@@ -2291,17 +2294,17 @@ fn test_snowflake_stage_object_names() {
         "@~/path",
     ];
     let mut allowed_object_names = [
-        ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
-        ObjectName(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
-        ObjectName(vec![
+        ObjectName::from(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
+        ObjectName::from(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
+        ObjectName::from(vec![
             Ident::new("@namespace"),
             Ident::new("%table_name/path"),
         ]),
-        ObjectName(vec![
+        ObjectName::from(vec![
             Ident::new("@namespace"),
             Ident::new("stage_name/path"),
         ]),
-        ObjectName(vec![Ident::new("@~/path")]),
+        ObjectName::from(vec![Ident::new("@~/path")]),
     ];
 
     for it in allowed_formatted_names
@@ -2330,10 +2333,13 @@ fn test_snowflake_copy_into() {
         Statement::CopyIntoSnowflake {
             into, from_stage, ..
         } => {
-            assert_eq!(into, ObjectName(vec![Ident::new("a"), Ident::new("b")]));
+            assert_eq!(
+                into,
+                ObjectName::from(vec![Ident::new("a"), Ident::new("b")])
+            );
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::new("@namespace"), Ident::new("stage_name")])
+                ObjectName::from(vec![Ident::new("@namespace"), Ident::new("stage_name")])
             )
         }
         _ => unreachable!(),
@@ -2350,14 +2356,14 @@ fn test_snowflake_copy_into_stage_name_ends_with_parens() {
         } => {
             assert_eq!(
                 into,
-                ObjectName(vec![
+                ObjectName::from(vec![
                     Ident::new("SCHEMA"),
                     Ident::new("SOME_MONITORING_SYSTEM")
                 ])
             );
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
+                ObjectName::from(vec![Ident::new("@schema"), Ident::new("general_finished")])
             )
         }
         _ => unreachable!(),
@@ -2725,6 +2731,20 @@ fn asof_joins() {
               "ON s.state = p.state ",
           "ORDER BY s.observed",
     ));
+
+    // Test without explicit aliases
+    #[rustfmt::skip]
+    snowflake_and_generic().verified_query(concat!(
+        "SELECT * ",
+          "FROM snowtime ",
+            "ASOF JOIN raintime ",
+              "MATCH_CONDITION (snowtime.observed >= raintime.observed) ",
+              "ON snowtime.state = raintime.state ",
+            "ASOF JOIN preciptime ",
+              "MATCH_CONDITION (showtime.observed >= preciptime.observed) ",
+              "ON showtime.state = preciptime.state ",
+          "ORDER BY showtime.observed",
+    ));
 }
 
 #[test]
@@ -2771,7 +2791,7 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             snowflake().verified_stmt(&format!("USE {}", object_name)),
-            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
         );
@@ -2779,7 +2799,7 @@ fn parse_use() {
             // Test single identifier with different type of quotes
             assert_eq!(
                 snowflake().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
-                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
                 )])))
@@ -2791,7 +2811,7 @@ fn parse_use() {
         // Test double identifier with different type of quotes
         assert_eq!(
             snowflake().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
-            Statement::Use(Use::Object(ObjectName(vec![
+            Statement::Use(Use::Object(ObjectName::from(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
             ])))
@@ -2800,7 +2820,7 @@ fn parse_use() {
     // Test double identifier without quotes
     assert_eq!(
         snowflake().verified_stmt("USE mydb.my_schema"),
-        Statement::Use(Use::Object(ObjectName(vec![
+        Statement::Use(Use::Object(ObjectName::from(vec![
             Ident::new("mydb"),
             Ident::new("my_schema")
         ])))
@@ -2810,35 +2830,35 @@ fn parse_use() {
         // Test single and double identifier with keyword and different type of quotes
         assert_eq!(
             snowflake().verified_stmt(&format!("USE DATABASE {0}my_database{0}", quote)),
-            Statement::Use(Use::Database(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Database(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_database".to_string(),
             )])))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE SCHEMA {0}my_schema{0}", quote)),
-            Statement::Use(Use::Schema(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Schema(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_schema".to_string(),
             )])))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE SCHEMA {0}CATALOG{0}.{0}my_schema{0}", quote)),
-            Statement::Use(Use::Schema(ObjectName(vec![
+            Statement::Use(Use::Schema(ObjectName::from(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
             ])))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE ROLE {0}my_role{0}", quote)),
-            Statement::Use(Use::Role(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Role(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_role".to_string(),
             )])))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE WAREHOUSE {0}my_wh{0}", quote)),
-            Statement::Use(Use::Warehouse(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Warehouse(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_wh".to_string(),
             )])))
@@ -2953,24 +2973,6 @@ fn test_parse_show_schemas() {
     snowflake().verified_stmt("SHOW SCHEMAS HISTORY LIKE '%xa%'");
     snowflake().verified_stmt("SHOW SCHEMAS STARTS WITH 'abc' LIMIT 20");
     snowflake().verified_stmt("SHOW SCHEMAS IN DATABASE STARTS WITH 'abc' LIMIT 20 FROM 'xyz'");
-}
-
-#[test]
-fn test_parse_show_objects() {
-    snowflake().verified_stmt("SHOW OBJECTS");
-    snowflake().verified_stmt("SHOW OBJECTS IN abc");
-    snowflake().verified_stmt("SHOW OBJECTS LIKE '%test%' IN abc");
-    snowflake().verified_stmt("SHOW OBJECTS IN ACCOUNT");
-    snowflake().verified_stmt("SHOW OBJECTS IN DATABASE");
-    snowflake().verified_stmt("SHOW OBJECTS IN DATABASE abc");
-    snowflake().verified_stmt("SHOW OBJECTS IN SCHEMA");
-    snowflake().verified_stmt("SHOW OBJECTS IN SCHEMA abc");
-    snowflake().verified_stmt("SHOW TERSE OBJECTS");
-    snowflake().verified_stmt("SHOW TERSE OBJECTS IN abc");
-    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc");
-    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b'");
-    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10");
-    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10 FROM 'x'");
 }
 
 #[test]
@@ -3094,7 +3096,7 @@ fn parse_ls_and_rm() {
         .verified_stmt("LIST @SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/");
     match statement {
         Statement::List(command) => {
-            assert_eq!(command.stage, ObjectName(vec!["@SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/".into()]));
+            assert_eq!(command.stage, ObjectName::from(vec!["@SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/".into()]));
             assert!(command.pattern.is_none());
         }
         _ => unreachable!(),
@@ -3106,7 +3108,7 @@ fn parse_ls_and_rm() {
         Statement::Remove(command) => {
             assert_eq!(
                 command.stage,
-                ObjectName(vec!["@my_csv_stage/analysis/".into()])
+                ObjectName::from(vec!["@my_csv_stage/analysis/".into()])
             );
             assert_eq!(command.pattern, Some(".*data_0.*".to_string()));
         }
@@ -3114,4 +3116,150 @@ fn parse_ls_and_rm() {
     };
 
     snowflake().verified_stmt(r#"LIST @"STAGE_WITH_QUOTES""#);
+    // Semi-colon after stage name - should terminate the stage name
+    snowflake()
+        .parse_sql_statements("LIST @db1.schema1.stage1/dir1/;")
+        .unwrap();
+}
+
+#[test]
+fn test_sql_keywords_as_select_item_aliases() {
+    // Some keywords that should be parsed as an alias
+    let unreserved_kws = vec!["CLUSTER", "FETCH", "RETURNING", "LIMIT", "EXCEPT"];
+    for kw in unreserved_kws {
+        snowflake()
+            .one_statement_parses_to(&format!("SELECT 1 {kw}"), &format!("SELECT 1 AS {kw}"));
+    }
+
+    // Some keywords that should not be parsed as an alias
+    let reserved_kws = vec![
+        "FROM",
+        "GROUP",
+        "HAVING",
+        "INTERSECT",
+        "INTO",
+        "ORDER",
+        "SELECT",
+        "UNION",
+        "WHERE",
+        "WITH",
+    ];
+    for kw in reserved_kws {
+        assert!(snowflake()
+            .parse_sql_statements(&format!("SELECT 1 {kw}"))
+            .is_err());
+    }
+}
+
+#[test]
+fn test_timetravel_at_before() {
+    snowflake().verified_only_select("SELECT * FROM tbl AT(TIMESTAMP => '2024-12-15 00:00:00')");
+    snowflake()
+        .verified_only_select("SELECT * FROM tbl BEFORE(TIMESTAMP => '2024-12-15 00:00:00')");
+}
+
+#[test]
+fn test_grant_account_privileges() {
+    let privileges = vec![
+        "ALL",
+        "ALL PRIVILEGES",
+        "ATTACH POLICY",
+        "AUDIT",
+        "BIND SERVICE ENDPOINT",
+        "IMPORT SHARE",
+        "OVERRIDE SHARE RESTRICTIONS",
+        "PURCHASE DATA EXCHANGE LISTING",
+        "RESOLVE ALL",
+        "READ SESSION",
+    ];
+    let with_grant_options = vec!["", " WITH GRANT OPTION"];
+
+    for p in &privileges {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT {p} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let create_object_types = vec![
+        "ACCOUNT",
+        "APPLICATION",
+        "APPLICATION PACKAGE",
+        "COMPUTE POOL",
+        "DATA EXCHANGE LISTING",
+        "DATABASE",
+        "EXTERNAL VOLUME",
+        "FAILOVER GROUP",
+        "INTEGRATION",
+        "NETWORK POLICY",
+        "ORGANIZATION LISTING",
+        "REPLICATION GROUP",
+        "ROLE",
+        "SHARE",
+        "USER",
+        "WAREHOUSE",
+    ];
+    for t in &create_object_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT CREATE {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let apply_types = vec![
+        "AGGREGATION POLICY",
+        "AUTHENTICATION POLICY",
+        "JOIN POLICY",
+        "MASKING POLICY",
+        "PACKAGES POLICY",
+        "PASSWORD POLICY",
+        "PROJECTION POLICY",
+        "ROW ACCESS POLICY",
+        "SESSION POLICY",
+        "TAG",
+    ];
+    for t in &apply_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT APPLY {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let execute_types = vec![
+        "ALERT",
+        "DATA METRIC FUNCTION",
+        "MANAGED ALERT",
+        "MANAGED TASK",
+        "TASK",
+    ];
+    for t in &execute_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT EXECUTE {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let manage_types = vec![
+        "ACCOUNT SUPPORT CASES",
+        "EVENT SHARING",
+        "GRANTS",
+        "LISTING AUTO FULFILLMENT",
+        "ORGANIZATION SUPPORT CASES",
+        "USER SUPPORT CASES",
+        "WAREHOUSES",
+    ];
+    for t in &manage_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT MANAGE {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+
+    let monitor_types = vec!["EXECUTION", "SECURITY", "USAGE"];
+    for t in &monitor_types {
+        for wgo in &with_grant_options {
+            let sql = format!("GRANT MONITOR {t} ON ACCOUNT TO ROLE role1{wgo}");
+            snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
 }

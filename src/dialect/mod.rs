@@ -304,6 +304,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports numbers containing underscores, e.g. `10_000_000`
+    fn supports_numeric_literal_underscores(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports specifying null treatment
     /// as part of a window function's parameter list as opposed
     /// to after the parameter list.
@@ -404,6 +409,19 @@ pub trait Dialect: Debug + Any {
         self.supports_trailing_commas()
     }
 
+    /// Returns true if the dialect supports trailing commas in the `FROM` clause of a `SELECT` statement.
+    /// Example: `SELECT 1 FROM T, U, LIMIT 1`
+    fn supports_from_trailing_commas(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports trailing commas in the
+    /// column definitions list of a `CREATE` statement.
+    /// Example: `CREATE TABLE T (x INT, y TEXT,)`
+    fn supports_column_definition_trailing_commas(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports double dot notation for object names
     ///
     /// Example
@@ -431,6 +449,17 @@ pub trait Dialect: Debug + Any {
     /// SELECT from table_name
     /// ```
     fn supports_empty_projections(&self) -> bool {
+        false
+    }
+
+    /// Return true if the dialect supports wildcard expansion on
+    /// arbitrary expressions in projections.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT STRUCT<STRING>('foo').* FROM T
+    /// ```
+    fn supports_select_expr_star(&self) -> bool {
         false
     }
 
@@ -775,6 +804,12 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_IDENTIFIER.contains(&kw)
     }
 
+    /// Returns reserved keywords when looking to parse a `TableFactor`.
+    /// See [Self::supports_from_trailing_commas]
+    fn get_reserved_keywords_for_table_factor(&self) -> &[Keyword] {
+        keywords::RESERVED_FOR_TABLE_FACTOR
+    }
+
     /// Returns true if this dialect supports the `TABLESAMPLE` option
     /// before the table alias option. For example:
     ///
@@ -806,6 +841,43 @@ pub trait Dialect: Debug + Any {
     /// Returns true if this dialect supports `SET` statements without an explicit
     /// assignment operator such as `=`. For example: `SET SHOWPLAN_XML ON`.
     fn supports_set_stmt_without_operator(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the specified keyword should be parsed as a column identifier.
+    /// See [keywords::RESERVED_FOR_COLUMN_ALIAS]
+    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw)
+    }
+
+    /// Returns true if the specified keyword should be parsed as a select item alias.
+    /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
+    /// to enable looking ahead if needed.
+    fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+        explicit || self.is_column_alias(kw, parser)
+    }
+
+    /// Returns true if the specified keyword should be parsed as a table factor alias.
+    /// When explicit is true, the keyword is preceded by an `AS` word. Parser is provided
+    /// to enable looking ahead if needed.
+    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
+        explicit || !keywords::RESERVED_FOR_TABLE_ALIAS.contains(kw)
+    }
+
+    /// Returns true if this dialect supports querying historical table data
+    /// by specifying which version of the data to query.
+    fn supports_timestamp_versioning(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect supports the E'...' syntax for string literals
+    ///
+    /// Postgres: <https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE>
+    fn supports_string_escape_constant(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports the table hints in the `FROM` clause.
+    fn supports_table_hints(&self) -> bool {
         false
     }
 }

@@ -33,7 +33,7 @@ use IsLateral::*;
 use IsOptional::*;
 
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
-use crate::ast::Statement::CreatePolicy;
+use crate::ast::Statement::{CreateConnector, CreatePolicy};
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
@@ -4268,6 +4268,8 @@ impl<'a> Parser<'a> {
             self.parse_create_type()
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             self.parse_create_procedure(or_alter)
+        } else if self.parse_keyword(Keyword::CONNECTOR) {
+            self.parse_create_connector()
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
@@ -5580,6 +5582,49 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// ```sql
+    /// CREATE CONNECTOR [IF NOT EXISTS] connector_name
+    /// [TYPE datasource_type]
+    /// [URL datasource_url]
+    /// [COMMENT connector_comment]
+    /// [WITH DCPROPERTIES(property_name=property_value, ...)]
+    /// ```
+    ///
+    /// [Hive Documentation](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
+    pub fn parse_create_connector(&mut self) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_identifier()?;
+
+        let connector_type = if self.parse_keyword(Keyword::TYPE) {
+            Some(self.parse_literal_string()?)
+        } else {
+            None
+        };
+
+        let url = if self.parse_keyword(Keyword::URL) {
+            Some(self.parse_literal_string()?)
+        } else {
+            None
+        };
+
+        let comment = self.parse_optional_inline_comment()?;
+
+        let with_dcproperties =
+            match self.parse_options_with_keywords(&[Keyword::WITH, Keyword::DCPROPERTIES]) {
+                Ok(properties) if !properties.is_empty() => Some(properties),
+                _ => None,
+            };
+
+        Ok(CreateConnector {
+            name,
+            if_not_exists,
+            connector_type,
+            url,
+            comment,
+            with_dcproperties,
+        })
+    }
+
     pub fn parse_drop(&mut self) -> Result<Statement, ParserError> {
         // MySQL dialect supports `TEMPORARY`
         let temporary = dialect_of!(self is MySqlDialect | GenericDialect | DuckDbDialect)
@@ -5609,6 +5654,8 @@ impl<'a> Parser<'a> {
             return self.parse_drop_function();
         } else if self.parse_keyword(Keyword::POLICY) {
             return self.parse_drop_policy();
+        } else if self.parse_keyword(Keyword::CONNECTOR) {
+            return self.parse_drop_connector();
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             return self.parse_drop_procedure();
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -5619,7 +5666,7 @@ impl<'a> Parser<'a> {
             return self.parse_drop_extension();
         } else {
             return self.expected(
-                "DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, or VIEW after DROP",
+                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, or VIEW after DROP",
                 self.peek_token(),
             );
         };
@@ -5692,6 +5739,16 @@ impl<'a> Parser<'a> {
             table_name,
             drop_behavior,
         })
+    }
+    /// ```sql  
+    /// DROP CONNECTOR [IF EXISTS] name
+    /// ```
+    ///
+    /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-DropConnector)
+    fn parse_drop_connector(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parse_identifier()?;
+        Ok(Statement::DropConnector { if_exists, name })
     }
 
     /// ```sql
@@ -7989,6 +8046,7 @@ impl<'a> Parser<'a> {
             Keyword::INDEX,
             Keyword::ROLE,
             Keyword::POLICY,
+            Keyword::CONNECTOR,
         ])?;
         match object_type {
             Keyword::VIEW => self.parse_alter_view(),
@@ -8041,6 +8099,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
+            Keyword::CONNECTOR => self.parse_alter_connector(),
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }

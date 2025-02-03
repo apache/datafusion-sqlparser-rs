@@ -2948,6 +2948,32 @@ pub enum Statement {
         show_options: ShowStatementOptions,
     },
     /// ```sql
+    /// SHOW [ TERSE ] OBJECTS [ LIKE '<pattern>' ]
+    ///                        [ IN
+    ///                              {
+    ///                                ACCOUNT                                         |
+    ///    
+    ///                                DATABASE                                        |
+    ///                                DATABASE <database_name>                        |
+    ///
+    ///                                SCHEMA                                          |
+    ///                                SCHEMA <schema_name>                            |
+    ///                                <schema_name>
+    ///
+    ///                                APPLICATION <application_name>                  |
+    ///                                APPLICATION PACKAGE <application_package_name>  |
+    ///                              }
+    ///                        ]
+    ///                        [ STARTS WITH '<name_string>' ]
+    ///                        [ LIMIT <rows> [ FROM '<name_string>' ] ]
+    /// ```
+    /// Snowflake-specific statement
+    /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
+    ShowObjects {
+        terse: bool,
+        show_options: ShowStatementOptions,
+    },
+    /// ```sql
     /// SHOW TABLES
     /// ```
     ShowTables {
@@ -4689,6 +4715,17 @@ impl fmt::Display for Statement {
                     "SHOW {terse}SCHEMAS{history}{show_options}",
                     terse = if *terse { "TERSE " } else { "" },
                     history = if *history { " HISTORY" } else { "" },
+                )?;
+                Ok(())
+            }
+            Statement::ShowObjects {
+                terse,
+                show_options,
+            } => {
+                write!(
+                    f,
+                    "SHOW {terse}OBJECTS{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
                 )?;
                 Ok(())
             }

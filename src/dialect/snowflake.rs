@@ -178,6 +178,13 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_file_staging_command(kw, parser));
         }
 
+        if parser.parse_keyword(Keyword::SHOW) {
+            let terse = parser.parse_keyword(Keyword::TERSE);
+            if parser.parse_keyword(Keyword::OBJECTS) {
+                return Some(parse_show_objects(terse, parser));
+            }
+        }
+
         None
     }
 
@@ -1115,4 +1122,16 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
     parser.expect_token(&Token::RParen)?;
 
     Ok(TagsColumnOption { with, tags })
+}
+
+/// Parse snowflake show objects.
+/// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
+fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
+    let show_options = parser.parse_show_stmt_options()?;
+    Ok(
+        Statement::ShowObjects { 
+            terse, 
+            show_options, 
+        }
+    )
 }

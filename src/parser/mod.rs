@@ -8867,6 +8867,10 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_keyword(Keyword::TYPE);
                     Ok(DataType::AnyType)
                 }
+                Keyword::TABLE => {
+                    let columns = self.parse_returns_table_columns()?;
+                    Ok(DataType::Table(columns))
+                }
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;
@@ -8892,6 +8896,24 @@ impl<'a> Parser<'a> {
             data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
         }
         Ok((data, trailing_bracket))
+    }
+
+    fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = self.parse_data_type()?;
+        Ok(ColumnDef {
+            name,
+            data_type,
+            collation: None,
+            options: Vec::new(), // No constraints expected here
+        })
+    }
+
+    fn parse_returns_table_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let columns = self.parse_comma_separated(Parser::parse_returns_table_column)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(columns)
     }
 
     pub fn parse_string_values(&mut self) -> Result<Vec<String>, ParserError> {

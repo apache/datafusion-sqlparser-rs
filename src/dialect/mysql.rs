@@ -125,6 +125,10 @@ impl Dialect for MySqlDialect {
     fn supports_table_hints(&self) -> bool {
         true
     }
+
+    fn supports_global_variable_modifier(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

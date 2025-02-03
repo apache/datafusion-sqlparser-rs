@@ -1210,7 +1210,7 @@ fn parse_mssql_declare() {
                 }]
             },
             Statement::SetVariable {
-                local: false,
+                scope: SetVariableScope::None,
                 hivevar: false,
                 variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("@bar")])),
                 value: vec![Expr::Value(Value::Number("2".parse().unwrap(), false))],

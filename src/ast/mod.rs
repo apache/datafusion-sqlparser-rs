@@ -3230,7 +3230,7 @@ pub enum Statement {
     /// ```
     Grant {
         privileges: Privileges,
-        objects: GrantObjects,
+        objects: Option<GrantObjects>,
         grantees: Vec<Grantee>,
         with_grant_option: bool,
         granted_by: Option<Ident>,
@@ -3240,7 +3240,7 @@ pub enum Statement {
     /// ```
     Revoke {
         privileges: Privileges,
-        objects: GrantObjects,
+        objects: Option<GrantObjects>,
         grantees: Vec<Grantee>,
         granted_by: Option<Ident>,
         cascade: Option<CascadeOption>,
@@ -4785,7 +4785,9 @@ impl fmt::Display for Statement {
                 granted_by,
             } => {
                 write!(f, "GRANT {privileges} ")?;
-                write!(f, "ON {objects} ")?;
+                if let Some(objects) = objects {
+                    write!(f, "ON {objects} ")?;
+                }
                 write!(f, "TO {}", display_comma_separated(grantees))?;
                 if *with_grant_option {
                     write!(f, " WITH GRANT OPTION")?;
@@ -4803,7 +4805,9 @@ impl fmt::Display for Statement {
                 cascade,
             } => {
                 write!(f, "REVOKE {privileges} ")?;
-                write!(f, "ON {objects} ")?;
+                if let Some(objects) = objects {
+                    write!(f, "ON {objects} ")?;
+                }
                 write!(f, "FROM {}", display_comma_separated(grantees))?;
                 if let Some(grantor) = granted_by {
                     write!(f, " GRANTED BY {grantor}")?;
@@ -5503,6 +5507,9 @@ pub enum Action {
     Create {
         obj_type: Option<ActionCreateObjectType>,
     },
+    DatabaseRole {
+        role: ObjectName,
+    },
     Delete,
     EvolveSchema,
     Execute {
@@ -5536,6 +5543,9 @@ pub enum Action {
     },
     Replicate,
     ResolveAll,
+    Role {
+        role: Ident,
+    },
     Select {
         columns: Option<Vec<Ident>>,
     },
@@ -5565,6 +5575,7 @@ impl fmt::Display for Action {
                     write!(f, " {obj_type}")?
                 }
             }
+            Action::DatabaseRole { role } => write!(f, "DATABASE ROLE {role}")?,
             Action::Delete => f.write_str("DELETE")?,
             Action::EvolveSchema => f.write_str("EVOLVE SCHEMA")?,
             Action::Execute { obj_type } => {
@@ -5591,6 +5602,7 @@ impl fmt::Display for Action {
             Action::References { .. } => f.write_str("REFERENCES")?,
             Action::Replicate => f.write_str("REPLICATE")?,
             Action::ResolveAll => f.write_str("RESOLVE ALL")?,
+            Action::Role { role } => write!(f, "ROLE {role}")?,
             Action::Select { .. } => f.write_str("SELECT")?,
             Action::Temporary => f.write_str("TEMPORARY")?,
             Action::Trigger => f.write_str("TRIGGER")?,

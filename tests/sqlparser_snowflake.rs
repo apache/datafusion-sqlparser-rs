@@ -3263,3 +3263,15 @@ fn test_grant_account_privileges() {
         }
     }
 }
+
+#[test]
+fn test_grant_role_to() {
+    snowflake_and_generic().verified_stmt("GRANT ROLE r1 TO ROLE r2");
+    snowflake_and_generic().verified_stmt("GRANT ROLE r1 TO USER u1");
+}
+
+#[test]
+fn test_grant_database_role_to() {
+    snowflake_and_generic().verified_stmt("GRANT DATABASE ROLE r1 TO ROLE r2");
+    snowflake_and_generic().verified_stmt("GRANT DATABASE ROLE db1.sc1.r1 TO ROLE db1.sc1.r2");
+}

@@ -8637,7 +8637,7 @@ fn parse_grant() {
             granted_by,
             ..
         } => match (privileges, objects) {
-            (Privileges::Actions(actions), GrantObjects::Tables(objects)) => {
+            (Privileges::Actions(actions), Some(GrantObjects::Tables(objects))) => {
                 assert_eq!(
                     vec![
                         Action::Select { columns: None },
@@ -8687,7 +8687,7 @@ fn parse_grant() {
             with_grant_option,
             ..
         } => match (privileges, objects) {
-            (Privileges::Actions(actions), GrantObjects::AllTablesInSchema { schemas }) => {
+            (Privileges::Actions(actions), Some(GrantObjects::AllTablesInSchema { schemas })) => {
                 assert_eq!(vec![Action::Insert { columns: None }], actions);
                 assert_eq_vec(&["public"], &schemas);
                 assert_eq_vec(&["browser"], &grantees);
@@ -8707,7 +8707,7 @@ fn parse_grant() {
             granted_by,
             ..
         } => match (privileges, objects, granted_by) {
-            (Privileges::Actions(actions), GrantObjects::Sequences(objects), None) => {
+            (Privileges::Actions(actions), Some(GrantObjects::Sequences(objects)), None) => {
                 assert_eq!(
                     vec![Action::Usage, Action::Select { columns: None }],
                     actions
@@ -8744,7 +8744,7 @@ fn parse_grant() {
                 Privileges::All {
                     with_privileges_keyword,
                 },
-                GrantObjects::Schemas(schemas),
+                Some(GrantObjects::Schemas(schemas)),
             ) => {
                 assert!(!with_privileges_keyword);
                 assert_eq_vec(&["aa", "b"], &schemas);
@@ -8761,7 +8761,10 @@ fn parse_grant() {
             objects,
             ..
         } => match (privileges, objects) {
-            (Privileges::Actions(actions), GrantObjects::AllSequencesInSchema { schemas }) => {
+            (
+                Privileges::Actions(actions),
+                Some(GrantObjects::AllSequencesInSchema { schemas }),
+            ) => {
                 assert_eq!(vec![Action::Usage], actions);
                 assert_eq_vec(&["bus"], &schemas);
             }
@@ -8791,7 +8794,7 @@ fn test_revoke() {
     match verified_stmt(sql) {
         Statement::Revoke {
             privileges,
-            objects: GrantObjects::Tables(tables),
+            objects: Some(GrantObjects::Tables(tables)),
             grantees,
             granted_by,
             cascade,
@@ -8817,7 +8820,7 @@ fn test_revoke_with_cascade() {
     match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
         Statement::Revoke {
             privileges,
-            objects: GrantObjects::Tables(tables),
+            objects: Some(GrantObjects::Tables(tables)),
             grantees,
             granted_by,
             cascade,

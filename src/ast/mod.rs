@@ -3230,7 +3230,7 @@ pub enum Statement {
     /// ```
     Grant {
         privileges: Privileges,
-        objects: GrantObjects,
+        objects: Option<GrantObjects>,
         grantees: Vec<Grantee>,
         with_grant_option: bool,
         granted_by: Option<Ident>,
@@ -3240,7 +3240,7 @@ pub enum Statement {
     /// ```
     Revoke {
         privileges: Privileges,
-        objects: GrantObjects,
+        objects: Option<GrantObjects>,
         grantees: Vec<Grantee>,
         granted_by: Option<Ident>,
         cascade: Option<CascadeOption>,
@@ -4785,7 +4785,7 @@ impl fmt::Display for Statement {
                 granted_by,
             } => {
                 write!(f, "GRANT {privileges} ")?;
-                if !matches!(objects, GrantObjects::None) {
+                if let Some(objects) = objects {
                     write!(f, "ON {objects} ")?;
                 }
                 write!(f, "TO {}", display_comma_separated(grantees))?;
@@ -4805,7 +4805,9 @@ impl fmt::Display for Statement {
                 cascade,
             } => {
                 write!(f, "REVOKE {privileges} ")?;
-                write!(f, "ON {objects} ")?;
+                if let Some(objects) = objects {
+                    write!(f, "ON {objects} ")?;
+                }
                 write!(f, "FROM {}", display_comma_separated(grantees))?;
                 if let Some(grantor) = granted_by {
                     write!(f, " GRANTED BY {grantor}")?;
@@ -5948,7 +5950,6 @@ impl fmt::Display for GrantObjects {
                     display_comma_separated(schemas)
                 )
             }
-            GrantObjects::None => Ok(()),
         }
     }
 }

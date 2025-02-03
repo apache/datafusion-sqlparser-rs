@@ -12130,7 +12130,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_grant_revoke_privileges_objects(
         &mut self,
-    ) -> Result<(Privileges, GrantObjects), ParserError> {
+    ) -> Result<(Privileges, Option<GrantObjects>), ParserError> {
         let privileges = if self.parse_keyword(Keyword::ALL) {
             Privileges::All {
                 with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
@@ -12142,24 +12142,28 @@ impl<'a> Parser<'a> {
 
         let objects = if self.parse_keyword(Keyword::ON) {
             if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
-                GrantObjects::AllTablesInSchema {
+                Some(GrantObjects::AllTablesInSchema {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
-                }
+                })
             } else if self.parse_keywords(&[
                 Keyword::ALL,
                 Keyword::SEQUENCES,
                 Keyword::IN,
                 Keyword::SCHEMA,
             ]) {
-                GrantObjects::AllSequencesInSchema {
+                Some(GrantObjects::AllSequencesInSchema {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
-                }
+                })
             } else {
                 let object_type = self.parse_one_of_keywords(&[
                     Keyword::SEQUENCE,
                     Keyword::DATABASE,
+                    Keyword::DATABASE,
                     Keyword::SCHEMA,
                     Keyword::TABLE,
+                    Keyword::VIEW,
+                    Keyword::WAREHOUSE,
+                    Keyword::INTEGRATION,
                     Keyword::VIEW,
                     Keyword::WAREHOUSE,
                     Keyword::INTEGRATION,
@@ -12167,17 +12171,18 @@ impl<'a> Parser<'a> {
                 let objects =
                     self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true));
                 match object_type {
-                    Some(Keyword::DATABASE) => GrantObjects::Databases(objects?),
-                    Some(Keyword::SCHEMA) => GrantObjects::Schemas(objects?),
-                    Some(Keyword::SEQUENCE) => GrantObjects::Sequences(objects?),
-                    Some(Keyword::WAREHOUSE) => GrantObjects::Warehouses(objects?),
-                    Some(Keyword::INTEGRATION) => GrantObjects::Integrations(objects?),
-                    Some(Keyword::VIEW) => GrantObjects::Views(objects?),
+                    Some(Keyword::DATABASE) => Some(GrantObjects::Databases(objects?)),
+                    Some(Keyword::SCHEMA) => Some(GrantObjects::Schemas(objects?)),
+                    Some(Keyword::SEQUENCE) => Some(GrantObjects::Sequences(objects?)),
+                    Some(Keyword::WAREHOUSE) => Some(GrantObjects::Warehouses(objects?)),
+                    Some(Keyword::INTEGRATION) => Some(GrantObjects::Integrations(objects?)),
+                    Some(Keyword::VIEW) => Some(GrantObjects::Views(objects?)),
+                    Some(Keyword::TABLE) | None => Some(GrantObjects::Tables(objects?)),
                     _ => unreachable!(),
                 }
             }
         } else {
-            GrantObjects::None
+            None
         };
 
         Ok((privileges, objects))

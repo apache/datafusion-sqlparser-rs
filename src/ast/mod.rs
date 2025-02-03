@@ -5884,12 +5884,20 @@ pub enum GrantObjects {
     AllSequencesInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `ALL TABLES IN SCHEMA <schema_name> [, ...]`
     AllTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on specific databases
+    Databases(Vec<ObjectName>),
     /// Grant privileges on specific schemas
     Schemas(Vec<ObjectName>),
     /// Grant privileges on specific sequences
     Sequences(Vec<ObjectName>),
     /// Grant privileges on specific tables
     Tables(Vec<ObjectName>),
+    /// Grant privileges on specific views
+    Views(Vec<ObjectName>),
+    /// Grant privileges on specific warehouses
+    Warehouses(Vec<ObjectName>),
+    /// Grant privileges on specific integrations
+    Integrations(Vec<ObjectName>),
 }
 
 impl fmt::Display for GrantObjects {
@@ -5898,11 +5906,23 @@ impl fmt::Display for GrantObjects {
             GrantObjects::Sequences(sequences) => {
                 write!(f, "SEQUENCE {}", display_comma_separated(sequences))
             }
+            GrantObjects::Databases(databases) => {
+                write!(f, "DATABASE {}", display_comma_separated(databases))
+            }
             GrantObjects::Schemas(schemas) => {
                 write!(f, "SCHEMA {}", display_comma_separated(schemas))
             }
             GrantObjects::Tables(tables) => {
                 write!(f, "{}", display_comma_separated(tables))
+            }
+            GrantObjects::Views(views) => {
+                write!(f, "VIEW {}", display_comma_separated(views))
+            }
+            GrantObjects::Warehouses(warehouses) => {
+                write!(f, "WAREHOUSE {}", display_comma_separated(warehouses))
+            }
+            GrantObjects::Integrations(integrations) => {
+                write!(f, "INTEGRATION {}", display_comma_separated(integrations))
             }
             GrantObjects::AllSequencesInSchema { schemas } => {
                 write!(

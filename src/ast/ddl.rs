@@ -341,6 +341,23 @@ impl fmt::Display for Owner {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterConnectorOwner {
+    User(Ident),
+    Role(Ident),
+}
+
+impl fmt::Display for AlterConnectorOwner {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterConnectorOwner::User(ident) => write!(f, "USER {ident}"),
+            AlterConnectorOwner::Role(ident) => write!(f, "ROLE {ident}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterIndexOperation {
     RenameIndex { index_name: ObjectName },
 }

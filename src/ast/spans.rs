@@ -424,6 +424,7 @@ impl Spanned for Statement {
             ),
             // These statements need to be implemented
             Statement::AlterRole { .. } => Span::empty(),
+            Statement::AlterSession { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),
             Statement::AttachDuckDBDatabase { .. } => Span::empty(),
             Statement::DetachDuckDBDatabase { .. } => Span::empty(),

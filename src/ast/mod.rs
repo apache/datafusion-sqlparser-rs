@@ -2697,6 +2697,17 @@ pub enum Statement {
         operation: AlterPolicyOperation,
     },
     /// ```sql
+    /// ALTER SESSION SET sessionParam
+    /// ALTER SESSION UNSET <param_name> [ , <param_name> , ... ]
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
+    AlterSession {
+        /// true is to set for the session parameters, false is to unset
+        set: bool,
+        /// The session parameters to set or unset
+        session_params: DataLoadingOptions,
+    },
+    /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
     /// ```
     /// (SQLite-specific)
@@ -4436,6 +4447,26 @@ impl fmt::Display for Statement {
                 operation,
             } => {
                 write!(f, "ALTER POLICY {name} ON {table_name}{operation}")
+            }
+            Statement::AlterSession {
+                set,
+                session_params,
+            } => {
+                
+                write!( f, "ALTER SESSION {set}", set = if *set { "SET"} else { "UNSET" })?;
+                if !session_params.options.is_empty() {
+                    if *set {
+                        write!(f, " {}", session_params)?;
+                    } else {
+                        let options = session_params
+                            .options
+                            .iter()
+                            .map(|p| p.option_name.clone())
+                            .collect::<Vec<_>>() ;
+                        write!(f, " {}", display_separated(&options, " "))?;
+                    }
+                }
+                Ok(())
             }
             Statement::Drop {
                 object_type,

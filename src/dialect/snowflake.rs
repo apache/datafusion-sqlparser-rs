@@ -30,7 +30,7 @@ use crate::ast::{
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Token;
+use crate::tokenizer::{Token, Word};
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 #[cfg(not(feature = "std"))]
@@ -38,7 +38,6 @@ use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec};
 use sqlparser::ast::StorageSerializationPolicy;
-
 use super::keywords::RESERVED_FOR_IDENTIFIER;
 
 /// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
@@ -117,6 +116,12 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        if parser.parse_keywords(&[Keyword::ALTER, Keyword::SESSION]) {
+            // ALTER SESSION
+            let set = parser.parse_keyword(Keyword::SET) | !parser.parse_keyword(Keyword::UNSET);
+            return Some(parse_alter_session(parser, set));
+        }
+
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
@@ -331,6 +336,21 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
         )),
     }
 }
+
+/// Parse snowflake alter session.
+/// <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
+fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, ParserError> {
+    let session_options = parse_session_options(parser, set)?;
+    Ok(
+        Statement::AlterSession {
+            set,
+            session_params: DataLoadingOptions {
+                options: session_options,
+            },
+        }
+    )
+}
+
 
 /// Parse snowflake create table statement.
 /// <https://docs.snowflake.com/en/sql-reference/sql/create-table>
@@ -922,6 +942,39 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     })
 }
 
+
+/// Parses options separated by blank spaces, commas, or new lines like:
+/// ABORT_DETACHED_QUERY = { TRUE | FALSE }
+///      [ ACTIVE_PYTHON_PROFILER = { 'LINE' | 'MEMORY' } ]
+///      [ BINARY_INPUT_FORMAT = <string> ]
+fn parse_session_options(parser: &mut Parser, set: bool) -> Result<Vec<DataLoadingOption>, ParserError> {
+    let mut options: Vec<DataLoadingOption> = Vec::new();
+    let empty = String::new;
+
+    loop {
+        match parser.next_token().token {
+            Token::EOF => break,
+            Token::Comma => continue, // Skip commas and continue to the next iteration
+            Token::Word(key) => {
+                if set {
+                    parse_data_loading_option(parser, key, &mut options)
+                } else {
+                    options.push(DataLoadingOption {
+                        option_name: key.value,
+                        option_type: DataLoadingOptionType::STRING,
+                        value: empty(),
+                    });
+                   Ok(())
+                }
+                
+            },
+            _ => parser.expected("another option", parser.peek_token()),
+        }?;
+    }
+    Ok(options)
+}
+
+
 /// Parses options provided within parentheses like:
 /// ( ENABLE = { TRUE | FALSE }
 ///      [ AUTO_REFRESH = { TRUE | FALSE } ]
@@ -936,47 +989,55 @@ fn parse_parentheses_options(parser: &mut Parser) -> Result<Vec<DataLoadingOptio
         match parser.next_token().token {
             Token::RParen => break,
             Token::Word(key) => {
-                parser.expect_token(&Token::Eq)?;
-                if parser.parse_keyword(Keyword::TRUE) {
-                    options.push(DataLoadingOption {
-                        option_name: key.value,
-                        option_type: DataLoadingOptionType::BOOLEAN,
-                        value: "TRUE".to_string(),
-                    });
-                    Ok(())
-                } else if parser.parse_keyword(Keyword::FALSE) {
-                    options.push(DataLoadingOption {
-                        option_name: key.value,
-                        option_type: DataLoadingOptionType::BOOLEAN,
-                        value: "FALSE".to_string(),
-                    });
-                    Ok(())
-                } else {
-                    match parser.next_token().token {
-                        Token::SingleQuotedString(value) => {
-                            options.push(DataLoadingOption {
-                                option_name: key.value,
-                                option_type: DataLoadingOptionType::STRING,
-                                value,
-                            });
-                            Ok(())
-                        }
-                        Token::Word(word) => {
-                            options.push(DataLoadingOption {
-                                option_name: key.value,
-                                option_type: DataLoadingOptionType::ENUM,
-                                value: word.value,
-                            });
-                            Ok(())
-                        }
-                        _ => parser.expected("expected option value", parser.peek_token()),
-                    }
-                }
-            }
+                parse_data_loading_option(parser, key, &mut options)
+            },
             _ => parser.expected("another option or ')'", parser.peek_token()),
         }?;
     }
     Ok(options)
+}
+
+fn parse_data_loading_option(
+    parser: &mut Parser,
+    key: Word,
+    options: &mut Vec<DataLoadingOption>,
+) -> Result<(), ParserError> {
+    parser.expect_token(&Token::Eq)?;
+    if parser.parse_keyword(Keyword::TRUE) {
+        options.push(DataLoadingOption {
+            option_name: key.value,
+            option_type: DataLoadingOptionType::BOOLEAN,
+            value: "TRUE".to_string(),
+        });
+        Ok(())
+    } else if parser.parse_keyword(Keyword::FALSE) {
+        options.push(DataLoadingOption {
+            option_name: key.value,
+            option_type: DataLoadingOptionType::BOOLEAN,
+            value: "FALSE".to_string(),
+        });
+        Ok(())
+    } else {
+        match parser.next_token().token {
+            Token::SingleQuotedString(value) => {
+                options.push(DataLoadingOption {
+                    option_name: key.value,
+                    option_type: DataLoadingOptionType::STRING,
+                    value,
+                });
+                Ok(())
+            }
+            Token::Word(word) => {
+                options.push(DataLoadingOption {
+                    option_name: key.value,
+                    option_type: DataLoadingOptionType::ENUM,
+                    value: word.value,
+                });
+                Ok(())
+            }
+            _ => parser.expected("expected option value", parser.peek_token()),
+        }
+    }
 }
 
 /// Parsing a property of identity or autoincrement column option

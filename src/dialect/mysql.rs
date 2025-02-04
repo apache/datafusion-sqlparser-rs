@@ -125,6 +125,15 @@ impl Dialect for MySqlDialect {
     fn supports_table_hints(&self) -> bool {
         true
     }
+
+    /// Returns whether it's the start of a single line comment
+    /// e.g. MySQL requires a space after `--` to be a single line comment
+    /// Otherwise it's interpreted as a double minus operator
+    ///
+    /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/ansi-diff-comments.html>
+    fn is_start_of_single_line_comment(&self, _ch: char) -> bool {
+        _ch == ' '
+    }
 }
 
 /// `LOCK TABLES`

@@ -2990,7 +2990,8 @@ fn test_parse_show_objects() {
     snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc");
     snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b'");
     snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10");
-    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10 FROM 'x'");
+    snowflake()
+        .verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10 FROM 'x'");
 }
 
 #[test]

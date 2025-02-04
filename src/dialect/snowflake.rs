@@ -23,9 +23,10 @@ use crate::ast::helpers::stmt_data_loading::{
     StageLoadSelectItem, StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
-    RowAccessPolicy, Statement, TagsColumnOption, WrappedCollection,
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, ObjectName, RowAccessPolicy, Statement, TagsColumnOption,
+    WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -186,6 +187,8 @@ impl Dialect for SnowflakeDialect {
             let terse = parser.parse_keyword(Keyword::TERSE);
             if parser.parse_keyword(Keyword::OBJECTS) {
                 return Some(parse_show_objects(terse, parser));
+            } else {
+                return Some(parser.parse_show());
             }
         }
 
@@ -1066,10 +1069,8 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
 /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
 fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
     let show_options = parser.parse_show_stmt_options()?;
-    Ok(
-        Statement::ShowObjects { 
-            terse, 
-            show_options, 
-        }
-    )
+    Ok(Statement::ShowObjects {
+        terse,
+        show_options,
+    })
 }

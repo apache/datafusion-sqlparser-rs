@@ -33,7 +33,7 @@ use IsLateral::*;
 use IsOptional::*;
 
 use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
-use crate::ast::Statement::{CreateConnector, CreatePolicy};
+use crate::ast::Statement::CreatePolicy;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{Keyword, ALL_KEYWORDS};
@@ -5610,19 +5610,19 @@ impl<'a> Parser<'a> {
         let comment = self.parse_optional_inline_comment()?;
 
         let with_dcproperties =
-            match self.parse_options_with_keywords(&[Keyword::WITH, Keyword::DCPROPERTIES]) {
-                Ok(properties) if !properties.is_empty() => Some(properties),
+            match self.parse_options_with_keywords(&[Keyword::WITH, Keyword::DCPROPERTIES])? {
+                properties if !properties.is_empty() => Some(properties),
                 _ => None,
             };
 
-        Ok(CreateConnector {
+        Ok(Statement::CreateConnector(CreateConnector {
             name,
             if_not_exists,
             connector_type,
             url,
             comment,
             with_dcproperties,
-        })
+        }))
     }
 
     pub fn parse_drop(&mut self) -> Result<Statement, ParserError> {

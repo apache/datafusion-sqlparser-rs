@@ -12290,13 +12290,13 @@ fn test_create_connector() {
                WITH DCPROPERTIES('user' = 'root', 'password' = 'password')";
     let dialects = all_dialects();
     match dialects.verified_stmt(sql) {
-        Statement::CreateConnector {
+        Statement::CreateConnector(CreateConnector {
             name,
             connector_type,
             url,
             with_dcproperties,
             ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "my_connector");
             assert_eq!(connector_type, Some("jdbc".to_string()));
             assert_eq!(url, Some("jdbc:mysql://localhost:3306/mydb".to_string()));

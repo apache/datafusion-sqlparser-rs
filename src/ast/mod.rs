@@ -49,7 +49,7 @@ pub use self::dcl::{
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
     AlterTableOperation, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy,
-    ColumnPolicyProperty, ConstraintCharacteristics, CreateFunction, Deduplicate,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateFunction, Deduplicate,
     DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
     IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
     IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
@@ -2649,14 +2649,7 @@ pub enum Statement {
     /// CREATE CONNECTOR
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
-    CreateConnector {
-        name: Ident,
-        if_not_exists: bool,
-        connector_type: Option<String>,
-        url: Option<String>,
-        comment: Option<CommentDef>,
-        with_dcproperties: Option<Vec<SqlOption>>,
-    },
+    CreateConnector(CreateConnector),
     /// ```sql
     /// ALTER TABLE
     /// ```
@@ -4385,43 +4378,7 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
-            Statement::CreateConnector {
-                name,
-                if_not_exists,
-                connector_type,
-                url,
-                comment,
-                with_dcproperties,
-            } => {
-                write!(
-                    f,
-                    "CREATE CONNECTOR {if_not_exists}{name}",
-                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    name = name,
-                )?;
-
-                if let Some(connector_type) = connector_type {
-                    write!(f, " TYPE '{connector_type}'")?;
-                }
-
-                if let Some(url) = url {
-                    write!(f, " URL '{url}'")?;
-                }
-
-                if let Some(comment) = comment {
-                    write!(f, " COMMENT = '{comment}'")?;
-                }
-
-                if let Some(with_dcproperties) = with_dcproperties {
-                    write!(
-                        f,
-                        " WITH DCPROPERTIES({})",
-                        display_comma_separated(with_dcproperties)
-                    )?;
-                }
-
-                Ok(())
-            }
+            Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::AlterTable {
                 name,
                 if_exists,

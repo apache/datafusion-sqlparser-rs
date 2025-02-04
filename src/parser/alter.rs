@@ -99,20 +99,20 @@ impl Parser<'_> {
         }
     }
 
-    /// Parse ALTER CONNECTOR statement
+    /// Parse an `ALTER CONNECTOR` statement
     /// ```sql
     /// ALTER CONNECTOR connector_name SET DCPROPERTIES(property_name=property_value, ...);
-    /// or
+    ///
     /// ALTER CONNECTOR connector_name SET URL new_url;
-    /// or
+    ///
     /// ALTER CONNECTOR connector_name SET OWNER [USER|ROLE] user_or_role;
     /// ```
     pub fn parse_alter_connector(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_keyword_is(Keyword::SET)?;
 
-        let properties = match self.parse_options_with_keywords(&[Keyword::DCPROPERTIES]) {
-            Ok(properties) if !properties.is_empty() => Some(properties),
+        let properties = match self.parse_options_with_keywords(&[Keyword::DCPROPERTIES])? {
+            properties if !properties.is_empty() => Some(properties),
             _ => None,
         };
 

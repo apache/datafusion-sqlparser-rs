@@ -40,13 +40,13 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::DollarQuotedString;
 use crate::dialect::Dialect;
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
     SnowflakeDialect,
 };
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use crate::{ast::DollarQuotedString, dialect::HiveDialect};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -971,7 +971,10 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('\'') => {
                             // N'...' - a <national character string literal>
-                            let s = self.tokenize_single_quoted_string(chars, '\'', true)?;
+                            let backslash_escape =
+                                self.dialect.supports_string_literal_backslash_escape();
+                            let s =
+                                self.tokenize_single_quoted_string(chars, '\'', backslash_escape)?;
                             Ok(Some(Token::NationalStringLiteral(s)))
                         }
                         _ => {
@@ -982,7 +985,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
-                x @ 'e' | x @ 'E' => {
+                x @ 'e' | x @ 'E' if self.dialect.supports_string_escape_constant() => {
                     let starting_loc = chars.location();
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
@@ -1133,12 +1136,24 @@ impl<'a> Tokenizer<'a> {
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
-                    let mut s = peeking_take_while(chars, |ch| ch.is_ascii_digit());
+                    // Some dialects support underscore as number separator
+                    // There can only be one at a time and it must be followed by another digit
+                    let is_number_separator = |ch: char, next_char: Option<char>| {
+                        self.dialect.supports_numeric_literal_underscores()
+                            && ch == '_'
+                            && next_char.is_some_and(|next_ch| next_ch.is_ascii_hexdigit())
+                    };
+
+                    let mut s = peeking_next_take_while(chars, |ch, next_ch| {
+                        ch.is_ascii_digit() || is_number_separator(ch, next_ch)
+                    });
 
                     // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
                         chars.next();
-                        let s2 = peeking_take_while(chars, |ch| ch.is_ascii_hexdigit());
+                        let s2 = peeking_next_take_while(chars, |ch, next_ch| {
+                            ch.is_ascii_hexdigit() || is_number_separator(ch, next_ch)
+                        });
                         return Ok(Some(Token::HexStringLiteral(s2)));
                     }
 
@@ -1147,7 +1162,10 @@ impl<'a> Tokenizer<'a> {
                         s.push('.');
                         chars.next();
                     }
-                    s += &peeking_take_while(chars, |ch| ch.is_ascii_digit());
+
+                    s += &peeking_next_take_while(chars, |ch, next_ch| {
+                        ch.is_ascii_digit() || is_number_separator(ch, next_ch)
+                    });
 
                     // No number -> Token::Period
                     if s == "." {
@@ -1372,7 +1390,8 @@ impl<'a> Tokenizer<'a> {
                 }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect) => {
+                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect | MySqlDialect | HiveDialect) =>
+                {
                     chars.next(); // consume the '#', starting a snowflake single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
@@ -1942,6 +1961,24 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
     s
 }
 
+/// Same as peeking_take_while, but also passes the next character to the predicate.
+fn peeking_next_take_while(
+    chars: &mut State,
+    mut predicate: impl FnMut(char, Option<char>) -> bool,
+) -> String {
+    let mut s = String::new();
+    while let Some(&ch) = chars.peek() {
+        let next_char = chars.peekable.clone().nth(1);
+        if predicate(ch, next_char) {
+            chars.next(); // consume
+            s.push(ch);
+        } else {
+            break;
+        }
+    }
+    s
+}
+
 fn unescape_single_quoted_string(chars: &mut State<'_>) -> Option<String> {
     Unescape::new(chars).unescape()
 }
@@ -2154,6 +2191,7 @@ mod tests {
     use crate::dialect::{
         BigQueryDialect, ClickHouseDialect, HiveDialect, MsSqlDialect, MySqlDialect, SQLiteDialect,
     };
+    use crate::test_utils::all_dialects_where;
     use core::fmt::Debug;
 
     #[test]
@@ -2220,6 +2258,41 @@ mod tests {
         ];
 
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_numeric_literal_underscore() {
+        let dialect = GenericDialect {};
+        let sql = String::from("SELECT 10_000");
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("10".to_string(), false),
+            Token::make_word("_000", None),
+        ];
+        compare(expected, tokens);
+
+        all_dialects_where(|dialect| dialect.supports_numeric_literal_underscores()).tokenizes_to(
+            "SELECT 10_000, _10_000, 10_00_, 10___0",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("10_000".to_string(), false),
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("_10_000", None), // leading underscore tokenizes as a word (parsed as column identifier)
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("10_00".to_string(), false),
+                Token::make_word("_", None), // trailing underscores tokenizes as a word (syntax error in some dialects)
+                Token::Comma,
+                Token::Whitespace(Whitespace::Space),
+                Token::Number("10".to_string(), false),
+                Token::make_word("___0", None), // multiple underscores tokenizes as a word (syntax error in some dialects)
+            ],
+        );
     }
 
     #[test]
@@ -3541,5 +3614,75 @@ mod tests {
             Token::make_word("foo", None),
         ];
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn test_national_strings_backslash_escape_not_supported() {
+        all_dialects_where(|dialect| !dialect.supports_string_literal_backslash_escape())
+            .tokenizes_to(
+                "select n'''''\\'",
+                vec![
+                    Token::make_keyword("select"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::NationalStringLiteral("''\\".to_string()),
+                ],
+            );
+    }
+
+    #[test]
+    fn test_national_strings_backslash_escape_supported() {
+        all_dialects_where(|dialect| dialect.supports_string_literal_backslash_escape())
+            .tokenizes_to(
+                "select n'''''\\''",
+                vec![
+                    Token::make_keyword("select"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::NationalStringLiteral("'''".to_string()),
+                ],
+            );
+    }
+
+    #[test]
+    fn test_string_escape_constant_not_supported() {
+        all_dialects_where(|dialect| !dialect.supports_string_escape_constant()).tokenizes_to(
+            "select e'...'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("e", None),
+                Token::SingleQuotedString("...".to_string()),
+            ],
+        );
+
+        all_dialects_where(|dialect| !dialect.supports_string_escape_constant()).tokenizes_to(
+            "select E'...'",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::make_word("E", None),
+                Token::SingleQuotedString("...".to_string()),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_string_escape_constant_supported() {
+        all_dialects_where(|dialect| dialect.supports_string_escape_constant()).tokenizes_to(
+            "select e'\\''",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::EscapedStringLiteral("'".to_string()),
+            ],
+        );
+
+        all_dialects_where(|dialect| dialect.supports_string_escape_constant()).tokenizes_to(
+            "select E'\\''",
+            vec![
+                Token::make_keyword("select"),
+                Token::Whitespace(Whitespace::Space),
+                Token::EscapedStringLiteral("'".to_string()),
+            ],
+        );
     }
 }

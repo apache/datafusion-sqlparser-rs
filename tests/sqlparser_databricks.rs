@@ -84,69 +84,6 @@ fn test_databricks_exists() {
 }
 
 #[test]
-fn test_databricks_lambdas() {
-    #[rustfmt::skip]
-    let sql = concat!(
-        "SELECT array_sort(array('Hello', 'World'), ",
-            "(p1, p2) -> CASE WHEN p1 = p2 THEN 0 ",
-                        "WHEN reverse(p1) < reverse(p2) THEN -1 ",
-                        "ELSE 1 END)",
-    );
-    pretty_assertions::assert_eq!(
-        SelectItem::UnnamedExpr(call(
-            "array_sort",
-            [
-                call(
-                    "array",
-                    [
-                        Expr::Value(Value::SingleQuotedString("Hello".to_owned())),
-                        Expr::Value(Value::SingleQuotedString("World".to_owned()))
-                    ]
-                ),
-                Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
-                    body: Box::new(Expr::Case {
-                        operand: None,
-                        conditions: vec![
-                            Expr::BinaryOp {
-                                left: Box::new(Expr::Identifier(Ident::new("p1"))),
-                                op: BinaryOperator::Eq,
-                                right: Box::new(Expr::Identifier(Ident::new("p2")))
-                            },
-                            Expr::BinaryOp {
-                                left: Box::new(call(
-                                    "reverse",
-                                    [Expr::Identifier(Ident::new("p1"))]
-                                )),
-                                op: BinaryOperator::Lt,
-                                right: Box::new(call(
-                                    "reverse",
-                                    [Expr::Identifier(Ident::new("p2"))]
-                                ))
-                            }
-                        ],
-                        results: vec![
-                            Expr::Value(number("0")),
-                            Expr::UnaryOp {
-                                op: UnaryOperator::Minus,
-                                expr: Box::new(Expr::Value(number("1")))
-                            }
-                        ],
-                        else_result: Some(Box::new(Expr::Value(number("1"))))
-                    })
-                })
-            ]
-        )),
-        databricks().verified_only_select(sql).projection[0]
-    );
-
-    databricks().verified_expr(
-        "map_zip_with(map(1, 'a', 2, 'b'), map(1, 'x', 2, 'y'), (k, v1, v2) -> concat(v1, v2))",
-    );
-    databricks().verified_expr("transform(array(1, 2, 3), x -> x + 1)");
-}
-
-#[test]
 fn test_values_clause() {
     let values = Values {
         explicit_row: false,
@@ -185,7 +122,9 @@ fn test_values_clause() {
         "SELECT * FROM values",
     ));
     assert_eq!(
-        Some(&table_from_name(ObjectName(vec![Ident::new("values")]))),
+        Some(&table_from_name(ObjectName::from(vec![Ident::new(
+            "values"
+        )]))),
         query
             .body
             .as_select()
@@ -205,7 +144,7 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             databricks().verified_stmt(&format!("USE {}", object_name)),
-            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
+            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
                 object_name.to_string()
             )])))
         );
@@ -213,7 +152,7 @@ fn parse_use() {
             // Test single identifier with different type of quotes
             assert_eq!(
                 databricks().verified_stmt(&format!("USE {0}{1}{0}", quote, object_name)),
-                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
+                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
                 )])))
@@ -225,21 +164,21 @@ fn parse_use() {
         // Test single identifier with keyword and different type of quotes
         assert_eq!(
             databricks().verified_stmt(&format!("USE CATALOG {0}my_catalog{0}", quote)),
-            Statement::Use(Use::Catalog(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Catalog(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_catalog".to_string(),
             )])))
         );
         assert_eq!(
             databricks().verified_stmt(&format!("USE DATABASE {0}my_database{0}", quote)),
-            Statement::Use(Use::Database(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Database(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_database".to_string(),
             )])))
         );
         assert_eq!(
             databricks().verified_stmt(&format!("USE SCHEMA {0}my_schema{0}", quote)),
-            Statement::Use(Use::Schema(ObjectName(vec![Ident::with_quote(
+            Statement::Use(Use::Schema(ObjectName::from(vec![Ident::with_quote(
                 quote,
                 "my_schema".to_string(),
             )])))
@@ -249,15 +188,19 @@ fn parse_use() {
     // Test single identifier with keyword and no quotes
     assert_eq!(
         databricks().verified_stmt("USE CATALOG my_catalog"),
-        Statement::Use(Use::Catalog(ObjectName(vec![Ident::new("my_catalog")])))
+        Statement::Use(Use::Catalog(ObjectName::from(vec![Ident::new(
+            "my_catalog"
+        )])))
     );
     assert_eq!(
         databricks().verified_stmt("USE DATABASE my_schema"),
-        Statement::Use(Use::Database(ObjectName(vec![Ident::new("my_schema")])))
+        Statement::Use(Use::Database(ObjectName::from(vec![Ident::new(
+            "my_schema"
+        )])))
     );
     assert_eq!(
         databricks().verified_stmt("USE SCHEMA my_schema"),
-        Statement::Use(Use::Schema(ObjectName(vec![Ident::new("my_schema")])))
+        Statement::Use(Use::Schema(ObjectName::from(vec![Ident::new("my_schema")])))
     );
 
     // Test invalid syntax - missing identifier

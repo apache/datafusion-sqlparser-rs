@@ -56,6 +56,24 @@ use sqlparser::ast::Value::Number;
 use sqlparser::test_utils::all_dialects_except;
 
 #[test]
+fn parse_numeric_literal_underscore() {
+    let dialects = all_dialects_where(|d| d.supports_numeric_literal_underscores());
+
+    let canonical = if cfg!(feature = "bigdecimal") {
+        "SELECT 10000"
+    } else {
+        "SELECT 10_000"
+    };
+
+    let select = dialects.verified_only_select_with_canonical("SELECT 10_000", canonical);
+
+    assert_eq!(
+        select.projection,
+        vec![UnnamedExpr(Expr::Value(number("10_000")))]
+    );
+}
+
+#[test]
 fn parse_insert_values() {
     let row = vec![
         Expr::Value(number("1")),
@@ -160,7 +178,7 @@ fn parse_insert_default_values() {
             assert_eq!(source, None);
             assert_eq!(
                 table_name,
-                TableObject::TableName(ObjectName(vec!["test_table".into()]))
+                TableObject::TableName(ObjectName::from(vec!["test_table".into()]))
             );
         }
         _ => unreachable!(),
@@ -188,7 +206,7 @@ fn parse_insert_default_values() {
             assert_eq!(source, None);
             assert_eq!(
                 table_name,
-                TableObject::TableName(ObjectName(vec!["test_table".into()]))
+                TableObject::TableName(ObjectName::from(vec!["test_table".into()]))
             );
         }
         _ => unreachable!(),
@@ -216,7 +234,7 @@ fn parse_insert_default_values() {
             assert_eq!(source, None);
             assert_eq!(
                 table_name,
-                TableObject::TableName(ObjectName(vec!["test_table".into()]))
+                TableObject::TableName(ObjectName::from(vec!["test_table".into()]))
             );
         }
         _ => unreachable!(),
@@ -253,8 +271,13 @@ fn parse_insert_default_values() {
 
 #[test]
 fn parse_insert_select_returning() {
-    verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
-    let stmt = verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
+    // Dialects that support `RETURNING` as a column identifier do
+    // not support this syntax.
+    let dialects =
+        all_dialects_where(|d| !d.is_column_alias(&Keyword::RETURNING, &mut Parser::new(d)));
+
+    dialects.verified_stmt("INSERT INTO t SELECT 1 RETURNING 2");
+    let stmt = dialects.verified_stmt("INSERT INTO t SELECT x RETURNING x AS y");
     match stmt {
         Statement::Insert(Insert {
             returning: Some(ret),
@@ -262,6 +285,27 @@ fn parse_insert_select_returning() {
             ..
         }) => assert_eq!(ret.len(), 1),
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_insert_select_from_returning() {
+    let sql = "INSERT INTO table1 SELECT * FROM table2 RETURNING id";
+    match verified_stmt(sql) {
+        Statement::Insert(Insert {
+            table: TableObject::TableName(table_name),
+            source: Some(source),
+            returning: Some(returning),
+            ..
+        }) => {
+            assert_eq!("table1", table_name.to_string());
+            assert!(matches!(*source.body, SetExpr::Select(_)));
+            assert_eq!(
+                returning,
+                vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),]
+            );
+        }
+        bad_stmt => unreachable!("Expected valid insert, got {:?}", bad_stmt),
     }
 }
 
@@ -322,15 +366,15 @@ fn parse_update() {
                 assignments,
                 vec![
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec!["a".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec!["a".into()])),
                         value: Expr::Value(number("1")),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec!["b".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec!["b".into()])),
                         value: Expr::Value(number("2")),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec!["c".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec!["c".into()])),
                         value: Expr::Value(number("3")),
                     },
                 ]
@@ -375,14 +419,14 @@ fn parse_update_set_from() {
         stmt,
         Statement::Update {
             table: TableWithJoins {
-                relation: table_from_name(ObjectName(vec![Ident::new("t1")])),
+                relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
             },
             assignments: vec![Assignment {
-                target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("name")])),
+                target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("name")])),
                 value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
             }],
-            from: Some(UpdateTableFromKind::AfterSet(TableWithJoins {
+            from: Some(UpdateTableFromKind::AfterSet(vec![TableWithJoins {
                 relation: TableFactor::Derived {
                     lateral: false,
                     subquery: Box::new(Query {
@@ -398,7 +442,7 @@ fn parse_update_set_from() {
                             ],
                             into: None,
                             from: vec![TableWithJoins {
-                                relation: table_from_name(ObjectName(vec![Ident::new("t1")])),
+                                relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                                 joins: vec![],
                             }],
                             lateral_views: vec![],
@@ -434,7 +478,7 @@ fn parse_update_set_from() {
                     })
                 },
                 joins: vec![]
-            })),
+            }])),
             selection: Some(Expr::BinaryOp {
                 left: Box::new(Expr::CompoundIdentifier(vec![
                     Ident::new("t1"),
@@ -450,6 +494,9 @@ fn parse_update_set_from() {
             or: None,
         }
     );
+
+    let sql = "UPDATE T SET a = b FROM U, (SELECT foo FROM V) AS W WHERE 1 = 1";
+    dialects.verified_stmt(sql);
 }
 
 #[test]
@@ -467,7 +514,7 @@ fn parse_update_with_table_alias() {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
-                        name: ObjectName(vec![Ident::new("users")]),
+                        name: ObjectName::from(vec![Ident::new("users")]),
                         alias: Some(TableAlias {
                             name: Ident::new("u"),
                             columns: vec![],
@@ -479,6 +526,7 @@ fn parse_update_with_table_alias() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
+                        index_hints: vec![],
                     },
                     joins: vec![],
                 },
@@ -486,7 +534,7 @@ fn parse_update_with_table_alias() {
             );
             assert_eq!(
                 vec![Assignment {
-                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                         Ident::new("u"),
                         Ident::new("username")
                     ])),
@@ -556,7 +604,7 @@ fn parse_select_with_table_alias() {
         select.from,
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("lineitem")]),
+                name: ObjectName::from(vec![Ident::new("lineitem")]),
                 alias: Some(TableAlias {
                     name: Ident::new("l"),
                     columns: vec![
@@ -572,6 +620,7 @@ fn parse_select_with_table_alias() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             joins: vec![],
         }]
@@ -607,7 +656,7 @@ fn parse_delete_statement() {
             ..
         }) => {
             assert_eq!(
-                table_from_name(ObjectName(vec![Ident::with_quote('"', "table")])),
+                table_from_name(ObjectName::from(vec![Ident::with_quote('"', "table")])),
                 from[0].relation
             );
         }
@@ -638,22 +687,22 @@ fn parse_delete_statement_for_multi_tables() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                ObjectName::from(vec![Ident::new("schema1"), Ident::new("table1")]),
                 tables[0]
             );
             assert_eq!(
-                ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                ObjectName::from(vec![Ident::new("schema2"), Ident::new("table2")]),
                 tables[1]
             );
             assert_eq!(
-                table_from_name(ObjectName(vec![
+                table_from_name(ObjectName::from(vec![
                     Ident::new("schema1"),
                     Ident::new("table1")
                 ])),
                 from[0].relation
             );
             assert_eq!(
-                table_from_name(ObjectName(vec![
+                table_from_name(ObjectName::from(vec![
                     Ident::new("schema2"),
                     Ident::new("table2")
                 ])),
@@ -674,28 +723,28 @@ fn parse_delete_statement_for_multi_tables_with_using() {
             ..
         }) => {
             assert_eq!(
-                table_from_name(ObjectName(vec![
+                table_from_name(ObjectName::from(vec![
                     Ident::new("schema1"),
                     Ident::new("table1")
                 ])),
                 from[0].relation
             );
             assert_eq!(
-                table_from_name(ObjectName(vec![
+                table_from_name(ObjectName::from(vec![
                     Ident::new("schema2"),
                     Ident::new("table2")
                 ])),
                 from[1].relation
             );
             assert_eq!(
-                table_from_name(ObjectName(vec![
+                table_from_name(ObjectName::from(vec![
                     Ident::new("schema1"),
                     Ident::new("table1")
                 ])),
                 using[0].relation
             );
             assert_eq!(
-                table_from_name(ObjectName(vec![
+                table_from_name(ObjectName::from(vec![
                     Ident::new("schema2"),
                     Ident::new("table2")
                 ])),
@@ -721,7 +770,7 @@ fn parse_where_delete_statement() {
             ..
         }) => {
             assert_eq!(
-                table_from_name(ObjectName(vec![Ident::new("foo")])),
+                table_from_name(ObjectName::from(vec![Ident::new("foo")])),
                 from[0].relation,
             );
 
@@ -756,7 +805,7 @@ fn parse_where_delete_with_alias_statement() {
         }) => {
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("basket")]),
+                    name: ObjectName::from(vec![Ident::new("basket")]),
                     alias: Some(TableAlias {
                         name: Ident::new("a"),
                         columns: vec![],
@@ -768,13 +817,14 @@ fn parse_where_delete_with_alias_statement() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
+                    index_hints: vec![],
                 },
                 from[0].relation,
             );
             assert_eq!(
                 Some(vec![TableWithJoins {
                     relation: TableFactor::Table {
-                        name: ObjectName(vec![Ident::new("basket")]),
+                        name: ObjectName::from(vec![Ident::new("basket")]),
                         alias: Some(TableAlias {
                             name: Ident::new("b"),
                             columns: vec![],
@@ -786,6 +836,7 @@ fn parse_where_delete_with_alias_statement() {
                         with_ordinality: false,
                         json_path: None,
                         sample: None,
+                        index_hints: vec![],
                     },
                     joins: vec![],
                 }]),
@@ -941,7 +992,7 @@ fn parse_select_into() {
             temporary: false,
             unlogged: false,
             table: false,
-            name: ObjectName(vec![Ident::new("table0")]),
+            name: ObjectName::from(vec![Ident::new("table0")]),
         },
         only(&select.into)
     );
@@ -974,7 +1025,7 @@ fn parse_select_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &SelectItem::QualifiedWildcard(
-            ObjectName(vec![Ident::new("foo")]),
+            SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("foo")])),
             WildcardAdditionalOptions::default()
         ),
         only(&select.projection)
@@ -984,7 +1035,10 @@ fn parse_select_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &SelectItem::QualifiedWildcard(
-            ObjectName(vec![Ident::new("myschema"), Ident::new("mytable"),]),
+            SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![
+                Ident::new("myschema"),
+                Ident::new("mytable"),
+            ])),
             WildcardAdditionalOptions::default(),
         ),
         only(&select.projection)
@@ -1030,6 +1084,84 @@ fn parse_column_aliases() {
 }
 
 #[test]
+fn parse_select_expr_star() {
+    let dialects = all_dialects_where(|d| d.supports_select_expr_star());
+
+    // Identifier wildcard expansion.
+    let select = dialects.verified_only_select("SELECT foo.bar.* FROM T");
+    let SelectItem::QualifiedWildcard(SelectItemQualifiedWildcardKind::ObjectName(object_name), _) =
+        only(&select.projection)
+    else {
+        unreachable!(
+            "expected wildcard select item: got {:?}",
+            &select.projection[0]
+        )
+    };
+    assert_eq!(
+        &ObjectName::from(
+            ["foo", "bar"]
+                .into_iter()
+                .map(Ident::new)
+                .collect::<Vec<_>>()
+        ),
+        object_name
+    );
+
+    // Arbitrary compound expression with wildcard expansion.
+    let select = dialects.verified_only_select("SELECT foo - bar.* FROM T");
+    let SelectItem::QualifiedWildcard(
+        SelectItemQualifiedWildcardKind::Expr(Expr::BinaryOp { left, op, right }),
+        _,
+    ) = only(&select.projection)
+    else {
+        unreachable!(
+            "expected wildcard select item: got {:?}",
+            &select.projection[0]
+        )
+    };
+    let (Expr::Identifier(left), BinaryOperator::Minus, Expr::Identifier(right)) =
+        (left.as_ref(), op, right.as_ref())
+    else {
+        unreachable!("expected binary op expr: got {:?}", &select.projection[0])
+    };
+    assert_eq!(&Ident::new("foo"), left);
+    assert_eq!(&Ident::new("bar"), right);
+
+    // Arbitrary expression wildcard expansion.
+    let select = dialects.verified_only_select("SELECT myfunc().foo.* FROM T");
+    let SelectItem::QualifiedWildcard(
+        SelectItemQualifiedWildcardKind::Expr(Expr::CompoundFieldAccess { root, access_chain }),
+        _,
+    ) = only(&select.projection)
+    else {
+        unreachable!("expected wildcard expr: got {:?}", &select.projection[0])
+    };
+    assert!(matches!(root.as_ref(), Expr::Function(_)));
+    assert_eq!(1, access_chain.len());
+    assert!(matches!(
+        &access_chain[0],
+        AccessExpr::Dot(Expr::Identifier(_))
+    ));
+
+    dialects.one_statement_parses_to(
+        "SELECT 2. * 3 FROM T",
+        #[cfg(feature = "bigdecimal")]
+        "SELECT 2 * 3 FROM T",
+        #[cfg(not(feature = "bigdecimal"))]
+        "SELECT 2. * 3 FROM T",
+    );
+    dialects.verified_only_select("SELECT myfunc().* FROM T");
+    dialects.verified_only_select("SELECT myfunc().* EXCEPT (foo) FROM T");
+
+    // Invalid
+    let res = dialects.parse_sql_statements("SELECT foo.*.* FROM T");
+    assert_eq!(
+        ParserError::ParserError("Expected: end of statement, found: .".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn test_eof_after_as() {
     let res = parse_sql_statements("SELECT foo AS");
     assert_eq!(
@@ -1061,7 +1193,7 @@ fn parse_select_count_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("COUNT")]),
+            name: ObjectName::from(vec![Ident::new("COUNT")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -1084,7 +1216,7 @@ fn parse_select_count_distinct() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("COUNT")]),
+            name: ObjectName::from(vec![Ident::new("COUNT")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -2321,7 +2453,7 @@ fn parse_select_having() {
     assert_eq!(
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("COUNT")]),
+                name: ObjectName::from(vec![Ident::new("COUNT")]),
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
@@ -2352,7 +2484,7 @@ fn parse_select_qualify() {
     assert_eq!(
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
+                name: ObjectName::from(vec![Ident::new("ROW_NUMBER")]),
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
@@ -2759,7 +2891,7 @@ fn parse_listagg() {
 
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("LISTAGG")]),
+            name: ObjectName::from(vec![Ident::new("LISTAGG")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -2914,7 +3046,10 @@ fn parse_window_function_null_treatment_arg() {
         let SelectItem::UnnamedExpr(Expr::Function(actual)) = &projection[i] else {
             unreachable!()
         };
-        assert_eq!(ObjectName(vec![Ident::new("FIRST_VALUE")]), actual.name);
+        assert_eq!(
+            ObjectName::from(vec![Ident::new("FIRST_VALUE")]),
+            actual.name
+        );
         let FunctionArguments::List(arg_list) = &actual.args else {
             panic!("expected argument list")
         };
@@ -3210,7 +3345,7 @@ fn parse_create_table() {
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
-                                foreign_table: ObjectName(vec!["othertable".into()]),
+                                foreign_table: ObjectName::from(vec!["othertable".into()]),
                                 referred_columns: vec!["a".into(), "b".into()],
                                 on_delete: None,
                                 on_update: None,
@@ -3225,7 +3360,7 @@ fn parse_create_table() {
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
-                                foreign_table: ObjectName(vec!["othertable2".into()]),
+                                foreign_table: ObjectName::from(vec!["othertable2".into()]),
                                 referred_columns: vec![],
                                 on_delete: Some(ReferentialAction::Cascade),
                                 on_update: Some(ReferentialAction::NoAction),
@@ -3241,7 +3376,7 @@ fn parse_create_table() {
                     TableConstraint::ForeignKey {
                         name: Some("fkey".into()),
                         columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable3".into()]),
+                        foreign_table: ObjectName::from(vec!["othertable3".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
@@ -3250,7 +3385,7 @@ fn parse_create_table() {
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
                         columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
@@ -3259,7 +3394,7 @@ fn parse_create_table() {
                     TableConstraint::ForeignKey {
                         name: None,
                         columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
@@ -3268,7 +3403,7 @@ fn parse_create_table() {
                     TableConstraint::ForeignKey {
                         name: None,
                         columns: vec!["lng".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["longitude".into()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
@@ -3367,7 +3502,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     TableConstraint::ForeignKey {
                         name: Some("fkey".into()),
                         columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable3".into()]),
+                        foreign_table: ObjectName::from(vec!["othertable3".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
@@ -3380,7 +3515,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
                         columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
@@ -3393,7 +3528,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     TableConstraint::ForeignKey {
                         name: None,
                         columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
@@ -3406,7 +3541,7 @@ fn parse_create_table_with_constraint_characteristics() {
                     TableConstraint::ForeignKey {
                         name: None,
                         columns: vec!["lng".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        foreign_table: ObjectName::from(vec!["othertable4".into()]),
                         referred_columns: vec!["longitude".into()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
@@ -3599,7 +3734,7 @@ fn parse_create_table_hive_array() {
                 ..
             }) => {
                 assert!(if_not_exists);
-                assert_eq!(name, ObjectName(vec!["something".into()]));
+                assert_eq!(name, ObjectName::from(vec!["something".into()]));
                 assert_eq!(
                     columns,
                     vec![
@@ -3796,7 +3931,7 @@ fn parse_create_table_as_table() {
 
     match verified_stmt(sql1) {
         Statement::CreateTable(CreateTable { query, name, .. }) => {
-            assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
+            assert_eq!(name, ObjectName::from(vec![Ident::new("new_table")]));
             assert_eq!(query.unwrap(), expected_query1);
         }
         _ => unreachable!(),
@@ -3823,7 +3958,7 @@ fn parse_create_table_as_table() {
 
     match verified_stmt(sql2) {
         Statement::CreateTable(CreateTable { query, name, .. }) => {
-            assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
+            assert_eq!(name, ObjectName::from(vec![Ident::new("new_table")]));
             assert_eq!(query.unwrap(), expected_query2);
         }
         _ => unreachable!(),
@@ -3926,8 +4061,8 @@ fn parse_create_table_clone() {
     let sql = "CREATE OR REPLACE TABLE a CLONE a_tmp";
     match verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, clone, .. }) => {
-            assert_eq!(ObjectName(vec![Ident::new("a")]), name);
-            assert_eq!(Some(ObjectName(vec![(Ident::new("a_tmp"))])), clone)
+            assert_eq!(ObjectName::from(vec![Ident::new("a")]), name);
+            assert_eq!(Some(ObjectName::from(vec![(Ident::new("a_tmp"))])), clone)
         }
         _ => unreachable!(),
     }
@@ -4155,11 +4290,11 @@ fn parse_rename_table() {
         Statement::RenameTable(rename_tables) => {
             assert_eq!(
                 vec![RenameTable {
-                    old_name: ObjectName(vec![
+                    old_name: ObjectName::from(vec![
                         Ident::new("test".to_string()),
                         Ident::new("test1".to_string()),
                     ]),
-                    new_name: ObjectName(vec![
+                    new_name: ObjectName::from(vec![
                         Ident::new("test_db".to_string()),
                         Ident::new("test2".to_string()),
                     ]),
@@ -4177,16 +4312,16 @@ fn parse_rename_table() {
             assert_eq!(
                 vec![
                     RenameTable {
-                        old_name: ObjectName(vec![Ident::new("old_table1".to_string())]),
-                        new_name: ObjectName(vec![Ident::new("new_table1".to_string())]),
+                        old_name: ObjectName::from(vec![Ident::new("old_table1".to_string())]),
+                        new_name: ObjectName::from(vec![Ident::new("new_table1".to_string())]),
                     },
                     RenameTable {
-                        old_name: ObjectName(vec![Ident::new("old_table2".to_string())]),
-                        new_name: ObjectName(vec![Ident::new("new_table2".to_string())]),
+                        old_name: ObjectName::from(vec![Ident::new("old_table2".to_string())]),
+                        new_name: ObjectName::from(vec![Ident::new("new_table2".to_string())]),
                     },
                     RenameTable {
-                        old_name: ObjectName(vec![Ident::new("old_table3".to_string())]),
-                        new_name: ObjectName(vec![Ident::new("new_table3".to_string())]),
+                        old_name: ObjectName::from(vec![Ident::new("old_table3".to_string())]),
+                        new_name: ObjectName::from(vec![Ident::new("new_table3".to_string())]),
                     }
                 ],
                 rename_tables
@@ -4579,7 +4714,7 @@ fn run_explain_analyze(
     expected_verbose: bool,
     expected_analyze: bool,
     expected_format: Option<AnalyzeFormat>,
-    exepcted_options: Option<Vec<UtilityOption>>,
+    expected_options: Option<Vec<UtilityOption>>,
 ) {
     match dialect.verified_stmt(query) {
         Statement::Explain {
@@ -4595,7 +4730,7 @@ fn run_explain_analyze(
             assert_eq!(verbose, expected_verbose);
             assert_eq!(analyze, expected_analyze);
             assert_eq!(format, expected_format);
-            assert_eq!(options, exepcted_options);
+            assert_eq!(options, expected_options);
             assert!(!query_plan);
             assert!(!estimate);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
@@ -4781,7 +4916,7 @@ fn parse_named_argument_function() {
 
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("FUN")]),
+            name: ObjectName::from(vec![Ident::new("FUN")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -4821,7 +4956,7 @@ fn parse_named_argument_function_with_eq_operator() {
         .verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("FUN")]),
+            name: ObjectName::from(vec![Ident::new("FUN")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -4896,7 +5031,7 @@ fn parse_window_functions() {
 
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("row_number")]),
+            name: ObjectName::from(vec![Ident::new("row_number")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -5023,7 +5158,7 @@ fn test_parse_named_window() {
         projection: vec![
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
-                    name: ObjectName(vec![Ident {
+                    name: ObjectName::from(vec![Ident {
                         value: "MIN".to_string(),
                         quote_style: None,
                         span: Span::empty(),
@@ -5058,7 +5193,7 @@ fn test_parse_named_window() {
             },
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
-                    name: ObjectName(vec![Ident {
+                    name: ObjectName::from(vec![Ident {
                         value: "MAX".to_string(),
                         quote_style: None,
                         span: Span::empty(),
@@ -5094,7 +5229,7 @@ fn test_parse_named_window() {
         ],
         into: None,
         from: vec![TableWithJoins {
-            relation: table_from_name(ObjectName(vec![Ident {
+            relation: table_from_name(ObjectName::from(vec![Ident {
                 value: "aggregate_test_100".to_string(),
                 quote_style: None,
                 span: Span::empty(),
@@ -5274,7 +5409,7 @@ fn parse_literal_date() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Date,
-            value: "1999-01-01".into(),
+            value: Value::SingleQuotedString("1999-01-01".into()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5287,7 +5422,7 @@ fn parse_literal_time() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Time(None, TimezoneInfo::None),
-            value: "01:23:34".into(),
+            value: Value::SingleQuotedString("01:23:34".into()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5300,7 +5435,7 @@ fn parse_literal_datetime() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Datetime(None),
-            value: "1999-01-01 01:23:34.45".into(),
+            value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5313,7 +5448,7 @@ fn parse_literal_timestamp_without_time_zone() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::None),
-            value: "1999-01-01 01:23:34".into(),
+            value: Value::SingleQuotedString("1999-01-01 01:23:34".into()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5328,7 +5463,7 @@ fn parse_literal_timestamp_with_time_zone() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::Timestamp(None, TimezoneInfo::Tz),
-            value: "1999-01-01 01:23:34Z".into(),
+            value: Value::SingleQuotedString("1999-01-01 01:23:34Z".into()),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5708,7 +5843,7 @@ fn parse_interval_and_or_xor() {
             }))],
             into: None,
             from: vec![TableWithJoins {
-                relation: table_from_name(ObjectName(vec![Ident {
+                relation: table_from_name(ObjectName::from(vec![Ident {
                     value: "test".to_string(),
                     quote_style: None,
                     span: Span::empty(),
@@ -5880,7 +6015,8 @@ fn parse_json_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::JSON,
-            value: r#"{
+            value: Value::SingleQuotedString(
+                r#"{
   "id": 10,
   "type": "fruit",
   "name": "apple",
@@ -5900,10 +6036,28 @@ fn parse_json_keyword() {
       ]
     }
 }"#
-            .into()
+                .to_string()
+            )
         },
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn parse_typed_strings() {
+    let expr = verified_expr(r#"JSON '{"foo":"bar"}'"#);
+    assert_eq!(
+        Expr::TypedString {
+            data_type: DataType::JSON,
+            value: Value::SingleQuotedString(r#"{"foo":"bar"}"#.into())
+        },
+        expr
+    );
+
+    if let Expr::TypedString { data_type, value } = expr {
+        assert_eq!(DataType::JSON, data_type);
+        assert_eq!(r#"{"foo":"bar"}"#, value.into_string().unwrap());
+    }
 }
 
 #[test]
@@ -5913,7 +6067,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"0"#.into()
+            value: Value::SingleQuotedString(r#"0"#.into())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5924,7 +6078,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"123456"#.into()
+            value: Value::SingleQuotedString(r#"123456"#.into())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5935,7 +6089,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"-3.14"#.into()
+            value: Value::SingleQuotedString(r#"-3.14"#.into())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5946,7 +6100,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"-0.54321"#.into()
+            value: Value::SingleQuotedString(r#"-0.54321"#.into())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5957,7 +6111,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"1.23456e05"#.into()
+            value: Value::SingleQuotedString(r#"1.23456e05"#.into())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -5968,7 +6122,7 @@ fn parse_bignumeric_keyword() {
     assert_eq!(
         &Expr::TypedString {
             data_type: DataType::BigNumeric(ExactNumberInfo::None),
-            value: r#"-9.876e-3"#.into()
+            value: Value::SingleQuotedString(r#"-9.876e-3"#.into())
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6320,11 +6474,11 @@ fn parse_implicit_join() {
     assert_eq!(
         vec![
             TableWithJoins {
-                relation: table_from_name(ObjectName(vec!["t1".into()])),
+                relation: table_from_name(ObjectName::from(vec!["t1".into()])),
                 joins: vec![],
             },
             TableWithJoins {
-                relation: table_from_name(ObjectName(vec!["t2".into()])),
+                relation: table_from_name(ObjectName::from(vec!["t2".into()])),
                 joins: vec![],
             },
         ],
@@ -6336,19 +6490,19 @@ fn parse_implicit_join() {
     assert_eq!(
         vec![
             TableWithJoins {
-                relation: table_from_name(ObjectName(vec!["t1a".into()])),
+                relation: table_from_name(ObjectName::from(vec!["t1a".into()])),
                 joins: vec![Join {
-                    relation: table_from_name(ObjectName(vec!["t1b".into()])),
+                    relation: table_from_name(ObjectName::from(vec!["t1b".into()])),
                     global: false,
-                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                    join_operator: JoinOperator::Join(JoinConstraint::Natural),
                 }],
             },
             TableWithJoins {
-                relation: table_from_name(ObjectName(vec!["t2a".into()])),
+                relation: table_from_name(ObjectName::from(vec!["t2a".into()])),
                 joins: vec![Join {
-                    relation: table_from_name(ObjectName(vec!["t2b".into()])),
+                    relation: table_from_name(ObjectName::from(vec!["t2b".into()])),
                     global: false,
-                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                    join_operator: JoinOperator::Join(JoinConstraint::Natural),
                 }],
             },
         ],
@@ -6362,7 +6516,7 @@ fn parse_cross_join() {
     let select = verified_only_select(sql);
     assert_eq!(
         Join {
-            relation: table_from_name(ObjectName(vec![Ident::new("t2")])),
+            relation: table_from_name(ObjectName::from(vec![Ident::new("t2")])),
             global: false,
             join_operator: JoinOperator::CrossJoin,
         },
@@ -6380,7 +6534,7 @@ fn parse_joins_on() {
     ) -> Join {
         Join {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new(relation.into())]),
+                name: ObjectName::from(vec![Ident::new(relation.into())]),
                 alias,
                 args: None,
                 with_hints: vec![],
@@ -6389,6 +6543,7 @@ fn parse_joins_on() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -6405,7 +6560,7 @@ fn parse_joins_on() {
             "t2",
             table_alias("foo"),
             false,
-            JoinOperator::Inner,
+            JoinOperator::Join,
         )]
     );
     one_statement_parses_to(
@@ -6415,7 +6570,7 @@ fn parse_joins_on() {
     // Test parsing of different join operators
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 JOIN t2 ON c1 = c2").from).joins,
-        vec![join_with_constraint("t2", None, false, JoinOperator::Inner)]
+        vec![join_with_constraint("t2", None, false, JoinOperator::Join)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").from).joins,
@@ -6509,7 +6664,7 @@ fn parse_joins_using() {
     ) -> Join {
         Join {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new(relation.into())]),
+                name: ObjectName::from(vec![Ident::new(relation.into())]),
                 alias,
                 args: None,
                 with_hints: vec![],
@@ -6518,9 +6673,12 @@ fn parse_joins_using() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             global: false,
-            join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
+            join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
+                "c1".into()
+            ])])),
         }
     }
     // Test parsing of aliases
@@ -6529,7 +6687,7 @@ fn parse_joins_using() {
         vec![join_with_constraint(
             "t2",
             table_alias("foo"),
-            JoinOperator::Inner,
+            JoinOperator::Join,
         )]
     );
     one_statement_parses_to(
@@ -6539,6 +6697,10 @@ fn parse_joins_using() {
     // Test parsing of different join operators
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Join)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 INNER JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
@@ -6577,6 +6739,7 @@ fn parse_joins_using() {
         only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
+    verified_stmt("SELECT * FROM tbl1 AS t1 JOIN tbl2 AS t2 USING(t2.col1)");
 }
 
 #[test]
@@ -6584,7 +6747,7 @@ fn parse_natural_join() {
     fn natural_join(f: impl Fn(JoinConstraint) -> JoinOperator, alias: Option<TableAlias>) -> Join {
         Join {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("t2")]),
+                name: ObjectName::from(vec![Ident::new("t2")]),
                 alias,
                 args: None,
                 with_hints: vec![],
@@ -6593,15 +6756,21 @@ fn parse_natural_join() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             },
             global: false,
             join_operator: f(JoinConstraint::Natural),
         }
     }
 
-    // if not specified, inner join as default
+    // unspecified join
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").from).joins,
+        vec![natural_join(JoinOperator::Join, None)]
+    );
+    // inner join explicitly
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 NATURAL INNER JOIN t2").from).joins,
         vec![natural_join(JoinOperator::Inner, None)]
     );
     // left join explicitly
@@ -6625,7 +6794,7 @@ fn parse_natural_join() {
     // natural join another table with alias
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2 AS t3").from).joins,
-        vec![natural_join(JoinOperator::Inner, table_alias("t3"))]
+        vec![natural_join(JoinOperator::Join, table_alias("t3"))]
     );
 
     let sql = "SELECT * FROM t1 natural";
@@ -6693,8 +6862,12 @@ fn parse_join_nesting() {
 #[test]
 fn parse_join_syntax_variants() {
     one_statement_parses_to(
-        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 JOIN t2 USING(c1)",
+    );
+    one_statement_parses_to(
+        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
     );
     one_statement_parses_to(
         "SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)",
@@ -6856,9 +7029,9 @@ fn parse_derived_tables() {
                     }),
                 },
                 joins: vec![Join {
-                    relation: table_from_name(ObjectName(vec!["t2".into()])),
+                    relation: table_from_name(ObjectName::from(vec!["t2".into()])),
                     global: false,
-                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                    join_operator: JoinOperator::Join(JoinConstraint::Natural),
                 }],
             }),
             alias: None,
@@ -6875,9 +7048,6 @@ fn parse_union_except_intersect_minus() {
     verified_stmt("SELECT 1 EXCEPT SELECT 2");
     verified_stmt("SELECT 1 EXCEPT ALL SELECT 2");
     verified_stmt("SELECT 1 EXCEPT DISTINCT SELECT 1");
-    verified_stmt("SELECT 1 MINUS SELECT 2");
-    verified_stmt("SELECT 1 MINUS ALL SELECT 2");
-    verified_stmt("SELECT 1 MINUS DISTINCT SELECT 1");
     verified_stmt("SELECT 1 INTERSECT SELECT 2");
     verified_stmt("SELECT 1 INTERSECT ALL SELECT 2");
     verified_stmt("SELECT 1 INTERSECT DISTINCT SELECT 1");
@@ -6896,6 +7066,13 @@ fn parse_union_except_intersect_minus() {
     verified_stmt("SELECT 1 AS x, 2 AS y INTERSECT BY NAME SELECT 9 AS y, 8 AS x");
     verified_stmt("SELECT 1 AS x, 2 AS y INTERSECT ALL BY NAME SELECT 9 AS y, 8 AS x");
     verified_stmt("SELECT 1 AS x, 2 AS y INTERSECT DISTINCT BY NAME SELECT 9 AS y, 8 AS x");
+
+    // Dialects that support `MINUS` as column identifier
+    // do not support `MINUS` as a set operator.
+    let dialects = all_dialects_where(|d| !d.is_column_alias(&Keyword::MINUS, &mut Parser::new(d)));
+    dialects.verified_stmt("SELECT 1 MINUS SELECT 2");
+    dialects.verified_stmt("SELECT 1 MINUS ALL SELECT 2");
+    dialects.verified_stmt("SELECT 1 MINUS DISTINCT SELECT 1");
 }
 
 #[test]
@@ -7572,19 +7749,26 @@ fn parse_invalid_subquery_without_parens() {
 
 #[test]
 fn parse_offset() {
+    // Dialects that support `OFFSET` as column identifiers
+    // don't support this syntax.
+    let dialects =
+        all_dialects_where(|d| !d.is_column_alias(&Keyword::OFFSET, &mut Parser::new(d)));
+
     let expect = Some(Offset {
         value: Expr::Value(number("2")),
         rows: OffsetRows::Rows,
     });
-    let ast = verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
+    let ast = dialects.verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
+    let ast = dialects.verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
+    let ast = dialects.verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
+    let ast =
+        dialects.verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
+    let ast =
+        dialects.verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
     match *ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
@@ -7595,7 +7779,7 @@ fn parse_offset() {
         },
         _ => panic!("Test broke"),
     }
-    let ast = verified_query("SELECT 'foo' OFFSET 0 ROWS");
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 0 ROWS");
     assert_eq!(
         ast.offset,
         Some(Offset {
@@ -7603,7 +7787,7 @@ fn parse_offset() {
             rows: OffsetRows::Rows,
         })
     );
-    let ast = verified_query("SELECT 'foo' OFFSET 1 ROW");
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 1 ROW");
     assert_eq!(
         ast.offset,
         Some(Offset {
@@ -7611,7 +7795,7 @@ fn parse_offset() {
             rows: OffsetRows::Row,
         })
     );
-    let ast = verified_query("SELECT 'foo' OFFSET 1");
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 1");
     assert_eq!(
         ast.offset,
         Some(Offset {
@@ -7804,7 +7988,7 @@ fn lateral_function() {
         top_before_distinct: false,
         into: None,
         from: vec![TableWithJoins {
-            relation: table_from_name(ObjectName(vec![Ident {
+            relation: table_from_name(ObjectName::from(vec![Ident {
                 value: "customer".to_string(),
                 quote_style: None,
                 span: Span::empty(),
@@ -7812,7 +7996,7 @@ fn lateral_function() {
             joins: vec![Join {
                 relation: TableFactor::Function {
                     lateral: true,
-                    name: ObjectName(vec!["generate_series".into()]),
+                    name: ObjectName::from(vec!["generate_series".into()]),
                     args: vec![
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(
@@ -7973,7 +8157,7 @@ fn parse_set_variable() {
             assert!(!hivevar);
             assert_eq!(
                 variables,
-                OneOrManyWithParens::One(ObjectName(vec!["SOMETHING".into()]))
+                OneOrManyWithParens::One(ObjectName::from(vec!["SOMETHING".into()]))
             );
             assert_eq!(
                 value,
@@ -7997,9 +8181,9 @@ fn parse_set_variable() {
             assert_eq!(
                 variables,
                 OneOrManyWithParens::Many(vec![
-                    ObjectName(vec!["a".into()]),
-                    ObjectName(vec!["b".into()]),
-                    ObjectName(vec!["c".into()]),
+                    ObjectName::from(vec!["a".into()]),
+                    ObjectName::from(vec!["b".into()]),
+                    ObjectName::from(vec!["c".into()]),
                 ])
             );
             assert_eq!(
@@ -8073,7 +8257,7 @@ fn parse_set_role_as_variable() {
             assert!(!hivevar);
             assert_eq!(
                 variables,
-                OneOrManyWithParens::One(ObjectName(vec!["role".into()]))
+                OneOrManyWithParens::One(ObjectName::from(vec!["role".into()]))
             );
             assert_eq!(
                 value,
@@ -8120,7 +8304,7 @@ fn parse_set_time_zone() {
             assert!(!hivevar);
             assert_eq!(
                 variable,
-                OneOrManyWithParens::One(ObjectName(vec!["TIMEZONE".into()]))
+                OneOrManyWithParens::One(ObjectName::from(vec!["TIMEZONE".into()]))
             );
             assert_eq!(
                 value,
@@ -8478,8 +8662,8 @@ fn parse_grant() {
                         Action::References { columns: None },
                         Action::Trigger,
                         Action::Connect,
-                        Action::Create,
-                        Action::Execute,
+                        Action::Create { obj_type: None },
+                        Action::Execute { obj_type: None },
                         Action::Temporary,
                     ],
                     actions
@@ -8594,6 +8778,11 @@ fn parse_grant() {
     verified_stmt("GRANT SELECT ON ALL TABLES IN SCHEMA db1.sc1 TO SHARE share1");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
+    verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
+    verified_stmt("GRANT USAGE ON DATABASE db1 TO ROLE role1");
+    verified_stmt("GRANT USAGE ON WAREHOUSE wh1 TO ROLE role1");
+    verified_stmt("GRANT OWNERSHIP ON INTEGRATION int1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON VIEW view1 TO ROLE role1");
 }
 
 #[test]
@@ -8675,7 +8864,7 @@ fn parse_merge() {
             assert_eq!(
                 table,
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("s"), Ident::new("bar")]),
+                    name: ObjectName::from(vec![Ident::new("s"), Ident::new("bar")]),
                     alias: Some(TableAlias {
                         name: Ident::new("dest"),
                         columns: vec![],
@@ -8687,6 +8876,7 @@ fn parse_merge() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
+                    index_hints: vec![],
                 }
             );
             assert_eq!(table, table_no_into);
@@ -8707,7 +8897,7 @@ fn parse_merge() {
                             )],
                             into: None,
                             from: vec![TableWithJoins {
-                                relation: table_from_name(ObjectName(vec![
+                                relation: table_from_name(ObjectName::from(vec![
                                     Ident::new("s"),
                                     Ident::new("foo")
                                 ])),
@@ -8821,7 +9011,7 @@ fn parse_merge() {
                         action: MergeAction::Update {
                             assignments: vec![
                                 Assignment {
-                                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                         Ident::new("dest"),
                                         Ident::new("F")
                                     ])),
@@ -8831,7 +9021,7 @@ fn parse_merge() {
                                     ]),
                                 },
                                 Assignment {
-                                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                                    target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                         Ident::new("dest"),
                                         Ident::new("G")
                                     ])),
@@ -8938,12 +9128,12 @@ fn test_lock_table() {
     let lock = ast.locks.pop().unwrap();
     assert_eq!(lock.lock_type, LockType::Update);
     assert_eq!(
-        lock.of.unwrap().0,
-        vec![Ident {
+        lock.of.unwrap(),
+        ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
-        }]
+        }])
     );
     assert!(lock.nonblock.is_none());
 
@@ -8953,12 +9143,12 @@ fn test_lock_table() {
     let lock = ast.locks.pop().unwrap();
     assert_eq!(lock.lock_type, LockType::Share);
     assert_eq!(
-        lock.of.unwrap().0,
-        vec![Ident {
+        lock.of.unwrap(),
+        ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
-        }]
+        }])
     );
     assert!(lock.nonblock.is_none());
 
@@ -8968,23 +9158,23 @@ fn test_lock_table() {
     let lock = ast.locks.remove(0);
     assert_eq!(lock.lock_type, LockType::Share);
     assert_eq!(
-        lock.of.unwrap().0,
-        vec![Ident {
+        lock.of.unwrap(),
+        ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
-        }]
+        }])
     );
     assert!(lock.nonblock.is_none());
     let lock = ast.locks.remove(0);
     assert_eq!(lock.lock_type, LockType::Update);
     assert_eq!(
-        lock.of.unwrap().0,
-        vec![Ident {
+        lock.of.unwrap(),
+        ObjectName::from(vec![Ident {
             value: "student".to_string(),
             quote_style: None,
             span: Span::empty(),
-        }]
+        }])
     );
     assert!(lock.nonblock.is_none());
 }
@@ -8997,12 +9187,12 @@ fn test_lock_nonblock() {
     let lock = ast.locks.pop().unwrap();
     assert_eq!(lock.lock_type, LockType::Update);
     assert_eq!(
-        lock.of.unwrap().0,
-        vec![Ident {
+        lock.of.unwrap(),
+        ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
-        }]
+        }])
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::SkipLocked);
 
@@ -9012,12 +9202,12 @@ fn test_lock_nonblock() {
     let lock = ast.locks.pop().unwrap();
     assert_eq!(lock.lock_type, LockType::Share);
     assert_eq!(
-        lock.of.unwrap().0,
-        vec![Ident {
+        lock.of.unwrap(),
+        ObjectName::from(vec![Ident {
             value: "school".to_string(),
             quote_style: None,
             span: Span::empty(),
-        }]
+        }])
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::Nowait);
 }
@@ -9199,7 +9389,7 @@ fn parse_time_functions() {
         let sql = format!("SELECT {}()", func_name);
         let select = verified_only_select(&sql);
         let select_localtime_func_call_ast = Function {
-            name: ObjectName(vec![Ident::new(func_name)]),
+            name: ObjectName::from(vec![Ident::new(func_name)]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -9296,6 +9486,46 @@ fn parse_is_boolean() {
         verified_expr(sql)
     );
 
+    let sql = "a IS NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: None,
+            negated: false,
+        },
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: None,
+            negated: true,
+        },
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NFKC NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: Some(NormalizationForm::NFKC),
+            negated: false,
+        },
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT NFKD NORMALIZED";
+    assert_eq!(
+        IsNormalized {
+            expr: Box::new(Identifier(Ident::new("a"))),
+            form: Some(NormalizationForm::NFKD),
+            negated: true,
+        },
+        verified_expr(sql)
+    );
+
     let sql = "a IS UNKNOWN";
     assert_eq!(
         IsUnknown(Box::new(Identifier(Ident::new("a")))),
@@ -9314,6 +9544,12 @@ fn parse_is_boolean() {
     verified_stmt("SELECT f FROM foo WHERE field IS FALSE");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT FALSE");
 
+    verified_stmt("SELECT f FROM foo WHERE field IS NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NFC NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NFD NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT NORMALIZED");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT NFKC NORMALIZED");
+
     verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
     verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
@@ -9321,7 +9557,37 @@ fn parse_is_boolean() {
     let res = parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
-            "Expected: [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: 0"
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: 0"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT s, s IS XYZ NORMALIZED FROM foo";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: XYZ"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT s, s IS NFKC FROM foo";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: FROM"
+                .to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT s, s IS TRIM(' NFKC ') FROM foo";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: TRIM"
                 .to_string()
         ),
         res.unwrap_err()
@@ -9396,7 +9662,7 @@ fn parse_cache_table() {
         verified_stmt(format!("CACHE TABLE '{cache_table_name}'").as_str()),
         Statement::Cache {
             table_flag: None,
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![],
             query: None,
@@ -9406,8 +9672,8 @@ fn parse_cache_table() {
     assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}'").as_str()),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![],
             query: None,
@@ -9422,8 +9688,8 @@ fn parse_cache_table() {
             .as_str()
         ),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
@@ -9447,8 +9713,8 @@ fn parse_cache_table() {
                 .as_str()
         ),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
@@ -9472,8 +9738,8 @@ fn parse_cache_table() {
                 .as_str()
         ),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: true,
             options: vec![
                 SqlOption::KeyValue {
@@ -9492,8 +9758,8 @@ fn parse_cache_table() {
     assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' {sql}").as_str()),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: false,
             options: vec![],
             query: Some(query.clone().into()),
@@ -9503,8 +9769,8 @@ fn parse_cache_table() {
     assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' AS {sql}").as_str()),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName::from(vec![Ident::new(table_flag)])),
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', cache_table_name)]),
             has_as: true,
             options: vec![],
             query: Some(query.into()),
@@ -9567,7 +9833,7 @@ fn parse_uncache_table() {
     assert_eq!(
         verified_stmt("UNCACHE TABLE 'table_name'"),
         Statement::UNCache {
-            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', "table_name")]),
             if_exists: false,
         }
     );
@@ -9575,7 +9841,7 @@ fn parse_uncache_table() {
     assert_eq!(
         verified_stmt("UNCACHE TABLE IF EXISTS 'table_name'"),
         Statement::UNCache {
-            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
+            table_name: ObjectName::from(vec![Ident::with_quote('\'', "table_name")]),
             if_exists: true,
         }
     );
@@ -9782,7 +10048,7 @@ fn parse_pivot_table() {
         verified_only_select(sql).from[0].relation,
         Pivot {
             table: Box::new(TableFactor::Table {
-                name: ObjectName(vec![Ident::new("monthly_sales")]),
+                name: ObjectName::from(vec![Ident::new("monthly_sales")]),
                 alias: Some(TableAlias {
                     name: Ident::new("a"),
                     columns: vec![]
@@ -9794,6 +10060,7 @@ fn parse_pivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             }),
             aggregate_functions: vec![
                 expected_function("a", None),
@@ -9858,7 +10125,7 @@ fn parse_unpivot_table() {
         verified_only_select(sql).from[0].relation,
         Unpivot {
             table: Box::new(TableFactor::Table {
-                name: ObjectName(vec![Ident::new("sales")]),
+                name: ObjectName::from(vec![Ident::new("sales")]),
                 alias: Some(TableAlias {
                     name: Ident::new("s"),
                     columns: vec![]
@@ -9870,6 +10137,7 @@ fn parse_unpivot_table() {
                 with_ordinality: false,
                 json_path: None,
                 sample: None,
+                index_hints: vec![],
             }),
             value: Ident {
                 value: "quantity".to_string(),
@@ -9917,6 +10185,73 @@ fn parse_unpivot_table() {
 }
 
 #[test]
+fn parse_select_table_with_index_hints() {
+    let supported_dialects = all_dialects_where(|d| d.supports_table_hints());
+    let s = supported_dialects.verified_only_select(
+        "SELECT * FROM t1 USE INDEX (i1) IGNORE INDEX FOR ORDER BY (i2) ORDER BY a",
+    );
+    if let TableFactor::Table { index_hints, .. } = &s.from[0].relation {
+        assert_eq!(
+            vec![
+                TableIndexHints {
+                    hint_type: TableIndexHintType::Use,
+                    index_names: vec!["i1".into()],
+                    index_type: TableIndexType::Index,
+                    for_clause: None,
+                },
+                TableIndexHints {
+                    hint_type: TableIndexHintType::Ignore,
+                    index_names: vec!["i2".into()],
+                    index_type: TableIndexType::Index,
+                    for_clause: Some(TableIndexHintForClause::OrderBy),
+                },
+            ],
+            *index_hints
+        );
+    } else {
+        panic!("Expected TableFactor::Table");
+    }
+    supported_dialects.verified_stmt("SELECT * FROM t1 USE INDEX (i1) USE INDEX (i1, i1)");
+    supported_dialects.verified_stmt(
+        "SELECT * FROM t1 USE INDEX () IGNORE INDEX (i2) USE INDEX (i1) USE INDEX (i2)",
+    );
+    supported_dialects.verified_stmt("SELECT * FROM t1 FORCE INDEX FOR JOIN (i2)");
+    supported_dialects.verified_stmt("SELECT * FROM t1 IGNORE INDEX FOR JOIN (i2)");
+    supported_dialects.verified_stmt(
+        "SELECT * FROM t USE INDEX (index1) IGNORE INDEX FOR ORDER BY (index1) IGNORE INDEX FOR GROUP BY (index1) WHERE A = B",
+    );
+
+    // Test that dialects that don't support table hints will keep parsing the USE as table alias
+    let sql = "SELECT * FROM T USE LIMIT 1";
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_table_hints());
+    let select = unsupported_dialects
+        .verified_only_select_with_canonical(sql, "SELECT * FROM T AS USE LIMIT 1");
+    assert_eq!(
+        select.from,
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![sqlparser::ast::ObjectNamePart::Identifier(
+                    Ident::new("T")
+                )]),
+                alias: Some(TableAlias {
+                    name: Ident::new("USE"),
+                    columns: vec![],
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+                with_ordinality: false,
+                json_path: None,
+                sample: None,
+                index_hints: vec![],
+            },
+            joins: vec![],
+        }]
+    );
+}
+
+#[test]
 fn parse_pivot_unpivot_table() {
     let sql = concat!(
         "SELECT * FROM census AS c ",
@@ -9929,7 +10264,7 @@ fn parse_pivot_unpivot_table() {
         Pivot {
             table: Box::new(Unpivot {
                 table: Box::new(TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("census")]),
+                    name: ObjectName::from(vec![Ident::new("census")]),
                     alias: Some(TableAlias {
                         name: Ident::new("c"),
                         columns: vec![]
@@ -9941,6 +10276,7 @@ fn parse_pivot_unpivot_table() {
                     with_ordinality: false,
                     json_path: None,
                     sample: None,
+                    index_hints: vec![],
                 }),
                 value: Ident {
                     value: "population".to_string(),
@@ -10090,15 +10426,19 @@ fn parse_trailing_comma() {
             "Expected: column name or constraint definition, found: )".to_string()
         )
     );
+
+    let unsupported_dialects = all_dialects_where(|d| !d.supports_trailing_commas());
+    assert_eq!(
+        unsupported_dialects
+            .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
+    );
 }
 
 #[test]
 fn parse_projection_trailing_comma() {
-    // Some dialects allow trailing commas only in the projection
-    let trailing_commas = TestedDialects::new(vec![
-        Box::new(SnowflakeDialect {}),
-        Box::new(BigQueryDialect {}),
-    ]);
+    let trailing_commas = all_dialects_where(|d| d.supports_projection_trailing_commas());
 
     trailing_commas.one_statement_parses_to(
         "SELECT album_id, name, FROM track",
@@ -10111,20 +10451,14 @@ fn parse_projection_trailing_comma() {
 
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
 
+    let unsupported_dialects = all_dialects_where(|d| {
+        !d.supports_projection_trailing_commas() && !d.supports_trailing_commas()
+    });
     assert_eq!(
-        trailing_commas
-            .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
+        unsupported_dialects
+            .parse_sql_statements("SELECT album_id, name, FROM track")
             .unwrap_err(),
-        ParserError::ParserError("Expected: an expression, found: EOF".to_string())
-    );
-
-    assert_eq!(
-        trailing_commas
-            .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
-            .unwrap_err(),
-        ParserError::ParserError(
-            "Expected: column name or constraint definition, found: )".to_string()
-        ),
+        ParserError::ParserError("Expected an expression, found: FROM".to_string())
     );
 }
 
@@ -10134,7 +10468,7 @@ fn parse_create_type() {
         verified_stmt("CREATE TYPE db.type_name AS (foo INT, bar TEXT COLLATE \"de_DE\")");
     assert_eq!(
         Statement::CreateType {
-            name: ObjectName(vec![Ident::new("db"), Ident::new("type_name")]),
+            name: ObjectName::from(vec![Ident::new("db"), Ident::new("type_name")]),
             representation: UserDefinedTypeRepresentation::Composite {
                 attributes: vec![
                     UserDefinedTypeCompositeAttributeDef {
@@ -10145,7 +10479,7 @@ fn parse_create_type() {
                     UserDefinedTypeCompositeAttributeDef {
                         name: Ident::new("bar"),
                         data_type: DataType::Text,
-                        collation: Some(ObjectName(vec![Ident::with_quote('\"', "de_DE")])),
+                        collation: Some(ObjectName::from(vec![Ident::with_quote('\"', "de_DE")])),
                     }
                 ]
             }
@@ -10226,7 +10560,7 @@ fn parse_call() {
                 )))],
                 clauses: vec![],
             }),
-            name: ObjectName(vec![Ident::new("my_procedure")]),
+            name: ObjectName::from(vec![Ident::new("my_procedure")]),
             filter: None,
             null_treatment: None,
             over: None,
@@ -10238,7 +10572,7 @@ fn parse_call() {
 #[test]
 fn parse_execute_stored_procedure() {
     let expected = Statement::Execute {
-        name: ObjectName(vec![
+        name: ObjectName::from(vec![
             Ident {
                 value: "my_schema".to_string(),
                 quote_style: None,
@@ -10350,7 +10684,7 @@ fn parse_unload() {
                     projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
                     into: None,
                     from: vec![TableWithJoins {
-                        relation: table_from_name(ObjectName(vec![Ident::new("tab")])),
+                        relation: table_from_name(ObjectName::from(vec![Ident::new("tab")])),
                         joins: vec![],
                     }],
                     lateral_views: vec![],
@@ -10423,6 +10757,7 @@ fn test_comment_hash_syntax() {
         Box::new(BigQueryDialect {}),
         Box::new(SnowflakeDialect {}),
         Box::new(MySqlDialect {}),
+        Box::new(HiveDialect {}),
     ]);
     let sql = r#"
     # comment
@@ -10502,7 +10837,7 @@ fn parse_map_access_expr() {
             }),
             AccessExpr::Subscript(Subscript::Index {
                 index: Expr::Function(Function {
-                    name: ObjectName(vec![Ident::with_span(
+                    name: ObjectName::from(vec![Ident::with_span(
                         Span::new(Location::of(1, 11), Location::of(1, 22)),
                         "safe_offset",
                     )]),
@@ -10543,7 +10878,7 @@ fn parse_connect_by() {
             SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
         ],
         from: vec![TableWithJoins {
-            relation: table_from_name(ObjectName(vec![Ident::new("employees")])),
+            relation: table_from_name(ObjectName::from(vec![Ident::new("employees")])),
             joins: vec![],
         }],
         into: None,
@@ -10623,7 +10958,7 @@ fn parse_connect_by() {
                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
             ],
             from: vec![TableWithJoins {
-                relation: table_from_name(ObjectName(vec![Ident::new("employees")])),
+                relation: table_from_name(ObjectName::from(vec![Ident::new("employees")])),
                 joins: vec![],
             }],
             into: None,
@@ -10699,7 +11034,7 @@ fn test_selective_aggregation() {
             .projection,
         vec![
             SelectItem::UnnamedExpr(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("ARRAY_AGG")]),
+                name: ObjectName::from(vec![Ident::new("ARRAY_AGG")]),
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
@@ -10718,7 +11053,7 @@ fn test_selective_aggregation() {
             })),
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("ARRAY_AGG")]),
+                    name: ObjectName::from(vec![Ident::new("ARRAY_AGG")]),
                     uses_odbc_syntax: false,
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
@@ -10778,7 +11113,7 @@ fn test_match_recognize() {
     use MatchRecognizeSymbol::*;
     use RepetitionQuantifier::*;
 
-    let table = table_from_name(ObjectName(vec![Ident::new("my_table")]));
+    let table = table_from_name(ObjectName::from(vec![Ident::new("my_table")]));
 
     fn check(options: &str, expect: TableFactor) {
         let select = all_dialects_where(|d| d.supports_match_recognize()).verified_only_select(
@@ -11162,7 +11497,7 @@ fn parse_odbc_scalar_function() {
     else {
         unreachable!("expected function")
     };
-    assert_eq!(name, &ObjectName(vec![Ident::new("my_func")]));
+    assert_eq!(name, &ObjectName::from(vec![Ident::new("my_func")]));
     assert!(uses_odbc_syntax);
     matches!(args, FunctionArguments::List(l) if l.args.len() == 2);
 
@@ -11187,6 +11522,8 @@ fn test_dictionary_syntax() {
             expect
         );
     }
+
+    check("{}", Expr::Dictionary(vec![]));
 
     check(
         "{'Alberta': 'Edmonton', 'Manitoba': 'Winnipeg'}",
@@ -12229,7 +12566,7 @@ fn parse_load_data() {
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
             assert_eq!(
-                ObjectName(vec![Ident::new("test"), Ident::new("my_table")]),
+                ObjectName::from(vec![Ident::new("test"), Ident::new("my_table")]),
                 table_name
             );
             assert_eq!(None, partitioned);
@@ -12252,7 +12589,7 @@ fn parse_load_data() {
             assert_eq!(false, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(true, overwrite);
-            assert_eq!(ObjectName(vec![Ident::new("my_table")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("my_table")]), table_name);
             assert_eq!(None, partitioned);
             assert_eq!(None, table_format);
         }
@@ -12289,7 +12626,7 @@ fn parse_load_data() {
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
             assert_eq!(
-                ObjectName(vec![Ident::new("test"), Ident::new("my_table")]),
+                ObjectName::from(vec![Ident::new("test"), Ident::new("my_table")]),
                 table_name
             );
             assert_eq!(None, partitioned);
@@ -12327,7 +12664,7 @@ fn parse_load_data() {
             assert_eq!(true, local);
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(false, overwrite);
-            assert_eq!(ObjectName(vec![Ident::new("my_table")]), table_name);
+            assert_eq!(ObjectName::from(vec![Ident::new("my_table")]), table_name);
             assert_eq!(
                 Some(vec![
                     Expr::BinaryOp {
@@ -12363,7 +12700,7 @@ fn parse_load_data() {
             assert_eq!("/local/path/to/data.txt", inpath);
             assert_eq!(true, overwrite);
             assert_eq!(
-                ObjectName(vec![Ident::new("good"), Ident::new("my_table")]),
+                ObjectName::from(vec![Ident::new("good"), Ident::new("my_table")]),
                 table_name
             );
             assert_eq!(
@@ -12717,7 +13054,7 @@ fn parse_composite_access_expr() {
         verified_expr("f(a).b"),
         Expr::CompoundFieldAccess {
             root: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("f")]),
+                name: ObjectName::from(vec![Ident::new("f")]),
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
@@ -12741,7 +13078,7 @@ fn parse_composite_access_expr() {
         verified_expr("f(a).b.c"),
         Expr::CompoundFieldAccess {
             root: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("f")]),
+                name: ObjectName::from(vec![Ident::new("f")]),
                 uses_odbc_syntax: false,
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
@@ -12767,7 +13104,7 @@ fn parse_composite_access_expr() {
     let stmt = verified_only_select("SELECT f(a).b FROM t WHERE f(a).b IS NOT NULL");
     let expr = Expr::CompoundFieldAccess {
         root: Box::new(Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("f")]),
+            name: ObjectName::from(vec![Ident::new("f")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -12946,8 +13283,8 @@ fn parse_select_without_projection() {
 
 #[test]
 fn parse_update_from_before_select() {
-    all_dialects()
-    .verified_stmt("UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id");
+    verified_stmt("UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id");
+    verified_stmt("UPDATE t1 FROM U, (SELECT id FROM V) AS W SET a = b WHERE 1 = 1");
 
     let query =
     "UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name FROM (SELECT name from t2) AS t2";
@@ -12956,8 +13293,130 @@ fn parse_update_from_before_select() {
         parse_sql_statements(query).unwrap_err()
     );
 }
-
 #[test]
 fn parse_overlaps() {
     verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
+}
+
+#[test]
+fn parse_column_definition_trailing_commas() {
+    let dialects = all_dialects_where(|d| d.supports_column_definition_trailing_commas());
+
+    dialects.one_statement_parses_to("CREATE TABLE T (x INT64,)", "CREATE TABLE T (x INT64)");
+    dialects.one_statement_parses_to(
+        "CREATE TABLE T (x INT64, y INT64, )",
+        "CREATE TABLE T (x INT64, y INT64)",
+    );
+    dialects.one_statement_parses_to(
+        "CREATE VIEW T (x, y, ) AS SELECT 1",
+        "CREATE VIEW T (x, y) AS SELECT 1",
+    );
+
+    let unsupported_dialects = all_dialects_where(|d| {
+        !d.supports_projection_trailing_commas() && !d.supports_trailing_commas()
+    });
+    assert_eq!(
+        unsupported_dialects
+            .parse_sql_statements("CREATE TABLE employees (name text, age int,)")
+            .unwrap_err(),
+        ParserError::ParserError(
+            "Expected: column name or constraint definition, found: )".to_string()
+        ),
+    );
+}
+
+#[test]
+fn test_trailing_commas_in_from() {
+    let dialects = all_dialects_where(|d| d.supports_from_trailing_commas());
+    dialects.verified_only_select_with_canonical("SELECT 1, 2 FROM t,", "SELECT 1, 2 FROM t");
+
+    dialects
+        .verified_only_select_with_canonical("SELECT 1, 2 FROM t1, t2,", "SELECT 1, 2 FROM t1, t2");
+
+    let sql = "SELECT a, FROM b, LIMIT 1";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    let sql = "INSERT INTO a SELECT b FROM c,";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    let sql = "SELECT a FROM b, HAVING COUNT(*) > 1";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    let sql = "SELECT a FROM b, WHERE c = 1";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    // nested
+    let sql = "SELECT 1, 2 FROM (SELECT * FROM t,),";
+    let _ = dialects.parse_sql_statements(sql).unwrap();
+
+    // multiple_subqueries
+    dialects.verified_only_select_with_canonical(
+        "SELECT 1, 2 FROM (SELECT * FROM t1), (SELECT * FROM t2),",
+        "SELECT 1, 2 FROM (SELECT * FROM t1), (SELECT * FROM t2)",
+    );
+}
+
+#[test]
+fn test_lambdas() {
+    let dialects = all_dialects_where(|d| d.supports_lambda_functions());
+
+    #[rustfmt::skip]
+    let sql = concat!(
+        "SELECT array_sort(array('Hello', 'World'), ",
+            "(p1, p2) -> CASE WHEN p1 = p2 THEN 0 ",
+                        "WHEN reverse(p1) < reverse(p2) THEN -1 ",
+                        "ELSE 1 END)",
+    );
+    pretty_assertions::assert_eq!(
+        SelectItem::UnnamedExpr(call(
+            "array_sort",
+            [
+                call(
+                    "array",
+                    [
+                        Expr::Value(Value::SingleQuotedString("Hello".to_owned())),
+                        Expr::Value(Value::SingleQuotedString("World".to_owned()))
+                    ]
+                ),
+                Expr::Lambda(LambdaFunction {
+                    params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
+                    body: Box::new(Expr::Case {
+                        operand: None,
+                        conditions: vec![
+                            Expr::BinaryOp {
+                                left: Box::new(Expr::Identifier(Ident::new("p1"))),
+                                op: BinaryOperator::Eq,
+                                right: Box::new(Expr::Identifier(Ident::new("p2")))
+                            },
+                            Expr::BinaryOp {
+                                left: Box::new(call(
+                                    "reverse",
+                                    [Expr::Identifier(Ident::new("p1"))]
+                                )),
+                                op: BinaryOperator::Lt,
+                                right: Box::new(call(
+                                    "reverse",
+                                    [Expr::Identifier(Ident::new("p2"))]
+                                ))
+                            }
+                        ],
+                        results: vec![
+                            Expr::Value(number("0")),
+                            Expr::UnaryOp {
+                                op: UnaryOperator::Minus,
+                                expr: Box::new(Expr::Value(number("1")))
+                            }
+                        ],
+                        else_result: Some(Box::new(Expr::Value(number("1"))))
+                    })
+                })
+            ]
+        )),
+        dialects.verified_only_select(sql).projection[0]
+    );
+
+    dialects.verified_expr(
+        "map_zip_with(map(1, 'a', 2, 'b'), map(1, 'x', 2, 'y'), (k, v1, v2) -> concat(v1, v2))",
+    );
+    dialects.verified_expr("transform(array(1, 2, 3), x -> x + 1)");
 }

@@ -586,6 +586,20 @@ impl fmt::Display for Cte {
     }
 }
 
+/// Represents an expression behind a wildcard expansion in a projection.
+/// `SELECT T.* FROM T;
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SelectItemQualifiedWildcardKind {
+    /// Expression is an object name.
+    /// e.g. `alias.*` or even `schema.table.*`
+    ObjectName(ObjectName),
+    /// Select star on an arbitrary expression.
+    /// e.g. `STRUCT<STRING>('foo').*`
+    Expr(Expr),
+}
+
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -595,10 +609,22 @@ pub enum SelectItem {
     UnnamedExpr(Expr),
     /// An expression, followed by `[ AS ] alias`
     ExprWithAlias { expr: Expr, alias: Ident },
-    /// `alias.*` or even `schema.table.*`
-    QualifiedWildcard(ObjectName, WildcardAdditionalOptions),
+    /// An expression, followed by a wildcard expansion.
+    /// e.g. `alias.*`, `STRUCT<STRING>('foo').*`
+    QualifiedWildcard(SelectItemQualifiedWildcardKind, WildcardAdditionalOptions),
     /// An unqualified `*`
     Wildcard(WildcardAdditionalOptions),
+}
+
+impl fmt::Display for SelectItemQualifiedWildcardKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self {
+            SelectItemQualifiedWildcardKind::ObjectName(object_name) => {
+                write!(f, "{object_name}.*")
+            }
+            SelectItemQualifiedWildcardKind::Expr(expr) => write!(f, "{expr}.*"),
+        }
+    }
 }
 
 /// Single aliased identifier
@@ -867,8 +893,8 @@ impl fmt::Display for SelectItem {
         match &self {
             SelectItem::UnnamedExpr(expr) => write!(f, "{expr}"),
             SelectItem::ExprWithAlias { expr, alias } => write!(f, "{expr} AS {alias}"),
-            SelectItem::QualifiedWildcard(prefix, additional_options) => {
-                write!(f, "{prefix}.*")?;
+            SelectItem::QualifiedWildcard(kind, additional_options) => {
+                write!(f, "{kind}")?;
                 write!(f, "{additional_options}")?;
                 Ok(())
             }
@@ -975,6 +1001,81 @@ pub struct TableFunctionArgs {
     pub settings: Option<Vec<Setting>>,
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableIndexHintType {
+    Use,
+    Ignore,
+    Force,
+}
+
+impl fmt::Display for TableIndexHintType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            TableIndexHintType::Use => "USE",
+            TableIndexHintType::Ignore => "IGNORE",
+            TableIndexHintType::Force => "FORCE",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableIndexType {
+    Index,
+    Key,
+}
+
+impl fmt::Display for TableIndexType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            TableIndexType::Index => "INDEX",
+            TableIndexType::Key => "KEY",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableIndexHintForClause {
+    Join,
+    OrderBy,
+    GroupBy,
+}
+
+impl fmt::Display for TableIndexHintForClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            TableIndexHintForClause::Join => "JOIN",
+            TableIndexHintForClause::OrderBy => "ORDER BY",
+            TableIndexHintForClause::GroupBy => "GROUP BY",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TableIndexHints {
+    pub hint_type: TableIndexHintType,
+    pub index_type: TableIndexType,
+    pub for_clause: Option<TableIndexHintForClause>,
+    pub index_names: Vec<Ident>,
+}
+
+impl fmt::Display for TableIndexHints {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {} ", self.hint_type, self.index_type)?;
+        if let Some(for_clause) = &self.for_clause {
+            write!(f, "FOR {} ", for_clause)?;
+        }
+        write!(f, "({})", display_comma_separated(&self.index_names))
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1009,6 +1110,9 @@ pub enum TableFactor {
         /// Optional table sample modifier
         /// See: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#sample-clause>
         sample: Option<TableSampleKind>,
+        /// Optional index hints(mysql)
+        /// See: <https://dev.mysql.com/doc/refman/8.4/en/index-hints.html>
+        index_hints: Vec<TableIndexHints>,
     },
     Derived {
         lateral: bool,
@@ -1590,6 +1694,7 @@ impl fmt::Display for TableFactor {
                 with_ordinality,
                 json_path,
                 sample,
+                index_hints,
             } => {
                 write!(f, "{name}")?;
                 if let Some(json_path) = json_path {
@@ -1617,6 +1722,9 @@ impl fmt::Display for TableFactor {
                 }
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+                if !index_hints.is_empty() {
+                    write!(f, " {}", display_separated(index_hints, " "))?;
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;
@@ -1873,13 +1981,19 @@ impl fmt::Display for TableAliasColumnDef {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TableVersion {
+    /// When the table version is defined using `FOR SYSTEM_TIME AS OF`.
+    /// For example: `SELECT * FROM tbl FOR SYSTEM_TIME AS OF TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR)`
     ForSystemTimeAsOf(Expr),
+    /// When the table version is defined using a function.
+    /// For example: `SELECT * FROM tbl AT(TIMESTAMP => '2020-08-14 09:30:00')`
+    Function(Expr),
 }
 
 impl Display for TableVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TableVersion::ForSystemTimeAsOf(e) => write!(f, " FOR SYSTEM_TIME AS OF {e}")?,
+            TableVersion::Function(func) => write!(f, " {func}")?,
         }
         Ok(())
     }
@@ -1924,9 +2038,16 @@ impl fmt::Display for Join {
         }
 
         match &self.join_operator {
-            JoinOperator::Inner(constraint) => write!(
+            JoinOperator::Join(constraint) => write!(
                 f,
                 " {}JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::Inner(constraint) => write!(
+                f,
+                " {}INNER JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
@@ -2014,6 +2135,7 @@ impl fmt::Display for Join {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum JoinOperator {
+    Join(JoinConstraint),
     Inner(JoinConstraint),
     LeftOuter(JoinConstraint),
     RightOuter(JoinConstraint),
@@ -2050,7 +2172,7 @@ pub enum JoinOperator {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum JoinConstraint {
     On(Expr),
-    Using(Vec<Ident>),
+    Using(Vec<ObjectName>),
     Natural,
     None,
 }
@@ -2821,10 +2943,10 @@ impl fmt::Display for ValueTableMode {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum UpdateTableFromKind {
-    /// Update Statment where the 'FROM' clause is before the 'SET' keyword (Supported by Snowflake)
+    /// Update Statement where the 'FROM' clause is before the 'SET' keyword (Supported by Snowflake)
     /// For Example: `UPDATE FROM t1 SET t1.name='aaa'`
-    BeforeSet(TableWithJoins),
-    /// Update Statment where the 'FROM' clause is after the 'SET' keyword (Which is the standard way)
+    BeforeSet(Vec<TableWithJoins>),
+    /// Update Statement where the 'FROM' clause is after the 'SET' keyword (Which is the standard way)
     /// For Example: `UPDATE SET t1.name='aaa' FROM t1`
-    AfterSet(TableWithJoins),
+    AfterSet(Vec<TableWithJoins>),
 }

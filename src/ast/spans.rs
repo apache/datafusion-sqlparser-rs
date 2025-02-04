@@ -15,8 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::tokenizer::Span;
+use crate::ast::query::SelectItemQualifiedWildcardKind;
 use core::iter;
+
+use crate::tokenizer::Span;
 
 use super::{
     dcl::SecondaryRoles, AccessExpr, AlterColumnOperation, AlterIndexOperation,
@@ -27,13 +29,13 @@ use super::{
     FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments,
     GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
-    Measure, NamedWindowDefinition, ObjectName, Offset, OnConflict, OnConflictAction, OnInsert,
-    OrderBy, OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
-    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WildcardAdditionalOptions, With,
-    WithFill,
+    Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OrderBy, OrderByExpr, Partition, PivotValueSource,
+    ProjectionSelect, Query, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -383,33 +385,6 @@ impl Spanned for Statement {
                     .chain(to.iter().map(|i| i.span())),
             ),
             Statement::CreateTable(create_table) => create_table.span(),
-            Statement::CreateIcebergTable {
-                or_replace: _,
-                if_not_exists: _,
-                name,
-                columns,
-                constraints,
-                with_options,
-                comment: _,
-                cluster_by: _,
-                external_volume: _,
-                catalog: _,
-                base_location: _,
-                catalog_sync: _,
-                storage_serialization_policy: _,
-                data_retention_time_in_days: _,
-                max_data_extension_time_in_days: _,
-                change_tracking: _,
-                copy_grants: _,
-                with_row_access_policy: _,
-                with_aggregation_policy: _,
-                with_tags: _,
-            } => union_spans(
-                core::iter::once(name.span())
-                    .chain(columns.iter().map(|i| i.span()))
-                    .chain(constraints.iter().map(|i| i.span()))
-                    .chain(with_options.iter().map(|i| i.span())),
-            ),
             Statement::CreateVirtualTable {
                 name,
                 if_not_exists: _,
@@ -522,6 +497,7 @@ impl Spanned for Statement {
             Statement::LoadData { .. } => Span::empty(),
             Statement::UNLISTEN { .. } => Span::empty(),
             Statement::RenameTable { .. } => Span::empty(),
+            Statement::RaisError { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
             Statement::SetSessionParam { .. } => Span::empty(),
         }
@@ -558,6 +534,7 @@ impl Spanned for CreateTable {
             if_not_exists: _, // bool
             transient: _,     // bool
             volatile: _,      // bool
+            iceberg: _,       // bool, Snowflake specific
             name,
             columns,
             constraints,
@@ -594,6 +571,11 @@ impl Spanned for CreateTable {
             with_aggregation_policy: _,         // todo, Snowflake specific
             with_row_access_policy: _,          // todo, Snowflake specific
             with_tags: _,                       // todo, Snowflake specific
+            external_volume: _,                 // todo, Snowflake specific
+            base_location: _,                   // todo, Snowflake specific
+            catalog: _,                         // todo, Snowflake specific
+            catalog_sync: _,                    // todo, Snowflake specific
+            storage_serialization_policy: _,    // todo, Snowflake specific
         } = self;
 
         union_spans(
@@ -1285,7 +1267,7 @@ impl Spanned for AssignmentTarget {
 /// f.e. `IS NULL <expr>` reports as `<expr>::span`.
 ///
 /// Missing spans:
-/// - [Expr::TypedString]
+/// - [Expr::TypedString] # missing span for data_type
 /// - [Expr::MatchAgainst] # MySQL specific
 /// - [Expr::RLike] # MySQL specific
 /// - [Expr::Struct] # BigQuery specific
@@ -1351,6 +1333,12 @@ impl Spanned for Expr {
                 escape_char: _,
                 any: _,
             } => expr.span().union(&pattern.span()),
+            Expr::RLike { .. } => Span::empty(),
+            Expr::IsNormalized {
+                expr,
+                form: _,
+                negated: _,
+            } => expr.span(),
             Expr::SimilarTo {
                 negated: _,
                 expr,
@@ -1372,10 +1360,10 @@ impl Spanned for Expr {
                 .union_opt(&overlay_for.as_ref().map(|i| i.span())),
             Expr::Collate { expr, collation } => expr
                 .span()
-                .union(&union_spans(collation.0.iter().map(|i| i.span))),
+                .union(&union_spans(collation.0.iter().map(|i| i.span()))),
             Expr::Nested(expr) => expr.span(),
             Expr::Value(value) => value.span(),
-            Expr::TypedString { .. } => Span::empty(),
+            Expr::TypedString { value, .. } => value.span(),
             Expr::Function(function) => function.span(),
             Expr::GroupingSets(vec) => {
                 union_spans(vec.iter().flat_map(|i| i.iter().map(|k| k.span())))
@@ -1386,7 +1374,6 @@ impl Spanned for Expr {
             Expr::Array(array) => array.span(),
             Expr::MatchAgainst { .. } => Span::empty(),
             Expr::JsonAccess { value, path } => value.span().union(&path.span()),
-            Expr::RLike { .. } => Span::empty(),
             Expr::AnyOp {
                 left,
                 compare_op: _,
@@ -1477,7 +1464,7 @@ impl Spanned for Expr {
                 object_name
                     .0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(iter::once(token.0.span)),
             ),
             Expr::OuterJoin(expr) => expr.span(),
@@ -1522,7 +1509,15 @@ impl Spanned for ObjectName {
     fn span(&self) -> Span {
         let ObjectName(segments) = self;
 
-        union_spans(segments.iter().map(|i| i.span))
+        union_spans(segments.iter().map(|i| i.span()))
+    }
+}
+
+impl Spanned for ObjectNamePart {
+    fn span(&self) -> Span {
+        match self {
+            ObjectNamePart::Identifier(ident) => ident.span,
+        }
     }
 }
 
@@ -1553,7 +1548,7 @@ impl Spanned for Function {
         union_spans(
             name.0
                 .iter()
-                .map(|i| i.span)
+                .map(|i| i.span())
                 .chain(iter::once(args.span()))
                 .chain(iter::once(parameters.span()))
                 .chain(filter.iter().map(|i| i.span()))
@@ -1630,16 +1625,23 @@ impl Spanned for JsonPathElem {
     }
 }
 
+impl Spanned for SelectItemQualifiedWildcardKind {
+    fn span(&self) -> Span {
+        match self {
+            SelectItemQualifiedWildcardKind::ObjectName(object_name) => object_name.span(),
+            SelectItemQualifiedWildcardKind::Expr(expr) => expr.span(),
+        }
+    }
+}
+
 impl Spanned for SelectItem {
     fn span(&self) -> Span {
         match self {
             SelectItem::UnnamedExpr(expr) => expr.span(),
             SelectItem::ExprWithAlias { expr, alias } => expr.span().union(&alias.span),
-            SelectItem::QualifiedWildcard(object_name, wildcard_additional_options) => union_spans(
-                object_name
-                    .0
-                    .iter()
-                    .map(|i| i.span)
+            SelectItem::QualifiedWildcard(kind, wildcard_additional_options) => union_spans(
+                [kind.span()]
+                    .into_iter()
                     .chain(iter::once(wildcard_additional_options.span())),
             ),
             SelectItem::Wildcard(wildcard_additional_options) => wildcard_additional_options.span(),
@@ -1746,10 +1748,11 @@ impl Spanned for TableFactor {
                 partitions: _,
                 json_path: _,
                 sample: _,
+                index_hints: _,
             } => union_spans(
                 name.0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(alias.as_ref().map(|alias| {
                         union_spans(
                             iter::once(alias.name.span)
@@ -1794,7 +1797,7 @@ impl Spanned for TableFactor {
             } => union_spans(
                 name.0
                     .iter()
-                    .map(|i| i.span)
+                    .map(|i| i.span())
                     .chain(args.iter().map(|i| i.span()))
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
@@ -1945,7 +1948,7 @@ impl Spanned for FunctionArgExpr {
         match self {
             FunctionArgExpr::Expr(expr) => expr.span(),
             FunctionArgExpr::QualifiedWildcard(object_name) => {
-                union_spans(object_name.0.iter().map(|i| i.span))
+                union_spans(object_name.0.iter().map(|i| i.span()))
             }
             FunctionArgExpr::Wildcard => Span::empty(),
         }
@@ -1999,6 +2002,7 @@ impl Spanned for Join {
 impl Spanned for JoinOperator {
     fn span(&self) -> Span {
         match self {
+            JoinOperator::Join(join_constraint) => join_constraint.span(),
             JoinOperator::Inner(join_constraint) => join_constraint.span(),
             JoinOperator::LeftOuter(join_constraint) => join_constraint.span(),
             JoinOperator::RightOuter(join_constraint) => join_constraint.span(),
@@ -2029,7 +2033,7 @@ impl Spanned for JoinConstraint {
     fn span(&self) -> Span {
         match self {
             JoinConstraint::On(expr) => expr.span(),
-            JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span)),
+            JoinConstraint::Using(vec) => union_spans(vec.iter().map(|i| i.span())),
             JoinConstraint::Natural => Span::empty(),
             JoinConstraint::None => Span::empty(),
         }
@@ -2145,10 +2149,11 @@ impl Spanned for SelectInto {
 
 impl Spanned for UpdateTableFromKind {
     fn span(&self) -> Span {
-        match self {
-            UpdateTableFromKind::BeforeSet(from) => from.span(),
-            UpdateTableFromKind::AfterSet(from) => from.span(),
-        }
+        let from = match self {
+            UpdateTableFromKind::BeforeSet(from) => from,
+            UpdateTableFromKind::AfterSet(from) => from,
+        };
+        union_spans(from.iter().map(|t| t.span()))
     }
 }
 
@@ -2156,7 +2161,7 @@ impl Spanned for TableObject {
     fn span(&self) -> Span {
         match self {
             TableObject::TableName(ObjectName(segments)) => {
-                union_spans(segments.iter().map(|i| i.span))
+                union_spans(segments.iter().map(|i| i.span()))
             }
             TableObject::TableFunction(func) => func.span(),
         }

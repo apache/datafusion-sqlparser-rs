@@ -1230,21 +1230,26 @@ impl<'a> Tokenizer<'a> {
                 '-' => {
                     chars.next(); // consume the '-'
 
-                    // Potential start of a single-line comment
                     if let Some('-') = chars.peek() {
-                        if let Some(next_char) = chars.peekable.clone().nth(1) {
+                        let mut is_comment = true;
+                        if self.dialect.requires_whitespace_to_start_comment() {
                             // MySQL requires a space after the -- for a single-line comment
                             // Otherwise it's interpreted as two minus signs
                             // e.g. UPDATE account SET balance=balance--1
                             //      WHERE account_id=5752;
-                            if self.dialect.is_start_of_single_line_comment(next_char) {
-                                chars.next(); // consume second '-'
-                                let comment = self.tokenize_single_line_comment(chars);
-                                return Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
-                                    prefix: "--".to_owned(),
-                                    comment,
-                                })));
+                            match chars.peekable.clone().nth(1) {
+                                Some(' ') => (),
+                                _ => is_comment = false,
                             }
+                        }
+
+                        if is_comment {
+                            chars.next(); // consume second '-'
+                            let comment = self.tokenize_single_line_comment(chars);
+                            return Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
+                                prefix: "--".to_owned(),
+                                comment,
+                            })));
                         }
                     }
 
@@ -3698,37 +3703,77 @@ mod tests {
     }
 
     #[test]
-    fn test_mysql_space_after_single_line_comment_missing() {
-        let sql = "SELECT --'abc' FROM DUAL";
-        let dialect = MySqlDialect {};
-        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
-        let expected = vec![
-            Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
-            Token::Minus,
-            Token::Minus,
-            Token::SingleQuotedString("abc".to_string()),
-            Token::Whitespace(Whitespace::Space),
-            Token::make_keyword("FROM"),
-            Token::Whitespace(Whitespace::Space),
-            Token::make_word("DUAL", None),
-        ];
-        compare(expected, tokens);
+    fn test_whitespace_required_after_single_line_comment() {
+        all_dialects_where(|dialect| dialect.requires_whitespace_to_start_comment()).tokenizes_to(
+            "SELECT --'abc'",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Minus,
+                Token::Minus,
+                Token::SingleQuotedString("abc".to_string()),
+            ],
+        );
+
+        all_dialects_where(|dialect| dialect.requires_whitespace_to_start_comment()).tokenizes_to(
+            "SELECT -- 'abc'",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: " 'abc'".to_string(),
+                }),
+            ],
+        );
+
+        all_dialects_where(|dialect| dialect.requires_whitespace_to_start_comment()).tokenizes_to(
+            "SELECT --",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Minus,
+                Token::Minus,
+            ],
+        );
     }
 
     #[test]
-    fn test_mysql_space_after_single_line_comment_present() {
-        let sql = "SELECT -- 'abc' FROM DUAL";
-        let dialect = MySqlDialect {};
-        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
-        let expected = vec![
-            Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
-            Token::Whitespace(Whitespace::SingleLineComment {
-                prefix: "--".to_string(),
-                comment: " 'abc' FROM DUAL".to_string(),
-            }),
-        ];
-        compare(expected, tokens);
+    fn test_whitespace_not_required_after_single_line_comment() {
+        all_dialects_where(|dialect| !dialect.requires_whitespace_to_start_comment()).tokenizes_to(
+            "SELECT --'abc'",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: "'abc'".to_string(),
+                }),
+            ],
+        );
+
+        all_dialects_where(|dialect| !dialect.requires_whitespace_to_start_comment()).tokenizes_to(
+            "SELECT -- 'abc'",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: " 'abc'".to_string(),
+                }),
+            ],
+        );
+
+        all_dialects_where(|dialect| !dialect.requires_whitespace_to_start_comment()).tokenizes_to(
+            "SELECT --",
+            vec![
+                Token::make_keyword("SELECT"),
+                Token::Whitespace(Whitespace::Space),
+                Token::Whitespace(Whitespace::SingleLineComment {
+                    prefix: "--".to_string(),
+                    comment: "".to_string(),
+                }),
+            ],
+        );
     }
 }

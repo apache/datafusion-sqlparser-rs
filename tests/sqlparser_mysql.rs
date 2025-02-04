@@ -3244,3 +3244,62 @@ fn parse_double_precision() {
         "CREATE TABLE foo (bar DOUBLE(11,0))",
     );
 }
+
+#[test]
+fn parse_looks_like_single_line_comment() {
+    // See https://dev.mysql.com/doc/refman/8.4/en/ansi-diff-comments.html
+    match mysql().parse_sql_statements(
+        r#"
+            UPDATE account SET balance=balance--1
+            WHERE account_id=5752
+        "#,
+    ) {
+        Ok(statement) => match statement.first() {
+            Some(Statement::Update { assignments, .. }) => {
+                assert_eq!(assignments.len(), 1);
+                assert_eq!(
+                    assignments[0],
+                    Assignment {
+                        value: Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident::new("balance"))),
+                            op: BinaryOperator::Minus,
+                            right: Box::new(Expr::UnaryOp {
+                                op: UnaryOperator::Minus,
+                                expr: Box::new(Expr::Value(number("1")))
+                            }),
+                        },
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
+                            "balance".to_string()
+                        )])),
+                    }
+                );
+            }
+            _ => panic!("expected update statement"),
+        },
+        _ => panic!("expected error"),
+    }
+
+    match mysql().parse_sql_statements(
+        r#"
+            UPDATE account SET balance=balance-- 1
+            WHERE account_id=5752
+        "#,
+    ) {
+        Ok(statement) => match statement.first() {
+            Some(Statement::Update { assignments, .. }) => {
+                assert_eq!(assignments.len(), 1);
+                assert_eq!(
+                    assignments[0],
+                    Assignment {
+                        value: Expr::Identifier(Ident::new("balance")),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
+                            "balance".to_string()
+                        )])),
+                    }
+                );
+            }
+            _ => panic!("expected update statement"),
+        },
+        _ => panic!("expected error"),
+    }
+}

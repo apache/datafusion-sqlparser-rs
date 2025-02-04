@@ -131,8 +131,8 @@ impl Dialect for MySqlDialect {
     /// Otherwise it's interpreted as a double minus operator
     ///
     /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/ansi-diff-comments.html>
-    fn is_start_of_single_line_comment(&self, _ch: char) -> bool {
-        _ch == ' '
+    fn requires_whitespace_to_start_comment(&self) -> bool {
+        true
     }
 }
 

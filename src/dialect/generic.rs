@@ -155,4 +155,8 @@ impl Dialect for GenericDialect {
     fn supports_match_against(&self) -> bool {
         true
     }
+
+    fn supports_set_names(&self) -> bool {
+        true
+    }
 }

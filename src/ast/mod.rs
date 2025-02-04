@@ -2956,10 +2956,8 @@ pub enum Statement {
     /// ```sql
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']
     /// ```
-    ///
-    /// Note: this is a MySQL-specific statement.
     SetNames {
-        charset_name: String,
+        charset_name: Ident,
         collation_name: Option<String>,
     },
     /// ```sql
@@ -4684,8 +4682,7 @@ impl fmt::Display for Statement {
                 charset_name,
                 collation_name,
             } => {
-                f.write_str("SET NAMES ")?;
-                f.write_str(charset_name)?;
+                write!(f, "SET NAMES {}", charset_name)?;
 
                 if let Some(collation) = collation_name {
                     f.write_str(" COLLATE ")?;

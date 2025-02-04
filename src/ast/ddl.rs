@@ -30,10 +30,10 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, CreateFunctionBody, CreateFunctionUsing, DataType,
-    Expr, FunctionBehavior, FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel,
-    Ident, MySQLColumnPosition, ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect,
-    SequenceOptions, SqlOption, Tag, Value,
+    display_comma_separated, display_separated, CommentDef, CreateFunctionBody,
+    CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
+    FunctionDeterminismSpecifier, FunctionParallel, Ident, MySQLColumnPosition, ObjectName,
+    OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -334,6 +334,23 @@ impl fmt::Display for Owner {
             Owner::CurrentRole => write!(f, "CURRENT_ROLE"),
             Owner::CurrentUser => write!(f, "CURRENT_USER"),
             Owner::SessionUser => write!(f, "SESSION_USER"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterConnectorOwner {
+    User(Ident),
+    Role(Ident),
+}
+
+impl fmt::Display for AlterConnectorOwner {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterConnectorOwner::User(ident) => write!(f, "USER {ident}"),
+            AlterConnectorOwner::Role(ident) => write!(f, "ROLE {ident}"),
         }
     }
 }
@@ -2052,6 +2069,64 @@ impl fmt::Display for CreateFunction {
         if let Some(CreateFunctionBody::AsAfterOptions(function_body)) = &self.function_body {
             write!(f, " AS {function_body}")?;
         }
+        Ok(())
+    }
+}
+
+/// ```sql
+/// CREATE CONNECTOR [IF NOT EXISTS] connector_name
+/// [TYPE datasource_type]
+/// [URL datasource_url]
+/// [COMMENT connector_comment]
+/// [WITH DCPROPERTIES(property_name=property_value, ...)]
+/// ```
+///
+/// [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateConnector {
+    pub name: Ident,
+    pub if_not_exists: bool,
+    pub connector_type: Option<String>,
+    pub url: Option<String>,
+    pub comment: Option<CommentDef>,
+    pub with_dcproperties: Option<Vec<SqlOption>>,
+}
+
+impl fmt::Display for CreateConnector {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CREATE CONNECTOR {if_not_exists}{name}",
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            name = self.name,
+        )?;
+
+        if let Some(connector_type) = &self.connector_type {
+            write!(f, " TYPE '{connector_type}'")?;
+        }
+
+        if let Some(url) = &self.url {
+            write!(f, " URL '{url}'")?;
+        }
+
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT = '{comment}'")?;
+        }
+
+        if let Some(with_dcproperties) = &self.with_dcproperties {
+            write!(
+                f,
+                " WITH DCPROPERTIES({})",
+                display_comma_separated(with_dcproperties)
+            )?;
+        }
+
         Ok(())
     }
 }

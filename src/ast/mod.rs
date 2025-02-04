@@ -47,14 +47,14 @@ pub use self::dcl::{
     AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
-    AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateFunction, Deduplicate, DeferrableInitial, DropBehavior,
-    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexOption,
-    IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition, ProcedureParam,
-    ReferentialAction, TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation, ViewColumnDef,
+    AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
+    AlterTableOperation, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateFunction, Deduplicate,
+    DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
+    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
+    IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
+    ProcedureParam, ReferentialAction, TableConstraint, TagsColumnOption,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -2646,6 +2646,11 @@ pub enum Statement {
         with_check: Option<Expr>,
     },
     /// ```sql
+    /// CREATE CONNECTOR
+    /// ```
+    /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
+    CreateConnector(CreateConnector),
+    /// ```sql
     /// ALTER TABLE
     /// ```
     AlterTable {
@@ -2695,6 +2700,20 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         operation: AlterPolicyOperation,
+    },
+    /// ```sql
+    /// ALTER CONNECTOR connector_name SET DCPROPERTIES(property_name=property_value, ...);
+    /// or
+    /// ALTER CONNECTOR connector_name SET URL new_url;
+    /// or
+    /// ALTER CONNECTOR connector_name SET OWNER [USER|ROLE] user_or_role;
+    /// ```
+    /// (Hive-specific)
+    AlterConnector {
+        name: Ident,
+        properties: Option<Vec<SqlOption>>,
+        url: Option<String>,
+        owner: Option<ddl::AlterConnectorOwner>,
     },
     /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
@@ -2794,6 +2813,11 @@ pub enum Statement {
         table_name: ObjectName,
         drop_behavior: Option<DropBehavior>,
     },
+    /// ```sql
+    /// DROP CONNECTOR
+    /// ```
+    /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-DropConnector)
+    DropConnector { if_exists: bool, name: Ident },
     /// ```sql
     /// DECLARE
     /// ```
@@ -4354,6 +4378,7 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
+            Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::AlterTable {
                 name,
                 if_exists,
@@ -4410,6 +4435,28 @@ impl fmt::Display for Statement {
                 operation,
             } => {
                 write!(f, "ALTER POLICY {name} ON {table_name}{operation}")
+            }
+            Statement::AlterConnector {
+                name,
+                properties,
+                url,
+                owner,
+            } => {
+                write!(f, "ALTER CONNECTOR {name}")?;
+                if let Some(properties) = properties {
+                    write!(
+                        f,
+                        " SET DCPROPERTIES({})",
+                        display_comma_separated(properties)
+                    )?;
+                }
+                if let Some(url) = url {
+                    write!(f, " SET URL '{url}'")?;
+                }
+                if let Some(owner) = owner {
+                    write!(f, " SET OWNER {owner}")?;
+                }
+                Ok(())
             }
             Statement::Drop {
                 object_type,
@@ -4496,6 +4543,14 @@ impl fmt::Display for Statement {
                 if let Some(drop_behavior) = drop_behavior {
                     write!(f, " {drop_behavior}")?;
                 }
+                Ok(())
+            }
+            Statement::DropConnector { if_exists, name } => {
+                write!(
+                    f,
+                    "DROP CONNECTOR {if_exists}{name}",
+                    if_exists = if *if_exists { "IF EXISTS " } else { "" }
+                )?;
                 Ok(())
             }
             Statement::Discard { object_type } => {

@@ -876,6 +876,7 @@ pub trait Dialect: Debug + Any {
     fn supports_string_escape_constant(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports the table hints in the `FROM` clause.
     fn supports_table_hints(&self) -> bool {
         false

@@ -398,6 +398,7 @@ impl Spanned for Statement {
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole { .. } => Span::empty(),
             Statement::CreateSecret { .. } => Span::empty(),
+            Statement::CreateConnector { .. } => Span::empty(),
             Statement::AlterTable {
                 name,
                 if_exists: _,
@@ -487,7 +488,9 @@ impl Spanned for Statement {
             Statement::OptimizeTable { .. } => Span::empty(),
             Statement::CreatePolicy { .. } => Span::empty(),
             Statement::AlterPolicy { .. } => Span::empty(),
+            Statement::AlterConnector { .. } => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
+            Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
             Statement::ShowSchemas { .. } => Span::empty(),
             Statement::ShowViews { .. } => Span::empty(),

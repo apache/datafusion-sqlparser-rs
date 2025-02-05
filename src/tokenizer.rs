@@ -1230,30 +1230,26 @@ impl<'a> Tokenizer<'a> {
                 '-' => {
                     chars.next(); // consume the '-'
 
-                    if let Some('-') = chars.peek() {
-                        let mut is_comment = true;
-                        if self.dialect.requires_whitespace_to_start_comment() {
-                            // MySQL requires a space after the -- for a single-line comment
-                            // Otherwise it's interpreted as two minus signs
-                            // e.g. UPDATE account SET balance=balance--1
-                            //      WHERE account_id=5752;
-                            match chars.peekable.clone().nth(1) {
-                                Some(' ') => (),
-                                _ => is_comment = false,
-                            }
-                        }
-
-                        if is_comment {
-                            chars.next(); // consume second '-'
-                            let comment = self.tokenize_single_line_comment(chars);
-                            return Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
-                                prefix: "--".to_owned(),
-                                comment,
-                            })));
-                        }
-                    }
-
                     match chars.peek() {
+                        Some('-') => {
+                            let mut is_comment = true;
+                            if self.dialect.requires_single_line_comment_whitespace() {
+                                is_comment = Some(' ') == chars.peekable.clone().nth(1);
+                            }
+
+                            if is_comment {
+                                chars.next(); // consume second '-'
+                                let comment = self.tokenize_single_line_comment(chars);
+                                return Ok(Some(Token::Whitespace(
+                                    Whitespace::SingleLineComment {
+                                        prefix: "--".to_owned(),
+                                        comment,
+                                    },
+                                )));
+                            }
+
+                            self.start_binop(chars, "-", Token::Minus)
+                        }
                         Some('>') => {
                             chars.next();
                             match chars.peek() {
@@ -3704,76 +3700,82 @@ mod tests {
 
     #[test]
     fn test_whitespace_required_after_single_line_comment() {
-        all_dialects_where(|dialect| dialect.requires_whitespace_to_start_comment()).tokenizes_to(
-            "SELECT --'abc'",
-            vec![
-                Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
-                Token::Minus,
-                Token::Minus,
-                Token::SingleQuotedString("abc".to_string()),
-            ],
-        );
+        all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT --'abc'",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Minus,
+                    Token::Minus,
+                    Token::SingleQuotedString("abc".to_string()),
+                ],
+            );
 
-        all_dialects_where(|dialect| dialect.requires_whitespace_to_start_comment()).tokenizes_to(
-            "SELECT -- 'abc'",
-            vec![
-                Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
-                Token::Whitespace(Whitespace::SingleLineComment {
-                    prefix: "--".to_string(),
-                    comment: " 'abc'".to_string(),
-                }),
-            ],
-        );
+        all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT -- 'abc'",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: " 'abc'".to_string(),
+                    }),
+                ],
+            );
 
-        all_dialects_where(|dialect| dialect.requires_whitespace_to_start_comment()).tokenizes_to(
-            "SELECT --",
-            vec![
-                Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
-                Token::Minus,
-                Token::Minus,
-            ],
-        );
+        all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT --",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Minus,
+                    Token::Minus,
+                ],
+            );
     }
 
     #[test]
     fn test_whitespace_not_required_after_single_line_comment() {
-        all_dialects_where(|dialect| !dialect.requires_whitespace_to_start_comment()).tokenizes_to(
-            "SELECT --'abc'",
-            vec![
-                Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
-                Token::Whitespace(Whitespace::SingleLineComment {
-                    prefix: "--".to_string(),
-                    comment: "'abc'".to_string(),
-                }),
-            ],
-        );
+        all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT --'abc'",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "'abc'".to_string(),
+                    }),
+                ],
+            );
 
-        all_dialects_where(|dialect| !dialect.requires_whitespace_to_start_comment()).tokenizes_to(
-            "SELECT -- 'abc'",
-            vec![
-                Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
-                Token::Whitespace(Whitespace::SingleLineComment {
-                    prefix: "--".to_string(),
-                    comment: " 'abc'".to_string(),
-                }),
-            ],
-        );
+        all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT -- 'abc'",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: " 'abc'".to_string(),
+                    }),
+                ],
+            );
 
-        all_dialects_where(|dialect| !dialect.requires_whitespace_to_start_comment()).tokenizes_to(
-            "SELECT --",
-            vec![
-                Token::make_keyword("SELECT"),
-                Token::Whitespace(Whitespace::Space),
-                Token::Whitespace(Whitespace::SingleLineComment {
-                    prefix: "--".to_string(),
-                    comment: "".to_string(),
-                }),
-            ],
-        );
+        all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT --",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "".to_string(),
+                    }),
+                ],
+            );
     }
 }

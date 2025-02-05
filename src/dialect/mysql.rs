@@ -126,12 +126,7 @@ impl Dialect for MySqlDialect {
         true
     }
 
-    /// Returns whether it's the start of a single line comment
-    /// e.g. MySQL requires a space after `--` to be a single line comment
-    /// Otherwise it's interpreted as a double minus operator
-    ///
-    /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/ansi-diff-comments.html>
-    fn requires_whitespace_to_start_comment(&self) -> bool {
+    fn requires_single_line_comment_whitespace(&self) -> bool {
         true
     }
 }

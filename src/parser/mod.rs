@@ -14164,7 +14164,7 @@ impl<'a> Parser<'a> {
         }
         false
     }
-    
+
     pub fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {
         let show_in;
         let mut filter_position = None;

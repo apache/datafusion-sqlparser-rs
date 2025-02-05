@@ -23,9 +23,10 @@ use crate::ast::helpers::stmt_data_loading::{
     StageLoadSelectItem, StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
-    RowAccessPolicy, Statement, TagsColumnOption, WrappedCollection,
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, ObjectName, RowAccessPolicy, Statement, TagsColumnOption,
+    WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -187,6 +188,17 @@ impl Dialect for SnowflakeDialect {
             return Some(parse_file_staging_command(kw, parser));
         }
 
+        if parser.parse_keyword(Keyword::SHOW) {
+            let terse = parser.parse_keyword(Keyword::TERSE);
+            if parser.parse_keyword(Keyword::OBJECTS) {
+                return Some(parse_show_objects(terse, parser));
+            } else {
+                return Some(parser.parse_show());
+            }
+        }
+
+
+
         None
     }
 
@@ -264,7 +276,7 @@ impl Dialect for SnowflakeDialect {
     fn is_select_item_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
         explicit
             || match kw {
-            // The following keywords can be considered an alias as long as 
+            // The following keywords can be considered an alias as long as
             // they are not followed by other tokens that may change their meaning
             // e.g. `SELECT * EXCEPT (col1) FROM tbl`
             Keyword::EXCEPT
@@ -286,8 +298,8 @@ impl Dialect for SnowflakeDialect {
                 false
             }
 
-            // Reserved keywords by the Snowflake dialect, which seem to be less strictive 
-            // than what is listed in `keywords::RESERVED_FOR_COLUMN_ALIAS`. The following 
+            // Reserved keywords by the Snowflake dialect, which seem to be less strictive
+            // than what is listed in `keywords::RESERVED_FOR_COLUMN_ALIAS`. The following
             // keywords were tested with the this statement: `SELECT 1 <KW>`.
             Keyword::FROM
             | Keyword::GROUP
@@ -966,7 +978,7 @@ fn parse_session_options(parser: &mut Parser, set: bool) -> Result<Vec<DataLoadi
                     });
                    Ok(())
                 }
-                
+
             },
             _ => parser.expected("another option", parser.peek_token()),
         }?;
@@ -1114,4 +1126,14 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
     parser.expect_token(&Token::RParen)?;
 
     Ok(TagsColumnOption { with, tags })
+}
+
+/// Parse snowflake show objects.
+/// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
+fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
+    let show_options = parser.parse_show_stmt_options()?;
+    Ok(Statement::ShowObjects {
+        terse,
+        show_options,
+    })
 }

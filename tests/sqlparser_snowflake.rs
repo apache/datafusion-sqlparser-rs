@@ -2976,6 +2976,25 @@ fn test_parse_show_schemas() {
 }
 
 #[test]
+fn test_parse_show_objects() {
+    snowflake().verified_stmt("SHOW OBJECTS");
+    snowflake().verified_stmt("SHOW OBJECTS IN abc");
+    snowflake().verified_stmt("SHOW OBJECTS LIKE '%test%' IN abc");
+    snowflake().verified_stmt("SHOW OBJECTS IN ACCOUNT");
+    snowflake().verified_stmt("SHOW OBJECTS IN DATABASE");
+    snowflake().verified_stmt("SHOW OBJECTS IN DATABASE abc");
+    snowflake().verified_stmt("SHOW OBJECTS IN SCHEMA");
+    snowflake().verified_stmt("SHOW OBJECTS IN SCHEMA abc");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS IN abc");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b'");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10");
+    snowflake()
+        .verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10 FROM 'x'");
+}
+
+#[test]
 fn test_parse_show_tables() {
     snowflake().verified_stmt("SHOW TABLES");
     snowflake().verified_stmt("SHOW TABLES IN ACCOUNT");

@@ -881,6 +881,15 @@ pub trait Dialect: Debug + Any {
     fn supports_table_hints(&self) -> bool {
         false
     }
+
+    /// Returns true if this dialect requires a whitespace character after `--` to start a single line comment.
+    ///
+    /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/ansi-diff-comments.html>
+    /// e.g. UPDATE account SET balance=balance--1
+    //       WHERE account_id=5752             ^^^ will be interpreted as two minus signs instead of a comment
+    fn requires_single_line_comment_whitespace(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

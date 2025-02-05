@@ -2478,6 +2478,113 @@ fn parse_create_anonymous_index() {
 }
 
 #[test]
+fn parse_create_users_name_trgm_index() {
+    let sql = "CREATE INDEX users_name_trgm_idx ON users USING gin (concat_users_name(first_name, last_name) gin_trgm_ops);";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_projects_name_description_trgm_index() {
+    let sql = "CREATE INDEX projects_name_description_trgm_idx ON projects USING gin (concat_projects_name_description(name, description) gin_trgm_ops);";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {}
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_nameplates_barcode_trgm_index() {
+    let sql =
+        "CREATE INDEX nameplates_barcode_trgm_idx ON nameplates USING gin (barcode gin_trgm_ops);";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {}
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_sample_containers_barcode_trgm_index() {
+    let sql = "CREATE INDEX sample_containers_barcode_trgm_idx ON sample_containers USING gin (barcode gin_trgm_ops);";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {}
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_teams_name_description_trgm_index() {
+    let sql = "CREATE INDEX teams_name_description_trgm_idx ON teams USING gin (concat_teams_name_description(name, description) gin_trgm_ops);";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {}
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_index_concurrently() {
     let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
     match pg().verified_stmt(sql) {

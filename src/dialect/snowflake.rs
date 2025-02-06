@@ -23,10 +23,7 @@ use crate::ast::helpers::stmt_data_loading::{
     StageLoadSelectItem, StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, Ident,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, ObjectName, RowAccessPolicy, Statement, TagsColumnOption,
-    WrappedCollection,
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, Ident, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName, RowAccessPolicy, ShowObjects, Statement, TagsColumnOption, WrappedCollection
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;

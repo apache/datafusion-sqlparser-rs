@@ -80,4 +80,9 @@ impl Dialect for DuckDbDialect {
     fn supports_load_extension(&self) -> bool {
         true
     }
+
+    // See DuckDB <https://duckdb.org/docs/sql/data_types/array.html#defining-an-array-field>
+    fn supports_array_typedef_size(&self) -> bool {
+        true
+    }
 }

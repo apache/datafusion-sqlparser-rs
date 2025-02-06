@@ -1256,6 +1256,32 @@ fn parse_semi_structured_data_traversal() {
             .to_string(),
         "sql parser error: Expected: variant object key name, found: 42"
     );
+
+    // casting a json access and accessing an array element
+    assert_eq!(
+        snowflake().verified_expr("a:b::ARRAY[1]"),
+        Expr::JsonAccess {
+            value: Box::new(Expr::Cast {
+                kind: CastKind::DoubleColon,
+                data_type: DataType::Array(ArrayElemTypeDef::None),
+                format: None,
+                expr: Box::new(Expr::JsonAccess {
+                    value: Box::new(Expr::Identifier(Ident::new("a"))),
+                    path: JsonPath {
+                        path: vec![JsonPathElem::Dot {
+                            key: "b".to_string(),
+                            quoted: false
+                        }]
+                    }
+                })
+            }),
+            path: JsonPath {
+                path: vec![JsonPathElem::Bracket {
+                    key: Expr::Value(number("1"))
+                }]
+            }
+        }
+    );
 }
 
 #[test]

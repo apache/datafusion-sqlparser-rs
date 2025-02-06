@@ -890,6 +890,12 @@ pub trait Dialect: Debug + Any {
     fn requires_single_line_comment_whitespace(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports size definition for array types.
+    /// For example: ```CREATE TABLE my_table (my_array INT[3])```.
+    fn supports_array_typedef_size(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

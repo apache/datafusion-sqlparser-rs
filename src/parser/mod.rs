@@ -63,6 +63,7 @@ mod recursion {
 
     use super::ParserError;
 
+    #[derive(Debug)]
     /// Tracks remaining recursion depth. This value is decremented on
     /// each call to [`RecursionCounter::try_decrease()`], when it reaches 0 an error will
     /// be returned.
@@ -263,7 +264,7 @@ impl ParserOptions {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum ParserState {
     /// The default state of the parser.
     Normal,
@@ -273,6 +274,7 @@ enum ParserState {
     ConnectBy,
 }
 
+#[derive(Debug)]
 /// A SQL Parser
 ///
 /// This struct is the main entry point for parsing SQL queries.
@@ -6249,12 +6251,36 @@ impl<'a> Parser<'a> {
         };
         let table_name = self.parse_object_name(false)?;
         let using = if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_identifier()?)
+            Some(self.parse_index_type()?)
         } else {
             None
         };
         self.expect_token(&Token::LParen)?;
-        let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+        let columns = if let Some(using) = &using {
+            match using {
+                IndexType::GIN => {
+                    self.parse_comma_separated(Parser::parse_create_index_expr::<GINOperatorClass>)?
+                }
+                IndexType::GiST => self
+                    .parse_comma_separated(Parser::parse_create_index_expr::<GiSTOperatorClass>)?,
+                IndexType::Hash => self
+                    .parse_comma_separated(Parser::parse_create_index_expr::<HashOperatorClass>)?,
+                IndexType::Bloom => self
+                    .parse_comma_separated(Parser::parse_create_index_expr::<BloomOperatorClass>)?,
+                IndexType::BTree => self
+                    .parse_comma_separated(Parser::parse_create_index_expr::<BTreeOperatorClass>)?,
+                IndexType::SPGiST | IndexType::BRIN => self
+                    .parse_comma_separated(Parser::parse_order_by_expr)?
+                    .into_iter()
+                    .map(|expr| expr.into())
+                    .collect(),
+            }
+        } else {
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
+                .into_iter()
+                .map(|expr| expr.into())
+                .collect()
+        };
         self.expect_token(&Token::RParen)?;
 
         let include = if self.parse_keyword(Keyword::INCLUDE) {
@@ -7482,8 +7508,21 @@ impl<'a> Parser<'a> {
             Ok(IndexType::BTree)
         } else if self.parse_keyword(Keyword::HASH) {
             Ok(IndexType::Hash)
+        } else if self.parse_keyword(Keyword::GIN) {
+            Ok(IndexType::GIN)
+        } else if self.parse_keyword(Keyword::GIST) {
+            Ok(IndexType::GiST)
+        } else if self.parse_keyword(Keyword::SPGIST) {
+            Ok(IndexType::SPGiST)
+        } else if self.parse_keyword(Keyword::BRIN) {
+            Ok(IndexType::BRIN)
+        } else if self.parse_keyword(Keyword::BLOOM) {
+            Ok(IndexType::Bloom)
         } else {
-            self.expected("index type {BTREE | HASH}", self.peek_token())
+            self.expected(
+                "index type {BTREE | HASH | GIN | GIST | SPGIST | BRIN | BLOOM}",
+                self.peek_token(),
+            )
         }
     }
 
@@ -13336,6 +13375,42 @@ impl<'a> Parser<'a> {
             asc,
             nulls_first,
             with_fill,
+        })
+    }
+
+    /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
+    pub fn parse_create_index_expr<OPS: OperatorClass>(
+        &mut self,
+    ) -> Result<IndexColumn, ParserError> {
+        let expr = self.parse_expr()?;
+
+        let operator_class: Option<OPS> = self.parse_one_of_keywords(OPS::KEYWORDS).map(Into::into);
+        let asc = self.parse_asc_desc();
+
+        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
+            Some(true)
+        } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
+            Some(false)
+        } else {
+            None
+        };
+
+        let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
+        {
+            Some(self.parse_with_fill()?)
+        } else {
+            None
+        };
+
+        Ok(IndexColumn {
+            column: OrderByExpr {
+                expr,
+                asc,
+                nulls_first,
+                with_fill,
+            },
+            operator_class: operator_class.map(Into::into),
         })
     }
 

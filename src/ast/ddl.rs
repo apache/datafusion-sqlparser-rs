@@ -1030,13 +1030,17 @@ impl fmt::Display for KeyOrIndexDisplay {
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
 /// [2]: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
 /// [3]: https://www.postgresql.org/docs/14/sql-createindex.html
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum IndexType {
     BTree,
     Hash,
-    // TODO add Postgresql's possible indexes
+    GIN,
+    GiST,
+    SPGiST,
+    BRIN,
+    Bloom
 }
 
 impl fmt::Display for IndexType {
@@ -1044,6 +1048,11 @@ impl fmt::Display for IndexType {
         match self {
             Self::BTree => write!(f, "BTREE"),
             Self::Hash => write!(f, "HASH"),
+            Self::GIN => write!(f, "GIN"),
+            Self::GiST => write!(f, "GIST"),
+            Self::SPGiST => write!(f, "SPGIST"),
+            Self::BRIN => write!(f, "BRIN"),
+            Self::Bloom => write!(f, "BLOOM"),
         }
     }
 }

@@ -32,13 +32,36 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, query::InputFormatClause, Assignment, ClusteredBy,
-    CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
-    HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert,
-    OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting, SqlOption,
-    SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject, TableWithJoins, Tag,
-    WrappedCollection,
+    display_comma_separated, display_separated, operator_classes::IndexOperatorClass, query::InputFormatClause, Assignment, ClusteredBy, CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting, SqlOption, SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject, TableWithJoins, Tag, WrappedCollection
 };
+
+/// Index column type.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IndexColumn {
+    pub column: OrderByExpr,
+    pub operator_class: Option<IndexOperatorClass>,
+}
+
+impl From<OrderByExpr> for IndexColumn {
+    fn from(column: OrderByExpr) -> Self {
+        Self {
+            column,
+            operator_class: None,
+        }
+    }
+}
+
+impl Display for IndexColumn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.column)?;
+        if let Some(operator_class) = &self.operator_class {
+            write!(f, " {}", operator_class)?;
+        }
+        Ok(())
+    }
+}
 
 /// CREATE INDEX statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -49,8 +72,8 @@ pub struct CreateIndex {
     pub name: Option<ObjectName>,
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub table_name: ObjectName,
-    pub using: Option<Ident>,
-    pub columns: Vec<OrderByExpr>,
+    pub using: Option<IndexType>,
+    pub columns: Vec<IndexColumn>,
     pub unique: bool,
     pub concurrently: bool,
     pub if_not_exists: bool,

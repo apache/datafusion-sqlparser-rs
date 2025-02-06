@@ -56,7 +56,7 @@ pub use self::ddl::{
     ProcedureParam, ReferentialAction, TableConstraint, TagsColumnOption,
     UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
-pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
+pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     AfterMatchSkip, ConnectBy, Cte, CteAsMaterialized, Distinct, EmptyMatchesMode,
@@ -87,9 +87,15 @@ pub use self::value::{
     NormalizationForm, TrimWhereField, Value,
 };
 
+pub use self::operator_classes::{
+    BTreeOperatorClass, BloomOperatorClass, GINOperatorClass, GiSTOperatorClass, HashOperatorClass,
+    OperatorClass,
+};
+
 use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
 };
+
 #[cfg(feature = "visitor")]
 pub use visitor::*;
 
@@ -99,6 +105,7 @@ mod ddl;
 mod dml;
 pub mod helpers;
 mod operator;
+mod operator_classes;
 mod query;
 mod spans;
 pub use spans::Spanned;

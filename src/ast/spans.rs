@@ -702,7 +702,7 @@ impl Spanned for CreateIndex {
         let CreateIndex {
             name,
             table_name,
-            using,
+            using: _,
             columns,
             unique: _,        // bool
             concurrently: _,  // bool
@@ -717,8 +717,7 @@ impl Spanned for CreateIndex {
             name.iter()
                 .map(|i| i.span())
                 .chain(core::iter::once(table_name.span()))
-                .chain(using.iter().map(|i| i.span))
-                .chain(columns.iter().map(|i| i.span()))
+                .chain(columns.iter().map(|i| i.column.span()))
                 .chain(include.iter().map(|i| i.span))
                 .chain(with.iter().map(|i| i.span()))
                 .chain(predicate.iter().map(|i| i.span())),
@@ -2201,6 +2200,7 @@ pub mod tests {
             "SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id",
         );
 
+        println!("{:?}", test.0);
         let query = test.0.parse_select().unwrap();
         let select_span = query.span();
 

@@ -461,6 +461,7 @@ fn parse_update_set_from() {
                             window_before_qualify: false,
                             value_table_mode: None,
                             connect_by: None,
+                            flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
                         limit: None,
@@ -5289,6 +5290,7 @@ fn test_parse_named_window() {
         window_before_qualify: true,
         value_table_mode: None,
         connect_by: None,
+        flavor: SelectFlavor::Standard,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -5915,6 +5917,7 @@ fn parse_interval_and_or_xor() {
             window_before_qualify: false,
             value_table_mode: None,
             connect_by: None,
+            flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
         limit: None,
@@ -8022,6 +8025,7 @@ fn lateral_function() {
         window_before_qualify: false,
         value_table_mode: None,
         connect_by: None,
+        flavor: SelectFlavor::Standard,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -8919,6 +8923,7 @@ fn parse_merge() {
                             qualify: None,
                             value_table_mode: None,
                             connect_by: None,
+                            flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
                         limit: None,
@@ -10703,6 +10708,7 @@ fn parse_unload() {
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 }))),
                 with: None,
                 limit: None,
@@ -10913,6 +10919,7 @@ fn parse_connect_by() {
                 ))))),
             }],
         }),
+        flavor: SelectFlavor::Standard,
     };
 
     let connect_by_1 = concat!(
@@ -10997,6 +11004,7 @@ fn parse_connect_by() {
                     ))))),
                 }],
             }),
+            flavor: SelectFlavor::Standard,
         }
     );
 
@@ -11860,6 +11868,7 @@ fn test_extract_seconds_ok() {
             window_before_qualify: false,
             value_table_mode: None,
             connect_by: None,
+            flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
         limit: None,

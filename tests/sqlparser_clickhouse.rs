@@ -101,6 +101,7 @@ fn parse_map_access_expr() {
             qualify: None,
             value_table_mode: None,
             connect_by: None,
+            flavor: SelectFlavor::Standard,
         },
         select
     );

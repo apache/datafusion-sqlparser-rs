@@ -2077,6 +2077,7 @@ impl Spanned for Select {
             value_table_mode: _,      // todo, BigQuery specific
             connect_by,
             top_before_distinct: _,
+            flavor: _,
         } = self;
 
         union_spans(

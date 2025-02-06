@@ -1111,6 +1111,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1164,6 +1165,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1211,6 +1213,7 @@ fn parse_escaped_backticks_with_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1262,6 +1265,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1931,6 +1935,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     window_before_qualify: false,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             );
         }
@@ -1983,6 +1988,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     window_before_qualify: false,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             );
         }
@@ -2503,6 +2509,7 @@ fn parse_substring_in_select() {
                         qualify: None,
                         value_table_mode: None,
                         connect_by: None,
+                        flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
                     limit: None,
@@ -2799,6 +2806,7 @@ fn parse_hex_string_introducer() {
                 value_table_mode: None,
                 into: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,

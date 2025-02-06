@@ -25,7 +25,7 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, Ident,
     IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, ObjectName, RowAccessPolicy, Statement, TagsColumnOption,
+    IdentityPropertyOrder, ObjectName, RowAccessPolicy, ShowObjects, Statement, TagsColumnOption,
     WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
@@ -183,6 +183,19 @@ impl Dialect for SnowflakeDialect {
             Keyword::RM,
         ]) {
             return Some(parse_file_staging_command(kw, parser));
+        }
+
+        if parser.parse_keyword(Keyword::SHOW) {
+            let terse = parser.parse_keyword(Keyword::TERSE);
+            if parser.parse_keyword(Keyword::OBJECTS) {
+                return Some(parse_show_objects(terse, parser));
+            }
+            //Give back Keyword::TERSE
+            if terse {
+                parser.prev_token();
+            }
+            //Give back Keyword::SHOW
+            parser.prev_token();
         }
 
         None
@@ -1091,4 +1104,14 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
     parser.expect_token(&Token::RParen)?;
 
     Ok(TagsColumnOption { with, tags })
+}
+
+/// Parse snowflake show objects.
+/// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
+fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
+    let show_options = parser.parse_show_stmt_options()?;
+    Ok(Statement::ShowObjects(ShowObjects {
+        terse,
+        show_options,
+    }))
 }

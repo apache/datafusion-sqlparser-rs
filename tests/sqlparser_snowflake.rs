@@ -3083,6 +3083,7 @@ fn test_parentheses_overflow() {
 #[test]
 fn test_show_databases() {
     snowflake().verified_stmt("SHOW DATABASES");
+    snowflake().verified_stmt("SHOW TERSE DATABASES");
     snowflake().verified_stmt("SHOW DATABASES HISTORY");
     snowflake().verified_stmt("SHOW DATABASES LIKE '%abc%'");
     snowflake().verified_stmt("SHOW DATABASES STARTS WITH 'demo_db'");
@@ -3095,6 +3096,7 @@ fn test_show_databases() {
 #[test]
 fn test_parse_show_schemas() {
     snowflake().verified_stmt("SHOW SCHEMAS");
+    snowflake().verified_stmt("SHOW TERSE SCHEMAS");
     snowflake().verified_stmt("SHOW SCHEMAS IN ACCOUNT");
     snowflake().verified_stmt("SHOW SCHEMAS IN ACCOUNT abc");
     snowflake().verified_stmt("SHOW SCHEMAS IN DATABASE");
@@ -3105,8 +3107,50 @@ fn test_parse_show_schemas() {
 }
 
 #[test]
+fn test_parse_show_objects() {
+    snowflake().verified_stmt("SHOW OBJECTS");
+    snowflake().verified_stmt("SHOW OBJECTS IN abc");
+    snowflake().verified_stmt("SHOW OBJECTS LIKE '%test%' IN abc");
+    snowflake().verified_stmt("SHOW OBJECTS IN ACCOUNT");
+    snowflake().verified_stmt("SHOW OBJECTS IN DATABASE");
+    snowflake().verified_stmt("SHOW OBJECTS IN DATABASE abc");
+    snowflake().verified_stmt("SHOW OBJECTS IN SCHEMA");
+    snowflake().verified_stmt("SHOW OBJECTS IN SCHEMA abc");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS IN abc");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b'");
+    snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10");
+    snowflake()
+        .verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10 FROM 'x'");
+    match snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc") {
+        Statement::ShowObjects(ShowObjects {
+            terse,
+            show_options,
+        }) => {
+            assert!(terse);
+            let name = match show_options.show_in {
+                Some(ShowStatementIn {
+                    parent_name: Some(val),
+                    ..
+                }) => val.to_string(),
+                _ => unreachable!(),
+            };
+            assert_eq!("abc", name);
+            let like = match show_options.filter_position {
+                Some(ShowStatementFilterPosition::Infix(ShowStatementFilter::Like(val))) => val,
+                _ => unreachable!(),
+            };
+            assert_eq!("%test%", like);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_parse_show_tables() {
     snowflake().verified_stmt("SHOW TABLES");
+    snowflake().verified_stmt("SHOW TERSE TABLES");
     snowflake().verified_stmt("SHOW TABLES IN ACCOUNT");
     snowflake().verified_stmt("SHOW TABLES IN DATABASE");
     snowflake().verified_stmt("SHOW TABLES IN DATABASE xyz");
@@ -3129,6 +3173,7 @@ fn test_parse_show_tables() {
 #[test]
 fn test_show_views() {
     snowflake().verified_stmt("SHOW VIEWS");
+    snowflake().verified_stmt("SHOW TERSE VIEWS");
     snowflake().verified_stmt("SHOW VIEWS IN ACCOUNT");
     snowflake().verified_stmt("SHOW VIEWS IN DATABASE");
     snowflake().verified_stmt("SHOW VIEWS IN DATABASE xyz");

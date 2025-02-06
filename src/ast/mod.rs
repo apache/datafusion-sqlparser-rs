@@ -3010,6 +3010,12 @@ pub enum Statement {
         show_options: ShowStatementOptions,
     },
     /// ```sql
+    /// SHOW OBJECTS LIKE 'line%' IN mydb.public
+    /// ```
+    /// Snowflake-specific statement
+    /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
+    ShowObjects(ShowObjects),
+    /// ```sql
     /// SHOW TABLES
     /// ```
     ShowTables {
@@ -4700,6 +4706,17 @@ impl fmt::Display for Statement {
                     "SHOW {terse}SCHEMAS{history}{show_options}",
                     terse = if *terse { "TERSE " } else { "" },
                     history = if *history { " HISTORY" } else { "" },
+                )?;
+                Ok(())
+            }
+            Statement::ShowObjects(ShowObjects {
+                terse,
+                show_options,
+            }) => {
+                write!(
+                    f,
+                    "SHOW {terse}OBJECTS{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
                 )?;
                 Ok(())
             }
@@ -8341,6 +8358,14 @@ impl fmt::Display for ShowStatementIn {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowObjects {
+    pub terse: bool,
+    pub show_options: ShowStatementOptions,
 }
 
 /// MSSQL's json null clause

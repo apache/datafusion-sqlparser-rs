@@ -3083,6 +3083,7 @@ fn test_parentheses_overflow() {
 #[test]
 fn test_show_databases() {
     snowflake().verified_stmt("SHOW DATABASES");
+    snowflake().verified_stmt("SHOW TERSE DATABASES");
     snowflake().verified_stmt("SHOW DATABASES HISTORY");
     snowflake().verified_stmt("SHOW DATABASES LIKE '%abc%'");
     snowflake().verified_stmt("SHOW DATABASES STARTS WITH 'demo_db'");
@@ -3095,6 +3096,7 @@ fn test_show_databases() {
 #[test]
 fn test_parse_show_schemas() {
     snowflake().verified_stmt("SHOW SCHEMAS");
+    snowflake().verified_stmt("SHOW TERSE SCHEMAS");
     snowflake().verified_stmt("SHOW SCHEMAS IN ACCOUNT");
     snowflake().verified_stmt("SHOW SCHEMAS IN ACCOUNT abc");
     snowflake().verified_stmt("SHOW SCHEMAS IN DATABASE");
@@ -3147,6 +3149,7 @@ fn test_parse_show_objects() {
 #[test]
 fn test_parse_show_tables() {
     snowflake().verified_stmt("SHOW TABLES");
+    snowflake().verified_stmt("SHOW TERSE TABLES");
     snowflake().verified_stmt("SHOW TABLES IN ACCOUNT");
     snowflake().verified_stmt("SHOW TABLES IN DATABASE");
     snowflake().verified_stmt("SHOW TABLES IN DATABASE xyz");
@@ -3169,6 +3172,7 @@ fn test_parse_show_tables() {
 #[test]
 fn test_show_views() {
     snowflake().verified_stmt("SHOW VIEWS");
+    snowflake().verified_stmt("SHOW TERSE VIEWS");
     snowflake().verified_stmt("SHOW VIEWS IN ACCOUNT");
     snowflake().verified_stmt("SHOW VIEWS IN DATABASE");
     snowflake().verified_stmt("SHOW VIEWS IN DATABASE xyz");

@@ -2511,20 +2511,20 @@ fn parse_create_users_name_trgm_index() {
                             args: FunctionArguments::List(FunctionArgumentList {
                                 duplicate_treatment: None,
                                 args: vec![
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                        Expr::Identifier(Ident {
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident {
                                             value: "first_name".to_owned(),
                                             quote_style: None,
                                             span: Span::empty()
-                                        })
-                                    )),
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                        Expr::Identifier(Ident {
+                                        }
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident {
                                             value: "last_name".to_owned(),
                                             quote_style: None,
                                             span: Span::empty()
-                                        })
-                                    ))
+                                        }
+                                    )))
                                 ],
                                 clauses: vec![]
                             }),
@@ -2585,20 +2585,20 @@ fn parse_create_projects_name_description_trgm_index() {
                             args: FunctionArguments::List(FunctionArgumentList {
                                 duplicate_treatment: None,
                                 args: vec![
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                        Expr::Identifier(Ident {
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident {
                                             value: "name".to_owned(),
                                             quote_style: None,
                                             span: Span::empty()
-                                        })
-                                    )),
-                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                        Expr::Identifier(Ident {
+                                        }
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident {
                                             value: "description".to_owned(),
                                             quote_style: None,
                                             span: Span::empty()
-                                        })
-                                    ))
+                                        }
+                                    )))
                                 ],
                                 clauses: vec![]
                             }),

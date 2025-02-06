@@ -8434,13 +8434,15 @@ fn parse_create_index() {
             asc: None,
             nulls_first: None,
             with_fill: None,
-        }.into(),
+        }
+        .into(),
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
             with_fill: None,
-        }.into(),
+        }
+        .into(),
     ];
     match verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
@@ -8470,13 +8472,15 @@ fn test_create_index_with_using_function() {
             asc: None,
             nulls_first: None,
             with_fill: None,
-        }.into(),
+        }
+        .into(),
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
             with_fill: None,
-        }.into(),
+        }
+        .into(),
     ];
     match verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
@@ -8514,7 +8518,8 @@ fn test_create_index_with_with_clause() {
         asc: None,
         nulls_first: None,
         with_fill: None,
-    }.into()];
+    }
+    .into()];
     let with_parameters = vec![
         Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("fillfactor"))),

@@ -1040,7 +1040,7 @@ pub enum IndexType {
     GiST,
     SPGiST,
     BRIN,
-    Bloom
+    Bloom,
 }
 
 impl fmt::Display for IndexType {

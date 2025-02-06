@@ -23,10 +23,9 @@ use crate::ast::helpers::stmt_data_loading::{
     StageLoadSelectItem, StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident,
-    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
-    IdentityPropertyOrder, ObjectName, RowAccessPolicy, Statement, TagsColumnOption,
-    WrappedCollection,
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, IdentityParameters, IdentityProperty,
+    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
+    RowAccessPolicy, ShowObjects, Statement, TagsColumnOption, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -1073,8 +1072,8 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
 /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
 fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
     let show_options = parser.parse_show_stmt_options()?;
-    Ok(Statement::ShowObjects {
+    Ok(Statement::ShowObjects(ShowObjects {
         terse,
         show_options,
-    })
+    }))
 }

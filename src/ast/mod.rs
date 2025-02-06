@@ -2980,31 +2980,11 @@ pub enum Statement {
         show_options: ShowStatementOptions,
     },
     /// ```sql
-    /// SHOW [ TERSE ] OBJECTS [ LIKE '<pattern>' ]
-    ///                        [ IN
-    ///                              {
-    ///                                ACCOUNT                                         |
-    ///    
-    ///                                DATABASE                                        |
-    ///                                DATABASE <database_name>                        |
-    ///
-    ///                                SCHEMA                                          |
-    ///                                SCHEMA <schema_name>                            |
-    ///                                <schema_name>
-    ///
-    ///                                APPLICATION <application_name>                  |
-    ///                                APPLICATION PACKAGE <application_package_name>  |
-    ///                              }
-    ///                        ]
-    ///                        [ STARTS WITH '<name_string>' ]
-    ///                        [ LIMIT <rows> [ FROM '<name_string>' ] ]
+    /// SHOW OBJECTS LIKE 'line%' IN mydb.public
     /// ```
     /// Snowflake-specific statement
     /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
-    ShowObjects {
-        terse: bool,
-        show_options: ShowStatementOptions,
-    },
+    ShowObjects(ShowObjects),
     /// ```sql
     /// SHOW TABLES
     /// ```
@@ -4668,10 +4648,10 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
-            Statement::ShowObjects {
+            Statement::ShowObjects(ShowObjects {
                 terse,
                 show_options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "SHOW {terse}OBJECTS{show_options}",
@@ -8308,6 +8288,14 @@ impl fmt::Display for ShowStatementIn {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowObjects {
+    pub terse: bool,
+    pub show_options: ShowStatementOptions,
 }
 
 /// MSSQL's json null clause

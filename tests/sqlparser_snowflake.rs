@@ -2992,6 +2992,27 @@ fn test_parse_show_objects() {
     snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10");
     snowflake()
         .verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc STARTS WITH 'b' LIMIT 10 FROM 'x'");
+    match snowflake().verified_stmt("SHOW TERSE OBJECTS LIKE '%test%' IN abc") {
+        Statement::ShowObjects(ShowObjects {
+            terse,
+            show_options,
+        }) => {
+            assert!(terse);
+            let name = show_options
+                .show_in
+                .unwrap()
+                .parent_name
+                .unwrap()
+                .to_string();
+            assert_eq!("abc", name);
+            let like = match show_options.filter_position {
+                Some(ShowStatementFilterPosition::Infix(ShowStatementFilter::Like(val))) => val,
+                _ => unreachable!(),
+            };
+            assert_eq!("%test%", like);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

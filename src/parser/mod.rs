@@ -14172,7 +14172,7 @@ impl<'a> Parser<'a> {
         false
     }
 
-    pub fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {
+    pub(crate) fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {
         let show_in;
         let mut filter_position = None;
         if self.dialect.supports_show_like_before_in() {

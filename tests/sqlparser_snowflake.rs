@@ -3129,12 +3129,12 @@ fn test_parse_show_objects() {
             show_options,
         }) => {
             assert!(terse);
-            let name = show_options
-                .show_in
-                .unwrap()
-                .parent_name
-                .unwrap()
-                .to_string();
+            let name = match show_options.show_in {
+                Some(ShowStatementIn { parent_name: Some(val), .. }) => {
+                    val.to_string()
+                }
+                _ => unreachable!(),
+            };
             assert_eq!("abc", name);
             let like = match show_options.filter_position {
                 Some(ShowStatementFilterPosition::Infix(ShowStatementFilter::Like(val))) => val,

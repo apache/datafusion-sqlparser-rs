@@ -303,6 +303,7 @@ fn test_select_from_first() {
             format_clause: None,
         };
         assert_eq!(expected, ast);
+        assert_eq!(ast.to_string(), q);
     }
 }
 

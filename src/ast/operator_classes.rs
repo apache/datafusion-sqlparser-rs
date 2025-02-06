@@ -17,6 +17,11 @@
 
 use core::fmt::{self, Display};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "visitor")]
+use sqlparser_derive::{Visit, VisitMut};
+
 use crate::keywords::Keyword;
 
 /// Trait characterizing the operator classes
@@ -27,6 +32,7 @@ pub trait OperatorClass: From<Keyword> + Into<IndexOperatorClass> {
 
 /// Bloom-index specific operator classes
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum BloomOperatorClass {
     Int4,
@@ -58,6 +64,7 @@ impl Display for BloomOperatorClass {
 
 /// BTree GIN-based index operator class
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GINOperatorClass {
     Int2,
@@ -210,6 +217,7 @@ impl Display for GINOperatorClass {
 
 /// BTree GIST-based index operator class
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GiSTOperatorClass {
     OID,
@@ -365,6 +373,7 @@ impl Display for GiSTOperatorClass {
 
 /// BTree-index specific operator classes
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum BTreeOperatorClass {
     /// The isn module provides data types for the following international product numbering standards: [`isn`](https://www.postgresql.org/docs/current/isn.html)
@@ -444,6 +453,7 @@ impl Display for BTreeOperatorClass {
 
 /// Hash-index specific operator classes
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum HashOperatorClass {
     /// The isn module provides data types for the following international product numbering standards: [`isn`](https://www.postgresql.org/docs/current/isn.html)

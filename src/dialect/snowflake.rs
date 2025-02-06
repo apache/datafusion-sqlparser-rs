@@ -187,9 +187,13 @@ impl Dialect for SnowflakeDialect {
             let terse = parser.parse_keyword(Keyword::TERSE);
             if parser.parse_keyword(Keyword::OBJECTS) {
                 return Some(parse_show_objects(terse, parser));
-            } else {
-                return Some(parser.parse_show());
             }
+            //Give back Keyword::TERSE
+            if terse {
+                parser.prev_token();
+            }
+            //Give back Keyword::SHOW
+            parser.prev_token();
         }
 
         None

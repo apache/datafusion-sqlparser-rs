@@ -3130,9 +3130,10 @@ fn test_parse_show_objects() {
         }) => {
             assert!(terse);
             let name = match show_options.show_in {
-                Some(ShowStatementIn { parent_name: Some(val), .. }) => {
-                    val.to_string()
-                }
+                Some(ShowStatementIn {
+                    parent_name: Some(val),
+                    ..
+                }) => val.to_string(),
                 _ => unreachable!(),
             };
             assert_eq!("abc", name);

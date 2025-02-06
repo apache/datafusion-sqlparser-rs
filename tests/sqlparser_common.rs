@@ -12290,6 +12290,175 @@ fn test_alter_policy() {
 }
 
 #[test]
+fn test_create_connector() {
+    let sql = "CREATE CONNECTOR my_connector \
+               TYPE 'jdbc' \
+               URL 'jdbc:mysql://localhost:3306/mydb' \
+               WITH DCPROPERTIES('user' = 'root', 'password' = 'password')";
+    let dialects = all_dialects();
+    match dialects.verified_stmt(sql) {
+        Statement::CreateConnector(CreateConnector {
+            name,
+            connector_type,
+            url,
+            with_dcproperties,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(connector_type, Some("jdbc".to_string()));
+            assert_eq!(url, Some("jdbc:mysql://localhost:3306/mydb".to_string()));
+            assert_eq!(
+                with_dcproperties,
+                Some(vec![
+                    SqlOption::KeyValue {
+                        key: Ident::with_quote('\'', "user"),
+                        value: Expr::Value(Value::SingleQuotedString("root".to_string()))
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::with_quote('\'', "password"),
+                        value: Expr::Value(Value::SingleQuotedString("password".to_string()))
+                    }
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // omit IF NOT EXISTS/TYPE/URL/COMMENT/WITH DCPROPERTIES clauses is allowed
+    dialects.verified_stmt("CREATE CONNECTOR my_connector");
+
+    // missing connector name
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE CONNECTOR")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn test_drop_connector() {
+    let dialects = all_dialects();
+    match dialects.verified_stmt("DROP CONNECTOR IF EXISTS my_connector") {
+        Statement::DropConnector { if_exists, name } => {
+            assert_eq!(if_exists, true);
+            assert_eq!(name.to_string(), "my_connector");
+        }
+        _ => unreachable!(),
+    }
+
+    // omit IF EXISTS is allowed
+    dialects.verified_stmt("DROP CONNECTOR my_connector");
+
+    // missing connector name
+    assert_eq!(
+        dialects
+            .parse_sql_statements("DROP CONNECTOR")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn test_alter_connector() {
+    let dialects = all_dialects();
+    match dialects.verified_stmt(
+        "ALTER CONNECTOR my_connector SET DCPROPERTIES('user' = 'root', 'password' = 'password')",
+    ) {
+        Statement::AlterConnector {
+            name,
+            properties,
+            url,
+            owner,
+        } => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(
+                properties,
+                Some(vec![
+                    SqlOption::KeyValue {
+                        key: Ident::with_quote('\'', "user"),
+                        value: Expr::Value(Value::SingleQuotedString("root".to_string()))
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::with_quote('\'', "password"),
+                        value: Expr::Value(Value::SingleQuotedString("password".to_string()))
+                    }
+                ])
+            );
+            assert_eq!(url, None);
+            assert_eq!(owner, None);
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects
+        .verified_stmt("ALTER CONNECTOR my_connector SET URL 'jdbc:mysql://localhost:3306/mydb'")
+    {
+        Statement::AlterConnector {
+            name,
+            properties,
+            url,
+            owner,
+        } => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(properties, None);
+            assert_eq!(url, Some("jdbc:mysql://localhost:3306/mydb".to_string()));
+            assert_eq!(owner, None);
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("ALTER CONNECTOR my_connector SET OWNER USER 'root'") {
+        Statement::AlterConnector {
+            name,
+            properties,
+            url,
+            owner,
+        } => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(properties, None);
+            assert_eq!(url, None);
+            assert_eq!(
+                owner,
+                Some(AlterConnectorOwner::User(Ident::with_quote('\'', "root")))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("ALTER CONNECTOR my_connector SET OWNER ROLE 'admin'") {
+        Statement::AlterConnector {
+            name,
+            properties,
+            url,
+            owner,
+        } => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(properties, None);
+            assert_eq!(url, None);
+            assert_eq!(
+                owner,
+                Some(AlterConnectorOwner::Role(Ident::with_quote('\'', "admin")))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Wrong option name
+    assert_eq!(
+        dialects
+            .parse_sql_statements(
+                "ALTER CONNECTOR my_connector SET WRONG 'jdbc:mysql://localhost:3306/mydb'"
+            )
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: WRONG"
+    );
+}
+
+#[test]
 fn test_select_where_with_like_or_ilike_any() {
     verified_stmt(r#"SELECT * FROM x WHERE a ILIKE ANY '%abc%'"#);
     verified_stmt(r#"SELECT * FROM x WHERE a LIKE ANY '%abc%'"#);

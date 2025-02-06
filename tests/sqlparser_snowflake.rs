@@ -3404,3 +3404,29 @@ fn test_grant_database_role_to() {
     snowflake_and_generic().verified_stmt("GRANT DATABASE ROLE r1 TO ROLE r2");
     snowflake_and_generic().verified_stmt("GRANT DATABASE ROLE db1.sc1.r1 TO ROLE db1.sc1.r2");
 }
+
+#[test]
+fn test_alter_session() {
+    snowflake().verified_stmt("ALTER SESSION SET");
+    snowflake().verified_stmt("ALTER SESSION UNSET");
+    snowflake().verified_stmt("ALTER SESSION SET AUTOCOMMIT=TRUE");
+    snowflake().verified_stmt("ALTER SESSION SET AUTOCOMMIT=FALSE QUERY_TAG='tag'");
+    snowflake().verified_stmt("ALTER SESSION UNSET AUTOCOMMIT");
+    snowflake().verified_stmt("ALTER SESSION UNSET AUTOCOMMIT QUERY_TAG");
+    snowflake().one_statement_parses_to(
+        "ALTER SESSION SET A=false, B='tag'",
+        "ALTER SESSION SET A=FALSE B='tag'",
+    );
+    snowflake().one_statement_parses_to(
+        "ALTER SESSION SET A=true \nB='tag'",
+        "ALTER SESSION SET A=TRUE B='tag'",
+    );
+    snowflake().one_statement_parses_to(
+        "ALTER SESSION UNSET a, b",
+        "ALTER SESSION UNSET a b",
+    );
+    snowflake().one_statement_parses_to(
+        "ALTER SESSION UNSET a\nB",
+        "ALTER SESSION UNSET a B",
+    );
+}

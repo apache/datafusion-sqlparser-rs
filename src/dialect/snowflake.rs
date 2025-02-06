@@ -120,6 +120,12 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        if parser.parse_keywords(&[Keyword::ALTER, Keyword::SESSION]) {
+            // ALTER SESSION
+            let set = parser.parse_keyword(Keyword::SET) | !parser.parse_keyword(Keyword::UNSET);
+            return Some(parse_alter_session(parser, set));
+        }
+        
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
@@ -333,6 +339,20 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
             "unexpected stage command, expecting LIST, LS, REMOVE or RM".to_string(),
         )),
     }
+}
+
+/// Parse snowflake alter session.
+/// <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
+fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, ParserError> {
+    let session_options = parse_session_options(parser, set)?;
+    Ok(
+        Statement::AlterSession {
+            set,
+            session_params: DataLoadingOptions {
+                options: session_options,
+            },
+        }
+    )
 }
 
 /// Parse snowflake create table statement.
@@ -959,6 +979,38 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
         credentials,
     })
 }
+
+
+/// Parses options separated by blank spaces, commas, or new lines like:
+/// ABORT_DETACHED_QUERY = { TRUE | FALSE }
+///      [ ACTIVE_PYTHON_PROFILER = { 'LINE' | 'MEMORY' } ]
+///      [ BINARY_INPUT_FORMAT = <string> ]
+fn parse_session_options(parser: &mut Parser, set: bool) -> Result<Vec<DataLoadingOption>, ParserError> {
+    let mut options: Vec<DataLoadingOption> = Vec::new();
+    let empty = String::new;
+    loop {
+        match parser.next_token().token {
+            Token::EOF => break,
+            Token::Comma => continue,
+            Token::Word(key) => {
+                if set {
+                    let option = parse_copy_option(parser, key)?;
+                    options.push(option);
+                } else {
+                    options.push(DataLoadingOption {
+                        option_name: key.value,
+                        option_type: DataLoadingOptionType::STRING,
+                        value: empty(),
+                    });
+                }
+
+            },
+            _ => return parser.expected("another option", parser.peek_token()),
+        }
+    }
+    Ok(options)
+}
+
 
 /// Parses options provided within parentheses like:
 /// ( ENABLE = { TRUE | FALSE }

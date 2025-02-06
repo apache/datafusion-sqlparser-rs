@@ -906,6 +906,7 @@ define_keywords!(
     UNNEST,
     UNPIVOT,
     UNSAFE,
+    UNSET,
     UNSIGNED,
     UNTIL,
     UPDATE,

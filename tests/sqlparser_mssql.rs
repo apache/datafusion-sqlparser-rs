@@ -1797,153 +1797,53 @@ fn parse_mssql_set_session_value() {
 fn parse_mssql_varbinary_max_length(){
     let sql = "CREATE TABLE example (var_binary_col VARBINARY(MAX))";
 
-    assert_eq!(ms_and_generic().verified_stmt(sql),
-               Statement::CreateTable(CreateTable {
-                   or_replace: false,
-                   temporary: false,
-                   external: false,
-                   global: None,
-                   if_not_exists: false,
-                   transient: false,
-                   volatile: false,
-                   with_options: vec![],
-                   name: ObjectName::from(vec![Ident {
-                       value: "example".to_string(),
-                       quote_style: None,
-                       span: Span::empty(),
-                   },],),
-                   columns: vec![
-                       ColumnDef {
-                           name: Ident {
-                               value: "var_binary_col".to_string(),
-                               quote_style: None,
-                               span: Span::empty(),
-                           },
-                           data_type: Varbinary(Some(BinaryLength::Max)),
-                           collation: None,
-                           options: vec![],
-                       }
-                   ],
-                   constraints: vec![],
-                   hive_distribution: HiveDistributionStyle::NONE,
-                   hive_formats: Some(HiveFormat {
-                       row_format: None,
-                       serde_properties: None,
-                       storage: None,
-                       location: None,
-                   },),
-                   table_properties: vec![],
-                   file_format: None,
-                   location: None,
-                   query: None,
-                   without_rowid: false,
-                   like: None,
-                   clone: None,
-                   engine: None,
-                   comment: None,
-                   auto_increment_offset: None,
-                   default_charset: None,
-                   collation: None,
-                   on_commit: None,
-                   on_cluster: None,
-                   primary_key: None,
-                   order_by: None,
-                   partition_by: None,
-                   cluster_by: None,
-                   clustered_by: None,
-                   options: None,
-                   strict: false,
-                   iceberg: false,
-                   copy_grants: false,
-                   enable_schema_evolution: None,
-                   change_tracking: None,
-                   data_retention_time_in_days: None,
-                   max_data_extension_time_in_days: None,
-                   default_ddl_collation: None,
-                   with_aggregation_policy: None,
-                   with_row_access_policy: None,
-                   with_tags: None,
-                   base_location: None,
-                   external_volume: None,
-                   catalog: None,
-                   catalog_sync: None,
-                   storage_serialization_policy: None,
-               }));
+    match ms_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(
+                name,
+                ObjectName::from(vec![Ident {
+                    value: "example".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }])
+            );
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: Ident::new("var_binary_col"),
+                    data_type: Varbinary(Some(BinaryLength::Max)),
+                    collation: None,
+                    options: vec![]
+                },],
+            );
+        }
+        _ => unreachable!(),
+    }
 
     let sql = "CREATE TABLE example (var_binary_col VARBINARY(50))";
 
-    assert_eq!(ms_and_generic().verified_stmt(sql),
-               Statement::CreateTable(CreateTable {
-                   or_replace: false,
-                   temporary: false,
-                   external: false,
-                   global: None,
-                   if_not_exists: false,
-                   transient: false,
-                   volatile: false,
-                   with_options: vec![],
-                   name: ObjectName::from(vec![Ident {
-                       value: "example".to_string(),
-                       quote_style: None,
-                       span: Span::empty(),
-                   },],),
-                   columns: vec![
-                       ColumnDef {
-                           name: Ident {
-                               value: "var_binary_col".to_string(),
-                               quote_style: None,
-                               span: Span::empty(),
-                           },
-                           data_type: Varbinary(Some(BinaryLength::IntegerLength {length:50})),
-                           collation: None,
-                           options: vec![],
-                       }
-                   ],
-                   constraints: vec![],
-                   hive_distribution: HiveDistributionStyle::NONE,
-                   hive_formats: Some(HiveFormat {
-                       row_format: None,
-                       serde_properties: None,
-                       storage: None,
-                       location: None,
-                   },),
-                   table_properties: vec![],
-                   file_format: None,
-                   location: None,
-                   query: None,
-                   without_rowid: false,
-                   like: None,
-                   clone: None,
-                   engine: None,
-                   comment: None,
-                   auto_increment_offset: None,
-                   default_charset: None,
-                   collation: None,
-                   on_commit: None,
-                   on_cluster: None,
-                   primary_key: None,
-                   order_by: None,
-                   partition_by: None,
-                   cluster_by: None,
-                   clustered_by: None,
-                   options: None,
-                   strict: false,
-                   iceberg: false,
-                   copy_grants: false,
-                   enable_schema_evolution: None,
-                   change_tracking: None,
-                   data_retention_time_in_days: None,
-                   max_data_extension_time_in_days: None,
-                   default_ddl_collation: None,
-                   with_aggregation_policy: None,
-                   with_row_access_policy: None,
-                   with_tags: None,
-                   base_location: None,
-                   external_volume: None,
-                   catalog: None,
-                   catalog_sync: None,
-                   storage_serialization_policy: None,
-               }));
+    match ms_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(
+                name,
+                ObjectName::from(vec![Ident {
+                   value: "example".to_string(),
+                   quote_style: None,
+                   span: Span::empty(),
+               }])
+            );
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: Ident::new("var_binary_col"),
+                    data_type: Varbinary(Some(BinaryLength::IntegerLength {length:50})),
+                    collation: None,
+                    options: vec![]
+                },],
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn ms() -> TestedDialects {

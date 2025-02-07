@@ -8779,6 +8779,7 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Bit(self.parse_optional_precision()?))
                     }
                 }
+                Keyword::VARBIT => Ok(DataType::VarBit(self.parse_optional_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
                 Keyword::DATE32 => Ok(DataType::Date32),

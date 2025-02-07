@@ -5327,3 +5327,29 @@ fn parse_bitstring_literal() {
         ))]
     );
 }
+
+#[test]
+fn parse_varbit_datatype() {
+    match pg_and_generic().verified_stmt("CREATE TABLE foo (x VARBIT, y VARBIT(42))") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "x".into(),
+                        data_type: DataType::VarBit(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: "y".into(),
+                        data_type: DataType::VarBit(Some(42)),
+                        collation: None,
+                        options: vec![],
+                    }
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}

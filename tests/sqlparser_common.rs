@@ -2632,7 +2632,9 @@ fn parse_cast() {
         &Expr::Cast {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Varbinary(Some(50)),
+            data_type:DataType::Varbinary(Some(BinaryLength::IntegerLength {
+                length: 50,
+            })),
             format: None,
         },
         expr_from_projection(only(&select.projection))

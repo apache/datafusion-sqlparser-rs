@@ -990,7 +990,6 @@ fn parse_session_options(parser: &mut Parser, set: bool) -> Result<Vec<DataLoadi
     let empty = String::new;
     loop {
         match parser.next_token().token {
-            Token::EOF => break,
             Token::Comma => continue,
             Token::Word(key) => {
                 if set {

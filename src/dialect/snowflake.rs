@@ -1005,7 +1005,12 @@ fn parse_session_options(parser: &mut Parser, set: bool) -> Result<Vec<DataLoadi
                 }
 
             },
-            _ => return parser.expected("another option", parser.peek_token()),
+            _ => {
+                if parser.peek_token().token == Token::EOF {
+                    break
+                }
+                return parser.expected("another option", parser.peek_token())
+            },
         }
     }
     Ok(options)

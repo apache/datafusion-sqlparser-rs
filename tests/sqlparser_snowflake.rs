@@ -3292,7 +3292,7 @@ fn test_alter_session() {
     snowflake().verified_stmt("ALTER SESSION UNSET AUTOCOMMIT");
     snowflake().verified_stmt("ALTER SESSION UNSET AUTOCOMMIT QUERY_TAG");
     snowflake().one_statement_parses_to(
-        "ALTER SESSION SET A=false, B='tag'",
+        "ALTER SESSION SET A=false, B='tag';",
         "ALTER SESSION SET A=FALSE B='tag'",
     );
     snowflake().one_statement_parses_to(

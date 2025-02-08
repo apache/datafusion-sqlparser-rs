@@ -1286,7 +1286,6 @@ impl Spanned for Expr {
         match self {
             Expr::Identifier(ident) => ident.span,
             Expr::CompoundIdentifier(vec) => union_spans(vec.iter().map(|i| i.span)),
-            Expr::CompositeAccess { expr, key } => expr.span().union(&key.span),
             Expr::CompoundFieldAccess { root, access_chain } => {
                 union_spans(iter::once(root.span()).chain(access_chain.iter().map(|i| i.span())))
             }
@@ -1476,7 +1475,6 @@ impl Spanned for Expr {
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),
             Expr::Lambda(_) => Span::empty(),
-            Expr::Method(_) => Span::empty(),
         }
     }
 }

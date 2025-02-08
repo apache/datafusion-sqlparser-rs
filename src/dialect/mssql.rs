@@ -46,6 +46,10 @@ impl Dialect for MsSqlDialect {
         true
     }
 
+    fn supports_outer_join_operator(&self) -> bool {
+        true
+    }
+
     fn supports_connect_by(&self) -> bool {
         true
     }
@@ -61,10 +65,6 @@ impl Dialect for MsSqlDialect {
     /// In MSSQL, there is no boolean type, and `true` and `false` are valid column names
     fn supports_boolean_literals(&self) -> bool {
         false
-    }
-
-    fn supports_methods(&self) -> bool {
-        true
     }
 
     fn supports_named_fn_args_with_colon_operator(&self) -> bool {

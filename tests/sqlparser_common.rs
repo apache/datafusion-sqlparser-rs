@@ -74,6 +74,23 @@ fn parse_numeric_literal_underscore() {
 }
 
 #[test]
+fn parse_function_object_name() {
+    let select = verified_only_select("SELECT a.b.c.d(1, 2, 3) FROM T");
+    let Expr::Function(func) = expr_from_projection(&select.projection[0]) else {
+        unreachable!()
+    };
+    assert_eq!(
+        ObjectName::from(
+            ["a", "b", "c", "d"]
+                .into_iter()
+                .map(Ident::new)
+                .collect::<Vec<_>>()
+        ),
+        func.name,
+    );
+}
+
+#[test]
 fn parse_insert_values() {
     let row = vec![
         Expr::Value(number("1")),
@@ -933,6 +950,44 @@ fn parse_select_distinct_tuple() {
             Expr::Identifier(Ident::new("id")),
         ]))],
         &select.projection
+    );
+}
+
+#[test]
+fn parse_outer_join_operator() {
+    let dialects = all_dialects_where(|d| d.supports_outer_join_operator());
+
+    let select = dialects.verified_only_select("SELECT 1 FROM T WHERE a = b (+)");
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::OuterJoin(Box::new(Expr::Identifier(Ident::new("b")))))
+        })
+    );
+
+    let select = dialects.verified_only_select("SELECT 1 FROM T WHERE t1.c1 = t2.c2.d3 (+)");
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("t1"),
+                Ident::new("c1")
+            ])),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::OuterJoin(Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("t2"),
+                Ident::new("c2"),
+                Ident::new("d3"),
+            ]))))
+        })
+    );
+
+    let res = dialects.parse_sql_statements("SELECT 1 FROM T WHERE 1 = 2 (+)");
+    assert_eq!(
+        ParserError::ParserError("Expected: column identifier before (+), found: 2".to_string()),
+        res.unwrap_err()
     );
 }
 
@@ -12623,68 +12678,76 @@ fn test_try_convert() {
 
 #[test]
 fn parse_method_select() {
-    let dialects = all_dialects_where(|d| d.supports_methods());
-    let _ = dialects.verified_only_select(
+    let _ = verified_only_select(
         "SELECT LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T",
     );
-    let _ = dialects.verified_only_select("SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T");
-    let _ = dialects
-        .verified_only_select("SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T");
+    let _ = verified_only_select("SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T");
+    let _ = verified_only_select("SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T");
 
     // `CONVERT` support
-    let dialects = all_dialects_where(|d| {
-        d.supports_methods() && d.supports_try_convert() && d.convert_type_before_value()
-    });
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && d.convert_type_before_value());
     let _ = dialects.verified_only_select("SELECT CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T");
 }
 
 #[test]
 fn parse_method_expr() {
-    let dialects = all_dialects_where(|d| d.supports_methods());
-    let expr = dialects
-        .verified_expr("LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')");
+    let expr =
+        verified_expr("LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')");
     match expr {
-        Expr::Method(Method { expr, method_chain }) => {
-            assert!(matches!(*expr, Expr::Function(_)));
+        Expr::CompoundFieldAccess { root, access_chain } => {
+            assert!(matches!(*root, Expr::Function(_)));
             assert!(matches!(
-                method_chain[..],
-                [Function { .. }, Function { .. }]
+                access_chain[..],
+                [
+                    AccessExpr::Dot(Expr::Function(_)),
+                    AccessExpr::Dot(Expr::Function(_))
+                ]
             ));
         }
         _ => unreachable!(),
     }
-    let expr = dialects.verified_expr(
+
+    let expr = verified_expr(
         "(SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)')",
     );
     match expr {
-        Expr::Method(Method { expr, method_chain }) => {
-            assert!(matches!(*expr, Expr::Subquery(_)));
-            assert!(matches!(method_chain[..], [Function { .. }]));
+        Expr::CompoundFieldAccess { root, access_chain } => {
+            assert!(matches!(*root, Expr::Subquery(_)));
+            assert!(matches!(
+                access_chain[..],
+                [AccessExpr::Dot(Expr::Function(_))]
+            ));
         }
         _ => unreachable!(),
     }
-    let expr = dialects.verified_expr("CAST(column AS XML).value('.', 'NVARCHAR(MAX)')");
+    let expr = verified_expr("CAST(column AS XML).value('.', 'NVARCHAR(MAX)')");
     match expr {
-        Expr::Method(Method { expr, method_chain }) => {
-            assert!(matches!(*expr, Expr::Cast { .. }));
-            assert!(matches!(method_chain[..], [Function { .. }]));
+        Expr::CompoundFieldAccess { root, access_chain } => {
+            assert!(matches!(*root, Expr::Cast { .. }));
+            assert!(matches!(
+                access_chain[..],
+                [AccessExpr::Dot(Expr::Function(_))]
+            ));
         }
         _ => unreachable!(),
     }
 
     // `CONVERT` support
-    let dialects = all_dialects_where(|d| {
-        d.supports_methods() && d.supports_try_convert() && d.convert_type_before_value()
-    });
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && d.convert_type_before_value());
     let expr = dialects.verified_expr(
         "CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')",
     );
     match expr {
-        Expr::Method(Method { expr, method_chain }) => {
-            assert!(matches!(*expr, Expr::Convert { .. }));
+        Expr::CompoundFieldAccess { root, access_chain } => {
+            assert!(matches!(*root, Expr::Convert { .. }));
             assert!(matches!(
-                method_chain[..],
-                [Function { .. }, Function { .. }]
+                access_chain[..],
+                [
+                    AccessExpr::Dot(Expr::Function(_)),
+                    AccessExpr::Dot(Expr::Function(_))
+                ]
             ));
         }
         _ => unreachable!(),

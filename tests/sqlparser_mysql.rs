@@ -3250,3 +3250,18 @@ fn parse_double_precision() {
         "CREATE TABLE foo (bar DOUBLE(11,0))",
     );
 }
+
+#[test]
+fn parse_looks_like_single_line_comment() {
+    mysql().one_statement_parses_to(
+        "UPDATE account SET balance=balance--1 WHERE account_id=5752",
+        "UPDATE account SET balance = balance - -1 WHERE account_id = 5752",
+    );
+    mysql().one_statement_parses_to(
+        r#"
+            UPDATE account SET balance=balance-- 1
+            WHERE account_id=5752
+        "#,
+        "UPDATE account SET balance = balance WHERE account_id = 5752",
+    );
+}

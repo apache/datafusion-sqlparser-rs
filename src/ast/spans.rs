@@ -333,8 +333,8 @@ impl Spanned for Statement {
             } => source.span(),
             Statement::CopyIntoSnowflake {
                 into: _,
-                from_stage: _,
-                from_stage_alias: _,
+                from_obj: _,
+                from_obj_alias: _,
                 stage_params: _,
                 from_transformations: _,
                 files: _,
@@ -342,6 +342,9 @@ impl Spanned for Statement {
                 file_format: _,
                 copy_options: _,
                 validation_mode: _,
+                kind: _,
+                from_query: _,
+                partition: _,
             } => Span::empty(),
             Statement::Close { cursor } => match cursor {
                 CloseCursor::All => Span::empty(),
@@ -493,6 +496,7 @@ impl Spanned for Statement {
             Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
             Statement::ShowSchemas { .. } => Span::empty(),
+            Statement::ShowObjects { .. } => Span::empty(),
             Statement::ShowViews { .. } => Span::empty(),
             Statement::LISTEN { .. } => Span::empty(),
             Statement::NOTIFY { .. } => Span::empty(),

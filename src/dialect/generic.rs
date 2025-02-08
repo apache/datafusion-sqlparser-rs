@@ -143,4 +143,8 @@ impl Dialect for GenericDialect {
     fn supports_string_escape_constant(&self) -> bool {
         true
     }
+
+    fn supports_array_typedef_size(&self) -> bool {
+        true
+    }
 }

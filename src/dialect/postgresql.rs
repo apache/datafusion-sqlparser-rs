@@ -253,6 +253,11 @@ impl Dialect for PostgreSqlDialect {
     fn supports_numeric_literal_underscores(&self) -> bool {
         true
     }
+
+    /// See: <https://www.postgresql.org/docs/current/arrays.html#ARRAYS-DECLARATION>
+    fn supports_array_typedef_size(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

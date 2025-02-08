@@ -125,6 +125,10 @@ impl Dialect for MySqlDialect {
     fn supports_table_hints(&self) -> bool {
         true
     }
+
+    fn requires_single_line_comment_whitespace(&self) -> bool {
+        true
+    }
 }
 
 /// `LOCK TABLES`

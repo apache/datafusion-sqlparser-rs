@@ -8343,7 +8343,12 @@ fn lateral_function() {
 
 #[test]
 fn parse_start_transaction() {
-    match verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
+    let dialects = all_dialects_except(|d|
+        // BigQuery does not support this syntax
+        d.is::<BigQueryDialect>());
+    match dialects
+        .verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE")
+    {
         Statement::StartTransaction { modes, .. } => assert_eq!(
             modes,
             vec![
@@ -8357,7 +8362,7 @@ fn parse_start_transaction() {
 
     // For historical reasons, PostgreSQL allows the commas between the modes to
     // be omitted.
-    match one_statement_parses_to(
+    match dialects.one_statement_parses_to(
         "START TRANSACTION READ ONLY READ WRITE ISOLATION LEVEL SERIALIZABLE",
         "START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE",
     ) {
@@ -8372,40 +8377,40 @@ fn parse_start_transaction() {
         _ => unreachable!(),
     }
 
-    verified_stmt("START TRANSACTION");
-    verified_stmt("BEGIN");
-    verified_stmt("BEGIN WORK");
-    verified_stmt("BEGIN TRANSACTION");
+    dialects.verified_stmt("START TRANSACTION");
+    dialects.verified_stmt("BEGIN");
+    dialects.verified_stmt("BEGIN WORK");
+    dialects.verified_stmt("BEGIN TRANSACTION");
 
-    verified_stmt("START TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
-    verified_stmt("START TRANSACTION ISOLATION LEVEL READ COMMITTED");
-    verified_stmt("START TRANSACTION ISOLATION LEVEL REPEATABLE READ");
-    verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+    dialects.verified_stmt("START TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+    dialects.verified_stmt("START TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    dialects.verified_stmt("START TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+    dialects.verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
 
     // Regression test for https://github.com/sqlparser-rs/sqlparser-rs/pull/139,
     // in which START TRANSACTION would fail to parse if followed by a statement
     // terminator.
     assert_eq!(
-        parse_sql_statements("START TRANSACTION; SELECT 1"),
+        dialects.parse_sql_statements("START TRANSACTION; SELECT 1"),
         Ok(vec![
             verified_stmt("START TRANSACTION"),
             verified_stmt("SELECT 1"),
         ])
     );
 
-    let res = parse_sql_statements("START TRANSACTION ISOLATION LEVEL BAD");
+    let res = dialects.parse_sql_statements("START TRANSACTION ISOLATION LEVEL BAD");
     assert_eq!(
         ParserError::ParserError("Expected: isolation level, found: BAD".to_string()),
         res.unwrap_err()
     );
 
-    let res = parse_sql_statements("START TRANSACTION BAD");
+    let res = dialects.parse_sql_statements("START TRANSACTION BAD");
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: BAD".to_string()),
         res.unwrap_err()
     );
 
-    let res = parse_sql_statements("START TRANSACTION READ ONLY,");
+    let res = dialects.parse_sql_statements("START TRANSACTION READ ONLY,");
     assert_eq!(
         ParserError::ParserError("Expected: transaction mode, found: EOF".to_string()),
         res.unwrap_err()

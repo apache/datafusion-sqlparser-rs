@@ -13695,7 +13695,14 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_execute(&mut self) -> Result<Statement, ParserError> {
-        let name = self.parse_object_name(false)?;
+        let name = if self.dialect.supports_execute_immediate()
+            && self.parse_keyword(Keyword::IMMEDIATE)
+        {
+            None
+        } else {
+            let name = self.parse_object_name(false)?;
+            Some(name)
+        };
 
         let has_parentheses = self.consume_token(&Token::LParen);
 
@@ -13712,19 +13719,24 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
         }
 
-        let mut using = vec![];
-        if self.parse_keyword(Keyword::USING) {
-            using.push(self.parse_expr()?);
+        let into = if self.parse_keyword(Keyword::INTO) {
+            self.parse_comma_separated(Self::parse_identifier)?
+        } else {
+            vec![]
+        };
 
-            while self.consume_token(&Token::Comma) {
-                using.push(self.parse_expr()?);
-            }
+        let using = if self.parse_keyword(Keyword::USING) {
+            self.parse_comma_separated(Self::parse_expr_with_alias)?
+        } else {
+            vec![]
         };
 
         Ok(Statement::Execute {
+            immediate: name.is_none(),
             name,
             parameters,
             has_parentheses,
+            into,
             using,
         })
     }

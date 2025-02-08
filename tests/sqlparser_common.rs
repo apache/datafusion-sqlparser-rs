@@ -10575,7 +10575,7 @@ fn parse_call() {
 #[test]
 fn parse_execute_stored_procedure() {
     let expected = Statement::Execute {
-        name: ObjectName::from(vec![
+        name: Some(ObjectName::from(vec![
             Ident {
                 value: "my_schema".to_string(),
                 quote_style: None,
@@ -10586,13 +10586,15 @@ fn parse_execute_stored_procedure() {
                 quote_style: None,
                 span: Span::empty(),
             },
-        ]),
+        ])),
         parameters: vec![
             Expr::Value(Value::NationalStringLiteral("param1".to_string())),
             Expr::Value(Value::NationalStringLiteral("param2".to_string())),
         ],
         has_parentheses: false,
+        immediate: false,
         using: vec![],
+        into: vec![],
     };
     assert_eq!(
         // Microsoft SQL Server does not use parentheses around arguments for EXECUTE
@@ -10606,6 +10608,41 @@ fn parse_execute_stored_procedure() {
             "EXECUTE my_schema.my_stored_procedure N'param1', N'param2'",
         ),
         expected
+    );
+}
+
+#[test]
+fn parse_execute_immediate() {
+    let dialects = all_dialects_where(|d| d.supports_execute_immediate());
+
+    let expected = Statement::Execute {
+        parameters: vec![Expr::Value(Value::SingleQuotedString(
+            "SELECT 1".to_string(),
+        ))],
+        immediate: true,
+        using: vec![ExprWithAlias {
+            expr: Expr::Value(number("1")),
+            alias: Some(Ident::new("b")),
+        }],
+        into: vec![Ident::new("a")],
+        name: None,
+        has_parentheses: false,
+    };
+
+    let stmt = dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a USING 1 AS b");
+    assert_eq!(expected, stmt);
+
+    dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a, b USING 1 AS x, y");
+    dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' USING 1 AS x, y");
+    dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a, b");
+    dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1'");
+    dialects.verified_stmt("EXECUTE 'SELECT 1'");
+
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: ,".to_string()),
+        dialects
+            .parse_sql_statements("EXECUTE IMMEDIATE 'SELECT 1' USING 1 AS, y")
+            .unwrap_err()
     );
 }
 

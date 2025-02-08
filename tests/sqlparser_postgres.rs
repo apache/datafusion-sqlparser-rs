@@ -1658,10 +1658,12 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName::from(vec!["a".into()]),
+            name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![],
             has_parentheses: false,
-            using: vec![]
+            using: vec![],
+            immediate: false,
+            into: vec![]
         }
     );
 
@@ -1669,13 +1671,15 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName::from(vec!["a".into()]),
+            name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![
                 Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
             ],
             has_parentheses: true,
-            using: vec![]
+            using: vec![],
+            immediate: false,
+            into: vec![]
         }
     );
 
@@ -1684,23 +1688,31 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName::from(vec!["a".into()]),
+            name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![],
             has_parentheses: false,
             using: vec![
-                Expr::Cast {
-                    kind: CastKind::Cast,
-                    expr: Box::new(Expr::Value(Value::Number("1337".parse().unwrap(), false))),
-                    data_type: DataType::SmallInt(None),
-                    format: None
+                ExprWithAlias {
+                    expr: Expr::Cast {
+                        kind: CastKind::Cast,
+                        expr: Box::new(Expr::Value(Value::Number("1337".parse().unwrap(), false))),
+                        data_type: DataType::SmallInt(None),
+                        format: None
+                    },
+                    alias: None
                 },
-                Expr::Cast {
-                    kind: CastKind::Cast,
-                    expr: Box::new(Expr::Value(Value::Number("7331".parse().unwrap(), false))),
-                    data_type: DataType::SmallInt(None),
-                    format: None
+                ExprWithAlias {
+                    expr: Expr::Cast {
+                        kind: CastKind::Cast,
+                        expr: Box::new(Expr::Value(Value::Number("7331".parse().unwrap(), false))),
+                        data_type: DataType::SmallInt(None),
+                        format: None
+                    },
+                    alias: None
                 },
-            ]
+            ],
+            immediate: false,
+            into: vec![]
         }
     );
 }

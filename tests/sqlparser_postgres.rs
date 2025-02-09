@@ -1315,6 +1315,7 @@ fn parse_copy_to() {
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 }))),
                 order_by: None,
                 limit: None,
@@ -2666,6 +2667,7 @@ fn parse_array_subquery_expr() {
                         window_before_qualify: false,
                         value_table_mode: None,
                         connect_by: None,
+                        flavor: SelectFlavor::Standard,
                     }))),
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
@@ -2688,6 +2690,7 @@ fn parse_array_subquery_expr() {
                         window_before_qualify: false,
                         value_table_mode: None,
                         connect_by: None,
+                        flavor: SelectFlavor::Standard,
                     }))),
                 }),
                 order_by: None,

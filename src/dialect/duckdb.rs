@@ -85,4 +85,8 @@ impl Dialect for DuckDbDialect {
     fn supports_array_typedef_size(&self) -> bool {
         true
     }
+
+    fn supports_from_first_select(&self) -> bool {
+        true
+    }
 }

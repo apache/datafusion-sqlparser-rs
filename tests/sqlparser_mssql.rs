@@ -137,6 +137,7 @@ fn parse_create_procedure() {
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             }))],
             params: Some(vec![
@@ -1114,6 +1115,7 @@ fn parse_substring_in_select() {
                         window_before_qualify: false,
                         value_table_mode: None,
                         connect_by: None,
+                        flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
                     limit: None,
@@ -1251,6 +1253,7 @@ fn parse_mssql_declare() {
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             }))
         ],

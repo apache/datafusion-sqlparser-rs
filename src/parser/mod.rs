@@ -528,7 +528,7 @@ impl<'a> Parser<'a> {
                 Keyword::DESCRIBE => self.parse_explain(DescribeAlias::Describe),
                 Keyword::EXPLAIN => self.parse_explain(DescribeAlias::Explain),
                 Keyword::ANALYZE => self.parse_analyze(),
-                Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
+                Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
                     self.prev_token();
                     self.parse_query().map(Statement::Query)
                 }
@@ -10218,7 +10218,9 @@ impl<'a> Parser<'a> {
     pub fn parse_query_body(&mut self, precedence: u8) -> Result<Box<SetExpr>, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
-        let expr = if self.peek_keyword(Keyword::SELECT) {
+        let expr = if self.peek_keyword(Keyword::SELECT)
+            || (self.peek_keyword(Keyword::FROM) && self.dialect.supports_from_first_select())
+        {
             SetExpr::Select(self.parse_select().map(Box::new)?)
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
@@ -10317,6 +10319,39 @@ impl<'a> Parser<'a> {
 
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`)
     pub fn parse_select(&mut self) -> Result<Select, ParserError> {
+        let mut from_first = None;
+
+        if self.dialect.supports_from_first_select() && self.peek_keyword(Keyword::FROM) {
+            let from_token = self.expect_keyword(Keyword::FROM)?;
+            let from = self.parse_table_with_joins()?;
+            if !self.peek_keyword(Keyword::SELECT) {
+                return Ok(Select {
+                    select_token: AttachedToken(from_token),
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection: vec![],
+                    into: None,
+                    from,
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    window_before_qualify: false,
+                    qualify: None,
+                    value_table_mode: None,
+                    connect_by: None,
+                    flavor: SelectFlavor::FromFirstNoSelect,
+                });
+            }
+            from_first = Some(from);
+        }
+
         let select_token = self.expect_keyword(Keyword::SELECT)?;
         let value_table_mode =
             if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::AS) {
@@ -10371,10 +10406,12 @@ impl<'a> Parser<'a> {
         // otherwise they may be parsed as an alias as part of the `projection`
         // or `from`.
 
-        let from = if self.parse_keyword(Keyword::FROM) {
-            self.parse_table_with_joins()?
+        let (from, from_first) = if let Some(from) = from_first.take() {
+            (from, true)
+        } else if self.parse_keyword(Keyword::FROM) {
+            (self.parse_table_with_joins()?, false)
         } else {
-            vec![]
+            (vec![], false)
         };
 
         let mut lateral_views = vec![];
@@ -10506,6 +10543,11 @@ impl<'a> Parser<'a> {
             qualify,
             value_table_mode,
             connect_by,
+            flavor: if from_first {
+                SelectFlavor::FromFirst
+            } else {
+                SelectFlavor::Standard
+            },
         })
     }
 

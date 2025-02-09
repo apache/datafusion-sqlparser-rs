@@ -528,6 +528,14 @@ impl<'a> Parser<'a> {
                 Keyword::DESCRIBE => self.parse_explain(DescribeAlias::Describe),
                 Keyword::EXPLAIN => self.parse_explain(DescribeAlias::Explain),
                 Keyword::ANALYZE => self.parse_analyze(),
+                Keyword::CASE => {
+                    self.prev_token();
+                    self.parse_case_stmt()
+                }
+                Keyword::IF => {
+                    self.prev_token();
+                    self.parse_if_stmt()
+                }
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
                     self.prev_token();
                     self.parse_query().map(Statement::Query)
@@ -613,6 +621,102 @@ impl<'a> Parser<'a> {
             }
             _ => self.expected("an SQL statement", next_token),
         }
+    }
+
+    /// Parse a `CASE` statement.
+    ///
+    /// See [Statement::Case]
+    pub fn parse_case_stmt(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword_is(Keyword::CASE)?;
+
+        let match_expr = if self.peek_keyword(Keyword::WHEN) {
+            None
+        } else {
+            Some(self.parse_expr()?)
+        };
+
+        self.expect_keyword_is(Keyword::WHEN)?;
+        let when_blocks = self.parse_keyword_separated(Keyword::WHEN, |parser| {
+            parser.parse_conditional_statements(
+                ConditionalStatementKind::When,
+                &[Keyword::WHEN, Keyword::ELSE, Keyword::END],
+            )
+        })?;
+
+        let else_block = if self.parse_keyword(Keyword::ELSE) {
+            Some(self.parse_statement_list(&[Keyword::END])?)
+        } else {
+            None
+        };
+
+        self.expect_keyword_is(Keyword::END)?;
+        let has_end_case = self.parse_keyword(Keyword::CASE);
+
+        Ok(Statement::Case(CaseStatement {
+            match_expr,
+            when_blocks,
+            else_block,
+            has_end_case,
+        }))
+    }
+
+    /// Parse an `IF` statement.
+    ///
+    /// See [Statement::If]
+    pub fn parse_if_stmt(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword_is(Keyword::IF)?;
+        let if_block = self.parse_conditional_statements(
+            ConditionalStatementKind::If,
+            &[Keyword::ELSE, Keyword::ELSEIF, Keyword::END],
+        )?;
+
+        let elseif_blocks = if self.parse_keyword(Keyword::ELSEIF) {
+            self.parse_keyword_separated(Keyword::ELSEIF, |parser| {
+                parser.parse_conditional_statements(
+                    ConditionalStatementKind::ElseIf,
+                    &[Keyword::ELSEIF, Keyword::ELSE, Keyword::END],
+                )
+            })?
+        } else {
+            vec![]
+        };
+
+        let else_block = if self.parse_keyword(Keyword::ELSE) {
+            Some(self.parse_statement_list(&[Keyword::END])?)
+        } else {
+            None
+        };
+
+        self.expect_keywords(&[Keyword::END, Keyword::IF])?;
+
+        Ok(Statement::If(IfStatement {
+            if_block,
+            elseif_blocks,
+            else_block,
+        }))
+    }
+
+    /// Parses an expression and associated list of statements
+    /// belonging to a conditional statement like `IF` or `WHEN`.
+    ///
+    /// Example:
+    /// ```sql
+    /// IF condition THEN statement1; statement2;
+    /// ```
+    fn parse_conditional_statements(
+        &mut self,
+        kind: ConditionalStatementKind,
+        terminal_keywords: &[Keyword],
+    ) -> Result<ConditionalStatements, ParserError> {
+        let condition = self.parse_expr()?;
+        self.expect_keyword_is(Keyword::THEN)?;
+        let statements = self.parse_statement_list(terminal_keywords)?;
+
+        Ok(ConditionalStatements {
+            condition,
+            statements,
+            kind,
+        })
     }
 
     pub fn parse_comment(&mut self) -> Result<Statement, ParserError> {

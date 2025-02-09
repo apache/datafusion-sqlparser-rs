@@ -147,4 +147,8 @@ impl Dialect for GenericDialect {
     fn supports_array_typedef_size(&self) -> bool {
         true
     }
+
+    fn supports_match_against(&self) -> bool {
+        true
+    }
 }

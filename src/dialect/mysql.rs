@@ -129,6 +129,10 @@ impl Dialect for MySqlDialect {
     fn requires_single_line_comment_whitespace(&self) -> bool {
         true
     }
+
+    fn supports_match_against(&self) -> bool {
+        false
+    }
 }
 
 /// `LOCK TABLES`

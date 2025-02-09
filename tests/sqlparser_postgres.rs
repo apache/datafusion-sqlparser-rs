@@ -2058,12 +2058,8 @@ fn parse_pg_custom_binary_ops() {
     let operators = [
         // PostGIS
         "&&&",   // n-D bounding boxes intersect
-        "&<",    // (is strictly to the left of)
-        "&>",    // (is strictly to the right of)
         "|=|",   //  distance between A and B trajectories at their closest point of approach
         "<<#>>", // n-D distance between A and B bounding boxes
-        "|>>",   // A's bounding box is strictly above B's.
-        "~=",    // bounding box is the same
         // PGroonga
         "&@",   // Full text search by a keyword
         "&@~",  // Full text search by easy to use query language

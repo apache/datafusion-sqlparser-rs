@@ -591,18 +591,34 @@ pub trait Dialect: Debug + Any {
             | Token::ExclamationMarkDoubleTilde
             | Token::ExclamationMarkDoubleTildeAsterisk
             | Token::Spaceship => Ok(p!(Eq)),
-            Token::Pipe => Ok(p!(Pipe)),
+            Token::Pipe
+            | Token::QuestionMarkDash
+            | Token::DoubleSharp
+            | Token::Overlap
+            | Token::AmpersandLeftAngleBracket
+            | Token::AmpersandRightAngleBracket
+            | Token::QuestionMarkDashVerticalBar
+            | Token::AmpersandLeftAngleBracketVerticalBar
+            | Token::VerticalBarAmpersandRightAngleBracket
+            | Token::TwoWayArrow
+            | Token::LeftAngleBracketCaret
+            | Token::RightAngleBracketCaret
+            | Token::QuestionMarkSharp
+            | Token::QuestionMarkDoubleVerticalBar
+            | Token::QuestionPipe
+            | Token::TildeEqual
+            | Token::AtSign
+            | Token::ShiftLeftVerticalBar
+            | Token::VerticalBarShiftRight => Ok(p!(Pipe)),
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(p!(Caret)),
             Token::Ampersand => Ok(p!(Ampersand)),
             Token::Plus | Token::Minus => Ok(p!(PlusMinus)),
             Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
                 Ok(p!(MulDivModOp))
             }
-            Token::DoubleColon
-            | Token::ExclamationMark
-            | Token::LBracket
-            | Token::Overlap
-            | Token::CaretAt => Ok(p!(DoubleColon)),
+            Token::DoubleColon | Token::ExclamationMark | Token::LBracket | Token::CaretAt => {
+                Ok(p!(DoubleColon))
+            }
             Token::Arrow
             | Token::LongArrow
             | Token::HashArrow
@@ -614,7 +630,6 @@ pub trait Dialect: Debug + Any {
             | Token::AtAt
             | Token::Question
             | Token::QuestionAnd
-            | Token::QuestionPipe
             | Token::CustomBinaryOperator(_) => Ok(p!(PgOther)),
             _ => Ok(self.prec_unknown()),
         }
@@ -910,6 +925,13 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports size definition for array types.
     /// For example: ```CREATE TABLE my_table (my_array INT[3])```.
     fn supports_array_typedef_size(&self) -> bool {
+        false
+    }
+    /// Returns true if the dialect supports geometric types.
+    ///
+    /// Postgres: <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    /// e.g. @@ circle '((0,0),10)'
+    fn supports_geometric_types(&self) -> bool {
         false
     }
 }

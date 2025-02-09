@@ -131,7 +131,7 @@ impl Dialect for MySqlDialect {
     }
 
     fn supports_match_against(&self) -> bool {
-        false
+        true
     }
 }
 

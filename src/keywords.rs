@@ -294,6 +294,7 @@ define_keywords!(
     ELEMENT,
     ELEMENTS,
     ELSE,
+    ELSEIF,
     EMPTY,
     ENABLE,
     ENABLE_SCHEMA_EVOLUTION,

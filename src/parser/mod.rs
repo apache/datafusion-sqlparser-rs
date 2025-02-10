@@ -5806,6 +5806,8 @@ impl<'a> Parser<'a> {
             ObjectType::Table
         } else if self.parse_keyword(Keyword::VIEW) {
             ObjectType::View
+        } else if self.parse_keywords(&[Keyword::MATERIALIZED, Keyword::VIEW]) {
+            ObjectType::MaterializedView
         } else if self.parse_keyword(Keyword::INDEX) {
             ObjectType::Index
         } else if self.parse_keyword(Keyword::ROLE) {
@@ -5836,7 +5838,7 @@ impl<'a> Parser<'a> {
             return self.parse_drop_extension();
         } else {
             return self.expected(
-                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, or VIEW after DROP",
+                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, VIEW, or MATERIALIZED VIEW after DROP",
                 self.peek_token(),
             );
         };

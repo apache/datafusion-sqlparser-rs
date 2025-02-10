@@ -8050,6 +8050,9 @@ fn parse_drop_view() {
         }
         _ => unreachable!(),
     }
+
+    verified_stmt("DROP MATERIALIZED VIEW a.b.c");
+    verified_stmt("DROP MATERIALIZED VIEW IF EXISTS a.b.c");
 }
 
 #[test]

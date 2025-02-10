@@ -32,11 +32,11 @@ use super::{
     JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
     OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource, ProjectionSelect,
-    Query, ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
-    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
-    TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
-    WildcardAdditionalOptions, With, WithFill,
+    Query, RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem,
+    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
+    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
+    TableFactor, TableObject, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
+    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -337,6 +337,7 @@ impl Spanned for Statement {
             } => source.span(),
             Statement::Case(stmt) => stmt.span(),
             Statement::If(stmt) => stmt.span(),
+            Statement::Raise(stmt) => stmt.span(),
             Statement::Call(function) => function.span(),
             Statement::Copy {
                 source,
@@ -779,6 +780,23 @@ impl Spanned for ConditionalStatements {
         } = self;
 
         union_spans(iter::once(condition.span()).chain(statements.iter().map(|s| s.span())))
+    }
+}
+
+impl Spanned for RaiseStatement {
+    fn span(&self) -> Span {
+        let RaiseStatement { value } = self;
+
+        union_spans(value.iter().map(|value| value.span()))
+    }
+}
+
+impl Spanned for RaiseStatementValue {
+    fn span(&self) -> Span {
+        match self {
+            RaiseStatementValue::UsingMessage(expr) => expr.span(),
+            RaiseStatementValue::Expr(expr) => expr.span(),
+        }
     }
 }
 

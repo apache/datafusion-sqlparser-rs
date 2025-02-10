@@ -536,6 +536,10 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_if_stmt()
                 }
+                Keyword::RAISE => {
+                    self.prev_token();
+                    self.parse_raise_stmt()
+                }
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
                     self.prev_token();
                     self.parse_query().map(Statement::Query)
@@ -717,6 +721,22 @@ impl<'a> Parser<'a> {
             statements,
             kind,
         })
+    }
+
+    /// Parse a `RAISE` statement.
+    ///
+    /// See [Statement::Raise]
+    pub fn parse_raise_stmt(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword_is(Keyword::RAISE)?;
+
+        let value = if self.parse_keywords(&[Keyword::USING, Keyword::MESSAGE]) {
+            self.expect_token(&Token::Eq)?;
+            Some(RaiseStatementValue::UsingMessage(self.parse_expr()?))
+        } else {
+            self.maybe_parse(|parser| parser.parse_expr().map(RaiseStatementValue::Expr))?
+        };
+
+        Ok(Statement::Raise(RaiseStatement { value }))
     }
 
     pub fn parse_comment(&mut self) -> Result<Statement, ParserError> {

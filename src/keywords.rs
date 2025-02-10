@@ -925,6 +925,7 @@ define_keywords!(
     VALUES,
     VALUE_OF,
     VARBINARY,
+    VARBIT,
     VARCHAR,
     VARIABLES,
     VARYING,

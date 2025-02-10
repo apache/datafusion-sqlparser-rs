@@ -3270,6 +3270,22 @@ pub enum Statement {
         /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
         schema_name: SchemaName,
         if_not_exists: bool,
+        /// Schema options.
+        ///
+        /// ```sql
+        /// CREATE SCHEMA myschema OPTIONS(key1='value1');
+        /// ```
+        ///
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
+        options: Option<Vec<SqlOption>>,
+        /// Default collation specification for the schema.
+        ///
+        /// ```sql
+        /// CREATE SCHEMA myschema DEFAULT COLLATE 'und:ci';
+        /// ```
+        ///
+        /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement)
+        default_collate_spec: Option<Expr>,
     },
     /// ```sql
     /// CREATE DATABASE
@@ -4995,12 +5011,26 @@ impl fmt::Display for Statement {
             Statement::CreateSchema {
                 schema_name,
                 if_not_exists,
-            } => write!(
-                f,
-                "CREATE SCHEMA {if_not_exists}{name}",
-                if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                name = schema_name
-            ),
+                options,
+                default_collate_spec,
+            } => {
+                write!(
+                    f,
+                    "CREATE SCHEMA {if_not_exists}{name}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = schema_name
+                )?;
+
+                if let Some(collate) = default_collate_spec {
+                    write!(f, " DEFAULT COLLATE {collate}")?;
+                }
+
+                if let Some(options) = options {
+                    write!(f, " OPTIONS({})", display_comma_separated(options))?;
+                }
+
+                Ok(())
+            }
             Statement::Assert { condition, message } => {
                 write!(f, "ASSERT {condition}")?;
                 if let Some(m) = message {

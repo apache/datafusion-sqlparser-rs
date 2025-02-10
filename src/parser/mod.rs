@@ -4627,9 +4627,23 @@ impl<'a> Parser<'a> {
 
         let schema_name = self.parse_schema_name()?;
 
+        let default_collate_spec = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::COLLATE]) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let options = if self.peek_keyword(Keyword::OPTIONS) {
+            Some(self.parse_options(Keyword::OPTIONS)?)
+        } else {
+            None
+        };
+
         Ok(Statement::CreateSchema {
             schema_name,
             if_not_exists,
+            options,
+            default_collate_spec,
         })
     }
 

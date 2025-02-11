@@ -669,10 +669,9 @@ fn format_varbinary_type(
     f: &mut fmt::Formatter,
     sql_type: &str,
     size: &Option<BinaryLength>,
-) -> fmt::Result{
-
+) -> fmt::Result {
     write!(f, "{sql_type}")?;
-    if let Some(size) = size{
+    if let Some(size) = size {
         write!(f, "({size})")?;
     }
     Ok(())
@@ -882,7 +881,7 @@ pub enum BinaryLength {
 impl fmt::Display for BinaryLength {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BinaryLength::IntegerLength { length  } => {
+            BinaryLength::IntegerLength { length } => {
                 write!(f, "{}", length)?;
             }
             BinaryLength::Max => {

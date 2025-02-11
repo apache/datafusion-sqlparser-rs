@@ -40,8 +40,8 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::tokenizer::Span;
 
 pub use self::data_type::{
-    ArrayElemTypeDef, CharLengthUnits, CharacterLength, BinaryLength, DataType, EnumMember, ExactNumberInfo,
-    StructBracketKind, TimezoneInfo,
+    ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
+    ExactNumberInfo, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
     AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,

@@ -1794,7 +1794,7 @@ fn parse_mssql_set_session_value() {
 }
 
 #[test]
-fn parse_mssql_varbinary_max_length(){
+fn parse_mssql_varbinary_max_length() {
     let sql = "CREATE TABLE example (var_binary_col VARBINARY(MAX))";
 
     match ms_and_generic().verified_stmt(sql) {
@@ -1827,16 +1827,16 @@ fn parse_mssql_varbinary_max_length(){
             assert_eq!(
                 name,
                 ObjectName::from(vec![Ident {
-                   value: "example".to_string(),
-                   quote_style: None,
-                   span: Span::empty(),
-               }])
+                    value: "example".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }])
             );
             assert_eq!(
                 columns,
                 vec![ColumnDef {
                     name: Ident::new("var_binary_col"),
-                    data_type: Varbinary(Some(BinaryLength::IntegerLength {length:50})),
+                    data_type: Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
                     collation: None,
                     options: vec![]
                 },],

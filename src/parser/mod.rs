@@ -9649,9 +9649,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_optional_binary_length(
-        &mut self,
-    ) -> Result<Option<BinaryLength>, ParserError> {
+    pub fn parse_optional_binary_length(&mut self) -> Result<Option<BinaryLength>, ParserError> {
         if self.consume_token(&Token::LParen) {
             let binary_length = self.parse_binary_length()?;
             self.expect_token(&Token::RParen)?;

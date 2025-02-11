@@ -115,6 +115,11 @@ impl Dialect for BigQueryDialect {
         true
     }
 
+    // See <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#group_by_clause>
+    fn supports_group_by_expr(&self) -> bool {
+        true
+    }
+
     fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
         !RESERVED_FOR_COLUMN_ALIAS.contains(kw)
     }

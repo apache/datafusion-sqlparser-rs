@@ -288,6 +288,7 @@ fn test_select_union_by_name() {
                 qualify: None,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             right: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
@@ -317,6 +318,7 @@ fn test_select_union_by_name() {
                 qualify: None,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
         });
         assert_eq!(ast.body, expected);

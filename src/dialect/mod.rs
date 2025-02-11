@@ -463,8 +463,24 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports "FROM-first" selects.
+    ///
+    /// Example:
+    /// ```sql
+    /// FROM table
+    /// SELECT *
+    /// ```
+    fn supports_from_first_select(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
     fn supports_user_host_grantee(&self) -> bool {
+        false
+    }
+
+    /// Does the dialect support the `MATCH() AGAINST()` syntax?
+    fn supports_match_against(&self) -> bool {
         false
     }
 

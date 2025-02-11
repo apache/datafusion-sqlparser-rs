@@ -75,4 +75,8 @@ impl Dialect for ClickHouseDialect {
     fn supports_lambda_functions(&self) -> bool {
         true
     }
+
+    fn supports_from_first_select(&self) -> bool {
+        true
+    }
 }

@@ -1315,6 +1315,7 @@ fn parse_copy_to() {
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 }))),
                 order_by: None,
                 limit: None,
@@ -2666,6 +2667,7 @@ fn parse_array_subquery_expr() {
                         window_before_qualify: false,
                         value_table_mode: None,
                         connect_by: None,
+                        flavor: SelectFlavor::Standard,
                     }))),
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
@@ -2688,6 +2690,7 @@ fn parse_array_subquery_expr() {
                         window_before_qualify: false,
                         value_table_mode: None,
                         connect_by: None,
+                        flavor: SelectFlavor::Standard,
                     }))),
                 }),
                 order_by: None,
@@ -5326,4 +5329,30 @@ fn parse_bitstring_literal() {
             Value::SingleQuotedByteStringLiteral("111".to_string())
         ))]
     );
+}
+
+#[test]
+fn parse_varbit_datatype() {
+    match pg_and_generic().verified_stmt("CREATE TABLE foo (x VARBIT, y VARBIT(42))") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "x".into(),
+                        data_type: DataType::VarBit(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: "y".into(),
+                        data_type: DataType::VarBit(Some(42)),
+                        collation: None,
+                        options: vec![],
+                    }
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
 }

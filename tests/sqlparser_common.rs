@@ -461,6 +461,7 @@ fn parse_update_set_from() {
                             window_before_qualify: false,
                             value_table_mode: None,
                             connect_by: None,
+                            flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
                         limit: None,
@@ -5289,6 +5290,7 @@ fn test_parse_named_window() {
         window_before_qualify: true,
         value_table_mode: None,
         connect_by: None,
+        flavor: SelectFlavor::Standard,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -5915,6 +5917,7 @@ fn parse_interval_and_or_xor() {
             window_before_qualify: false,
             value_table_mode: None,
             connect_by: None,
+            flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
         limit: None,
@@ -8022,6 +8025,7 @@ fn lateral_function() {
         window_before_qualify: false,
         value_table_mode: None,
         connect_by: None,
+        flavor: SelectFlavor::Standard,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -8919,6 +8923,7 @@ fn parse_merge() {
                             qualify: None,
                             value_table_mode: None,
                             connect_by: None,
+                            flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
                         limit: None,
@@ -10703,6 +10708,7 @@ fn parse_unload() {
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 }))),
                 with: None,
                 limit: None,
@@ -10913,6 +10919,7 @@ fn parse_connect_by() {
                 ))))),
             }],
         }),
+        flavor: SelectFlavor::Standard,
     };
 
     let connect_by_1 = concat!(
@@ -10997,6 +11004,7 @@ fn parse_connect_by() {
                     ))))),
                 }],
             }),
+            flavor: SelectFlavor::Standard,
         }
     );
 
@@ -11860,6 +11868,7 @@ fn test_extract_seconds_ok() {
             window_before_qualify: false,
             value_table_mode: None,
             connect_by: None,
+            flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
         limit: None,
@@ -13591,4 +13600,66 @@ fn test_lambdas() {
         "map_zip_with(map(1, 'a', 2, 'b'), map(1, 'x', 2, 'y'), (k, v1, v2) -> concat(v1, v2))",
     );
     dialects.verified_expr("transform(array(1, 2, 3), x -> x + 1)");
+}
+
+#[test]
+fn test_select_from_first() {
+    let dialects = all_dialects_where(|d| d.supports_from_first_select());
+    let q1 = "FROM capitals";
+    let q2 = "FROM capitals SELECT *";
+
+    for (q, flavor, projection) in [
+        (q1, SelectFlavor::FromFirstNoSelect, vec![]),
+        (
+            q2,
+            SelectFlavor::FromFirst,
+            vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+        ),
+    ] {
+        let ast = dialects.verified_query(q);
+        let expected = Query {
+            with: None,
+            body: Box::new(SetExpr::Select(Box::new(Select {
+                select_token: AttachedToken::empty(),
+                distinct: None,
+                top: None,
+                projection,
+                top_before_distinct: false,
+                into: None,
+                from: vec![TableWithJoins {
+                    relation: table_from_name(ObjectName::from(vec![Ident {
+                        value: "capitals".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }])),
+                    joins: vec![],
+                }],
+                lateral_views: vec![],
+                prewhere: None,
+                selection: None,
+                group_by: GroupByExpr::Expressions(vec![], vec![]),
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+                named_window: vec![],
+                window_before_qualify: false,
+                qualify: None,
+                value_table_mode: None,
+                connect_by: None,
+                flavor,
+            }))),
+            order_by: None,
+            limit: None,
+            offset: None,
+            fetch: None,
+            locks: vec![],
+            limit_by: vec![],
+            for_clause: None,
+            settings: None,
+            format_clause: None,
+        };
+        assert_eq!(expected, ast);
+        assert_eq!(ast.to_string(), q);
+    }
 }

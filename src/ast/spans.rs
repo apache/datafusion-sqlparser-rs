@@ -2204,7 +2204,6 @@ pub mod tests {
             "SELECT id, name FROM users LEFT JOIN companies ON users.company_id = companies.id",
         );
 
-        println!("{:?}", test.0);
         let query = test.0.parse_select().unwrap();
         let select_span = query.span();
 

@@ -91,6 +91,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/execute-immediate>
+    fn supports_execute_immediate(&self) -> bool {
+        true
+    }
+
     fn supports_match_recognize(&self) -> bool {
         true
     }

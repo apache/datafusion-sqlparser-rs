@@ -110,6 +110,11 @@ impl Dialect for BigQueryDialect {
         true
     }
 
+    /// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate>
+    fn supports_execute_immediate(&self) -> bool {
+        true
+    }
+
     // See <https://cloud.google.com/bigquery/docs/access-historical-data>
     fn supports_timestamp_versioning(&self) -> bool {
         true

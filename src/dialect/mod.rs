@@ -250,6 +250,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `EXECUTE IMMEDIATE` statements.
+    fn supports_execute_immediate(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports the MATCH_RECOGNIZE operation.
     fn supports_match_recognize(&self) -> bool {
         false

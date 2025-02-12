@@ -2205,28 +2205,47 @@ pub enum JoinConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct OrderBy {
-    pub exprs: Vec<OrderByExpr>,
-    /// Optional: `INTERPOLATE`
-    /// Supported by [ClickHouse syntax]
+pub enum OrderBy {
+    /// ALL syntax of [DuckDB] and [ClickHouse].
     ///
-    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
-    pub interpolate: Option<Interpolate>,
+    /// [DuckDB]:  <https://duckdb.org/docs/sql/query_syntax/orderby>
+    /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
+    All(OrderByAll),
+
+    /// Expressions
+    Expressions(OrderByExprsWithInterpolate),
 }
 
 impl fmt::Display for OrderBy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ORDER BY")?;
-        if !self.exprs.is_empty() {
-            write!(f, " {}", display_comma_separated(&self.exprs))?;
-        }
-        if let Some(ref interpolate) = self.interpolate {
-            match &interpolate.exprs {
-                Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
-                None => write!(f, " INTERPOLATE")?,
+        match self {
+            OrderBy::Expressions(exprs) => {
+                write!(f, "{}", exprs)?;
+            }
+            OrderBy::All(all) => {
+                write!(f, " ALL{}", all)?;
             }
         }
+
         Ok(())
+    }
+}
+
+impl OrderBy {
+    pub fn get_exprs(&self) -> Option<&Vec<OrderByExpr>> {
+        match self {
+            OrderBy::Expressions(exprs_with_interpolate) => Some(&exprs_with_interpolate.exprs),
+            OrderBy::All(_) => None,
+        }
+    }
+    pub fn get_interpolate(&self) -> Option<&Interpolate> {
+        match self {
+            OrderBy::Expressions(exprs_with_interpolate) => {
+                exprs_with_interpolate.interpolate.as_ref()
+            }
+            OrderBy::All(_) => None,
+        }
     }
 }
 
@@ -2318,6 +2337,61 @@ impl fmt::Display for InterpolateExpr {
         write!(f, "{}", self.column)?;
         if let Some(ref expr) = self.expr {
             write!(f, " AS {}", expr)?;
+        }
+        Ok(())
+    }
+}
+
+/// `ORDER BY` expressions with interpolate
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OrderByExprsWithInterpolate {
+    pub exprs: Vec<OrderByExpr>,
+    /// Expressions
+    /// Optional: `INTERPOLATE`
+    /// Supported by [ClickHouse syntax]
+    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    pub interpolate: Option<Interpolate>,
+}
+
+impl fmt::Display for OrderByExprsWithInterpolate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if !self.exprs.is_empty() {
+            write!(f, " {}", display_comma_separated(&self.exprs))?;
+        }
+        if let Some(ref interpolate) = self.interpolate {
+            match &interpolate.exprs {
+                Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
+                None => write!(f, " INTERPOLATE")?,
+            }
+        }
+        Ok(())
+    }
+}
+
+/// 'ORDER BY ALL' clause
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OrderByAll {
+    /// Optional `ASC` or `DESC`
+    pub asc: Option<bool>,
+    /// Optional `NULLS FIRST` or `NULLS LAST`
+    pub nulls_first: Option<bool>,
+}
+
+impl fmt::Display for OrderByAll {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.asc {
+            Some(true) => write!(f, " ASC")?,
+            Some(false) => write!(f, " DESC")?,
+            None => (),
+        }
+        match self.nulls_first {
+            Some(true) => write!(f, " NULLS FIRST")?,
+            Some(false) => write!(f, " NULLS LAST")?,
+            None => (),
         }
         Ok(())
     }

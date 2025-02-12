@@ -1096,16 +1096,22 @@ impl Spanned for ProjectionSelect {
     }
 }
 
+/// # partial span
+///
+/// Missing spans:
+/// - [OrderByExpr::All]
 impl Spanned for OrderBy {
     fn span(&self) -> Span {
-        let OrderBy { exprs, interpolate } = self;
-
-        union_spans(
-            exprs
-                .iter()
-                .map(|i| i.span())
-                .chain(interpolate.iter().map(|i| i.span())),
-        )
+        match self {
+            OrderBy::All(_) => Span::empty(),
+            OrderBy::Expressions(expressions) => union_spans(
+                expressions
+                    .exprs
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(expressions.interpolate.iter().map(|i| i.span())),
+            ),
+        }
     }
 }
 

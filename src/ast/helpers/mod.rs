@@ -17,3 +17,4 @@
 pub mod attached_token;
 pub mod stmt_create_table;
 pub mod stmt_data_loading;
+pub mod key_value_options;

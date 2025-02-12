@@ -24,15 +24,14 @@ use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::fmt;
-use core::fmt::Formatter;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::ast::helpers::key_value_options::KeyValueOptions;
 use crate::ast::{Ident, ObjectName};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
-use crate::ast::helpers::key_value_options::KeyValueOptions;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -80,7 +79,6 @@ impl fmt::Display for StageParamsObject {
         Ok(())
     }
 }
-
 
 impl fmt::Display for StageLoadSelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

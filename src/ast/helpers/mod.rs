@@ -15,6 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 pub mod attached_token;
+pub mod key_value_options;
 pub mod stmt_create_table;
 pub mod stmt_data_loading;
-pub mod key_value_options;

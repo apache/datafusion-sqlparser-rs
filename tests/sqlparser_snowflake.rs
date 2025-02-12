@@ -1887,38 +1887,26 @@ fn test_create_stage_with_stage_params() {
                 "<s3_api_compatible_endpoint>",
                 stage_params.endpoint.unwrap()
             );
-            assert!(stage_params
-                .credentials
-                .options
-                .contains(&KeyValueOption {
-                    option_name: "AWS_KEY_ID".to_string(),
-                    option_type: KeyValueOptionType::STRING,
-                    value: "1a2b3c".to_string()
-                }));
-            assert!(stage_params
-                .credentials
-                .options
-                .contains(&KeyValueOption {
-                    option_name: "AWS_SECRET_KEY".to_string(),
-                    option_type: KeyValueOptionType::STRING,
-                    value: "4x5y6z".to_string()
-                }));
-            assert!(stage_params
-                .encryption
-                .options
-                .contains(&KeyValueOption {
-                    option_name: "MASTER_KEY".to_string(),
-                    option_type: KeyValueOptionType::STRING,
-                    value: "key".to_string()
-                }));
-            assert!(stage_params
-                .encryption
-                .options
-                .contains(&KeyValueOption {
-                    option_name: "TYPE".to_string(),
-                    option_type: KeyValueOptionType::STRING,
-                    value: "AWS_SSE_KMS".to_string()
-                }));
+            assert!(stage_params.credentials.options.contains(&KeyValueOption {
+                option_name: "AWS_KEY_ID".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "1a2b3c".to_string()
+            }));
+            assert!(stage_params.credentials.options.contains(&KeyValueOption {
+                option_name: "AWS_SECRET_KEY".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "4x5y6z".to_string()
+            }));
+            assert!(stage_params.encryption.options.contains(&KeyValueOption {
+                option_name: "MASTER_KEY".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "key".to_string()
+            }));
+            assert!(stage_params.encryption.options.contains(&KeyValueOption {
+                option_name: "TYPE".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "AWS_SSE_KMS".to_string()
+            }));
         }
         _ => unreachable!(),
     };
@@ -2140,38 +2128,26 @@ fn test_copy_into_with_stage_params() {
                 "<s3_api_compatible_endpoint>",
                 stage_params.endpoint.unwrap()
             );
-            assert!(stage_params
-                .credentials
-                .options
-                .contains(&KeyValueOption {
-                    option_name: "AWS_KEY_ID".to_string(),
-                    option_type: KeyValueOptionType::STRING,
-                    value: "1a2b3c".to_string()
-                }));
-            assert!(stage_params
-                .credentials
-                .options
-                .contains(&KeyValueOption {
-                    option_name: "AWS_SECRET_KEY".to_string(),
-                    option_type: KeyValueOptionType::STRING,
-                    value: "4x5y6z".to_string()
-                }));
-            assert!(stage_params
-                .encryption
-                .options
-                .contains(&KeyValueOption {
-                    option_name: "MASTER_KEY".to_string(),
-                    option_type: KeyValueOptionType::STRING,
-                    value: "key".to_string()
-                }));
-            assert!(stage_params
-                .encryption
-                .options
-                .contains(&KeyValueOption {
-                    option_name: "TYPE".to_string(),
-                    option_type: KeyValueOptionType::STRING,
-                    value: "AWS_SSE_KMS".to_string()
-                }));
+            assert!(stage_params.credentials.options.contains(&KeyValueOption {
+                option_name: "AWS_KEY_ID".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "1a2b3c".to_string()
+            }));
+            assert!(stage_params.credentials.options.contains(&KeyValueOption {
+                option_name: "AWS_SECRET_KEY".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "4x5y6z".to_string()
+            }));
+            assert!(stage_params.encryption.options.contains(&KeyValueOption {
+                option_name: "MASTER_KEY".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "key".to_string()
+            }));
+            assert!(stage_params.encryption.options.contains(&KeyValueOption {
+                option_name: "TYPE".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "AWS_SSE_KMS".to_string()
+            }));
         }
         _ => unreachable!(),
     };
@@ -3420,7 +3396,7 @@ fn test_alter_session() {
             .to_string(),
         "sql parser error: expected at least one option"
     );
-    
+
     snowflake().verified_stmt("ALTER SESSION SET AUTOCOMMIT=TRUE");
     snowflake().verified_stmt("ALTER SESSION SET AUTOCOMMIT=FALSE QUERY_TAG='tag'");
     snowflake().verified_stmt("ALTER SESSION UNSET AUTOCOMMIT");
@@ -3433,8 +3409,5 @@ fn test_alter_session() {
         "ALTER SESSION SET A=true \nB='tag'",
         "ALTER SESSION SET A=TRUE B='tag'",
     );
-    snowflake().one_statement_parses_to(
-        "ALTER SESSION UNSET a\nB",
-        "ALTER SESSION UNSET a, B",
-    );
+    snowflake().one_statement_parses_to("ALTER SESSION UNSET a\nB", "ALTER SESSION UNSET a, B");
 }

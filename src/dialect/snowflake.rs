@@ -17,12 +17,10 @@
 
 #[cfg(not(feature = "std"))]
 use crate::alloc::string::ToString;
+use crate::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionType, KeyValueOptions};
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::helpers::stmt_data_loading::{
     FileStagingCommand, StageLoadSelectItem, StageParamsObject,
-};
-use crate::ast::helpers::key_value_options::{
-    KeyValueOption, KeyValueOptionType, KeyValueOptions
 };
 use crate::ast::{
     ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, Ident,
@@ -127,11 +125,11 @@ impl Dialect for SnowflakeDialect {
             let set = match parser.parse_one_of_keywords(&[Keyword::SET, Keyword::UNSET]) {
                 Some(Keyword::SET) => true,
                 Some(Keyword::UNSET) => false,
-                _ => return Some(parser.expected("SET or UNSET", parser.peek_token()))
+                _ => return Some(parser.expected("SET or UNSET", parser.peek_token())),
             };
             return Some(parse_alter_session(parser, set));
         }
-        
+
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
@@ -351,14 +349,12 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
 /// <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
 fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, ParserError> {
     let session_options = parse_session_options(parser, set)?;
-    Ok(
-        Statement::AlterSession {
-            set,
-            session_params: KeyValueOptions {
-                options: session_options,
-            },
-        }
-    )
+    Ok(Statement::AlterSession {
+        set,
+        session_params: KeyValueOptions {
+            options: session_options,
+        },
+    })
 }
 
 /// Parse snowflake create table statement.
@@ -986,12 +982,14 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     })
 }
 
-
 /// Parses options separated by blank spaces, commas, or new lines like:
 /// ABORT_DETACHED_QUERY = { TRUE | FALSE }
 ///      [ ACTIVE_PYTHON_PROFILER = { 'LINE' | 'MEMORY' } ]
 ///      [ BINARY_INPUT_FORMAT = <string> ]
-fn parse_session_options(parser: &mut Parser, set: bool) -> Result<Vec<KeyValueOption>, ParserError> {
+fn parse_session_options(
+    parser: &mut Parser,
+    set: bool,
+) -> Result<Vec<KeyValueOption>, ParserError> {
     let mut options: Vec<KeyValueOption> = Vec::new();
     let empty = String::new;
     loop {
@@ -1008,21 +1006,24 @@ fn parse_session_options(parser: &mut Parser, set: bool) -> Result<Vec<KeyValueO
                         value: empty(),
                     });
                 }
-
-            },
+            }
             _ => {
                 if parser.peek_token().token == Token::EOF {
-                    break
+                    break;
                 }
-                return parser.expected("another option", parser.peek_token())
-            },
+                return parser.expected("another option", parser.peek_token());
+            }
         }
     }
-    options.is_empty()
-        .then(|| Err(ParserError::ParserError("expected at least one option".to_string())))
+    options
+        .is_empty()
+        .then(|| {
+            Err(ParserError::ParserError(
+                "expected at least one option".to_string(),
+            ))
+        })
         .unwrap_or(Ok(options))
 }
-
 
 /// Parses options provided within parentheses like:
 /// ( ENABLE = { TRUE | FALSE }

@@ -57,7 +57,6 @@ pub struct KeyValueOption {
     pub value: String,
 }
 
-
 impl fmt::Display for KeyValueOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if !self.options.is_empty() {
@@ -81,9 +80,7 @@ impl fmt::Display for KeyValueOption {
             KeyValueOptionType::STRING => {
                 write!(f, "{}='{}'", self.option_name, self.value)?;
             }
-            KeyValueOptionType::ENUM
-            | KeyValueOptionType::BOOLEAN
-            | KeyValueOptionType::NUMBER => {
+            KeyValueOptionType::ENUM | KeyValueOptionType::BOOLEAN | KeyValueOptionType::NUMBER => {
                 write!(f, "{}={}", self.option_name, self.value)?;
             }
         }

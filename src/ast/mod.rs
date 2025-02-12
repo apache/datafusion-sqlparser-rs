@@ -4478,7 +4478,11 @@ impl fmt::Display for Statement {
                 set,
                 session_params,
             } => {
-                write!( f, "ALTER SESSION {set}", set = if *set { "SET"} else { "UNSET" })?;
+                write!(
+                    f,
+                    "ALTER SESSION {set}",
+                    set = if *set { "SET" } else { "UNSET" }
+                )?;
                 if !session_params.options.is_empty() {
                     if *set {
                         write!(f, " {}", session_params)?;
@@ -4487,7 +4491,7 @@ impl fmt::Display for Statement {
                             .options
                             .iter()
                             .map(|p| p.option_name.clone())
-                            .collect::<Vec<_>>() ;
+                            .collect::<Vec<_>>();
                         write!(f, " {}", display_separated(&options, ", "))?;
                     }
                 }

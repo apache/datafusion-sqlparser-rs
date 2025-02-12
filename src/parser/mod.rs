@@ -1198,7 +1198,7 @@ impl<'a> Parser<'a> {
                     })))
                 }
             Keyword::NOT => Ok(Some(self.parse_not()?)),
-            Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
+            Keyword::MATCH if self.dialect.supports_match_against() => {
                 Ok(Some(self.parse_match_against()?))
             }
             Keyword::STRUCT if self.dialect.supports_struct_literal() => {

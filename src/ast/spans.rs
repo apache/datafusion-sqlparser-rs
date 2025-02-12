@@ -1099,7 +1099,7 @@ impl Spanned for ProjectionSelect {
 /// # partial span
 ///
 /// Missing spans:
-/// - [OrderByExpr::All]
+/// - [OrderBy::All]
 impl Spanned for OrderBy {
     fn span(&self) -> Span {
         match self {

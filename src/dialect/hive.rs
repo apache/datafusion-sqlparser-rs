@@ -71,9 +71,4 @@ impl Dialect for HiveDialect {
     fn supports_group_by_with_modifier(&self) -> bool {
         true
     }
-
-    /// See <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=30151323#EnhancedAggregation,Cube,GroupingandRollup-GROUPINGSETSclause>
-    fn supports_group_by_special_grouping_sets(&self) -> bool {
-        true
-    }
 }

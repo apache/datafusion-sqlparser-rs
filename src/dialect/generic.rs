@@ -52,10 +52,6 @@ impl Dialect for GenericDialect {
         true
     }
 
-    fn supports_group_by_special_grouping_sets(&self) -> bool {
-        true
-    }
-
     fn supports_connect_by(&self) -> bool {
         true
     }

@@ -2506,10 +2506,8 @@ fn parse_group_by_with_modifier() {
 
 #[test]
 fn parse_group_by_special_grouping_sets() {
-    let dialects = all_dialects_where(|d| d.supports_group_by_special_grouping_sets());
-
     let sql = "SELECT a, b, SUM(c) FROM tab1 GROUP BY a, b GROUPING SETS ((a, b), (a), (b), ())";
-    match dialects.verified_stmt(sql) {
+    match all_dialects().verified_stmt(sql) {
         Statement::Query(query) => {
             let group_by = &query.body.as_select().unwrap().group_by;
             assert_eq!(
@@ -2533,13 +2531,6 @@ fn parse_group_by_special_grouping_sets() {
         }
         _ => unreachable!(),
     }
-
-    let dialects = all_dialects_where(|d| !d.supports_group_by_special_grouping_sets());
-
-    assert_eq!(
-        dialects.parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected: end of statement, found: GROUPING".to_string())
-    );
 }
 
 #[test]

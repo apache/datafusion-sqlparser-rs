@@ -9171,9 +9171,7 @@ impl<'a> Parser<'a> {
                     });
                 }
             }
-            if self.dialect.supports_group_by_special_grouping_sets()
-                && self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS])
-            {
+            if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
                 let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
                 self.expect_token(&Token::RParen)?;

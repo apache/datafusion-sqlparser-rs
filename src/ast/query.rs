@@ -2567,19 +2567,9 @@ impl fmt::Display for GroupByWithModifier {
             GroupByWithModifier::Rollup => write!(f, "WITH ROLLUP"),
             GroupByWithModifier::Cube => write!(f, "WITH CUBE"),
             GroupByWithModifier::Totals => write!(f, "WITH TOTALS"),
-            GroupByWithModifier::GroupingSets(expr) => match expr {
-                Expr::GroupingSets(sets) => {
-                    write!(f, "GROUPING SETS (")?;
-                    let mut sep = "";
-                    for set in sets {
-                        write!(f, "{sep}")?;
-                        sep = ", ";
-                        write!(f, "({})", display_comma_separated(set))?;
-                    }
-                    write!(f, ")")
-                }
-                _ => unreachable!(),
-            },
+            GroupByWithModifier::GroupingSets(expr) => {
+                write!(f, "{expr}")
+            }
         }
     }
 }

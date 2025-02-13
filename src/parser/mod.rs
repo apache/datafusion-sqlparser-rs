@@ -8766,7 +8766,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
                 Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
-                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_precision()?)),
+                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_binary_length()?)),
                 Keyword::BLOB => Ok(DataType::Blob(self.parse_optional_precision()?)),
                 Keyword::TINYBLOB => Ok(DataType::TinyBlob),
                 Keyword::MEDIUMBLOB => Ok(DataType::MediumBlob),
@@ -9650,6 +9650,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_optional_binary_length(&mut self) -> Result<Option<BinaryLength>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let binary_length = self.parse_binary_length()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Some(binary_length))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn parse_character_length(&mut self) -> Result<CharacterLength, ParserError> {
         if self.parse_keyword(Keyword::MAX) {
             return Ok(CharacterLength::Max);
@@ -9663,6 +9673,14 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(CharacterLength::IntegerLength { length, unit })
+    }
+
+    pub fn parse_binary_length(&mut self) -> Result<BinaryLength, ParserError> {
+        if self.parse_keyword(Keyword::MAX) {
+            return Ok(BinaryLength::Max);
+        }
+        let length = self.parse_literal_uint()?;
+        Ok(BinaryLength::IntegerLength { length })
     }
 
     pub fn parse_optional_precision_scale(

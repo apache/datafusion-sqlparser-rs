@@ -5740,7 +5740,7 @@ impl<'a> Parser<'a> {
             drop_behavior,
         })
     }
-    /// ```sql  
+    /// ```sql
     /// DROP CONNECTOR [IF EXISTS] name
     /// ```
     ///
@@ -11182,9 +11182,9 @@ impl<'a> Parser<'a> {
                             }
                             Some(Keyword::JOIN) => {
                                 if is_left {
-                                    JoinOperator::LeftOuter
+                                    JoinOperator::Left
                                 } else {
-                                    JoinOperator::RightOuter
+                                    JoinOperator::Right
                                 }
                             }
                             _ => {

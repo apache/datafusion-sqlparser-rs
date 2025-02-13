@@ -23,23 +23,26 @@ use crate::ast::helpers::stmt_data_loading::{
     StageLoadSelectItem, StageParamsObject,
 };
 use crate::ast::{
-    ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
-    RowAccessPolicy, Statement, TagsColumnOption, WrappedCollection,
+    ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, Ident,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, ObjectName, RowAccessPolicy, ShowObjects, Statement, TagsColumnOption,
+    WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Token;
+use crate::tokenizer::{Token, Word};
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec};
-use sqlparser::ast::StorageSerializationPolicy;
 
 use super::keywords::RESERVED_FOR_IDENTIFIER;
+use sqlparser::ast::StorageSerializationPolicy;
 
 /// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
 #[derive(Debug, Default)]
@@ -180,6 +183,19 @@ impl Dialect for SnowflakeDialect {
             Keyword::RM,
         ]) {
             return Some(parse_file_staging_command(kw, parser));
+        }
+
+        if parser.parse_keyword(Keyword::SHOW) {
+            let terse = parser.parse_keyword(Keyword::TERSE);
+            if parser.parse_keyword(Keyword::OBJECTS) {
+                return Some(parse_show_objects(terse, parser));
+            }
+            //Give back Keyword::TERSE
+            if terse {
+                parser.prev_token();
+            }
+            //Give back Keyword::SHOW
+            parser.prev_token();
         }
 
         None
@@ -665,24 +681,49 @@ pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, Par
     }
 }
 
+/// Parses a `COPY INTO` statement. Snowflake has two variants, `COPY INTO <table>`
+/// and `COPY INTO <location>` which have different syntax.
 pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
-    let into: ObjectName = parse_snowflake_stage_name(parser)?;
+    let kind = match parser.peek_token().token {
+        // Indicates an internal stage
+        Token::AtSign => CopyIntoSnowflakeKind::Location,
+        // Indicates an external stage, i.e. s3://, gcs:// or azure://
+        Token::SingleQuotedString(s) if s.contains("://") => CopyIntoSnowflakeKind::Location,
+        _ => CopyIntoSnowflakeKind::Table,
+    };
+
     let mut files: Vec<String> = vec![];
     let mut from_transformations: Option<Vec<StageLoadSelectItem>> = None;
-    let from_stage_alias;
-    let from_stage: ObjectName;
-    let stage_params: StageParamsObject;
+    let mut from_stage_alias = None;
+    let mut from_stage = None;
+    let mut stage_params = StageParamsObject {
+        url: None,
+        encryption: DataLoadingOptions { options: vec![] },
+        endpoint: None,
+        storage_integration: None,
+        credentials: DataLoadingOptions { options: vec![] },
+    };
+    let mut from_query = None;
+    let mut partition = None;
+    let mut file_format = Vec::new();
+    let mut pattern = None;
+    let mut validation_mode = None;
+    let mut copy_options = Vec::new();
+
+    let into: ObjectName = parse_snowflake_stage_name(parser)?;
+    if kind == CopyIntoSnowflakeKind::Location {
+        stage_params = parse_stage_params(parser)?;
+    }
 
     parser.expect_keyword_is(Keyword::FROM)?;
-    // check if data load transformations are present
     match parser.next_token().token {
-        Token::LParen => {
-            // data load with transformations
+        Token::LParen if kind == CopyIntoSnowflakeKind::Table => {
+            // Data load with transformations
             parser.expect_keyword_is(Keyword::SELECT)?;
             from_transformations = parse_select_items_for_data_load(parser)?;
 
             parser.expect_keyword_is(Keyword::FROM)?;
-            from_stage = parse_snowflake_stage_name(parser)?;
+            from_stage = Some(parse_snowflake_stage_name(parser)?);
             stage_params = parse_stage_params(parser)?;
 
             // as
@@ -696,9 +737,14 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             };
             parser.expect_token(&Token::RParen)?;
         }
+        Token::LParen if kind == CopyIntoSnowflakeKind::Location => {
+            // Data unload with a query
+            from_query = Some(parser.parse_query()?);
+            parser.expect_token(&Token::RParen)?;
+        }
         _ => {
             parser.prev_token();
-            from_stage = parse_snowflake_stage_name(parser)?;
+            from_stage = Some(parse_snowflake_stage_name(parser)?);
             stage_params = parse_stage_params(parser)?;
 
             // as
@@ -711,67 +757,71 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
                 None
             };
         }
-    };
+    }
 
-    // [ files ]
-    if parser.parse_keyword(Keyword::FILES) {
-        parser.expect_token(&Token::Eq)?;
-        parser.expect_token(&Token::LParen)?;
-        let mut continue_loop = true;
-        while continue_loop {
-            continue_loop = false;
+    loop {
+        // FILE_FORMAT
+        if parser.parse_keyword(Keyword::FILE_FORMAT) {
+            parser.expect_token(&Token::Eq)?;
+            file_format = parse_parentheses_options(parser)?;
+        // PARTITION BY
+        } else if parser.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+            partition = Some(Box::new(parser.parse_expr()?))
+        // FILES
+        } else if parser.parse_keyword(Keyword::FILES) {
+            parser.expect_token(&Token::Eq)?;
+            parser.expect_token(&Token::LParen)?;
+            let mut continue_loop = true;
+            while continue_loop {
+                continue_loop = false;
+                let next_token = parser.next_token();
+                match next_token.token {
+                    Token::SingleQuotedString(s) => files.push(s),
+                    _ => parser.expected("file token", next_token)?,
+                };
+                if parser.next_token().token.eq(&Token::Comma) {
+                    continue_loop = true;
+                } else {
+                    parser.prev_token(); // not a comma, need to go back
+                }
+            }
+            parser.expect_token(&Token::RParen)?;
+        // PATTERN
+        } else if parser.parse_keyword(Keyword::PATTERN) {
+            parser.expect_token(&Token::Eq)?;
             let next_token = parser.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(s) => files.push(s),
-                _ => parser.expected("file token", next_token)?,
-            };
-            if parser.next_token().token.eq(&Token::Comma) {
-                continue_loop = true;
-            } else {
-                parser.prev_token(); // not a comma, need to go back
+            pattern = Some(match next_token.token {
+                Token::SingleQuotedString(s) => s,
+                _ => parser.expected("pattern", next_token)?,
+            });
+        // VALIDATION MODE
+        } else if parser.parse_keyword(Keyword::VALIDATION_MODE) {
+            parser.expect_token(&Token::Eq)?;
+            validation_mode = Some(parser.next_token().token.to_string());
+        // COPY OPTIONS
+        } else if parser.parse_keyword(Keyword::COPY_OPTIONS) {
+            parser.expect_token(&Token::Eq)?;
+            copy_options = parse_parentheses_options(parser)?;
+        } else {
+            match parser.next_token().token {
+                Token::SemiColon | Token::EOF => break,
+                Token::Comma => continue,
+                // In `COPY INTO <location>` the copy options do not have a shared key
+                // like in `COPY INTO <table>`
+                Token::Word(key) => copy_options.push(parse_copy_option(parser, key)?),
+                _ => return parser.expected("another copy option, ; or EOF'", parser.peek_token()),
             }
         }
-        parser.expect_token(&Token::RParen)?;
-    }
-
-    // [ pattern ]
-    let mut pattern = None;
-    if parser.parse_keyword(Keyword::PATTERN) {
-        parser.expect_token(&Token::Eq)?;
-        let next_token = parser.next_token();
-        pattern = Some(match next_token.token {
-            Token::SingleQuotedString(s) => s,
-            _ => parser.expected("pattern", next_token)?,
-        });
-    }
-
-    // [ file_format]
-    let mut file_format = Vec::new();
-    if parser.parse_keyword(Keyword::FILE_FORMAT) {
-        parser.expect_token(&Token::Eq)?;
-        file_format = parse_parentheses_options(parser)?;
-    }
-
-    // [ copy_options ]
-    let mut copy_options = Vec::new();
-    if parser.parse_keyword(Keyword::COPY_OPTIONS) {
-        parser.expect_token(&Token::Eq)?;
-        copy_options = parse_parentheses_options(parser)?;
-    }
-
-    // [ VALIDATION_MODE ]
-    let mut validation_mode = None;
-    if parser.parse_keyword(Keyword::VALIDATION_MODE) {
-        parser.expect_token(&Token::Eq)?;
-        validation_mode = Some(parser.next_token().token.to_string());
     }
 
     Ok(Statement::CopyIntoSnowflake {
+        kind,
         into,
-        from_stage,
-        from_stage_alias,
+        from_obj: from_stage,
+        from_obj_alias: from_stage_alias,
         stage_params,
         from_transformations,
+        from_query,
         files: if files.is_empty() { None } else { Some(files) },
         pattern,
         file_format: DataLoadingOptions {
@@ -781,6 +831,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             options: copy_options,
         },
         validation_mode,
+        partition,
     })
 }
 
@@ -930,53 +981,53 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
 ///
 fn parse_parentheses_options(parser: &mut Parser) -> Result<Vec<DataLoadingOption>, ParserError> {
     let mut options: Vec<DataLoadingOption> = Vec::new();
-
     parser.expect_token(&Token::LParen)?;
     loop {
         match parser.next_token().token {
             Token::RParen => break,
-            Token::Word(key) => {
-                parser.expect_token(&Token::Eq)?;
-                if parser.parse_keyword(Keyword::TRUE) {
-                    options.push(DataLoadingOption {
-                        option_name: key.value,
-                        option_type: DataLoadingOptionType::BOOLEAN,
-                        value: "TRUE".to_string(),
-                    });
-                    Ok(())
-                } else if parser.parse_keyword(Keyword::FALSE) {
-                    options.push(DataLoadingOption {
-                        option_name: key.value,
-                        option_type: DataLoadingOptionType::BOOLEAN,
-                        value: "FALSE".to_string(),
-                    });
-                    Ok(())
-                } else {
-                    match parser.next_token().token {
-                        Token::SingleQuotedString(value) => {
-                            options.push(DataLoadingOption {
-                                option_name: key.value,
-                                option_type: DataLoadingOptionType::STRING,
-                                value,
-                            });
-                            Ok(())
-                        }
-                        Token::Word(word) => {
-                            options.push(DataLoadingOption {
-                                option_name: key.value,
-                                option_type: DataLoadingOptionType::ENUM,
-                                value: word.value,
-                            });
-                            Ok(())
-                        }
-                        _ => parser.expected("expected option value", parser.peek_token()),
-                    }
-                }
-            }
-            _ => parser.expected("another option or ')'", parser.peek_token()),
-        }?;
+            Token::Comma => continue,
+            Token::Word(key) => options.push(parse_copy_option(parser, key)?),
+            _ => return parser.expected("another option or ')'", parser.peek_token()),
+        };
     }
     Ok(options)
+}
+
+/// Parses a `KEY = VALUE` construct based on the specified key
+fn parse_copy_option(parser: &mut Parser, key: Word) -> Result<DataLoadingOption, ParserError> {
+    parser.expect_token(&Token::Eq)?;
+    if parser.parse_keyword(Keyword::TRUE) {
+        Ok(DataLoadingOption {
+            option_name: key.value,
+            option_type: DataLoadingOptionType::BOOLEAN,
+            value: "TRUE".to_string(),
+        })
+    } else if parser.parse_keyword(Keyword::FALSE) {
+        Ok(DataLoadingOption {
+            option_name: key.value,
+            option_type: DataLoadingOptionType::BOOLEAN,
+            value: "FALSE".to_string(),
+        })
+    } else {
+        match parser.next_token().token {
+            Token::SingleQuotedString(value) => Ok(DataLoadingOption {
+                option_name: key.value,
+                option_type: DataLoadingOptionType::STRING,
+                value,
+            }),
+            Token::Word(word) => Ok(DataLoadingOption {
+                option_name: key.value,
+                option_type: DataLoadingOptionType::ENUM,
+                value: word.value,
+            }),
+            Token::Number(n, _) => Ok(DataLoadingOption {
+                option_name: key.value,
+                option_type: DataLoadingOptionType::NUMBER,
+                value: n,
+            }),
+            _ => parser.expected("expected option value", parser.peek_token()),
+        }
+    }
 }
 
 /// Parsing a property of identity or autoincrement column option
@@ -1053,4 +1104,14 @@ fn parse_column_tags(parser: &mut Parser, with: bool) -> Result<TagsColumnOption
     parser.expect_token(&Token::RParen)?;
 
     Ok(TagsColumnOption { with, tags })
+}
+
+/// Parse snowflake show objects.
+/// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
+fn parse_show_objects(terse: bool, parser: &mut Parser) -> Result<Statement, ParserError> {
+    let show_options = parser.parse_show_stmt_options()?;
+    Ok(Statement::ShowObjects(ShowObjects {
+        terse,
+        show_options,
+    }))
 }

@@ -1111,6 +1111,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1164,6 +1165,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1211,6 +1213,7 @@ fn parse_escaped_backticks_with_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1262,6 +1265,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1931,6 +1935,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     window_before_qualify: false,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             );
         }
@@ -1983,6 +1988,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     window_before_qualify: false,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             );
         }
@@ -2503,6 +2509,7 @@ fn parse_substring_in_select() {
                         qualify: None,
                         value_table_mode: None,
                         connect_by: None,
+                        flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
                     limit: None,
@@ -2799,6 +2806,7 @@ fn parse_hex_string_introducer() {
                 value_table_mode: None,
                 into: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -3046,7 +3054,10 @@ fn parse_grant() {
         );
         assert_eq!(
             objects,
-            GrantObjects::Tables(vec![ObjectName::from(vec!["*".into(), "*".into()])])
+            Some(GrantObjects::Tables(vec![ObjectName::from(vec![
+                "*".into(),
+                "*".into()
+            ])]))
         );
         assert!(!with_grant_option);
         assert!(granted_by.is_none());
@@ -3087,7 +3098,10 @@ fn parse_revoke() {
         );
         assert_eq!(
             objects,
-            GrantObjects::Tables(vec![ObjectName::from(vec!["db1".into(), "*".into()])])
+            Some(GrantObjects::Tables(vec![ObjectName::from(vec![
+                "db1".into(),
+                "*".into()
+            ])]))
         );
         if let [Grantee {
             grantee_type: GranteesType::None,
@@ -3242,5 +3256,20 @@ fn parse_double_precision() {
     mysql().one_statement_parses_to(
         "CREATE TABLE foo (bar DOUBLE(11, 0))",
         "CREATE TABLE foo (bar DOUBLE(11,0))",
+    );
+}
+
+#[test]
+fn parse_looks_like_single_line_comment() {
+    mysql().one_statement_parses_to(
+        "UPDATE account SET balance=balance--1 WHERE account_id=5752",
+        "UPDATE account SET balance = balance - -1 WHERE account_id = 5752",
+    );
+    mysql().one_statement_parses_to(
+        r#"
+            UPDATE account SET balance=balance-- 1
+            WHERE account_id=5752
+        "#,
+        "UPDATE account SET balance = balance WHERE account_id = 5752",
     );
 }

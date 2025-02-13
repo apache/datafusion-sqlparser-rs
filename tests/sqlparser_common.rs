@@ -461,6 +461,7 @@ fn parse_update_set_from() {
                             window_before_qualify: false,
                             value_table_mode: None,
                             connect_by: None,
+                            flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
                         limit: None,
@@ -2727,7 +2728,7 @@ fn parse_cast() {
         &Expr::Cast {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Varbinary(Some(50)),
+            data_type: DataType::Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -5384,6 +5385,7 @@ fn test_parse_named_window() {
         window_before_qualify: true,
         value_table_mode: None,
         connect_by: None,
+        flavor: SelectFlavor::Standard,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -6010,6 +6012,7 @@ fn parse_interval_and_or_xor() {
             window_before_qualify: false,
             value_table_mode: None,
             connect_by: None,
+            flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
         limit: None,
@@ -8117,6 +8120,7 @@ fn lateral_function() {
         window_before_qualify: false,
         value_table_mode: None,
         connect_by: None,
+        flavor: SelectFlavor::Standard,
     };
     assert_eq!(actual_select_only, expected);
 }
@@ -8732,7 +8736,7 @@ fn parse_grant() {
             granted_by,
             ..
         } => match (privileges, objects) {
-            (Privileges::Actions(actions), GrantObjects::Tables(objects)) => {
+            (Privileges::Actions(actions), Some(GrantObjects::Tables(objects))) => {
                 assert_eq!(
                     vec![
                         Action::Select { columns: None },
@@ -8782,7 +8786,7 @@ fn parse_grant() {
             with_grant_option,
             ..
         } => match (privileges, objects) {
-            (Privileges::Actions(actions), GrantObjects::AllTablesInSchema { schemas }) => {
+            (Privileges::Actions(actions), Some(GrantObjects::AllTablesInSchema { schemas })) => {
                 assert_eq!(vec![Action::Insert { columns: None }], actions);
                 assert_eq_vec(&["public"], &schemas);
                 assert_eq_vec(&["browser"], &grantees);
@@ -8802,7 +8806,7 @@ fn parse_grant() {
             granted_by,
             ..
         } => match (privileges, objects, granted_by) {
-            (Privileges::Actions(actions), GrantObjects::Sequences(objects), None) => {
+            (Privileges::Actions(actions), Some(GrantObjects::Sequences(objects)), None) => {
                 assert_eq!(
                     vec![Action::Usage, Action::Select { columns: None }],
                     actions
@@ -8839,7 +8843,7 @@ fn parse_grant() {
                 Privileges::All {
                     with_privileges_keyword,
                 },
-                GrantObjects::Schemas(schemas),
+                Some(GrantObjects::Schemas(schemas)),
             ) => {
                 assert!(!with_privileges_keyword);
                 assert_eq_vec(&["aa", "b"], &schemas);
@@ -8856,7 +8860,10 @@ fn parse_grant() {
             objects,
             ..
         } => match (privileges, objects) {
-            (Privileges::Actions(actions), GrantObjects::AllSequencesInSchema { schemas }) => {
+            (
+                Privileges::Actions(actions),
+                Some(GrantObjects::AllSequencesInSchema { schemas }),
+            ) => {
                 assert_eq!(vec![Action::Usage], actions);
                 assert_eq_vec(&["bus"], &schemas);
             }
@@ -8874,6 +8881,10 @@ fn parse_grant() {
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO a:b");
     verified_stmt("GRANT USAGE ON SCHEMA sc1 TO GROUP group1");
     verified_stmt("GRANT OWNERSHIP ON ALL TABLES IN SCHEMA DEV_STAS_ROGOZHIN TO ROLE ANALYST");
+    verified_stmt("GRANT USAGE ON DATABASE db1 TO ROLE role1");
+    verified_stmt("GRANT USAGE ON WAREHOUSE wh1 TO ROLE role1");
+    verified_stmt("GRANT OWNERSHIP ON INTEGRATION int1 TO ROLE role1");
+    verified_stmt("GRANT SELECT ON VIEW view1 TO ROLE role1");
 }
 
 #[test]
@@ -8882,7 +8893,7 @@ fn test_revoke() {
     match verified_stmt(sql) {
         Statement::Revoke {
             privileges,
-            objects: GrantObjects::Tables(tables),
+            objects: Some(GrantObjects::Tables(tables)),
             grantees,
             granted_by,
             cascade,
@@ -8908,7 +8919,7 @@ fn test_revoke_with_cascade() {
     match all_dialects_except(|d| d.is::<MySqlDialect>()).verified_stmt(sql) {
         Statement::Revoke {
             privileges,
-            objects: GrantObjects::Tables(tables),
+            objects: Some(GrantObjects::Tables(tables)),
             grantees,
             granted_by,
             cascade,
@@ -9007,6 +9018,7 @@ fn parse_merge() {
                             qualify: None,
                             value_table_mode: None,
                             connect_by: None,
+                            flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
                         limit: None,
@@ -10791,6 +10803,7 @@ fn parse_unload() {
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 }))),
                 with: None,
                 limit: None,
@@ -11001,6 +11014,7 @@ fn parse_connect_by() {
                 ))))),
             }],
         }),
+        flavor: SelectFlavor::Standard,
     };
 
     let connect_by_1 = concat!(
@@ -11085,6 +11099,7 @@ fn parse_connect_by() {
                     ))))),
                 }],
             }),
+            flavor: SelectFlavor::Standard,
         }
     );
 
@@ -11948,6 +11963,7 @@ fn test_extract_seconds_ok() {
             window_before_qualify: false,
             value_table_mode: None,
             connect_by: None,
+            flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
         limit: None,
@@ -12374,6 +12390,175 @@ fn test_alter_policy() {
             .unwrap_err()
             .to_string(),
         "sql parser error: Expected: (, found: EOF"
+    );
+}
+
+#[test]
+fn test_create_connector() {
+    let sql = "CREATE CONNECTOR my_connector \
+               TYPE 'jdbc' \
+               URL 'jdbc:mysql://localhost:3306/mydb' \
+               WITH DCPROPERTIES('user' = 'root', 'password' = 'password')";
+    let dialects = all_dialects();
+    match dialects.verified_stmt(sql) {
+        Statement::CreateConnector(CreateConnector {
+            name,
+            connector_type,
+            url,
+            with_dcproperties,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(connector_type, Some("jdbc".to_string()));
+            assert_eq!(url, Some("jdbc:mysql://localhost:3306/mydb".to_string()));
+            assert_eq!(
+                with_dcproperties,
+                Some(vec![
+                    SqlOption::KeyValue {
+                        key: Ident::with_quote('\'', "user"),
+                        value: Expr::Value(Value::SingleQuotedString("root".to_string()))
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::with_quote('\'', "password"),
+                        value: Expr::Value(Value::SingleQuotedString("password".to_string()))
+                    }
+                ])
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // omit IF NOT EXISTS/TYPE/URL/COMMENT/WITH DCPROPERTIES clauses is allowed
+    dialects.verified_stmt("CREATE CONNECTOR my_connector");
+
+    // missing connector name
+    assert_eq!(
+        dialects
+            .parse_sql_statements("CREATE CONNECTOR")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn test_drop_connector() {
+    let dialects = all_dialects();
+    match dialects.verified_stmt("DROP CONNECTOR IF EXISTS my_connector") {
+        Statement::DropConnector { if_exists, name } => {
+            assert_eq!(if_exists, true);
+            assert_eq!(name.to_string(), "my_connector");
+        }
+        _ => unreachable!(),
+    }
+
+    // omit IF EXISTS is allowed
+    dialects.verified_stmt("DROP CONNECTOR my_connector");
+
+    // missing connector name
+    assert_eq!(
+        dialects
+            .parse_sql_statements("DROP CONNECTOR")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: identifier, found: EOF"
+    );
+}
+
+#[test]
+fn test_alter_connector() {
+    let dialects = all_dialects();
+    match dialects.verified_stmt(
+        "ALTER CONNECTOR my_connector SET DCPROPERTIES('user' = 'root', 'password' = 'password')",
+    ) {
+        Statement::AlterConnector {
+            name,
+            properties,
+            url,
+            owner,
+        } => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(
+                properties,
+                Some(vec![
+                    SqlOption::KeyValue {
+                        key: Ident::with_quote('\'', "user"),
+                        value: Expr::Value(Value::SingleQuotedString("root".to_string()))
+                    },
+                    SqlOption::KeyValue {
+                        key: Ident::with_quote('\'', "password"),
+                        value: Expr::Value(Value::SingleQuotedString("password".to_string()))
+                    }
+                ])
+            );
+            assert_eq!(url, None);
+            assert_eq!(owner, None);
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects
+        .verified_stmt("ALTER CONNECTOR my_connector SET URL 'jdbc:mysql://localhost:3306/mydb'")
+    {
+        Statement::AlterConnector {
+            name,
+            properties,
+            url,
+            owner,
+        } => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(properties, None);
+            assert_eq!(url, Some("jdbc:mysql://localhost:3306/mydb".to_string()));
+            assert_eq!(owner, None);
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("ALTER CONNECTOR my_connector SET OWNER USER 'root'") {
+        Statement::AlterConnector {
+            name,
+            properties,
+            url,
+            owner,
+        } => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(properties, None);
+            assert_eq!(url, None);
+            assert_eq!(
+                owner,
+                Some(AlterConnectorOwner::User(Ident::with_quote('\'', "root")))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match dialects.verified_stmt("ALTER CONNECTOR my_connector SET OWNER ROLE 'admin'") {
+        Statement::AlterConnector {
+            name,
+            properties,
+            url,
+            owner,
+        } => {
+            assert_eq!(name.to_string(), "my_connector");
+            assert_eq!(properties, None);
+            assert_eq!(url, None);
+            assert_eq!(
+                owner,
+                Some(AlterConnectorOwner::Role(Ident::with_quote('\'', "admin")))
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    // Wrong option name
+    assert_eq!(
+        dialects
+            .parse_sql_statements(
+                "ALTER CONNECTOR my_connector SET WRONG 'jdbc:mysql://localhost:3306/mydb'"
+            )
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected: end of statement, found: WRONG"
     );
 }
 
@@ -13510,4 +13695,66 @@ fn test_lambdas() {
         "map_zip_with(map(1, 'a', 2, 'b'), map(1, 'x', 2, 'y'), (k, v1, v2) -> concat(v1, v2))",
     );
     dialects.verified_expr("transform(array(1, 2, 3), x -> x + 1)");
+}
+
+#[test]
+fn test_select_from_first() {
+    let dialects = all_dialects_where(|d| d.supports_from_first_select());
+    let q1 = "FROM capitals";
+    let q2 = "FROM capitals SELECT *";
+
+    for (q, flavor, projection) in [
+        (q1, SelectFlavor::FromFirstNoSelect, vec![]),
+        (
+            q2,
+            SelectFlavor::FromFirst,
+            vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+        ),
+    ] {
+        let ast = dialects.verified_query(q);
+        let expected = Query {
+            with: None,
+            body: Box::new(SetExpr::Select(Box::new(Select {
+                select_token: AttachedToken::empty(),
+                distinct: None,
+                top: None,
+                projection,
+                top_before_distinct: false,
+                into: None,
+                from: vec![TableWithJoins {
+                    relation: table_from_name(ObjectName::from(vec![Ident {
+                        value: "capitals".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }])),
+                    joins: vec![],
+                }],
+                lateral_views: vec![],
+                prewhere: None,
+                selection: None,
+                group_by: GroupByExpr::Expressions(vec![], vec![]),
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+                named_window: vec![],
+                window_before_qualify: false,
+                qualify: None,
+                value_table_mode: None,
+                connect_by: None,
+                flavor,
+            }))),
+            order_by: None,
+            limit: None,
+            offset: None,
+            fetch: None,
+            locks: vec![],
+            limit_by: vec![],
+            for_clause: None,
+            settings: None,
+            format_clause: None,
+        };
+        assert_eq!(expected, ast);
+        assert_eq!(ast.to_string(), q);
+    }
 }

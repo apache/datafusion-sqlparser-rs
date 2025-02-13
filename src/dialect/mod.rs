@@ -473,8 +473,24 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports "FROM-first" selects.
+    ///
+    /// Example:
+    /// ```sql
+    /// FROM table
+    /// SELECT *
+    /// ```
+    fn supports_from_first_select(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
     fn supports_user_host_grantee(&self) -> bool {
+        false
+    }
+
+    /// Does the dialect support the `MATCH() AGAINST()` syntax?
+    fn supports_match_against(&self) -> bool {
         false
     }
 
@@ -886,8 +902,24 @@ pub trait Dialect: Debug + Any {
     fn supports_string_escape_constant(&self) -> bool {
         false
     }
+
     /// Returns true if the dialect supports the table hints in the `FROM` clause.
     fn supports_table_hints(&self) -> bool {
+        false
+    }
+
+    /// Returns true if this dialect requires a whitespace character after `--` to start a single line comment.
+    ///
+    /// MySQL: <https://dev.mysql.com/doc/refman/8.4/en/ansi-diff-comments.html>
+    /// e.g. UPDATE account SET balance=balance--1
+    //       WHERE account_id=5752             ^^^ will be interpreted as two minus signs instead of a comment
+    fn requires_single_line_comment_whitespace(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports size definition for array types.
+    /// For example: ```CREATE TABLE my_table (my_array INT[3])```.
+    fn supports_array_typedef_size(&self) -> bool {
         false
     }
 }

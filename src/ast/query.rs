@@ -275,6 +275,19 @@ impl fmt::Display for Table {
     }
 }
 
+/// What did this select look like?
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SelectFlavor {
+    /// `SELECT *`
+    Standard,
+    /// `FROM ... SELECT *`
+    FromFirst,
+    /// `FROM *`
+    FromFirstNoSelect,
+}
+
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.
@@ -328,11 +341,23 @@ pub struct Select {
     pub value_table_mode: Option<ValueTableMode>,
     /// STARTING WITH .. CONNECT BY
     pub connect_by: Option<ConnectBy>,
+    /// Was this a FROM-first query?
+    pub flavor: SelectFlavor,
 }
 
 impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SELECT")?;
+        match self.flavor {
+            SelectFlavor::Standard => {
+                write!(f, "SELECT")?;
+            }
+            SelectFlavor::FromFirst => {
+                write!(f, "FROM {} SELECT", display_comma_separated(&self.from))?;
+            }
+            SelectFlavor::FromFirstNoSelect => {
+                write!(f, "FROM {}", display_comma_separated(&self.from))?;
+            }
+        }
 
         if let Some(value_table_mode) = self.value_table_mode {
             write!(f, " {value_table_mode}")?;
@@ -360,7 +385,7 @@ impl fmt::Display for Select {
             write!(f, " {into}")?;
         }
 
-        if !self.from.is_empty() {
+        if self.flavor == SelectFlavor::Standard && !self.from.is_empty() {
             write!(f, " FROM {}", display_comma_separated(&self.from))?;
         }
         if !self.lateral_views.is_empty() {

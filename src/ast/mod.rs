@@ -40,21 +40,21 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::tokenizer::Span;
 
 pub use self::data_type::{
-    ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, EnumMember, ExactNumberInfo,
-    StructBracketKind, TimezoneInfo,
+    ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
+    ExactNumberInfo, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
     AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
-    AlterColumnOperation, AlterIndexOperation, AlterPolicyOperation, AlterTableOperation,
-    ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
-    ConstraintCharacteristics, CreateFunction, Deduplicate, DeferrableInitial, DropBehavior,
-    GeneratedAs, GeneratedExpressionMode, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, IndexOption,
-    IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition, ProcedureParam,
-    ReferentialAction, TableConstraint, TagsColumnOption, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation, ViewColumnDef,
+    AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
+    AlterTableOperation, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy,
+    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateFunction, Deduplicate,
+    DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
+    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
+    IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
+    ProcedureParam, ReferentialAction, TableConstraint, TagsColumnOption,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -68,8 +68,8 @@ pub use self::query::{
     NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset, OffsetRows, OpenJsonTableColumn,
     OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
     RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
-    SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SetExpr, SetOperator, SetQuantifier,
-    Setting, SymbolDefinition, Table, TableAlias, TableAliasColumnDef, TableFactor,
+    SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SetExpr, SetOperator,
+    SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableAliasColumnDef, TableFactor,
     TableFunctionArgs, TableIndexHintForClause, TableIndexHintType, TableIndexHints,
     TableIndexType, TableSample, TableSampleBucket, TableSampleKind, TableSampleMethod,
     TableSampleModifier, TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier,
@@ -2498,24 +2498,30 @@ pub enum Statement {
         values: Vec<Option<String>>,
     },
     /// ```sql
-    /// COPY INTO
+    /// COPY INTO <table> | <location>
     /// ```
-    /// See <https://docs.snowflake.com/en/sql-reference/sql/copy-into-table>
+    /// See:
+    /// <https://docs.snowflake.com/en/sql-reference/sql/copy-into-table>
+    /// <https://docs.snowflake.com/en/sql-reference/sql/copy-into-location>
+    ///
     /// Copy Into syntax available for Snowflake is different than the one implemented in
     /// Postgres. Although they share common prefix, it is reasonable to implement them
     /// in different enums. This can be refactored later once custom dialects
     /// are allowed to have custom Statements.
     CopyIntoSnowflake {
+        kind: CopyIntoSnowflakeKind,
         into: ObjectName,
-        from_stage: ObjectName,
-        from_stage_alias: Option<Ident>,
+        from_obj: Option<ObjectName>,
+        from_obj_alias: Option<Ident>,
         stage_params: StageParamsObject,
         from_transformations: Option<Vec<StageLoadSelectItem>>,
+        from_query: Option<Box<Query>>,
         files: Option<Vec<String>>,
         pattern: Option<String>,
         file_format: DataLoadingOptions,
         copy_options: DataLoadingOptions,
         validation_mode: Option<String>,
+        partition: Option<Box<Expr>>,
     },
     /// ```sql
     /// CLOSE
@@ -2646,6 +2652,11 @@ pub enum Statement {
         with_check: Option<Expr>,
     },
     /// ```sql
+    /// CREATE CONNECTOR
+    /// ```
+    /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
+    CreateConnector(CreateConnector),
+    /// ```sql
     /// ALTER TABLE
     /// ```
     AlterTable {
@@ -2695,6 +2706,20 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         operation: AlterPolicyOperation,
+    },
+    /// ```sql
+    /// ALTER CONNECTOR connector_name SET DCPROPERTIES(property_name=property_value, ...);
+    /// or
+    /// ALTER CONNECTOR connector_name SET URL new_url;
+    /// or
+    /// ALTER CONNECTOR connector_name SET OWNER [USER|ROLE] user_or_role;
+    /// ```
+    /// (Hive-specific)
+    AlterConnector {
+        name: Ident,
+        properties: Option<Vec<SqlOption>>,
+        url: Option<String>,
+        owner: Option<ddl::AlterConnectorOwner>,
     },
     /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
@@ -2794,6 +2819,11 @@ pub enum Statement {
         table_name: ObjectName,
         drop_behavior: Option<DropBehavior>,
     },
+    /// ```sql
+    /// DROP CONNECTOR
+    /// ```
+    /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-DropConnector)
+    DropConnector { if_exists: bool, name: Ident },
     /// ```sql
     /// DECLARE
     /// ```
@@ -2979,6 +3009,12 @@ pub enum Statement {
         history: bool,
         show_options: ShowStatementOptions,
     },
+    /// ```sql
+    /// SHOW OBJECTS LIKE 'line%' IN mydb.public
+    /// ```
+    /// Snowflake-specific statement
+    /// <https://docs.snowflake.com/en/sql-reference/sql/show-objects>
+    ShowObjects(ShowObjects),
     /// ```sql
     /// SHOW TABLES
     /// ```
@@ -3230,7 +3266,7 @@ pub enum Statement {
     /// ```
     Grant {
         privileges: Privileges,
-        objects: GrantObjects,
+        objects: Option<GrantObjects>,
         grantees: Vec<Grantee>,
         with_grant_option: bool,
         granted_by: Option<Ident>,
@@ -3240,7 +3276,7 @@ pub enum Statement {
     /// ```
     Revoke {
         privileges: Privileges,
-        objects: GrantObjects,
+        objects: Option<GrantObjects>,
         grantees: Vec<Grantee>,
         granted_by: Option<Ident>,
         cascade: Option<CascadeOption>,
@@ -4354,6 +4390,7 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
+            Statement::CreateConnector(create_connector) => create_connector.fmt(f),
             Statement::AlterTable {
                 name,
                 if_exists,
@@ -4410,6 +4447,28 @@ impl fmt::Display for Statement {
                 operation,
             } => {
                 write!(f, "ALTER POLICY {name} ON {table_name}{operation}")
+            }
+            Statement::AlterConnector {
+                name,
+                properties,
+                url,
+                owner,
+            } => {
+                write!(f, "ALTER CONNECTOR {name}")?;
+                if let Some(properties) = properties {
+                    write!(
+                        f,
+                        " SET DCPROPERTIES({})",
+                        display_comma_separated(properties)
+                    )?;
+                }
+                if let Some(url) = url {
+                    write!(f, " SET URL '{url}'")?;
+                }
+                if let Some(owner) = owner {
+                    write!(f, " SET OWNER {owner}")?;
+                }
+                Ok(())
             }
             Statement::Drop {
                 object_type,
@@ -4496,6 +4555,14 @@ impl fmt::Display for Statement {
                 if let Some(drop_behavior) = drop_behavior {
                     write!(f, " {drop_behavior}")?;
                 }
+                Ok(())
+            }
+            Statement::DropConnector { if_exists, name } => {
+                write!(
+                    f,
+                    "DROP CONNECTOR {if_exists}{name}",
+                    if_exists = if *if_exists { "IF EXISTS " } else { "" }
+                )?;
                 Ok(())
             }
             Statement::Discard { object_type } => {
@@ -4642,6 +4709,17 @@ impl fmt::Display for Statement {
                 )?;
                 Ok(())
             }
+            Statement::ShowObjects(ShowObjects {
+                terse,
+                show_options,
+            }) => {
+                write!(
+                    f,
+                    "SHOW {terse}OBJECTS{show_options}",
+                    terse = if *terse { "TERSE " } else { "" },
+                )?;
+                Ok(())
+            }
             Statement::ShowTables {
                 terse,
                 history,
@@ -4785,7 +4863,9 @@ impl fmt::Display for Statement {
                 granted_by,
             } => {
                 write!(f, "GRANT {privileges} ")?;
-                write!(f, "ON {objects} ")?;
+                if let Some(objects) = objects {
+                    write!(f, "ON {objects} ")?;
+                }
                 write!(f, "TO {}", display_comma_separated(grantees))?;
                 if *with_grant_option {
                     write!(f, " WITH GRANT OPTION")?;
@@ -4803,7 +4883,9 @@ impl fmt::Display for Statement {
                 cascade,
             } => {
                 write!(f, "REVOKE {privileges} ")?;
-                write!(f, "ON {objects} ")?;
+                if let Some(objects) = objects {
+                    write!(f, "ON {objects} ")?;
+                }
                 write!(f, "FROM {}", display_comma_separated(grantees))?;
                 if let Some(grantor) = granted_by {
                     write!(f, " GRANTED BY {grantor}")?;
@@ -4989,60 +5071,69 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CopyIntoSnowflake {
+                kind,
                 into,
-                from_stage,
-                from_stage_alias,
+                from_obj,
+                from_obj_alias,
                 stage_params,
                 from_transformations,
+                from_query,
                 files,
                 pattern,
                 file_format,
                 copy_options,
                 validation_mode,
+                partition,
             } => {
                 write!(f, "COPY INTO {}", into)?;
-                if from_transformations.is_none() {
-                    // Standard data load
-                    write!(f, " FROM {}{}", from_stage, stage_params)?;
-                    if from_stage_alias.as_ref().is_some() {
-                        write!(f, " AS {}", from_stage_alias.as_ref().unwrap())?;
-                    }
-                } else {
+                if let Some(from_transformations) = from_transformations {
                     // Data load with transformation
-                    write!(
-                        f,
-                        " FROM (SELECT {} FROM {}{}",
-                        display_separated(from_transformations.as_ref().unwrap(), ", "),
-                        from_stage,
-                        stage_params,
-                    )?;
-                    if from_stage_alias.as_ref().is_some() {
-                        write!(f, " AS {}", from_stage_alias.as_ref().unwrap())?;
+                    if let Some(from_stage) = from_obj {
+                        write!(
+                            f,
+                            " FROM (SELECT {} FROM {}{}",
+                            display_separated(from_transformations, ", "),
+                            from_stage,
+                            stage_params
+                        )?;
+                    }
+                    if let Some(from_obj_alias) = from_obj_alias {
+                        write!(f, " AS {}", from_obj_alias)?;
                     }
                     write!(f, ")")?;
+                } else if let Some(from_obj) = from_obj {
+                    // Standard data load
+                    write!(f, " FROM {}{}", from_obj, stage_params)?;
+                    if let Some(from_obj_alias) = from_obj_alias {
+                        write!(f, " AS {from_obj_alias}")?;
+                    }
+                } else if let Some(from_query) = from_query {
+                    // Data unload from query
+                    write!(f, " FROM ({from_query})")?;
                 }
-                if files.is_some() {
-                    write!(
-                        f,
-                        " FILES = ('{}')",
-                        display_separated(files.as_ref().unwrap(), "', '")
-                    )?;
+
+                if let Some(files) = files {
+                    write!(f, " FILES = ('{}')", display_separated(files, "', '"))?;
                 }
-                if pattern.is_some() {
-                    write!(f, " PATTERN = '{}'", pattern.as_ref().unwrap())?;
+                if let Some(pattern) = pattern {
+                    write!(f, " PATTERN = '{}'", pattern)?;
+                }
+                if let Some(partition) = partition {
+                    write!(f, " PARTITION BY {partition}")?;
                 }
                 if !file_format.options.is_empty() {
                     write!(f, " FILE_FORMAT=({})", file_format)?;
                 }
                 if !copy_options.options.is_empty() {
-                    write!(f, " COPY_OPTIONS=({})", copy_options)?;
+                    match kind {
+                        CopyIntoSnowflakeKind::Table => {
+                            write!(f, " COPY_OPTIONS=({})", copy_options)?
+                        }
+                        CopyIntoSnowflakeKind::Location => write!(f, " {copy_options}")?,
+                    }
                 }
-                if validation_mode.is_some() {
-                    write!(
-                        f,
-                        " VALIDATION_MODE = {}",
-                        validation_mode.as_ref().unwrap()
-                    )?;
+                if let Some(validation_mode) = validation_mode {
+                    write!(f, " VALIDATION_MODE = {}", validation_mode)?;
                 }
                 Ok(())
             }
@@ -5503,6 +5594,9 @@ pub enum Action {
     Create {
         obj_type: Option<ActionCreateObjectType>,
     },
+    DatabaseRole {
+        role: ObjectName,
+    },
     Delete,
     EvolveSchema,
     Execute {
@@ -5536,6 +5630,9 @@ pub enum Action {
     },
     Replicate,
     ResolveAll,
+    Role {
+        role: Ident,
+    },
     Select {
         columns: Option<Vec<Ident>>,
     },
@@ -5565,6 +5662,7 @@ impl fmt::Display for Action {
                     write!(f, " {obj_type}")?
                 }
             }
+            Action::DatabaseRole { role } => write!(f, "DATABASE ROLE {role}")?,
             Action::Delete => f.write_str("DELETE")?,
             Action::EvolveSchema => f.write_str("EVOLVE SCHEMA")?,
             Action::Execute { obj_type } => {
@@ -5591,6 +5689,7 @@ impl fmt::Display for Action {
             Action::References { .. } => f.write_str("REFERENCES")?,
             Action::Replicate => f.write_str("REPLICATE")?,
             Action::ResolveAll => f.write_str("RESOLVE ALL")?,
+            Action::Role { role } => write!(f, "ROLE {role}")?,
             Action::Select { .. } => f.write_str("SELECT")?,
             Action::Temporary => f.write_str("TEMPORARY")?,
             Action::Trigger => f.write_str("TRIGGER")?,
@@ -5884,12 +5983,20 @@ pub enum GrantObjects {
     AllSequencesInSchema { schemas: Vec<ObjectName> },
     /// Grant privileges on `ALL TABLES IN SCHEMA <schema_name> [, ...]`
     AllTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on specific databases
+    Databases(Vec<ObjectName>),
     /// Grant privileges on specific schemas
     Schemas(Vec<ObjectName>),
     /// Grant privileges on specific sequences
     Sequences(Vec<ObjectName>),
     /// Grant privileges on specific tables
     Tables(Vec<ObjectName>),
+    /// Grant privileges on specific views
+    Views(Vec<ObjectName>),
+    /// Grant privileges on specific warehouses
+    Warehouses(Vec<ObjectName>),
+    /// Grant privileges on specific integrations
+    Integrations(Vec<ObjectName>),
 }
 
 impl fmt::Display for GrantObjects {
@@ -5898,11 +6005,23 @@ impl fmt::Display for GrantObjects {
             GrantObjects::Sequences(sequences) => {
                 write!(f, "SEQUENCE {}", display_comma_separated(sequences))
             }
+            GrantObjects::Databases(databases) => {
+                write!(f, "DATABASE {}", display_comma_separated(databases))
+            }
             GrantObjects::Schemas(schemas) => {
                 write!(f, "SCHEMA {}", display_comma_separated(schemas))
             }
             GrantObjects::Tables(tables) => {
                 write!(f, "{}", display_comma_separated(tables))
+            }
+            GrantObjects::Views(views) => {
+                write!(f, "VIEW {}", display_comma_separated(views))
+            }
+            GrantObjects::Warehouses(warehouses) => {
+                write!(f, "WAREHOUSE {}", display_comma_separated(warehouses))
+            }
+            GrantObjects::Integrations(integrations) => {
+                write!(f, "INTEGRATION {}", display_comma_separated(integrations))
             }
             GrantObjects::AllSequencesInSchema { schemas } => {
                 write!(
@@ -8241,6 +8360,14 @@ impl fmt::Display for ShowStatementIn {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ShowObjects {
+    pub terse: bool,
+    pub show_options: ShowStatementOptions,
+}
+
 /// MSSQL's json null clause
 ///
 /// ```plaintext
@@ -8454,6 +8581,19 @@ impl Display for StorageSerializationPolicy {
             StorageSerializationPolicy::Optimized => write!(f, "OPTIMIZED"),
         }
     }
+}
+
+/// Variants of the Snowflake `COPY INTO` statement
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CopyIntoSnowflakeKind {
+    /// Loads data from files to a table
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/copy-into-table>
+    Table,
+    /// Unloads data from a table or query to external files
+    /// See: <https://docs.snowflake.com/en/sql-reference/sql/copy-into-location>
+    Location,
 }
 
 #[cfg(test)]

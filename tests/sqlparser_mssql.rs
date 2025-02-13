@@ -26,7 +26,7 @@ use helpers::attached_token::AttachedToken;
 use sqlparser::tokenizer::Span;
 use test_utils::*;
 
-use sqlparser::ast::DataType::{Int, Text};
+use sqlparser::ast::DataType::{Int, Text, Varbinary};
 use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
@@ -137,6 +137,7 @@ fn parse_create_procedure() {
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             }))],
             params: Some(vec![
@@ -1114,6 +1115,7 @@ fn parse_substring_in_select() {
                         window_before_qualify: false,
                         value_table_mode: None,
                         connect_by: None,
+                        flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
                     limit: None,
@@ -1251,6 +1253,7 @@ fn parse_mssql_declare() {
                     qualify: None,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             }))
         ],
@@ -1791,6 +1794,59 @@ fn parse_mssql_set_session_value() {
     ms().verified_stmt("SET REMOTE_PROC_TRANSACTIONS ON");
     ms().verified_stmt("SET XACT_ABORT ON");
     ms().verified_stmt("SET ANSI_NULLS, ANSI_PADDING ON");
+}
+
+#[test]
+fn parse_mssql_varbinary_max_length() {
+    let sql = "CREATE TABLE example (var_binary_col VARBINARY(MAX))";
+
+    match ms_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(
+                name,
+                ObjectName::from(vec![Ident {
+                    value: "example".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }])
+            );
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: Ident::new("var_binary_col"),
+                    data_type: Varbinary(Some(BinaryLength::Max)),
+                    collation: None,
+                    options: vec![]
+                },],
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE TABLE example (var_binary_col VARBINARY(50))";
+
+    match ms_and_generic().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+            assert_eq!(
+                name,
+                ObjectName::from(vec![Ident {
+                    value: "example".to_string(),
+                    quote_style: None,
+                    span: Span::empty(),
+                }])
+            );
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: Ident::new("var_binary_col"),
+                    data_type: Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
+                    collation: None,
+                    options: vec![]
+                },],
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn ms() -> TestedDialects {

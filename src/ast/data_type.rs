@@ -45,6 +45,10 @@ pub enum EnumMember {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DataType {
+    /// Table type in [postgresql]. e.g. CREATE FUNCTION RETURNS TABLE(...)
+    ///
+    /// [postgresql]: https://www.postgresql.org/docs/15/sql-createfunction.html
+    Table(Vec<ColumnDef>),
     /// Fixed-length character type e.g. CHARACTER(10)
     Character(Option<CharacterLength>),
     /// Fixed-length char type e.g. CHAR(10)
@@ -81,7 +85,7 @@ pub enum DataType {
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
     /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/data-types/binary-and-varbinary-transact-sql?view=sql-server-ver16
-    Varbinary(Option<u64>),
+    Varbinary(Option<BinaryLength>),
     /// Large binary object with optional length e.g. BLOB, BLOB(1000), [standard], [Oracle]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-large-object-string-type
@@ -324,10 +328,15 @@ pub enum DataType {
     /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/bit-type.html
     /// [MSSQL]: https://learn.microsoft.com/en-us/sql/t-sql/data-types/bit-transact-sql?view=sql-server-ver16
     Bit(Option<u64>),
-    /// Variable-length bit string e.g. [Postgres]
+    /// `BIT VARYING(n)`: Variable-length bit string e.g. [Postgres]
     ///
     /// [Postgres]: https://www.postgresql.org/docs/current/datatype-bit.html
     BitVarying(Option<u64>),
+    /// `VARBIT(n)`: Variable-length bit string. [Postgres] alias for `BIT VARYING`
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/current/datatype.html
+    VarBit(Option<u64>),
+    ///
     /// Custom type such as enums
     Custom(ObjectName, Vec<String>),
     /// Arrays
@@ -399,9 +408,7 @@ impl fmt::Display for DataType {
             }
             DataType::Clob(size) => format_type_with_optional_length(f, "CLOB", size, false),
             DataType::Binary(size) => format_type_with_optional_length(f, "BINARY", size, false),
-            DataType::Varbinary(size) => {
-                format_type_with_optional_length(f, "VARBINARY", size, false)
-            }
+            DataType::Varbinary(size) => format_varbinary_type(f, "VARBINARY", size),
             DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
             DataType::TinyBlob => write!(f, "TINYBLOB"),
             DataType::MediumBlob => write!(f, "MEDIUMBLOB"),
@@ -546,6 +553,7 @@ impl fmt::Display for DataType {
             DataType::BitVarying(size) => {
                 format_type_with_optional_length(f, "BIT VARYING", size, false)
             }
+            DataType::VarBit(size) => format_type_with_optional_length(f, "VARBIT", size, false),
             DataType::Array(ty) => match ty {
                 ArrayElemTypeDef::None => write!(f, "ARRAY"),
                 ArrayElemTypeDef::SquareBracket(t, None) => write!(f, "{t}[]"),
@@ -630,6 +638,7 @@ impl fmt::Display for DataType {
             DataType::Unspecified => Ok(()),
             DataType::Trigger => write!(f, "TRIGGER"),
             DataType::AnyType => write!(f, "ANY TYPE"),
+            DataType::Table(fields) => write!(f, "TABLE({})", display_comma_separated(fields)),
         }
     }
 }
@@ -654,6 +663,18 @@ fn format_character_string_type(
     f: &mut fmt::Formatter,
     sql_type: &str,
     size: &Option<CharacterLength>,
+) -> fmt::Result {
+    write!(f, "{sql_type}")?;
+    if let Some(size) = size {
+        write!(f, "({size})")?;
+    }
+    Ok(())
+}
+
+fn format_varbinary_type(
+    f: &mut fmt::Formatter,
+    sql_type: &str,
+    size: &Option<BinaryLength>,
 ) -> fmt::Result {
     write!(f, "{sql_type}")?;
     if let Some(size) = size {
@@ -848,6 +869,32 @@ impl fmt::Display for CharLengthUnits {
                 write!(f, "OCTETS")
             }
         }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum BinaryLength {
+    IntegerLength {
+        /// Default (if VARYING)
+        length: u64,
+    },
+    /// VARBINARY(MAX) used in T-SQL (Microsoft SQL Server)
+    Max,
+}
+
+impl fmt::Display for BinaryLength {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BinaryLength::IntegerLength { length } => {
+                write!(f, "{}", length)?;
+            }
+            BinaryLength::Max => {
+                write!(f, "MAX")?;
+            }
+        }
+        Ok(())
     }
 }
 

@@ -528,7 +528,7 @@ impl<'a> Parser<'a> {
                 Keyword::DESCRIBE => self.parse_explain(DescribeAlias::Describe),
                 Keyword::EXPLAIN => self.parse_explain(DescribeAlias::Explain),
                 Keyword::ANALYZE => self.parse_analyze(),
-                Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
+                Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::FROM => {
                     self.prev_token();
                     self.parse_query().map(Statement::Query)
                 }
@@ -1198,7 +1198,7 @@ impl<'a> Parser<'a> {
                     })))
                 }
             Keyword::NOT => Ok(Some(self.parse_not()?)),
-            Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
+            Keyword::MATCH if self.dialect.supports_match_against() => {
                 Ok(Some(self.parse_match_against()?))
             }
             Keyword::STRUCT if self.dialect.supports_struct_literal() => {
@@ -4268,6 +4268,8 @@ impl<'a> Parser<'a> {
             self.parse_create_type()
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             self.parse_create_procedure(or_alter)
+        } else if self.parse_keyword(Keyword::CONNECTOR) {
+            self.parse_create_connector()
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
@@ -5580,6 +5582,49 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// ```sql
+    /// CREATE CONNECTOR [IF NOT EXISTS] connector_name
+    /// [TYPE datasource_type]
+    /// [URL datasource_url]
+    /// [COMMENT connector_comment]
+    /// [WITH DCPROPERTIES(property_name=property_value, ...)]
+    /// ```
+    ///
+    /// [Hive Documentation](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-CreateDataConnectorCreateConnector)
+    pub fn parse_create_connector(&mut self) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parse_identifier()?;
+
+        let connector_type = if self.parse_keyword(Keyword::TYPE) {
+            Some(self.parse_literal_string()?)
+        } else {
+            None
+        };
+
+        let url = if self.parse_keyword(Keyword::URL) {
+            Some(self.parse_literal_string()?)
+        } else {
+            None
+        };
+
+        let comment = self.parse_optional_inline_comment()?;
+
+        let with_dcproperties =
+            match self.parse_options_with_keywords(&[Keyword::WITH, Keyword::DCPROPERTIES])? {
+                properties if !properties.is_empty() => Some(properties),
+                _ => None,
+            };
+
+        Ok(Statement::CreateConnector(CreateConnector {
+            name,
+            if_not_exists,
+            connector_type,
+            url,
+            comment,
+            with_dcproperties,
+        }))
+    }
+
     pub fn parse_drop(&mut self) -> Result<Statement, ParserError> {
         // MySQL dialect supports `TEMPORARY`
         let temporary = dialect_of!(self is MySqlDialect | GenericDialect | DuckDbDialect)
@@ -5609,6 +5654,8 @@ impl<'a> Parser<'a> {
             return self.parse_drop_function();
         } else if self.parse_keyword(Keyword::POLICY) {
             return self.parse_drop_policy();
+        } else if self.parse_keyword(Keyword::CONNECTOR) {
+            return self.parse_drop_connector();
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             return self.parse_drop_procedure();
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -5619,7 +5666,7 @@ impl<'a> Parser<'a> {
             return self.parse_drop_extension();
         } else {
             return self.expected(
-                "DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, or VIEW after DROP",
+                "CONNECTOR, DATABASE, EXTENSION, FUNCTION, INDEX, POLICY, PROCEDURE, ROLE, SCHEMA, SECRET, SEQUENCE, STAGE, TABLE, TRIGGER, TYPE, or VIEW after DROP",
                 self.peek_token(),
             );
         };
@@ -5692,6 +5739,16 @@ impl<'a> Parser<'a> {
             table_name,
             drop_behavior,
         })
+    }
+    /// ```sql  
+    /// DROP CONNECTOR [IF EXISTS] name
+    /// ```
+    ///
+    /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-DropConnector)
+    fn parse_drop_connector(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parse_identifier()?;
+        Ok(Statement::DropConnector { if_exists, name })
     }
 
     /// ```sql
@@ -7989,6 +8046,7 @@ impl<'a> Parser<'a> {
             Keyword::INDEX,
             Keyword::ROLE,
             Keyword::POLICY,
+            Keyword::CONNECTOR,
         ])?;
         match object_type {
             Keyword::VIEW => self.parse_alter_view(),
@@ -8041,6 +8099,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::ROLE => self.parse_alter_role(),
             Keyword::POLICY => self.parse_alter_policy(),
+            Keyword::CONNECTOR => self.parse_alter_connector(),
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }
@@ -8707,7 +8766,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
                 Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
-                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_precision()?)),
+                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_binary_length()?)),
                 Keyword::BLOB => Ok(DataType::Blob(self.parse_optional_precision()?)),
                 Keyword::TINYBLOB => Ok(DataType::TinyBlob),
                 Keyword::MEDIUMBLOB => Ok(DataType::MediumBlob),
@@ -8720,6 +8779,7 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Bit(self.parse_optional_precision()?))
                     }
                 }
+                Keyword::VARBIT => Ok(DataType::VarBit(self.parse_optional_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
                 Keyword::DATE32 => Ok(DataType::Date32),
@@ -8867,6 +8927,10 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_keyword(Keyword::TYPE);
                     Ok(DataType::AnyType)
                 }
+                Keyword::TABLE => {
+                    let columns = self.parse_returns_table_columns()?;
+                    Ok(DataType::Table(columns))
+                }
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name(false)?;
@@ -8880,18 +8944,33 @@ impl<'a> Parser<'a> {
             _ => self.expected_at("a data type name", next_token_index),
         }?;
 
-        // Parse array data types. Note: this is postgresql-specific and different from
-        // Keyword::ARRAY syntax from above
-        while self.consume_token(&Token::LBracket) {
-            let size = if dialect_of!(self is GenericDialect | DuckDbDialect | PostgreSqlDialect) {
-                self.maybe_parse(|p| p.parse_literal_uint())?
-            } else {
-                None
-            };
-            self.expect_token(&Token::RBracket)?;
-            data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
+        if self.dialect.supports_array_typedef_size() {
+            // Parse array data type size
+            while self.consume_token(&Token::LBracket) {
+                let size = self.maybe_parse(|p| p.parse_literal_uint())?;
+                self.expect_token(&Token::RBracket)?;
+                data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
+            }
         }
         Ok((data, trailing_bracket))
+    }
+
+    fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = self.parse_data_type()?;
+        Ok(ColumnDef {
+            name,
+            data_type,
+            collation: None,
+            options: Vec::new(), // No constraints expected here
+        })
+    }
+
+    fn parse_returns_table_columns(&mut self) -> Result<Vec<ColumnDef>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let columns = self.parse_comma_separated(Parser::parse_returns_table_column)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(columns)
     }
 
     pub fn parse_string_values(&mut self) -> Result<Vec<String>, ParserError> {
@@ -9581,6 +9660,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_optional_binary_length(&mut self) -> Result<Option<BinaryLength>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let binary_length = self.parse_binary_length()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Some(binary_length))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn parse_character_length(&mut self) -> Result<CharacterLength, ParserError> {
         if self.parse_keyword(Keyword::MAX) {
             return Ok(CharacterLength::Max);
@@ -9594,6 +9683,14 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(CharacterLength::IntegerLength { length, unit })
+    }
+
+    pub fn parse_binary_length(&mut self) -> Result<BinaryLength, ParserError> {
+        if self.parse_keyword(Keyword::MAX) {
+            return Ok(BinaryLength::Max);
+        }
+        let length = self.parse_literal_uint()?;
+        Ok(BinaryLength::IntegerLength { length })
     }
 
     pub fn parse_optional_precision_scale(
@@ -10149,7 +10246,9 @@ impl<'a> Parser<'a> {
     pub fn parse_query_body(&mut self, precedence: u8) -> Result<Box<SetExpr>, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
-        let expr = if self.peek_keyword(Keyword::SELECT) {
+        let expr = if self.peek_keyword(Keyword::SELECT)
+            || (self.peek_keyword(Keyword::FROM) && self.dialect.supports_from_first_select())
+        {
             SetExpr::Select(self.parse_select().map(Box::new)?)
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
@@ -10248,6 +10347,39 @@ impl<'a> Parser<'a> {
 
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`)
     pub fn parse_select(&mut self) -> Result<Select, ParserError> {
+        let mut from_first = None;
+
+        if self.dialect.supports_from_first_select() && self.peek_keyword(Keyword::FROM) {
+            let from_token = self.expect_keyword(Keyword::FROM)?;
+            let from = self.parse_table_with_joins()?;
+            if !self.peek_keyword(Keyword::SELECT) {
+                return Ok(Select {
+                    select_token: AttachedToken(from_token),
+                    distinct: None,
+                    top: None,
+                    top_before_distinct: false,
+                    projection: vec![],
+                    into: None,
+                    from,
+                    lateral_views: vec![],
+                    prewhere: None,
+                    selection: None,
+                    group_by: GroupByExpr::Expressions(vec![], vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    window_before_qualify: false,
+                    qualify: None,
+                    value_table_mode: None,
+                    connect_by: None,
+                    flavor: SelectFlavor::FromFirstNoSelect,
+                });
+            }
+            from_first = Some(from);
+        }
+
         let select_token = self.expect_keyword(Keyword::SELECT)?;
         let value_table_mode =
             if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::AS) {
@@ -10302,10 +10434,12 @@ impl<'a> Parser<'a> {
         // otherwise they may be parsed as an alias as part of the `projection`
         // or `from`.
 
-        let from = if self.parse_keyword(Keyword::FROM) {
-            self.parse_table_with_joins()?
+        let (from, from_first) = if let Some(from) = from_first.take() {
+            (from, true)
+        } else if self.parse_keyword(Keyword::FROM) {
+            (self.parse_table_with_joins()?, false)
         } else {
-            vec![]
+            (vec![], false)
         };
 
         let mut lateral_views = vec![];
@@ -10437,6 +10571,11 @@ impl<'a> Parser<'a> {
             qualify,
             value_table_mode,
             connect_by,
+            flavor: if from_first {
+                SelectFlavor::FromFirst
+            } else {
+                SelectFlavor::Standard
+            },
         })
     }
 
@@ -12118,7 +12257,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_grant_revoke_privileges_objects(
         &mut self,
-    ) -> Result<(Privileges, GrantObjects), ParserError> {
+    ) -> Result<(Privileges, Option<GrantObjects>), ParserError> {
         let privileges = if self.parse_keyword(Keyword::ALL) {
             Privileges::All {
                 with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
@@ -12128,37 +12267,49 @@ impl<'a> Parser<'a> {
             Privileges::Actions(actions)
         };
 
-        self.expect_keyword_is(Keyword::ON)?;
-
-        let objects = if self.parse_keywords(&[
-            Keyword::ALL,
-            Keyword::TABLES,
-            Keyword::IN,
-            Keyword::SCHEMA,
-        ]) {
-            GrantObjects::AllTablesInSchema {
-                schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
-            }
-        } else if self.parse_keywords(&[
-            Keyword::ALL,
-            Keyword::SEQUENCES,
-            Keyword::IN,
-            Keyword::SCHEMA,
-        ]) {
-            GrantObjects::AllSequencesInSchema {
-                schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+        let objects = if self.parse_keyword(Keyword::ON) {
+            if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
+                Some(GrantObjects::AllTablesInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else if self.parse_keywords(&[
+                Keyword::ALL,
+                Keyword::SEQUENCES,
+                Keyword::IN,
+                Keyword::SCHEMA,
+            ]) {
+                Some(GrantObjects::AllSequencesInSchema {
+                    schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
+                })
+            } else {
+                let object_type = self.parse_one_of_keywords(&[
+                    Keyword::SEQUENCE,
+                    Keyword::DATABASE,
+                    Keyword::DATABASE,
+                    Keyword::SCHEMA,
+                    Keyword::TABLE,
+                    Keyword::VIEW,
+                    Keyword::WAREHOUSE,
+                    Keyword::INTEGRATION,
+                    Keyword::VIEW,
+                    Keyword::WAREHOUSE,
+                    Keyword::INTEGRATION,
+                ]);
+                let objects =
+                    self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true));
+                match object_type {
+                    Some(Keyword::DATABASE) => Some(GrantObjects::Databases(objects?)),
+                    Some(Keyword::SCHEMA) => Some(GrantObjects::Schemas(objects?)),
+                    Some(Keyword::SEQUENCE) => Some(GrantObjects::Sequences(objects?)),
+                    Some(Keyword::WAREHOUSE) => Some(GrantObjects::Warehouses(objects?)),
+                    Some(Keyword::INTEGRATION) => Some(GrantObjects::Integrations(objects?)),
+                    Some(Keyword::VIEW) => Some(GrantObjects::Views(objects?)),
+                    Some(Keyword::TABLE) | None => Some(GrantObjects::Tables(objects?)),
+                    _ => unreachable!(),
+                }
             }
         } else {
-            let object_type =
-                self.parse_one_of_keywords(&[Keyword::SEQUENCE, Keyword::SCHEMA, Keyword::TABLE]);
-            let objects =
-                self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true));
-            match object_type {
-                Some(Keyword::SCHEMA) => GrantObjects::Schemas(objects?),
-                Some(Keyword::SEQUENCE) => GrantObjects::Sequences(objects?),
-                Some(Keyword::TABLE) | None => GrantObjects::Tables(objects?),
-                _ => unreachable!(),
-            }
+            None
         };
 
         Ok((privileges, objects))
@@ -12185,6 +12336,9 @@ impl<'a> Parser<'a> {
             Ok(Action::AttachPolicy)
         } else if self.parse_keywords(&[Keyword::BIND, Keyword::SERVICE, Keyword::ENDPOINT]) {
             Ok(Action::BindServiceEndpoint)
+        } else if self.parse_keywords(&[Keyword::DATABASE, Keyword::ROLE]) {
+            let role = self.parse_object_name(false)?;
+            Ok(Action::DatabaseRole { role })
         } else if self.parse_keywords(&[Keyword::EVOLVE, Keyword::SCHEMA]) {
             Ok(Action::EvolveSchema)
         } else if self.parse_keywords(&[Keyword::IMPORT, Keyword::SHARE]) {
@@ -12250,6 +12404,9 @@ impl<'a> Parser<'a> {
             Ok(Action::Read)
         } else if self.parse_keyword(Keyword::REPLICATE) {
             Ok(Action::Replicate)
+        } else if self.parse_keyword(Keyword::ROLE) {
+            let role = self.parse_identifier()?;
+            Ok(Action::Role { role })
         } else if self.parse_keyword(Keyword::SELECT) {
             Ok(Action::Select {
                 columns: parse_columns(self)?,
@@ -14142,7 +14299,7 @@ impl<'a> Parser<'a> {
         false
     }
 
-    fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {
+    pub(crate) fn parse_show_stmt_options(&mut self) -> Result<ShowStatementOptions, ParserError> {
         let show_in;
         let mut filter_position = None;
         if self.dialect.supports_show_like_before_in() {

@@ -333,8 +333,8 @@ impl Spanned for Statement {
             } => source.span(),
             Statement::CopyIntoSnowflake {
                 into: _,
-                from_stage: _,
-                from_stage_alias: _,
+                from_obj: _,
+                from_obj_alias: _,
                 stage_params: _,
                 from_transformations: _,
                 files: _,
@@ -342,6 +342,9 @@ impl Spanned for Statement {
                 file_format: _,
                 copy_options: _,
                 validation_mode: _,
+                kind: _,
+                from_query: _,
+                partition: _,
             } => Span::empty(),
             Statement::Close { cursor } => match cursor {
                 CloseCursor::All => Span::empty(),
@@ -398,6 +401,7 @@ impl Spanned for Statement {
             Statement::CreateIndex(create_index) => create_index.span(),
             Statement::CreateRole { .. } => Span::empty(),
             Statement::CreateSecret { .. } => Span::empty(),
+            Statement::CreateConnector { .. } => Span::empty(),
             Statement::AlterTable {
                 name,
                 if_exists: _,
@@ -487,9 +491,12 @@ impl Spanned for Statement {
             Statement::OptimizeTable { .. } => Span::empty(),
             Statement::CreatePolicy { .. } => Span::empty(),
             Statement::AlterPolicy { .. } => Span::empty(),
+            Statement::AlterConnector { .. } => Span::empty(),
             Statement::DropPolicy { .. } => Span::empty(),
+            Statement::DropConnector { .. } => Span::empty(),
             Statement::ShowDatabases { .. } => Span::empty(),
             Statement::ShowSchemas { .. } => Span::empty(),
+            Statement::ShowObjects { .. } => Span::empty(),
             Statement::ShowViews { .. } => Span::empty(),
             Statement::LISTEN { .. } => Span::empty(),
             Statement::NOTIFY { .. } => Span::empty(),
@@ -2070,6 +2077,7 @@ impl Spanned for Select {
             value_table_mode: _,      // todo, BigQuery specific
             connect_by,
             top_before_distinct: _,
+            flavor: _,
         } = self;
 
         union_spans(

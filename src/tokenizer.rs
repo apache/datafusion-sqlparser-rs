@@ -1229,14 +1229,26 @@ impl<'a> Tokenizer<'a> {
                 // operators
                 '-' => {
                     chars.next(); // consume the '-'
+
                     match chars.peek() {
                         Some('-') => {
-                            chars.next(); // consume the second '-', starting a single-line comment
-                            let comment = self.tokenize_single_line_comment(chars);
-                            Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
-                                prefix: "--".to_owned(),
-                                comment,
-                            })))
+                            let mut is_comment = true;
+                            if self.dialect.requires_single_line_comment_whitespace() {
+                                is_comment = Some(' ') == chars.peekable.clone().nth(1);
+                            }
+
+                            if is_comment {
+                                chars.next(); // consume second '-'
+                                let comment = self.tokenize_single_line_comment(chars);
+                                return Ok(Some(Token::Whitespace(
+                                    Whitespace::SingleLineComment {
+                                        prefix: "--".to_owned(),
+                                        comment,
+                                    },
+                                )));
+                            }
+
+                            self.start_binop(chars, "-", Token::Minus)
                         }
                         Some('>') => {
                             chars.next();
@@ -3684,5 +3696,86 @@ mod tests {
                 Token::EscapedStringLiteral("'".to_string()),
             ],
         );
+    }
+
+    #[test]
+    fn test_whitespace_required_after_single_line_comment() {
+        all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT --'abc'",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Minus,
+                    Token::Minus,
+                    Token::SingleQuotedString("abc".to_string()),
+                ],
+            );
+
+        all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT -- 'abc'",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: " 'abc'".to_string(),
+                    }),
+                ],
+            );
+
+        all_dialects_where(|dialect| dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT --",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Minus,
+                    Token::Minus,
+                ],
+            );
+    }
+
+    #[test]
+    fn test_whitespace_not_required_after_single_line_comment() {
+        all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT --'abc'",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "'abc'".to_string(),
+                    }),
+                ],
+            );
+
+        all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT -- 'abc'",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: " 'abc'".to_string(),
+                    }),
+                ],
+            );
+
+        all_dialects_where(|dialect| !dialect.requires_single_line_comment_whitespace())
+            .tokenizes_to(
+                "SELECT --",
+                vec![
+                    Token::make_keyword("SELECT"),
+                    Token::Whitespace(Whitespace::Space),
+                    Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "--".to_string(),
+                        comment: "".to_string(),
+                    }),
+                ],
+            );
     }
 }

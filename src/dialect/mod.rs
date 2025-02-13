@@ -245,7 +245,8 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialects supports `with rollup/cube/all` expressions.
+    /// Returns true if the dialects supports `GROUP BY` modifiers prefixed by a `WITH` keyword.
+    /// Example: `GROUP BY value WITH ROLLUP`.
     fn supports_group_by_with_modifier(&self) -> bool {
         false
     }

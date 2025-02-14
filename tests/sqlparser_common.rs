@@ -2448,6 +2448,92 @@ fn parse_select_group_by_all() {
 }
 
 #[test]
+fn parse_group_by_with_modifier() {
+    let clauses = ["x", "a, b", "ALL"];
+    let modifiers = [
+        "WITH ROLLUP",
+        "WITH CUBE",
+        "WITH TOTALS",
+        "WITH ROLLUP WITH CUBE",
+    ];
+    let expected_modifiers = [
+        vec![GroupByWithModifier::Rollup],
+        vec![GroupByWithModifier::Cube],
+        vec![GroupByWithModifier::Totals],
+        vec![GroupByWithModifier::Rollup, GroupByWithModifier::Cube],
+    ];
+    let dialects = all_dialects_where(|d| d.supports_group_by_with_modifier());
+
+    for clause in &clauses {
+        for (modifier, expected_modifier) in modifiers.iter().zip(expected_modifiers.iter()) {
+            let sql = format!("SELECT * FROM t GROUP BY {clause} {modifier}");
+            match dialects.verified_stmt(&sql) {
+                Statement::Query(query) => {
+                    let group_by = &query.body.as_select().unwrap().group_by;
+                    if clause == &"ALL" {
+                        assert_eq!(group_by, &GroupByExpr::All(expected_modifier.to_vec()));
+                    } else {
+                        assert_eq!(
+                            group_by,
+                            &GroupByExpr::Expressions(
+                                clause
+                                    .split(", ")
+                                    .map(|c| Identifier(Ident::new(c)))
+                                    .collect(),
+                                expected_modifier.to_vec()
+                            )
+                        );
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    // invalid cases
+    let invalid_cases = [
+        "SELECT * FROM t GROUP BY x WITH",
+        "SELECT * FROM t GROUP BY x WITH ROLLUP CUBE",
+        "SELECT * FROM t GROUP BY x WITH WITH ROLLUP",
+        "SELECT * FROM t GROUP BY WITH ROLLUP",
+    ];
+    for sql in invalid_cases {
+        dialects
+            .parse_sql_statements(sql)
+            .expect_err("Expected: one of ROLLUP or CUBE or TOTALS, found: WITH");
+    }
+}
+
+#[test]
+fn parse_group_by_special_grouping_sets() {
+    let sql = "SELECT a, b, SUM(c) FROM tab1 GROUP BY a, b GROUPING SETS ((a, b), (a), (b), ())";
+    match all_dialects().verified_stmt(sql) {
+        Statement::Query(query) => {
+            let group_by = &query.body.as_select().unwrap().group_by;
+            assert_eq!(
+                group_by,
+                &GroupByExpr::Expressions(
+                    vec![
+                        Expr::Identifier(Ident::new("a")),
+                        Expr::Identifier(Ident::new("b"))
+                    ],
+                    vec![GroupByWithModifier::GroupingSets(Expr::GroupingSets(vec![
+                        vec![
+                            Expr::Identifier(Ident::new("a")),
+                            Expr::Identifier(Ident::new("b"))
+                        ],
+                        vec![Expr::Identifier(Ident::new("a")),],
+                        vec![Expr::Identifier(Ident::new("b"))],
+                        vec![]
+                    ]))]
+                )
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_select_having() {
     let sql = "SELECT foo FROM bar GROUP BY foo HAVING COUNT(*) > 1";
     let select = verified_only_select(sql);

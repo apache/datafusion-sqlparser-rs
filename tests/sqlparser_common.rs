@@ -8542,19 +8542,21 @@ fn ensure_multiple_dialects_are_tested() {
 #[test]
 fn parse_create_index() {
     let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age DESC)";
-    let indexed_columns = vec![
+    let indexed_columns: Vec<IndexColumn> = vec![
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
             asc: None,
             nulls_first: None,
             with_fill: None,
-        },
+        }
+        .into(),
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
             with_fill: None,
-        },
+        }
+        .into(),
     ];
     match verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
@@ -8577,20 +8579,22 @@ fn parse_create_index() {
 
 #[test]
 fn test_create_index_with_using_function() {
-    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test USING btree (name,age DESC)";
-    let indexed_columns = vec![
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test USING BTREE (name,age DESC)";
+    let indexed_columns: Vec<IndexColumn> = vec![
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
             asc: None,
             nulls_first: None,
             with_fill: None,
-        },
+        }
+        .into(),
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
             with_fill: None,
-        },
+        }
+        .into(),
     ];
     match verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
@@ -8608,7 +8612,7 @@ fn test_create_index_with_using_function() {
         }) => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
-            assert_eq!("btree", using.unwrap().to_string());
+            assert_eq!("BTREE", using.unwrap().to_string());
             assert_eq!(indexed_columns, columns);
             assert!(unique);
             assert!(!concurrently);
@@ -8623,12 +8627,13 @@ fn test_create_index_with_using_function() {
 #[test]
 fn test_create_index_with_with_clause() {
     let sql = "CREATE UNIQUE INDEX title_idx ON films(title) WITH (fillfactor = 70, single_param)";
-    let indexed_columns = vec![OrderByExpr {
+    let indexed_columns: Vec<IndexColumn> = vec![OrderByExpr {
         expr: Expr::Identifier(Ident::new("title")),
         asc: None,
         nulls_first: None,
         with_fill: None,
-    }];
+    }
+    .into()];
     let with_parameters = vec![
         Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("fillfactor"))),

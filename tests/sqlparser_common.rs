@@ -6662,7 +6662,15 @@ fn parse_joins_on() {
         vec![join_with_constraint("t2", None, false, JoinOperator::Join)]
     );
     assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 INNER JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, false, JoinOperator::Inner)]
+    );
+    assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, false, JoinOperator::Left)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 LEFT OUTER JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6672,6 +6680,10 @@ fn parse_joins_on() {
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, false, JoinOperator::Right)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 RIGHT OUTER JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6794,10 +6806,18 @@ fn parse_joins_using() {
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Left)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 LEFT OUTER JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Right)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 RIGHT OUTER JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
@@ -6857,20 +6877,34 @@ fn parse_natural_join() {
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").from).joins,
         vec![natural_join(JoinOperator::Join, None)]
     );
+
     // inner join explicitly
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL INNER JOIN t2").from).joins,
         vec![natural_join(JoinOperator::Inner, None)]
     );
+
     // left join explicitly
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL LEFT JOIN t2").from).joins,
+        vec![natural_join(JoinOperator::Left, None)]
+    );
+
+    // left outer join explicitly
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 NATURAL LEFT OUTER JOIN t2").from).joins,
         vec![natural_join(JoinOperator::LeftOuter, None)]
     );
 
     // right join explicitly
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL RIGHT JOIN t2").from).joins,
+        vec![natural_join(JoinOperator::Right, None)]
+    );
+
+    // right outer join explicitly
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 NATURAL RIGHT OUTER JOIN t2").from).joins,
         vec![natural_join(JoinOperator::RightOuter, None)]
     );
 
@@ -6950,22 +6984,12 @@ fn parse_join_nesting() {
 
 #[test]
 fn parse_join_syntax_variants() {
-    one_statement_parses_to(
-        "SELECT c1 FROM t1 JOIN t2 USING(c1)",
-        "SELECT c1 FROM t1 JOIN t2 USING(c1)",
-    );
-    one_statement_parses_to(
-        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
-        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
-    );
-    one_statement_parses_to(
-        "SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)",
-        "SELECT c1 FROM t1 LEFT JOIN t2 USING(c1)",
-    );
-    one_statement_parses_to(
-        "SELECT c1 FROM t1 RIGHT OUTER JOIN t2 USING(c1)",
-        "SELECT c1 FROM t1 RIGHT JOIN t2 USING(c1)",
-    );
+    verified_stmt("SELECT c1 FROM t1 JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 INNER JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 LEFT JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 RIGHT JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 RIGHT OUTER JOIN t2 USING(c1)");
     one_statement_parses_to(
         "SELECT c1 FROM t1 FULL OUTER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 FULL JOIN t2 USING(c1)",
@@ -8027,7 +8051,7 @@ fn lateral_derived() {
         let join = &from.joins[0];
         assert_eq!(
             join.join_operator,
-            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(test_utils::number("1"))))
+            JoinOperator::Left(JoinConstraint::On(Expr::Value(test_utils::number("1"))))
         );
         if let TableFactor::Derived {
             lateral,
@@ -8095,7 +8119,7 @@ fn lateral_function() {
                     alias: None,
                 },
                 global: false,
-                join_operator: JoinOperator::LeftOuter(JoinConstraint::None),
+                join_operator: JoinOperator::Left(JoinConstraint::None),
             }],
         }],
         lateral_views: vec![],

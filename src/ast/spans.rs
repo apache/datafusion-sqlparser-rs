@@ -2010,7 +2010,9 @@ impl Spanned for JoinOperator {
         match self {
             JoinOperator::Join(join_constraint) => join_constraint.span(),
             JoinOperator::Inner(join_constraint) => join_constraint.span(),
+            JoinOperator::Left(join_constraint) => join_constraint.span(),
             JoinOperator::LeftOuter(join_constraint) => join_constraint.span(),
+            JoinOperator::Right(join_constraint) => join_constraint.span(),
             JoinOperator::RightOuter(join_constraint) => join_constraint.span(),
             JoinOperator::FullOuter(join_constraint) => join_constraint.span(),
             JoinOperator::CrossJoin => Span::empty(),

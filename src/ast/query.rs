@@ -2077,16 +2077,30 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::LeftOuter(constraint) => write!(
+            JoinOperator::Left(constraint) => write!(
                 f,
                 " {}LEFT JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::RightOuter(constraint) => write!(
+            JoinOperator::LeftOuter(constraint) => write!(
+                f,
+                " {}LEFT OUTER JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::Right(constraint) => write!(
                 f,
                 " {}RIGHT JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::RightOuter(constraint) => write!(
+                f,
+                " {}RIGHT OUTER JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
@@ -2162,7 +2176,9 @@ impl fmt::Display for Join {
 pub enum JoinOperator {
     Join(JoinConstraint),
     Inner(JoinConstraint),
+    Left(JoinConstraint),
     LeftOuter(JoinConstraint),
+    Right(JoinConstraint),
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
     CrossJoin,

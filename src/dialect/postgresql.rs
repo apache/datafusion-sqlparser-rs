@@ -258,6 +258,10 @@ impl Dialect for PostgreSqlDialect {
     fn supports_array_typedef_size(&self) -> bool {
         true
     }
+
+    fn supports_geometric_types(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_create(parser: &mut Parser) -> Option<Result<Statement, ParserError>> {

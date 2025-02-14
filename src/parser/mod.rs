@@ -1212,7 +1212,18 @@ impl<'a> Parser<'a> {
             Keyword::MAP if *self.peek_token_ref() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
                 Ok(Some(self.parse_duckdb_map_literal()?))
             }
-            _ => Ok(None)
+            _ if self.dialect.supports_geometric_types() => match w.keyword {
+                Keyword::CIRCLE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Circle)?)),
+                Keyword::BOX => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricBox)?)),
+                Keyword::PATH => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricPath)?)),
+                Keyword::LINE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Line)?)),
+                Keyword::LSEG => Ok(Some(self.parse_geometric_type(GeometricTypeKind::LineSegment)?)),
+                Keyword::POINT => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Point)?)),
+                Keyword::POLYGON => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Polygon)?)),
+                _ => Ok(None),
+            },
+        
+            _ => Ok(None),
         }
     }
 
@@ -1411,6 +1422,33 @@ impl<'a> Parser<'a> {
                     ),
                 })
             }
+            tok @ Token::Sharp
+            | tok @ Token::AtDashAt
+            | tok @ Token::AtAt
+            | tok @ Token::QuestionMarkDash
+            | tok @ Token::QuestionPipe
+                if self.dialect.supports_geometric_types() =>
+            {
+                let op = match tok {
+                    Token::Sharp => UnaryOperator::NumOfPoints,
+                    Token::AtDashAt => UnaryOperator::LenOrCircumference,
+                    Token::AtAt => UnaryOperator::Center,
+                    Token::QuestionMarkDash => UnaryOperator::IsHorizontal,
+                    Token::QuestionPipe => UnaryOperator::IsVertical,
+                    _ => {
+                        return Err(ParserError::ParserError(format!(
+                            "Unexpected token in unary operator parsing: {:?}",
+                            tok
+                        )))
+                    }
+                };
+                Ok(Expr::UnaryOp {
+                    op,
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?,
+                    ),
+                })
+            }
             Token::EscapedStringLiteral(_) if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) =>
             {
                 self.prev_token();
@@ -1494,6 +1532,14 @@ impl<'a> Parser<'a> {
         } else {
             Ok(expr)
         }
+    }
+
+    fn parse_geometric_type(&mut self, kind: GeometricTypeKind) -> Result<Expr, ParserError> {
+        let value: Value = self.parse_value()?;
+        Ok(Expr::TypedString {
+            data_type: DataType::GeometricType(kind),
+            value,
+        })
     }
 
     /// Try to parse an [Expr::CompoundFieldAccess] like `a.b.c` or `a.b[1].c`.
@@ -3043,14 +3089,17 @@ impl<'a> Parser<'a> {
             Token::DuckIntDiv if dialect_is!(dialect is DuckDbDialect | GenericDialect) => {
                 Some(BinaryOperator::DuckIntegerDivide)
             }
-            Token::ShiftLeft if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
+            Token::ShiftLeft if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect | RedshiftSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftLeft)
             }
-            Token::ShiftRight if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
+            Token::ShiftRight if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect | RedshiftSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftRight)
             }
-            Token::Sharp if dialect_is!(dialect is PostgreSqlDialect) => {
+            Token::Sharp if dialect_is!(dialect is PostgreSqlDialect | RedshiftSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseXor)
+            }
+            Token::Overlap if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::PGOverlap)
             }
             Token::Overlap if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGOverlap)
@@ -3079,6 +3128,55 @@ impl<'a> Parser<'a> {
             Token::QuestionAnd => Some(BinaryOperator::QuestionAnd),
             Token::QuestionPipe => Some(BinaryOperator::QuestionPipe),
             Token::CustomBinaryOperator(s) => Some(BinaryOperator::Custom(s.clone())),
+            Token::DoubleSharp if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::DoubleHash)
+            }
+
+            Token::AmpersandLeftAngleBracket if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::AndLt)
+            }
+            Token::AmpersandRightAngleBracket if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::AndGt)
+            }
+            Token::QuestionMarkDash if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::QuestionDash)
+            }
+            Token::AmpersandLeftAngleBracketVerticalBar if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::AndLtPipe)
+            }
+            Token::VerticalBarAmpersandRightAngleBracket if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::PipeAndGt)
+            }
+            Token::TwoWayArrow if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::LtDashGt)
+            }
+            Token::LeftAngleBracketCaret if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::LtCaret)
+            }
+            Token::RightAngleBracketCaret if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::GtCaret)
+            }
+            Token::QuestionMarkSharp if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::QuestionHash)
+            }
+            Token::QuestionMarkDoubleVerticalBar if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::QuestionDoublePipe)
+            }
+            Token::QuestionMarkDashVerticalBar if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::QuestionDashPipe)
+            }
+            Token::TildeEqual if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::TildeEq)
+            }
+            Token::ShiftLeftVerticalBar if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::LtLtPipe)
+            }
+            Token::VerticalBarShiftRight if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::PipeGtGt)
+            }
+            Token::AtSign if dialect_of!(self is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::At)
+            }
 
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),

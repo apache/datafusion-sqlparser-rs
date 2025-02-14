@@ -87,6 +87,11 @@ impl Dialect for SnowflakeDialect {
         true
     }
 
+    /// See <https://docs.snowflake.com/en/sql-reference/constructs/where#joins-in-the-where-clause>
+    fn supports_outer_join_operator(&self) -> bool {
+        true
+    }
+
     fn supports_connect_by(&self) -> bool {
         true
     }

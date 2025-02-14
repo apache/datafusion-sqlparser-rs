@@ -2991,38 +2991,45 @@ fn parse_json_table_is_not_reserved() {
 fn test_composite_value() {
     let sql = "SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9";
     let select = pg().verified_only_select(sql);
+
+    let Expr::CompoundFieldAccess { root, access_chain } =
+        expr_from_projection(&select.projection[0])
+    else {
+        unreachable!("expected projection: got {:?}", &select.projection[0]);
+    };
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::CompositeAccess {
-            key: Ident::new("name"),
-            expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("on_hand"),
-                Ident::new("item")
-            ]))))
-        }),
-        select.projection[0]
+        root.as_ref(),
+        &Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+            Ident::new("on_hand"),
+            Ident::new("item")
+        ])))
+    );
+    assert_eq!(
+        access_chain.as_slice(),
+        &[AccessExpr::Dot(Expr::Identifier(Ident::new("name")))]
     );
 
     assert_eq!(
-        select.selection,
-        Some(Expr::BinaryOp {
-            left: Box::new(Expr::CompositeAccess {
-                key: Ident::new("price"),
-                expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+        select.selection.as_ref().unwrap(),
+        &Expr::BinaryOp {
+            left: Box::new(Expr::CompoundFieldAccess {
+                root: Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
                     Ident::new("on_hand"),
                     Ident::new("item")
-                ]))))
+                ])))
+                .into(),
+                access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("price")))]
             }),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("9")))
-        })
+        }
     );
 
     let sql = "SELECT (information_schema._pg_expandarray(ARRAY['i', 'i'])).n";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::CompositeAccess {
-            key: Ident::new("n"),
-            expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
+        &Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
                 name: ObjectName::from(vec![
                     Ident::new("information_schema"),
                     Ident::new("_pg_expandarray")
@@ -3046,9 +3053,10 @@ fn test_composite_value() {
                 filter: None,
                 over: None,
                 within_group: vec![],
-            }))))
-        }),
-        select.projection[0]
+            })))),
+            access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("n")))],
+        },
+        expr_from_projection(&select.projection[0])
     );
 }
 

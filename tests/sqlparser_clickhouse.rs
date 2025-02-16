@@ -323,12 +323,12 @@ fn parse_alter_table_add_projection() {
                             vec![]
                         )),
                         order_by: Some(OrderBy {
-                            exprs: vec![OrderByExpr {
+                            kind: OrderByKind::Expressions(vec![OrderByExpr {
                                 expr: Identifier(Ident::new("b")),
                                 asc: None,
                                 nulls_first: None,
                                 with_fill: None,
-                            }],
+                            }]),
                             interpolate: None,
                         }),
                     }
@@ -1080,7 +1080,7 @@ fn parse_select_order_by_with_fill_interpolate() {
     let select = clickhouse().verified_query(sql);
     assert_eq!(
         OrderBy {
-            exprs: vec![
+            kind: OrderByKind::Expressions(vec![
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
                     asc: Some(true),
@@ -1101,7 +1101,7 @@ fn parse_select_order_by_with_fill_interpolate() {
                         step: Some(Expr::Value(number("3"))),
                     }),
                 },
-            ],
+            ]),
             interpolate: Some(Interpolate {
                 exprs: Some(vec![InterpolateExpr {
                     column: Ident::new("col1"),
@@ -1159,8 +1159,12 @@ fn parse_with_fill() {
             from: Some(Expr::Value(number("10"))),
             to: Some(Expr::Value(number("20"))),
             step: Some(Expr::Value(number("2"))),
-        }),
-        select.order_by.expect("ORDER BY expected").exprs[0].with_fill
+        })
+        .as_ref(),
+        match select.order_by.expect("ORDER BY expected").kind {
+            OrderByKind::Expressions(ref exprs) => exprs[0].with_fill.as_ref(),
+            _ => None,
+        }
     );
 }
 
@@ -1211,8 +1215,13 @@ fn parse_interpolate_body_with_columns() {
                     }),
                 },
             ])
-        }),
-        select.order_by.expect("ORDER BY expected").interpolate
+        })
+        .as_ref(),
+        select
+            .order_by
+            .expect("ORDER BY expected")
+            .interpolate
+            .as_ref()
     );
 }
 
@@ -1221,8 +1230,12 @@ fn parse_interpolate_without_body() {
     let sql = "SELECT fname FROM customer ORDER BY fname WITH FILL INTERPOLATE";
     let select = clickhouse().verified_query(sql);
     assert_eq!(
-        Some(Interpolate { exprs: None }),
-        select.order_by.expect("ORDER BY expected").interpolate
+        Some(Interpolate { exprs: None }).as_ref(),
+        select
+            .order_by
+            .expect("ORDER BY expected")
+            .interpolate
+            .as_ref()
     );
 }
 
@@ -1233,8 +1246,13 @@ fn parse_interpolate_with_empty_body() {
     assert_eq!(
         Some(Interpolate {
             exprs: Some(vec![])
-        }),
-        select.order_by.expect("ORDER BY expected").interpolate
+        })
+        .as_ref(),
+        select
+            .order_by
+            .expect("ORDER BY expected")
+            .interpolate
+            .as_ref()
     );
 }
 

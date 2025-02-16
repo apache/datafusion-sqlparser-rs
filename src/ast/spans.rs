@@ -215,6 +215,7 @@ impl Spanned for Values {
 /// - [Statement::CopyIntoSnowflake]
 /// - [Statement::CreateSecret]
 /// - [Statement::CreateRole]
+/// - [Statement::AlterType]
 /// - [Statement::AlterRole]
 /// - [Statement::AttachDatabase]
 /// - [Statement::AttachDuckDBDatabase]
@@ -427,6 +428,7 @@ impl Spanned for Statement {
                     .chain(with_options.iter().map(|i| i.span())),
             ),
             // These statements need to be implemented
+            Statement::AlterType { .. } => Span::empty(),
             Statement::AlterRole { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),
             Statement::AttachDuckDBDatabase { .. } => Span::empty(),

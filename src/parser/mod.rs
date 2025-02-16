@@ -8042,6 +8042,7 @@ impl<'a> Parser<'a> {
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,
+            Keyword::TYPE,
             Keyword::TABLE,
             Keyword::INDEX,
             Keyword::ROLE,
@@ -8050,6 +8051,7 @@ impl<'a> Parser<'a> {
         ])?;
         match object_type {
             Keyword::VIEW => self.parse_alter_view(),
+            Keyword::TYPE => self.parse_alter_type(),
             Keyword::TABLE => {
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
@@ -8120,6 +8122,55 @@ impl<'a> Parser<'a> {
             query,
             with_options,
         })
+    }
+
+    /// Parse a [Statement::AlterType]
+    pub fn parse_alter_type(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+
+        if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_identifier()?;
+            Ok(Statement::AlterType(AlterType {
+                name,
+                operation: AlterTypeOperation::Rename(AlterTypeRename { new_name }),
+            }))
+        } else if self.parse_keywords(&[Keyword::ADD, Keyword::VALUE]) {
+            let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+            let new_enum_value = self.parse_identifier()?;
+            let position = if self.parse_keyword(Keyword::BEFORE) {
+                Some(AlterTypeAddValuePosition::Before(self.parse_identifier()?))
+            } else if self.parse_keyword(Keyword::AFTER) {
+                Some(AlterTypeAddValuePosition::After(self.parse_identifier()?))
+            } else {
+                None
+            };
+
+            Ok(Statement::AlterType(AlterType {
+                name,
+                operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                    if_not_exists,
+                    value: new_enum_value,
+                    position,
+                }),
+            }))
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::VALUE]) {
+            let existing_enum_value = self.parse_identifier()?;
+            self.expect_keyword(Keyword::TO)?;
+            let new_enum_value = self.parse_identifier()?;
+
+            Ok(Statement::AlterType(AlterType {
+                name,
+                operation: AlterTypeOperation::RenameValue(AlterTypeRenameValue {
+                    from: existing_enum_value,
+                    to: new_enum_value,
+                }),
+            }))
+        } else {
+            return self.expected_ref(
+                "{RENAME TO | { RENAME | ADD } VALUE}",
+                self.peek_token_ref(),
+            );
+        }
     }
 
     /// Parse a `CALL procedure_name(arg1, arg2, ...)`

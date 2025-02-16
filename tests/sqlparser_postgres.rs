@@ -5293,15 +5293,8 @@ fn arrow_cast_precedence() {
 
 #[test]
 fn parse_create_type_as_enum() {
-    let statement = pg().one_statement_parses_to(
-        r#"CREATE TYPE public.my_type AS ENUM (
-            'label1',
-            'label2',
-            'label3',
-            'label4'
-        );"#,
-        "CREATE TYPE public.my_type AS ENUM ('label1', 'label2', 'label3', 'label4')",
-    );
+    let sql = "CREATE TYPE public.my_type AS ENUM ('label1', 'label2', 'label3', 'label4')";
+    let statement = pg_and_generic().verified_stmt(sql);
     match statement {
         Statement::CreateType {
             name,
@@ -5316,7 +5309,7 @@ fn parse_create_type_as_enum() {
                 labels
             );
         }
-        _ => unreachable!(),
+        _ => unreachable!("{:?} should parse to Statement::CreateType", sql),
     }
 }
 

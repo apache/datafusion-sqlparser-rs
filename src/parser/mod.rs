@@ -14222,6 +14222,10 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword_is(Keyword::AS)?;
 
+        if self.parse_keyword(Keyword::ENUM) {
+            return self.parse_create_type_enum(name);
+        }
+
         let mut attributes = vec![];
         if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
             return Ok(Statement::CreateType {
@@ -14255,6 +14259,20 @@ impl<'a> Parser<'a> {
         Ok(Statement::CreateType {
             name,
             representation: UserDefinedTypeRepresentation::Composite { attributes },
+        })
+    }
+
+    /// Parse remainder of `CREATE TYPE AS ENUM` statement (see [Statement::CreateType] and [Self::parse_create_type])
+    ///
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtype.html)
+    pub fn parse_create_type_enum(&mut self, name: ObjectName) -> Result<Statement, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let labels = self.parse_comma_separated0(|p| p.parse_identifier(), Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Statement::CreateType {
+            name,
+            representation: UserDefinedTypeRepresentation::Enum { labels },
         })
     }
 

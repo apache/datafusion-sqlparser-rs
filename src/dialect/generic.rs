@@ -48,6 +48,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_group_by_with_modifier(&self) -> bool {
+        true
+    }
+
     fn supports_connect_by(&self) -> bool {
         true
     }

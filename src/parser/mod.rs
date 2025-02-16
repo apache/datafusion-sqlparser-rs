@@ -5740,7 +5740,7 @@ impl<'a> Parser<'a> {
             drop_behavior,
         })
     }
-    /// ```sql  
+    /// ```sql
     /// DROP CONNECTOR [IF EXISTS] name
     /// ```
     ///
@@ -9148,7 +9148,7 @@ impl<'a> Parser<'a> {
             };
 
             let mut modifiers = vec![];
-            if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+            if self.dialect.supports_group_by_with_modifier() {
                 loop {
                     if !self.parse_keyword(Keyword::WITH) {
                         break;
@@ -9171,6 +9171,14 @@ impl<'a> Parser<'a> {
                     });
                 }
             }
+            if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
+                self.expect_token(&Token::LParen)?;
+                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+                self.expect_token(&Token::RParen)?;
+                modifiers.push(GroupByWithModifier::GroupingSets(Expr::GroupingSets(
+                    result,
+                )));
+            };
             let group_by = match expressions {
                 None => GroupByExpr::All(modifiers),
                 Some(exprs) => GroupByExpr::Expressions(exprs, modifiers),
@@ -11182,9 +11190,9 @@ impl<'a> Parser<'a> {
                             }
                             Some(Keyword::JOIN) => {
                                 if is_left {
-                                    JoinOperator::LeftOuter
+                                    JoinOperator::Left
                                 } else {
-                                    JoinOperator::RightOuter
+                                    JoinOperator::Right
                                 }
                             }
                             _ => {

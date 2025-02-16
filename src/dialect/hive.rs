@@ -52,18 +52,23 @@ impl Dialect for HiveDialect {
         true
     }
 
-    /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362061#Tutorial-BuiltInOperators>
+    /// See <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362061#Tutorial-BuiltInOperators>
     fn supports_bang_not_operator(&self) -> bool {
         true
     }
 
-    /// See Hive <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
+    /// See <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362036#LanguageManualDML-Loadingfilesintotables>
     fn supports_load_data(&self) -> bool {
         true
     }
 
-    /// See Hive <https://cwiki.apache.org/confluence/display/hive/languagemanual+sampling>
+    /// See <https://cwiki.apache.org/confluence/display/hive/languagemanual+sampling>
     fn supports_table_sample_before_alias(&self) -> bool {
+        true
+    }
+
+    /// See <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=30151323#EnhancedAggregation,Cube,GroupingandRollup-CubesandRollupsr>
+    fn supports_group_by_with_modifier(&self) -> bool {
         true
     }
 }

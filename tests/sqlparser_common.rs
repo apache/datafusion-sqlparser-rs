@@ -2529,6 +2529,92 @@ fn parse_select_group_by_all() {
 }
 
 #[test]
+fn parse_group_by_with_modifier() {
+    let clauses = ["x", "a, b", "ALL"];
+    let modifiers = [
+        "WITH ROLLUP",
+        "WITH CUBE",
+        "WITH TOTALS",
+        "WITH ROLLUP WITH CUBE",
+    ];
+    let expected_modifiers = [
+        vec![GroupByWithModifier::Rollup],
+        vec![GroupByWithModifier::Cube],
+        vec![GroupByWithModifier::Totals],
+        vec![GroupByWithModifier::Rollup, GroupByWithModifier::Cube],
+    ];
+    let dialects = all_dialects_where(|d| d.supports_group_by_with_modifier());
+
+    for clause in &clauses {
+        for (modifier, expected_modifier) in modifiers.iter().zip(expected_modifiers.iter()) {
+            let sql = format!("SELECT * FROM t GROUP BY {clause} {modifier}");
+            match dialects.verified_stmt(&sql) {
+                Statement::Query(query) => {
+                    let group_by = &query.body.as_select().unwrap().group_by;
+                    if clause == &"ALL" {
+                        assert_eq!(group_by, &GroupByExpr::All(expected_modifier.to_vec()));
+                    } else {
+                        assert_eq!(
+                            group_by,
+                            &GroupByExpr::Expressions(
+                                clause
+                                    .split(", ")
+                                    .map(|c| Identifier(Ident::new(c)))
+                                    .collect(),
+                                expected_modifier.to_vec()
+                            )
+                        );
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    // invalid cases
+    let invalid_cases = [
+        "SELECT * FROM t GROUP BY x WITH",
+        "SELECT * FROM t GROUP BY x WITH ROLLUP CUBE",
+        "SELECT * FROM t GROUP BY x WITH WITH ROLLUP",
+        "SELECT * FROM t GROUP BY WITH ROLLUP",
+    ];
+    for sql in invalid_cases {
+        dialects
+            .parse_sql_statements(sql)
+            .expect_err("Expected: one of ROLLUP or CUBE or TOTALS, found: WITH");
+    }
+}
+
+#[test]
+fn parse_group_by_special_grouping_sets() {
+    let sql = "SELECT a, b, SUM(c) FROM tab1 GROUP BY a, b GROUPING SETS ((a, b), (a), (b), ())";
+    match all_dialects().verified_stmt(sql) {
+        Statement::Query(query) => {
+            let group_by = &query.body.as_select().unwrap().group_by;
+            assert_eq!(
+                group_by,
+                &GroupByExpr::Expressions(
+                    vec![
+                        Expr::Identifier(Ident::new("a")),
+                        Expr::Identifier(Ident::new("b"))
+                    ],
+                    vec![GroupByWithModifier::GroupingSets(Expr::GroupingSets(vec![
+                        vec![
+                            Expr::Identifier(Ident::new("a")),
+                            Expr::Identifier(Ident::new("b"))
+                        ],
+                        vec![Expr::Identifier(Ident::new("a")),],
+                        vec![Expr::Identifier(Ident::new("b"))],
+                        vec![]
+                    ]))]
+                )
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_select_having() {
     let sql = "SELECT foo FROM bar GROUP BY foo HAVING COUNT(*) > 1";
     let select = verified_only_select(sql);
@@ -2714,7 +2800,7 @@ fn parse_cast() {
         &Expr::Cast {
             kind: CastKind::Cast,
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Varbinary(Some(50)),
+            data_type: DataType::Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
             format: None,
         },
         expr_from_projection(only(&select.projection))
@@ -6657,7 +6743,15 @@ fn parse_joins_on() {
         vec![join_with_constraint("t2", None, false, JoinOperator::Join)]
     );
     assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 INNER JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, false, JoinOperator::Inner)]
+    );
+    assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, false, JoinOperator::Left)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 LEFT OUTER JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6667,6 +6761,10 @@ fn parse_joins_on() {
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, false, JoinOperator::Right)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 RIGHT OUTER JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint(
             "t2",
             None,
@@ -6789,10 +6887,18 @@ fn parse_joins_using() {
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Left)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 LEFT OUTER JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::Right)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 RIGHT OUTER JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
@@ -6852,20 +6958,34 @@ fn parse_natural_join() {
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").from).joins,
         vec![natural_join(JoinOperator::Join, None)]
     );
+
     // inner join explicitly
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL INNER JOIN t2").from).joins,
         vec![natural_join(JoinOperator::Inner, None)]
     );
+
     // left join explicitly
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL LEFT JOIN t2").from).joins,
+        vec![natural_join(JoinOperator::Left, None)]
+    );
+
+    // left outer join explicitly
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 NATURAL LEFT OUTER JOIN t2").from).joins,
         vec![natural_join(JoinOperator::LeftOuter, None)]
     );
 
     // right join explicitly
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL RIGHT JOIN t2").from).joins,
+        vec![natural_join(JoinOperator::Right, None)]
+    );
+
+    // right outer join explicitly
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 NATURAL RIGHT OUTER JOIN t2").from).joins,
         vec![natural_join(JoinOperator::RightOuter, None)]
     );
 
@@ -6945,22 +7065,12 @@ fn parse_join_nesting() {
 
 #[test]
 fn parse_join_syntax_variants() {
-    one_statement_parses_to(
-        "SELECT c1 FROM t1 JOIN t2 USING(c1)",
-        "SELECT c1 FROM t1 JOIN t2 USING(c1)",
-    );
-    one_statement_parses_to(
-        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
-        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
-    );
-    one_statement_parses_to(
-        "SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)",
-        "SELECT c1 FROM t1 LEFT JOIN t2 USING(c1)",
-    );
-    one_statement_parses_to(
-        "SELECT c1 FROM t1 RIGHT OUTER JOIN t2 USING(c1)",
-        "SELECT c1 FROM t1 RIGHT JOIN t2 USING(c1)",
-    );
+    verified_stmt("SELECT c1 FROM t1 JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 INNER JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 LEFT JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 RIGHT JOIN t2 USING(c1)");
+    verified_stmt("SELECT c1 FROM t1 RIGHT OUTER JOIN t2 USING(c1)");
     one_statement_parses_to(
         "SELECT c1 FROM t1 FULL OUTER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 FULL JOIN t2 USING(c1)",
@@ -8022,7 +8132,7 @@ fn lateral_derived() {
         let join = &from.joins[0];
         assert_eq!(
             join.join_operator,
-            JoinOperator::LeftOuter(JoinConstraint::On(Expr::Value(test_utils::number("1"))))
+            JoinOperator::Left(JoinConstraint::On(Expr::Value(test_utils::number("1"))))
         );
         if let TableFactor::Derived {
             lateral,
@@ -8090,7 +8200,7 @@ fn lateral_function() {
                     alias: None,
                 },
                 global: false,
-                join_operator: JoinOperator::LeftOuter(JoinConstraint::None),
+                join_operator: JoinOperator::Left(JoinConstraint::None),
             }],
         }],
         lateral_views: vec![],

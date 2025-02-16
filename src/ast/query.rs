@@ -2077,16 +2077,30 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::LeftOuter(constraint) => write!(
+            JoinOperator::Left(constraint) => write!(
                 f,
                 " {}LEFT JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::RightOuter(constraint) => write!(
+            JoinOperator::LeftOuter(constraint) => write!(
+                f,
+                " {}LEFT OUTER JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::Right(constraint) => write!(
                 f,
                 " {}RIGHT JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::RightOuter(constraint) => write!(
+                f,
+                " {}RIGHT OUTER JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
@@ -2162,7 +2176,9 @@ impl fmt::Display for Join {
 pub enum JoinOperator {
     Join(JoinConstraint),
     Inner(JoinConstraint),
+    Left(JoinConstraint),
     LeftOuter(JoinConstraint),
+    Right(JoinConstraint),
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
     CrossJoin,
@@ -2599,13 +2615,18 @@ impl fmt::Display for SelectInto {
 /// e.g. GROUP BY year WITH ROLLUP WITH TOTALS
 ///
 /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#rollup-modifier>
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GroupByWithModifier {
     Rollup,
     Cube,
     Totals,
+    /// Hive supports GROUP BY GROUPING SETS syntax.
+    /// e.g. GROUP BY year , month GROUPING SETS((year,month),(year),(month))
+    ///
+    /// [Hive]: <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=30151323#EnhancedAggregation,Cube,GroupingandRollup-GROUPINGSETSclause>
+    GroupingSets(Expr),
 }
 
 impl fmt::Display for GroupByWithModifier {
@@ -2614,6 +2635,9 @@ impl fmt::Display for GroupByWithModifier {
             GroupByWithModifier::Rollup => write!(f, "WITH ROLLUP"),
             GroupByWithModifier::Cube => write!(f, "WITH CUBE"),
             GroupByWithModifier::Totals => write!(f, "WITH TOTALS"),
+            GroupByWithModifier::GroupingSets(expr) => {
+                write!(f, "{expr}")
+            }
         }
     }
 }

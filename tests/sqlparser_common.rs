@@ -2334,7 +2334,7 @@ fn parse_select_order_by() {
     fn chk(sql: &str) {
         let select = verified_query(sql);
         assert_eq!(
-            Some(vec![
+            OrderByKind::Expressions(vec![
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("lname")),
                     asc: Some(true),
@@ -2353,9 +2353,8 @@ fn parse_select_order_by() {
                     nulls_first: None,
                     with_fill: None,
                 },
-            ])
-            .as_ref(),
-            select.order_by.expect("ORDER BY expected").get_exprs()
+            ]),
+            select.order_by.expect("ORDER BY expected").kind
         );
     }
     chk("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id");
@@ -2370,7 +2369,7 @@ fn parse_select_order_by_limit() {
                ORDER BY lname ASC, fname DESC LIMIT 2";
     let select = verified_query(sql);
     assert_eq!(
-        Some(vec![
+        OrderByKind::Expressions(vec![
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
                 asc: Some(true),
@@ -2383,11 +2382,91 @@ fn parse_select_order_by_limit() {
                 nulls_first: None,
                 with_fill: None,
             },
-        ])
-        .as_ref(),
-        select.order_by.expect("ORDER BY expected").get_exprs()
+        ]),
+        select.order_by.expect("ORDER BY expected").kind
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
+}
+
+#[test]
+fn parse_select_order_by_all() {
+    fn chk(sql: &str, except_order_by: OrderByKind) {
+        let dialects = all_dialects_where(|d| d.supports_order_by_all());
+        let select = dialects.verified_query(sql);
+        assert_eq!(
+            except_order_by,
+            select.order_by.expect("ORDER BY expected").kind
+        );
+    }
+    let test_cases = [
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL",
+            OrderByKind::All(OrderByAll {
+                asc: None,
+                nulls_first: None,
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS FIRST",
+            OrderByKind::All(OrderByAll {
+                asc: None,
+                nulls_first: Some(true),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS LAST",
+            OrderByKind::All(OrderByAll {
+                asc: None,
+                nulls_first: Some(false),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC",
+            OrderByKind::All(OrderByAll {
+                asc: Some(true),
+                nulls_first: None,
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS FIRST",
+            OrderByKind::All(OrderByAll {
+                asc: Some(true),
+                nulls_first: Some(true),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS LAST",
+            OrderByKind::All(OrderByAll {
+                asc: Some(true),
+                nulls_first: Some(false),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC",
+            OrderByKind::All(OrderByAll {
+                asc: Some(false),
+                nulls_first: None,
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS FIRST",
+            OrderByKind::All(OrderByAll {
+                asc: Some(false),
+                nulls_first: Some(true),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS LAST",
+            OrderByKind::All(OrderByAll {
+                asc: Some(false),
+                nulls_first: Some(false),
+            }),
+        ),
+    ];
+
+    for (sql, expected_order_by) in test_cases {
+        chk(sql, expected_order_by);
+    }
 }
 
 #[test]
@@ -2396,7 +2475,7 @@ fn parse_select_order_by_nulls_order() {
                ORDER BY lname ASC NULLS FIRST, fname DESC NULLS LAST LIMIT 2";
     let select = verified_query(sql);
     assert_eq!(
-        Some(vec![
+        OrderByKind::Expressions(vec![
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
                 asc: Some(true),
@@ -2409,88 +2488,10 @@ fn parse_select_order_by_nulls_order() {
                 nulls_first: Some(false),
                 with_fill: None,
             },
-        ])
-        .as_ref(),
-        select.order_by.expect("ORDER BY expeccted").get_exprs()
+        ]),
+        select.order_by.expect("ORDER BY expeccted").kind
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
-}
-
-#[test]
-fn parse_select_order_by_all() {
-    fn chk(sql: &str, except_order_by: &OrderBy) {
-        let select = verified_query(sql);
-        assert_eq!(Some(except_order_by), select.order_by.as_ref());
-    }
-    let test_cases = [
-        (
-            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL",
-            OrderBy::All(OrderByAll {
-                asc: None,
-                nulls_first: None,
-            }),
-        ),
-        (
-            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS FIRST",
-            OrderBy::All(OrderByAll {
-                asc: None,
-                nulls_first: Some(true),
-            }),
-        ),
-        (
-            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS LAST",
-            OrderBy::All(OrderByAll {
-                asc: None,
-                nulls_first: Some(false),
-            }),
-        ),
-        (
-            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC",
-            OrderBy::All(OrderByAll {
-                asc: Some(true),
-                nulls_first: None,
-            }),
-        ),
-        (
-            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS FIRST",
-            OrderBy::All(OrderByAll {
-                asc: Some(true),
-                nulls_first: Some(true),
-            }),
-        ),
-        (
-            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS LAST",
-            OrderBy::All(OrderByAll {
-                asc: Some(true),
-                nulls_first: Some(false),
-            }),
-        ),
-        (
-            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC",
-            OrderBy::All(OrderByAll {
-                asc: Some(false),
-                nulls_first: None,
-            }),
-        ),
-        (
-            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS FIRST",
-            OrderBy::All(OrderByAll {
-                asc: Some(false),
-                nulls_first: Some(true),
-            }),
-        ),
-        (
-            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS LAST",
-            OrderBy::All(OrderByAll {
-                asc: Some(false),
-                nulls_first: Some(false),
-            }),
-        ),
-    ];
-
-    for (sql, expected_order_by) in &test_cases {
-        chk(sql, expected_order_by);
-    }
 }
 
 #[test]

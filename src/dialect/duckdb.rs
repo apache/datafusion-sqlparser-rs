@@ -89,4 +89,9 @@ impl Dialect for DuckDbDialect {
     fn supports_from_first_select(&self) -> bool {
         true
     }
+
+    // See DuckDB <https://duckdb.org/docs/sql/query_syntax/orderby.html#order-by-all-examples>
+    fn supports_order_by_all(&self) -> bool {
+        true
+    }
 }

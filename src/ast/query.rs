@@ -2205,7 +2205,7 @@ pub enum JoinConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum OrderBy {
+pub enum OrderByKind {
     /// ALL syntax of [DuckDB] and [ClickHouse].
     ///
     /// [DuckDB]:  <https://duckdb.org/docs/sql/query_syntax/orderby>
@@ -2213,39 +2213,45 @@ pub enum OrderBy {
     All(OrderByAll),
 
     /// Expressions
-    Expressions(OrderByExprsWithInterpolate),
+    Expressions(Vec<OrderByExpr>),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OrderBy {
+    pub kind: OrderByKind,
+
+    /// Optional: `INTERPOLATE`
+    /// Supported by [ClickHouse syntax]
+    /// Note that when combined with `OrderByKind::All`, it should be None, as ClickHouse doesn't support using them together.
+    ///
+    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
+    pub interpolate: Option<Interpolate>,
 }
 
 impl fmt::Display for OrderBy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ORDER BY")?;
-        match self {
-            OrderBy::Expressions(exprs) => {
-                write!(f, "{}", exprs)?;
+        match &self.kind {
+            OrderByKind::Expressions(exprs) => {
+                write!(f, " {}", display_comma_separated(exprs))?;
+
+                if let Some(ref interpolate) = self.interpolate {
+                    match &interpolate.exprs {
+                        Some(exprs) => {
+                            write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?
+                        }
+                        None => write!(f, " INTERPOLATE")?,
+                    }
+                }
             }
-            OrderBy::All(all) => {
+            OrderByKind::All(all) => {
                 write!(f, " ALL{}", all)?;
             }
         }
 
         Ok(())
-    }
-}
-
-impl OrderBy {
-    pub fn get_exprs(&self) -> Option<&Vec<OrderByExpr>> {
-        match self {
-            OrderBy::Expressions(exprs_with_interpolate) => Some(&exprs_with_interpolate.exprs),
-            OrderBy::All(_) => None,
-        }
-    }
-    pub fn get_interpolate(&self) -> Option<&Interpolate> {
-        match self {
-            OrderBy::Expressions(exprs_with_interpolate) => {
-                exprs_with_interpolate.interpolate.as_ref()
-            }
-            OrderBy::All(_) => None,
-        }
     }
 }
 
@@ -2337,34 +2343,6 @@ impl fmt::Display for InterpolateExpr {
         write!(f, "{}", self.column)?;
         if let Some(ref expr) = self.expr {
             write!(f, " AS {}", expr)?;
-        }
-        Ok(())
-    }
-}
-
-/// `ORDER BY` expressions with interpolate
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct OrderByExprsWithInterpolate {
-    pub exprs: Vec<OrderByExpr>,
-    /// Expressions
-    /// Optional: `INTERPOLATE`
-    /// Supported by [ClickHouse syntax]
-    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
-    pub interpolate: Option<Interpolate>,
-}
-
-impl fmt::Display for OrderByExprsWithInterpolate {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if !self.exprs.is_empty() {
-            write!(f, " {}", display_comma_separated(&self.exprs))?;
-        }
-        if let Some(ref interpolate) = self.interpolate {
-            match &interpolate.exprs {
-                Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
-                None => write!(f, " INTERPOLATE")?,
-            }
         }
         Ok(())
     }

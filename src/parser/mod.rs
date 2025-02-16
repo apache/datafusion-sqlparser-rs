@@ -9184,8 +9184,17 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_order_by(&mut self) -> Result<Option<OrderBy>, ParserError> {
         if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             let order_by = if self.parse_keyword(Keyword::ALL) {
+                if !self.dialect.supports_order_by_all() {
+                    return parser_err!(
+                        "ALL is not supported in ORDER BY",
+                        self.peek_token().span.start
+                    );
+                }
                 let order_by_all = self.parse_order_by_all()?;
-                OrderBy::All(order_by_all)
+                OrderBy {
+                    kind: OrderByKind::All(order_by_all),
+                    interpolate: None,
+                }
             } else {
                 let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
                 let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
@@ -9193,7 +9202,10 @@ impl<'a> Parser<'a> {
                 } else {
                     None
                 };
-                OrderBy::Expressions(OrderByExprsWithInterpolate { exprs, interpolate })
+                OrderBy {
+                    kind: OrderByKind::Expressions(exprs),
+                    interpolate,
+                }
             };
             Ok(Some(order_by))
         } else {

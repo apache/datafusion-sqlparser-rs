@@ -79,4 +79,9 @@ impl Dialect for ClickHouseDialect {
     fn supports_from_first_select(&self) -> bool {
         true
     }
+
+    // See <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
+    fn supports_order_by_all(&self) -> bool {
+        true
+    }
 }

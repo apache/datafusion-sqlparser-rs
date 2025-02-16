@@ -30,7 +30,7 @@ use super::{
     GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
     JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
     Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
-    OnConflictAction, OnInsert, OrderBy, OrderByExpr, Partition, PivotValueSource,
+    OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource,
     ProjectionSelect, Query, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
     ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
     SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
@@ -1102,14 +1102,13 @@ impl Spanned for ProjectionSelect {
 /// - [OrderBy::All]
 impl Spanned for OrderBy {
     fn span(&self) -> Span {
-        match self {
-            OrderBy::All(_) => Span::empty(),
-            OrderBy::Expressions(expressions) => union_spans(
-                expressions
-                    .exprs
+        match &self.kind {
+            OrderByKind::All(_) => Span::empty(),
+            OrderByKind::Expressions(exprs) => union_spans(
+                exprs
                     .iter()
                     .map(|i| i.span())
-                    .chain(expressions.interpolate.iter().map(|i| i.span())),
+                    .chain(self.interpolate.iter().map(|i| i.span())),
             ),
         }
     }

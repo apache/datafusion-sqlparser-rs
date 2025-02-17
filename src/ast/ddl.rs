@@ -640,6 +640,95 @@ impl fmt::Display for AlterIndexOperation {
     }
 }
 
+/// An `ALTER TYPE` statement (`Statement::AlterType`)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterType {
+    pub name: ObjectName,
+    pub operation: AlterTypeOperation,
+}
+
+/// An [AlterType] operation
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTypeOperation {
+    Rename(AlterTypeRename),
+    AddValue(AlterTypeAddValue),
+    RenameValue(AlterTypeRenameValue),
+}
+
+/// See [AlterTypeOperation::Rename]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTypeRename {
+    pub new_name: Ident,
+}
+
+/// See [AlterTypeOperation::AddValue]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTypeAddValue {
+    pub if_not_exists: bool,
+    pub value: Ident,
+    pub position: Option<AlterTypeAddValuePosition>,
+}
+
+/// See [AlterTypeAddValue]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTypeAddValuePosition {
+    Before(Ident),
+    After(Ident),
+}
+
+/// See [AlterTypeOperation::RenameValue]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct AlterTypeRenameValue {
+    pub from: Ident,
+    pub to: Ident,
+}
+
+impl fmt::Display for AlterTypeOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Rename(AlterTypeRename { new_name }) => {
+                write!(f, "RENAME TO {new_name}")
+            }
+            Self::AddValue(AlterTypeAddValue {
+                if_not_exists,
+                value,
+                position,
+            }) => {
+                write!(f, "ADD VALUE")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {value}")?;
+                match position {
+                    Some(AlterTypeAddValuePosition::Before(neighbor_value)) => {
+                        write!(f, " BEFORE {neighbor_value}")?;
+                    }
+                    Some(AlterTypeAddValuePosition::After(neighbor_value)) => {
+                        write!(f, " AFTER {neighbor_value}")?;
+                    }
+                    None => {}
+                };
+                Ok(())
+            }
+            Self::RenameValue(AlterTypeRenameValue { from, to }) => {
+                write!(f, "RENAME VALUE {from} TO {to}")
+            }
+        }
+    }
+}
+
 /// An `ALTER COLUMN` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

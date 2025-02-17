@@ -5293,15 +5293,8 @@ fn arrow_cast_precedence() {
 
 #[test]
 fn parse_create_type_as_enum() {
-    let statement = pg().one_statement_parses_to(
-        r#"CREATE TYPE public.my_type AS ENUM (
-            'label1',
-            'label2',
-            'label3',
-            'label4'
-        );"#,
-        "CREATE TYPE public.my_type AS ENUM ('label1', 'label2', 'label3', 'label4')",
-    );
+    let sql = "CREATE TYPE public.my_type AS ENUM ('label1', 'label2', 'label3', 'label4')";
+    let statement = pg_and_generic().verified_stmt(sql);
     match statement {
         Statement::CreateType {
             name,
@@ -5316,8 +5309,99 @@ fn parse_create_type_as_enum() {
                 labels
             );
         }
-        _ => unreachable!(),
+        _ => unreachable!("{:?} should parse to Statement::CreateType", sql),
     }
+}
+
+#[test]
+fn parse_alter_type() {
+    struct TestCase {
+        sql: &'static str,
+        name: &'static str,
+        operation: AlterTypeOperation,
+    }
+    vec![
+        TestCase {
+            sql: "ALTER TYPE public.my_type RENAME TO my_new_type",
+            name: "public.my_type",
+            operation: AlterTypeOperation::Rename(AlterTypeRename {
+                new_name: Ident::new("my_new_type"),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE IF NOT EXISTS 'label3.5' BEFORE 'label4'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: true,
+                value: Ident::with_quote('\'', "label3.5"),
+                position: Some(AlterTypeAddValuePosition::Before(Ident::with_quote(
+                    '\'', "label4",
+                ))),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE 'label3.5' BEFORE 'label4'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: false,
+                value: Ident::with_quote('\'', "label3.5"),
+                position: Some(AlterTypeAddValuePosition::Before(Ident::with_quote(
+                    '\'', "label4",
+                ))),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE IF NOT EXISTS 'label3.5' AFTER 'label3'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: true,
+                value: Ident::with_quote('\'', "label3.5"),
+                position: Some(AlterTypeAddValuePosition::After(Ident::with_quote(
+                    '\'', "label3",
+                ))),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE 'label3.5' AFTER 'label3'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: false,
+                value: Ident::with_quote('\'', "label3.5"),
+                position: Some(AlterTypeAddValuePosition::After(Ident::with_quote(
+                    '\'', "label3",
+                ))),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE IF NOT EXISTS 'label5'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: true,
+                value: Ident::with_quote('\'', "label5"),
+                position: None,
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE 'label5'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: false,
+                value: Ident::with_quote('\'', "label5"),
+                position: None,
+            }),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    .for_each(|(index, tc)| {
+        let statement = pg_and_generic().verified_stmt(tc.sql);
+        if let Statement::AlterType(AlterType { name, operation }) = statement {
+            assert_eq!(tc.name, name.to_string(), "TestCase[{index}].name");
+            assert_eq!(tc.operation, operation, "TestCase[{index}].operation");
+        } else {
+            unreachable!("{:?} should parse to Statement::AlterType", tc.sql);
+        }
+    });
 }
 
 #[test]

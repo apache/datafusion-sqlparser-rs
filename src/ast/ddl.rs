@@ -1206,7 +1206,6 @@ impl fmt::Display for ProcedureParam {
 pub struct ColumnDef {
     pub name: Ident,
     pub data_type: DataType,
-    pub collation: Option<ObjectName>,
     pub options: Vec<ColumnOptionDef>,
 }
 
@@ -1216,9 +1215,6 @@ impl fmt::Display for ColumnDef {
             write!(f, "{}", self.name)?;
         } else {
             write!(f, "{} {}", self.name, self.data_type)?;
-        }
-        if let Some(collation) = &self.collation {
-            write!(f, " COLLATE {collation}")?;
         }
         for option in &self.options {
             write!(f, " {option}")?;
@@ -1566,6 +1562,7 @@ pub enum ColumnOption {
     /// - ...
     DialectSpecific(Vec<Token>),
     CharacterSet(ObjectName),
+    Collation(ObjectName),
     Comment(String),
     OnUpdate(Expr),
     /// `Generated`s are modifiers that follow a column definition in a `CREATE
@@ -1665,6 +1662,7 @@ impl fmt::Display for ColumnOption {
             Check(expr) => write!(f, "CHECK ({expr})"),
             DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
             CharacterSet(n) => write!(f, "CHARACTER SET {n}"),
+            Collation(n) => write!(f, "COLLATE {n}"),
             Comment(v) => write!(f, "COMMENT '{}'", escape_single_quote_string(v)),
             OnUpdate(expr) => write!(f, "ON UPDATE {expr}"),
             Generated {

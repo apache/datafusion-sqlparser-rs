@@ -214,7 +214,6 @@ fn parse_create_table_auto_increment() {
                 vec![ColumnDef {
                     name: "bar".into(),
                     data_type: DataType::Int(None),
-                    collation: None,
                     options: vec![
                         ColumnOptionDef {
                             name: None,
@@ -243,7 +242,6 @@ fn parse_create_table_primary_key_asc_desc() {
     let expected_column_def = |kind| ColumnDef {
         name: "bar".into(),
         data_type: DataType::Int(None),
-        collation: None,
         options: vec![
             ColumnOptionDef {
                 name: None,
@@ -286,13 +284,11 @@ fn parse_create_sqlite_quote() {
                     ColumnDef {
                         name: Ident::with_quote('"', "KEY"),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::with_quote('[', "INDEX"),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                 ],

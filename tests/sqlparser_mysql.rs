@@ -636,7 +636,6 @@ fn parse_create_table_auto_increment() {
                 vec![ColumnDef {
                     name: Ident::new("bar"),
                     data_type: DataType::Int(None),
-                    collation: None,
                     options: vec![
                         ColumnOptionDef {
                             name: None,
@@ -726,7 +725,6 @@ fn parse_create_table_primary_and_unique_key() {
                         ColumnDef {
                             name: Ident::new("id"),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![
                                 ColumnOptionDef {
                                     name: None,
@@ -746,7 +744,6 @@ fn parse_create_table_primary_and_unique_key() {
                         ColumnDef {
                             name: Ident::new("bar"),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![ColumnOptionDef {
                                 name: None,
                                 option: ColumnOption::NotNull,
@@ -896,7 +893,6 @@ fn parse_create_table_set_enum() {
                     ColumnDef {
                         name: Ident::new("bar"),
                         data_type: DataType::Set(vec!["a".to_string(), "b".to_string()]),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -908,7 +904,6 @@ fn parse_create_table_set_enum() {
                             ],
                             None
                         ),
-                        collation: None,
                         options: vec![],
                     }
                 ],
@@ -935,7 +930,6 @@ fn parse_create_table_engine_default_charset() {
                 vec![ColumnDef {
                     name: Ident::new("id"),
                     data_type: DataType::Int(Some(11)),
-                    collation: None,
                     options: vec![],
                 },],
                 columns
@@ -968,7 +962,6 @@ fn parse_create_table_collate() {
                 vec![ColumnDef {
                     name: Ident::new("id"),
                     data_type: DataType::Int(Some(11)),
-                    collation: None,
                     options: vec![],
                 },],
                 columns
@@ -1016,7 +1009,6 @@ fn parse_create_table_comment_character_set() {
                 vec![ColumnDef {
                     name: Ident::new("s"),
                     data_type: DataType::Text,
-                    collation: None,
                     options: vec![
                         ColumnOptionDef {
                             name: None,
@@ -1063,7 +1055,6 @@ fn parse_quote_identifiers() {
                 vec![ColumnDef {
                     name: Ident::with_quote('`', "BEGIN"),
                     data_type: DataType::Int(None),
-                    collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: ColumnOption::Unique {
@@ -1326,31 +1317,26 @@ fn parse_create_table_with_minimum_display_width() {
                     ColumnDef {
                         name: Ident::new("bar_tinyint"),
                         data_type: DataType::TinyInt(Some(3)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_smallint"),
                         data_type: DataType::SmallInt(Some(5)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_mediumint"),
                         data_type: DataType::MediumInt(Some(6)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_int"),
                         data_type: DataType::Int(Some(11)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_bigint"),
                         data_type: DataType::BigInt(Some(20)),
-                        collation: None,
                         options: vec![],
                     }
                 ],
@@ -1372,31 +1358,26 @@ fn parse_create_table_unsigned() {
                     ColumnDef {
                         name: Ident::new("bar_tinyint"),
                         data_type: DataType::UnsignedTinyInt(Some(3)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_smallint"),
                         data_type: DataType::UnsignedSmallInt(Some(5)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_mediumint"),
                         data_type: DataType::UnsignedMediumInt(Some(13)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_int"),
                         data_type: DataType::UnsignedInt(Some(11)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_bigint"),
                         data_type: DataType::UnsignedBigInt(Some(20)),
-                        collation: None,
                         options: vec![],
                     },
                 ],
@@ -2159,7 +2140,6 @@ fn parse_alter_table_add_column() {
                     column_def: ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                     column_position: Some(MySQLColumnPosition::First),
@@ -2189,7 +2169,6 @@ fn parse_alter_table_add_column() {
                     column_def: ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                     column_position: Some(MySQLColumnPosition::After(Ident {
@@ -2229,7 +2208,6 @@ fn parse_alter_table_add_columns() {
                         column_def: ColumnDef {
                             name: "a".into(),
                             data_type: DataType::Text,
-                            collation: None,
                             options: vec![],
                         },
                         column_position: Some(MySQLColumnPosition::First),
@@ -2240,7 +2218,6 @@ fn parse_alter_table_add_columns() {
                         column_def: ColumnDef {
                             name: "b".into(),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![],
                         },
                         column_position: Some(MySQLColumnPosition::After(Ident {
@@ -2593,7 +2570,6 @@ fn parse_table_column_option_on_update() {
                 vec![ColumnDef {
                     name: Ident::with_quote('`', "modification_time"),
                     data_type: DataType::Datetime(None),
-                    collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: ColumnOption::OnUpdate(call("CURRENT_TIMESTAMP", [])),
@@ -2878,21 +2854,27 @@ fn parse_convert_using() {
 #[test]
 fn parse_create_table_with_column_collate() {
     let sql = "CREATE TABLE tb (id TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci)";
-    let canonical = "CREATE TABLE tb (id TEXT COLLATE utf8mb4_0900_ai_ci CHARACTER SET utf8mb4)";
-    match mysql().one_statement_parses_to(sql, canonical) {
+    match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "tb");
             assert_eq!(
                 vec![ColumnDef {
                     name: Ident::new("id"),
                     data_type: DataType::Text,
-                    collation: Some(ObjectName::from(vec![Ident::new("utf8mb4_0900_ai_ci")])),
-                    options: vec![ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::CharacterSet(ObjectName::from(vec![Ident::new(
-                            "utf8mb4"
-                        )]))
-                    }],
+                    options: vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::CharacterSet(ObjectName::from(vec![Ident::new(
+                                "utf8mb4"
+                            )]))
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Collation(ObjectName::from(vec![Ident::new(
+                                "utf8mb4_0900_ai_ci"
+                            )]))
+                        }
+                    ],
                 },],
                 columns
             );

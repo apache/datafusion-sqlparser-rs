@@ -528,7 +528,6 @@ fn column_def(name: Ident, data_type: DataType) -> ColumnDef {
     ColumnDef {
         name,
         data_type,
-        collation: None,
         options: vec![],
     }
 }
@@ -617,7 +616,6 @@ fn parse_create_table_with_nullable() {
                     ColumnDef {
                         name: "d".into(),
                         data_type: DataType::Date32,
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Null
@@ -661,7 +659,6 @@ fn parse_create_table_with_nested_data_types() {
                                 DataType::LowCardinality(Box::new(DataType::String(None)))
                             )
                         ]),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -678,7 +675,6 @@ fn parse_create_table_with_nested_data_types() {
                                 }
                             ])
                         ))),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -695,7 +691,6 @@ fn parse_create_table_with_nested_data_types() {
                                 ))
                             },
                         ]),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -704,7 +699,6 @@ fn parse_create_table_with_nested_data_types() {
                             Box::new(DataType::String(None)),
                             Box::new(DataType::UInt16)
                         ),
-                        collation: None,
                         options: vec![],
                     },
                 ]
@@ -736,13 +730,11 @@ fn parse_create_table_with_primary_key() {
                     ColumnDef {
                         name: Ident::with_quote('`', "i"),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::with_quote('`', "k"),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                 ],
@@ -814,7 +806,6 @@ fn parse_create_table_with_variant_default_expressions() {
                     ColumnDef {
                         name: Ident::new("a"),
                         data_type: DataType::Datetime(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Materialized(Expr::Function(Function {
@@ -836,7 +827,6 @@ fn parse_create_table_with_variant_default_expressions() {
                     ColumnDef {
                         name: Ident::new("b"),
                         data_type: DataType::Datetime(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Ephemeral(Some(Expr::Function(Function {
@@ -858,7 +848,6 @@ fn parse_create_table_with_variant_default_expressions() {
                     ColumnDef {
                         name: Ident::new("c"),
                         data_type: DataType::Datetime(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Ephemeral(None)
@@ -867,7 +856,6 @@ fn parse_create_table_with_variant_default_expressions() {
                     ColumnDef {
                         name: Ident::new("d"),
                         data_type: DataType::String(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Alias(Expr::Function(Function {

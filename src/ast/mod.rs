@@ -3269,18 +3269,21 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement.
     Deallocate { name: Ident, prepare: bool },
     /// ```sql
-    /// EXECUTE name [ ( parameter [, ...] ) ] [USING <expr>]
+    /// An `EXECUTE` statement
     /// ```
-    ///
-    /// Note: this statement is supported by Postgres and MSSQL, with slight differences in syntax.
     ///
     /// Postgres: <https://www.postgresql.org/docs/current/sql-execute.html>
     /// MSSQL: <https://learn.microsoft.com/en-us/sql/relational-databases/stored-procedures/execute-a-stored-procedure>
+    /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate>
+    /// Snowflake: <https://docs.snowflake.com/en/sql-reference/sql/execute-immediate>
     Execute {
-        name: ObjectName,
+        name: Option<ObjectName>,
         parameters: Vec<Expr>,
         has_parentheses: bool,
-        using: Vec<Expr>,
+        /// Is this an `EXECUTE IMMEDIATE`
+        immediate: bool,
+        into: Vec<Ident>,
+        using: Vec<ExprWithAlias>,
     },
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
@@ -4889,6 +4892,8 @@ impl fmt::Display for Statement {
                 name,
                 parameters,
                 has_parentheses,
+                immediate,
+                into,
                 using,
             } => {
                 let (open, close) = if *has_parentheses {
@@ -4896,11 +4901,17 @@ impl fmt::Display for Statement {
                 } else {
                     (if parameters.is_empty() { "" } else { " " }, "")
                 };
-                write!(
-                    f,
-                    "EXECUTE {name}{open}{}{close}",
-                    display_comma_separated(parameters),
-                )?;
+                write!(f, "EXECUTE")?;
+                if *immediate {
+                    write!(f, " IMMEDIATE")?;
+                }
+                if let Some(name) = name {
+                    write!(f, " {name}")?;
+                }
+                write!(f, "{open}{}{close}", display_comma_separated(parameters),)?;
+                if !into.is_empty() {
+                    write!(f, " INTO {}", display_comma_separated(into))?;
+                }
                 if !using.is_empty() {
                     write!(f, " USING {}", display_comma_separated(using))?;
                 };

@@ -80,7 +80,7 @@ impl Dialect for ClickHouseDialect {
         true
     }
 
-    // See <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
     fn supports_order_by_all(&self) -> bool {
         true
     }

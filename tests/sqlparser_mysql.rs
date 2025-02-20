@@ -2115,8 +2115,10 @@ fn parse_delete_with_order_by() {
                         quote_style: None,
                         span: Span::empty(),
                     }),
-                    asc: Some(false),
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: Some(false),
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 }],
                 order_by

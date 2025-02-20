@@ -23,8 +23,8 @@
 use sqlparser::ast::{
     ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
     Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName,
-    OneOrManyWithParens, OrderByExpr, SelectItem, Statement, TableFactor, UnaryOperator, Use,
-    Value,
+    OneOrManyWithParens, OrderByExpr, OrderByOptions, SelectItem, Statement, TableFactor,
+    UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::ParserError;
@@ -171,14 +171,18 @@ fn create_table_with_clustered_by() {
                     sorted_by: Some(vec![
                         OrderByExpr {
                             expr: Expr::Identifier(Ident::new("a")),
-                            asc: Some(true),
-                            nulls_first: None,
+                            options: OrderByOptions {
+                                asc: Some(true),
+                                nulls_first: None,
+                            },
                             with_fill: None,
                         },
                         OrderByExpr {
                             expr: Expr::Identifier(Ident::new("b")),
-                            asc: Some(false),
-                            nulls_first: None,
+                            options: OrderByOptions {
+                                asc: Some(false),
+                                nulls_first: None,
+                            },
                             with_fill: None,
                         },
                     ]),

@@ -1910,8 +1910,7 @@ impl Spanned for OrderByExpr {
     fn span(&self) -> Span {
         let OrderByExpr {
             expr,
-            asc: _,         // bool
-            nulls_first: _, // bool
+            options: _,
             with_fill,
         } = self;
 

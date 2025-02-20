@@ -325,8 +325,10 @@ fn parse_alter_table_add_projection() {
                         order_by: Some(OrderBy {
                             kind: OrderByKind::Expressions(vec![OrderByExpr {
                                 expr: Identifier(Ident::new("b")),
-                                asc: None,
-                                nulls_first: None,
+                                options: OrderByOptions {
+                                    asc: None,
+                                    nulls_first: None,
+                                },
                                 with_fill: None,
                             }]),
                             interpolate: None,
@@ -1083,8 +1085,10 @@ fn parse_select_order_by_with_fill_interpolate() {
             kind: OrderByKind::Expressions(vec![
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
-                    asc: Some(true),
-                    nulls_first: Some(true),
+                    options: OrderByOptions {
+                        asc: Some(true),
+                        nulls_first: Some(true),
+                    },
                     with_fill: Some(WithFill {
                         from: Some(Expr::Value(number("10"))),
                         to: Some(Expr::Value(number("20"))),
@@ -1093,8 +1097,10 @@ fn parse_select_order_by_with_fill_interpolate() {
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("lname")),
-                    asc: Some(false),
-                    nulls_first: Some(false),
+                    options: OrderByOptions {
+                        asc: Some(false),
+                        nulls_first: Some(false),
+                    },
                     with_fill: Some(WithFill {
                         from: Some(Expr::Value(number("30"))),
                         to: Some(Expr::Value(number("40"))),

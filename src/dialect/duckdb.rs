@@ -90,7 +90,7 @@ impl Dialect for DuckDbDialect {
         true
     }
 
-    // See DuckDB <https://duckdb.org/docs/sql/query_syntax/orderby.html#order-by-all-examples>
+    /// See DuckDB <https://duckdb.org/docs/sql/query_syntax/orderby.html#order-by-all-examples>
     fn supports_order_by_all(&self) -> bool {
         true
     }

@@ -922,8 +922,6 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports `ORDER BY ALL`.
     /// `ALL` which means all columns of the SELECT clause.
     ///
-    /// DuckDB: <https://duckdb.org/docs/sql/query_syntax/orderby.html#order-by-all>
-    /// ClickHouse: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
     /// For example: ```SELECT * FROM addresses ORDER BY ALL;```.
     fn supports_order_by_all(&self) -> bool {
         false

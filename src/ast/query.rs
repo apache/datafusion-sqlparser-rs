@@ -2226,7 +2226,7 @@ pub enum OrderByKind {
     ///
     /// [DuckDB]:  <https://duckdb.org/docs/sql/query_syntax/orderby>
     /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
-    All(OrderByAll),
+    All(OrderByOptions),
 
     /// Expressions
     Expressions(Vec<OrderByExpr>),
@@ -2240,9 +2240,6 @@ pub struct OrderBy {
 
     /// Optional: `INTERPOLATE`
     /// Supported by [ClickHouse syntax]
-    /// Note that when combined with `OrderByKind::All`, it should be None, as ClickHouse doesn't support using them together.
-    ///
-    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
     pub interpolate: Option<Interpolate>,
 }
 
@@ -2252,18 +2249,16 @@ impl fmt::Display for OrderBy {
         match &self.kind {
             OrderByKind::Expressions(exprs) => {
                 write!(f, " {}", display_comma_separated(exprs))?;
-
-                if let Some(ref interpolate) = self.interpolate {
-                    match &interpolate.exprs {
-                        Some(exprs) => {
-                            write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?
-                        }
-                        None => write!(f, " INTERPOLATE")?,
-                    }
-                }
             }
             OrderByKind::All(all) => {
                 write!(f, " ALL{}", all)?;
+            }
+        }
+
+        if let Some(ref interpolate) = self.interpolate {
+            match &interpolate.exprs {
+                Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
+                None => write!(f, " INTERPOLATE")?,
             }
         }
 
@@ -2277,10 +2272,7 @@ impl fmt::Display for OrderBy {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OrderByExpr {
     pub expr: Expr,
-    /// Optional `ASC` or `DESC`
-    pub asc: Option<bool>,
-    /// Optional `NULLS FIRST` or `NULLS LAST`
-    pub nulls_first: Option<bool>,
+    pub options: OrderByOptions,
     /// Optional: `WITH FILL`
     /// Supported by [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
     pub with_fill: Option<WithFill>,
@@ -2288,17 +2280,7 @@ pub struct OrderByExpr {
 
 impl fmt::Display for OrderByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.expr)?;
-        match self.asc {
-            Some(true) => write!(f, " ASC")?,
-            Some(false) => write!(f, " DESC")?,
-            None => (),
-        }
-        match self.nulls_first {
-            Some(true) => write!(f, " NULLS FIRST")?,
-            Some(false) => write!(f, " NULLS LAST")?,
-            None => (),
-        }
+        write!(f, "{}{}", self.expr, self.options)?;
         if let Some(ref with_fill) = self.with_fill {
             write!(f, " {}", with_fill)?
         }
@@ -2364,18 +2346,17 @@ impl fmt::Display for InterpolateExpr {
     }
 }
 
-/// 'ORDER BY ALL' clause
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct OrderByAll {
+pub struct OrderByOptions {
     /// Optional `ASC` or `DESC`
     pub asc: Option<bool>,
     /// Optional `NULLS FIRST` or `NULLS LAST`
     pub nulls_first: Option<bool>,
 }
 
-impl fmt::Display for OrderByAll {
+impl fmt::Display for OrderByOptions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.asc {
             Some(true) => write!(f, " ASC")?,

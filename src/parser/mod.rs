@@ -9191,30 +9191,25 @@ impl<'a> Parser<'a> {
 
     pub fn parse_optional_order_by(&mut self) -> Result<Option<OrderBy>, ParserError> {
         if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-            let order_by = if self.parse_keyword(Keyword::ALL) {
-                if !self.dialect.supports_order_by_all() {
-                    return parser_err!(
-                        "ALL is not supported in ORDER BY",
-                        self.peek_token().span.start
-                    );
-                }
-                let order_by_all = self.parse_order_by_all()?;
-                OrderBy {
-                    kind: OrderByKind::All(order_by_all),
-                    interpolate: None,
-                }
-            } else {
-                let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
-                let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
-                    self.parse_interpolations()?
+            let order_by =
+                if self.dialect.supports_order_by_all() && self.parse_keyword(Keyword::ALL) {
+                    let order_by_options = self.parse_order_by_options()?;
+                    OrderBy {
+                        kind: OrderByKind::All(order_by_options),
+                        interpolate: None,
+                    }
                 } else {
-                    None
+                    let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+                    let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                        self.parse_interpolations()?
+                    } else {
+                        None
+                    };
+                    OrderBy {
+                        kind: OrderByKind::Expressions(exprs),
+                        interpolate,
+                    }
                 };
-                OrderBy {
-                    kind: OrderByKind::Expressions(exprs),
-                    interpolate,
-                }
-            };
             Ok(Some(order_by))
         } else {
             Ok(None)
@@ -13393,15 +13388,7 @@ impl<'a> Parser<'a> {
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
         let expr = self.parse_expr()?;
 
-        let asc = self.parse_asc_desc();
-
-        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
-            Some(true)
-        } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
-            Some(false)
-        } else {
-            None
-        };
+        let options = self.parse_order_by_options()?;
 
         let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
@@ -13413,13 +13400,12 @@ impl<'a> Parser<'a> {
 
         Ok(OrderByExpr {
             expr,
-            asc,
-            nulls_first,
+            options,
             with_fill,
         })
     }
 
-    pub fn parse_order_by_all(&mut self) -> Result<OrderByAll, ParserError> {
+    fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {
         let asc = self.parse_asc_desc();
 
         let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
@@ -13429,7 +13415,8 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(OrderByAll { asc, nulls_first })
+
+        Ok(OrderByOptions { asc, nulls_first })
     }
 
     // Parse a WITH FILL clause (ClickHouse dialect)

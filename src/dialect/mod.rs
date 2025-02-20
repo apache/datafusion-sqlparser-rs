@@ -201,6 +201,33 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Determine whether the dialect strips the backslash when escaping LIKE wildcards (%, _).
+    ///
+    /// [MySQL] has a special case when escaping single quoted strings which leaves these unescaped
+    /// so they can be used in LIKE patterns without double-escaping (as is necessary in other
+    /// escaping dialects, such as [Snowflake]). Generally, special characters have escaping rules
+    /// causing them to be replaced with a different byte sequences (e.g. `'\0'` becoming the zero
+    /// byte), and the default if an escaped character does not have a specific escaping rule is to
+    /// strip the backslash (e.g. there is no rule for `h`, so `'\h' = 'h'`). MySQL's special case
+    /// for ignoring LIKE wildcard escapes is to *not* strip the backslash, so that `'\%' = '\\%'`.
+    /// This applies to all string literals though, not just those used in LIKE patterns.
+    ///
+    /// ```text
+    /// mysql> select '\_', hex('\\'), hex('_'), hex('\_');
+    /// +----+-----------+----------+-----------+
+    /// | \_ | hex('\\') | hex('_') | hex('\_') |
+    /// +----+-----------+----------+-----------+
+    /// | \_ | 5C        | 5F       | 5C5F      |
+    /// +----+-----------+----------+-----------+
+    /// 1 row in set (0.00 sec)
+    /// ```
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/string-literals.html
+    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/functions/like#usage-notes
+    fn ignores_wildcard_escapes(&self) -> bool {
+        false
+    }
+
     /// Determine if the dialect supports string literals with `U&` prefix.
     /// This is used to specify Unicode code points in string literals.
     /// For example, in PostgreSQL, the following is a valid string literal:

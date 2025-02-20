@@ -62,6 +62,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn ignores_wildcard_escapes(&self) -> bool {
+        true
+    }
+
     fn supports_numeric_prefix(&self) -> bool {
         true
     }

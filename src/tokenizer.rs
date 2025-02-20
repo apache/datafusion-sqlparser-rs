@@ -2011,8 +2011,13 @@ impl<'a> Tokenizer<'a> {
                     num_consecutive_quotes = 0;
 
                     if let Some(next) = chars.peek() {
-                        if !self.unescape {
-                            // In no-escape mode, the given query has to be saved completely including backslashes.
+                        if !self.unescape
+                            || (self.dialect.ignores_wildcard_escapes()
+                                && (*next == '%' || *next == '_'))
+                        {
+                            // In no-escape mode, the given query has to be saved completely
+                            // including backslashes. Similarly, with ignore_like_wildcard_escapes,
+                            // the backslash is not stripped.
                             s.push(ch);
                             s.push(*next);
                             chars.next(); // consume next
@@ -3585,6 +3590,9 @@ mod tests {
             (r#"'\\a\\b\'c'"#, r#"\\a\\b\'c"#, r#"\a\b'c"#),
             (r#"'\'abcd'"#, r#"\'abcd"#, r#"'abcd"#),
             (r#"'''a''b'"#, r#"''a''b"#, r#"'a'b"#),
+            (r#"'\q'"#, r#"\q"#, r#"q"#),
+            (r#"'\%\_'"#, r#"\%\_"#, r#"%_"#),
+            (r#"'\\%\\_'"#, r#"\\%\\_"#, r#"\%\_"#),
         ] {
             let tokens = Tokenizer::new(&dialect, sql)
                 .with_unescape(false)
@@ -3612,6 +3620,16 @@ mod tests {
         // Non-escape dialect
         for (sql, expected) in [(r#"'\'"#, r#"\"#), (r#"'ab\'"#, r#"ab\"#)] {
             let dialect = GenericDialect {};
+            let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+
+            let expected = vec![Token::SingleQuotedString(expected.to_string())];
+
+            compare(expected, tokens);
+        }
+
+        // MySQL special case for LIKE escapes
+        for (sql, expected) in [(r#"'\%'"#, r#"\%"#), (r#"'\_'"#, r#"\_"#)] {
+            let dialect = MySqlDialect {};
             let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
 
             let expected = vec![Token::SingleQuotedString(expected.to_string())];

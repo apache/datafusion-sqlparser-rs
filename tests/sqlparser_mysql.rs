@@ -2628,6 +2628,17 @@ fn parse_rlike_and_regexp() {
 }
 
 #[test]
+fn parse_like_with_escape() {
+    // verify backslash is not stripped for escaped wildcards
+    mysql().verified_only_select(r#"SELECT 'a\%c' LIKE 'a\%c'"#);
+    mysql().verified_only_select(r#"SELECT 'a\_c' LIKE 'a\_c'"#);
+    mysql().verified_only_select(r#"SELECT '%\_\%' LIKE '%\_\%'"#);
+    mysql().verified_only_select(r#"SELECT '\_\%' LIKE CONCAT('\_', '\%')"#);
+    mysql().verified_only_select(r#"SELECT 'a%c' LIKE 'a$%c' ESCAPE '$'"#);
+    mysql().verified_only_select(r#"SELECT 'a_c' LIKE 'a#_c' ESCAPE '#'"#);
+}
+
+#[test]
 fn parse_kill() {
     let stmt = mysql_and_generic().verified_stmt("KILL CONNECTION 5");
     assert_eq!(

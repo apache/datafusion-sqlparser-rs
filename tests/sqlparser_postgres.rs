@@ -363,7 +363,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "customer_id".into(),
                         data_type: DataType::Integer(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Default(
@@ -374,7 +373,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "store_id".into(),
                         data_type: DataType::SmallInt(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -388,7 +386,6 @@ fn parse_create_table_with_defaults() {
                                 unit: None
                             }
                         )),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -402,11 +399,18 @@ fn parse_create_table_with_defaults() {
                                 unit: None
                             }
                         )),
-                        collation: Some(ObjectName::from(vec![Ident::with_quote('"', "es_ES")])),
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::NotNull,
-                        }],
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Collation(ObjectName::from(vec![
+                                    Ident::with_quote('"', "es_ES")
+                                ])),
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull,
+                            }
+                        ],
                     },
                     ColumnDef {
                         name: "email".into(),
@@ -416,13 +420,11 @@ fn parse_create_table_with_defaults() {
                                 unit: None
                             }
                         )),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: "address_id".into(),
                         data_type: DataType::SmallInt(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull
@@ -431,7 +433,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "activebool".into(),
                         data_type: DataType::Boolean,
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -446,7 +447,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "create_date".into(),
                         data_type: DataType::Date,
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -461,7 +461,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "last_update".into(),
                         data_type: DataType::Timestamp(None, TimezoneInfo::WithoutTimeZone),
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -476,7 +475,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "active".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull
@@ -842,7 +840,6 @@ fn parse_alter_table_add_columns() {
                         column_def: ColumnDef {
                             name: "a".into(),
                             data_type: DataType::Text,
-                            collation: None,
                             options: vec![],
                         },
                         column_position: None,
@@ -853,7 +850,6 @@ fn parse_alter_table_add_columns() {
                         column_def: ColumnDef {
                             name: "b".into(),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![],
                         },
                         column_position: None,
@@ -4291,37 +4287,31 @@ fn parse_create_table_with_alias() {
                     ColumnDef {
                         name: "int8_col".into(),
                         data_type: DataType::Int8(None),
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "int4_col".into(),
                         data_type: DataType::Int4(None),
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "int2_col".into(),
                         data_type: DataType::Int2(None),
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "float8_col".into(),
                         data_type: DataType::Float8,
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "float4_col".into(),
                         data_type: DataType::Float4,
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "bool_col".into(),
                         data_type: DataType::Bool,
-                        collation: None,
                         options: vec![]
                     },
                 ]
@@ -4343,13 +4333,11 @@ fn parse_create_table_with_partition_by() {
                     ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Text,
-                        collation: None,
                         options: vec![]
                     }
                 ],
@@ -5093,25 +5081,21 @@ fn parse_trigger_related_functions() {
                 ColumnDef {
                     name: "empname".into(),
                     data_type: DataType::Text,
-                    collation: None,
                     options: vec![],
                 },
                 ColumnDef {
                     name: "salary".into(),
                     data_type: DataType::Integer(None),
-                    collation: None,
                     options: vec![],
                 },
                 ColumnDef {
                     name: "last_date".into(),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    collation: None,
                     options: vec![],
                 },
                 ColumnDef {
                     name: "last_user".into(),
                     data_type: DataType::Text,
-                    collation: None,
                     options: vec![],
                 },
             ],
@@ -5445,13 +5429,11 @@ fn parse_varbit_datatype() {
                     ColumnDef {
                         name: "x".into(),
                         data_type: DataType::VarBit(None),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: "y".into(),
                         data_type: DataType::VarBit(Some(42)),
-                        collation: None,
                         options: vec![],
                     }
                 ]

@@ -604,15 +604,10 @@ impl Spanned for ColumnDef {
         let ColumnDef {
             name,
             data_type: _, // enum
-            collation,
             options,
         } = self;
 
-        union_spans(
-            core::iter::once(name.span)
-                .chain(collation.iter().map(|i| i.span()))
-                .chain(options.iter().map(|i| i.span())),
-        )
+        union_spans(core::iter::once(name.span).chain(options.iter().map(|i| i.span())))
     }
 }
 
@@ -767,6 +762,7 @@ impl Spanned for ColumnOption {
             ColumnOption::Check(expr) => expr.span(),
             ColumnOption::DialectSpecific(_) => Span::empty(),
             ColumnOption::CharacterSet(object_name) => object_name.span(),
+            ColumnOption::Collation(object_name) => object_name.span(),
             ColumnOption::Comment(_) => Span::empty(),
             ColumnOption::OnUpdate(expr) => expr.span(),
             ColumnOption::Generated { .. } => Span::empty(),

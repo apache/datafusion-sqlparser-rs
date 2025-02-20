@@ -60,7 +60,6 @@ fn test_struct() {
         vec![ColumnDef {
             name: "s".into(),
             data_type: struct_type1.clone(),
-            collation: None,
             options: vec![],
         }]
     );
@@ -75,7 +74,6 @@ fn test_struct() {
                 Box::new(struct_type1),
                 None
             )),
-            collation: None,
             options: vec![],
         }]
     );
@@ -120,7 +118,6 @@ fn test_struct() {
                 Box::new(struct_type2),
                 None
             )),
-            collation: None,
             options: vec![],
         }]
     );
@@ -671,7 +668,6 @@ fn test_duckdb_union_datatype() {
                         field_name: "a".into(),
                         field_type: DataType::Int(None)
                     }]),
-                    collation: Default::default(),
                     options: Default::default()
                 },
                 ColumnDef {
@@ -686,7 +682,6 @@ fn test_duckdb_union_datatype() {
                             field_type: DataType::Int(None)
                         }
                     ]),
-                    collation: Default::default(),
                     options: Default::default()
                 },
                 ColumnDef {
@@ -698,7 +693,6 @@ fn test_duckdb_union_datatype() {
                             field_type: DataType::Int(None)
                         }])
                     }]),
-                    collation: Default::default(),
                     options: Default::default()
                 }
             ],

@@ -389,7 +389,6 @@ fn parse_create_table_with_unquoted_hyphen() {
                 vec![ColumnDef {
                     name: Ident::new("x"),
                     data_type: DataType::Int64,
-                    collation: None,
                     options: vec![]
                 },],
                 columns
@@ -427,7 +426,6 @@ fn parse_create_table_with_options() {
                     ColumnDef {
                         name: Ident::new("x"),
                         data_type: DataType::Int64,
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -447,7 +445,6 @@ fn parse_create_table_with_options() {
                     ColumnDef {
                         name: Ident::new("y"),
                         data_type: DataType::Bool,
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Options(vec![SqlOption::KeyValue {
@@ -530,7 +527,6 @@ fn parse_nested_data_types() {
                             ],
                             StructBracketKind::AngleBrackets
                         ),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -544,7 +540,6 @@ fn parse_nested_data_types() {
                                 StructBracketKind::AngleBrackets
                             ),
                         ))),
-                        collation: None,
                         options: vec![],
                     },
                 ]

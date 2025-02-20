@@ -6889,11 +6889,6 @@ impl<'a> Parser<'a> {
         } else {
             self.parse_data_type()?
         };
-        let mut collation = if self.parse_keyword(Keyword::COLLATE) {
-            Some(self.parse_object_name(false)?)
-        } else {
-            None
-        };
         let mut options = vec![];
         loop {
             if self.parse_keyword(Keyword::CONSTRAINT) {
@@ -6908,10 +6903,6 @@ impl<'a> Parser<'a> {
                 }
             } else if let Some(option) = self.parse_optional_column_option()? {
                 options.push(ColumnOptionDef { name: None, option });
-            } else if dialect_of!(self is MySqlDialect | SnowflakeDialect | GenericDialect)
-                && self.parse_keyword(Keyword::COLLATE)
-            {
-                collation = Some(self.parse_object_name(false)?);
             } else {
                 break;
             };
@@ -6919,7 +6910,6 @@ impl<'a> Parser<'a> {
         Ok(ColumnDef {
             name,
             data_type,
-            collation,
             options,
         })
     }
@@ -6954,6 +6944,10 @@ impl<'a> Parser<'a> {
 
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
+                self.parse_object_name(false)?,
+            )))
+        } else if self.parse_keywords(&[Keyword::COLLATE]) {
+            Ok(Some(ColumnOption::Collation(
                 self.parse_object_name(false)?,
             )))
         } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
@@ -9047,7 +9041,6 @@ impl<'a> Parser<'a> {
         Ok(ColumnDef {
             name,
             data_type,
-            collation: None,
             options: Vec::new(), // No constraints expected here
         })
     }

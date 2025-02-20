@@ -3426,7 +3426,6 @@ fn parse_create_table() {
                             length: 100,
                             unit: None,
                         })),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -3435,7 +3434,6 @@ fn parse_create_table() {
                     ColumnDef {
                         name: "lat".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Null,
@@ -3444,13 +3442,11 @@ fn parse_create_table() {
                     ColumnDef {
                         name: "lng".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: "constrained".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -3483,7 +3479,6 @@ fn parse_create_table() {
                     ColumnDef {
                         name: "ref".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
@@ -3498,7 +3493,6 @@ fn parse_create_table() {
                     ColumnDef {
                         name: "ref2".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
@@ -3615,7 +3609,6 @@ fn parse_create_table_with_constraint_characteristics() {
                             length: 100,
                             unit: None,
                         })),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -3624,7 +3617,6 @@ fn parse_create_table_with_constraint_characteristics() {
                     ColumnDef {
                         name: "lat".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Null,
@@ -3633,7 +3625,6 @@ fn parse_create_table_with_constraint_characteristics() {
                     ColumnDef {
                         name: "lng".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![],
                     },
                 ]
@@ -3768,7 +3759,6 @@ fn parse_create_table_column_constraint_characteristics() {
                     vec![ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Unique {
@@ -3883,13 +3873,11 @@ fn parse_create_table_hive_array() {
                         ColumnDef {
                             name: Ident::new("name"),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![],
                         },
                         ColumnDef {
                             name: Ident::new("val"),
                             data_type: DataType::Array(expected),
-                            collation: None,
                             options: vec![],
                         },
                     ],
@@ -4255,7 +4243,6 @@ fn parse_create_external_table() {
                             length: 100,
                             unit: None,
                         })),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -4264,7 +4251,6 @@ fn parse_create_external_table() {
                     ColumnDef {
                         name: "lat".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Null,
@@ -4273,7 +4259,6 @@ fn parse_create_external_table() {
                     ColumnDef {
                         name: "lng".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![],
                     },
                 ]
@@ -4326,7 +4311,6 @@ fn parse_create_or_replace_external_table() {
                         length: 100,
                         unit: None,
                     })),
-                    collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: ColumnOption::NotNull,
@@ -10818,7 +10802,14 @@ fn parse_execute_immediate() {
 
 #[test]
 fn parse_create_table_collate() {
-    pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
+    all_dialects().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
+    // check ordering is preserved
+    all_dialects().verified_stmt(
+        "CREATE TABLE tbl (foo INT, bar TEXT CHARACTER SET utf8mb4 COLLATE \"de_DE\")",
+    );
+    all_dialects().verified_stmt(
+        "CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\" CHARACTER SET utf8mb4)",
+    );
 }
 
 #[test]
@@ -10997,7 +10988,6 @@ fn test_parse_inline_comment() {
                 vec![ColumnDef {
                     name: Ident::new("id".to_string()),
                     data_type: DataType::Int(None),
-                    collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: Comment("comment without equal".to_string()),
@@ -13584,7 +13574,6 @@ fn parse_create_table_with_enum_types() {
                             ],
                             Some(8)
                         ),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -13602,7 +13591,6 @@ fn parse_create_table_with_enum_types() {
                             ],
                             Some(16)
                         ),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -13614,7 +13602,6 @@ fn parse_create_table_with_enum_types() {
                             ],
                             None
                         ),
-                        collation: None,
                         options: vec![],
                     }
                 ],

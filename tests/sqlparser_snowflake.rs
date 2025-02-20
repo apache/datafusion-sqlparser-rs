@@ -346,7 +346,6 @@ fn test_snowflake_create_table_column_comment() {
                         name: None,
                         option: ColumnOption::Comment("some comment".to_string())
                     }],
-                    collation: None
                 }],
                 columns
             )
@@ -553,7 +552,6 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                     ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
@@ -567,7 +565,6 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                     ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
@@ -586,7 +583,6 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                     ColumnDef {
                         name: "c".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Identity(IdentityPropertyKind::Identity(
@@ -600,7 +596,6 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                     ColumnDef {
                         name: "d".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Identity(IdentityPropertyKind::Identity(
@@ -634,8 +629,12 @@ fn test_snowflake_create_table_with_collated_column() {
                 vec![ColumnDef {
                     name: "a".into(),
                     data_type: DataType::Text,
-                    collation: Some(ObjectName::from(vec![Ident::with_quote('\'', "de_DE")])),
-                    options: vec![]
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Collation(ObjectName::from(vec![Ident::with_quote(
+                            '\'', "de_DE"
+                        )])),
+                    }]
                 },]
             );
         }
@@ -674,7 +673,6 @@ fn test_snowflake_create_table_with_columns_masking_policy() {
                     vec![ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
@@ -709,7 +707,6 @@ fn test_snowflake_create_table_with_columns_projection_policy() {
                     vec![ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
@@ -747,7 +744,6 @@ fn test_snowflake_create_table_with_columns_tags() {
                     vec![ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Tags(TagsColumnOption {
@@ -782,7 +778,6 @@ fn test_snowflake_create_table_with_several_column_options() {
                     ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -818,8 +813,13 @@ fn test_snowflake_create_table_with_several_column_options() {
                     ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Text,
-                        collation: Some(ObjectName::from(vec![Ident::with_quote('\'', "de_DE")])),
                         options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Collation(ObjectName::from(vec![
+                                    Ident::with_quote('\'', "de_DE")
+                                ])),
+                            },
                             ColumnOptionDef {
                                 name: None,
                                 option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(

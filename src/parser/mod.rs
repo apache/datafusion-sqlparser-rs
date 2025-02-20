@@ -2065,11 +2065,11 @@ impl<'a> Parser<'a> {
             self.expect_keyword_is(Keyword::WHEN)?;
         }
         let mut conditions = vec![];
-        let mut results = vec![];
         loop {
-            conditions.push(self.parse_expr()?);
+            let condition = self.parse_expr()?;
             self.expect_keyword_is(Keyword::THEN)?;
-            results.push(self.parse_expr()?);
+            let result = self.parse_expr()?;
+            conditions.push(CaseWhen { condition, result });
             if !self.parse_keyword(Keyword::WHEN) {
                 break;
             }
@@ -2083,7 +2083,6 @@ impl<'a> Parser<'a> {
         Ok(Expr::Case {
             operand,
             conditions,
-            results,
             else_result,
         })
     }

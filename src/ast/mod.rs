@@ -600,6 +600,22 @@ pub enum CeilFloorKind {
     Scale(Value),
 }
 
+/// A WHEN clause in a CASE expression containing both
+/// the condition and its corresponding result
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CaseWhen {
+    pub condition: Expr,
+    pub result: Expr,
+}
+
+impl fmt::Display for CaseWhen {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "WHEN {} THEN {}", self.condition, self.result)
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// # Semantics / Type Checking
@@ -918,8 +934,7 @@ pub enum Expr {
     /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
     Case {
         operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
+        conditions: Vec<CaseWhen>,
         else_result: Option<Box<Expr>>,
     },
     /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
@@ -1621,17 +1636,15 @@ impl fmt::Display for Expr {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
             } => {
                 write!(f, "CASE")?;
                 if let Some(operand) = operand {
                     write!(f, " {operand}")?;
                 }
-                for (c, r) in conditions.iter().zip(results) {
-                    write!(f, " WHEN {c} THEN {r}")?;
+                for when in conditions {
+                    write!(f, " {when}")?;
                 }
-
                 if let Some(else_result) = else_result {
                     write!(f, " ELSE {else_result}")?;
                 }

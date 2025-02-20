@@ -985,7 +985,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
 /// Parses options separated by blank spaces, commas, or new lines like:
 /// ABORT_DETACHED_QUERY = { TRUE | FALSE }
 ///      [ ACTIVE_PYTHON_PROFILER = { 'LINE' | 'MEMORY' } ]
-///      [ BINARY_INPUT_FORMAT = <string> ]
+///      [ BINARY_INPUT_FORMAT = '\<string\>' ]
 fn parse_session_options(
     parser: &mut Parser,
     set: bool,

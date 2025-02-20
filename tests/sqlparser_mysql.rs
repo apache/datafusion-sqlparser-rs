@@ -665,7 +665,7 @@ fn table_constraint_unique_primary_ctor(
     name: Option<Ident>,
     index_name: Option<Ident>,
     index_type: Option<IndexType>,
-    columns: Vec<Ident>,
+    index_fields: Vec<IndexField>,
     index_options: Vec<IndexOption>,
     characteristics: Option<ConstraintCharacteristics>,
     unique_index_type_display: Option<KeyOrIndexDisplay>,
@@ -676,7 +676,7 @@ fn table_constraint_unique_primary_ctor(
             index_name,
             index_type_display,
             index_type,
-            columns,
+            index_fields,
             index_options,
             characteristics,
             nulls_distinct: NullsDistinctOption::None,
@@ -685,7 +685,7 @@ fn table_constraint_unique_primary_ctor(
             name,
             index_name,
             index_type,
-            columns,
+            index_fields,
             index_options,
             characteristics,
         },
@@ -713,7 +713,10 @@ fn parse_create_table_primary_and_unique_key() {
                     Some(Ident::new("bar_key")),
                     None,
                     None,
-                    vec![Ident::new("bar")],
+                    vec![IndexField {
+                        expr: IndexExpr::Column(Ident::new("bar")),
+                        asc: None,
+                    }],
                     vec![],
                     None,
                     index_type_display,
@@ -776,7 +779,16 @@ fn parse_create_table_primary_and_unique_key_with_index_options() {
                     Some(Ident::new("constr")),
                     Some(Ident::new("index_name")),
                     None,
-                    vec![Ident::new("bar"), Ident::new("var")],
+                    vec![
+                        IndexField {
+                            expr: IndexExpr::Column(Ident::new("bar")),
+                            asc: None,
+                        },
+                        IndexField {
+                            expr: IndexExpr::Column(Ident::new("var")),
+                            asc: None,
+                        },
+                    ],
                     vec![
                         IndexOption::Using(IndexType::Hash),
                         IndexOption::Comment("yes, ".into()),
@@ -814,7 +826,10 @@ fn parse_create_table_primary_and_unique_key_with_index_type() {
                     None,
                     Some(Ident::new("index_name")),
                     Some(IndexType::BTree),
-                    vec![Ident::new("bar")],
+                    vec![IndexField {
+                        expr: IndexExpr::Column(Ident::new("bar")),
+                        asc: None,
+                    }],
                     vec![IndexOption::Using(IndexType::Hash)],
                     None,
                     index_type_display,
@@ -2228,6 +2243,59 @@ fn parse_alter_table_add_columns() {
                             span: Span::empty(),
                         })),
                     },
+                ]
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_add_keys() {
+    match mysql().verified_stmt("ALTER TABLE tab ADD PRIMARY KEY (a), ADD KEY b (b(20), c)") {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only,
+            operations,
+            location: _,
+            on_cluster: _,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert!(!if_exists);
+            assert!(!only);
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::AddConstraint(TableConstraint::PrimaryKey {
+                        name: None,
+                        index_name: None,
+                        index_fields: vec![IndexField {
+                            expr: IndexExpr::Column(Ident::new("a")),
+                            asc: None
+                        }],
+                        index_type: None,
+                        index_options: vec![],
+                        characteristics: None,
+                    }),
+                    AlterTableOperation::AddConstraint(TableConstraint::Index {
+                        display_as_key: true,
+                        name: Some(Ident::new("b")),
+                        index_type: None,
+                        index_fields: vec![
+                            IndexField {
+                                expr: IndexExpr::ColumnPrefix {
+                                    column: Ident::new("b"),
+                                    length: 20,
+                                },
+                                asc: None,
+                            },
+                            IndexField {
+                                expr: IndexExpr::Column(Ident::new("c")),
+                                asc: None,
+                            }
+                        ]
+                    })
                 ]
             );
         }

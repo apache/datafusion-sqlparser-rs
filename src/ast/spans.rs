@@ -628,7 +628,7 @@ impl Spanned for TableConstraint {
                 index_name,
                 index_type_display: _,
                 index_type: _,
-                columns,
+                index_fields: _,
                 index_options: _,
                 characteristics,
                 nulls_distinct: _,
@@ -636,21 +636,19 @@ impl Spanned for TableConstraint {
                 name.iter()
                     .map(|i| i.span)
                     .chain(index_name.iter().map(|i| i.span))
-                    .chain(columns.iter().map(|i| i.span))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
             TableConstraint::PrimaryKey {
                 name,
                 index_name,
                 index_type: _,
-                columns,
+                index_fields: _,
                 index_options: _,
                 characteristics,
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)
                     .chain(index_name.iter().map(|i| i.span))
-                    .chain(columns.iter().map(|i| i.span))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
             TableConstraint::ForeignKey {
@@ -678,23 +676,14 @@ impl Spanned for TableConstraint {
                 display_as_key: _,
                 name,
                 index_type: _,
-                columns,
-            } => union_spans(
-                name.iter()
-                    .map(|i| i.span)
-                    .chain(columns.iter().map(|i| i.span)),
-            ),
+                index_fields: _,
+            } => union_spans(name.iter().map(|i| i.span)),
             TableConstraint::FulltextOrSpatial {
                 fulltext: _,
                 index_type_display: _,
                 opt_index_name,
-                columns,
-            } => union_spans(
-                opt_index_name
-                    .iter()
-                    .map(|i| i.span)
-                    .chain(columns.iter().map(|i| i.span)),
-            ),
+                index_fields: _,
+            } => union_spans(opt_index_name.iter().map(|i| i.span)),
         }
     }
 }

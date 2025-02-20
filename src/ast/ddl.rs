@@ -32,8 +32,9 @@ use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, CommentDef, CreateFunctionBody,
     CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
-    FunctionDeterminismSpecifier, FunctionParallel, Ident, MySQLColumnPosition, ObjectName,
-    OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
+    FunctionDeterminismSpecifier, FunctionParallel, Ident, IndexField, MySQLColumnPosition,
+    ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag,
+    Value,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -832,8 +833,8 @@ pub enum TableConstraint {
         ///
         /// [1]: IndexType
         index_type: Option<IndexType>,
-        /// Identifiers of the columns that are unique.
-        columns: Vec<Ident>,
+        /// Index field list.
+        index_fields: Vec<IndexField>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
         /// Optional Postgres nulls handling: `[ NULLS [ NOT ] DISTINCT ]`
@@ -868,8 +869,8 @@ pub enum TableConstraint {
         ///
         /// [1]: IndexType
         index_type: Option<IndexType>,
-        /// Identifiers of the columns that form the primary key.
-        columns: Vec<Ident>,
+        /// Index field list that form the primary key.
+        index_fields: Vec<IndexField>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
     },
@@ -907,8 +908,10 @@ pub enum TableConstraint {
         ///
         /// [1]: IndexType
         index_type: Option<IndexType>,
-        /// Referred column identifier list.
-        columns: Vec<Ident>,
+        /// [Index field list][1].
+        ///
+        /// [1]: IndexField
+        index_fields: Vec<IndexField>,
     },
     /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
     /// and MySQL displays both the same way, it is part of this definition as well.
@@ -930,8 +933,8 @@ pub enum TableConstraint {
         index_type_display: KeyOrIndexDisplay,
         /// Optional index name.
         opt_index_name: Option<Ident>,
-        /// Referred column identifier list.
-        columns: Vec<Ident>,
+        /// Index field list.
+        index_fields: Vec<IndexField>,
     },
 }
 
@@ -943,7 +946,7 @@ impl fmt::Display for TableConstraint {
                 index_name,
                 index_type_display,
                 index_type,
-                columns,
+                index_fields,
                 index_options,
                 characteristics,
                 nulls_distinct,
@@ -954,7 +957,7 @@ impl fmt::Display for TableConstraint {
                     display_constraint_name(name),
                     display_option_spaced(index_name),
                     display_option(" USING ", "", index_type),
-                    display_comma_separated(columns),
+                    display_comma_separated(index_fields),
                 )?;
 
                 if !index_options.is_empty() {
@@ -968,7 +971,7 @@ impl fmt::Display for TableConstraint {
                 name,
                 index_name,
                 index_type,
-                columns,
+                index_fields,
                 index_options,
                 characteristics,
             } => {
@@ -978,7 +981,7 @@ impl fmt::Display for TableConstraint {
                     display_constraint_name(name),
                     display_option_spaced(index_name),
                     display_option(" USING ", "", index_type),
-                    display_comma_separated(columns),
+                    display_comma_separated(index_fields),
                 )?;
 
                 if !index_options.is_empty() {
@@ -1025,7 +1028,7 @@ impl fmt::Display for TableConstraint {
                 display_as_key,
                 name,
                 index_type,
-                columns,
+                index_fields,
             } => {
                 write!(f, "{}", if *display_as_key { "KEY" } else { "INDEX" })?;
                 if let Some(name) = name {
@@ -1034,7 +1037,8 @@ impl fmt::Display for TableConstraint {
                 if let Some(index_type) = index_type {
                     write!(f, " USING {index_type}")?;
                 }
-                write!(f, " ({})", display_comma_separated(columns))?;
+
+                write!(f, " ({})", display_comma_separated(index_fields))?;
 
                 Ok(())
             }
@@ -1042,7 +1046,7 @@ impl fmt::Display for TableConstraint {
                 fulltext,
                 index_type_display,
                 opt_index_name,
-                columns,
+                index_fields,
             } => {
                 if *fulltext {
                     write!(f, "FULLTEXT")?;
@@ -1056,7 +1060,7 @@ impl fmt::Display for TableConstraint {
                     write!(f, " {name}")?;
                 }
 
-                write!(f, " ({})", display_comma_separated(columns))?;
+                write!(f, " ({})", display_comma_separated(index_fields))?;
 
                 Ok(())
             }

@@ -4970,14 +4970,19 @@ impl<'a> Parser<'a> {
     /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
     /// ```
     pub fn parse_drop_trigger(&mut self) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect) {
             self.prev_token();
             return self.expected("an object type after DROP", self.peek_token());
         }
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let trigger_name = self.parse_object_name(false)?;
-        self.expect_keyword_is(Keyword::ON)?;
-        let table_name = self.parse_object_name(false)?;
+        let table_name = match dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+            true => {
+                self.expect_keyword_is(Keyword::ON)?;
+                Some(self.parse_object_name(false)?)
+            }
+            false => None,
+        };
         let option = self
             .parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT])
             .map(|keyword| match keyword {
@@ -4998,7 +5003,7 @@ impl<'a> Parser<'a> {
         or_replace: bool,
         is_constraint: bool,
     ) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect) {
             self.prev_token();
             return self.expected("an object type after CREATE", self.peek_token());
         }
@@ -5061,20 +5066,19 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {
-        Ok(
-            match self.expect_one_of_keywords(&[
-                Keyword::BEFORE,
-                Keyword::AFTER,
-                Keyword::INSTEAD,
-            ])? {
-                Keyword::BEFORE => TriggerPeriod::Before,
-                Keyword::AFTER => TriggerPeriod::After,
-                Keyword::INSTEAD => self
-                    .expect_keyword_is(Keyword::OF)
-                    .map(|_| TriggerPeriod::InsteadOf)?,
-                _ => unreachable!(),
-            },
-        )
+        let allowed_keywords = if dialect_of!(self is MySqlDialect) {
+            vec![Keyword::BEFORE, Keyword::AFTER]
+        } else {
+            vec![Keyword::BEFORE, Keyword::AFTER, Keyword::INSTEAD]
+        };
+        Ok(match self.expect_one_of_keywords(&allowed_keywords)? {
+            Keyword::BEFORE => TriggerPeriod::Before,
+            Keyword::AFTER => TriggerPeriod::After,
+            Keyword::INSTEAD => self
+                .expect_keyword_is(Keyword::OF)
+                .map(|_| TriggerPeriod::InsteadOf)?,
+            _ => unreachable!(),
+        })
     }
 
     pub fn parse_trigger_event(&mut self) -> Result<TriggerEvent, ParserError> {

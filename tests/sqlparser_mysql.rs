@@ -3255,3 +3255,53 @@ fn parse_looks_like_single_line_comment() {
         "UPDATE account SET balance = balance WHERE account_id = 5752",
     );
 }
+
+#[test]
+fn parse_create_trigger() {
+    let sql_create_trigger = r#"
+        CREATE TRIGGER emp_stamp BEFORE INSERT ON emp
+            FOR EACH ROW EXECUTE FUNCTION emp_stamp();
+    "#;
+    let create_stmt = mysql().one_statement_parses_to(sql_create_trigger, "");
+    assert_eq!(
+        create_stmt,
+        Statement::CreateTrigger {
+            or_replace: false,
+            is_constraint: false,
+            name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+            period: TriggerPeriod::Before,
+            events: vec![TriggerEvent::Insert],
+            table_name: ObjectName::from(vec![Ident::new("emp")]),
+            referenced_table_name: None,
+            referencing: vec![],
+            trigger_object: TriggerObject::Row,
+            include_each: true,
+            condition: None,
+            exec_body: TriggerExecBody {
+                exec_type: TriggerExecBodyType::Function,
+                func_desc: FunctionDesc {
+                    name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+                    args: None,
+                }
+            },
+            characteristics: None,
+        }
+    );
+}
+
+#[test]
+fn parse_drop_trigger() {
+    let sql_drop_trigger = "DROP TRIGGER emp_stamp;";
+    let drop_stmt = mysql().one_statement_parses_to(sql_drop_trigger, "");
+    assert_eq!(
+        drop_stmt,
+        Statement::DropTrigger {
+            if_exists: false,
+            trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+            table_name: None,
+            option: None,
+        }
+    );
+    let sql_drop_trigger_invalid = "DROP TRIGGER emp_stamp on emp;";
+    assert!(mysql().parse_sql_statements(sql_drop_trigger_invalid).is_err());
+}

@@ -4958,7 +4958,7 @@ fn parse_drop_trigger() {
                 Statement::DropTrigger {
                     if_exists,
                     trigger_name: ObjectName::from(vec![Ident::new("check_update")]),
-                    table_name: ObjectName::from(vec![Ident::new("table_name")]),
+                    table_name: Some(ObjectName::from(vec![Ident::new("table_name")])),
                     option
                 }
             );
@@ -5211,7 +5211,7 @@ fn parse_trigger_related_functions() {
         Statement::DropTrigger {
             if_exists: false,
             trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
-            table_name: ObjectName::from(vec![Ident::new("emp")]),
+            table_name: Some(ObjectName::from(vec![Ident::new("emp")])),
             option: None
         }
     );

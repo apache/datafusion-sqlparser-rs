@@ -170,8 +170,10 @@ pub enum Token {
     RBrace,
     /// Right Arrow `=>`
     RArrow,
-    /// Sharp `#` used for PostgreSQL Bitwise XOR operator
+    /// Sharp `#` used for PostgreSQL Bitwise XOR operator, also PostgreSQL/Redshift geometrical unary/binary operator (Number of points in path or polygon/Intersection)
     Sharp,
+    /// `##` PostgreSQL/Redshift geometrical binary operator (Point of closest proximity)
+    DoubleSharp,
     /// Tilde `~` used for PostgreSQL Bitwise NOT operator or case sensitive match regular expression operator
     Tilde,
     /// `~*` , a case insensitive match regular expression operator in PostgreSQL
@@ -198,7 +200,7 @@ pub enum Token {
     ExclamationMark,
     /// Double Exclamation Mark `!!` used for PostgreSQL prefix factorial operator
     DoubleExclamationMark,
-    /// AtSign `@` used for PostgreSQL abs operator
+    /// AtSign `@` used for PostgreSQL abs operator, also PostgreSQL/Redshift geometrical unary/binary operator (Center, Contained or on)
     AtSign,
     /// `^@`, a "starts with" string operator in PostgreSQL
     CaretAt,
@@ -214,6 +216,36 @@ pub enum Token {
     LongArrow,
     /// `#>`, extracts JSON sub-object at the specified path
     HashArrow,
+    /// `@-@` PostgreSQL/Redshift geometrical unary operator (Length or circumference)
+    AtDashAt,
+    /// `?-` PostgreSQL/Redshift geometrical unary/binary operator (Is horizontal?/Are horizontally aligned?)
+    QuestionMarkDash,
+    /// `&<` PostgreSQL/Redshift geometrical binary operator (Overlaps to left?)
+    AmpersandLeftAngleBracket,
+    /// `&>` PostgreSQL/Redshift geometrical binary operator (Overlaps to right?)`
+    AmpersandRightAngleBracket,
+    /// `&<|` PostgreSQL/Redshift geometrical binary operator (Does not extend above?)`
+    AmpersandLeftAngleBracketVerticalBar,
+    /// `|&>` PostgreSQL/Redshift geometrical binary operator (Does not extend below?)`
+    VerticalBarAmpersandRightAngleBracket,
+    /// `<->` PostgreSQL/Redshift geometrical binary operator (Distance between)
+    TwoWayArrow,
+    /// `<^` PostgreSQL/Redshift geometrical binary operator (Is below?)
+    LeftAngleBracketCaret,
+    /// `>^` PostgreSQL/Redshift geometrical binary operator (Is above?)
+    RightAngleBracketCaret,
+    /// `?#` PostgreSQL/Redshift geometrical binary operator (Intersects or overlaps)
+    QuestionMarkSharp,
+    /// `?-|` PostgreSQL/Redshift geometrical binary operator (Is perpendicular?)
+    QuestionMarkDashVerticalBar,
+    /// `?||` PostgreSQL/Redshift geometrical binary operator (Are parallel?)
+    QuestionMarkDoubleVerticalBar,
+    /// `~=` PostgreSQL/Redshift geometrical binary operator (Same as)
+    TildeEqual,
+    /// `<<| PostgreSQL/Redshift geometrical binary operator (Is strictly below?)
+    ShiftLeftVerticalBar,
+    /// `|>> PostgreSQL/Redshift geometrical binary operator (Is strictly above?)
+    VerticalBarShiftRight,
     /// `#>>`, extracts JSON sub-object at the specified path as text
     HashLongArrow,
     /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
@@ -303,6 +335,7 @@ impl fmt::Display for Token {
             Token::RBrace => f.write_str("}"),
             Token::RArrow => f.write_str("=>"),
             Token::Sharp => f.write_str("#"),
+            Token::DoubleSharp => f.write_str("##"),
             Token::ExclamationMark => f.write_str("!"),
             Token::DoubleExclamationMark => f.write_str("!!"),
             Token::Tilde => f.write_str("~"),
@@ -320,6 +353,21 @@ impl fmt::Display for Token {
             Token::Overlap => f.write_str("&&"),
             Token::PGSquareRoot => f.write_str("|/"),
             Token::PGCubeRoot => f.write_str("||/"),
+            Token::AtDashAt => f.write_str("@-@"),
+            Token::QuestionMarkDash => f.write_str("?-"),
+            Token::AmpersandLeftAngleBracket => f.write_str("&<"),
+            Token::AmpersandRightAngleBracket => f.write_str("&>"),
+            Token::AmpersandLeftAngleBracketVerticalBar => f.write_str("&<|"),
+            Token::VerticalBarAmpersandRightAngleBracket => f.write_str("|&>"),
+            Token::TwoWayArrow => f.write_str("<->"),
+            Token::LeftAngleBracketCaret => f.write_str("<^"),
+            Token::RightAngleBracketCaret => f.write_str(">^"),
+            Token::QuestionMarkSharp => f.write_str("?#"),
+            Token::QuestionMarkDashVerticalBar => f.write_str("?-|"),
+            Token::QuestionMarkDoubleVerticalBar => f.write_str("?||"),
+            Token::TildeEqual => f.write_str("~="),
+            Token::ShiftLeftVerticalBar => f.write_str("<<|"),
+            Token::VerticalBarShiftRight => f.write_str("|>>"),
             Token::Placeholder(ref s) => write!(f, "{s}"),
             Token::Arrow => write!(f, "->"),
             Token::LongArrow => write!(f, "->>"),
@@ -1308,6 +1356,28 @@ impl<'a> Tokenizer<'a> {
                                 _ => self.start_binop(chars, "||", Token::StringConcat),
                             }
                         }
+                        Some('&') if self.dialect.supports_geometric_types() => {
+                            chars.next(); // consume
+                            match chars.peek() {
+                                Some('>') => self.consume_for_binop(
+                                    chars,
+                                    "|&>",
+                                    Token::VerticalBarAmpersandRightAngleBracket,
+                                ),
+                                _ => self.start_binop_opt(chars, "|&", None),
+                            }
+                        }
+                        Some('>') if self.dialect.supports_geometric_types() => {
+                            chars.next(); // consume
+                            match chars.peek() {
+                                Some('>') => self.consume_for_binop(
+                                    chars,
+                                    "|>>",
+                                    Token::VerticalBarShiftRight,
+                                ),
+                                _ => self.start_binop_opt(chars, "|>", None),
+                            }
+                        }
                         // Bitshift '|' operator
                         _ => self.start_binop(chars, "|", Token::Pipe),
                     }
@@ -1356,8 +1426,34 @@ impl<'a> Tokenizer<'a> {
                                 _ => self.start_binop(chars, "<=", Token::LtEq),
                             }
                         }
+                        Some('|') if self.dialect.supports_geometric_types() => {
+                            self.consume_for_binop(chars, "<<|", Token::ShiftLeftVerticalBar)
+                        }
                         Some('>') => self.consume_for_binop(chars, "<>", Token::Neq),
+                        Some('<') if self.dialect.supports_geometric_types() => {
+                            chars.next(); // consume
+                            match chars.peek() {
+                                Some('|') => self.consume_for_binop(
+                                    chars,
+                                    "<<|",
+                                    Token::ShiftLeftVerticalBar,
+                                ),
+                                _ => self.start_binop(chars, "<<", Token::ShiftLeft),
+                            }
+                        }
                         Some('<') => self.consume_for_binop(chars, "<<", Token::ShiftLeft),
+                        Some('-') if self.dialect.supports_geometric_types() => {
+                            chars.next(); // consume
+                            match chars.peek() {
+                                Some('>') => {
+                                    self.consume_for_binop(chars, "<->", Token::TwoWayArrow)
+                                }
+                                _ => self.start_binop_opt(chars, "<-", None),
+                            }
+                        }
+                        Some('^') if self.dialect.supports_geometric_types() => {
+                            self.consume_for_binop(chars, "<^", Token::LeftAngleBracketCaret)
+                        }
                         Some('@') => self.consume_for_binop(chars, "<@", Token::ArrowAt),
                         _ => self.start_binop(chars, "<", Token::Lt),
                     }
@@ -1367,6 +1463,9 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('=') => self.consume_for_binop(chars, ">=", Token::GtEq),
                         Some('>') => self.consume_for_binop(chars, ">>", Token::ShiftRight),
+                        Some('^') if self.dialect.supports_geometric_types() => {
+                            self.consume_for_binop(chars, ">^", Token::RightAngleBracketCaret)
+                        }
                         _ => self.start_binop(chars, ">", Token::Gt),
                     }
                 }
@@ -1385,6 +1484,22 @@ impl<'a> Tokenizer<'a> {
                 '&' => {
                     chars.next(); // consume the '&'
                     match chars.peek() {
+                        Some('>') if self.dialect.supports_geometric_types() => {
+                            chars.next();
+                            self.consume_and_return(chars, Token::AmpersandRightAngleBracket)
+                        }
+                        Some('<') if self.dialect.supports_geometric_types() => {
+                            chars.next(); // consume
+                            match chars.peek() {
+                                Some('|') => self.consume_and_return(
+                                    chars,
+                                    Token::AmpersandLeftAngleBracketVerticalBar,
+                                ),
+                                _ => {
+                                    self.start_binop(chars, "&<", Token::AmpersandLeftAngleBracket)
+                                }
+                            }
+                        }
                         Some('&') => {
                             chars.next(); // consume the second '&'
                             self.start_binop(chars, "&&", Token::Overlap)
@@ -1415,6 +1530,9 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('*') => self.consume_for_binop(chars, "~*", Token::TildeAsterisk),
+                        Some('=') if self.dialect.supports_geometric_types() => {
+                            self.consume_for_binop(chars, "~=", Token::TildeEqual)
+                        }
                         Some('~') => {
                             chars.next();
                             match chars.peek() {
@@ -1441,6 +1559,9 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some(' ') => Ok(Some(Token::Sharp)),
+                        Some('#') if self.dialect.supports_geometric_types() => {
+                            self.consume_for_binop(chars, "##", Token::DoubleSharp)
+                        }
                         Some(sch) if self.dialect.is_identifier_start('#') => {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
@@ -1450,6 +1571,16 @@ impl<'a> Tokenizer<'a> {
                 '@' => {
                     chars.next();
                     match chars.peek() {
+                        Some('@') if self.dialect.supports_geometric_types() => {
+                            self.consume_and_return(chars, Token::AtAt)
+                        }
+                        Some('-') if self.dialect.supports_geometric_types() => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('@') => self.consume_and_return(chars, Token::AtDashAt),
+                                _ => self.start_binop_opt(chars, "@-", None),
+                            }
+                        }
                         Some('>') => self.consume_and_return(chars, Token::AtArrow),
                         Some('?') => self.consume_and_return(chars, Token::AtQuestion),
                         Some('@') => {
@@ -1482,11 +1613,30 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // Postgres uses ? for jsonb operators, not prepared statements
-                '?' if dialect_of!(self is PostgreSqlDialect) => {
-                    chars.next();
+                '?' if self.dialect.supports_geometric_types() => {
+                    chars.next(); // consume
                     match chars.peek() {
-                        Some('|') => self.consume_and_return(chars, Token::QuestionPipe),
+                        Some('|') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('|') => self.consume_and_return(
+                                    chars,
+                                    Token::QuestionMarkDoubleVerticalBar,
+                                ),
+                                _ => Ok(Some(Token::QuestionPipe)),
+                            }
+                        }
+
                         Some('&') => self.consume_and_return(chars, Token::QuestionAnd),
+                        Some('-') => {
+                            chars.next(); // consume
+                            match chars.peek() {
+                                Some('|') => self
+                                    .consume_and_return(chars, Token::QuestionMarkDashVerticalBar),
+                                _ => Ok(Some(Token::QuestionMarkDash)),
+                            }
+                        }
+                        Some('#') => self.consume_and_return(chars, Token::QuestionMarkSharp),
                         _ => self.consume_and_return(chars, Token::Question),
                     }
                 }
@@ -1520,7 +1670,7 @@ impl<'a> Tokenizer<'a> {
         default: Token,
     ) -> Result<Option<Token>, TokenizerError> {
         chars.next(); // consume the first char
-        self.start_binop(chars, prefix, default)
+        self.start_binop_opt(chars, prefix, Some(default))
     }
 
     /// parse a custom binary operator
@@ -1529,6 +1679,16 @@ impl<'a> Tokenizer<'a> {
         chars: &mut State,
         prefix: &str,
         default: Token,
+    ) -> Result<Option<Token>, TokenizerError> {
+        self.start_binop_opt(chars, prefix, Some(default))
+    }
+
+    /// parse a custom binary operator
+    fn start_binop_opt(
+        &self,
+        chars: &mut State,
+        prefix: &str,
+        default: Option<Token>,
     ) -> Result<Option<Token>, TokenizerError> {
         let mut custom = None;
         while let Some(&ch) = chars.peek() {
@@ -1539,10 +1699,14 @@ impl<'a> Tokenizer<'a> {
             custom.get_or_insert_with(|| prefix.to_string()).push(ch);
             chars.next();
         }
-
-        Ok(Some(
-            custom.map(Token::CustomBinaryOperator).unwrap_or(default),
-        ))
+        match (custom, default) {
+            (Some(custom), _) => Ok(Token::CustomBinaryOperator(custom).into()),
+            (None, Some(tok)) => Ok(Some(tok)),
+            (None, None) => self.tokenizer_error(
+                chars.location(),
+                format!("Expected a valid binary operator after '{}'", prefix),
+            ),
+        }
     }
 
     /// Tokenize dollar preceded value (i.e: a string/placeholder)

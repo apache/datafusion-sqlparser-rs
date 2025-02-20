@@ -386,6 +386,10 @@ pub enum DataType {
     ///
     /// [bigquery]: https://cloud.google.com/bigquery/docs/user-defined-functions#templated-sql-udf-parameters
     AnyType,
+    /// geometric type
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/9.5/functions-geometry.html
+    GeometricType(GeometricTypeKind),
 }
 
 impl fmt::Display for DataType {
@@ -639,6 +643,7 @@ impl fmt::Display for DataType {
             DataType::Trigger => write!(f, "TRIGGER"),
             DataType::AnyType => write!(f, "ANY TYPE"),
             DataType::Table(fields) => write!(f, "TABLE({})", display_comma_separated(fields)),
+            DataType::GeometricType(kind) => write!(f, "{}", kind),
         }
     }
 }
@@ -914,4 +919,35 @@ pub enum ArrayElemTypeDef {
     SquareBracket(Box<DataType>, Option<u64>),
     /// `Array(Int64)`
     Parenthesis(Box<DataType>),
+}
+
+/// Represents different types of geometric shapes which are commonly used in
+/// PostgreSQL/Redshift for spatial operations and geometry-related computations.
+///
+/// [Postgres]: https://www.postgresql.org/docs/9.5/functions-geometry.html
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum GeometricTypeKind {
+    Point,
+    Line,
+    LineSegment,
+    GeometricBox,
+    GeometricPath,
+    Polygon,
+    Circle,
+}
+
+impl fmt::Display for GeometricTypeKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GeometricTypeKind::Point => write!(f, "point"),
+            GeometricTypeKind::Line => write!(f, "line"),
+            GeometricTypeKind::LineSegment => write!(f, "lseg"),
+            GeometricTypeKind::GeometricBox => write!(f, "box"),
+            GeometricTypeKind::GeometricPath => write!(f, "path"),
+            GeometricTypeKind::Polygon => write!(f, "polygon"),
+            GeometricTypeKind::Circle => write!(f, "circle"),
+        }
+    }
 }

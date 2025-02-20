@@ -13860,3 +13860,361 @@ fn test_select_from_first() {
         assert_eq!(ast.to_string(), q);
     }
 }
+
+#[test]
+fn test_geometric_unary_operators() {
+    // Number of points in path or polygon
+    let sql = "# path '((1,0),(0,1),(-1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::Hash,
+            ..
+        }
+    ));
+
+    // Length or circumference
+    let sql = "@-@ path '((0,0),(1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::AtDashAt,
+            ..
+        }
+    ));
+
+    // Center
+    let sql = "@@ circle '((0,0),10)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::DoubleAt,
+            ..
+        }
+    ));
+    // Is horizontal?
+    let sql = "?- lseg '((-1,0),(1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::QuestionDash,
+            ..
+        }
+    ));
+
+    // Is vertical?
+    let sql = "?| lseg '((-1,0),(1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::QuestionPipe,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_geomtery_type() {
+    let sql = "point '1,2'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::Point),
+            value: Value::SingleQuotedString("1,2".to_string()),
+        }
+    );
+
+    let sql = "line '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::Line),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+
+    let sql = "path '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::GeometricPath),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+    let sql = "box '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::GeometricBox),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+
+    let sql = "circle '1,2,3'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::Circle),
+            value: Value::SingleQuotedString("1,2,3".to_string()),
+        }
+    );
+
+    let sql = "polygon '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::Polygon),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+    let sql = "lseg '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::LineSegment),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+}
+#[test]
+fn test_geometric_binary_operators() {
+    // Translation plus
+    let sql = "box '((0,0),(1,1))' + point '(2.0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::Plus,
+            ..
+        }
+    ));
+    // Translation minus
+    let sql = "box '((0,0),(1,1))' - point '(2.0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::Minus,
+            ..
+        }
+    ));
+
+    // Scaling multiply
+    let sql = "box '((0,0),(1,1))' * point '(2.0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::Multiply,
+            ..
+        }
+    ));
+
+    // Scaling divide
+    let sql = "box '((0,0),(1,1))' / point '(2.0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::Divide,
+            ..
+        }
+    ));
+
+    // Intersection
+    let sql = "'((1,-1),(-1,1))' # '((1,1),(-1,-1))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PGBitwiseXor,
+            ..
+        }
+    ));
+
+    //Point of closest proximity
+    let sql = "point '(0,0)' ## lseg '((2,0),(0,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::DoubleHash,
+            ..
+        }
+    ));
+
+    // Point of closest proximity
+    let sql = "box '((0,0),(1,1))' && box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PGOverlap,
+            ..
+        }
+    ));
+
+    // Overlaps to left?
+    let sql = "box '((0,0),(1,1))' &< box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::AndLt,
+            ..
+        }
+    ));
+
+    // Overlaps to right?
+    let sql = "box '((0,0),(3,3))' &> box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::AndGt,
+            ..
+        }
+    ));
+
+    // Distance between
+    let sql = "circle '((0,0),1)' <-> circle '((5,0),1)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::LtDashGt,
+            ..
+        }
+    ));
+
+    // Is left of?
+    let sql = "circle '((0,0),1)' << circle '((5,0),1)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PGBitwiseShiftLeft,
+            ..
+        }
+    ));
+
+    // Is right of?
+    let sql = "circle '((5,0),1)' >> circle '((0,0),1)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PGBitwiseShiftRight,
+            ..
+        }
+    ));
+
+    // Is below?
+    let sql = "circle '((0,0),1)' <^ circle '((0,5),1)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::LtCaret,
+            ..
+        }
+    ));
+
+    // 	Intersects or overlaps
+    let sql = "lseg '((-1,0),(1,0))' ?# box '((-2,-2),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionHash,
+            ..
+        }
+    ));
+
+    // Is horizontal?
+    let sql = "point '(1,0)' ?- point '(0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionDash,
+            ..
+        }
+    ));
+
+    // Is perpendicular?
+    let sql = "lseg '((0,0),(0,1))' ?-| lseg '((0,0),(1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionDashPipe,
+            ..
+        }
+    ));
+
+    // Is vertical?
+    let sql = "point '(0,1)' ?| point '(0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionPipe,
+            ..
+        }
+    ));
+
+    // Are parallel?
+    let sql = "lseg '((-1,0),(1,0))' ?|| lseg '((-1,2),(1,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionDoublePipe,
+            ..
+        }
+    ));
+
+    // Contained or on?
+    let sql = "point '(1,1)' @ circle '((0,0),2)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::At,
+            ..
+        }
+    ));
+
+    //
+    // Same as?
+    let sql = "polygon '((0,0),(1,1))' ~= polygon '((1,1),(0,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::TildeEq,
+            ..
+        }
+    ));
+
+    // Is strictly below?
+    let sql = "box '((0,0),(3,3))' <<| box '((3,4),(5,5))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::LtLtPipe,
+            ..
+        }
+    ));
+
+    // Is strictly above?
+    let sql = "box '((3,4),(5,5))' |>> box '((0,0),(3,3))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PipeGtGt,
+            ..
+        }
+    ));
+
+    // Does not extend above?
+    let sql = "box '((0,0),(1,1))' &<| box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::AndLtPipe,
+            ..
+        }
+    ));
+
+    // Does not extend below?
+    let sql = "box '((0,0),(3,3))' |&> box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PipeAndGt,
+            ..
+        }
+    ));
+}

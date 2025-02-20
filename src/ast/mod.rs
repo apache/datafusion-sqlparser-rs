@@ -95,6 +95,8 @@ use crate::ast::helpers::stmt_data_loading::{
 #[cfg(feature = "visitor")]
 pub use visitor::*;
 
+pub use self::data_type::GeometricTypeKind;
+
 mod data_type;
 mod dcl;
 mod ddl;
@@ -1513,7 +1515,15 @@ impl fmt::Display for Expr {
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{expr}{op}")
-                } else if op == &UnaryOperator::Not {
+                } else if matches!(
+                    op,
+                    UnaryOperator::Not
+                        | UnaryOperator::Hash
+                        | UnaryOperator::AtDashAt
+                        | UnaryOperator::DoubleAt
+                        | UnaryOperator::QuestionDash
+                        | UnaryOperator::QuestionPipe
+                ) {
                     write!(f, "{op} {expr}")
                 } else {
                     write!(f, "{op}{expr}")

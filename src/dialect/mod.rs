@@ -251,8 +251,18 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports the `(+)` syntax for OUTER JOIN.
+    fn supports_outer_join_operator(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports CONNECT BY.
     fn supports_connect_by(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `EXECUTE IMMEDIATE` statements.
+    fn supports_execute_immediate(&self) -> bool {
         false
     }
 
@@ -349,15 +359,6 @@ pub trait Dialect: Debug + Any {
     /// SELECT transform(array(1, 2, 3), x -> x + 1); -- returns [2,3,4]
     /// ```
     fn supports_lambda_functions(&self) -> bool {
-        false
-    }
-
-    /// Returns true if the dialect supports method calls, for example:
-    ///
-    /// ```sql
-    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')
-    /// ```
-    fn supports_methods(&self) -> bool {
         false
     }
 
@@ -581,6 +582,7 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(p!(Like)),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
+            Token::Period => Ok(p!(Period)),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -597,18 +599,34 @@ pub trait Dialect: Debug + Any {
             | Token::ExclamationMarkDoubleTilde
             | Token::ExclamationMarkDoubleTildeAsterisk
             | Token::Spaceship => Ok(p!(Eq)),
-            Token::Pipe => Ok(p!(Pipe)),
+            Token::Pipe
+            | Token::QuestionMarkDash
+            | Token::DoubleSharp
+            | Token::Overlap
+            | Token::AmpersandLeftAngleBracket
+            | Token::AmpersandRightAngleBracket
+            | Token::QuestionMarkDashVerticalBar
+            | Token::AmpersandLeftAngleBracketVerticalBar
+            | Token::VerticalBarAmpersandRightAngleBracket
+            | Token::TwoWayArrow
+            | Token::LeftAngleBracketCaret
+            | Token::RightAngleBracketCaret
+            | Token::QuestionMarkSharp
+            | Token::QuestionMarkDoubleVerticalBar
+            | Token::QuestionPipe
+            | Token::TildeEqual
+            | Token::AtSign
+            | Token::ShiftLeftVerticalBar
+            | Token::VerticalBarShiftRight => Ok(p!(Pipe)),
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(p!(Caret)),
             Token::Ampersand => Ok(p!(Ampersand)),
             Token::Plus | Token::Minus => Ok(p!(PlusMinus)),
             Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
                 Ok(p!(MulDivModOp))
             }
-            Token::DoubleColon
-            | Token::ExclamationMark
-            | Token::LBracket
-            | Token::Overlap
-            | Token::CaretAt => Ok(p!(DoubleColon)),
+            Token::DoubleColon | Token::ExclamationMark | Token::LBracket | Token::CaretAt => {
+                Ok(p!(DoubleColon))
+            }
             Token::Arrow
             | Token::LongArrow
             | Token::HashArrow
@@ -620,7 +638,6 @@ pub trait Dialect: Debug + Any {
             | Token::AtAt
             | Token::Question
             | Token::QuestionAnd
-            | Token::QuestionPipe
             | Token::CustomBinaryOperator(_) => Ok(p!(PgOther)),
             _ => Ok(self.prec_unknown()),
         }
@@ -654,6 +671,7 @@ pub trait Dialect: Debug + Any {
     /// Uses (APPROXIMATELY) <https://www.postgresql.org/docs/7.0/operators.htm#AEN2026> as a reference
     fn prec_value(&self, prec: Precedence) -> u8 {
         match prec {
+            Precedence::Period => 100,
             Precedence::DoubleColon => 50,
             Precedence::AtTz => 41,
             Precedence::MulDivModOp => 40,
@@ -918,6 +936,13 @@ pub trait Dialect: Debug + Any {
     fn supports_array_typedef_size(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports geometric types.
+    ///
+    /// Postgres: <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    /// e.g. @@ circle '((0,0),10)'
+    fn supports_geometric_types(&self) -> bool {
+        false
+    }
 
     /// Returns true if the dialect supports `ORDER BY ALL`.
     /// `ALL` which means all columns of the SELECT clause.
@@ -933,6 +958,7 @@ pub trait Dialect: Debug + Any {
 /// higher number -> higher precedence
 #[derive(Debug, Clone, Copy)]
 pub enum Precedence {
+    Period,
     DoubleColon,
     AtTz,
     MulDivModOp,

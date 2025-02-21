@@ -215,6 +215,7 @@ impl Spanned for Values {
 /// - [Statement::CopyIntoSnowflake]
 /// - [Statement::CreateSecret]
 /// - [Statement::CreateRole]
+/// - [Statement::AlterType]
 /// - [Statement::AlterRole]
 /// - [Statement::AttachDatabase]
 /// - [Statement::AttachDuckDBDatabase]
@@ -427,7 +428,9 @@ impl Spanned for Statement {
                     .chain(with_options.iter().map(|i| i.span())),
             ),
             // These statements need to be implemented
+            Statement::AlterType { .. } => Span::empty(),
             Statement::AlterRole { .. } => Span::empty(),
+            Statement::AlterSession { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),
             Statement::AttachDuckDBDatabase { .. } => Span::empty(),
             Statement::DetachDuckDBDatabase { .. } => Span::empty(),
@@ -602,15 +605,10 @@ impl Spanned for ColumnDef {
         let ColumnDef {
             name,
             data_type: _, // enum
-            collation,
             options,
         } = self;
 
-        union_spans(
-            core::iter::once(name.span)
-                .chain(collation.iter().map(|i| i.span()))
-                .chain(options.iter().map(|i| i.span())),
-        )
+        union_spans(core::iter::once(name.span).chain(options.iter().map(|i| i.span())))
     }
 }
 
@@ -765,6 +763,7 @@ impl Spanned for ColumnOption {
             ColumnOption::Check(expr) => expr.span(),
             ColumnOption::DialectSpecific(_) => Span::empty(),
             ColumnOption::CharacterSet(object_name) => object_name.span(),
+            ColumnOption::Collation(object_name) => object_name.span(),
             ColumnOption::Comment(_) => Span::empty(),
             ColumnOption::OnUpdate(expr) => expr.span(),
             ColumnOption::Generated { .. } => Span::empty(),
@@ -1291,7 +1290,6 @@ impl Spanned for Expr {
         match self {
             Expr::Identifier(ident) => ident.span,
             Expr::CompoundIdentifier(vec) => union_spans(vec.iter().map(|i| i.span)),
-            Expr::CompositeAccess { expr, key } => expr.span().union(&key.span),
             Expr::CompoundFieldAccess { root, access_chain } => {
                 union_spans(iter::once(root.span()).chain(access_chain.iter().map(|i| i.span())))
             }
@@ -1481,7 +1479,6 @@ impl Spanned for Expr {
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),
             Expr::Lambda(_) => Span::empty(),
-            Expr::Method(_) => Span::empty(),
         }
     }
 }

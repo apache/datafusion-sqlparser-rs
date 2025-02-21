@@ -1021,12 +1021,20 @@ impl<'a> Parser<'a> {
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
 
+        expr = self.parse_compound_expr(expr, vec![])?;
+
         debug!("prefix: {:?}", expr);
         loop {
             let next_precedence = self.get_next_precedence()?;
             debug!("next precedence: {:?}", next_precedence);
 
             if precedence >= next_precedence {
+                break;
+            }
+
+            // The period operator is handled exclusively by the
+            // compound field access parsing.
+            if Token::Period == self.peek_token_ref().token {
                 break;
             }
 
@@ -1105,8 +1113,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Tries to parse an expression by matching the specified word to known keywords that have a special meaning in the dialect.
-    // Returns `None if no match is found.
+    /// Tries to parse an expression by matching the specified word to known keywords that have a special meaning in the dialect.
+    /// Returns `None if no match is found.
     fn parse_expr_prefix_by_reserved_word(
         &mut self,
         w: &Word,
@@ -1203,7 +1211,7 @@ impl<'a> Parser<'a> {
             }
             Keyword::STRUCT if self.dialect.supports_struct_literal() => {
                 let struct_expr = self.parse_struct_literal()?;
-                Ok(Some(self.parse_compound_field_access(struct_expr, vec![])?))
+                Ok(Some(struct_expr))
             }
             Keyword::PRIOR if matches!(self.state, ParserState::ConnectBy) => {
                 let expr = self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?;
@@ -1212,39 +1220,30 @@ impl<'a> Parser<'a> {
             Keyword::MAP if *self.peek_token_ref() == Token::LBrace && self.dialect.support_map_literal_syntax() => {
                 Ok(Some(self.parse_duckdb_map_literal()?))
             }
-            _ => Ok(None)
+            _ if self.dialect.supports_geometric_types() => match w.keyword {
+                Keyword::CIRCLE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Circle)?)),
+                Keyword::BOX => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricBox)?)),
+                Keyword::PATH => Ok(Some(self.parse_geometric_type(GeometricTypeKind::GeometricPath)?)),
+                Keyword::LINE => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Line)?)),
+                Keyword::LSEG => Ok(Some(self.parse_geometric_type(GeometricTypeKind::LineSegment)?)),
+                Keyword::POINT => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Point)?)),
+                Keyword::POLYGON => Ok(Some(self.parse_geometric_type(GeometricTypeKind::Polygon)?)),
+                _ => Ok(None),
+            },
+            _ => Ok(None),
         }
     }
 
-    // Tries to parse an expression by a word that is not known to have a special meaning in the dialect.
+    /// Tries to parse an expression by a word that is not known to have a special meaning in the dialect.
     fn parse_expr_prefix_by_unreserved_word(
         &mut self,
         w: &Word,
         w_span: Span,
     ) -> Result<Expr, ParserError> {
         match self.peek_token().token {
-            Token::Period => self.parse_compound_field_access(
-                Expr::Identifier(w.clone().into_ident(w_span)),
-                vec![],
-            ),
-            Token::LParen => {
+            Token::LParen if !self.peek_outer_join_operator() => {
                 let id_parts = vec![w.clone().into_ident(w_span)];
-                if let Some(expr) = self.parse_outer_join_expr(&id_parts) {
-                    Ok(expr)
-                } else {
-                    let mut expr = self.parse_function(ObjectName::from(id_parts))?;
-                    // consume all period if it's a method chain
-                    expr = self.try_parse_method(expr)?;
-                    let fields = vec![];
-                    self.parse_compound_field_access(expr, fields)
-                }
-            }
-            Token::LBracket if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect) =>
-            {
-                let ident = Expr::Identifier(w.clone().into_ident(w_span));
-                let mut fields = vec![];
-                self.parse_multi_dim_subscript(&mut fields)?;
-                self.parse_compound_field_access(ident, fields)
+                self.parse_function(ObjectName::from(id_parts))
             }
             // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
             Token::SingleQuotedString(_)
@@ -1411,6 +1410,33 @@ impl<'a> Parser<'a> {
                     ),
                 })
             }
+            tok @ Token::Sharp
+            | tok @ Token::AtDashAt
+            | tok @ Token::AtAt
+            | tok @ Token::QuestionMarkDash
+            | tok @ Token::QuestionPipe
+                if self.dialect.supports_geometric_types() =>
+            {
+                let op = match tok {
+                    Token::Sharp => UnaryOperator::Hash,
+                    Token::AtDashAt => UnaryOperator::AtDashAt,
+                    Token::AtAt => UnaryOperator::DoubleAt,
+                    Token::QuestionMarkDash => UnaryOperator::QuestionDash,
+                    Token::QuestionPipe => UnaryOperator::QuestionPipe,
+                    _ => {
+                        return Err(ParserError::ParserError(format!(
+                            "Unexpected token in unary operator parsing: {:?}",
+                            tok
+                        )))
+                    }
+                };
+                Ok(Expr::UnaryOp {
+                    op,
+                    expr: Box::new(
+                        self.parse_subexpr(self.dialect.prec_value(Precedence::PlusMinus))?,
+                    ),
+                })
+            }
             Token::EscapedStringLiteral(_) if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) =>
             {
                 self.prev_token();
@@ -1453,25 +1479,7 @@ impl<'a> Parser<'a> {
                     }
                 };
                 self.expect_token(&Token::RParen)?;
-                let expr = self.try_parse_method(expr)?;
-                if !self.consume_token(&Token::Period) {
-                    Ok(expr)
-                } else {
-                    let tok = self.next_token();
-                    let key = match tok.token {
-                        Token::Word(word) => word.into_ident(tok.span),
-                        _ => {
-                            return parser_err!(
-                                format!("Expected identifier, found: {tok}"),
-                                tok.span.start
-                            )
-                        }
-                    };
-                    Ok(Expr::CompositeAccess {
-                        expr: Box::new(expr),
-                        key,
-                    })
-                }
+                Ok(expr)
             }
             Token::Placeholder(_) | Token::Colon | Token::AtSign => {
                 self.prev_token();
@@ -1484,8 +1492,6 @@ impl<'a> Parser<'a> {
             _ => self.expected_at("an expression", next_token_index),
         }?;
 
-        let expr = self.try_parse_method(expr)?;
-
         if self.parse_keyword(Keyword::COLLATE) {
             Ok(Expr::Collate {
                 expr: Box::new(expr),
@@ -1496,65 +1502,83 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_geometric_type(&mut self, kind: GeometricTypeKind) -> Result<Expr, ParserError> {
+        let value: Value = self.parse_value()?;
+        Ok(Expr::TypedString {
+            data_type: DataType::GeometricType(kind),
+            value,
+        })
+    }
+
     /// Try to parse an [Expr::CompoundFieldAccess] like `a.b.c` or `a.b[1].c`.
     /// If all the fields are `Expr::Identifier`s, return an [Expr::CompoundIdentifier] instead.
     /// If only the root exists, return the root.
-    /// If self supports [Dialect::supports_partiql], it will fall back when occurs [Token::LBracket] for JsonAccess parsing.
-    pub fn parse_compound_field_access(
+    /// Parses compound expressions which may be delimited by period
+    /// or bracket notation.
+    /// For example: `a.b.c`, `a.b[1]`.
+    pub fn parse_compound_expr(
         &mut self,
         root: Expr,
         mut chain: Vec<AccessExpr>,
     ) -> Result<Expr, ParserError> {
         let mut ending_wildcard: Option<TokenWithSpan> = None;
-        let mut ending_lbracket = false;
-        while self.consume_token(&Token::Period) {
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Word(w) => {
-                    let expr = Expr::Identifier(w.into_ident(next_token.span));
-                    chain.push(AccessExpr::Dot(expr));
-                    if self.peek_token().token == Token::LBracket {
-                        if self.dialect.supports_partiql() {
-                            self.next_token();
-                            ending_lbracket = true;
-                            break;
+        loop {
+            if self.consume_token(&Token::Period) {
+                let next_token = self.peek_token_ref();
+                match &next_token.token {
+                    Token::Mul => {
+                        // Postgres explicitly allows funcnm(tablenm.*) and the
+                        // function array_agg traverses this control flow
+                        if dialect_of!(self is PostgreSqlDialect) {
+                            ending_wildcard = Some(self.next_token());
                         } else {
-                            self.parse_multi_dim_subscript(&mut chain)?
+                            // Put back the consumed `.` tokens before exiting.
+                            // If this expression is being parsed in the
+                            // context of a projection, then the `.*` could imply
+                            // a wildcard expansion. For example:
+                            // `SELECT STRUCT('foo').* FROM T`
+                            self.prev_token(); // .
                         }
-                    }
-                }
-                Token::Mul => {
-                    // Postgres explicitly allows funcnm(tablenm.*) and the
-                    // function array_agg traverses this control flow
-                    if dialect_of!(self is PostgreSqlDialect) {
-                        ending_wildcard = Some(next_token);
-                    } else {
-                        // Put back the consumed .* tokens before exiting.
-                        // If this expression is being parsed in the
-                        // context of a projection, then this could imply
-                        // a wildcard expansion. For example:
-                        // `SELECT STRUCT('foo').* FROM T`
-                        self.prev_token(); // *
-                        self.prev_token(); // .
-                    }
 
-                    break;
+                        break;
+                    }
+                    Token::SingleQuotedString(s) => {
+                        let expr =
+                            Expr::Identifier(Ident::with_quote_and_span('\'', next_token.span, s));
+                        chain.push(AccessExpr::Dot(expr));
+                        self.advance_token(); // The consumed string
+                    }
+                    // Fallback to parsing an arbitrary expression.
+                    _ => match self.parse_subexpr(self.dialect.prec_value(Precedence::Period))? {
+                        // If we get back a compound field access or identifier,
+                        // we flatten the nested expression.
+                        // For example if the current root is `foo`
+                        // and we get back a compound identifier expression `bar.baz`
+                        // The full expression should be `foo.bar.baz` (i.e.
+                        // a root with an access chain with 2 entries) and not
+                        // `foo.(bar.baz)` (i.e. a root with an access chain with
+                        // 1 entry`).
+                        Expr::CompoundFieldAccess { root, access_chain } => {
+                            chain.push(AccessExpr::Dot(*root));
+                            chain.extend(access_chain);
+                        }
+                        Expr::CompoundIdentifier(parts) => chain
+                            .extend(parts.into_iter().map(Expr::Identifier).map(AccessExpr::Dot)),
+                        expr => {
+                            chain.push(AccessExpr::Dot(expr));
+                        }
+                    },
                 }
-                Token::SingleQuotedString(s) => {
-                    let expr = Expr::Identifier(Ident::with_quote('\'', s));
-                    chain.push(AccessExpr::Dot(expr));
-                }
-                _ => {
-                    return self.expected("an identifier or a '*' after '.'", next_token);
-                }
+            } else if !self.dialect.supports_partiql()
+                && self.peek_token_ref().token == Token::LBracket
+            {
+                self.parse_multi_dim_subscript(&mut chain)?;
+            } else {
+                break;
             }
         }
 
-        // if dialect supports partiql, we need to go back one Token::LBracket for the JsonAccess parsing
-        if self.dialect.supports_partiql() && ending_lbracket {
-            self.prev_token();
-        }
-
+        let tok_index = self.get_current_index();
         if let Some(wildcard_token) = ending_wildcard {
             if !Self::is_all_ident(&root, &chain) {
                 return self.expected("an identifier or a '*' after '.'", self.peek_token());
@@ -1563,32 +1587,112 @@ impl<'a> Parser<'a> {
                 ObjectName::from(Self::exprs_to_idents(root, chain)?),
                 AttachedToken(wildcard_token),
             ))
-        } else if self.peek_token().token == Token::LParen {
+        } else if self.maybe_parse_outer_join_operator() {
             if !Self::is_all_ident(&root, &chain) {
-                // consume LParen
-                self.next_token();
-                return self.expected("an identifier or a '*' after '.'", self.peek_token());
+                return self.expected_at("column identifier before (+)", tok_index);
             };
-            let id_parts = Self::exprs_to_idents(root, chain)?;
-            if let Some(expr) = self.parse_outer_join_expr(&id_parts) {
-                Ok(expr)
+            let expr = if chain.is_empty() {
+                root
             } else {
-                self.parse_function(ObjectName::from(id_parts))
-            }
-        } else if chain.is_empty() {
-            Ok(root)
+                Expr::CompoundIdentifier(Self::exprs_to_idents(root, chain)?)
+            };
+            Ok(Expr::OuterJoin(expr.into()))
         } else {
-            if Self::is_all_ident(&root, &chain) {
-                return Ok(Expr::CompoundIdentifier(Self::exprs_to_idents(
-                    root, chain,
-                )?));
+            Self::build_compound_expr(root, chain)
+        }
+    }
+
+    /// Combines a root expression and access chain to form
+    /// a compound expression. Which may be a [Expr::CompoundFieldAccess]
+    /// or other special cased expressions like [Expr::CompoundIdentifier],
+    /// [Expr::OuterJoin].
+    fn build_compound_expr(
+        root: Expr,
+        mut access_chain: Vec<AccessExpr>,
+    ) -> Result<Expr, ParserError> {
+        if access_chain.is_empty() {
+            return Ok(root);
+        }
+
+        if Self::is_all_ident(&root, &access_chain) {
+            return Ok(Expr::CompoundIdentifier(Self::exprs_to_idents(
+                root,
+                access_chain,
+            )?));
+        }
+
+        // Flatten qualified function calls.
+        // For example, the expression `a.b.c.foo(1,2,3)` should
+        // represent a function called `a.b.c.foo`, rather than
+        // a composite expression.
+        if matches!(root, Expr::Identifier(_))
+            && matches!(
+                access_chain.last(),
+                Some(AccessExpr::Dot(Expr::Function(_)))
+            )
+            && access_chain
+                .iter()
+                .rev()
+                .skip(1) // All except the Function
+                .all(|access| matches!(access, AccessExpr::Dot(Expr::Identifier(_))))
+        {
+            let Some(AccessExpr::Dot(Expr::Function(mut func))) = access_chain.pop() else {
+                return parser_err!("expected function expression", root.span().start);
+            };
+
+            let compound_func_name = [root]
+                .into_iter()
+                .chain(access_chain.into_iter().flat_map(|access| match access {
+                    AccessExpr::Dot(expr) => Some(expr),
+                    _ => None,
+                }))
+                .flat_map(|expr| match expr {
+                    Expr::Identifier(ident) => Some(ident),
+                    _ => None,
+                })
+                .map(ObjectNamePart::Identifier)
+                .chain(func.name.0)
+                .collect::<Vec<_>>();
+            func.name = ObjectName(compound_func_name);
+
+            return Ok(Expr::Function(func));
+        }
+
+        // Flatten qualified outer join expressions.
+        // For example, the expression `T.foo(+)` should
+        // represent an outer join on the column name `T.foo`
+        // rather than a composite expression.
+        if access_chain.len() == 1
+            && matches!(
+                access_chain.last(),
+                Some(AccessExpr::Dot(Expr::OuterJoin(_)))
+            )
+        {
+            let Some(AccessExpr::Dot(Expr::OuterJoin(inner_expr))) = access_chain.pop() else {
+                return parser_err!("expected (+) expression", root.span().start);
+            };
+
+            if !Self::is_all_ident(&root, &[]) {
+                return parser_err!("column identifier before (+)", root.span().start);
+            };
+
+            let token_start = root.span().start;
+            let mut idents = Self::exprs_to_idents(root, vec![])?;
+            match *inner_expr {
+                Expr::CompoundIdentifier(suffix) => idents.extend(suffix),
+                Expr::Identifier(suffix) => idents.push(suffix),
+                _ => {
+                    return parser_err!("column identifier before (+)", token_start);
+                }
             }
 
-            Ok(Expr::CompoundFieldAccess {
-                root: Box::new(root),
-                access_chain: chain,
-            })
+            return Ok(Expr::OuterJoin(Expr::CompoundIdentifier(idents).into()));
         }
+
+        Ok(Expr::CompoundFieldAccess {
+            root: Box::new(root),
+            access_chain,
+        })
     }
 
     /// Check if the root is an identifier and all fields are identifiers.
@@ -1625,20 +1729,23 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Try to parse OuterJoin expression `(+)`
-    fn parse_outer_join_expr(&mut self, id_parts: &[Ident]) -> Option<Expr> {
-        if dialect_of!(self is SnowflakeDialect | MsSqlDialect)
-            && self.consume_tokens(&[Token::LParen, Token::Plus, Token::RParen])
-        {
-            Some(Expr::OuterJoin(Box::new(
-                match <[Ident; 1]>::try_from(id_parts.to_vec()) {
-                    Ok([ident]) => Expr::Identifier(ident),
-                    Err(parts) => Expr::CompoundIdentifier(parts),
-                },
-            )))
-        } else {
-            None
+    /// Returns true if the next tokens indicate the outer join operator `(+)`.
+    fn peek_outer_join_operator(&mut self) -> bool {
+        if !self.dialect.supports_outer_join_operator() {
+            return false;
         }
+
+        let [maybe_lparen, maybe_plus, maybe_rparen] = self.peek_tokens_ref();
+        Token::LParen == maybe_lparen.token
+            && Token::Plus == maybe_plus.token
+            && Token::RParen == maybe_rparen.token
+    }
+
+    /// If the next tokens indicates the outer join operator `(+)`, consume
+    /// the tokens and return true.
+    fn maybe_parse_outer_join_operator(&mut self) -> bool {
+        self.dialect.supports_outer_join_operator()
+            && self.consume_tokens(&[Token::LParen, Token::Plus, Token::RParen])
     }
 
     pub fn parse_utility_options(&mut self) -> Result<Vec<UtilityOption>, ParserError> {
@@ -1686,41 +1793,6 @@ impl<'a> Parser<'a> {
                 body: Box::new(expr),
             }))
         })
-    }
-
-    /// Parses method call expression
-    fn try_parse_method(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        if !self.dialect.supports_methods() {
-            return Ok(expr);
-        }
-        let method_chain = self.maybe_parse(|p| {
-            let mut method_chain = Vec::new();
-            while p.consume_token(&Token::Period) {
-                let tok = p.next_token();
-                let name = match tok.token {
-                    Token::Word(word) => word.into_ident(tok.span),
-                    _ => return p.expected("identifier", tok),
-                };
-                let func = match p.parse_function(ObjectName::from(vec![name]))? {
-                    Expr::Function(func) => func,
-                    _ => return p.expected("function", p.peek_token()),
-                };
-                method_chain.push(func);
-            }
-            if !method_chain.is_empty() {
-                Ok(method_chain)
-            } else {
-                p.expected("function", p.peek_token())
-            }
-        })?;
-        if let Some(method_chain) = method_chain {
-            Ok(Expr::Method(Method {
-                expr: Box::new(expr),
-                method_chain,
-            }))
-        } else {
-            Ok(expr)
-        }
     }
 
     /// Tries to parse the body of an [ODBC function] call.
@@ -3043,14 +3115,17 @@ impl<'a> Parser<'a> {
             Token::DuckIntDiv if dialect_is!(dialect is DuckDbDialect | GenericDialect) => {
                 Some(BinaryOperator::DuckIntegerDivide)
             }
-            Token::ShiftLeft if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
+            Token::ShiftLeft if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect | RedshiftSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftLeft)
             }
-            Token::ShiftRight if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
+            Token::ShiftRight if dialect_is!(dialect is PostgreSqlDialect | DuckDbDialect | GenericDialect | RedshiftSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftRight)
             }
-            Token::Sharp if dialect_is!(dialect is PostgreSqlDialect) => {
+            Token::Sharp if dialect_is!(dialect is PostgreSqlDialect | RedshiftSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseXor)
+            }
+            Token::Overlap if dialect_is!(dialect is PostgreSqlDialect | RedshiftSqlDialect) => {
+                Some(BinaryOperator::PGOverlap)
             }
             Token::Overlap if dialect_is!(dialect is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGOverlap)
@@ -3079,6 +3154,57 @@ impl<'a> Parser<'a> {
             Token::QuestionAnd => Some(BinaryOperator::QuestionAnd),
             Token::QuestionPipe => Some(BinaryOperator::QuestionPipe),
             Token::CustomBinaryOperator(s) => Some(BinaryOperator::Custom(s.clone())),
+            Token::DoubleSharp if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::DoubleHash)
+            }
+
+            Token::AmpersandLeftAngleBracket if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::AndLt)
+            }
+            Token::AmpersandRightAngleBracket if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::AndGt)
+            }
+            Token::QuestionMarkDash if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::QuestionDash)
+            }
+            Token::AmpersandLeftAngleBracketVerticalBar
+                if self.dialect.supports_geometric_types() =>
+            {
+                Some(BinaryOperator::AndLtPipe)
+            }
+            Token::VerticalBarAmpersandRightAngleBracket
+                if self.dialect.supports_geometric_types() =>
+            {
+                Some(BinaryOperator::PipeAndGt)
+            }
+            Token::TwoWayArrow if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::LtDashGt)
+            }
+            Token::LeftAngleBracketCaret if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::LtCaret)
+            }
+            Token::RightAngleBracketCaret if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::GtCaret)
+            }
+            Token::QuestionMarkSharp if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::QuestionHash)
+            }
+            Token::QuestionMarkDoubleVerticalBar if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::QuestionDoublePipe)
+            }
+            Token::QuestionMarkDashVerticalBar if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::QuestionDashPipe)
+            }
+            Token::TildeEqual if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::TildeEq)
+            }
+            Token::ShiftLeftVerticalBar if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::LtLtPipe)
+            }
+            Token::VerticalBarShiftRight if self.dialect.supports_geometric_types() => {
+                Some(BinaryOperator::PipeGtGt)
+            }
+            Token::AtSign if self.dialect.supports_geometric_types() => Some(BinaryOperator::At),
 
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
@@ -3281,21 +3407,9 @@ impl<'a> Parser<'a> {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),
             })
-        } else if Token::LBracket == *tok {
-            if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect | ClickHouseDialect | BigQueryDialect)
-            {
-                let mut chain = vec![];
-                // back to LBracket
-                self.prev_token();
-                self.parse_multi_dim_subscript(&mut chain)?;
-                self.parse_compound_field_access(expr, chain)
-            } else if self.dialect.supports_partiql() {
-                self.prev_token();
-                self.parse_json_access(expr)
-            } else {
-                parser_err!("Array subscripting is not supported", tok.span.start)
-            }
-        } else if dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == *tok {
+        } else if Token::LBracket == *tok && self.dialect.supports_partiql()
+            || (dialect_of!(self is SnowflakeDialect | GenericDialect) && Token::Colon == *tok)
+        {
             self.prev_token();
             self.parse_json_access(expr)
         } else {
@@ -3602,6 +3716,26 @@ impl<'a> Parser<'a> {
                 token: Token::EOF,
                 span: Span::empty(),
             });
+        })
+    }
+
+    /// Returns references to the `N` next non-whitespace tokens
+    /// that have not yet been processed.
+    ///
+    /// See [`Self::peek_tokens`] for an example.
+    pub fn peek_tokens_ref<const N: usize>(&self) -> [&TokenWithSpan; N] {
+        let mut index = self.index;
+        core::array::from_fn(|_| loop {
+            let token = self.tokens.get(index);
+            index += 1;
+            if let Some(TokenWithSpan {
+                token: Token::Whitespace(_),
+                span: _,
+            }) = token
+            {
+                continue;
+            }
+            break token.unwrap_or(&EOF_TOKEN);
         })
     }
 
@@ -6854,11 +6988,6 @@ impl<'a> Parser<'a> {
         } else {
             self.parse_data_type()?
         };
-        let mut collation = if self.parse_keyword(Keyword::COLLATE) {
-            Some(self.parse_object_name(false)?)
-        } else {
-            None
-        };
         let mut options = vec![];
         loop {
             if self.parse_keyword(Keyword::CONSTRAINT) {
@@ -6873,10 +7002,6 @@ impl<'a> Parser<'a> {
                 }
             } else if let Some(option) = self.parse_optional_column_option()? {
                 options.push(ColumnOptionDef { name: None, option });
-            } else if dialect_of!(self is MySqlDialect | SnowflakeDialect | GenericDialect)
-                && self.parse_keyword(Keyword::COLLATE)
-            {
-                collation = Some(self.parse_object_name(false)?);
             } else {
                 break;
             };
@@ -6884,7 +7009,6 @@ impl<'a> Parser<'a> {
         Ok(ColumnDef {
             name,
             data_type,
-            collation,
             options,
         })
     }
@@ -6919,6 +7043,10 @@ impl<'a> Parser<'a> {
 
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
+                self.parse_object_name(false)?,
+            )))
+        } else if self.parse_keywords(&[Keyword::COLLATE]) {
+            Ok(Some(ColumnOption::Collation(
                 self.parse_object_name(false)?,
             )))
         } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
@@ -8042,6 +8170,7 @@ impl<'a> Parser<'a> {
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,
+            Keyword::TYPE,
             Keyword::TABLE,
             Keyword::INDEX,
             Keyword::ROLE,
@@ -8050,6 +8179,7 @@ impl<'a> Parser<'a> {
         ])?;
         match object_type {
             Keyword::VIEW => self.parse_alter_view(),
+            Keyword::TYPE => self.parse_alter_type(),
             Keyword::TABLE => {
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
@@ -8120,6 +8250,55 @@ impl<'a> Parser<'a> {
             query,
             with_options,
         })
+    }
+
+    /// Parse a [Statement::AlterType]
+    pub fn parse_alter_type(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+
+        if self.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_name = self.parse_identifier()?;
+            Ok(Statement::AlterType(AlterType {
+                name,
+                operation: AlterTypeOperation::Rename(AlterTypeRename { new_name }),
+            }))
+        } else if self.parse_keywords(&[Keyword::ADD, Keyword::VALUE]) {
+            let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+            let new_enum_value = self.parse_identifier()?;
+            let position = if self.parse_keyword(Keyword::BEFORE) {
+                Some(AlterTypeAddValuePosition::Before(self.parse_identifier()?))
+            } else if self.parse_keyword(Keyword::AFTER) {
+                Some(AlterTypeAddValuePosition::After(self.parse_identifier()?))
+            } else {
+                None
+            };
+
+            Ok(Statement::AlterType(AlterType {
+                name,
+                operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                    if_not_exists,
+                    value: new_enum_value,
+                    position,
+                }),
+            }))
+        } else if self.parse_keywords(&[Keyword::RENAME, Keyword::VALUE]) {
+            let existing_enum_value = self.parse_identifier()?;
+            self.expect_keyword(Keyword::TO)?;
+            let new_enum_value = self.parse_identifier()?;
+
+            Ok(Statement::AlterType(AlterType {
+                name,
+                operation: AlterTypeOperation::RenameValue(AlterTypeRenameValue {
+                    from: existing_enum_value,
+                    to: new_enum_value,
+                }),
+            }))
+        } else {
+            return self.expected_ref(
+                "{RENAME TO | { RENAME | ADD } VALUE}",
+                self.peek_token_ref(),
+            );
+        }
     }
 
     /// Parse a `CALL procedure_name(arg1, arg2, ...)`
@@ -8961,7 +9140,6 @@ impl<'a> Parser<'a> {
         Ok(ColumnDef {
             name,
             data_type,
-            collation: None,
             options: Vec::new(), // No constraints expected here
         })
     }
@@ -13777,7 +13955,14 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_execute(&mut self) -> Result<Statement, ParserError> {
-        let name = self.parse_object_name(false)?;
+        let name = if self.dialect.supports_execute_immediate()
+            && self.parse_keyword(Keyword::IMMEDIATE)
+        {
+            None
+        } else {
+            let name = self.parse_object_name(false)?;
+            Some(name)
+        };
 
         let has_parentheses = self.consume_token(&Token::LParen);
 
@@ -13794,19 +13979,24 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
         }
 
-        let mut using = vec![];
-        if self.parse_keyword(Keyword::USING) {
-            using.push(self.parse_expr()?);
+        let into = if self.parse_keyword(Keyword::INTO) {
+            self.parse_comma_separated(Self::parse_identifier)?
+        } else {
+            vec![]
+        };
 
-            while self.consume_token(&Token::Comma) {
-                using.push(self.parse_expr()?);
-            }
+        let using = if self.parse_keyword(Keyword::USING) {
+            self.parse_comma_separated(Self::parse_expr_with_alias)?
+        } else {
+            vec![]
         };
 
         Ok(Statement::Execute {
+            immediate: name.is_none(),
             name,
             parameters,
             has_parentheses,
+            into,
             using,
         })
     }
@@ -14236,6 +14426,10 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name(false)?;
         self.expect_keyword_is(Keyword::AS)?;
 
+        if self.parse_keyword(Keyword::ENUM) {
+            return self.parse_create_type_enum(name);
+        }
+
         let mut attributes = vec![];
         if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
             return Ok(Statement::CreateType {
@@ -14269,6 +14463,20 @@ impl<'a> Parser<'a> {
         Ok(Statement::CreateType {
             name,
             representation: UserDefinedTypeRepresentation::Composite { attributes },
+        })
+    }
+
+    /// Parse remainder of `CREATE TYPE AS ENUM` statement (see [Statement::CreateType] and [Self::parse_create_type])
+    ///
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createtype.html)
+    pub fn parse_create_type_enum(&mut self, name: ObjectName) -> Result<Statement, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let labels = self.parse_comma_separated0(|p| p.parse_identifier(), Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Statement::CreateType {
+            name,
+            representation: UserDefinedTypeRepresentation::Enum { labels },
         })
     }
 

@@ -74,6 +74,23 @@ fn parse_numeric_literal_underscore() {
 }
 
 #[test]
+fn parse_function_object_name() {
+    let select = verified_only_select("SELECT a.b.c.d(1, 2, 3) FROM T");
+    let Expr::Function(func) = expr_from_projection(&select.projection[0]) else {
+        unreachable!()
+    };
+    assert_eq!(
+        ObjectName::from(
+            ["a", "b", "c", "d"]
+                .into_iter()
+                .map(Ident::new)
+                .collect::<Vec<_>>()
+        ),
+        func.name,
+    );
+}
+
+#[test]
 fn parse_insert_values() {
     let row = vec![
         Expr::Value(number("1")),
@@ -933,6 +950,44 @@ fn parse_select_distinct_tuple() {
             Expr::Identifier(Ident::new("id")),
         ]))],
         &select.projection
+    );
+}
+
+#[test]
+fn parse_outer_join_operator() {
+    let dialects = all_dialects_where(|d| d.supports_outer_join_operator());
+
+    let select = dialects.verified_only_select("SELECT 1 FROM T WHERE a = b (+)");
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::OuterJoin(Box::new(Expr::Identifier(Ident::new("b")))))
+        })
+    );
+
+    let select = dialects.verified_only_select("SELECT 1 FROM T WHERE t1.c1 = t2.c2.d3 (+)");
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("t1"),
+                Ident::new("c1")
+            ])),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::OuterJoin(Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("t2"),
+                Ident::new("c2"),
+                Ident::new("d3"),
+            ]))))
+        })
+    );
+
+    let res = dialects.parse_sql_statements("SELECT 1 FROM T WHERE 1 = 2 (+)");
+    assert_eq!(
+        ParserError::ParserError("Expected: column identifier before (+), found: 2".to_string()),
+        res.unwrap_err()
     );
 }
 
@@ -3523,7 +3578,6 @@ fn parse_create_table() {
                             length: 100,
                             unit: None,
                         })),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -3532,7 +3586,6 @@ fn parse_create_table() {
                     ColumnDef {
                         name: "lat".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Null,
@@ -3541,13 +3594,11 @@ fn parse_create_table() {
                     ColumnDef {
                         name: "lng".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: "constrained".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -3580,7 +3631,6 @@ fn parse_create_table() {
                     ColumnDef {
                         name: "ref".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
@@ -3595,7 +3645,6 @@ fn parse_create_table() {
                     ColumnDef {
                         name: "ref2".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
@@ -3712,7 +3761,6 @@ fn parse_create_table_with_constraint_characteristics() {
                             length: 100,
                             unit: None,
                         })),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -3721,7 +3769,6 @@ fn parse_create_table_with_constraint_characteristics() {
                     ColumnDef {
                         name: "lat".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Null,
@@ -3730,7 +3777,6 @@ fn parse_create_table_with_constraint_characteristics() {
                     ColumnDef {
                         name: "lng".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![],
                     },
                 ]
@@ -3865,7 +3911,6 @@ fn parse_create_table_column_constraint_characteristics() {
                     vec![ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Unique {
@@ -3980,13 +4025,11 @@ fn parse_create_table_hive_array() {
                         ColumnDef {
                             name: Ident::new("name"),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![],
                         },
                         ColumnDef {
                             name: Ident::new("val"),
                             data_type: DataType::Array(expected),
-                            collation: None,
                             options: vec![],
                         },
                     ],
@@ -4352,7 +4395,6 @@ fn parse_create_external_table() {
                             length: 100,
                             unit: None,
                         })),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -4361,7 +4403,6 @@ fn parse_create_external_table() {
                     ColumnDef {
                         name: "lat".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Null,
@@ -4370,7 +4411,6 @@ fn parse_create_external_table() {
                     ColumnDef {
                         name: "lng".into(),
                         data_type: DataType::Double(ExactNumberInfo::None),
-                        collation: None,
                         options: vec![],
                     },
                 ]
@@ -4423,7 +4463,6 @@ fn parse_create_or_replace_external_table() {
                         length: 100,
                         unit: None,
                     })),
-                    collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: ColumnOption::NotNull,
@@ -10856,7 +10895,7 @@ fn parse_call() {
 #[test]
 fn parse_execute_stored_procedure() {
     let expected = Statement::Execute {
-        name: ObjectName::from(vec![
+        name: Some(ObjectName::from(vec![
             Ident {
                 value: "my_schema".to_string(),
                 quote_style: None,
@@ -10867,13 +10906,15 @@ fn parse_execute_stored_procedure() {
                 quote_style: None,
                 span: Span::empty(),
             },
-        ]),
+        ])),
         parameters: vec![
             Expr::Value(Value::NationalStringLiteral("param1".to_string())),
             Expr::Value(Value::NationalStringLiteral("param2".to_string())),
         ],
         has_parentheses: false,
+        immediate: false,
         using: vec![],
+        into: vec![],
     };
     assert_eq!(
         // Microsoft SQL Server does not use parentheses around arguments for EXECUTE
@@ -10891,8 +10932,50 @@ fn parse_execute_stored_procedure() {
 }
 
 #[test]
+fn parse_execute_immediate() {
+    let dialects = all_dialects_where(|d| d.supports_execute_immediate());
+
+    let expected = Statement::Execute {
+        parameters: vec![Expr::Value(Value::SingleQuotedString(
+            "SELECT 1".to_string(),
+        ))],
+        immediate: true,
+        using: vec![ExprWithAlias {
+            expr: Expr::Value(number("1")),
+            alias: Some(Ident::new("b")),
+        }],
+        into: vec![Ident::new("a")],
+        name: None,
+        has_parentheses: false,
+    };
+
+    let stmt = dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a USING 1 AS b");
+    assert_eq!(expected, stmt);
+
+    dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a, b USING 1 AS x, y");
+    dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' USING 1 AS x, y");
+    dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1' INTO a, b");
+    dialects.verified_stmt("EXECUTE IMMEDIATE 'SELECT 1'");
+    dialects.verified_stmt("EXECUTE 'SELECT 1'");
+
+    assert_eq!(
+        ParserError::ParserError("Expected: identifier, found: ,".to_string()),
+        dialects
+            .parse_sql_statements("EXECUTE IMMEDIATE 'SELECT 1' USING 1 AS, y")
+            .unwrap_err()
+    );
+}
+
+#[test]
 fn parse_create_table_collate() {
-    pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
+    all_dialects().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
+    // check ordering is preserved
+    all_dialects().verified_stmt(
+        "CREATE TABLE tbl (foo INT, bar TEXT CHARACTER SET utf8mb4 COLLATE \"de_DE\")",
+    );
+    all_dialects().verified_stmt(
+        "CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\" CHARACTER SET utf8mb4)",
+    );
 }
 
 #[test]
@@ -11071,7 +11154,6 @@ fn test_parse_inline_comment() {
                 vec![ColumnDef {
                     name: Ident::new("id".to_string()),
                     data_type: DataType::Int(None),
-                    collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: Comment("comment without equal".to_string()),
@@ -12791,68 +12873,76 @@ fn test_try_convert() {
 
 #[test]
 fn parse_method_select() {
-    let dialects = all_dialects_where(|d| d.supports_methods());
-    let _ = dialects.verified_only_select(
+    let _ = verified_only_select(
         "SELECT LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T",
     );
-    let _ = dialects.verified_only_select("SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T");
-    let _ = dialects
-        .verified_only_select("SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T");
+    let _ = verified_only_select("SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T");
+    let _ = verified_only_select("SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T");
 
     // `CONVERT` support
-    let dialects = all_dialects_where(|d| {
-        d.supports_methods() && d.supports_try_convert() && d.convert_type_before_value()
-    });
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && d.convert_type_before_value());
     let _ = dialects.verified_only_select("SELECT CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T");
 }
 
 #[test]
 fn parse_method_expr() {
-    let dialects = all_dialects_where(|d| d.supports_methods());
-    let expr = dialects
-        .verified_expr("LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')");
+    let expr =
+        verified_expr("LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')");
     match expr {
-        Expr::Method(Method { expr, method_chain }) => {
-            assert!(matches!(*expr, Expr::Function(_)));
+        Expr::CompoundFieldAccess { root, access_chain } => {
+            assert!(matches!(*root, Expr::Function(_)));
             assert!(matches!(
-                method_chain[..],
-                [Function { .. }, Function { .. }]
+                access_chain[..],
+                [
+                    AccessExpr::Dot(Expr::Function(_)),
+                    AccessExpr::Dot(Expr::Function(_))
+                ]
             ));
         }
         _ => unreachable!(),
     }
-    let expr = dialects.verified_expr(
+
+    let expr = verified_expr(
         "(SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)')",
     );
     match expr {
-        Expr::Method(Method { expr, method_chain }) => {
-            assert!(matches!(*expr, Expr::Subquery(_)));
-            assert!(matches!(method_chain[..], [Function { .. }]));
+        Expr::CompoundFieldAccess { root, access_chain } => {
+            assert!(matches!(*root, Expr::Subquery(_)));
+            assert!(matches!(
+                access_chain[..],
+                [AccessExpr::Dot(Expr::Function(_))]
+            ));
         }
         _ => unreachable!(),
     }
-    let expr = dialects.verified_expr("CAST(column AS XML).value('.', 'NVARCHAR(MAX)')");
+    let expr = verified_expr("CAST(column AS XML).value('.', 'NVARCHAR(MAX)')");
     match expr {
-        Expr::Method(Method { expr, method_chain }) => {
-            assert!(matches!(*expr, Expr::Cast { .. }));
-            assert!(matches!(method_chain[..], [Function { .. }]));
+        Expr::CompoundFieldAccess { root, access_chain } => {
+            assert!(matches!(*root, Expr::Cast { .. }));
+            assert!(matches!(
+                access_chain[..],
+                [AccessExpr::Dot(Expr::Function(_))]
+            ));
         }
         _ => unreachable!(),
     }
 
     // `CONVERT` support
-    let dialects = all_dialects_where(|d| {
-        d.supports_methods() && d.supports_try_convert() && d.convert_type_before_value()
-    });
+    let dialects =
+        all_dialects_where(|d| d.supports_try_convert() && d.convert_type_before_value());
     let expr = dialects.verified_expr(
         "CONVERT(XML, '<Book>abc</Book>').value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)')",
     );
     match expr {
-        Expr::Method(Method { expr, method_chain }) => {
-            assert!(matches!(*expr, Expr::Convert { .. }));
+        Expr::CompoundFieldAccess { root, access_chain } => {
+            assert!(matches!(*root, Expr::Convert { .. }));
             assert!(matches!(
-                method_chain[..],
-                [Function { .. }, Function { .. }]
+                access_chain[..],
+                [
+                    AccessExpr::Dot(Expr::Function(_)),
+                    AccessExpr::Dot(Expr::Function(_))
+                ]
             ));
         }
         _ => unreachable!(),
@@ -13652,7 +13742,6 @@ fn parse_create_table_with_enum_types() {
                             ],
                             Some(8)
                         ),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -13670,7 +13759,6 @@ fn parse_create_table_with_enum_types() {
                             ],
                             Some(16)
                         ),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -13682,7 +13770,6 @@ fn parse_create_table_with_enum_types() {
                             ],
                             None
                         ),
-                        collation: None,
                         options: vec![],
                     }
                 ],
@@ -13940,4 +14027,362 @@ fn test_select_from_first() {
         assert_eq!(expected, ast);
         assert_eq!(ast.to_string(), q);
     }
+}
+
+#[test]
+fn test_geometric_unary_operators() {
+    // Number of points in path or polygon
+    let sql = "# path '((1,0),(0,1),(-1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::Hash,
+            ..
+        }
+    ));
+
+    // Length or circumference
+    let sql = "@-@ path '((0,0),(1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::AtDashAt,
+            ..
+        }
+    ));
+
+    // Center
+    let sql = "@@ circle '((0,0),10)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::DoubleAt,
+            ..
+        }
+    ));
+    // Is horizontal?
+    let sql = "?- lseg '((-1,0),(1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::QuestionDash,
+            ..
+        }
+    ));
+
+    // Is vertical?
+    let sql = "?| lseg '((-1,0),(1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::QuestionPipe,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_geomtery_type() {
+    let sql = "point '1,2'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::Point),
+            value: Value::SingleQuotedString("1,2".to_string()),
+        }
+    );
+
+    let sql = "line '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::Line),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+
+    let sql = "path '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::GeometricPath),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+    let sql = "box '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::GeometricBox),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+
+    let sql = "circle '1,2,3'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::Circle),
+            value: Value::SingleQuotedString("1,2,3".to_string()),
+        }
+    );
+
+    let sql = "polygon '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::Polygon),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+    let sql = "lseg '1,2,3,4'";
+    assert_eq!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::TypedString {
+            data_type: DataType::GeometricType(GeometricTypeKind::LineSegment),
+            value: Value::SingleQuotedString("1,2,3,4".to_string()),
+        }
+    );
+}
+#[test]
+fn test_geometric_binary_operators() {
+    // Translation plus
+    let sql = "box '((0,0),(1,1))' + point '(2.0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::Plus,
+            ..
+        }
+    ));
+    // Translation minus
+    let sql = "box '((0,0),(1,1))' - point '(2.0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::Minus,
+            ..
+        }
+    ));
+
+    // Scaling multiply
+    let sql = "box '((0,0),(1,1))' * point '(2.0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::Multiply,
+            ..
+        }
+    ));
+
+    // Scaling divide
+    let sql = "box '((0,0),(1,1))' / point '(2.0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::Divide,
+            ..
+        }
+    ));
+
+    // Intersection
+    let sql = "'((1,-1),(-1,1))' # '((1,1),(-1,-1))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PGBitwiseXor,
+            ..
+        }
+    ));
+
+    //Point of closest proximity
+    let sql = "point '(0,0)' ## lseg '((2,0),(0,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::DoubleHash,
+            ..
+        }
+    ));
+
+    // Point of closest proximity
+    let sql = "box '((0,0),(1,1))' && box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PGOverlap,
+            ..
+        }
+    ));
+
+    // Overlaps to left?
+    let sql = "box '((0,0),(1,1))' &< box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::AndLt,
+            ..
+        }
+    ));
+
+    // Overlaps to right?
+    let sql = "box '((0,0),(3,3))' &> box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::AndGt,
+            ..
+        }
+    ));
+
+    // Distance between
+    let sql = "circle '((0,0),1)' <-> circle '((5,0),1)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::LtDashGt,
+            ..
+        }
+    ));
+
+    // Is left of?
+    let sql = "circle '((0,0),1)' << circle '((5,0),1)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PGBitwiseShiftLeft,
+            ..
+        }
+    ));
+
+    // Is right of?
+    let sql = "circle '((5,0),1)' >> circle '((0,0),1)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PGBitwiseShiftRight,
+            ..
+        }
+    ));
+
+    // Is below?
+    let sql = "circle '((0,0),1)' <^ circle '((0,5),1)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::LtCaret,
+            ..
+        }
+    ));
+
+    // 	Intersects or overlaps
+    let sql = "lseg '((-1,0),(1,0))' ?# box '((-2,-2),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionHash,
+            ..
+        }
+    ));
+
+    // Is horizontal?
+    let sql = "point '(1,0)' ?- point '(0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionDash,
+            ..
+        }
+    ));
+
+    // Is perpendicular?
+    let sql = "lseg '((0,0),(0,1))' ?-| lseg '((0,0),(1,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionDashPipe,
+            ..
+        }
+    ));
+
+    // Is vertical?
+    let sql = "point '(0,1)' ?| point '(0,0)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionPipe,
+            ..
+        }
+    ));
+
+    // Are parallel?
+    let sql = "lseg '((-1,0),(1,0))' ?|| lseg '((-1,2),(1,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::QuestionDoublePipe,
+            ..
+        }
+    ));
+
+    // Contained or on?
+    let sql = "point '(1,1)' @ circle '((0,0),2)'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::At,
+            ..
+        }
+    ));
+
+    //
+    // Same as?
+    let sql = "polygon '((0,0),(1,1))' ~= polygon '((1,1),(0,0))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::TildeEq,
+            ..
+        }
+    ));
+
+    // Is strictly below?
+    let sql = "box '((0,0),(3,3))' <<| box '((3,4),(5,5))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::LtLtPipe,
+            ..
+        }
+    ));
+
+    // Is strictly above?
+    let sql = "box '((3,4),(5,5))' |>> box '((0,0),(3,3))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PipeGtGt,
+            ..
+        }
+    ));
+
+    // Does not extend above?
+    let sql = "box '((0,0),(1,1))' &<| box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::AndLtPipe,
+            ..
+        }
+    ));
+
+    // Does not extend below?
+    let sql = "box '((0,0),(3,3))' |&> box '((0,0),(2,2))'";
+    assert!(matches!(
+        all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::PipeAndGt,
+            ..
+        }
+    ));
 }

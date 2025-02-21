@@ -363,7 +363,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "customer_id".into(),
                         data_type: DataType::Integer(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Default(
@@ -374,7 +373,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "store_id".into(),
                         data_type: DataType::SmallInt(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -388,7 +386,6 @@ fn parse_create_table_with_defaults() {
                                 unit: None
                             }
                         )),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -402,11 +399,18 @@ fn parse_create_table_with_defaults() {
                                 unit: None
                             }
                         )),
-                        collation: Some(ObjectName::from(vec![Ident::with_quote('"', "es_ES")])),
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::NotNull,
-                        }],
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Collation(ObjectName::from(vec![
+                                    Ident::with_quote('"', "es_ES")
+                                ])),
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull,
+                            }
+                        ],
                     },
                     ColumnDef {
                         name: "email".into(),
@@ -416,13 +420,11 @@ fn parse_create_table_with_defaults() {
                                 unit: None
                             }
                         )),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: "address_id".into(),
                         data_type: DataType::SmallInt(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull
@@ -431,7 +433,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "activebool".into(),
                         data_type: DataType::Boolean,
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -446,7 +447,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "create_date".into(),
                         data_type: DataType::Date,
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -461,7 +461,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "last_update".into(),
                         data_type: DataType::Timestamp(None, TimezoneInfo::WithoutTimeZone),
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -476,7 +475,6 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "active".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull
@@ -842,7 +840,6 @@ fn parse_alter_table_add_columns() {
                         column_def: ColumnDef {
                             name: "a".into(),
                             data_type: DataType::Text,
-                            collation: None,
                             options: vec![],
                         },
                         column_position: None,
@@ -853,7 +850,6 @@ fn parse_alter_table_add_columns() {
                         column_def: ColumnDef {
                             name: "b".into(),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![],
                         },
                         column_position: None,
@@ -1659,10 +1655,12 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName::from(vec!["a".into()]),
+            name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![],
             has_parentheses: false,
-            using: vec![]
+            using: vec![],
+            immediate: false,
+            into: vec![]
         }
     );
 
@@ -1670,13 +1668,15 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName::from(vec!["a".into()]),
+            name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![
                 Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
             ],
             has_parentheses: true,
-            using: vec![]
+            using: vec![],
+            immediate: false,
+            into: vec![]
         }
     );
 
@@ -1685,23 +1685,31 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName::from(vec!["a".into()]),
+            name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![],
             has_parentheses: false,
             using: vec![
-                Expr::Cast {
-                    kind: CastKind::Cast,
-                    expr: Box::new(Expr::Value(Value::Number("1337".parse().unwrap(), false))),
-                    data_type: DataType::SmallInt(None),
-                    format: None
+                ExprWithAlias {
+                    expr: Expr::Cast {
+                        kind: CastKind::Cast,
+                        expr: Box::new(Expr::Value(Value::Number("1337".parse().unwrap(), false))),
+                        data_type: DataType::SmallInt(None),
+                        format: None
+                    },
+                    alias: None
                 },
-                Expr::Cast {
-                    kind: CastKind::Cast,
-                    expr: Box::new(Expr::Value(Value::Number("7331".parse().unwrap(), false))),
-                    data_type: DataType::SmallInt(None),
-                    format: None
+                ExprWithAlias {
+                    expr: Expr::Cast {
+                        kind: CastKind::Cast,
+                        expr: Box::new(Expr::Value(Value::Number("7331".parse().unwrap(), false))),
+                        data_type: DataType::SmallInt(None),
+                        format: None
+                    },
+                    alias: None
                 },
-            ]
+            ],
+            immediate: false,
+            into: vec![]
         }
     );
 }
@@ -2058,12 +2066,8 @@ fn parse_pg_custom_binary_ops() {
     let operators = [
         // PostGIS
         "&&&",   // n-D bounding boxes intersect
-        "&<",    // (is strictly to the left of)
-        "&>",    // (is strictly to the right of)
         "|=|",   //  distance between A and B trajectories at their closest point of approach
         "<<#>>", // n-D distance between A and B bounding boxes
-        "|>>",   // A's bounding box is strictly above B's.
-        "~=",    // bounding box is the same
         // PGroonga
         "&@",   // Full text search by a keyword
         "&@~",  // Full text search by easy to use query language
@@ -2991,38 +2995,45 @@ fn parse_json_table_is_not_reserved() {
 fn test_composite_value() {
     let sql = "SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9";
     let select = pg().verified_only_select(sql);
+
+    let Expr::CompoundFieldAccess { root, access_chain } =
+        expr_from_projection(&select.projection[0])
+    else {
+        unreachable!("expected projection: got {:?}", &select.projection[0]);
+    };
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::CompositeAccess {
-            key: Ident::new("name"),
-            expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("on_hand"),
-                Ident::new("item")
-            ]))))
-        }),
-        select.projection[0]
+        root.as_ref(),
+        &Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+            Ident::new("on_hand"),
+            Ident::new("item")
+        ])))
+    );
+    assert_eq!(
+        access_chain.as_slice(),
+        &[AccessExpr::Dot(Expr::Identifier(Ident::new("name")))]
     );
 
     assert_eq!(
-        select.selection,
-        Some(Expr::BinaryOp {
-            left: Box::new(Expr::CompositeAccess {
-                key: Ident::new("price"),
-                expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+        select.selection.as_ref().unwrap(),
+        &Expr::BinaryOp {
+            left: Box::new(Expr::CompoundFieldAccess {
+                root: Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
                     Ident::new("on_hand"),
                     Ident::new("item")
-                ]))))
+                ])))
+                .into(),
+                access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("price")))]
             }),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("9")))
-        })
+        }
     );
 
     let sql = "SELECT (information_schema._pg_expandarray(ARRAY['i', 'i'])).n";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::CompositeAccess {
-            key: Ident::new("n"),
-            expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
+        &Expr::CompoundFieldAccess {
+            root: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
                 name: ObjectName::from(vec![
                     Ident::new("information_schema"),
                     Ident::new("_pg_expandarray")
@@ -3046,9 +3057,10 @@ fn test_composite_value() {
                 filter: None,
                 over: None,
                 within_group: vec![],
-            }))))
-        }),
-        select.projection[0]
+            })))),
+            access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("n")))],
+        },
+        expr_from_projection(&select.projection[0])
     );
 }
 
@@ -4271,37 +4283,31 @@ fn parse_create_table_with_alias() {
                     ColumnDef {
                         name: "int8_col".into(),
                         data_type: DataType::Int8(None),
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "int4_col".into(),
                         data_type: DataType::Int4(None),
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "int2_col".into(),
                         data_type: DataType::Int2(None),
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "float8_col".into(),
                         data_type: DataType::Float8,
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "float4_col".into(),
                         data_type: DataType::Float4,
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "bool_col".into(),
                         data_type: DataType::Bool,
-                        collation: None,
                         options: vec![]
                     },
                 ]
@@ -4323,13 +4329,11 @@ fn parse_create_table_with_partition_by() {
                     ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Text,
-                        collation: None,
                         options: vec![]
                     }
                 ],
@@ -5073,25 +5077,21 @@ fn parse_trigger_related_functions() {
                 ColumnDef {
                     name: "empname".into(),
                     data_type: DataType::Text,
-                    collation: None,
                     options: vec![],
                 },
                 ColumnDef {
                     name: "salary".into(),
                     data_type: DataType::Integer(None),
-                    collation: None,
                     options: vec![],
                 },
                 ColumnDef {
                     name: "last_date".into(),
                     data_type: DataType::Timestamp(None, TimezoneInfo::None),
-                    collation: None,
                     options: vec![],
                 },
                 ColumnDef {
                     name: "last_user".into(),
                     data_type: DataType::Text,
-                    collation: None,
                     options: vec![],
                 },
             ],
@@ -5293,15 +5293,8 @@ fn arrow_cast_precedence() {
 
 #[test]
 fn parse_create_type_as_enum() {
-    let statement = pg().one_statement_parses_to(
-        r#"CREATE TYPE public.my_type AS ENUM (
-            'label1',
-            'label2',
-            'label3',
-            'label4'
-        );"#,
-        "CREATE TYPE public.my_type AS ENUM ('label1', 'label2', 'label3', 'label4')",
-    );
+    let sql = "CREATE TYPE public.my_type AS ENUM ('label1', 'label2', 'label3', 'label4')";
+    let statement = pg_and_generic().verified_stmt(sql);
     match statement {
         Statement::CreateType {
             name,
@@ -5316,8 +5309,99 @@ fn parse_create_type_as_enum() {
                 labels
             );
         }
-        _ => unreachable!(),
+        _ => unreachable!("{:?} should parse to Statement::CreateType", sql),
     }
+}
+
+#[test]
+fn parse_alter_type() {
+    struct TestCase {
+        sql: &'static str,
+        name: &'static str,
+        operation: AlterTypeOperation,
+    }
+    vec![
+        TestCase {
+            sql: "ALTER TYPE public.my_type RENAME TO my_new_type",
+            name: "public.my_type",
+            operation: AlterTypeOperation::Rename(AlterTypeRename {
+                new_name: Ident::new("my_new_type"),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE IF NOT EXISTS 'label3.5' BEFORE 'label4'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: true,
+                value: Ident::with_quote('\'', "label3.5"),
+                position: Some(AlterTypeAddValuePosition::Before(Ident::with_quote(
+                    '\'', "label4",
+                ))),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE 'label3.5' BEFORE 'label4'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: false,
+                value: Ident::with_quote('\'', "label3.5"),
+                position: Some(AlterTypeAddValuePosition::Before(Ident::with_quote(
+                    '\'', "label4",
+                ))),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE IF NOT EXISTS 'label3.5' AFTER 'label3'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: true,
+                value: Ident::with_quote('\'', "label3.5"),
+                position: Some(AlterTypeAddValuePosition::After(Ident::with_quote(
+                    '\'', "label3",
+                ))),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE 'label3.5' AFTER 'label3'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: false,
+                value: Ident::with_quote('\'', "label3.5"),
+                position: Some(AlterTypeAddValuePosition::After(Ident::with_quote(
+                    '\'', "label3",
+                ))),
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE IF NOT EXISTS 'label5'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: true,
+                value: Ident::with_quote('\'', "label5"),
+                position: None,
+            }),
+        },
+        TestCase {
+            sql: "ALTER TYPE public.my_type ADD VALUE 'label5'",
+            name: "public.my_type",
+            operation: AlterTypeOperation::AddValue(AlterTypeAddValue {
+                if_not_exists: false,
+                value: Ident::with_quote('\'', "label5"),
+                position: None,
+            }),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    .for_each(|(index, tc)| {
+        let statement = pg_and_generic().verified_stmt(tc.sql);
+        if let Statement::AlterType(AlterType { name, operation }) = statement {
+            assert_eq!(tc.name, name.to_string(), "TestCase[{index}].name");
+            assert_eq!(tc.operation, operation, "TestCase[{index}].operation");
+        } else {
+            unreachable!("{:?} should parse to Statement::AlterType", tc.sql);
+        }
+    });
 }
 
 #[test]
@@ -5341,13 +5425,11 @@ fn parse_varbit_datatype() {
                     ColumnDef {
                         name: "x".into(),
                         data_type: DataType::VarBit(None),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: "y".into(),
                         data_type: DataType::VarBit(Some(42)),
-                        collation: None,
                         options: vec![],
                     }
                 ]

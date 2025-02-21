@@ -1496,7 +1496,6 @@ fn parse_create_table_with_valid_options() {
                             span: Span::empty(),
                         },
                         data_type: Int(None,),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -1506,7 +1505,7 @@ fn parse_create_table_with_valid_options() {
                             span: Span::empty(),
                         },
                         data_type: Int(None,),
-                        collation: None,
+
                         options: vec![],
                     },
                     ColumnDef {
@@ -1516,7 +1515,7 @@ fn parse_create_table_with_valid_options() {
                             span: Span::empty(),
                         },
                         data_type: Int(None,),
-                        collation: None,
+
                         options: vec![],
                     },
                 ],
@@ -1671,7 +1670,7 @@ fn parse_create_table_with_identity_column() {
                         span: Span::empty(),
                     },
                     data_type: Int(None,),
-                    collation: None,
+
                     options: column_options,
                 },],
                 constraints: vec![],
@@ -1815,7 +1814,7 @@ fn parse_mssql_varbinary_max_length() {
                 vec![ColumnDef {
                     name: Ident::new("var_binary_col"),
                     data_type: Varbinary(Some(BinaryLength::Max)),
-                    collation: None,
+
                     options: vec![]
                 },],
             );
@@ -1840,7 +1839,7 @@ fn parse_mssql_varbinary_max_length() {
                 vec![ColumnDef {
                     name: Ident::new("var_binary_col"),
                     data_type: Varbinary(Some(BinaryLength::IntegerLength { length: 50 })),
-                    collation: None,
+
                     options: vec![]
                 },],
             );

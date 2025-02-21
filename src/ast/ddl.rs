@@ -30,10 +30,10 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
-    display_comma_separated, display_separated, CommentDef, CreateFunctionBody,
-    CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
-    FunctionDeterminismSpecifier, FunctionParallel, Ident, MySQLColumnPosition, ObjectName,
-    OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
+    CommentDef, CreateFunctionBody, CreateFunctionUsing, DataType, Expr, FunctionBehavior,
+    FunctionCalledOnNull, FunctionDeterminismSpecifier, FunctionParallel, Ident,
+    MySQLColumnPosition, ObjectName, OperateFunctionArg, OrderByExpr, ProjectionSelect,
+    SequenceOptions, SqlOption, Tag, Value, display_comma_separated, display_separated,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -1840,11 +1840,7 @@ impl ConstraintCharacteristics {
     fn enforced_text(&self) -> Option<&'static str> {
         self.enforced.map(
             |enforced| {
-                if enforced {
-                    "ENFORCED"
-                } else {
-                    "NOT ENFORCED"
-                }
+                if enforced { "ENFORCED" } else { "NOT ENFORCED" }
             },
         )
     }

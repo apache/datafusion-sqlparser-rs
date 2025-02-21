@@ -28,15 +28,15 @@ use helpers::attached_token::AttachedToken;
 
 use log::debug;
 
-use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
+use recursion::RecursionCounter;
 
-use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
 use crate::ast::Statement::CreatePolicy;
+use crate::ast::helpers::stmt_create_table::{CreateTableBuilder, CreateTableConfiguration};
 use crate::ast::*;
 use crate::dialect::*;
-use crate::keywords::{Keyword, ALL_KEYWORDS};
+use crate::keywords::{ALL_KEYWORDS, Keyword};
 use crate::tokenizer::*;
 
 mod alter;
@@ -1427,7 +1427,7 @@ impl<'a> Parser<'a> {
                         return Err(ParserError::ParserError(format!(
                             "Unexpected token in unary operator parsing: {:?}",
                             tok
-                        )))
+                        )));
                     }
                 };
                 Ok(Expr::UnaryOp {
@@ -2236,7 +2236,7 @@ impl<'a> Parser<'a> {
                 _ => {
                     return Err(ParserError::ParserError(
                         "Scale field can only be of number type".to_string(),
-                    ))
+                    ));
                 }
             }
         } else {
@@ -3262,8 +3262,8 @@ impl<'a> Parser<'a> {
                 ) {
                     return parser_err!(
                         format!(
-                        "Expected one of [=, >, <, =>, =<, !=] as comparison operator, found: {op}"
-                    ),
+                            "Expected one of [=, >, <, =>, =<, !=] as comparison operator, found: {op}"
+                        ),
                         span.start
                     );
                 };
@@ -3702,20 +3702,22 @@ impl<'a> Parser<'a> {
     /// See [`Self::peek_token`] for an example.
     pub fn peek_tokens_with_location<const N: usize>(&self) -> [TokenWithSpan; N] {
         let mut index = self.index;
-        core::array::from_fn(|_| loop {
-            let token = self.tokens.get(index);
-            index += 1;
-            if let Some(TokenWithSpan {
-                token: Token::Whitespace(_),
-                span: _,
-            }) = token
-            {
-                continue;
+        core::array::from_fn(|_| {
+            loop {
+                let token = self.tokens.get(index);
+                index += 1;
+                if let Some(TokenWithSpan {
+                    token: Token::Whitespace(_),
+                    span: _,
+                }) = token
+                {
+                    continue;
+                }
+                break token.cloned().unwrap_or(TokenWithSpan {
+                    token: Token::EOF,
+                    span: Span::empty(),
+                });
             }
-            break token.cloned().unwrap_or(TokenWithSpan {
-                token: Token::EOF,
-                span: Span::empty(),
-            });
         })
     }
 
@@ -3725,17 +3727,19 @@ impl<'a> Parser<'a> {
     /// See [`Self::peek_tokens`] for an example.
     pub fn peek_tokens_ref<const N: usize>(&self) -> [&TokenWithSpan; N] {
         let mut index = self.index;
-        core::array::from_fn(|_| loop {
-            let token = self.tokens.get(index);
-            index += 1;
-            if let Some(TokenWithSpan {
-                token: Token::Whitespace(_),
-                span: _,
-            }) = token
-            {
-                continue;
+        core::array::from_fn(|_| {
+            loop {
+                let token = self.tokens.get(index);
+                index += 1;
+                if let Some(TokenWithSpan {
+                    token: Token::Whitespace(_),
+                    span: _,
+                }) = token
+                {
+                    continue;
+                }
+                break token.unwrap_or(&EOF_TOKEN);
             }
-            break token.unwrap_or(&EOF_TOKEN);
         })
     }
 
@@ -5618,19 +5622,23 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_owner(&mut self) -> Result<Owner, ParserError> {
-        let owner = match self.parse_one_of_keywords(&[Keyword::CURRENT_USER, Keyword::CURRENT_ROLE, Keyword::SESSION_USER]) {
+        let owner = match self.parse_one_of_keywords(&[
+            Keyword::CURRENT_USER,
+            Keyword::CURRENT_ROLE,
+            Keyword::SESSION_USER,
+        ]) {
             Some(Keyword::CURRENT_USER) => Owner::CurrentUser,
             Some(Keyword::CURRENT_ROLE) => Owner::CurrentRole,
             Some(Keyword::SESSION_USER) => Owner::SessionUser,
             Some(_) => unreachable!(),
-            None => {
-                match self.parse_identifier() {
-                    Ok(ident) => Owner::Ident(ident),
-                    Err(e) => {
-                        return Err(ParserError::ParserError(format!("Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. {e}")))
-                    }
+            None => match self.parse_identifier() {
+                Ok(ident) => Owner::Ident(ident),
+                Err(e) => {
+                    return Err(ParserError::ParserError(format!(
+                        "Expected: CURRENT_USER, CURRENT_ROLE, SESSION_USER or identifier after OWNER TO. {e}"
+                    )));
                 }
-            }
+            },
         };
         Ok(owner)
     }
@@ -9215,14 +9223,14 @@ impl<'a> Parser<'a> {
                     return self.expected(
                         "expected to match USE/IGNORE/FORCE keyword",
                         self.peek_token(),
-                    )
+                    );
                 }
             };
             let index_type = match self.parse_one_of_keywords(&[Keyword::INDEX, Keyword::KEY]) {
                 Some(Keyword::INDEX) => TableIndexType::Index,
                 Some(Keyword::KEY) => TableIndexType::Key,
                 _ => {
-                    return self.expected("expected to match INDEX/KEY keyword", self.peek_token())
+                    return self.expected("expected to match INDEX/KEY keyword", self.peek_token());
                 }
             };
             let for_clause = if self.parse_keyword(Keyword::FOR) {
@@ -9344,7 +9352,7 @@ impl<'a> Parser<'a> {
                             return parser_err!(
                                 "BUG: expected to match GroupBy modifier keyword",
                                 self.peek_token().span.start
-                            )
+                            );
                         }
                     });
                 }
@@ -9547,12 +9555,12 @@ impl<'a> Parser<'a> {
             Token::EOF => {
                 return Err(ParserError::ParserError(
                     "Empty input when parsing identifier".to_string(),
-                ))?
+                ))?;
             }
             token => {
                 return Err(ParserError::ParserError(format!(
                     "Unexpected token in identifier: {token}"
-                )))?
+                )))?;
             }
         };
 
@@ -9567,12 +9575,12 @@ impl<'a> Parser<'a> {
                         Token::EOF => {
                             return Err(ParserError::ParserError(
                                 "Trailing period in identifier".to_string(),
-                            ))?
+                            ))?;
                         }
                         token => {
                             return Err(ParserError::ParserError(format!(
                                 "Unexpected token following period in identifier: {token}"
-                            )))?
+                            )))?;
                         }
                     }
                 }
@@ -9580,7 +9588,7 @@ impl<'a> Parser<'a> {
                 token => {
                     return Err(ParserError::ParserError(format!(
                         "Unexpected token in identifier: {token}"
-                    )))?
+                    )))?;
                 }
             }
         }
@@ -11376,7 +11384,7 @@ impl<'a> Parser<'a> {
                             _ => {
                                 return Err(ParserError::ParserError(format!(
                                     "expected OUTER, SEMI, ANTI or JOIN after {kw:?}"
-                                )))
+                                )));
                             }
                         }
                     }
@@ -14574,7 +14582,7 @@ impl<'a> Parser<'a> {
                         return self.expected(
                             "one of ACCOUNT, DATABASE, SCHEMA, TABLE or VIEW",
                             self.peek_token(),
-                        )
+                        );
                     }
                 }
             }
@@ -14648,7 +14656,7 @@ impl Word {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::{all_dialects, TestedDialects};
+    use crate::test_utils::{TestedDialects, all_dialects};
 
     use super::*;
 

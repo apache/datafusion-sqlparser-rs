@@ -21,7 +21,7 @@
 //! Run with `cargo run --example cli`
 
 use std::fs;
-use std::io::{stdin, Read};
+use std::io::{Read, stdin};
 
 use simple_logger::SimpleLogger;
 use sqlparser::dialect::*;

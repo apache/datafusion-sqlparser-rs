@@ -45,7 +45,7 @@ use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
     SnowflakeDialect,
 };
-use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use crate::keywords::{ALL_KEYWORDS, ALL_KEYWORDS_INDEX, Keyword};
 use crate::{ast::DollarQuotedString, dialect::HiveDialect};
 
 /// SQL Token enumeration
@@ -2209,11 +2209,7 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
 
     #[inline]
     fn check_null(c: char) -> Option<char> {
-        if c == '\0' {
-            None
-        } else {
-            Some(c)
-        }
+        if c == '\0' { None } else { Some(c) }
     }
 
     #[inline]
@@ -2223,11 +2219,7 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
             Err(_) => None,
             Ok(n) => {
                 let n = n & 0xFF;
-                if n <= 127 {
-                    char::from_u32(n)
-                } else {
-                    None
-                }
+                if n <= 127 { char::from_u32(n) } else { None }
             }
         }
     }
@@ -2807,15 +2799,18 @@ mod tests {
     fn tokenize_dollar_quoted_string_tagged() {
         let test_cases = vec![
             (
-                String::from("SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$tag$"),
+                String::from(
+                    "SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$tag$",
+                ),
                 vec![
                     Token::make_keyword("SELECT"),
                     Token::Whitespace(Whitespace::Space),
                     Token::DollarQuotedString(DollarQuotedString {
-                        value: "dollar '$' quoted strings have $tags like this$ or like this $$".into(),
+                        value: "dollar '$' quoted strings have $tags like this$ or like this $$"
+                            .into(),
                         tag: Some("tag".into()),
-                    })
-                ]
+                    }),
+                ],
             ),
             (
                 String::from("SELECT $abc$x$ab$abc$"),
@@ -2825,8 +2820,8 @@ mod tests {
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "x$ab".into(),
                         tag: Some("abc".into()),
-                    })
-                ]
+                    }),
+                ],
             ),
             (
                 String::from("SELECT $abc$$abc$"),
@@ -2836,8 +2831,8 @@ mod tests {
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "".into(),
                         tag: Some("abc".into()),
-                    })
-                ]
+                    }),
+                ],
             ),
             (
                 String::from("0$abc$$abc$1"),
@@ -2848,16 +2843,14 @@ mod tests {
                         tag: Some("abc".into()),
                     }),
                     Token::Number("1".into(), false),
-                ]
+                ],
             ),
             (
                 String::from("$function$abc$q$data$q$$function$"),
-                vec![
-                    Token::DollarQuotedString(DollarQuotedString {
-                        value: "abc$q$data$q$".into(),
-                        tag: Some("function".into()),
-                    }),
-                ]
+                vec![Token::DollarQuotedString(DollarQuotedString {
+                    value: "abc$q$data$q$".into(),
+                    tag: Some("function".into()),
+                })],
             ),
         ];
 
@@ -2870,7 +2863,9 @@ mod tests {
 
     #[test]
     fn tokenize_dollar_quoted_string_tagged_unterminated() {
-        let sql = String::from("SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$different tag$");
+        let sql = String::from(
+            "SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$different tag$",
+        );
         let dialect = GenericDialect {};
         assert_eq!(
             Tokenizer::new(&dialect, &sql).tokenize(),

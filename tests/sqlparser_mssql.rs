@@ -713,9 +713,10 @@ fn parse_for_clause() {
 
 #[test]
 fn dont_parse_trailing_for() {
-    assert!(ms()
-        .run_parser_method("SELECT * FROM foo FOR", |p| p.parse_query())
-        .is_err());
+    assert!(
+        ms().run_parser_method("SELECT * FROM foo FOR", |p| p.parse_query())
+            .is_err()
+    );
 }
 
 #[test]
@@ -1342,71 +1343,72 @@ fn parse_create_table_with_valid_options() {
                         value: "ROUND_ROBIN".to_string(),
                         quote_style: None,
                         span: Span::empty(),
-                    })
+                    }),
                 },
                 SqlOption::Partition {
                     column_name: "column_a".into(),
                     range_direction: None,
-                    for_values: vec![Expr::Value(test_utils::number("10")), Expr::Value(test_utils::number("11"))] ,
+                    for_values: vec![
+                        Expr::Value(test_utils::number("10")),
+                        Expr::Value(test_utils::number("11")),
+                    ],
                 },
             ],
         ),
         (
             "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (PARTITION (column_a RANGE LEFT FOR VALUES (10, 11)))",
-            vec![
-                SqlOption::Partition {
-                        column_name: "column_a".into(),
-                        range_direction: Some(PartitionRangeDirection::Left),
-                        for_values: vec![
-                            Expr::Value(test_utils::number("10")),
-                            Expr::Value(test_utils::number("11")),
-                        ],
-                    }
-            ],
+            vec![SqlOption::Partition {
+                column_name: "column_a".into(),
+                range_direction: Some(PartitionRangeDirection::Left),
+                for_values: vec![
+                    Expr::Value(test_utils::number("10")),
+                    Expr::Value(test_utils::number("11")),
+                ],
+            }],
         ),
         (
             "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (CLUSTERED COLUMNSTORE INDEX)",
-            vec![SqlOption::Clustered(TableOptionsClustered::ColumnstoreIndex)],
+            vec![SqlOption::Clustered(
+                TableOptionsClustered::ColumnstoreIndex,
+            )],
         ),
         (
             "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (CLUSTERED COLUMNSTORE INDEX ORDER (column_a, column_b))",
-            vec![
-                SqlOption::Clustered(TableOptionsClustered::ColumnstoreIndexOrder(vec![
+            vec![SqlOption::Clustered(
+                TableOptionsClustered::ColumnstoreIndexOrder(vec![
                     "column_a".into(),
                     "column_b".into(),
-                ]))
-            ],
+                ]),
+            )],
         ),
         (
             "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (CLUSTERED INDEX (column_a ASC, column_b DESC, column_c))",
-            vec![
-                SqlOption::Clustered(TableOptionsClustered::Index(vec![
-                        ClusteredIndex {
-                            name: Ident {
-                                value: "column_a".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            },
-                            asc: Some(true),
-                        },
-                        ClusteredIndex {
-                            name: Ident {
-                                value: "column_b".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            },
-                            asc: Some(false),
-                        },
-                        ClusteredIndex {
-                            name: Ident {
-                                value: "column_c".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            },
-                            asc: None,
-                        },
-                    ]))
-            ],
+            vec![SqlOption::Clustered(TableOptionsClustered::Index(vec![
+                ClusteredIndex {
+                    name: Ident {
+                        value: "column_a".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    },
+                    asc: Some(true),
+                },
+                ClusteredIndex {
+                    name: Ident {
+                        value: "column_b".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    },
+                    asc: Some(false),
+                },
+                ClusteredIndex {
+                    name: Ident {
+                        value: "column_c".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    },
+                    asc: None,
+                },
+            ]))],
         ),
         (
             "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (DISTRIBUTION = HASH(column_a, column_b), HEAP)",
@@ -1417,59 +1419,43 @@ fn parse_create_table_with_valid_options() {
                         quote_style: None,
                         span: Span::empty(),
                     },
-                    value: Expr::Function(
-                        Function {
-                            name: ObjectName::from(
-                                vec![
+                    value: Expr::Function(Function {
+                        name: ObjectName::from(vec![Ident {
+                            value: "HASH".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        }]),
+                        uses_odbc_syntax: false,
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
                                     Ident {
-                                        value: "HASH".to_string(),
+                                        value: "column_a".to_string(),
                                         quote_style: None,
                                         span: Span::empty(),
                                     },
-                                ],
-                            ),
-                            uses_odbc_syntax: false,
-                            parameters: FunctionArguments::None,
-                            args: FunctionArguments::List(
-                                FunctionArgumentList {
-                                    duplicate_treatment: None,
-                                    args: vec![
-                                        FunctionArg::Unnamed(
-                                            FunctionArgExpr::Expr(
-                                                Expr::Identifier(
-                                                    Ident {
-                                                        value: "column_a".to_string(),
-                                                        quote_style: None,
-                                                        span: Span::empty(),
-                                                    },
-                                                ),
-                                            ),
-                                        ),
-                                        FunctionArg::Unnamed(
-                                            FunctionArgExpr::Expr(
-                                                Expr::Identifier(
-                                                    Ident {
-                                                        value: "column_b".to_string(),
-                                                        quote_style: None,
-                                                        span: Span::empty(),
-                                                    },
-                                                ),
-                                            ),
-                                        ),
-                                    ],
-                                    clauses: vec![],
-                                },
-                            ),
-                            filter: None,
-                            null_treatment: None,
-                            over: None,
-                            within_group: vec![],
-                        },
-                    ),
+                                ))),
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                    Ident {
+                                        value: "column_b".to_string(),
+                                        quote_style: None,
+                                        span: Span::empty(),
+                                    },
+                                ))),
+                            ],
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                    }),
                 },
                 SqlOption::Ident("HEAP".into()),
             ],
-         ),
+        ),
     ];
 
     for (sql, with_options) in options {
@@ -1585,7 +1571,6 @@ fn parse_create_table_with_invalid_options() {
             "Expected: ), found: INDEX",
         ),
         (
-
             "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (PARTITION (RANGE LEFT FOR VALUES (10, 11)))",
             "Expected: RANGE, found: LEFT",
         ),

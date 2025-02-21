@@ -25,9 +25,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::{display_comma_separated, Expr, ObjectName, StructField, UnionField};
+use crate::ast::{Expr, ObjectName, StructField, UnionField, display_comma_separated};
 
-use super::{value::escape_single_quote_string, ColumnDef};
+use super::{ColumnDef, value::escape_single_quote_string};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

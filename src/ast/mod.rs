@@ -85,8 +85,8 @@ pub use self::trigger::{
 };
 
 pub use self::value::{
-    escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    NormalizationForm, TrimWhereField, Value,
+    DateTimeField, DollarQuotedString, NormalizationForm, TrimWhereField, Value,
+    escape_double_quote_string, escape_quoted_string,
 };
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
@@ -4253,37 +4253,37 @@ impl fmt::Display for Statement {
                     superuser = match *superuser {
                         Some(true) => " SUPERUSER",
                         Some(false) => " NOSUPERUSER",
-                        None => ""
+                        None => "",
                     },
                     create_db = match *create_db {
                         Some(true) => " CREATEDB",
                         Some(false) => " NOCREATEDB",
-                        None => ""
+                        None => "",
                     },
                     create_role = match *create_role {
                         Some(true) => " CREATEROLE",
                         Some(false) => " NOCREATEROLE",
-                        None => ""
+                        None => "",
                     },
                     inherit = match *inherit {
                         Some(true) => " INHERIT",
                         Some(false) => " NOINHERIT",
-                        None => ""
+                        None => "",
                     },
                     login = match *login {
                         Some(true) => " LOGIN",
                         Some(false) => " NOLOGIN",
-                        None => ""
+                        None => "",
                     },
                     replication = match *replication {
                         Some(true) => " REPLICATION",
                         Some(false) => " NOREPLICATION",
-                        None => ""
+                        None => "",
                     },
                     bypassrls = match *bypassrls {
                         Some(true) => " BYPASSRLS",
                         Some(false) => " NOBYPASSRLS",
-                        None => ""
+                        None => "",
                     }
                 )?;
                 if let Some(limit) = connection_limit {

@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use super::{display_comma_separated, Expr, Ident, Password};
-use crate::ast::{display_separated, ObjectName};
+use super::{Expr, Ident, Password, display_comma_separated};
+use crate::ast::{ObjectName, display_separated};
 
 /// An option in `ROLE` statement.
 ///

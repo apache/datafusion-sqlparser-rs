@@ -35,13 +35,13 @@ use sqlparser::dialect::{
     GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect,
     SQLiteDialect, SnowflakeDialect,
 };
-use sqlparser::keywords::{Keyword, ALL_KEYWORDS};
+use sqlparser::keywords::{ALL_KEYWORDS, Keyword};
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::{Location, Span};
 use test_utils::{
-    all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, call, expr_from_projection,
-    join, number, only, table, table_alias, table_from_name, TestedDialects,
+    TestedDialects, all_dialects, all_dialects_where, alter_table_op, assert_eq_vec, call,
+    expr_from_projection, join, number, only, table, table_alias, table_from_name,
 };
 
 #[macro_use]
@@ -3552,16 +3552,18 @@ fn parse_create_table() {
     }
 
     let res = parse_sql_statements("CREATE TABLE t (a int NOT NULL GARBAGE)");
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("Expected: \',\' or \')\' after column definition, found: GARBAGE"));
+    assert!(
+        res.unwrap_err()
+            .to_string()
+            .contains("Expected: \',\' or \')\' after column definition, found: GARBAGE")
+    );
 
     let res = parse_sql_statements("CREATE TABLE t (a int NOT NULL CONSTRAINT foo)");
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("Expected: constraint details after CONSTRAINT <name>"));
+    assert!(
+        res.unwrap_err()
+            .to_string()
+            .contains("Expected: constraint details after CONSTRAINT <name>")
+    );
 }
 
 #[test]
@@ -3694,28 +3696,31 @@ fn parse_create_table_with_constraint_characteristics() {
         a int NOT NULL,
          FOREIGN KEY (a) REFERENCES othertable4(a) ON DELETE CASCADE ON UPDATE SET DEFAULT DEFERRABLE INITIALLY IMMEDIATE NOT DEFERRABLE, \
         )");
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("Expected: \',\' or \')\' after column definition, found: NOT"));
+    assert!(
+        res.unwrap_err()
+            .to_string()
+            .contains("Expected: \',\' or \')\' after column definition, found: NOT")
+    );
 
     let res = parse_sql_statements("CREATE TABLE t (
         a int NOT NULL,
          FOREIGN KEY (a) REFERENCES othertable4(a) ON DELETE CASCADE ON UPDATE SET DEFAULT NOT ENFORCED INITIALLY DEFERRED ENFORCED, \
         )");
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("Expected: \',\' or \')\' after column definition, found: ENFORCED"));
+    assert!(
+        res.unwrap_err()
+            .to_string()
+            .contains("Expected: \',\' or \')\' after column definition, found: ENFORCED")
+    );
 
     let res = parse_sql_statements("CREATE TABLE t (
         a int NOT NULL,
          FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE CASCADE ON UPDATE SET DEFAULT INITIALLY DEFERRED INITIALLY IMMEDIATE, \
         )");
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("Expected: \',\' or \')\' after column definition, found: INITIALLY"));
+    assert!(
+        res.unwrap_err()
+            .to_string()
+            .contains("Expected: \',\' or \')\' after column definition, found: INITIALLY")
+    );
 }
 
 #[test]
@@ -3802,10 +3807,11 @@ fn parse_create_table_column_constraint_characteristics() {
     let res = parse_sql_statements(
         "CREATE TABLE t (a int NOT NULL UNIQUE DEFERRABLE INITIALLY BADVALUE)",
     );
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("Expected: one of DEFERRED or IMMEDIATE, found: BADVALUE"));
+    assert!(
+        res.unwrap_err()
+            .to_string()
+            .contains("Expected: one of DEFERRED or IMMEDIATE, found: BADVALUE")
+    );
 
     let res = parse_sql_statements(
         "CREATE TABLE t (a int NOT NULL UNIQUE INITIALLY IMMEDIATE DEFERRABLE INITIALLY DEFERRED)",
@@ -6816,7 +6822,7 @@ fn parse_joins_using() {
             },
             global: false,
             join_operator: f(JoinConstraint::Using(vec![ObjectName::from(vec![
-                "c1".into()
+                "c1".into(),
             ])])),
         }
     }
@@ -7209,8 +7215,12 @@ fn parse_union_except_intersect_minus() {
     verified_stmt("SELECT 1 UNION (SELECT 2 ORDER BY 1 LIMIT 1)");
     verified_stmt("SELECT 1 UNION SELECT 2 INTERSECT SELECT 3"); // Union[1, Intersect[2,3]]
     verified_stmt("SELECT foo FROM tab UNION SELECT bar FROM TAB");
-    verified_stmt("(SELECT * FROM new EXCEPT SELECT * FROM old) UNION ALL (SELECT * FROM old EXCEPT SELECT * FROM new) ORDER BY 1");
-    verified_stmt("(SELECT * FROM new EXCEPT DISTINCT SELECT * FROM old) UNION DISTINCT (SELECT * FROM old EXCEPT DISTINCT SELECT * FROM new) ORDER BY 1");
+    verified_stmt(
+        "(SELECT * FROM new EXCEPT SELECT * FROM old) UNION ALL (SELECT * FROM old EXCEPT SELECT * FROM new) ORDER BY 1",
+    );
+    verified_stmt(
+        "(SELECT * FROM new EXCEPT DISTINCT SELECT * FROM old) UNION DISTINCT (SELECT * FROM old EXCEPT DISTINCT SELECT * FROM new) ORDER BY 1",
+    );
     verified_stmt("SELECT 1 AS x, 2 AS y EXCEPT BY NAME SELECT 9 AS y, 8 AS x");
     verified_stmt("SELECT 1 AS x, 2 AS y EXCEPT ALL BY NAME SELECT 9 AS y, 8 AS x");
     verified_stmt("SELECT 1 AS x, 2 AS y EXCEPT DISTINCT BY NAME SELECT 9 AS y, 8 AS x");
@@ -8024,7 +8034,9 @@ fn parse_fetch() {
         },
         _ => panic!("Test broke"),
     }
-    let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY");
+    let ast = verified_query(
+        "SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY",
+    );
     assert_eq!(
         ast.offset,
         Some(Offset {
@@ -10510,9 +10522,11 @@ fn parse_non_latin_identifiers() {
     supported_dialects.verified_stmt("SELECT a.説明 FROM test.public.inter01 AS a");
     supported_dialects.verified_stmt("SELECT a.説明 FROM inter01 AS a, inter01_transactions AS b WHERE a.説明 = b.取引 GROUP BY a.説明");
     supported_dialects.verified_stmt("SELECT 説明, hühnervögel, garçon, Москва, 東京 FROM inter01");
-    assert!(supported_dialects
-        .parse_sql_statements("SELECT 💝 FROM table1")
-        .is_err());
+    assert!(
+        supported_dialects
+            .parse_sql_statements("SELECT 💝 FROM table1")
+            .is_err()
+    );
 }
 
 #[test]
@@ -12707,7 +12721,9 @@ fn parse_method_select() {
     let _ = verified_only_select(
         "SELECT LEFT('abc', 1).value('.', 'NVARCHAR(MAX)').value('.', 'NVARCHAR(MAX)') AS T",
     );
-    let _ = verified_only_select("SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T");
+    let _ = verified_only_select(
+        "SELECT STUFF((SELECT ',' + name FROM sys.objects FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '') AS T",
+    );
     let _ = verified_only_select("SELECT CAST(column AS XML).value('.', 'NVARCHAR(MAX)') AS T");
 
     // `CONVERT` support
@@ -13660,11 +13676,12 @@ fn parse_select_without_projection() {
 
 #[test]
 fn parse_update_from_before_select() {
-    verified_stmt("UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id");
+    verified_stmt(
+        "UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name WHERE t1.id = t2.id",
+    );
     verified_stmt("UPDATE t1 FROM U, (SELECT id FROM V) AS W SET a = b WHERE 1 = 1");
 
-    let query =
-    "UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name FROM (SELECT name from t2) AS t2";
+    let query = "UPDATE t1 FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 SET name = t2.name FROM (SELECT name from t2) AS t2";
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: FROM".to_string()),
         parse_sql_statements(query).unwrap_err()
@@ -13672,7 +13689,9 @@ fn parse_update_from_before_select() {
 }
 #[test]
 fn parse_overlaps() {
-    verified_stmt("SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')");
+    verified_stmt(
+        "SELECT (DATE '2016-01-10', DATE '2016-02-01') OVERLAPS (DATE '2016-01-20', DATE '2016-02-10')",
+    );
 }
 
 #[test]

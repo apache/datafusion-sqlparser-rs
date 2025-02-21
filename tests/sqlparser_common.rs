@@ -1123,9 +1123,9 @@ fn parse_column_aliases() {
     let select = verified_only_select(sql);
     if let SelectItem::ExprWithAlias {
         expr: Expr::BinaryOp {
-            ref op, ref right, ..
+            op, right, ..
         },
-        ref alias,
+        alias,
     } = only(&select.projection)
     {
         assert_eq!(&BinaryOperator::Plus, op);
@@ -3280,17 +3280,16 @@ fn test_double_value() {
 
     for (input, expected) in test_cases {
         for (i, expr) in input.iter().enumerate() {
-            if let Statement::Query(query) =
-                dialects.one_statement_parses_to(&format!("SELECT {}", expr), "")
-            {
+            match dialects.one_statement_parses_to(&format!("SELECT {}", expr), "")
+            { Statement::Query(query) => {
                 if let SetExpr::Select(select) = *query.body {
                     assert_eq!(expected[i], select.projection[0]);
                 } else {
                     panic!("Expected a SELECT statement");
                 }
-            } else {
+            } _ => {
                 panic!("Expected a SELECT statement");
-            }
+            }}
         }
     }
 }
@@ -7071,7 +7070,7 @@ fn parse_ctes() {
     let sql = &format!("SELECT ({with})");
     let select = verified_only_select(sql);
     match expr_from_projection(only(&select.projection)) {
-        Expr::Subquery(ref subquery) => {
+        Expr::Subquery(subquery) => {
             assert_ctes_in_select(&cte_sqls, subquery.as_ref());
         }
         _ => panic!("Expected: subquery"),

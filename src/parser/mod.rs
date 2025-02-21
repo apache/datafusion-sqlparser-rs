@@ -50,7 +50,7 @@ pub enum ParserError {
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
-    ($MSG:expr, $loc:expr) => {
+    ($MSG:expr_2021, $loc:expr_2021) => {
         Err(ParserError::ParserError(format!("{}{}", $MSG, $loc)))
     };
 }
@@ -14727,7 +14727,7 @@ mod tests {
         use crate::test_utils::TestedDialects;
 
         macro_rules! test_parse_data_type {
-            ($dialect:expr, $input:expr, $expected_type:expr $(,)?) => {{
+            ($dialect:expr_2021, $input:expr_2021, $expected_type:expr_2021 $(,)?) => {{
                 $dialect.run_parser_method(&*$input, |parser| {
                     let data_type = parser.parse_data_type().unwrap();
                     assert_eq!($expected_type, data_type);
@@ -15045,7 +15045,7 @@ mod tests {
     fn test_parse_schema_name() {
         // The expected name should be identical as the input name, that's why I don't receive both
         macro_rules! test_parse_schema_name {
-            ($input:expr, $expected_name:expr $(,)?) => {{
+            ($input:expr_2021, $expected_name:expr_2021 $(,)?) => {{
                 all_dialects().run_parser_method(&*$input, |parser| {
                     let schema_name = parser.parse_schema_name().unwrap();
                     // Validate that the structure is the same as expected
@@ -15077,7 +15077,7 @@ mod tests {
     #[test]
     fn mysql_parse_index_table_constraint() {
         macro_rules! test_parse_table_constraint {
-            ($dialect:expr, $input:expr, $expected:expr $(,)?) => {{
+            ($dialect:expr_2021, $input:expr_2021, $expected:expr_2021 $(,)?) => {{
                 $dialect.run_parser_method(&*$input, |parser| {
                     let constraint = parser.parse_optional_table_constraint().unwrap().unwrap();
                     // Validate that the structure is the same as expected
@@ -15255,7 +15255,7 @@ mod tests {
     #[test]
     fn test_parse_multipart_identifier_negative() {
         macro_rules! test_parse_multipart_identifier_error {
-            ($input:expr, $expected_err:expr $(,)?) => {{
+            ($input:expr_2021, $expected_err:expr_2021 $(,)?) => {{
                 all_dialects().run_parser_method(&*$input, |parser| {
                     let actual_err = parser.parse_multipart_identifier().unwrap_err();
                     assert_eq!(actual_err.to_string(), $expected_err);

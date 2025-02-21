@@ -3708,7 +3708,7 @@ impl fmt::Display for Statement {
                     local = if *local { " LOCAL" } else { "" },
                     path = path
                 )?;
-                if let Some(ref ff) = file_format {
+                if let Some(ff) = file_format {
                     write!(f, " STORED AS {ff}")?
                 }
                 write!(f, " {source}")
@@ -3760,7 +3760,7 @@ impl fmt::Display for Statement {
                     }
                 }
 
-                if let Some(ref parts) = partitions {
+                if let Some(parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
                     }
@@ -3827,7 +3827,7 @@ impl fmt::Display for Statement {
                     "ANALYZE{}{table_name}",
                     if *has_table_keyword { " TABLE " } else { " " }
                 )?;
-                if let Some(ref parts) = partitions {
+                if let Some(parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
                     }
@@ -4149,7 +4149,7 @@ impl fmt::Display for Statement {
                     overwrite = if *overwrite { "OVERWRITE " } else { "" },
                     table_name = table_name,
                 )?;
-                if let Some(ref parts) = &partitioned {
+                if let Some(parts) = &partitioned {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
                     }

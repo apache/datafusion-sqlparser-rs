@@ -21,7 +21,7 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 
 macro_rules! tpch_tests {
-    ($($name:ident: $value:expr,)*) => {
+    ($($name:ident: $value:expr_2021,)*) => {
         const QUERIES: &[&str] = &[
             $(include_str!(concat!("queries/tpch/", $value, ".sql"))),*
         ];

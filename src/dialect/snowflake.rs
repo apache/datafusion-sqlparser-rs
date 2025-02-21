@@ -17,10 +17,10 @@
 
 #[cfg(not(feature = "std"))]
 use crate::alloc::string::ToString;
+use crate::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionType, KeyValueOptions};
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::helpers::stmt_data_loading::{
-    DataLoadingOption, DataLoadingOptionType, DataLoadingOptions, FileStagingCommand,
-    StageLoadSelectItem, StageParamsObject,
+    FileStagingCommand, StageLoadSelectItem, StageParamsObject,
 };
 use crate::ast::{
     ColumnOption, ColumnPolicy, ColumnPolicyProperty, CopyIntoSnowflakeKind, Ident,
@@ -130,6 +130,16 @@ impl Dialect for SnowflakeDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        if parser.parse_keywords(&[Keyword::ALTER, Keyword::SESSION]) {
+            // ALTER SESSION
+            let set = match parser.parse_one_of_keywords(&[Keyword::SET, Keyword::UNSET]) {
+                Some(Keyword::SET) => true,
+                Some(Keyword::UNSET) => false,
+                _ => return Some(parser.expected("SET or UNSET", parser.peek_token())),
+            };
+            return Some(parse_alter_session(parser, set));
+        }
+
         if parser.parse_keyword(Keyword::CREATE) {
             // possibly CREATE STAGE
             //[ OR  REPLACE ]
@@ -356,6 +366,18 @@ fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statem
             "unexpected stage command, expecting LIST, LS, REMOVE or RM".to_string(),
         )),
     }
+}
+
+/// Parse snowflake alter session.
+/// <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
+fn parse_alter_session(parser: &mut Parser, set: bool) -> Result<Statement, ParserError> {
+    let session_options = parse_session_options(parser, set)?;
+    Ok(Statement::AlterSession {
+        set,
+        session_params: KeyValueOptions {
+            options: session_options,
+        },
+    })
 }
 
 /// Parse snowflake create table statement.
@@ -634,13 +656,13 @@ pub fn parse_create_stage(
         if_not_exists,
         name,
         stage_params,
-        directory_table_params: DataLoadingOptions {
+        directory_table_params: KeyValueOptions {
             options: directory_table_params,
         },
-        file_format: DataLoadingOptions {
+        file_format: KeyValueOptions {
             options: file_format,
         },
-        copy_options: DataLoadingOptions {
+        copy_options: KeyValueOptions {
             options: copy_options,
         },
         comment,
@@ -708,10 +730,10 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
     let mut from_stage = None;
     let mut stage_params = StageParamsObject {
         url: None,
-        encryption: DataLoadingOptions { options: vec![] },
+        encryption: KeyValueOptions { options: vec![] },
         endpoint: None,
         storage_integration: None,
-        credentials: DataLoadingOptions { options: vec![] },
+        credentials: KeyValueOptions { options: vec![] },
     };
     let mut from_query = None;
     let mut partition = None;
@@ -818,7 +840,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
                 Token::Comma => continue,
                 // In `COPY INTO <location>` the copy options do not have a shared key
                 // like in `COPY INTO <table>`
-                Token::Word(key) => copy_options.push(parse_copy_option(parser, key)?),
+                Token::Word(key) => copy_options.push(parse_option(parser, key)?),
                 _ => return parser.expected("another copy option, ; or EOF'", parser.peek_token()),
             }
         }
@@ -834,10 +856,10 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
         from_query,
         files: if files.is_empty() { None } else { Some(files) },
         pattern,
-        file_format: DataLoadingOptions {
+        file_format: KeyValueOptions {
             options: file_format,
         },
-        copy_options: DataLoadingOptions {
+        copy_options: KeyValueOptions {
             options: copy_options,
         },
         validation_mode,
@@ -931,8 +953,8 @@ fn parse_select_items_for_data_load(
 
 fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserError> {
     let (mut url, mut storage_integration, mut endpoint) = (None, None, None);
-    let mut encryption: DataLoadingOptions = DataLoadingOptions { options: vec![] };
-    let mut credentials: DataLoadingOptions = DataLoadingOptions { options: vec![] };
+    let mut encryption: KeyValueOptions = KeyValueOptions { options: vec![] };
+    let mut credentials: KeyValueOptions = KeyValueOptions { options: vec![] };
 
     // URL
     if parser.parse_keyword(Keyword::URL) {
@@ -961,7 +983,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     // CREDENTIALS
     if parser.parse_keyword(Keyword::CREDENTIALS) {
         parser.expect_token(&Token::Eq)?;
-        credentials = DataLoadingOptions {
+        credentials = KeyValueOptions {
             options: parse_parentheses_options(parser)?,
         };
     }
@@ -969,7 +991,7 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     // ENCRYPTION
     if parser.parse_keyword(Keyword::ENCRYPTION) {
         parser.expect_token(&Token::Eq)?;
-        encryption = DataLoadingOptions {
+        encryption = KeyValueOptions {
             options: parse_parentheses_options(parser)?,
         };
     }
@@ -983,20 +1005,63 @@ fn parse_stage_params(parser: &mut Parser) -> Result<StageParamsObject, ParserEr
     })
 }
 
+/// Parses options separated by blank spaces, commas, or new lines like:
+/// ABORT_DETACHED_QUERY = { TRUE | FALSE }
+///      [ ACTIVE_PYTHON_PROFILER = { 'LINE' | 'MEMORY' } ]
+///      [ BINARY_INPUT_FORMAT = '\<string\>' ]
+fn parse_session_options(
+    parser: &mut Parser,
+    set: bool,
+) -> Result<Vec<KeyValueOption>, ParserError> {
+    let mut options: Vec<KeyValueOption> = Vec::new();
+    let empty = String::new;
+    loop {
+        match parser.next_token().token {
+            Token::Comma => continue,
+            Token::Word(key) => {
+                if set {
+                    let option = parse_option(parser, key)?;
+                    options.push(option);
+                } else {
+                    options.push(KeyValueOption {
+                        option_name: key.value,
+                        option_type: KeyValueOptionType::STRING,
+                        value: empty(),
+                    });
+                }
+            }
+            _ => {
+                if parser.peek_token().token == Token::EOF {
+                    break;
+                }
+                return parser.expected("another option", parser.peek_token());
+            }
+        }
+    }
+    options
+        .is_empty()
+        .then(|| {
+            Err(ParserError::ParserError(
+                "expected at least one option".to_string(),
+            ))
+        })
+        .unwrap_or(Ok(options))
+}
+
 /// Parses options provided within parentheses like:
 /// ( ENABLE = { TRUE | FALSE }
 ///      [ AUTO_REFRESH = { TRUE | FALSE } ]
 ///      [ REFRESH_ON_CREATE =  { TRUE | FALSE } ]
 ///      [ NOTIFICATION_INTEGRATION = '<notification_integration_name>' ] )
 ///
-fn parse_parentheses_options(parser: &mut Parser) -> Result<Vec<DataLoadingOption>, ParserError> {
-    let mut options: Vec<DataLoadingOption> = Vec::new();
+fn parse_parentheses_options(parser: &mut Parser) -> Result<Vec<KeyValueOption>, ParserError> {
+    let mut options: Vec<KeyValueOption> = Vec::new();
     parser.expect_token(&Token::LParen)?;
     loop {
         match parser.next_token().token {
             Token::RParen => break,
             Token::Comma => continue,
-            Token::Word(key) => options.push(parse_copy_option(parser, key)?),
+            Token::Word(key) => options.push(parse_option(parser, key)?),
             _ => return parser.expected("another option or ')'", parser.peek_token()),
         };
     }
@@ -1004,35 +1069,35 @@ fn parse_parentheses_options(parser: &mut Parser) -> Result<Vec<DataLoadingOptio
 }
 
 /// Parses a `KEY = VALUE` construct based on the specified key
-fn parse_copy_option(parser: &mut Parser, key: Word) -> Result<DataLoadingOption, ParserError> {
+fn parse_option(parser: &mut Parser, key: Word) -> Result<KeyValueOption, ParserError> {
     parser.expect_token(&Token::Eq)?;
     if parser.parse_keyword(Keyword::TRUE) {
-        Ok(DataLoadingOption {
+        Ok(KeyValueOption {
             option_name: key.value,
-            option_type: DataLoadingOptionType::BOOLEAN,
+            option_type: KeyValueOptionType::BOOLEAN,
             value: "TRUE".to_string(),
         })
     } else if parser.parse_keyword(Keyword::FALSE) {
-        Ok(DataLoadingOption {
+        Ok(KeyValueOption {
             option_name: key.value,
-            option_type: DataLoadingOptionType::BOOLEAN,
+            option_type: KeyValueOptionType::BOOLEAN,
             value: "FALSE".to_string(),
         })
     } else {
         match parser.next_token().token {
-            Token::SingleQuotedString(value) => Ok(DataLoadingOption {
+            Token::SingleQuotedString(value) => Ok(KeyValueOption {
                 option_name: key.value,
-                option_type: DataLoadingOptionType::STRING,
+                option_type: KeyValueOptionType::STRING,
                 value,
             }),
-            Token::Word(word) => Ok(DataLoadingOption {
+            Token::Word(word) => Ok(KeyValueOption {
                 option_name: key.value,
-                option_type: DataLoadingOptionType::ENUM,
+                option_type: KeyValueOptionType::ENUM,
                 value: word.value,
             }),
-            Token::Number(n, _) => Ok(DataLoadingOption {
+            Token::Number(n, _) => Ok(KeyValueOption {
                 option_name: key.value,
-                option_type: DataLoadingOptionType::NUMBER,
+                option_type: KeyValueOptionType::NUMBER,
                 value: n,
             }),
             _ => parser.expected("expected option value", parser.peek_token()),

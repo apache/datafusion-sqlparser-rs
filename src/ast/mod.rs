@@ -89,9 +89,8 @@ pub use self::value::{
     NormalizationForm, TrimWhereField, Value,
 };
 
-use crate::ast::helpers::stmt_data_loading::{
-    DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
-};
+use crate::ast::helpers::key_value_options::KeyValueOptions;
+use crate::ast::helpers::stmt_data_loading::{StageLoadSelectItem, StageParamsObject};
 #[cfg(feature = "visitor")]
 pub use visitor::*;
 
@@ -2504,8 +2503,8 @@ pub enum Statement {
         from_query: Option<Box<Query>>,
         files: Option<Vec<String>>,
         pattern: Option<String>,
-        file_format: DataLoadingOptions,
-        copy_options: DataLoadingOptions,
+        file_format: KeyValueOptions,
+        copy_options: KeyValueOptions,
         validation_mode: Option<String>,
         partition: Option<Box<Expr>>,
     },
@@ -2711,6 +2710,17 @@ pub enum Statement {
         properties: Option<Vec<SqlOption>>,
         url: Option<String>,
         owner: Option<ddl::AlterConnectorOwner>,
+    },
+    /// ```sql
+    /// ALTER SESSION SET sessionParam
+    /// ALTER SESSION UNSET <param_name> [ , <param_name> , ... ]
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
+    AlterSession {
+        /// true is to set for the session parameters, false is to unset
+        set: bool,
+        /// The session parameters to set or unset
+        session_params: KeyValueOptions,
     },
     /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
@@ -3240,9 +3250,9 @@ pub enum Statement {
         if_not_exists: bool,
         name: ObjectName,
         stage_params: StageParamsObject,
-        directory_table_params: DataLoadingOptions,
-        file_format: DataLoadingOptions,
-        copy_options: DataLoadingOptions,
+        directory_table_params: KeyValueOptions,
+        file_format: KeyValueOptions,
+        copy_options: KeyValueOptions,
         comment: Option<String>,
     },
     /// ```sql
@@ -4464,6 +4474,29 @@ impl fmt::Display for Statement {
                 }
                 if let Some(owner) = owner {
                     write!(f, " SET OWNER {owner}")?;
+                }
+                Ok(())
+            }
+            Statement::AlterSession {
+                set,
+                session_params,
+            } => {
+                write!(
+                    f,
+                    "ALTER SESSION {set}",
+                    set = if *set { "SET" } else { "UNSET" }
+                )?;
+                if !session_params.options.is_empty() {
+                    if *set {
+                        write!(f, " {}", session_params)?;
+                    } else {
+                        let options = session_params
+                            .options
+                            .iter()
+                            .map(|p| p.option_name.clone())
+                            .collect::<Vec<_>>();
+                        write!(f, " {}", display_separated(&options, ", "))?;
+                    }
                 }
                 Ok(())
             }

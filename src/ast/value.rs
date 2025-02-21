@@ -26,9 +26,24 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ast::Ident;
+use crate::{ast::Ident, tokenizer::Span};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
+
+/// Primitive SQL values such as number and string
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ValueWrapper {
+    pub value: Value,
+    pub span: Span,
+}
+
+impl From<ValueWrapper> for Value {
+    fn from(value: ValueWrapper) -> Self {
+        value.value
+    }
+}
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -97,6 +112,13 @@ pub enum Value {
     Placeholder(String),
 }
 
+impl ValueWrapper {
+    /// If the underlying literal is a string, regardless of quote style, returns the associated string value
+    pub fn into_string(self) -> Option<String> {
+        self.value.into_string()
+    }
+}
+
 impl Value {
     /// If the underlying literal is a string, regardless of quote style, returns the associated string value
     pub fn into_string(self) -> Option<String> {
@@ -120,6 +142,20 @@ impl Value {
             Value::DollarQuotedString(s) => Some(s.value),
             _ => None,
         }
+    }
+
+    pub fn with_span(self, span: Span) -> ValueWrapper {
+        ValueWrapper { value: self, span }
+    }
+
+    pub fn with_empty_span(self) -> ValueWrapper {
+        self.with_span(Span::empty())
+    }
+}
+
+impl fmt::Display for ValueWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.value)
     }
 }
 

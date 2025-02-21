@@ -86,7 +86,7 @@ pub use self::trigger::{
 
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    NormalizationForm, TrimWhereField, Value,
+    NormalizationForm, TrimWhereField, Value, ValueWrapper,
 };
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
@@ -892,7 +892,7 @@ pub enum Expr {
     /// Nested expression e.g. `(foo > bar)` or `(1)`
     Nested(Box<Expr>),
     /// A literal value, such as string, number, date or NULL
-    Value(Value),
+    Value(ValueWrapper),
     /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
     IntroducedString {
         introducer: String,
@@ -8733,9 +8733,9 @@ mod tests {
     #[test]
     fn test_interval_display() {
         let interval = Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
-                "123:45.67",
-            )))),
+            value: Box::new(Expr::Value(
+                Value::SingleQuotedString(String::from("123:45.67")).with_empty_span(),
+            )),
             leading_field: Some(DateTimeField::Minute),
             leading_precision: Some(10),
             last_field: Some(DateTimeField::Second),
@@ -8747,7 +8747,9 @@ mod tests {
         );
 
         let interval = Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("5")))),
+            value: Box::new(Expr::Value(
+                Value::SingleQuotedString(String::from("5")).with_empty_span(),
+            )),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(1),
             last_field: None,

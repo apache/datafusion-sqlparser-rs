@@ -1315,7 +1315,7 @@ impl<'a> Parser<'a> {
                 DataType::Custom(..) => parser_err!("dummy", loc),
                 data_type => Ok(Expr::TypedString {
                     data_type,
-                    value: parser.parse_value()?,
+                    value: parser.parse_value()?.value,
                 }),
             }
         })?;
@@ -1503,7 +1503,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_geometric_type(&mut self, kind: GeometricTypeKind) -> Result<Expr, ParserError> {
-        let value: Value = self.parse_value()?;
+        let value: Value = self.parse_value()?.value;
         Ok(Expr::TypedString {
             data_type: DataType::GeometricType(kind),
             value,
@@ -2090,7 +2090,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_optional_cast_format(&mut self) -> Result<Option<CastFormat>, ParserError> {
         if self.parse_keyword(Keyword::FORMAT) {
-            let value = self.parse_value()?;
+            let value = self.parse_value()?.value;
             match self.parse_optional_time_zone()? {
                 Some(tz) => Ok(Some(CastFormat::ValueAtTimeZone(value, tz))),
                 None => Ok(Some(CastFormat::Value(value))),
@@ -2102,7 +2102,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_optional_time_zone(&mut self) -> Result<Option<Value>, ParserError> {
         if self.parse_keywords(&[Keyword::AT, Keyword::TIME, Keyword::ZONE]) {
-            self.parse_value().map(Some)
+            self.parse_value().map(|v| Some(v.value))
         } else {
             Ok(None)
         }
@@ -2231,7 +2231,7 @@ impl<'a> Parser<'a> {
             CeilFloorKind::DateTimeField(self.parse_date_time_field()?)
         } else if self.consume_token(&Token::Comma) {
             // Parse `CEIL/FLOOR(expr, scale)`
-            match self.parse_value()? {
+            match self.parse_value()?.value {
                 Value::Number(n, s) => CeilFloorKind::Scale(Value::Number(n, s)),
                 _ => {
                     return Err(ParserError::ParserError(
@@ -2567,7 +2567,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
 
         // MySQL is too permissive about the value, IMO we can't validate it perfectly on syntax level.
-        let match_value = self.parse_value()?;
+        let match_value = self.parse_value()?.value;
 
         let in_natural_language_mode_keywords = &[
             Keyword::IN,
@@ -6304,11 +6304,11 @@ impl<'a> Parser<'a> {
             FetchDirection::Last
         } else if self.parse_keyword(Keyword::ABSOLUTE) {
             FetchDirection::Absolute {
-                limit: self.parse_number_value()?,
+                limit: self.parse_number_value()?.value,
             }
         } else if self.parse_keyword(Keyword::RELATIVE) {
             FetchDirection::Relative {
-                limit: self.parse_number_value()?,
+                limit: self.parse_number_value()?.value,
             }
         } else if self.parse_keyword(Keyword::FORWARD) {
             if self.parse_keyword(Keyword::ALL) {
@@ -6316,7 +6316,7 @@ impl<'a> Parser<'a> {
             } else {
                 FetchDirection::Forward {
                     // TODO: Support optional
-                    limit: Some(self.parse_number_value()?),
+                    limit: Some(self.parse_number_value()?.value),
                 }
             }
         } else if self.parse_keyword(Keyword::BACKWARD) {
@@ -6325,14 +6325,14 @@ impl<'a> Parser<'a> {
             } else {
                 FetchDirection::Backward {
                     // TODO: Support optional
-                    limit: Some(self.parse_number_value()?),
+                    limit: Some(self.parse_number_value()?.value),
                 }
             }
         } else if self.parse_keyword(Keyword::ALL) {
             FetchDirection::All
         } else {
             FetchDirection::Count {
-                limit: self.parse_number_value()?,
+                limit: self.parse_number_value()?.value,
             }
         };
 
@@ -7325,7 +7325,7 @@ impl<'a> Parser<'a> {
             };
 
             self.expect_keyword_is(Keyword::INTO)?;
-            let num_buckets = self.parse_number_value()?;
+            let num_buckets = self.parse_number_value()?.value;
             self.expect_keyword_is(Keyword::BUCKETS)?;
             Some(ClusteredBy {
                 columns,
@@ -8559,21 +8559,22 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a literal value (numbers, strings, date/time, booleans)
-    pub fn parse_value(&mut self) -> Result<Value, ParserError> {
+    pub fn parse_value(&mut self) -> Result<ValueWrapper, ParserError> {
         let next_token = self.next_token();
         let span = next_token.span;
+        let ok_value = |value: Value| Ok(value.with_span(span));
         match next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE if self.dialect.supports_boolean_literals() => {
-                    Ok(Value::Boolean(true))
+                    ok_value(Value::Boolean(true))
                 }
                 Keyword::FALSE if self.dialect.supports_boolean_literals() => {
-                    Ok(Value::Boolean(false))
+                    ok_value(Value::Boolean(false))
                 }
-                Keyword::NULL => Ok(Value::Null),
+                Keyword::NULL => ok_value(Value::Null),
                 Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
-                    Some('"') => Ok(Value::DoubleQuotedString(w.value)),
-                    Some('\'') => Ok(Value::SingleQuotedString(w.value)),
+                    Some('"') => ok_value(Value::DoubleQuotedString(w.value)),
+                    Some('\'') => ok_value(Value::SingleQuotedString(w.value)),
                     _ => self.expected(
                         "A value?",
                         TokenWithSpan {
@@ -8593,45 +8594,45 @@ impl<'a> Parser<'a> {
             // The call to n.parse() returns a bigdecimal when the
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
-            Token::Number(n, l) => Ok(Value::Number(Self::parse(n, span.start)?, l)),
-            Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
-            Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+            Token::Number(n, l) => ok_value(Value::Number(Self::parse(n, span.start)?, l)),
+            Token::SingleQuotedString(ref s) => ok_value(Value::SingleQuotedString(s.to_string())),
+            Token::DoubleQuotedString(ref s) => ok_value(Value::DoubleQuotedString(s.to_string())),
             Token::TripleSingleQuotedString(ref s) => {
-                Ok(Value::TripleSingleQuotedString(s.to_string()))
+                ok_value(Value::TripleSingleQuotedString(s.to_string()))
             }
             Token::TripleDoubleQuotedString(ref s) => {
-                Ok(Value::TripleDoubleQuotedString(s.to_string()))
+                ok_value(Value::TripleDoubleQuotedString(s.to_string()))
             }
-            Token::DollarQuotedString(ref s) => Ok(Value::DollarQuotedString(s.clone())),
+            Token::DollarQuotedString(ref s) => ok_value(Value::DollarQuotedString(s.clone())),
             Token::SingleQuotedByteStringLiteral(ref s) => {
-                Ok(Value::SingleQuotedByteStringLiteral(s.clone()))
+                ok_value(Value::SingleQuotedByteStringLiteral(s.clone()))
             }
             Token::DoubleQuotedByteStringLiteral(ref s) => {
-                Ok(Value::DoubleQuotedByteStringLiteral(s.clone()))
+                ok_value(Value::DoubleQuotedByteStringLiteral(s.clone()))
             }
             Token::TripleSingleQuotedByteStringLiteral(ref s) => {
-                Ok(Value::TripleSingleQuotedByteStringLiteral(s.clone()))
+                ok_value(Value::TripleSingleQuotedByteStringLiteral(s.clone()))
             }
             Token::TripleDoubleQuotedByteStringLiteral(ref s) => {
-                Ok(Value::TripleDoubleQuotedByteStringLiteral(s.clone()))
+                ok_value(Value::TripleDoubleQuotedByteStringLiteral(s.clone()))
             }
             Token::SingleQuotedRawStringLiteral(ref s) => {
-                Ok(Value::SingleQuotedRawStringLiteral(s.clone()))
+                ok_value(Value::SingleQuotedRawStringLiteral(s.clone()))
             }
             Token::DoubleQuotedRawStringLiteral(ref s) => {
-                Ok(Value::DoubleQuotedRawStringLiteral(s.clone()))
+                ok_value(Value::DoubleQuotedRawStringLiteral(s.clone()))
             }
             Token::TripleSingleQuotedRawStringLiteral(ref s) => {
-                Ok(Value::TripleSingleQuotedRawStringLiteral(s.clone()))
+                ok_value(Value::TripleSingleQuotedRawStringLiteral(s.clone()))
             }
             Token::TripleDoubleQuotedRawStringLiteral(ref s) => {
-                Ok(Value::TripleDoubleQuotedRawStringLiteral(s.clone()))
+                ok_value(Value::TripleDoubleQuotedRawStringLiteral(s.clone()))
             }
-            Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
-            Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
-            Token::UnicodeStringLiteral(ref s) => Ok(Value::UnicodeStringLiteral(s.to_string())),
-            Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
-            Token::Placeholder(ref s) => Ok(Value::Placeholder(s.to_string())),
+            Token::NationalStringLiteral(ref s) => ok_value(Value::NationalStringLiteral(s.to_string())),
+            Token::EscapedStringLiteral(ref s) => ok_value(Value::EscapedStringLiteral(s.to_string())),
+            Token::UnicodeStringLiteral(ref s) => ok_value(Value::UnicodeStringLiteral(s.to_string())),
+            Token::HexStringLiteral(ref s) => ok_value(Value::HexStringLiteral(s.to_string())),
+            Token::Placeholder(ref s) => ok_value(Value::Placeholder(s.to_string())),
             tok @ Token::Colon | tok @ Token::AtSign => {
                 // Not calling self.parse_identifier(false)? because only in placeholder we want to check numbers as idfentifies
                 // This because snowflake allows numbers as placeholders
@@ -8642,7 +8643,7 @@ impl<'a> Parser<'a> {
                     _ => self.expected("placeholder", next_token),
                 }?;
                 let placeholder = tok.to_string() + &ident.value;
-                Ok(Value::Placeholder(placeholder))
+                ok_value(Value::Placeholder(placeholder))
             }
             unexpected => self.expected(
                 "a value",
@@ -8655,10 +8656,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse an unsigned numeric literal
-    pub fn parse_number_value(&mut self) -> Result<Value, ParserError> {
-        match self.parse_value()? {
-            v @ Value::Number(_, _) => Ok(v),
-            v @ Value::Placeholder(_) => Ok(v),
+    pub fn parse_number_value(&mut self) -> Result<ValueWrapper, ParserError> {
+        let value_wrapper = self.parse_value()?;
+        match &value_wrapper.value {
+            Value::Number(_, _) => Ok(value_wrapper),
+            Value::Placeholder(_) => Ok(value_wrapper),
             _ => {
                 self.prev_token();
                 self.expected("literal number", self.peek_token())
@@ -8716,15 +8718,16 @@ impl<'a> Parser<'a> {
     /// e.g. `CREATE FUNCTION ... AS $$ body $$`.
     fn parse_create_function_body_string(&mut self) -> Result<Expr, ParserError> {
         let peek_token = self.peek_token();
+        let span = peek_token.span;
         match peek_token.token {
             Token::DollarQuotedString(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
             {
                 self.next_token();
-                Ok(Expr::Value(Value::DollarQuotedString(s)))
+                Ok(Expr::Value(Value::DollarQuotedString(s).with_span(span)))
             }
             _ => Ok(Expr::Value(Value::SingleQuotedString(
                 self.parse_literal_string()?,
-            ))),
+            ).with_span(span))),
         }
     }
 
@@ -10239,7 +10242,7 @@ impl<'a> Parser<'a> {
             let key_values = self.parse_comma_separated(|p| {
                 let key = p.parse_identifier()?;
                 p.expect_token(&Token::Eq)?;
-                let value = p.parse_value()?;
+                let value = p.parse_value()?.value;
                 Ok(Setting { key, value })
             })?;
             Some(key_values)
@@ -10961,7 +10964,7 @@ impl<'a> Parser<'a> {
             })
         } else if variable.to_string() == "TRANSACTION" && modifier.is_none() {
             if self.parse_keyword(Keyword::SNAPSHOT) {
-                let snapshot_id = self.parse_value()?;
+                let snapshot_id = self.parse_value()?.value;
                 return Ok(Statement::SetTransaction {
                     modes: vec![],
                     snapshot: Some(snapshot_id),
@@ -11626,7 +11629,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword_with_tokens(Keyword::JSON_TABLE, &[Token::LParen]) {
             let json_expr = self.parse_expr()?;
             self.expect_token(&Token::Comma)?;
-            let json_path = self.parse_value()?;
+            let json_path = self.parse_value()?.value;
             self.expect_keyword_is(Keyword::COLUMNS)?;
             self.expect_token(&Token::LParen)?;
             let columns = self.parse_comma_separated(Parser::parse_json_table_column_def)?;
@@ -11761,9 +11764,9 @@ impl<'a> Parser<'a> {
         let parenthesized = self.consume_token(&Token::LParen);
 
         let (quantity, bucket) = if parenthesized && self.parse_keyword(Keyword::BUCKET) {
-            let selected_bucket = self.parse_number_value()?;
+            let selected_bucket = self.parse_number_value()?.value;
             self.expect_keywords(&[Keyword::OUT, Keyword::OF])?;
-            let total = self.parse_number_value()?;
+            let total = self.parse_number_value()?.value;
             let on = if self.parse_keyword(Keyword::ON) {
                 Some(self.parse_expr()?)
             } else {
@@ -11781,8 +11784,9 @@ impl<'a> Parser<'a> {
             let value = match self.maybe_parse(|p| p.parse_expr())? {
                 Some(num) => num,
                 None => {
-                    if let Token::Word(w) = self.next_token().token {
-                        Expr::Value(Value::Placeholder(w.value))
+                    let next_token = self.next_token();
+                    if let Token::Word(w) = next_token.token {
+                        Expr::Value(Value::Placeholder(w.value).with_span(next_token.span))
                     } else {
                         return parser_err!(
                             "Expecting number or byte length e.g. 100M",
@@ -11840,7 +11844,7 @@ impl<'a> Parser<'a> {
         modifier: TableSampleSeedModifier,
     ) -> Result<TableSampleSeed, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let value = self.parse_number_value()?;
+        let value = self.parse_number_value()?.value;
         self.expect_token(&Token::RParen)?;
         Ok(TableSampleSeed { modifier, value })
     }
@@ -11851,7 +11855,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let json_expr = self.parse_expr()?;
         let json_path = if self.consume_token(&Token::Comma) {
-            Some(self.parse_value()?)
+            Some(self.parse_value()?.value)
         } else {
             None
         };
@@ -12120,7 +12124,7 @@ impl<'a> Parser<'a> {
     pub fn parse_json_table_column_def(&mut self) -> Result<JsonTableColumn, ParserError> {
         if self.parse_keyword(Keyword::NESTED) {
             let _has_path_keyword = self.parse_keyword(Keyword::PATH);
-            let path = self.parse_value()?;
+            let path = self.parse_value()?.value;
             self.expect_keyword_is(Keyword::COLUMNS)?;
             let columns = self.parse_parenthesized(|p| {
                 p.parse_comma_separated(Self::parse_json_table_column_def)
@@ -12138,7 +12142,7 @@ impl<'a> Parser<'a> {
         let r#type = self.parse_data_type()?;
         let exists = self.parse_keyword(Keyword::EXISTS);
         self.expect_keyword_is(Keyword::PATH)?;
-        let path = self.parse_value()?;
+        let path = self.parse_value()?.value;
         let mut on_empty = None;
         let mut on_error = None;
         while let Some(error_handling) = self.parse_json_table_column_error_handling()? {
@@ -12195,7 +12199,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::ERROR) {
             JsonTableColumnErrorHandling::Error
         } else if self.parse_keyword(Keyword::DEFAULT) {
-            JsonTableColumnErrorHandling::Default(self.parse_value()?)
+            JsonTableColumnErrorHandling::Default(self.parse_value()?.value)
         } else {
             return Ok(None);
         };
@@ -13270,7 +13274,7 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is GenericDialect | MySqlDialect)
             && self.parse_keyword(Keyword::SEPARATOR)
         {
-            clauses.push(FunctionArgumentClause::Separator(self.parse_value()?));
+            clauses.push(FunctionArgumentClause::Separator(self.parse_value()?.value));
         }
 
         if let Some(on_overflow) = self.parse_listagg_on_overflow()? {
@@ -14143,7 +14147,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_pragma_value(&mut self) -> Result<Value, ParserError> {
-        match self.parse_value()? {
+        match self.parse_value()?.value {
             v @ Value::SingleQuotedString(_) => Ok(v),
             v @ Value::DoubleQuotedString(_) => Ok(v),
             v @ Value::Number(_, _) => Ok(v),
@@ -14603,7 +14607,7 @@ impl<'a> Parser<'a> {
 
     fn maybe_parse_show_stmt_starts_with(&mut self) -> Result<Option<Value>, ParserError> {
         if self.parse_keywords(&[Keyword::STARTS, Keyword::WITH]) {
-            Ok(Some(self.parse_value()?))
+            Ok(Some(self.parse_value()?.value))
         } else {
             Ok(None)
         }
@@ -14619,7 +14623,7 @@ impl<'a> Parser<'a> {
 
     fn maybe_parse_show_stmt_from(&mut self) -> Result<Option<Value>, ParserError> {
         if self.parse_keyword(Keyword::FROM) {
-            Ok(Some(self.parse_value()?))
+            Ok(Some(self.parse_value()?.value))
         } else {
             Ok(None)
         }

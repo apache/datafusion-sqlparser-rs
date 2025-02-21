@@ -814,8 +814,9 @@ pub enum Expr {
         kind: CastKind,
         expr: Box<Expr>,
         data_type: DataType,
-        // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
-        // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
+        /// Optional CAST(string_expression AS type FORMAT format_string_expression) as used by [BigQuery]
+        ///
+        /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
         format: Option<CastFormat>,
     },
     /// AT a timestamp to a different timezone e.g. `FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00'`

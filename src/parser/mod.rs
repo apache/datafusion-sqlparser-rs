@@ -8867,7 +8867,7 @@ impl<'a> Parser<'a> {
                 Keyword::TINYINT => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
-                        Ok(DataType::UnsignedTinyInt(optional_precision?))
+                        Ok(DataType::TinyIntUnsigned(optional_precision?))
                     } else {
                         Ok(DataType::TinyInt(optional_precision?))
                     }
@@ -8875,7 +8875,7 @@ impl<'a> Parser<'a> {
                 Keyword::INT2 => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
-                        Ok(DataType::UnsignedInt2(optional_precision?))
+                        Ok(DataType::Int2Unsigned(optional_precision?))
                     } else {
                         Ok(DataType::Int2(optional_precision?))
                     }
@@ -8883,7 +8883,7 @@ impl<'a> Parser<'a> {
                 Keyword::SMALLINT => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
-                        Ok(DataType::UnsignedSmallInt(optional_precision?))
+                        Ok(DataType::SmallIntUnsigned(optional_precision?))
                     } else {
                         Ok(DataType::SmallInt(optional_precision?))
                     }
@@ -8891,7 +8891,7 @@ impl<'a> Parser<'a> {
                 Keyword::MEDIUMINT => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
-                        Ok(DataType::UnsignedMediumInt(optional_precision?))
+                        Ok(DataType::MediumIntUnsigned(optional_precision?))
                     } else {
                         Ok(DataType::MediumInt(optional_precision?))
                     }
@@ -8899,7 +8899,7 @@ impl<'a> Parser<'a> {
                 Keyword::INT => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
-                        Ok(DataType::UnsignedInt(optional_precision?))
+                        Ok(DataType::IntUnsigned(optional_precision?))
                     } else {
                         Ok(DataType::Int(optional_precision?))
                     }
@@ -8907,7 +8907,7 @@ impl<'a> Parser<'a> {
                 Keyword::INT4 => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
-                        Ok(DataType::UnsignedInt4(optional_precision?))
+                        Ok(DataType::Int4Unsigned(optional_precision?))
                     } else {
                         Ok(DataType::Int4(optional_precision?))
                     }
@@ -8915,7 +8915,7 @@ impl<'a> Parser<'a> {
                 Keyword::INT8 => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
-                        Ok(DataType::UnsignedInt8(optional_precision?))
+                        Ok(DataType::Int8Unsigned(optional_precision?))
                     } else {
                         Ok(DataType::Int8(optional_precision?))
                     }
@@ -8928,7 +8928,7 @@ impl<'a> Parser<'a> {
                 Keyword::INTEGER => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
-                        Ok(DataType::UnsignedInteger(optional_precision?))
+                        Ok(DataType::IntegerUnsigned(optional_precision?))
                     } else {
                         Ok(DataType::Integer(optional_precision?))
                     }
@@ -8936,7 +8936,7 @@ impl<'a> Parser<'a> {
                 Keyword::BIGINT => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
-                        Ok(DataType::UnsignedBigInt(optional_precision?))
+                        Ok(DataType::BigIntUnsigned(optional_precision?))
                     } else {
                         Ok(DataType::BigInt(optional_precision?))
                     }
@@ -9141,6 +9141,20 @@ impl<'a> Parser<'a> {
                 Keyword::TABLE => {
                     let columns = self.parse_returns_table_columns()?;
                     Ok(DataType::Table(columns))
+                }
+                Keyword::SIGNED => {
+                    if self.parse_keyword(Keyword::INTEGER) {
+                        Ok(DataType::SignedInteger)
+                    } else {
+                        Ok(DataType::Signed)
+                    }
+                }
+                Keyword::UNSIGNED => {
+                    if self.parse_keyword(Keyword::INTEGER) {
+                        Ok(DataType::UnsignedInteger)
+                    } else {
+                        Ok(DataType::Unsigned)
+                    }
                 }
                 _ => {
                     self.prev_token();

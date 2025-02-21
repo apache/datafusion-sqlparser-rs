@@ -790,6 +790,7 @@ define_keywords!(
     SHARE,
     SHARING,
     SHOW,
+    SIGNED,
     SIMILAR,
     SKIP,
     SLOW,

@@ -1359,27 +1359,27 @@ fn parse_create_table_unsigned() {
                 vec![
                     ColumnDef {
                         name: Ident::new("bar_tinyint"),
-                        data_type: DataType::UnsignedTinyInt(Some(3)),
+                        data_type: DataType::TinyIntUnsigned(Some(3)),
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_smallint"),
-                        data_type: DataType::UnsignedSmallInt(Some(5)),
+                        data_type: DataType::SmallIntUnsigned(Some(5)),
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_mediumint"),
-                        data_type: DataType::UnsignedMediumInt(Some(13)),
+                        data_type: DataType::MediumIntUnsigned(Some(13)),
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_int"),
-                        data_type: DataType::UnsignedInt(Some(11)),
+                        data_type: DataType::IntUnsigned(Some(11)),
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_bigint"),
-                        data_type: DataType::UnsignedBigInt(Some(20)),
+                        data_type: DataType::BigIntUnsigned(Some(20)),
                         options: vec![],
                     },
                 ],
@@ -3338,4 +3338,22 @@ fn parse_drop_trigger() {
             option: None,
         }
     );
+}
+
+#[test]
+fn parse_cast_integers() {
+    mysql().verified_expr("CAST(foo AS UNSIGNED)");
+    mysql().verified_expr("CAST(foo AS SIGNED)");
+    mysql().verified_expr("CAST(foo AS UNSIGNED INTEGER)");
+    mysql().verified_expr("CAST(foo AS SIGNED INTEGER)");
+
+    mysql()
+        .run_parser_method("CAST(foo AS UNSIGNED(3))", |p| p.parse_expr())
+        .expect_err("CAST doesn't allow display width");
+    mysql()
+        .run_parser_method("CAST(foo AS UNSIGNED(3) INTEGER)", |p| p.parse_expr())
+        .expect_err("CAST doesn't allow display width");
+    mysql()
+        .run_parser_method("CAST(foo AS UNSIGNED INTEGER(3))", |p| p.parse_expr())
+        .expect_err("CAST doesn't allow display width");
 }

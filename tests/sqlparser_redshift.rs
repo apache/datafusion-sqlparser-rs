@@ -381,7 +381,9 @@ fn test_parse_nested_quoted_identifier() {
     // trim spaces
     redshift().one_statement_parses_to(r#"SELECT 1 AS [ " 1 " ]"#, r#"SELECT 1 AS [" 1 "]"#);
     // invalid query
-    assert!(redshift()
-        .parse_sql_statements(r#"SELECT 1 AS ["1]"#)
-        .is_err());
+    assert!(
+        redshift()
+            .parse_sql_statements(r#"SELECT 1 AS ["1]"#)
+            .is_err()
+    );
 }

@@ -925,13 +925,17 @@ fn test_snowflake_create_iceberg_table_without_location() {
 
 #[test]
 fn parse_sf_create_or_replace_view_with_comment_missing_equal() {
-    assert!(snowflake_and_generic()
-        .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1")
-        .is_ok());
+    assert!(
+        snowflake_and_generic()
+            .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT = 'hello, world' AS SELECT 1")
+            .is_ok()
+    );
 
-    assert!(snowflake_and_generic()
-        .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT 'hello, world' AS SELECT 1")
-        .is_err());
+    assert!(
+        snowflake_and_generic()
+            .parse_sql_statements("CREATE OR REPLACE VIEW v COMMENT 'hello, world' AS SELECT 1")
+            .is_err()
+    );
 }
 
 #[test]
@@ -2069,7 +2073,11 @@ fn test_copy_into() {
     };
     assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
 
-    let sql = concat!("COPY INTO 's3://a/b/c/data.parquet' ", "FROM db.sc.tbl ", "PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || to_varchar(date_part(hour, ts)))");
+    let sql = concat!(
+        "COPY INTO 's3://a/b/c/data.parquet' ",
+        "FROM db.sc.tbl ",
+        "PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || to_varchar(date_part(hour, ts)))"
+    );
     match snowflake().verified_stmt(sql) {
         Statement::CopyIntoSnowflake {
             kind,
@@ -3024,8 +3032,7 @@ fn view_comment_option_should_be_after_column_list() {
         "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') COMMENT = 'Comment' AS SELECT a FROM t",
         "CREATE OR REPLACE VIEW v (a COMMENT 'a comment', b, c COMMENT 'c comment') WITH (foo = bar) COMMENT = 'Comment' AS SELECT a FROM t",
     ] {
-        snowflake_and_generic()
-            .verified_stmt(sql);
+        snowflake_and_generic().verified_stmt(sql);
     }
 }
 
@@ -3320,9 +3327,11 @@ fn test_sql_keywords_as_select_item_aliases() {
         "WITH",
     ];
     for kw in reserved_kws {
-        assert!(snowflake()
-            .parse_sql_statements(&format!("SELECT 1 {kw}"))
-            .is_err());
+        assert!(
+            snowflake()
+                .parse_sql_statements(&format!("SELECT 1 {kw}"))
+                .is_err()
+        );
     }
 }
 

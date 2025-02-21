@@ -36,7 +36,7 @@ use sqlparser_derive::{Visit, VisitMut};
 /// Defines a string constant for a single keyword: `kw_def!(SELECT);`
 /// expands to `pub const SELECT = "SELECT";`
 macro_rules! kw_def {
-    ($ident:ident = $string_keyword:expr) => {
+    ($ident:ident = $string_keyword:expr_2021) => {
         pub const $ident: &'static str = $string_keyword;
     };
     ($ident:ident) => {
@@ -48,7 +48,7 @@ macro_rules! kw_def {
 /// and defines an ALL_KEYWORDS array of the defined constants.
 macro_rules! define_keywords {
     ($(
-        $ident:ident $(= $string_keyword:expr)?
+        $ident:ident $(= $string_keyword:expr_2021)?
     ),*) => {
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

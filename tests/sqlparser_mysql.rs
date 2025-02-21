@@ -517,22 +517,32 @@ fn parse_show_tables() {
 
 #[test]
 fn parse_show_extended_full() {
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL TABLES")
-        .is_ok());
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL COLUMNS FROM mytable")
-        .is_ok());
+    assert!(
+        mysql_and_generic()
+            .parse_sql_statements("SHOW EXTENDED FULL TABLES")
+            .is_ok()
+    );
+    assert!(
+        mysql_and_generic()
+            .parse_sql_statements("SHOW EXTENDED FULL COLUMNS FROM mytable")
+            .is_ok()
+    );
     // SHOW EXTENDED/FULL can only be used with COLUMNS and TABLES
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL CREATE TABLE mytable")
-        .is_err());
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL COLLATION")
-        .is_err());
-    assert!(mysql_and_generic()
-        .parse_sql_statements("SHOW EXTENDED FULL VARIABLES")
-        .is_err());
+    assert!(
+        mysql_and_generic()
+            .parse_sql_statements("SHOW EXTENDED FULL CREATE TABLE mytable")
+            .is_err()
+    );
+    assert!(
+        mysql_and_generic()
+            .parse_sql_statements("SHOW EXTENDED FULL COLLATION")
+            .is_err()
+    );
+    assert!(
+        mysql_and_generic()
+            .parse_sql_statements("SHOW EXTENDED FULL VARIABLES")
+            .is_err()
+    );
 }
 
 #[test]
@@ -3043,10 +3053,12 @@ fn parse_grant() {
         );
         assert!(!with_grant_option);
         assert!(granted_by.is_none());
-        if let [Grantee {
-            grantee_type: GranteesType::None,
-            name: Some(GranteeName::UserHost { user, host }),
-        }] = grantees.as_slice()
+        if let [
+            Grantee {
+                grantee_type: GranteesType::None,
+                name: Some(GranteeName::UserHost { user, host }),
+            },
+        ] = grantees.as_slice()
         {
             assert_eq!(user.value, "jeffrey");
             assert_eq!(user.quote_style, Some('\''));
@@ -3085,10 +3097,12 @@ fn parse_revoke() {
                 "*".into()
             ])]))
         );
-        if let [Grantee {
-            grantee_type: GranteesType::None,
-            name: Some(GranteeName::UserHost { user, host }),
-        }] = grantees.as_slice()
+        if let [
+            Grantee {
+                grantee_type: GranteesType::None,
+                name: Some(GranteeName::UserHost { user, host }),
+            },
+        ] = grantees.as_slice()
         {
             assert_eq!(user.value, "jeffrey");
             assert_eq!(user.quote_style, Some('\''));

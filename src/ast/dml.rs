@@ -32,12 +32,12 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, query::InputFormatClause, Assignment, ClusteredBy,
-    CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
-    HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert,
-    OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting, SqlOption,
-    SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject, TableWithJoins, Tag,
-    WrappedCollection,
+    Assignment, ClusteredBy, CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle,
+    HiveFormat, HiveIOFormat, HiveRowFormat, Ident, InsertAliases, MysqlInsertPriority, ObjectName,
+    OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem,
+    Setting, SqlOption, SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject,
+    TableWithJoins, Tag, WrappedCollection, display_comma_separated, display_separated,
+    query::InputFormatClause,
 };
 
 /// CREATE INDEX statement.
@@ -225,16 +225,15 @@ impl Display for CreateTable {
             "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{iceberg}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
-            global = self.global
-                .map(|global| {
-                    if global {
-                        "GLOBAL "
-                    } else {
-                        "LOCAL "
-                    }
-                })
+            global = self
+                .global
+                .map(|global| { if global { "GLOBAL " } else { "LOCAL " } })
                 .unwrap_or(""),
-            if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
+            if_not_exists = if self.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
             temporary = if self.temporary { "TEMPORARY " } else { "" },
             transient = if self.transient { "TRANSIENT " } else { "" },
             volatile = if self.volatile { "VOLATILE " } else { "" },

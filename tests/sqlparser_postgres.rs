@@ -1802,9 +1802,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(
-                            vec!["dname".into()]
-                        )),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![
+                            "dname".into()
+                        ])),
                         value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
                     },],
                     selection: None
@@ -1896,9 +1896,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(
-                            vec!["dname".into()]
-                        )),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![
+                            "dname".into()
+                        ])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -1939,9 +1939,9 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName::from(
-                            vec!["dname".into()]
-                        )),
+                        target: AssignmentTarget::ColumnName(ObjectName::from(vec![
+                            "dname".into()
+                        ])),
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
@@ -2963,13 +2963,25 @@ fn test_json() {
 #[test]
 fn test_fn_arg_with_value_operator() {
     match pg().verified_expr("JSON_OBJECT('name' VALUE 'value')") {
-        Expr::Function(Function { args: FunctionArguments::List(FunctionArgumentList { args, .. }), .. }) => {
-            assert!(matches!(
-                &args[..],
-                &[FunctionArg::ExprNamed { operator: FunctionArgOperator::Value, .. }]
-            ), "Invalid function argument: {:?}", args);
+        Expr::Function(Function {
+            args: FunctionArguments::List(FunctionArgumentList { args, .. }),
+            ..
+        }) => {
+            assert!(
+                matches!(
+                    &args[..],
+                    &[FunctionArg::ExprNamed {
+                        operator: FunctionArgOperator::Value,
+                        ..
+                    }]
+                ),
+                "Invalid function argument: {:?}",
+                args
+            );
         }
-        other => panic!("Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"),
+        other => panic!(
+            "Expected: JSON_OBJECT('name' VALUE 'value') to be parsed as a function, but got {other:?}"
+        ),
     }
 }
 
@@ -3365,12 +3377,14 @@ fn parse_create_role() {
     let sql = "CREATE ROLE abc LOGIN PASSWORD NULL";
     match pg().parse_sql_statements(sql).as_deref() {
         Ok(
-            [Statement::CreateRole {
-                names,
-                login,
-                password,
-                ..
-            }],
+            [
+                Statement::CreateRole {
+                    names,
+                    login,
+                    password,
+                    ..
+                },
+            ],
         ) => {
             assert_eq_vec(&["abc"], names);
             assert_eq!(*login, Some(true));
@@ -3382,12 +3396,14 @@ fn parse_create_role() {
     let sql = "CREATE ROLE abc WITH LOGIN PASSWORD NULL";
     match pg().parse_sql_statements(sql).as_deref() {
         Ok(
-            [Statement::CreateRole {
-                names,
-                login,
-                password,
-                ..
-            }],
+            [
+                Statement::CreateRole {
+                    names,
+                    login,
+                    password,
+                    ..
+                },
+            ],
         ) => {
             assert_eq_vec(&["abc"], names);
             assert_eq!(*login, Some(true));
@@ -3400,26 +3416,28 @@ fn parse_create_role() {
     // Roundtrip order of optional parameters is not preserved
     match pg().parse_sql_statements(sql).as_deref() {
         Ok(
-            [Statement::CreateRole {
-                names,
-                if_not_exists,
-                bypassrls,
-                login,
-                inherit,
-                password,
-                superuser,
-                create_db,
-                create_role,
-                replication,
-                connection_limit,
-                valid_until,
-                in_role,
-                in_group,
-                role,
-                user: _,
-                admin,
-                authorization_owner,
-            }],
+            [
+                Statement::CreateRole {
+                    names,
+                    if_not_exists,
+                    bypassrls,
+                    login,
+                    inherit,
+                    password,
+                    superuser,
+                    create_db,
+                    create_role,
+                    replication,
+                    connection_limit,
+                    valid_until,
+                    in_role,
+                    in_group,
+                    role,
+                    user: _,
+                    admin,
+                    authorization_owner,
+                },
+            ],
         ) => {
             assert_eq_vec(&["magician"], names);
             assert!(!*if_not_exists);
@@ -3453,9 +3471,11 @@ fn parse_create_role() {
     let sql = "CREATE ROLE abc WITH USER foo, bar ROLE baz ";
     match pg().parse_sql_statements(sql).as_deref() {
         Ok(
-            [Statement::CreateRole {
-                names, user, role, ..
-            }],
+            [
+                Statement::CreateRole {
+                    names, user, role, ..
+                },
+            ],
         ) => {
             assert_eq_vec(&["abc"], names);
             assert_eq_vec(&["foo", "bar"], user);
@@ -3477,7 +3497,9 @@ fn parse_create_role() {
     for negatable_kw in negatables.iter() {
         let sql = format!("CREATE ROLE abc {negatable_kw} NO{negatable_kw}");
         if pg().parse_sql_statements(&sql).is_ok() {
-            panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {negatable_kw}")
+            panic!(
+                "Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {negatable_kw}"
+            )
         }
     }
 }
@@ -4917,16 +4939,16 @@ fn parse_create_trigger_invalid_cases() {
     let invalid_cases = vec![
         (
             "CREATE TRIGGER check_update BEFORE UPDATE ON accounts FUNCTION check_account_update",
-            "Expected: FOR, found: FUNCTION"
+            "Expected: FOR, found: FUNCTION",
         ),
         (
             "CREATE TRIGGER check_update TOMORROW UPDATE ON accounts EXECUTE FUNCTION check_account_update",
-            "Expected: one of BEFORE or AFTER or INSTEAD, found: TOMORROW"
+            "Expected: one of BEFORE or AFTER or INSTEAD, found: TOMORROW",
         ),
         (
             "CREATE TRIGGER check_update BEFORE SAVE ON accounts EXECUTE FUNCTION check_account_update",
-            "Expected: one of INSERT or UPDATE or DELETE or TRUNCATE, found: SAVE"
-        )
+            "Expected: one of INSERT or UPDATE or DELETE or TRUNCATE, found: SAVE",
+        ),
     ];
 
     for (sql, expected_error) in invalid_cases {

@@ -85,8 +85,8 @@ pub use self::trigger::{
 };
 
 pub use self::value::{
-    escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    NormalizationForm, TrimWhereField, Value,
+    DateTimeField, DollarQuotedString, NormalizationForm, TrimWhereField, Value,
+    escape_double_quote_string, escape_quoted_string,
 };
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
@@ -3708,7 +3708,7 @@ impl fmt::Display for Statement {
                     local = if *local { " LOCAL" } else { "" },
                     path = path
                 )?;
-                if let Some(ref ff) = file_format {
+                if let Some(ff) = file_format {
                     write!(f, " STORED AS {ff}")?
                 }
                 write!(f, " {source}")
@@ -3760,7 +3760,7 @@ impl fmt::Display for Statement {
                     }
                 }
 
-                if let Some(ref parts) = partitions {
+                if let Some(parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
                     }
@@ -3827,7 +3827,7 @@ impl fmt::Display for Statement {
                     "ANALYZE{}{table_name}",
                     if *has_table_keyword { " TABLE " } else { " " }
                 )?;
-                if let Some(ref parts) = partitions {
+                if let Some(parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
                     }
@@ -4149,7 +4149,7 @@ impl fmt::Display for Statement {
                     overwrite = if *overwrite { "OVERWRITE " } else { "" },
                     table_name = table_name,
                 )?;
-                if let Some(ref parts) = &partitioned {
+                if let Some(parts) = &partitioned {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
                     }
@@ -4253,37 +4253,37 @@ impl fmt::Display for Statement {
                     superuser = match *superuser {
                         Some(true) => " SUPERUSER",
                         Some(false) => " NOSUPERUSER",
-                        None => ""
+                        None => "",
                     },
                     create_db = match *create_db {
                         Some(true) => " CREATEDB",
                         Some(false) => " NOCREATEDB",
-                        None => ""
+                        None => "",
                     },
                     create_role = match *create_role {
                         Some(true) => " CREATEROLE",
                         Some(false) => " NOCREATEROLE",
-                        None => ""
+                        None => "",
                     },
                     inherit = match *inherit {
                         Some(true) => " INHERIT",
                         Some(false) => " NOINHERIT",
-                        None => ""
+                        None => "",
                     },
                     login = match *login {
                         Some(true) => " LOGIN",
                         Some(false) => " NOLOGIN",
-                        None => ""
+                        None => "",
                     },
                     replication = match *replication {
                         Some(true) => " REPLICATION",
                         Some(false) => " NOREPLICATION",
-                        None => ""
+                        None => "",
                     },
                     bypassrls = match *bypassrls {
                         Some(true) => " BYPASSRLS",
                         Some(false) => " NOBYPASSRLS",
-                        None => ""
+                        None => "",
                     }
                 )?;
                 if let Some(limit) = connection_limit {

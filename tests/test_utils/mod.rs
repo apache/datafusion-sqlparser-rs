@@ -30,7 +30,7 @@ pub use sqlparser::test_utils::*;
 
 #[macro_export]
 macro_rules! nest {
-    ($base:expr $(, $join:expr)*) => {
+    ($base:expr_2021 $(, $join:expr_2021)*) => {
         TableFactor::NestedJoin { table_with_joins: Box::new(TableWithJoins {
             relation: $base,
             joins: vec![$(join($join)),*]

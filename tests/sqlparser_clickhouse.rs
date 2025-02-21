@@ -994,7 +994,7 @@ fn parse_select_parametric_function() {
             match &projection[0] {
                 UnnamedExpr(Expr::Function(f)) => {
                     let args = match &f.args {
-                        FunctionArguments::List(ref args) => args,
+                        FunctionArguments::List(args) => args,
                         _ => unreachable!(),
                     };
                     assert_eq!(args.args.len(), 2);

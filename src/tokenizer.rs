@@ -45,7 +45,7 @@ use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, MySqlDialect, PostgreSqlDialect,
     SnowflakeDialect,
 };
-use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use crate::keywords::{ALL_KEYWORDS, ALL_KEYWORDS_INDEX, Keyword};
 use crate::{ast::DollarQuotedString, dialect::HiveDialect};
 
 /// SQL Token enumeration
@@ -281,26 +281,26 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Token::EOF => f.write_str("EOF"),
-            Token::Word(ref w) => write!(f, "{w}"),
-            Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
-            Token::Char(ref c) => write!(f, "{c}"),
-            Token::SingleQuotedString(ref s) => write!(f, "'{s}'"),
-            Token::TripleSingleQuotedString(ref s) => write!(f, "'''{s}'''"),
-            Token::DoubleQuotedString(ref s) => write!(f, "\"{s}\""),
-            Token::TripleDoubleQuotedString(ref s) => write!(f, "\"\"\"{s}\"\"\""),
-            Token::DollarQuotedString(ref s) => write!(f, "{s}"),
-            Token::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
-            Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
-            Token::UnicodeStringLiteral(ref s) => write!(f, "U&'{s}'"),
-            Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
-            Token::SingleQuotedByteStringLiteral(ref s) => write!(f, "B'{s}'"),
-            Token::TripleSingleQuotedByteStringLiteral(ref s) => write!(f, "B'''{s}'''"),
-            Token::DoubleQuotedByteStringLiteral(ref s) => write!(f, "B\"{s}\""),
-            Token::TripleDoubleQuotedByteStringLiteral(ref s) => write!(f, "B\"\"\"{s}\"\"\""),
-            Token::SingleQuotedRawStringLiteral(ref s) => write!(f, "R'{s}'"),
-            Token::DoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"{s}\""),
-            Token::TripleSingleQuotedRawStringLiteral(ref s) => write!(f, "R'''{s}'''"),
-            Token::TripleDoubleQuotedRawStringLiteral(ref s) => write!(f, "R\"\"\"{s}\"\"\""),
+            Token::Word(w) => write!(f, "{w}"),
+            Token::Number(n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
+            Token::Char(c) => write!(f, "{c}"),
+            Token::SingleQuotedString(s) => write!(f, "'{s}'"),
+            Token::TripleSingleQuotedString(s) => write!(f, "'''{s}'''"),
+            Token::DoubleQuotedString(s) => write!(f, "\"{s}\""),
+            Token::TripleDoubleQuotedString(s) => write!(f, "\"\"\"{s}\"\"\""),
+            Token::DollarQuotedString(s) => write!(f, "{s}"),
+            Token::NationalStringLiteral(s) => write!(f, "N'{s}'"),
+            Token::EscapedStringLiteral(s) => write!(f, "E'{s}'"),
+            Token::UnicodeStringLiteral(s) => write!(f, "U&'{s}'"),
+            Token::HexStringLiteral(s) => write!(f, "X'{s}'"),
+            Token::SingleQuotedByteStringLiteral(s) => write!(f, "B'{s}'"),
+            Token::TripleSingleQuotedByteStringLiteral(s) => write!(f, "B'''{s}'''"),
+            Token::DoubleQuotedByteStringLiteral(s) => write!(f, "B\"{s}\""),
+            Token::TripleDoubleQuotedByteStringLiteral(s) => write!(f, "B\"\"\"{s}\"\"\""),
+            Token::SingleQuotedRawStringLiteral(s) => write!(f, "R'{s}'"),
+            Token::DoubleQuotedRawStringLiteral(s) => write!(f, "R\"{s}\""),
+            Token::TripleSingleQuotedRawStringLiteral(s) => write!(f, "R'''{s}'''"),
+            Token::TripleDoubleQuotedRawStringLiteral(s) => write!(f, "R\"\"\"{s}\"\"\""),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{ws}"),
             Token::DoubleEq => f.write_str("=="),
@@ -368,7 +368,7 @@ impl fmt::Display for Token {
             Token::TildeEqual => f.write_str("~="),
             Token::ShiftLeftVerticalBar => f.write_str("<<|"),
             Token::VerticalBarShiftRight => f.write_str("|>>"),
-            Token::Placeholder(ref s) => write!(f, "{s}"),
+            Token::Placeholder(s) => write!(f, "{s}"),
             Token::Arrow => write!(f, "->"),
             Token::LongArrow => write!(f, "->>"),
             Token::HashArrow => write!(f, "#>"),
@@ -2209,11 +2209,7 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
 
     #[inline]
     fn check_null(c: char) -> Option<char> {
-        if c == '\0' {
-            None
-        } else {
-            Some(c)
-        }
+        if c == '\0' { None } else { Some(c) }
     }
 
     #[inline]
@@ -2223,11 +2219,7 @@ impl<'a: 'b, 'b> Unescape<'a, 'b> {
             Err(_) => None,
             Ok(n) => {
                 let n = n & 0xFF;
-                if n <= 127 {
-                    char::from_u32(n)
-                } else {
-                    None
-                }
+                if n <= 127 { char::from_u32(n) } else { None }
             }
         }
     }
@@ -2807,15 +2799,18 @@ mod tests {
     fn tokenize_dollar_quoted_string_tagged() {
         let test_cases = vec![
             (
-                String::from("SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$tag$"),
+                String::from(
+                    "SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$tag$",
+                ),
                 vec![
                     Token::make_keyword("SELECT"),
                     Token::Whitespace(Whitespace::Space),
                     Token::DollarQuotedString(DollarQuotedString {
-                        value: "dollar '$' quoted strings have $tags like this$ or like this $$".into(),
+                        value: "dollar '$' quoted strings have $tags like this$ or like this $$"
+                            .into(),
                         tag: Some("tag".into()),
-                    })
-                ]
+                    }),
+                ],
             ),
             (
                 String::from("SELECT $abc$x$ab$abc$"),
@@ -2825,8 +2820,8 @@ mod tests {
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "x$ab".into(),
                         tag: Some("abc".into()),
-                    })
-                ]
+                    }),
+                ],
             ),
             (
                 String::from("SELECT $abc$$abc$"),
@@ -2836,8 +2831,8 @@ mod tests {
                     Token::DollarQuotedString(DollarQuotedString {
                         value: "".into(),
                         tag: Some("abc".into()),
-                    })
-                ]
+                    }),
+                ],
             ),
             (
                 String::from("0$abc$$abc$1"),
@@ -2848,16 +2843,14 @@ mod tests {
                         tag: Some("abc".into()),
                     }),
                     Token::Number("1".into(), false),
-                ]
+                ],
             ),
             (
                 String::from("$function$abc$q$data$q$$function$"),
-                vec![
-                    Token::DollarQuotedString(DollarQuotedString {
-                        value: "abc$q$data$q$".into(),
-                        tag: Some("function".into()),
-                    }),
-                ]
+                vec![Token::DollarQuotedString(DollarQuotedString {
+                    value: "abc$q$data$q$".into(),
+                    tag: Some("function".into()),
+                })],
             ),
         ];
 
@@ -2870,7 +2863,9 @@ mod tests {
 
     #[test]
     fn tokenize_dollar_quoted_string_tagged_unterminated() {
-        let sql = String::from("SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$different tag$");
+        let sql = String::from(
+            "SELECT $tag$dollar '$' quoted strings have $tags like this$ or like this $$$different tag$",
+        );
         let dialect = GenericDialect {};
         assert_eq!(
             Tokenizer::new(&dialect, &sql).tokenize(),

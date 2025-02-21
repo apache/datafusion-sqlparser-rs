@@ -1122,9 +1122,7 @@ fn parse_column_aliases() {
     let sql = "SELECT a.col + 1 AS newname FROM foo AS a";
     let select = verified_only_select(sql);
     if let SelectItem::ExprWithAlias {
-        expr: Expr::BinaryOp {
-            op, right, ..
-        },
+        expr: Expr::BinaryOp { op, right, .. },
         alias,
     } = only(&select.projection)
     {
@@ -3280,16 +3278,18 @@ fn test_double_value() {
 
     for (input, expected) in test_cases {
         for (i, expr) in input.iter().enumerate() {
-            match dialects.one_statement_parses_to(&format!("SELECT {}", expr), "")
-            { Statement::Query(query) => {
-                if let SetExpr::Select(select) = *query.body {
-                    assert_eq!(expected[i], select.projection[0]);
-                } else {
+            match dialects.one_statement_parses_to(&format!("SELECT {}", expr), "") {
+                Statement::Query(query) => {
+                    if let SetExpr::Select(select) = *query.body {
+                        assert_eq!(expected[i], select.projection[0]);
+                    } else {
+                        panic!("Expected a SELECT statement");
+                    }
+                }
+                _ => {
                     panic!("Expected a SELECT statement");
                 }
-            } _ => {
-                panic!("Expected a SELECT statement");
-            }}
+            }
         }
     }
 }

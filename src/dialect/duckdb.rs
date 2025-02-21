@@ -82,7 +82,7 @@ impl Dialect for DuckDbDialect {
     }
 
     // See DuckDB <https://duckdb.org/docs/sql/data_types/array.html#defining-an-array-field>
-    fn supports_array_typedef_size(&self) -> bool {
+    fn supports_array_typedef_with_brackets(&self) -> bool {
         true
     }
 

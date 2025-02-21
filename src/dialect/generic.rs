@@ -148,7 +148,7 @@ impl Dialect for GenericDialect {
         true
     }
 
-    fn supports_array_typedef_size(&self) -> bool {
+    fn supports_array_typedef_with_brackets(&self) -> bool {
         true
     }
 

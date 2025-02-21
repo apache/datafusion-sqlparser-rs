@@ -9123,9 +9123,9 @@ impl<'a> Parser<'a> {
             _ => self.expected_at("a data type name", next_token_index),
         }?;
 
-        if self.dialect.supports_array_typedef_size() {
-            // Parse array data type size
+        if self.dialect.supports_array_typedef_with_brackets() {
             while self.consume_token(&Token::LBracket) {
+                // Parse optional array data type size
                 let size = self.maybe_parse(|p| p.parse_literal_uint())?;
                 self.expect_token(&Token::RBracket)?;
                 data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))

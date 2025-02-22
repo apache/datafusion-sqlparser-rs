@@ -14386,3 +14386,10 @@ fn test_geometric_binary_operators() {
         }
     ));
 }
+
+#[test]
+fn parse_array_type_def_with_brackets() {
+    let dialects = all_dialects_where(|d| d.supports_array_typedef_with_brackets());
+    dialects.verified_stmt("SELECT x::INT[]");
+    dialects.verified_stmt("SELECT STRING_TO_ARRAY('1,2,3', ',')::INT[3]");
+}

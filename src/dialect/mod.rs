@@ -931,9 +931,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports size definition for array types.
-    /// For example: ```CREATE TABLE my_table (my_array INT[3])```.
-    fn supports_array_typedef_size(&self) -> bool {
+    /// Returns true if the dialect supports array type definition with brackets with
+    /// an optional size. For example:
+    /// ```CREATE TABLE my_table (arr1 INT[], arr2 INT[3])```
+    /// ```SELECT x::INT[]```
+    fn supports_array_typedef_with_brackets(&self) -> bool {
         false
     }
     /// Returns true if the dialect supports geometric types.

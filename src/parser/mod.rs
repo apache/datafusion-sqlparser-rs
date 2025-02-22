@@ -4976,12 +4976,10 @@ impl<'a> Parser<'a> {
         }
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let trigger_name = self.parse_object_name(false)?;
-        let table_name = match dialect_of!(self is PostgreSqlDialect | GenericDialect) {
-            true => {
-                self.expect_keyword_is(Keyword::ON)?;
-                Some(self.parse_object_name(false)?)
-            }
-            false => None,
+        let table_name = if self.parse_keyword(Keyword::ON) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
         };
         let option = self
             .parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT])
@@ -5066,19 +5064,20 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {
-        let allowed_keywords = if dialect_of!(self is MySqlDialect) {
-            vec![Keyword::BEFORE, Keyword::AFTER]
-        } else {
-            vec![Keyword::BEFORE, Keyword::AFTER, Keyword::INSTEAD]
-        };
-        Ok(match self.expect_one_of_keywords(&allowed_keywords)? {
-            Keyword::BEFORE => TriggerPeriod::Before,
-            Keyword::AFTER => TriggerPeriod::After,
-            Keyword::INSTEAD => self
-                .expect_keyword_is(Keyword::OF)
-                .map(|_| TriggerPeriod::InsteadOf)?,
-            _ => unreachable!(),
-        })
+        Ok(
+            match self.expect_one_of_keywords(&[
+                Keyword::BEFORE,
+                Keyword::AFTER,
+                Keyword::INSTEAD,
+            ])? {
+                Keyword::BEFORE => TriggerPeriod::Before,
+                Keyword::AFTER => TriggerPeriod::After,
+                Keyword::INSTEAD => self
+                    .expect_keyword_is(Keyword::OF)
+                    .map(|_| TriggerPeriod::InsteadOf)?,
+                _ => unreachable!(),
+            },
+        )
     }
 
     pub fn parse_trigger_event(&mut self) -> Result<TriggerEvent, ParserError> {

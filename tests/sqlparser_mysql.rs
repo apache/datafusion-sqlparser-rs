@@ -3302,8 +3302,4 @@ fn parse_drop_trigger() {
             option: None,
         }
     );
-    let sql_drop_trigger_invalid = "DROP TRIGGER emp_stamp on emp;";
-    assert!(mysql()
-        .parse_sql_statements(sql_drop_trigger_invalid)
-        .is_err());
 }

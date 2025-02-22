@@ -6695,22 +6695,26 @@ fn parse_searched_case_expr() {
         &Case {
             operand: None,
             conditions: vec![
-                IsNull(Box::new(Identifier(Ident::new("bar")))),
-                BinaryOp {
-                    left: Box::new(Identifier(Ident::new("bar"))),
-                    op: Eq,
-                    right: Box::new(Expr::Value(number("0"))),
+                CaseWhen {
+                    condition: IsNull(Box::new(Identifier(Ident::new("bar")))),
+                    result: Expr::Value(Value::SingleQuotedString("null".to_string())),
                 },
-                BinaryOp {
-                    left: Box::new(Identifier(Ident::new("bar"))),
-                    op: GtEq,
-                    right: Box::new(Expr::Value(number("0"))),
+                CaseWhen {
+                    condition: BinaryOp {
+                        left: Box::new(Identifier(Ident::new("bar"))),
+                        op: Eq,
+                        right: Box::new(Expr::Value(number("0"))),
+                    },
+                    result: Expr::Value(Value::SingleQuotedString("=0".to_string())),
                 },
-            ],
-            results: vec![
-                Expr::Value(Value::SingleQuotedString("null".to_string())),
-                Expr::Value(Value::SingleQuotedString("=0".to_string())),
-                Expr::Value(Value::SingleQuotedString(">=0".to_string())),
+                CaseWhen {
+                    condition: BinaryOp {
+                        left: Box::new(Identifier(Ident::new("bar"))),
+                        op: GtEq,
+                        right: Box::new(Expr::Value(number("0"))),
+                    },
+                    result: Expr::Value(Value::SingleQuotedString(">=0".to_string())),
+                },
             ],
             else_result: Some(Box::new(Expr::Value(Value::SingleQuotedString(
                 "<0".to_string()
@@ -6729,8 +6733,10 @@ fn parse_simple_case_expr() {
     assert_eq!(
         &Case {
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
-            conditions: vec![Expr::Value(number("1"))],
-            results: vec![Expr::Value(Value::SingleQuotedString("Y".to_string()))],
+            conditions: vec![CaseWhen {
+                condition: Expr::Value(number("1")),
+                result: Expr::Value(Value::SingleQuotedString("Y".to_string())),
+            }],
             else_result: Some(Box::new(Expr::Value(Value::SingleQuotedString(
                 "N".to_string()
             )))),
@@ -13903,6 +13909,31 @@ fn test_trailing_commas_in_from() {
 }
 
 #[test]
+#[cfg(feature = "visitor")]
+fn test_visit_order() {
+    let sql = "SELECT CASE a WHEN 1 THEN 2 WHEN 3 THEN 4 ELSE 5 END";
+    let stmt = verified_stmt(sql);
+    let mut visited = vec![];
+    sqlparser::ast::visit_expressions(&stmt, |expr| {
+        visited.push(expr.to_string());
+        core::ops::ControlFlow::<()>::Continue(())
+    });
+
+    assert_eq!(
+        visited,
+        [
+            "CASE a WHEN 1 THEN 2 WHEN 3 THEN 4 ELSE 5 END",
+            "a",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+        ]
+    );
+}
+
+#[test]
 fn test_lambdas() {
     let dialects = all_dialects_where(|d| d.supports_lambda_functions());
 
@@ -13929,28 +13960,30 @@ fn test_lambdas() {
                     body: Box::new(Expr::Case {
                         operand: None,
                         conditions: vec![
-                            Expr::BinaryOp {
-                                left: Box::new(Expr::Identifier(Ident::new("p1"))),
-                                op: BinaryOperator::Eq,
-                                right: Box::new(Expr::Identifier(Ident::new("p2")))
+                            CaseWhen {
+                                condition: Expr::BinaryOp {
+                                    left: Box::new(Expr::Identifier(Ident::new("p1"))),
+                                    op: BinaryOperator::Eq,
+                                    right: Box::new(Expr::Identifier(Ident::new("p2")))
+                                },
+                                result: Expr::Value(number("0"))
                             },
-                            Expr::BinaryOp {
-                                left: Box::new(call(
-                                    "reverse",
-                                    [Expr::Identifier(Ident::new("p1"))]
-                                )),
-                                op: BinaryOperator::Lt,
-                                right: Box::new(call(
-                                    "reverse",
-                                    [Expr::Identifier(Ident::new("p2"))]
-                                ))
-                            }
-                        ],
-                        results: vec![
-                            Expr::Value(number("0")),
-                            Expr::UnaryOp {
-                                op: UnaryOperator::Minus,
-                                expr: Box::new(Expr::Value(number("1")))
+                            CaseWhen {
+                                condition: Expr::BinaryOp {
+                                    left: Box::new(call(
+                                        "reverse",
+                                        [Expr::Identifier(Ident::new("p1"))]
+                                    )),
+                                    op: BinaryOperator::Lt,
+                                    right: Box::new(call(
+                                        "reverse",
+                                        [Expr::Identifier(Ident::new("p2"))]
+                                    ))
+                                },
+                                result: Expr::UnaryOp {
+                                    op: UnaryOperator::Minus,
+                                    expr: Box::new(Expr::Value(number("1")))
+                                }
                             }
                         ],
                         else_result: Some(Box::new(Expr::Value(number("1"))))

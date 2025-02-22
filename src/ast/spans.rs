@@ -1450,15 +1450,15 @@ impl Spanned for Expr {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
             } => union_spans(
                 operand
                     .as_ref()
                     .map(|i| i.span())
                     .into_iter()
-                    .chain(conditions.iter().map(|i| i.span()))
-                    .chain(results.iter().map(|i| i.span()))
+                    .chain(conditions.iter().flat_map(|case_when| {
+                        [case_when.condition.span(), case_when.result.span()]
+                    }))
                     .chain(else_result.as_ref().map(|i| i.span())),
             ),
             Expr::Exists { subquery, .. } => subquery.span(),

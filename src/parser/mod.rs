@@ -8163,6 +8163,24 @@ impl<'a> Parser<'a> {
             AlterTableOperation::SuspendRecluster
         } else if self.parse_keywords(&[Keyword::RESUME, Keyword::RECLUSTER]) {
             AlterTableOperation::ResumeRecluster
+        } else if self.parse_keyword(Keyword::ALGORITHM) {
+            let equals = self.consume_token(&Token::Eq);
+            let algorithm = match self.parse_one_of_keywords(&[
+                Keyword::DEFAULT,
+                Keyword::INSTANT,
+                Keyword::INPLACE,
+                Keyword::COPY,
+            ]) {
+                Some(Keyword::DEFAULT) => AlterTableAlgorithm::Default,
+                Some(Keyword::INSTANT) => AlterTableAlgorithm::Instant,
+                Some(Keyword::INPLACE) => AlterTableAlgorithm::Inplace,
+                Some(Keyword::COPY) => AlterTableAlgorithm::Copy,
+                _ => self.expected(
+                    "DEFAULT, INSTANT, INPLACE, or COPY after ALGORITHM [=]",
+                    self.peek_token(),
+                )?,
+            };
+            AlterTableOperation::Algorithm { equals, algorithm }
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

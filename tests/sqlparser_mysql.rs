@@ -2423,6 +2423,54 @@ fn parse_alter_table_modify_column() {
 }
 
 #[test]
+fn parse_alter_table_with_algorithm() {
+    let sql = "ALTER TABLE tab ALGORITHM = COPY";
+    let expected_operation = AlterTableOperation::Algorithm {
+        equals: true,
+        algorithm: AlterTableAlgorithm::Copy,
+    };
+    let operation = alter_table_op(mysql_and_generic().verified_stmt(sql));
+    assert_eq!(expected_operation, operation);
+
+    //  Check order doesn't matter
+    let sql =
+        "ALTER TABLE users DROP COLUMN password_digest, ALGORITHM = COPY, RENAME COLUMN name TO username";
+    let stmt = mysql_and_generic().verified_stmt(sql);
+    match stmt {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::DropColumn {
+                        column_name: Ident::new("password_digest"),
+                        if_exists: false,
+                        drop_behavior: None,
+                    },
+                    AlterTableOperation::Algorithm {
+                        equals: true,
+                        algorithm: AlterTableAlgorithm::Copy,
+                    },
+                    AlterTableOperation::RenameColumn {
+                        old_column_name: Ident::new("name"),
+                        new_column_name: Ident::new("username")
+                    },
+                ]
+            )
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` ALGORITHM DEFAULT");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` ALGORITHM INSTANT");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` ALGORITHM INPLACE");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` ALGORITHM COPY");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` ALGORITHM = DEFAULT");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` ALGORITHM = INSTANT");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` ALGORITHM = INPLACE");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` ALGORITHM = COPY");
+}
+
+#[test]
 fn parse_alter_table_modify_column_with_column_position() {
     let expected_name = ObjectName::from(vec![Ident::new("orders")]);
     let expected_operation_first = AlterTableOperation::ModifyColumn {

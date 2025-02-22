@@ -943,6 +943,14 @@ pub trait Dialect: Debug + Any {
     fn supports_geometric_types(&self) -> bool {
         false
     }
+
+    /// Returns true if the dialect supports `ORDER BY ALL`.
+    /// `ALL` which means all columns of the SELECT clause.
+    ///
+    /// For example: ```SELECT * FROM addresses ORDER BY ALL;```.
+    fn supports_order_by_all(&self) -> bool {
+        false
+    }
 }
 
 /// This represents the operators for which precedence must be defined

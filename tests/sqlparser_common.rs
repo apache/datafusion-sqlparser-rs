@@ -2389,27 +2389,33 @@ fn parse_select_order_by() {
     fn chk(sql: &str) {
         let select = verified_query(sql);
         assert_eq!(
-            vec![
+            OrderByKind::Expressions(vec![
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("lname")),
-                    asc: Some(true),
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: Some(true),
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
-                    asc: Some(false),
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: Some(false),
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("id")),
-                    asc: None,
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
-            ],
-            select.order_by.expect("ORDER BY expected").exprs
+            ]),
+            select.order_by.expect("ORDER BY expected").kind
         );
     }
     chk("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id");
@@ -2424,23 +2430,159 @@ fn parse_select_order_by_limit() {
                ORDER BY lname ASC, fname DESC LIMIT 2";
     let select = verified_query(sql);
     assert_eq!(
-        vec![
+        OrderByKind::Expressions(vec![
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
-                asc: Some(true),
-                nulls_first: None,
+                options: OrderByOptions {
+                    asc: Some(true),
+                    nulls_first: None,
+                },
                 with_fill: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
-                asc: Some(false),
-                nulls_first: None,
+                options: OrderByOptions {
+                    asc: Some(false),
+                    nulls_first: None,
+                },
                 with_fill: None,
             },
-        ],
-        select.order_by.expect("ORDER BY expected").exprs
+        ]),
+        select.order_by.expect("ORDER BY expected").kind
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
+}
+
+#[test]
+fn parse_select_order_by_all() {
+    fn chk(sql: &str, except_order_by: OrderByKind) {
+        let dialects = all_dialects_where(|d| d.supports_order_by_all());
+        let select = dialects.verified_query(sql);
+        assert_eq!(
+            except_order_by,
+            select.order_by.expect("ORDER BY expected").kind
+        );
+    }
+    let test_cases = [
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL",
+            OrderByKind::All(OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS FIRST",
+            OrderByKind::All(OrderByOptions {
+                asc: None,
+                nulls_first: Some(true),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS LAST",
+            OrderByKind::All(OrderByOptions {
+                asc: None,
+                nulls_first: Some(false),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(true),
+                nulls_first: None,
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS FIRST",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(true),
+                nulls_first: Some(true),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS LAST",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(true),
+                nulls_first: Some(false),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(false),
+                nulls_first: None,
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS FIRST",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(false),
+                nulls_first: Some(true),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS LAST",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(false),
+                nulls_first: Some(false),
+            }),
+        ),
+    ];
+
+    for (sql, expected_order_by) in test_cases {
+        chk(sql, expected_order_by);
+    }
+}
+
+#[test]
+fn parse_select_order_by_not_support_all() {
+    fn chk(sql: &str, except_order_by: OrderByKind) {
+        let dialects = all_dialects_where(|d| !d.supports_order_by_all());
+        let select = dialects.verified_query(sql);
+        assert_eq!(
+            except_order_by,
+            select.order_by.expect("ORDER BY expected").kind
+        );
+    }
+    let test_cases = [
+        (
+            "SELECT id, ALL FROM customer WHERE id < 5 ORDER BY ALL",
+            OrderByKind::Expressions(vec![OrderByExpr {
+                expr: Expr::Identifier(Ident::new("ALL")),
+                options: OrderByOptions {
+                    asc: None,
+                    nulls_first: None,
+                },
+                with_fill: None,
+            }]),
+        ),
+        (
+            "SELECT id, ALL FROM customer ORDER BY ALL ASC NULLS FIRST",
+            OrderByKind::Expressions(vec![OrderByExpr {
+                expr: Expr::Identifier(Ident::new("ALL")),
+                options: OrderByOptions {
+                    asc: Some(true),
+                    nulls_first: Some(true),
+                },
+                with_fill: None,
+            }]),
+        ),
+        (
+            "SELECT id, ALL FROM customer ORDER BY ALL DESC NULLS LAST",
+            OrderByKind::Expressions(vec![OrderByExpr {
+                expr: Expr::Identifier(Ident::new("ALL")),
+                options: OrderByOptions {
+                    asc: Some(false),
+                    nulls_first: Some(false),
+                },
+                with_fill: None,
+            }]),
+        ),
+    ];
+
+    for (sql, expected_order_by) in test_cases {
+        chk(sql, expected_order_by);
+    }
 }
 
 #[test]
@@ -2449,21 +2591,25 @@ fn parse_select_order_by_nulls_order() {
                ORDER BY lname ASC NULLS FIRST, fname DESC NULLS LAST LIMIT 2";
     let select = verified_query(sql);
     assert_eq!(
-        vec![
+        OrderByKind::Expressions(vec![
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
-                asc: Some(true),
-                nulls_first: Some(true),
+                options: OrderByOptions {
+                    asc: Some(true),
+                    nulls_first: Some(true),
+                },
                 with_fill: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
-                asc: Some(false),
-                nulls_first: Some(false),
+                options: OrderByOptions {
+                    asc: Some(false),
+                    nulls_first: Some(false),
+                },
                 with_fill: None,
             },
-        ],
-        select.order_by.expect("ORDER BY expeccted").exprs
+        ]),
+        select.order_by.expect("ORDER BY expeccted").kind
     );
     assert_eq!(Some(Expr::Value(number("2"))), select.limit);
 }
@@ -2641,8 +2787,10 @@ fn parse_select_qualify() {
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
-                        asc: None,
-                        nulls_first: None,
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
                         with_fill: None,
                     }],
                     window_frame: None,
@@ -3065,8 +3213,10 @@ fn parse_listagg() {
                         quote_style: None,
                         span: Span::empty(),
                     }),
-                    asc: None,
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
                 OrderByExpr {
@@ -3075,8 +3225,10 @@ fn parse_listagg() {
                         quote_style: None,
                         span: Span::empty(),
                     }),
-                    asc: None,
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
             ]
@@ -5172,8 +5324,10 @@ fn parse_window_functions() {
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
-                    asc: Some(false),
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: Some(false),
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 }],
                 window_frame: None,
@@ -5386,8 +5540,10 @@ fn test_parse_named_window() {
                             quote_style: None,
                             span: Span::empty(),
                         }),
-                        asc: None,
-                        nulls_first: None,
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
                         with_fill: None,
                     }],
                     window_frame: None,
@@ -8584,14 +8740,18 @@ fn parse_create_index() {
     let indexed_columns = vec![
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
-            asc: None,
-            nulls_first: None,
+            options: OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            },
             with_fill: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
-            asc: Some(false),
-            nulls_first: None,
+            options: OrderByOptions {
+                asc: Some(false),
+                nulls_first: None,
+            },
             with_fill: None,
         },
     ];
@@ -8620,14 +8780,18 @@ fn test_create_index_with_using_function() {
     let indexed_columns = vec![
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
-            asc: None,
-            nulls_first: None,
+            options: OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            },
             with_fill: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
-            asc: Some(false),
-            nulls_first: None,
+            options: OrderByOptions {
+                asc: Some(false),
+                nulls_first: None,
+            },
             with_fill: None,
         },
     ];
@@ -8664,8 +8828,10 @@ fn test_create_index_with_with_clause() {
     let sql = "CREATE UNIQUE INDEX title_idx ON films(title) WITH (fillfactor = 70, single_param)";
     let indexed_columns = vec![OrderByExpr {
         expr: Expr::Identifier(Ident::new("title")),
-        asc: None,
-        nulls_first: None,
+        options: OrderByOptions {
+            asc: None,
+            nulls_first: None,
+        },
         with_fill: None,
     }];
     let with_parameters = vec![
@@ -11345,8 +11511,10 @@ fn test_match_recognize() {
             partition_by: vec![Expr::Identifier(Ident::new("company"))],
             order_by: vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("price_date")),
-                asc: None,
-                nulls_first: None,
+                options: OrderByOptions {
+                    asc: None,
+                    nulls_first: None,
+                },
                 with_fill: None,
             }],
             measures: vec![

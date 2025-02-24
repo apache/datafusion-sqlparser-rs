@@ -86,7 +86,7 @@ pub use self::trigger::{
 
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    NormalizationForm, TrimWhereField, Value, ValueWrapper,
+    NormalizationForm, TrimWhereField, Value, ValueWithSpan,
 };
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
@@ -892,7 +892,7 @@ pub enum Expr {
     /// Nested expression e.g. `(foo > bar)` or `(1)`
     Nested(Box<Expr>),
     /// A literal value, such as string, number, date or NULL
-    Value(ValueWrapper),
+    Value(ValueWithSpan),
     /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
     IntroducedString {
         introducer: String,

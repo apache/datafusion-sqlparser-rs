@@ -34,13 +34,13 @@ use sqlparser_derive::{Visit, VisitMut};
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ValueWrapper {
+pub struct ValueWithSpan {
     pub value: Value,
     pub span: Span,
 }
 
-impl From<ValueWrapper> for Value {
-    fn from(value: ValueWrapper) -> Self {
+impl From<ValueWithSpan> for Value {
+    fn from(value: ValueWithSpan) -> Self {
         value.value
     }
 }
@@ -112,7 +112,7 @@ pub enum Value {
     Placeholder(String),
 }
 
-impl ValueWrapper {
+impl ValueWithSpan {
     /// If the underlying literal is a string, regardless of quote style, returns the associated string value
     pub fn into_string(self) -> Option<String> {
         self.value.into_string()
@@ -144,16 +144,16 @@ impl Value {
         }
     }
 
-    pub fn with_span(self, span: Span) -> ValueWrapper {
-        ValueWrapper { value: self, span }
+    pub fn with_span(self, span: Span) -> ValueWithSpan {
+        ValueWithSpan { value: self, span }
     }
 
-    pub fn with_empty_span(self) -> ValueWrapper {
+    pub fn with_empty_span(self) -> ValueWithSpan {
         self.with_span(Span::empty())
     }
 }
 
-impl fmt::Display for ValueWrapper {
+impl fmt::Display for ValueWithSpan {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.value)
     }

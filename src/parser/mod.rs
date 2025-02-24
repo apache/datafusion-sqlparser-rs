@@ -8559,7 +8559,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a literal value (numbers, strings, date/time, booleans)
-    pub fn parse_value(&mut self) -> Result<ValueWrapper, ParserError> {
+    pub fn parse_value(&mut self) -> Result<ValueWithSpan, ParserError> {
         let next_token = self.next_token();
         let span = next_token.span;
         let ok_value = |value: Value| Ok(value.with_span(span));
@@ -8656,7 +8656,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse an unsigned numeric literal
-    pub fn parse_number_value(&mut self) -> Result<ValueWrapper, ParserError> {
+    pub fn parse_number_value(&mut self) -> Result<ValueWithSpan, ParserError> {
         let value_wrapper = self.parse_value()?;
         match &value_wrapper.value {
             Value::Number(_, _) => Ok(value_wrapper),

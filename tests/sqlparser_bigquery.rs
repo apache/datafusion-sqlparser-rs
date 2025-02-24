@@ -857,7 +857,7 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::Value(
-                Value::SingleQuotedString("2011-05-05".into()).with_empty_span()
+                Value::DoubleQuotedString("2011-05-05".into()).with_empty_span()
             )],
             fields: vec![StructField {
                 field_name: None,

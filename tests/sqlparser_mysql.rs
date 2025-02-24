@@ -665,7 +665,7 @@ fn table_constraint_unique_primary_ctor(
     name: Option<Ident>,
     index_name: Option<Ident>,
     index_type: Option<IndexType>,
-    index_fields: Vec<IndexField>,
+    index_exprs: Vec<OrderByExpr>,
     index_options: Vec<IndexOption>,
     characteristics: Option<ConstraintCharacteristics>,
     unique_index_type_display: Option<KeyOrIndexDisplay>,
@@ -676,7 +676,7 @@ fn table_constraint_unique_primary_ctor(
             index_name,
             index_type_display,
             index_type,
-            index_fields,
+            index_exprs,
             index_options,
             characteristics,
             nulls_distinct: NullsDistinctOption::None,
@@ -685,7 +685,7 @@ fn table_constraint_unique_primary_ctor(
             name,
             index_name,
             index_type,
-            index_fields,
+            index_exprs,
             index_options,
             characteristics,
         },
@@ -713,9 +713,13 @@ fn parse_create_table_primary_and_unique_key() {
                     Some(Ident::new("bar_key")),
                     None,
                     None,
-                    vec![IndexField {
-                        expr: IndexExpr::Column(Ident::new("bar")),
-                        asc: None,
+                    vec![OrderByExpr {
+                        expr: Expr::Identifier(Ident::new("bar")),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
                     }],
                     vec![],
                     None,
@@ -780,13 +784,21 @@ fn parse_create_table_primary_and_unique_key_with_index_options() {
                     Some(Ident::new("index_name")),
                     None,
                     vec![
-                        IndexField {
-                            expr: IndexExpr::Column(Ident::new("bar")),
-                            asc: None,
+                        OrderByExpr {
+                            expr: Expr::Identifier(Ident::new("bar")),
+                            options: OrderByOptions {
+                                asc: None,
+                                nulls_first: None,
+                            },
+                            with_fill: None,
                         },
-                        IndexField {
-                            expr: IndexExpr::Column(Ident::new("var")),
-                            asc: None,
+                        OrderByExpr {
+                            expr: Expr::Identifier(Ident::new("var")),
+                            options: OrderByOptions {
+                                asc: None,
+                                nulls_first: None,
+                            },
+                            with_fill: None,
                         },
                     ],
                     vec![
@@ -826,9 +838,13 @@ fn parse_create_table_primary_and_unique_key_with_index_type() {
                     None,
                     Some(Ident::new("index_name")),
                     Some(IndexType::BTree),
-                    vec![IndexField {
-                        expr: IndexExpr::Column(Ident::new("bar")),
-                        asc: None,
+                    vec![OrderByExpr {
+                        expr: Expr::Identifier(Ident::new("bar")),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
                     }],
                     vec![IndexOption::Using(IndexType::Hash)],
                     None,
@@ -2270,9 +2286,13 @@ fn parse_alter_table_add_keys() {
                     AlterTableOperation::AddConstraint(TableConstraint::PrimaryKey {
                         name: None,
                         index_name: None,
-                        index_fields: vec![IndexField {
-                            expr: IndexExpr::Column(Ident::new("a")),
-                            asc: None
+                        index_exprs: vec![OrderByExpr {
+                            expr: Expr::Identifier(Ident::new("a")),
+                            options: OrderByOptions {
+                                asc: None,
+                                nulls_first: None,
+                            },
+                            with_fill: None,
                         }],
                         index_type: None,
                         index_options: vec![],
@@ -2282,18 +2302,26 @@ fn parse_alter_table_add_keys() {
                         display_as_key: true,
                         name: Some(Ident::new("b")),
                         index_type: None,
-                        index_fields: vec![
-                            IndexField {
-                                expr: IndexExpr::ColumnPrefix {
+                        index_exprs: vec![
+                            OrderByExpr {
+                                expr: Expr::ColumnPrefix {
                                     column: Ident::new("b"),
-                                    length: 20,
+                                    length: 20
                                 },
-                                asc: None,
+                                options: OrderByOptions {
+                                    asc: None,
+                                    nulls_first: None,
+                                },
+                                with_fill: None,
                             },
-                            IndexField {
-                                expr: IndexExpr::Column(Ident::new("c")),
-                                asc: None,
-                            }
+                            OrderByExpr {
+                                expr: Expr::Identifier(Ident::new("c")),
+                                options: OrderByOptions {
+                                    asc: None,
+                                    nulls_first: None,
+                                },
+                                with_fill: None,
+                            },
                         ]
                     })
                 ]

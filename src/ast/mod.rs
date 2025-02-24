@@ -1049,6 +1049,16 @@ pub enum Expr {
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html)
     /// [DuckDb](https://duckdb.org/docs/sql/functions/lambda.html)
     Lambda(LambdaFunction),
+    /// A ColumnPrefix used in MySQL indexes.
+    /// ```sql
+    /// CREATE INDEX ON tbl (col(10));
+    /// ```
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.0/en/create-index.html)
+    ColumnPrefix {
+        column: Ident,
+        length: u64,
+    },
 }
 
 /// The contents inside the `[` and `]` in a subscript expression.
@@ -1817,6 +1827,7 @@ impl fmt::Display for Expr {
             }
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
+            Expr::ColumnPrefix { column, length } => write!(f, "{column}({length})"),
         }
     }
 }
@@ -8688,61 +8699,6 @@ pub enum CopyIntoSnowflakeKind {
     /// Unloads data from a table or query to external files
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/copy-into-location>
     Location,
-}
-
-/// Index Field
-///
-/// This structure used here [`MySQL` CREATE INDEX][1], [`PostgreSQL` CREATE INDEX][2], [`MySQL` CREATE TABLE][3].
-///
-/// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-index.html
-/// [2]: https://www.postgresql.org/docs/17/sql-createindex.html
-/// [3]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct IndexField {
-    pub expr: IndexExpr,
-    /// Optional `ASC` or `DESC`
-    pub asc: Option<bool>,
-}
-
-impl fmt::Display for IndexField {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.expr)?;
-        match self.asc {
-            Some(true) => write!(f, " ASC")?,
-            Some(false) => write!(f, " DESC")?,
-            None => (),
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum IndexExpr {
-    Column(Ident),
-    /// Mysql specific syntax
-    ///
-    /// See [Mysql documentation](https://dev.mysql.com/doc/refman/8.3/en/create-index.html)
-    /// for more details.
-    ColumnPrefix {
-        column: Ident,
-        length: u64,
-    },
-    Functional(Box<Expr>),
-}
-
-impl fmt::Display for IndexExpr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            IndexExpr::Column(column) => write!(f, "{}", column),
-            IndexExpr::ColumnPrefix { column, length } => write!(f, "{column}({length})"),
-            IndexExpr::Functional(expr) => write!(f, "({expr})"),
-        }
-    }
 }
 
 #[cfg(test)]

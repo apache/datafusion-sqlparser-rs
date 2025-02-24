@@ -628,7 +628,7 @@ impl Spanned for TableConstraint {
                 index_name,
                 index_type_display: _,
                 index_type: _,
-                index_fields: _,
+                index_exprs,
                 index_options: _,
                 characteristics,
                 nulls_distinct: _,
@@ -636,19 +636,21 @@ impl Spanned for TableConstraint {
                 name.iter()
                     .map(|i| i.span)
                     .chain(index_name.iter().map(|i| i.span))
+                    .chain(index_exprs.iter().map(|i| i.span()))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
             TableConstraint::PrimaryKey {
                 name,
                 index_name,
                 index_type: _,
-                index_fields: _,
+                index_exprs,
                 index_options: _,
                 characteristics,
             } => union_spans(
                 name.iter()
                     .map(|i| i.span)
                     .chain(index_name.iter().map(|i| i.span))
+                    .chain(index_exprs.iter().map(|i| i.span()))
                     .chain(characteristics.iter().map(|i| i.span())),
             ),
             TableConstraint::ForeignKey {
@@ -676,14 +678,23 @@ impl Spanned for TableConstraint {
                 display_as_key: _,
                 name,
                 index_type: _,
-                index_fields: _,
-            } => union_spans(name.iter().map(|i| i.span)),
+                index_exprs,
+            } => union_spans(
+                name.iter()
+                    .map(|i| i.span)
+                    .chain(index_exprs.iter().map(|i| i.span())),
+            ),
             TableConstraint::FulltextOrSpatial {
                 fulltext: _,
                 index_type_display: _,
                 opt_index_name,
-                index_fields: _,
-            } => union_spans(opt_index_name.iter().map(|i| i.span)),
+                index_exprs,
+            } => union_spans(
+                opt_index_name
+                    .iter()
+                    .map(|i| i.span)
+                    .chain(index_exprs.iter().map(|i| i.span())),
+            ),
         }
     }
 }
@@ -1468,6 +1479,7 @@ impl Spanned for Expr {
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),
             Expr::Lambda(_) => Span::empty(),
+            Expr::ColumnPrefix { .. } => Span::empty(),
         }
     }
 }

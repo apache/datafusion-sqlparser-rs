@@ -7440,7 +7440,7 @@ impl<'a> Parser<'a> {
                 let index_name = self.parse_optional_indent()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
-                let index_fields = self.parse_index_fields()?;
+                let index_fields = self.parse_index_exprs()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
                 Ok(Some(TableConstraint::Unique {
@@ -7448,7 +7448,7 @@ impl<'a> Parser<'a> {
                     index_name,
                     index_type_display,
                     index_type,
-                    index_fields,
+                    index_exprs: index_fields,
                     index_options,
                     characteristics,
                     nulls_distinct,
@@ -7462,14 +7462,14 @@ impl<'a> Parser<'a> {
                 let index_name = self.parse_optional_indent()?;
                 let index_type = self.parse_optional_using_then_index_type()?;
 
-                let index_fields = self.parse_index_fields()?;
+                let index_exprs = self.parse_index_exprs()?;
                 let index_options = self.parse_index_options()?;
                 let characteristics = self.parse_constraint_characteristics()?;
                 Ok(Some(TableConstraint::PrimaryKey {
                     name,
                     index_name,
                     index_type,
-                    index_fields,
+                    index_exprs,
                     index_options,
                     characteristics,
                 }))
@@ -7525,13 +7525,13 @@ impl<'a> Parser<'a> {
                 };
 
                 let index_type = self.parse_optional_using_then_index_type()?;
-                let index_fields = self.parse_index_fields()?;
+                let index_fields = self.parse_index_exprs()?;
 
                 Ok(Some(TableConstraint::Index {
                     display_as_key,
                     name,
                     index_type,
-                    index_fields,
+                    index_exprs: index_fields,
                 }))
             }
             Token::Word(w)
@@ -7554,13 +7554,13 @@ impl<'a> Parser<'a> {
 
                 let opt_index_name = self.parse_optional_indent()?;
 
-                let index_fields = self.parse_index_fields()?;
+                let index_exprs = self.parse_index_exprs()?;
 
                 Ok(Some(TableConstraint::FulltextOrSpatial {
                     fulltext,
                     index_type_display,
                     opt_index_name,
-                    index_fields,
+                    index_exprs,
                 }))
             }
             _ => {
@@ -7646,21 +7646,33 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_index_fields(&mut self) -> Result<Vec<IndexField>, ParserError> {
+    pub fn parse_index_exprs(&mut self) -> Result<Vec<OrderByExpr>, ParserError> {
         self.parse_parenthesized(|p| p.parse_comma_separated(Parser::parse_index_field))
     }
 
-    pub fn parse_index_field(&mut self) -> Result<IndexField, ParserError> {
+    pub fn parse_index_field(&mut self) -> Result<OrderByExpr, ParserError> {
         let expr = self.parse_index_expr()?;
-        let asc = self.parse_asc_desc();
+        let options = self.parse_order_by_options()?;
 
-        Ok(IndexField { expr, asc })
+        let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+            && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
+        {
+            Some(self.parse_with_fill()?)
+        } else {
+            None
+        };
+
+        Ok(OrderByExpr {
+            expr,
+            options,
+            with_fill,
+        })
     }
 
-    pub fn parse_index_expr(&mut self) -> Result<IndexExpr, ParserError> {
+    pub fn parse_index_expr(&mut self) -> Result<Expr, ParserError> {
         if self.peek_token() == Token::LParen {
-            let expr = self.parse_parenthesized(|p| p.parse_expr())?;
-            return Ok(IndexExpr::Functional(Box::new(expr)));
+            let expr = self.parse_expr()?;
+            return Ok(expr);
         }
 
         let column = self.parse_identifier()?;
@@ -7668,10 +7680,10 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is MySqlDialect | GenericDialect) && self.peek_token() == Token::LParen
         {
             let length = self.parse_parenthesized(Parser::parse_literal_uint)?;
-            return Ok(IndexExpr::ColumnPrefix { column, length });
+            return Ok(Expr::ColumnPrefix { column, length });
         }
 
-        Ok(IndexExpr::Column(column))
+        Ok(Expr::Identifier(column))
     }
 
     /// Parse `[ident]`, mostly `ident` is name, like:
@@ -15168,9 +15180,13 @@ mod tests {
                 display_as_key: false,
                 name: None,
                 index_type: None,
-                index_fields: vec![IndexField {
-                    expr: IndexExpr::Column(Ident::new("c1")),
-                    asc: None,
+                index_exprs: vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("c1")),
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
+                    with_fill: None,
                 }],
             }
         );
@@ -15182,9 +15198,13 @@ mod tests {
                 display_as_key: true,
                 name: None,
                 index_type: None,
-                index_fields: vec![IndexField {
-                    expr: IndexExpr::Column(Ident::new("c1")),
-                    asc: None,
+                index_exprs: vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("c1")),
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
+                    with_fill: None,
                 }],
             }
         );
@@ -15196,16 +15216,96 @@ mod tests {
                 display_as_key: false,
                 name: Some(Ident::with_quote('\'', "index")),
                 index_type: None,
-                index_fields: vec![
-                    IndexField {
-                        expr: IndexExpr::Column(Ident::new("c1")),
-                        asc: None,
+                index_exprs: vec![
+                    OrderByExpr {
+                        expr: Expr::Identifier(Ident::new("c1")),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
                     },
-                    IndexField {
-                        expr: IndexExpr::Column(Ident::new("c2")),
-                        asc: None,
+                    OrderByExpr {
+                        expr: Expr::Identifier(Ident::new("c2")),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
                     }
                 ],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX USING BTREE (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: None,
+                index_type: Some(IndexType::BTree),
+                index_exprs: vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("c1")),
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                }],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX USING HASH (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: None,
+                index_type: Some(IndexType::Hash),
+                index_exprs: vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("c1")),
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                }],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX idx_name USING BTREE (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: Some(Ident::new("idx_name")),
+                index_type: Some(IndexType::BTree),
+                index_exprs: vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("c1")),
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                }],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX idx_name USING HASH (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: Some(Ident::new("idx_name")),
+                index_type: Some(IndexType::Hash),
+                index_exprs: vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident::new("c1")),
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                }],
             }
         );
 
@@ -15216,16 +15316,20 @@ mod tests {
                 display_as_key: true,
                 name: None,
                 index_type: None,
-                index_fields: vec![
-                    IndexField {
-                        expr: IndexExpr::ColumnPrefix {
+                index_exprs: vec![
+                    OrderByExpr {
+                        expr: Expr::ColumnPrefix {
                             column: Ident::new("c1"),
-                            length: 10,
+                            length: 10
                         },
-                        asc: None,
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
                     },
-                    IndexField {
-                        expr: IndexExpr::Functional(Box::new(Expr::Function(Function {
+                    OrderByExpr {
+                        expr: Expr::Nested(Box::new(Expr::Function(Function {
                             name: ObjectName::from(vec![Ident::new("LOWER")]),
                             uses_odbc_syntax: false,
                             parameters: FunctionArguments::None,
@@ -15241,65 +15345,13 @@ mod tests {
                             over: None,
                             within_group: vec![],
                         }))),
-                        asc: Some(false),
+                        options: OrderByOptions {
+                            asc: Some(false),
+                            nulls_first: None,
+                        },
+                        with_fill: None,
                     }
                 ],
-            }
-        );
-
-        test_parse_table_constraint!(
-            dialect,
-            "INDEX USING BTREE (c1)",
-            TableConstraint::Index {
-                display_as_key: false,
-                name: None,
-                index_type: Some(IndexType::BTree),
-                index_fields: vec![IndexField {
-                    expr: IndexExpr::Column(Ident::new("c1")),
-                    asc: None,
-                }],
-            }
-        );
-
-        test_parse_table_constraint!(
-            dialect,
-            "INDEX USING HASH (c1)",
-            TableConstraint::Index {
-                display_as_key: false,
-                name: None,
-                index_type: Some(IndexType::Hash),
-                index_fields: vec![IndexField {
-                    expr: IndexExpr::Column(Ident::new("c1")),
-                    asc: None,
-                }],
-            }
-        );
-
-        test_parse_table_constraint!(
-            dialect,
-            "INDEX idx_name USING BTREE (c1)",
-            TableConstraint::Index {
-                display_as_key: false,
-                name: Some(Ident::new("idx_name")),
-                index_type: Some(IndexType::BTree),
-                index_fields: vec![IndexField {
-                    expr: IndexExpr::Column(Ident::new("c1")),
-                    asc: None,
-                }],
-            }
-        );
-
-        test_parse_table_constraint!(
-            dialect,
-            "INDEX idx_name USING HASH (c1)",
-            TableConstraint::Index {
-                display_as_key: false,
-                name: Some(Ident::new("idx_name")),
-                index_type: Some(IndexType::Hash),
-                index_fields: vec![IndexField {
-                    expr: IndexExpr::Column(Ident::new("c1")),
-                    asc: None,
-                }],
             }
         );
     }

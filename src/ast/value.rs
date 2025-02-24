@@ -45,15 +45,15 @@ impl PartialEq for ValueWithSpan {
     }
 }
 
-impl PartialOrd for ValueWithSpan {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        self.value.partial_cmp(&other.value)
-    }
-}
-
 impl Ord for ValueWithSpan {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.value.cmp(&other.value)
+    }
+}
+
+impl PartialOrd for ValueWithSpan {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(Ord::cmp(self, other))
     }
 }
 

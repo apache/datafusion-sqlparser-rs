@@ -2432,27 +2432,33 @@ fn parse_select_order_by() {
     fn chk(sql: &str) {
         let select = verified_query(sql);
         assert_eq!(
-            vec![
+            OrderByKind::Expressions(vec![
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("lname")),
-                    asc: Some(true),
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: Some(true),
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
-                    asc: Some(false),
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: Some(false),
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("id")),
-                    asc: None,
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
-            ],
-            select.order_by.expect("ORDER BY expected").exprs
+            ]),
+            select.order_by.expect("ORDER BY expected").kind
         );
     }
     chk("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id");
@@ -2467,23 +2473,159 @@ fn parse_select_order_by_limit() {
                ORDER BY lname ASC, fname DESC LIMIT 2";
     let select = verified_query(sql);
     assert_eq!(
-        vec![
+        OrderByKind::Expressions(vec![
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
-                asc: Some(true),
-                nulls_first: None,
+                options: OrderByOptions {
+                    asc: Some(true),
+                    nulls_first: None,
+                },
                 with_fill: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
-                asc: Some(false),
-                nulls_first: None,
+                options: OrderByOptions {
+                    asc: Some(false),
+                    nulls_first: None,
+                },
                 with_fill: None,
             },
-        ],
-        select.order_by.expect("ORDER BY expected").exprs
+        ]),
+        select.order_by.expect("ORDER BY expected").kind
     );
     assert_eq!(Some(Expr::value(number("2"))), select.limit);
+}
+
+#[test]
+fn parse_select_order_by_all() {
+    fn chk(sql: &str, except_order_by: OrderByKind) {
+        let dialects = all_dialects_where(|d| d.supports_order_by_all());
+        let select = dialects.verified_query(sql);
+        assert_eq!(
+            except_order_by,
+            select.order_by.expect("ORDER BY expected").kind
+        );
+    }
+    let test_cases = [
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL",
+            OrderByKind::All(OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS FIRST",
+            OrderByKind::All(OrderByOptions {
+                asc: None,
+                nulls_first: Some(true),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL NULLS LAST",
+            OrderByKind::All(OrderByOptions {
+                asc: None,
+                nulls_first: Some(false),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(true),
+                nulls_first: None,
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS FIRST",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(true),
+                nulls_first: Some(true),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer ORDER BY ALL ASC NULLS LAST",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(true),
+                nulls_first: Some(false),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(false),
+                nulls_first: None,
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS FIRST",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(false),
+                nulls_first: Some(true),
+            }),
+        ),
+        (
+            "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY ALL DESC NULLS LAST",
+            OrderByKind::All(OrderByOptions {
+                asc: Some(false),
+                nulls_first: Some(false),
+            }),
+        ),
+    ];
+
+    for (sql, expected_order_by) in test_cases {
+        chk(sql, expected_order_by);
+    }
+}
+
+#[test]
+fn parse_select_order_by_not_support_all() {
+    fn chk(sql: &str, except_order_by: OrderByKind) {
+        let dialects = all_dialects_where(|d| !d.supports_order_by_all());
+        let select = dialects.verified_query(sql);
+        assert_eq!(
+            except_order_by,
+            select.order_by.expect("ORDER BY expected").kind
+        );
+    }
+    let test_cases = [
+        (
+            "SELECT id, ALL FROM customer WHERE id < 5 ORDER BY ALL",
+            OrderByKind::Expressions(vec![OrderByExpr {
+                expr: Expr::Identifier(Ident::new("ALL")),
+                options: OrderByOptions {
+                    asc: None,
+                    nulls_first: None,
+                },
+                with_fill: None,
+            }]),
+        ),
+        (
+            "SELECT id, ALL FROM customer ORDER BY ALL ASC NULLS FIRST",
+            OrderByKind::Expressions(vec![OrderByExpr {
+                expr: Expr::Identifier(Ident::new("ALL")),
+                options: OrderByOptions {
+                    asc: Some(true),
+                    nulls_first: Some(true),
+                },
+                with_fill: None,
+            }]),
+        ),
+        (
+            "SELECT id, ALL FROM customer ORDER BY ALL DESC NULLS LAST",
+            OrderByKind::Expressions(vec![OrderByExpr {
+                expr: Expr::Identifier(Ident::new("ALL")),
+                options: OrderByOptions {
+                    asc: Some(false),
+                    nulls_first: Some(false),
+                },
+                with_fill: None,
+            }]),
+        ),
+    ];
+
+    for (sql, expected_order_by) in test_cases {
+        chk(sql, expected_order_by);
+    }
 }
 
 #[test]
@@ -2492,21 +2634,25 @@ fn parse_select_order_by_nulls_order() {
                ORDER BY lname ASC NULLS FIRST, fname DESC NULLS LAST LIMIT 2";
     let select = verified_query(sql);
     assert_eq!(
-        vec![
+        OrderByKind::Expressions(vec![
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
-                asc: Some(true),
-                nulls_first: Some(true),
+                options: OrderByOptions {
+                    asc: Some(true),
+                    nulls_first: Some(true),
+                },
                 with_fill: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
-                asc: Some(false),
-                nulls_first: Some(false),
+                options: OrderByOptions {
+                    asc: Some(false),
+                    nulls_first: Some(false),
+                },
                 with_fill: None,
             },
-        ],
-        select.order_by.expect("ORDER BY expeccted").exprs
+        ]),
+        select.order_by.expect("ORDER BY expeccted").kind
     );
     assert_eq!(Some(Expr::value(number("2"))), select.limit);
 }
@@ -2684,8 +2830,10 @@ fn parse_select_qualify() {
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
-                        asc: None,
-                        nulls_first: None,
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
                         with_fill: None,
                     }],
                     window_frame: None,
@@ -3108,8 +3256,10 @@ fn parse_listagg() {
                         quote_style: None,
                         span: Span::empty(),
                     }),
-                    asc: None,
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
                 OrderByExpr {
@@ -3118,8 +3268,10 @@ fn parse_listagg() {
                         quote_style: None,
                         span: Span::empty(),
                     }),
-                    asc: None,
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 },
             ]
@@ -5224,8 +5376,10 @@ fn parse_window_functions() {
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
-                    asc: Some(false),
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: Some(false),
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 }],
                 window_frame: None,
@@ -5438,8 +5592,10 @@ fn test_parse_named_window() {
                             quote_style: None,
                             span: Span::empty(),
                         }),
-                        asc: None,
-                        nulls_first: None,
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
                         with_fill: None,
                     }],
                     window_frame: None,
@@ -6615,26 +6771,30 @@ fn parse_searched_case_expr() {
         &Case {
             operand: None,
             conditions: vec![
-                IsNull(Box::new(Identifier(Ident::new("bar")))),
-                BinaryOp {
-                    left: Box::new(Identifier(Ident::new("bar"))),
-                    op: Eq,
-                    right: Box::new(Expr::value(number("0"))),
+                CaseWhen {
+                    condition: IsNull(Box::new(Identifier(Ident::new("bar")))),
+                    result: Expr::value(Value::SingleQuotedString("null".to_string())),
                 },
-                BinaryOp {
-                    left: Box::new(Identifier(Ident::new("bar"))),
-                    op: GtEq,
-                    right: Box::new(Expr::value(number("0"))),
+                CaseWhen {
+                    condition: BinaryOp {
+                        left: Box::new(Identifier(Ident::new("bar"))),
+                        op: Eq,
+                        right: Box::new(Expr::value(number("0"))),
+                    },
+                    result: Expr::value(Value::SingleQuotedString("=0".to_string())),
+                },
+                CaseWhen {
+                    condition: BinaryOp {
+                        left: Box::new(Identifier(Ident::new("bar"))),
+                        op: GtEq,
+                        right: Box::new(Expr::value(number("0"))),
+                    },
+                    result: Expr::value(Value::SingleQuotedString(">=0".to_string())),
                 },
             ],
-            results: vec![
-                Expr::Value((Value::SingleQuotedString("null".to_string())).with_empty_span()),
-                Expr::Value((Value::SingleQuotedString("=0".to_string())).with_empty_span()),
-                Expr::Value((Value::SingleQuotedString(">=0".to_string())).with_empty_span()),
-            ],
-            else_result: Some(Box::new(Expr::Value(
-                (Value::SingleQuotedString("<0".to_string())).with_empty_span()
-            ))),
+            else_result: Some(Box::new(Expr::value(Value::SingleQuotedString(
+                "<0".to_string()
+            )))),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -6649,13 +6809,13 @@ fn parse_simple_case_expr() {
     assert_eq!(
         &Case {
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
-            conditions: vec![Expr::value(number("1"))],
-            results: vec![Expr::Value(
-                (Value::SingleQuotedString("Y".to_string())).with_empty_span()
-            )],
-            else_result: Some(Box::new(Expr::Value(
-                (Value::SingleQuotedString("N".to_string())).with_empty_span()
-            ))),
+            conditions: vec![CaseWhen {
+                condition: Expr::value(number("1")),
+                result: Expr::value(Value::SingleQuotedString("Y".to_string())),
+            }],
+            else_result: Some(Box::new(Expr::value(Value::SingleQuotedString(
+                "N".to_string()
+            )))),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -8267,7 +8427,12 @@ fn lateral_function() {
 
 #[test]
 fn parse_start_transaction() {
-    match verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
+    let dialects = all_dialects_except(|d|
+        // BigQuery does not support this syntax
+        d.is::<BigQueryDialect>());
+    match dialects
+        .verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE")
+    {
         Statement::StartTransaction { modes, .. } => assert_eq!(
             modes,
             vec![
@@ -8281,7 +8446,7 @@ fn parse_start_transaction() {
 
     // For historical reasons, PostgreSQL allows the commas between the modes to
     // be omitted.
-    match one_statement_parses_to(
+    match dialects.one_statement_parses_to(
         "START TRANSACTION READ ONLY READ WRITE ISOLATION LEVEL SERIALIZABLE",
         "START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE",
     ) {
@@ -8296,40 +8461,40 @@ fn parse_start_transaction() {
         _ => unreachable!(),
     }
 
-    verified_stmt("START TRANSACTION");
-    verified_stmt("BEGIN");
-    verified_stmt("BEGIN WORK");
-    verified_stmt("BEGIN TRANSACTION");
+    dialects.verified_stmt("START TRANSACTION");
+    dialects.verified_stmt("BEGIN");
+    dialects.verified_stmt("BEGIN WORK");
+    dialects.verified_stmt("BEGIN TRANSACTION");
 
-    verified_stmt("START TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
-    verified_stmt("START TRANSACTION ISOLATION LEVEL READ COMMITTED");
-    verified_stmt("START TRANSACTION ISOLATION LEVEL REPEATABLE READ");
-    verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+    dialects.verified_stmt("START TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+    dialects.verified_stmt("START TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    dialects.verified_stmt("START TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+    dialects.verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
 
     // Regression test for https://github.com/sqlparser-rs/sqlparser-rs/pull/139,
     // in which START TRANSACTION would fail to parse if followed by a statement
     // terminator.
     assert_eq!(
-        parse_sql_statements("START TRANSACTION; SELECT 1"),
+        dialects.parse_sql_statements("START TRANSACTION; SELECT 1"),
         Ok(vec![
             verified_stmt("START TRANSACTION"),
             verified_stmt("SELECT 1"),
         ])
     );
 
-    let res = parse_sql_statements("START TRANSACTION ISOLATION LEVEL BAD");
+    let res = dialects.parse_sql_statements("START TRANSACTION ISOLATION LEVEL BAD");
     assert_eq!(
         ParserError::ParserError("Expected: isolation level, found: BAD".to_string()),
         res.unwrap_err()
     );
 
-    let res = parse_sql_statements("START TRANSACTION BAD");
+    let res = dialects.parse_sql_statements("START TRANSACTION BAD");
     assert_eq!(
         ParserError::ParserError("Expected: end of statement, found: BAD".to_string()),
         res.unwrap_err()
     );
 
-    let res = parse_sql_statements("START TRANSACTION READ ONLY,");
+    let res = dialects.parse_sql_statements("START TRANSACTION READ ONLY,");
     assert_eq!(
         ParserError::ParserError("Expected: transaction mode, found: EOF".to_string()),
         res.unwrap_err()
@@ -8680,14 +8845,18 @@ fn parse_create_index() {
     let indexed_columns = vec![
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
-            asc: None,
-            nulls_first: None,
+            options: OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            },
             with_fill: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
-            asc: Some(false),
-            nulls_first: None,
+            options: OrderByOptions {
+                asc: Some(false),
+                nulls_first: None,
+            },
             with_fill: None,
         },
     ];
@@ -8716,14 +8885,18 @@ fn test_create_index_with_using_function() {
     let indexed_columns = vec![
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
-            asc: None,
-            nulls_first: None,
+            options: OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            },
             with_fill: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
-            asc: Some(false),
-            nulls_first: None,
+            options: OrderByOptions {
+                asc: Some(false),
+                nulls_first: None,
+            },
             with_fill: None,
         },
     ];
@@ -8760,8 +8933,10 @@ fn test_create_index_with_with_clause() {
     let sql = "CREATE UNIQUE INDEX title_idx ON films(title) WITH (fillfactor = 70, single_param)";
     let indexed_columns = vec![OrderByExpr {
         expr: Expr::Identifier(Ident::new("title")),
-        asc: None,
-        nulls_first: None,
+        options: OrderByOptions {
+            asc: None,
+            nulls_first: None,
+        },
         with_fill: None,
     }];
     let with_parameters = vec![
@@ -11471,8 +11646,10 @@ fn test_match_recognize() {
             partition_by: vec![Expr::Identifier(Ident::new("company"))],
             order_by: vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("price_date")),
-                asc: None,
-                nulls_first: None,
+                options: OrderByOptions {
+                    asc: None,
+                    nulls_first: None,
+                },
                 with_fill: None,
             }],
             measures: vec![
@@ -13919,6 +14096,31 @@ fn test_trailing_commas_in_from() {
 }
 
 #[test]
+#[cfg(feature = "visitor")]
+fn test_visit_order() {
+    let sql = "SELECT CASE a WHEN 1 THEN 2 WHEN 3 THEN 4 ELSE 5 END";
+    let stmt = verified_stmt(sql);
+    let mut visited = vec![];
+    sqlparser::ast::visit_expressions(&stmt, |expr| {
+        visited.push(expr.to_string());
+        core::ops::ControlFlow::<()>::Continue(())
+    });
+
+    assert_eq!(
+        visited,
+        [
+            "CASE a WHEN 1 THEN 2 WHEN 3 THEN 4 ELSE 5 END",
+            "a",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+        ]
+    );
+}
+
+#[test]
 fn test_lambdas() {
     let dialects = all_dialects_where(|d| d.supports_lambda_functions());
 
@@ -13949,31 +14151,33 @@ fn test_lambdas() {
                     body: Box::new(Expr::Case {
                         operand: None,
                         conditions: vec![
-                            Expr::BinaryOp {
-                                left: Box::new(Expr::Identifier(Ident::new("p1"))),
-                                op: BinaryOperator::Eq,
-                                right: Box::new(Expr::Identifier(Ident::new("p2")))
+                            CaseWhen {
+                                condition: Expr::BinaryOp {
+                                    left: Box::new(Expr::Identifier(Ident::new("p1"))),
+                                    op: BinaryOperator::Eq,
+                                    right: Box::new(Expr::Identifier(Ident::new("p2")))
+                                },
+                                result: Expr::value(number("0")),
                             },
-                            Expr::BinaryOp {
-                                left: Box::new(call(
-                                    "reverse",
-                                    [Expr::Identifier(Ident::new("p1"))]
-                                )),
-                                op: BinaryOperator::Lt,
-                                right: Box::new(call(
-                                    "reverse",
-                                    [Expr::Identifier(Ident::new("p2"))]
-                                ))
-                            }
+                            CaseWhen {
+                                condition: Expr::BinaryOp {
+                                    left: Box::new(call(
+                                        "reverse",
+                                        [Expr::Identifier(Ident::new("p1"))]
+                                    )),
+                                    op: BinaryOperator::Lt,
+                                    right: Box::new(call(
+                                        "reverse",
+                                        [Expr::Identifier(Ident::new("p2"))]
+                                    )),
+                                },
+                                result: Expr::UnaryOp {
+                                    op: UnaryOperator::Minus,
+                                    expr: Box::new(Expr::value(number("1")))
+                                }
+                            },
                         ],
-                        results: vec![
-                            Expr::value(number("0")),
-                            Expr::UnaryOp {
-                                op: UnaryOperator::Minus,
-                                expr: Box::new(Expr::value(number("1")))
-                            }
-                        ],
-                        else_result: Some(Box::new(Expr::value(number("1"))))
+                        else_result: Some(Box::new(Expr::value(number("1")))),
                     })
                 })
             ]
@@ -14405,4 +14609,11 @@ fn test_geometric_binary_operators() {
             ..
         }
     ));
+}
+
+#[test]
+fn parse_array_type_def_with_brackets() {
+    let dialects = all_dialects_where(|d| d.supports_array_typedef_with_brackets());
+    dialects.verified_stmt("SELECT x::INT[]");
+    dialects.verified_stmt("SELECT STRING_TO_ARRAY('1,2,3', ',')::INT[3]");
 }

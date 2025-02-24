@@ -931,9 +931,11 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports size definition for array types.
-    /// For example: ```CREATE TABLE my_table (my_array INT[3])```.
-    fn supports_array_typedef_size(&self) -> bool {
+    /// Returns true if the dialect supports array type definition with brackets with
+    /// an optional size. For example:
+    /// ```CREATE TABLE my_table (arr1 INT[], arr2 INT[3])```
+    /// ```SELECT x::INT[]```
+    fn supports_array_typedef_with_brackets(&self) -> bool {
         false
     }
     /// Returns true if the dialect supports geometric types.
@@ -941,6 +943,14 @@ pub trait Dialect: Debug + Any {
     /// Postgres: <https://www.postgresql.org/docs/9.5/functions-geometry.html>
     /// e.g. @@ circle '((0,0),10)'
     fn supports_geometric_types(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports `ORDER BY ALL`.
+    /// `ALL` which means all columns of the SELECT clause.
+    ///
+    /// For example: ```SELECT * FROM addresses ORDER BY ALL;```.
+    fn supports_order_by_all(&self) -> bool {
         false
     }
 }

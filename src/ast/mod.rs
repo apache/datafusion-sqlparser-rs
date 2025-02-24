@@ -68,11 +68,11 @@ pub use self::query::{
     JsonTableColumn, JsonTableColumnErrorHandling, JsonTableNamedColumn, JsonTableNestedColumn,
     LateralView, LockClause, LockType, MatchRecognizePattern, MatchRecognizeSymbol, Measure,
     NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset, OffsetRows, OpenJsonTableColumn,
-    OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
-    RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
-    SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SetExpr, SetOperator,
-    SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableAliasColumnDef, TableFactor,
-    TableFunctionArgs, TableIndexHintForClause, TableIndexHintType, TableIndexHints,
+    OrderBy, OrderByExpr, OrderByKind, OrderByOptions, PivotValueSource, ProjectionSelect, Query,
+    RenameSelectItem, RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch,
+    Select, SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SetExpr,
+    SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableAliasColumnDef,
+    TableFactor, TableFunctionArgs, TableIndexHintForClause, TableIndexHintType, TableIndexHints,
     TableIndexType, TableSample, TableSampleBucket, TableSampleKind, TableSampleMethod,
     TableSampleModifier, TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier,
     TableSampleUnit, TableVersion, TableWithJoins, Top, TopQuantity, UpdateTableFromKind,
@@ -600,6 +600,22 @@ pub enum CeilFloorKind {
     Scale(Value),
 }
 
+/// A WHEN clause in a CASE expression containing both
+/// the condition and its corresponding result
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CaseWhen {
+    pub condition: Expr,
+    pub result: Expr,
+}
+
+impl fmt::Display for CaseWhen {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "WHEN {} THEN {}", self.condition, self.result)
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// # Semantics / Type Checking
@@ -918,8 +934,7 @@ pub enum Expr {
     /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
     Case {
         operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
+        conditions: Vec<CaseWhen>,
         else_result: Option<Box<Expr>>,
     },
     /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
@@ -1628,17 +1643,15 @@ impl fmt::Display for Expr {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
             } => {
                 write!(f, "CASE")?;
                 if let Some(operand) = operand {
                     write!(f, " {operand}")?;
                 }
-                for (c, r) in conditions.iter().zip(results) {
-                    write!(f, " WHEN {c} THEN {r}")?;
+                for when in conditions {
+                    write!(f, " {when}")?;
                 }
-
                 if let Some(else_result) = else_result {
                     write!(f, " ELSE {else_result}")?;
                 }
@@ -3066,6 +3079,28 @@ pub enum Statement {
         begin: bool,
         transaction: Option<BeginTransactionKind>,
         modifier: Option<TransactionModifier>,
+        /// List of statements belonging to the `BEGIN` block.
+        /// Example:
+        /// ```sql
+        /// BEGIN
+        ///     SELECT 1;
+        ///     SELECT 2;
+        /// END;
+        /// ```
+        statements: Vec<Statement>,
+        /// Statements of an exception clause.
+        /// Example:
+        /// ```sql
+        /// BEGIN
+        ///     SELECT 1;
+        /// EXCEPTION WHEN ERROR THEN
+        ///     SELECT 2;
+        ///     SELECT 3;
+        /// END;
+        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
+        exception_statements: Option<Vec<Statement>>,
+        /// TRUE if the statement has an `END` keyword.
+        has_end_keyword: bool,
     },
     /// ```sql
     /// SET TRANSACTION ...
@@ -4809,6 +4844,9 @@ impl fmt::Display for Statement {
                 begin: syntax_begin,
                 transaction,
                 modifier,
+                statements,
+                exception_statements,
+                has_end_keyword,
             } => {
                 if *syntax_begin {
                     if let Some(modifier) = *modifier {
@@ -4824,6 +4862,24 @@ impl fmt::Display for Statement {
                 }
                 if !modes.is_empty() {
                     write!(f, " {}", display_comma_separated(modes))?;
+                }
+                if !statements.is_empty() {
+                    write!(f, " {}", display_separated(statements, "; "))?;
+                    // We manually insert semicolon for the last statement,
+                    // since display_separated doesn't handle that case.
+                    write!(f, ";")?;
+                }
+                if let Some(exception_statements) = exception_statements {
+                    write!(f, " EXCEPTION WHEN ERROR THEN")?;
+                    if !exception_statements.is_empty() {
+                        write!(f, " {}", display_separated(exception_statements, "; "))?;
+                        // We manually insert semicolon for the last statement,
+                        // since display_separated doesn't handle that case.
+                        write!(f, ";")?;
+                    }
+                }
+                if *has_end_keyword {
+                    write!(f, " END")?;
                 }
                 Ok(())
             }

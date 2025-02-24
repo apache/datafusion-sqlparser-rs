@@ -117,4 +117,8 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_geometric_types(&self) -> bool {
         true
     }
+
+    fn supports_array_typedef_with_brackets(&self) -> bool {
+        true
+    }
 }

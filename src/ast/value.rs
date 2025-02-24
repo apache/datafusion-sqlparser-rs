@@ -111,7 +111,12 @@ impl From<ValueWithSpan> for Value {
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(
+    feature = "visitor",
+    derive(Visit, VisitMut),
+    visit(with = "visit_value")
+)]
+
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]

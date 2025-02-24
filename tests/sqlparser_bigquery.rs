@@ -255,6 +255,52 @@ fn parse_big_query_non_reserved_column_alias() {
 }
 
 #[test]
+fn parse_at_at_identifier() {
+    bigquery().verified_stmt("SELECT @@error.stack_trace, @@error.message");
+}
+
+#[test]
+fn parse_begin() {
+    let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; END"#;
+    let Statement::StartTransaction {
+        statements,
+        exception_statements,
+        has_end_keyword,
+        ..
+    } = bigquery().verified_stmt(sql)
+    else {
+        unreachable!();
+    };
+    assert_eq!(1, statements.len());
+    assert_eq!(1, exception_statements.unwrap().len());
+    assert!(has_end_keyword);
+
+    bigquery().verified_stmt(
+        "BEGIN SELECT 1; SELECT 2; EXCEPTION WHEN ERROR THEN SELECT 2; SELECT 4; END",
+    );
+    bigquery()
+        .verified_stmt("BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT @@error.stack_trace; END");
+    bigquery().verified_stmt("BEGIN EXCEPTION WHEN ERROR THEN SELECT 2; END");
+    bigquery().verified_stmt("BEGIN SELECT 1; SELECT 2; EXCEPTION WHEN ERROR THEN END");
+    bigquery().verified_stmt("BEGIN EXCEPTION WHEN ERROR THEN END");
+    bigquery().verified_stmt("BEGIN SELECT 1; SELECT 2; END");
+    bigquery().verified_stmt("BEGIN END");
+
+    assert_eq!(
+        bigquery()
+            .parse_sql_statements("BEGIN SELECT 1; SELECT 2 END")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ;, found: END".to_string())
+    );
+    assert_eq!(
+        bigquery()
+            .parse_sql_statements("BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2 END")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ;, found: END".to_string())
+    );
+}
+
+#[test]
 fn parse_delete_statement() {
     let sql = "DELETE \"table\" WHERE 1";
     match bigquery_and_generic().verified_stmt(sql) {

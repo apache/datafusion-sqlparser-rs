@@ -2065,11 +2065,11 @@ impl<'a> Parser<'a> {
             self.expect_keyword_is(Keyword::WHEN)?;
         }
         let mut conditions = vec![];
-        let mut results = vec![];
         loop {
-            conditions.push(self.parse_expr()?);
+            let condition = self.parse_expr()?;
             self.expect_keyword_is(Keyword::THEN)?;
-            results.push(self.parse_expr()?);
+            let result = self.parse_expr()?;
+            conditions.push(CaseWhen { condition, result });
             if !self.parse_keyword(Keyword::WHEN) {
                 break;
             }
@@ -2083,7 +2083,6 @@ impl<'a> Parser<'a> {
         Ok(Expr::Case {
             operand,
             conditions,
-            results,
             else_result,
         })
     }
@@ -4272,6 +4271,27 @@ impl<'a> Parser<'a> {
         }
 
         self.parse_comma_separated(f)
+    }
+
+    /// Parses 0 or more statements, each followed by a semicolon.
+    /// If the next token is any of `terminal_keywords` then no more
+    /// statements will be parsed.
+    pub(crate) fn parse_statement_list(
+        &mut self,
+        terminal_keywords: &[Keyword],
+    ) -> Result<Vec<Statement>, ParserError> {
+        let mut values = vec![];
+        loop {
+            if let Token::Word(w) = &self.peek_nth_token_ref(0).token {
+                if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
+                    break;
+                }
+            }
+
+            values.push(self.parse_statement()?);
+            self.expect_token(&Token::SemiColon)?;
+        }
+        Ok(values)
     }
 
     /// Default implementation of a predicate that returns true if
@@ -9132,9 +9152,9 @@ impl<'a> Parser<'a> {
             _ => self.expected_at("a data type name", next_token_index),
         }?;
 
-        if self.dialect.supports_array_typedef_size() {
-            // Parse array data type size
+        if self.dialect.supports_array_typedef_with_brackets() {
             while self.consume_token(&Token::LBracket) {
+                // Parse optional array data type size
                 let size = self.maybe_parse(|p| p.parse_literal_uint())?;
                 self.expect_token(&Token::RBracket)?;
                 data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data), size))
@@ -9378,17 +9398,26 @@ impl<'a> Parser<'a> {
 
     pub fn parse_optional_order_by(&mut self) -> Result<Option<OrderBy>, ParserError> {
         if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-            let order_by_exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
-            let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
-                self.parse_interpolations()?
-            } else {
-                None
-            };
-
-            Ok(Some(OrderBy {
-                exprs: order_by_exprs,
-                interpolate,
-            }))
+            let order_by =
+                if self.dialect.supports_order_by_all() && self.parse_keyword(Keyword::ALL) {
+                    let order_by_options = self.parse_order_by_options()?;
+                    OrderBy {
+                        kind: OrderByKind::All(order_by_options),
+                        interpolate: None,
+                    }
+                } else {
+                    let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+                    let interpolate = if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                        self.parse_interpolations()?
+                    } else {
+                        None
+                    };
+                    OrderBy {
+                        kind: OrderByKind::Expressions(exprs),
+                        interpolate,
+                    }
+                };
+            Ok(Some(order_by))
         } else {
             Ok(None)
         }
@@ -13567,15 +13596,7 @@ impl<'a> Parser<'a> {
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
         let expr = self.parse_expr()?;
 
-        let asc = self.parse_asc_desc();
-
-        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
-            Some(true)
-        } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
-            Some(false)
-        } else {
-            None
-        };
+        let options = self.parse_order_by_options()?;
 
         let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
@@ -13587,10 +13608,23 @@ impl<'a> Parser<'a> {
 
         Ok(OrderByExpr {
             expr,
-            asc,
-            nulls_first,
+            options,
             with_fill,
         })
+    }
+
+    fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {
+        let asc = self.parse_asc_desc();
+
+        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
+            Some(true)
+        } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
+            Some(false)
+        } else {
+            None
+        };
+
+        Ok(OrderByOptions { asc, nulls_first })
     }
 
     // Parse a WITH FILL clause (ClickHouse dialect)
@@ -13780,6 +13814,9 @@ impl<'a> Parser<'a> {
             begin: false,
             transaction: Some(BeginTransactionKind::Transaction),
             modifier: None,
+            statements: vec![],
+            exception_statements: None,
+            has_end_keyword: false,
         })
     }
 
@@ -13809,6 +13846,9 @@ impl<'a> Parser<'a> {
             begin: true,
             transaction,
             modifier,
+            statements: vec![],
+            exception_statements: None,
+            has_end_keyword: false,
         })
     }
 

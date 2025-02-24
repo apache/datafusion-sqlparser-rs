@@ -3072,6 +3072,28 @@ pub enum Statement {
         begin: bool,
         transaction: Option<BeginTransactionKind>,
         modifier: Option<TransactionModifier>,
+        /// List of statements belonging to the `BEGIN` block.
+        /// Example:
+        /// ```sql
+        /// BEGIN
+        ///     SELECT 1;
+        ///     SELECT 2;
+        /// END;
+        /// ```
+        statements: Vec<Statement>,
+        /// Statements of an exception clause.
+        /// Example:
+        /// ```sql
+        /// BEGIN
+        ///     SELECT 1;
+        /// EXCEPTION WHEN ERROR THEN
+        ///     SELECT 2;
+        ///     SELECT 3;
+        /// END;
+        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
+        exception_statements: Option<Vec<Statement>>,
+        /// TRUE if the statement has an `END` keyword.
+        has_end_keyword: bool,
     },
     /// ```sql
     /// SET TRANSACTION ...
@@ -4815,6 +4837,9 @@ impl fmt::Display for Statement {
                 begin: syntax_begin,
                 transaction,
                 modifier,
+                statements,
+                exception_statements,
+                has_end_keyword,
             } => {
                 if *syntax_begin {
                     if let Some(modifier) = *modifier {
@@ -4830,6 +4855,24 @@ impl fmt::Display for Statement {
                 }
                 if !modes.is_empty() {
                     write!(f, " {}", display_comma_separated(modes))?;
+                }
+                if !statements.is_empty() {
+                    write!(f, " {}", display_separated(statements, "; "))?;
+                    // We manually insert semicolon for the last statement,
+                    // since display_separated doesn't handle that case.
+                    write!(f, ";")?;
+                }
+                if let Some(exception_statements) = exception_statements {
+                    write!(f, " EXCEPTION WHEN ERROR THEN")?;
+                    if !exception_statements.is_empty() {
+                        write!(f, " {}", display_separated(exception_statements, "; "))?;
+                        // We manually insert semicolon for the last statement,
+                        // since display_separated doesn't handle that case.
+                        write!(f, ";")?;
+                    }
+                }
+                if *has_end_keyword {
+                    write!(f, " END")?;
                 }
                 Ok(())
             }

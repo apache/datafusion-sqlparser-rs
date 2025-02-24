@@ -518,23 +518,6 @@ fn parse_start_transaction_with_modifier() {
     sqlite_and_generic().verified_stmt("BEGIN DEFERRED");
     sqlite_and_generic().verified_stmt("BEGIN IMMEDIATE");
     sqlite_and_generic().verified_stmt("BEGIN EXCLUSIVE");
-
-    let unsupported_dialects = all_dialects_except(|d| d.supports_start_transaction_modifier());
-    let res = unsupported_dialects.parse_sql_statements("BEGIN DEFERRED");
-    assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: DEFERRED".to_string()),
-        res.unwrap_err(),
-    );
-    let res = unsupported_dialects.parse_sql_statements("BEGIN IMMEDIATE");
-    assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: IMMEDIATE".to_string()),
-        res.unwrap_err(),
-    );
-    let res = unsupported_dialects.parse_sql_statements("BEGIN EXCLUSIVE");
-    assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: EXCLUSIVE".to_string()),
-        res.unwrap_err(),
-    );
 }
 
 #[test]

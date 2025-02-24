@@ -4273,6 +4273,27 @@ impl<'a> Parser<'a> {
         self.parse_comma_separated(f)
     }
 
+    /// Parses 0 or more statements, each followed by a semicolon.
+    /// If the next token is any of `terminal_keywords` then no more
+    /// statements will be parsed.
+    pub(crate) fn parse_statement_list(
+        &mut self,
+        terminal_keywords: &[Keyword],
+    ) -> Result<Vec<Statement>, ParserError> {
+        let mut values = vec![];
+        loop {
+            if let Token::Word(w) = &self.peek_nth_token_ref(0).token {
+                if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
+                    break;
+                }
+            }
+
+            values.push(self.parse_statement()?);
+            self.expect_token(&Token::SemiColon)?;
+        }
+        Ok(values)
+    }
+
     /// Default implementation of a predicate that returns true if
     /// the specified keyword is reserved for column alias.
     /// See [Dialect::is_column_alias]
@@ -13783,6 +13804,9 @@ impl<'a> Parser<'a> {
             begin: false,
             transaction: Some(BeginTransactionKind::Transaction),
             modifier: None,
+            statements: vec![],
+            exception_statements: None,
+            has_end_keyword: false,
         })
     }
 
@@ -13812,6 +13836,9 @@ impl<'a> Parser<'a> {
             begin: true,
             transaction,
             modifier,
+            statements: vec![],
+            exception_statements: None,
+            has_end_keyword: false,
         })
     }
 

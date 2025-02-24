@@ -208,7 +208,7 @@ fn test_redshift_json_path() {
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Bracket {
-                        key: Expr::Value(number("0"))
+                        key: Expr::Value((number("0")).with_empty_span())
                     },
                     JsonPathElem::Dot {
                         key: "o_orderkey".to_string(),
@@ -231,10 +231,10 @@ fn test_redshift_json_path() {
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Bracket {
-                        key: Expr::Value(number("0"))
+                        key: Expr::Value((number("0")).with_empty_span())
                     },
                     JsonPathElem::Bracket {
-                        key: Expr::Value(Value::SingleQuotedString("id".to_owned()))
+                        key: Expr::Value((Value::SingleQuotedString("id".to_owned())).with_empty_span())
                     }
                 ]
             }
@@ -255,10 +255,10 @@ fn test_redshift_json_path() {
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Bracket {
-                        key: Expr::Value(number("0"))
+                        key: Expr::Value((number("0")).with_empty_span())
                     },
                     JsonPathElem::Bracket {
-                        key: Expr::Value(Value::SingleQuotedString("id".to_owned()))
+                        key: Expr::Value((Value::SingleQuotedString("id".to_owned())).with_empty_span())
                     }
                 ]
             }
@@ -279,7 +279,7 @@ fn test_redshift_json_path() {
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Bracket {
-                        key: Expr::Value(number("0"))
+                        key: Expr::Value((number("0")).with_empty_span())
                     },
                     JsonPathElem::Dot {
                         key: "id".to_string(),
@@ -306,7 +306,7 @@ fn test_parse_json_path_from() {
                 &Some(JsonPath {
                     path: vec![
                         JsonPathElem::Bracket {
-                            key: Expr::Value(number("0"))
+                            key: Expr::Value((number("0")).with_empty_span())
                         },
                         JsonPathElem::Dot {
                             key: "a".to_string(),
@@ -330,14 +330,14 @@ fn test_parse_json_path_from() {
                 &Some(JsonPath {
                     path: vec![
                         JsonPathElem::Bracket {
-                            key: Expr::Value(number("0"))
+                            key: Expr::Value((number("0")).with_empty_span())
                         },
                         JsonPathElem::Dot {
                             key: "a".to_string(),
                             quoted: false
                         },
                         JsonPathElem::Bracket {
-                            key: Expr::Value(Value::Number("1".parse().unwrap(), false))
+                            key: Expr::Value((Value::Number("1".parse().unwrap(), false)).with_empty_span())
                         },
                         JsonPathElem::Dot {
                             key: "b".to_string(),

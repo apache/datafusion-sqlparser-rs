@@ -369,7 +369,7 @@ fn test_placeholder() {
     let ast = sqlite().verified_only_select(sql);
     assert_eq!(
         ast.projection[0],
-        UnnamedExpr(Expr::Value(Value::Placeholder("@xxx".into()))),
+        UnnamedExpr(Expr::Value((Value::Placeholder("@xxx".into())).with_empty_span())),
     );
 }
 
@@ -469,8 +469,8 @@ fn parse_update_tuple_row_values() {
                     ObjectName::from(vec![Ident::new("b"),]),
                 ]),
                 value: Expr::Tuple(vec![
-                    Expr::Value(Value::Number("1".parse().unwrap(), false)),
-                    Expr::Value(Value::Number("2".parse().unwrap(), false))
+                    Expr::Value((Value::Number("1".parse().unwrap(), false)).with_empty_span()),
+                    Expr::Value((Value::Number("2".parse().unwrap(), false)).with_empty_span())
                 ])
             }],
             selection: None,
@@ -547,7 +547,7 @@ fn test_dollar_identifier_as_placeholder() {
         Expr::BinaryOp { op, left, right } => {
             assert_eq!(op, BinaryOperator::Eq);
             assert_eq!(left, Box::new(Expr::Identifier(Ident::new("id"))));
-            assert_eq!(right, Box::new(Expr::Value(Placeholder("$id".to_string()))));
+            assert_eq!(right, Box::new(Expr::Value((Placeholder("$id".to_string())).with_empty_span())));
         }
         _ => unreachable!(),
     }
@@ -557,7 +557,7 @@ fn test_dollar_identifier_as_placeholder() {
         Expr::BinaryOp { op, left, right } => {
             assert_eq!(op, BinaryOperator::Eq);
             assert_eq!(left, Box::new(Expr::Identifier(Ident::new("id"))));
-            assert_eq!(right, Box::new(Expr::Value(Placeholder("$$".to_string()))));
+            assert_eq!(right, Box::new(Expr::Value((Placeholder("$$".to_string())).with_empty_span())));
         }
         _ => unreachable!(),
     }

@@ -52,11 +52,11 @@ fn parse_literal_string() {
     let select = mysql().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
-        &Expr::Value(Value::SingleQuotedString("single".to_string())),
+        &Expr::Value((Value::SingleQuotedString("single".to_string())).with_empty_span()),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
-        &Expr::Value(Value::DoubleQuotedString("double".to_string())),
+        &Expr::Value((Value::DoubleQuotedString("double".to_string())).with_empty_span()),
         expr_from_projection(&select.projection[1])
     );
 }
@@ -621,7 +621,7 @@ fn parse_set_variables() {
             local: true,
             hivevar: false,
             variables: OneOrManyWithParens::One(ObjectName::from(vec!["autocommit".into()])),
-            value: vec![Expr::Value(number("1"))],
+            value: vec![Expr::Value((number("1")).with_empty_span())],
         }
     );
 }
@@ -986,7 +986,7 @@ fn parse_create_table_both_options_and_as_query() {
             assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
             assert_eq!(
                 query.unwrap().body.as_select().unwrap().projection,
-                vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))]
+                vec![SelectItem::UnnamedExpr(Expr::Value((number("1")).with_empty_span()))]
             );
         }
         _ => unreachable!(),
@@ -1413,18 +1413,18 @@ fn parse_simple_insert() {
                         explicit_row: false,
                         rows: vec![
                             vec![
-                                Expr::Value(Value::SingleQuotedString(
+                                Expr::Value((Value::SingleQuotedString(
                                     "Test Some Inserts".to_string()
-                                )),
-                                Expr::Value(number("1"))
+                                )).with_empty_span()),
+                                Expr::Value((number("1")).with_empty_span())
                             ],
                             vec![
-                                Expr::Value(Value::SingleQuotedString("Test Entry 2".to_string())),
-                                Expr::Value(number("2"))
+                                Expr::Value((Value::SingleQuotedString("Test Entry 2".to_string())).with_empty_span()),
+                                Expr::Value((number("2")).with_empty_span())
                             ],
                             vec![
-                                Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
-                                Expr::Value(number("3"))
+                                Expr::Value((Value::SingleQuotedString("Test Entry 3".to_string())).with_empty_span()),
+                                Expr::Value((number("3")).with_empty_span())
                             ]
                         ]
                     })),
@@ -1471,8 +1471,8 @@ fn parse_ignore_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(number("1"))
+                            Expr::Value((Value::SingleQuotedString("Test Some Inserts".to_string())).with_empty_span()),
+                            Expr::Value((number("1")).with_empty_span())
                         ]]
                     })),
                     order_by: None,
@@ -1518,8 +1518,8 @@ fn parse_priority_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(number("1"))
+                            Expr::Value((Value::SingleQuotedString("Test Some Inserts".to_string())).with_empty_span()),
+                            Expr::Value((number("1")).with_empty_span())
                         ]]
                     })),
                     order_by: None,
@@ -1562,8 +1562,8 @@ fn parse_priority_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(number("1"))
+                            Expr::Value((Value::SingleQuotedString("Test Some Inserts".to_string())).with_empty_span()),
+                            Expr::Value((number("1")).with_empty_span())
                         ]]
                     })),
                     order_by: None,
@@ -1611,9 +1611,9 @@ fn parse_insert_as() {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
-                        rows: vec![vec![Expr::Value(Value::SingleQuotedString(
+                        rows: vec![vec![Expr::Value((Value::SingleQuotedString(
                             "2024-01-01".to_string()
-                        ))]]
+                        )).with_empty_span())]]
                     })),
                     order_by: None,
                     limit: None,
@@ -1672,8 +1672,8 @@ fn parse_insert_as() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(number("1")),
-                            Expr::Value(Value::SingleQuotedString("2024-01-01".to_string()))
+                            Expr::Value((number("1")).with_empty_span()),
+                            Expr::Value((Value::SingleQuotedString("2024-01-01".to_string())).with_empty_span())
                         ]]
                     })),
                     order_by: None,
@@ -1720,8 +1720,8 @@ fn parse_replace_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(number("1"))
+                            Expr::Value((Value::SingleQuotedString("Test Some Inserts".to_string())).with_empty_span()),
+                            Expr::Value((number("1")).with_empty_span())
                         ]]
                     })),
                     order_by: None,
@@ -1816,16 +1816,16 @@ fn parse_insert_with_on_duplicate_update() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString(
+                            Expr::Value((Value::SingleQuotedString(
                                 "accounting_manager".to_string()
-                            )),
-                            Expr::Value(Value::SingleQuotedString(
+                            )).with_empty_span()),
+                            Expr::Value((Value::SingleQuotedString(
                                 "Some description about the group".to_string()
-                            )),
-                            Expr::Value(Value::Boolean(true)),
-                            Expr::Value(Value::Boolean(true)),
-                            Expr::Value(Value::Boolean(true)),
-                            Expr::Value(Value::Boolean(true)),
+                            )).with_empty_span()),
+                            Expr::Value((Value::Boolean(true)).with_empty_span()),
+                            Expr::Value((Value::Boolean(true)).with_empty_span()),
+                            Expr::Value((Value::Boolean(true)).with_empty_span()),
+                            Expr::Value((Value::Boolean(true)).with_empty_span()),
                         ]]
                     })),
                     order_by: None,
@@ -1946,7 +1946,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
-                        SelectItem::UnnamedExpr(Expr::Value(number("123e4"))),
+                        SelectItem::UnnamedExpr(Expr::Value((number("123e4")).with_empty_span())),
                         SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
                     ],
                     into: None,
@@ -2063,7 +2063,7 @@ fn parse_update_with_joins() {
                         Ident::new("o"),
                         Ident::new("completed")
                     ])),
-                    value: Expr::Value(Value::Boolean(true))
+                    value: Expr::Value((Value::Boolean(true)).with_empty_span())
                 }],
                 assignments
             );
@@ -2074,7 +2074,7 @@ fn parse_update_with_joins() {
                         Ident::new("firstname")
                     ])),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("Peter".to_string())))
+                    right: Box::new(Expr::Value((Value::SingleQuotedString("Peter".to_string())).with_empty_span()))
                 }),
                 selection
             );
@@ -2112,7 +2112,7 @@ fn parse_delete_with_limit() {
     let sql = "DELETE FROM customers LIMIT 100";
     match mysql().verified_stmt(sql) {
         Statement::Delete(Delete { limit, .. }) => {
-            assert_eq!(Some(Expr::Value(number("100"))), limit);
+            assert_eq!(Some(Expr::Value((number("100")).with_empty_span())), limit);
         }
         _ => unreachable!(),
     }
@@ -2460,8 +2460,8 @@ fn parse_substring_in_select() {
                                 quote_style: None,
                                 span: Span::empty(),
                             })),
-                            substring_from: Some(Box::new(Expr::Value(number("0")))),
-                            substring_for: Some(Box::new(Expr::Value(number("1")))),
+                            substring_from: Some(Box::new(Expr::Value((number("0")).with_empty_span()))),
+                            substring_for: Some(Box::new(Expr::Value((number("1")).with_empty_span()))),
                             special: true,
                         })],
                         into: None,
@@ -2935,7 +2935,7 @@ fn parse_json_table() {
             .from[0]
             .relation,
         TableFactor::JsonTable {
-            json_expr: Expr::Value(Value::SingleQuotedString("[1,2]".to_string())),
+            json_expr: Expr::Value((Value::SingleQuotedString("[1,2]".to_string())).with_empty_span()),
             json_path: Value::SingleQuotedString("$[*]".to_string()),
             columns: vec![
                 JsonTableColumn::Named(JsonTableNamedColumn {
@@ -2973,33 +2973,33 @@ fn parse_logical_xor() {
     let select = mysql_and_generic().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(true))),
+            left: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
             op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(true))),
+            right: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
         }),
         select.projection[0]
     );
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(false))),
+            left: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
             op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(false))),
+            right: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
         }),
         select.projection[1]
     );
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(true))),
+            left: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
             op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(false))),
+            right: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
         }),
         select.projection[2]
     );
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(false))),
+            left: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
             op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(true))),
+            right: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
         }),
         select.projection[3]
     );
@@ -3010,9 +3010,9 @@ fn parse_bitstring_literal() {
     let select = mysql_and_generic().verified_only_select("SELECT B'111'");
     assert_eq!(
         select.projection,
-        vec![SelectItem::UnnamedExpr(Expr::Value(
+        vec![SelectItem::UnnamedExpr(Expr::Value((
             Value::SingleQuotedByteStringLiteral("111".to_string())
-        ))]
+        ).with_empty_span()))]
     );
 }
 

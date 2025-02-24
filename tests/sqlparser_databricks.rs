@@ -47,7 +47,7 @@ fn test_databricks_identifiers() {
         databricks()
             .verified_only_select(r#"SELECT "Ä""#)
             .projection[0],
-        SelectItem::UnnamedExpr(Expr::Value(Value::DoubleQuotedString("Ä".to_owned())))
+        SelectItem::UnnamedExpr(Expr::Value((Value::DoubleQuotedString("Ä".to_owned())).with_empty_span()))
     );
 }
 
@@ -62,9 +62,9 @@ fn test_databricks_exists() {
                 call(
                     "array",
                     [
-                        Expr::Value(number("1")),
-                        Expr::Value(number("2")),
-                        Expr::Value(number("3"))
+                        Expr::Value((number("1")).with_empty_span()),
+                        Expr::Value((number("2")).with_empty_span()),
+                        Expr::Value((number("3")).with_empty_span())
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
@@ -89,12 +89,12 @@ fn test_values_clause() {
         explicit_row: false,
         rows: vec![
             vec![
-                Expr::Value(Value::DoubleQuotedString("one".to_owned())),
-                Expr::Value(number("1")),
+                Expr::Value((Value::DoubleQuotedString("one".to_owned())).with_empty_span()),
+                Expr::Value((number("1")).with_empty_span()),
             ],
             vec![
-                Expr::Value(Value::SingleQuotedString("two".to_owned())),
-                Expr::Value(number("2")),
+                Expr::Value((Value::SingleQuotedString("two".to_owned())).with_empty_span()),
+                Expr::Value((number("2")).with_empty_span()),
             ],
         ],
     };
@@ -221,8 +221,8 @@ fn parse_databricks_struct_function() {
             .projection[0],
         SelectItem::UnnamedExpr(Expr::Struct {
             values: vec![
-                Expr::Value(number("1")),
-                Expr::Value(Value::SingleQuotedString("foo".to_string()))
+                Expr::Value((number("1")).with_empty_span()),
+                Expr::Value((Value::SingleQuotedString("foo".to_string())).with_empty_span())
             ],
             fields: vec![]
         })
@@ -234,14 +234,14 @@ fn parse_databricks_struct_function() {
         SelectItem::UnnamedExpr(Expr::Struct {
             values: vec![
                 Expr::Named {
-                    expr: Expr::Value(number("1")).into(),
+                    expr: Expr::Value((number("1")).with_empty_span()).into(),
                     name: Ident::new("one")
                 },
                 Expr::Named {
-                    expr: Expr::Value(Value::SingleQuotedString("foo".to_string())).into(),
+                    expr: Expr::Value((Value::SingleQuotedString("foo".to_string())).with_empty_span()).into(),
                     name: Ident::new("foo")
                 },
-                Expr::Value(Value::Boolean(false))
+                Expr::Value((Value::Boolean(false)).with_empty_span())
             ],
             fields: vec![]
         })

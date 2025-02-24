@@ -8628,9 +8628,15 @@ impl<'a> Parser<'a> {
             Token::TripleDoubleQuotedRawStringLiteral(ref s) => {
                 ok_value(Value::TripleDoubleQuotedRawStringLiteral(s.clone()))
             }
-            Token::NationalStringLiteral(ref s) => ok_value(Value::NationalStringLiteral(s.to_string())),
-            Token::EscapedStringLiteral(ref s) => ok_value(Value::EscapedStringLiteral(s.to_string())),
-            Token::UnicodeStringLiteral(ref s) => ok_value(Value::UnicodeStringLiteral(s.to_string())),
+            Token::NationalStringLiteral(ref s) => {
+                ok_value(Value::NationalStringLiteral(s.to_string()))
+            }
+            Token::EscapedStringLiteral(ref s) => {
+                ok_value(Value::EscapedStringLiteral(s.to_string()))
+            }
+            Token::UnicodeStringLiteral(ref s) => {
+                ok_value(Value::UnicodeStringLiteral(s.to_string()))
+            }
             Token::HexStringLiteral(ref s) => ok_value(Value::HexStringLiteral(s.to_string())),
             Token::Placeholder(ref s) => ok_value(Value::Placeholder(s.to_string())),
             tok @ Token::Colon | tok @ Token::AtSign => {
@@ -8725,9 +8731,9 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 Ok(Expr::Value(Value::DollarQuotedString(s).with_span(span)))
             }
-            _ => Ok(Expr::Value(Value::SingleQuotedString(
-                self.parse_literal_string()?,
-            ).with_span(span))),
+            _ => Ok(Expr::Value(
+                Value::SingleQuotedString(self.parse_literal_string()?).with_span(span),
+            )),
         }
     }
 

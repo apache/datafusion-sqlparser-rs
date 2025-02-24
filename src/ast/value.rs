@@ -31,12 +31,30 @@ use crate::{ast::Ident, tokenizer::Span};
 use sqlparser_derive::{Visit, VisitMut};
 
 /// Primitive SQL values such as number and string
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Eq, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ValueWithSpan {
     pub value: Value,
     pub span: Span,
+}
+
+impl PartialEq for ValueWithSpan {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl PartialOrd for ValueWithSpan {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        self.value.partial_cmp(&other.value)
+    }
+}
+
+impl core::hash::Hash for ValueWithSpan {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
 }
 
 impl From<ValueWithSpan> for Value {

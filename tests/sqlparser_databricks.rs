@@ -47,7 +47,9 @@ fn test_databricks_identifiers() {
         databricks()
             .verified_only_select(r#"SELECT "Ä""#)
             .projection[0],
-        SelectItem::UnnamedExpr(Expr::Value((Value::DoubleQuotedString("Ä".to_owned())).with_empty_span()))
+        SelectItem::UnnamedExpr(Expr::Value(
+            (Value::DoubleQuotedString("Ä".to_owned())).with_empty_span()
+        ))
     );
 }
 
@@ -238,7 +240,10 @@ fn parse_databricks_struct_function() {
                     name: Ident::new("one")
                 },
                 Expr::Named {
-                    expr: Expr::Value((Value::SingleQuotedString("foo".to_string())).with_empty_span()).into(),
+                    expr: Expr::Value(
+                        (Value::SingleQuotedString("foo".to_string())).with_empty_span()
+                    )
+                    .into(),
                     name: Ident::new("foo")
                 },
                 Expr::Value((Value::Boolean(false)).with_empty_span())

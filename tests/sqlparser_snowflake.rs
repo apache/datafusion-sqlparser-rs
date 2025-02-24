@@ -602,8 +602,12 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                                     parameters: Some(
                                         IdentityPropertyFormatKind::StartAndIncrement(
                                             IdentityParameters {
-                                                seed: Expr::Value((number("100")).with_empty_span()),
-                                                increment: Expr::Value((number("1")).with_empty_span()),
+                                                seed: Expr::Value(
+                                                    (number("100")).with_empty_span()
+                                                ),
+                                                increment: Expr::Value(
+                                                    (number("1")).with_empty_span()
+                                                ),
                                             }
                                         )
                                     ),
@@ -1661,7 +1665,9 @@ fn parse_snowflake_declare_result_set() {
         (
             "DECLARE res RESULTSET DEFAULT 42",
             "res",
-            Some(DeclareAssignment::Default(Expr::Value(number("42").with_empty_span()).into())),
+            Some(DeclareAssignment::Default(
+                Expr::Value(number("42").with_empty_span()).into(),
+            )),
         ),
         (
             "DECLARE res RESULTSET := 42",
@@ -1754,13 +1760,17 @@ fn parse_snowflake_declare_variable() {
             "DECLARE profit TEXT DEFAULT 42",
             "profit",
             Some(DataType::Text),
-            Some(DeclareAssignment::Default(Expr::Value(number("42").with_empty_span()).into())),
+            Some(DeclareAssignment::Default(
+                Expr::Value(number("42").with_empty_span()).into(),
+            )),
         ),
         (
             "DECLARE profit DEFAULT 42",
             "profit",
             None,
-            Some(DeclareAssignment::Default(Expr::Value(number("42").with_empty_span()).into())),
+            Some(DeclareAssignment::Default(
+                Expr::Value(number("42").with_empty_span()).into(),
+            )),
         ),
         ("DECLARE profit TEXT", "profit", Some(DataType::Text), None),
         ("DECLARE profit", "profit", None, None),
@@ -2509,10 +2519,14 @@ fn test_snowflake_trim() {
     let select = snowflake().verified_only_select(sql_only_select);
     assert_eq!(
         &Expr::Trim {
-            expr: Box::new(Expr::Value((Value::SingleQuotedString("xyz".to_owned())).with_empty_span())),
+            expr: Box::new(Expr::Value(
+                (Value::SingleQuotedString("xyz".to_owned())).with_empty_span()
+            )),
             trim_where: None,
             trim_what: None,
-            trim_characters: Some(vec![Expr::Value((Value::SingleQuotedString("a".to_owned())).with_empty_span())]),
+            trim_characters: Some(vec![Expr::Value(
+                (Value::SingleQuotedString("a".to_owned())).with_empty_span()
+            )]),
         },
         expr_from_projection(only(&select.projection))
     );

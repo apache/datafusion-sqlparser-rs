@@ -55,7 +55,10 @@ fn parse_map_access_expr() {
                         "indexOf",
                         [
                             Expr::Identifier(Ident::new("string_names")),
-                            Expr::Value((Value::SingleQuotedString("endpoint".to_string())).with_empty_span())
+                            Expr::Value(
+                                (Value::SingleQuotedString("endpoint".to_string()))
+                                    .with_empty_span()
+                            )
                         ]
                     ),
                 })],
@@ -71,7 +74,9 @@ fn parse_map_access_expr() {
                 left: Box::new(BinaryOp {
                     left: Box::new(Identifier(Ident::new("id"))),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value((Value::SingleQuotedString("test".to_string())).with_empty_span())),
+                    right: Box::new(Expr::Value(
+                        (Value::SingleQuotedString("test".to_string())).with_empty_span()
+                    )),
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
@@ -82,13 +87,18 @@ fn parse_map_access_expr() {
                                 "indexOf",
                                 [
                                     Expr::Identifier(Ident::new("string_name")),
-                                    Expr::Value((Value::SingleQuotedString("app".to_string())).with_empty_span())
+                                    Expr::Value(
+                                        (Value::SingleQuotedString("app".to_string()))
+                                            .with_empty_span()
+                                    )
                                 ]
                             ),
                         })],
                     }),
                     op: BinaryOperator::NotEq,
-                    right: Box::new(Expr::Value((Value::SingleQuotedString("foo".to_string())).with_empty_span())),
+                    right: Box::new(Expr::Value(
+                        (Value::SingleQuotedString("foo".to_string())).with_empty_span()
+                    )),
                 }),
             }),
             group_by: GroupByExpr::Expressions(vec![], vec![]),
@@ -1014,17 +1024,15 @@ fn parse_select_parametric_function() {
                     assert_eq!(parameters.args.len(), 2);
                     assert_eq!(
                         parameters.args[0],
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value((Value::Number(
-                            "0.5".parse().unwrap(),
-                            false
-                        )).with_empty_span())))
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (Value::Number("0.5".parse().unwrap(), false)).with_empty_span()
+                        )))
                     );
                     assert_eq!(
                         parameters.args[1],
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value((Value::Number(
-                            "0.6".parse().unwrap(),
-                            false
-                        )).with_empty_span())))
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            (Value::Number("0.6".parse().unwrap(), false)).with_empty_span()
+                        )))
                     );
                 }
                 _ => unreachable!(),
@@ -1103,7 +1111,10 @@ fn parse_select_order_by_with_fill_interpolate() {
         },
         select.order_by.expect("ORDER BY expected")
     );
-    assert_eq!(Some(Expr::Value((number("2")).with_empty_span())), select.limit);
+    assert_eq!(
+        Some(Expr::Value((number("2")).with_empty_span())),
+        select.limit
+    );
 }
 
 #[test]
@@ -1236,7 +1247,9 @@ fn test_prewhere() {
                 Some(&BinaryOp {
                     left: Box::new(Identifier(Ident::new("x"))),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value((Value::Number("1".parse().unwrap(), false)).with_empty_span())),
+                    right: Box::new(Expr::Value(
+                        (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+                    )),
                 })
             );
             let selection = query.as_ref().body.as_select().unwrap().selection.as_ref();
@@ -1245,7 +1258,9 @@ fn test_prewhere() {
                 Some(&BinaryOp {
                     left: Box::new(Identifier(Ident::new("y"))),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value((Value::Number("2".parse().unwrap(), false)).with_empty_span())),
+                    right: Box::new(Expr::Value(
+                        (Value::Number("2".parse().unwrap(), false)).with_empty_span()
+                    )),
                 })
             );
         }
@@ -1261,13 +1276,17 @@ fn test_prewhere() {
                     left: Box::new(BinaryOp {
                         left: Box::new(Identifier(Ident::new("x"))),
                         op: BinaryOperator::Eq,
-                        right: Box::new(Expr::Value((Value::Number("1".parse().unwrap(), false)).with_empty_span())),
+                        right: Box::new(Expr::Value(
+                            (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+                        )),
                     }),
                     op: BinaryOperator::And,
                     right: Box::new(BinaryOp {
                         left: Box::new(Identifier(Ident::new("y"))),
                         op: BinaryOperator::Eq,
-                        right: Box::new(Expr::Value((Value::Number("2".parse().unwrap(), false)).with_empty_span())),
+                        right: Box::new(Expr::Value(
+                            (Value::Number("2".parse().unwrap(), false)).with_empty_span()
+                        )),
                     }),
                 })
             );
@@ -1375,10 +1394,9 @@ fn parse_create_table_on_commit_and_as_query() {
             assert_eq!(on_commit, Some(OnCommit::PreserveRows));
             assert_eq!(
                 query.unwrap().body.as_select().unwrap().projection,
-                vec![UnnamedExpr(Expr::Value((Value::Number(
-                    "1".parse().unwrap(),
-                    false
-                )).with_empty_span()))]
+                vec![UnnamedExpr(Expr::Value(
+                    (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+                ))]
             );
         }
         _ => unreachable!(),
@@ -1391,9 +1409,9 @@ fn parse_freeze_and_unfreeze_partition() {
     for operation_name in &["FREEZE", "UNFREEZE"] {
         let sql = format!("ALTER TABLE t {operation_name} PARTITION '2024-08-14'");
 
-        let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
-            "2024-08-14".to_string(),
-        ).with_empty_span()));
+        let expected_partition = Partition::Expr(Expr::Value(
+            Value::SingleQuotedString("2024-08-14".to_string()).with_empty_span(),
+        ));
         match clickhouse_and_generic().verified_stmt(&sql) {
             Statement::AlterTable { operations, .. } => {
                 assert_eq!(operations.len(), 1);
@@ -1421,9 +1439,9 @@ fn parse_freeze_and_unfreeze_partition() {
         match clickhouse_and_generic().verified_stmt(&sql) {
             Statement::AlterTable { operations, .. } => {
                 assert_eq!(operations.len(), 1);
-                let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
-                    "2024-08-14".to_string(),
-                ).with_empty_span()));
+                let expected_partition = Partition::Expr(Expr::Value(
+                    Value::SingleQuotedString("2024-08-14".to_string()).with_empty_span(),
+                ));
                 let expected_operation = if operation_name == &"FREEZE" {
                     AlterTableOperation::FreezePartition {
                         partition: expected_partition,

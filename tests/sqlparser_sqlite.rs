@@ -369,7 +369,9 @@ fn test_placeholder() {
     let ast = sqlite().verified_only_select(sql);
     assert_eq!(
         ast.projection[0],
-        UnnamedExpr(Expr::Value((Value::Placeholder("@xxx".into())).with_empty_span())),
+        UnnamedExpr(Expr::Value(
+            (Value::Placeholder("@xxx".into())).with_empty_span()
+        )),
     );
 }
 
@@ -446,7 +448,11 @@ fn parse_attach_database() {
     match verified_stmt {
         Statement::AttachDatabase {
             schema_name,
-            database_file_name: Expr::Value(ValueWithSpan{value: Value::SingleQuotedString(literal_name), span: _}),
+            database_file_name:
+                Expr::Value(ValueWithSpan {
+                    value: Value::SingleQuotedString(literal_name),
+                    span: _,
+                }),
             database: true,
         } => {
             assert_eq!(schema_name.value, "test");
@@ -547,7 +553,12 @@ fn test_dollar_identifier_as_placeholder() {
         Expr::BinaryOp { op, left, right } => {
             assert_eq!(op, BinaryOperator::Eq);
             assert_eq!(left, Box::new(Expr::Identifier(Ident::new("id"))));
-            assert_eq!(right, Box::new(Expr::Value((Placeholder("$id".to_string())).with_empty_span())));
+            assert_eq!(
+                right,
+                Box::new(Expr::Value(
+                    (Placeholder("$id".to_string())).with_empty_span()
+                ))
+            );
         }
         _ => unreachable!(),
     }
@@ -557,7 +568,12 @@ fn test_dollar_identifier_as_placeholder() {
         Expr::BinaryOp { op, left, right } => {
             assert_eq!(op, BinaryOperator::Eq);
             assert_eq!(left, Box::new(Expr::Identifier(Ident::new("id"))));
-            assert_eq!(right, Box::new(Expr::Value((Placeholder("$$".to_string())).with_empty_span())));
+            assert_eq!(
+                right,
+                Box::new(Expr::Value(
+                    (Placeholder("$$".to_string())).with_empty_span()
+                ))
+            );
         }
         _ => unreachable!(),
     }

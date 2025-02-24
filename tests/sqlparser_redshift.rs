@@ -234,7 +234,9 @@ fn test_redshift_json_path() {
                         key: Expr::Value((number("0")).with_empty_span())
                     },
                     JsonPathElem::Bracket {
-                        key: Expr::Value((Value::SingleQuotedString("id".to_owned())).with_empty_span())
+                        key: Expr::Value(
+                            (Value::SingleQuotedString("id".to_owned())).with_empty_span()
+                        )
                     }
                 ]
             }
@@ -258,7 +260,9 @@ fn test_redshift_json_path() {
                         key: Expr::Value((number("0")).with_empty_span())
                     },
                     JsonPathElem::Bracket {
-                        key: Expr::Value((Value::SingleQuotedString("id".to_owned())).with_empty_span())
+                        key: Expr::Value(
+                            (Value::SingleQuotedString("id".to_owned())).with_empty_span()
+                        )
                     }
                 ]
             }
@@ -337,7 +341,9 @@ fn test_parse_json_path_from() {
                             quoted: false
                         },
                         JsonPathElem::Bracket {
-                            key: Expr::Value((Value::Number("1".parse().unwrap(), false)).with_empty_span())
+                            key: Expr::Value(
+                                (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+                            )
                         },
                         JsonPathElem::Dot {
                             key: "b".to_string(),

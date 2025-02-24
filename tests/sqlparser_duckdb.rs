@@ -381,7 +381,9 @@ fn test_duckdb_struct_literal() {
         &Expr::Array(Array {
             elem: vec![Expr::Dictionary(vec![DictionaryField {
                 key: Ident::with_quote('\'', "a"),
-                value: Box::new(Expr::Value((Value::SingleQuotedString("abc".to_string())).with_empty_span())),
+                value: Box::new(Expr::Value(
+                    (Value::SingleQuotedString("abc".to_string())).with_empty_span()
+                )),
             },],)],
             named: false
         }),
@@ -414,7 +416,10 @@ fn test_duckdb_struct_literal() {
             },
             DictionaryField {
                 key: Ident::with_quote('\'', "b"),
-                value: Expr::Value((Value::SingleQuotedString("abc".to_string())).with_empty_span()).into(),
+                value: Expr::Value(
+                    (Value::SingleQuotedString("abc".to_string())).with_empty_span()
+                )
+                .into(),
             },
         ],),
         expr_from_projection(&select.projection[3])
@@ -594,16 +599,16 @@ fn test_duckdb_named_argument_function_with_assignment_operator() {
                 args: vec![
                     FunctionArg::Named {
                         name: Ident::new("a"),
-                        arg: FunctionArgExpr::Expr(Expr::Value((Value::SingleQuotedString(
-                            "1".to_owned()
-                        )).with_empty_span())),
+                        arg: FunctionArgExpr::Expr(Expr::Value(
+                            (Value::SingleQuotedString("1".to_owned())).with_empty_span()
+                        )),
                         operator: FunctionArgOperator::Assignment
                     },
                     FunctionArg::Named {
                         name: Ident::new("b"),
-                        arg: FunctionArgExpr::Expr(Expr::Value((Value::SingleQuotedString(
-                            "2".to_owned()
-                        )).with_empty_span())),
+                        arg: FunctionArgExpr::Expr(Expr::Value(
+                            (Value::SingleQuotedString("2".to_owned())).with_empty_span()
+                        )),
                         operator: FunctionArgOperator::Assignment
                     },
                 ],

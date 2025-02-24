@@ -446,7 +446,7 @@ fn parse_attach_database() {
     match verified_stmt {
         Statement::AttachDatabase {
             schema_name,
-            database_file_name: Expr::Value(Value::SingleQuotedString(literal_name)),
+            database_file_name: Expr::Value(ValueWithSpan{value: Value::SingleQuotedString(literal_name), span: _}),
             database: true,
         } => {
             assert_eq!(schema_name.value, "test");

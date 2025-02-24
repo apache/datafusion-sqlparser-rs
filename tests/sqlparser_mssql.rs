@@ -746,7 +746,7 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[0],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value((Value::SingleQuotedString(_)).with_empty_span()),
+                    name: Expr::Value(ValueWithSpan{value: Value::SingleQuotedString(_), span: _}),
                     arg: FunctionArgExpr::Expr(Expr::Function(_)),
                     operator: FunctionArgOperator::Colon
                 }
@@ -762,7 +762,7 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[2],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value((Value::SingleQuotedString(_)).with_empty_span()),
+                    name: Expr::Value(ValueWithSpan{value: Value::SingleQuotedString(_), span: _}),
                     arg: FunctionArgExpr::Expr(Expr::Subquery(_)),
                     operator: FunctionArgOperator::Colon
                 }
@@ -793,7 +793,7 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[0],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value((Value::SingleQuotedString(_)).with_empty_span()),
+                    name: Expr::Value(ValueWithSpan{value: Value::SingleQuotedString(_), span: _}),
                     arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
                     operator: FunctionArgOperator::Colon
                 }
@@ -801,7 +801,7 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[1],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value((Value::SingleQuotedString(_)).with_empty_span()),
+                    name: Expr::Value(ValueWithSpan{value: Value::SingleQuotedString(_), span: _}),
                     arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
                     operator: FunctionArgOperator::Colon
                 }
@@ -809,7 +809,7 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[2],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value((Value::SingleQuotedString(_)).with_empty_span()),
+                    name: Expr::Value(ValueWithSpan{value: Value::SingleQuotedString(_), span: _}),
                     arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
                     operator: FunctionArgOperator::Colon
                 }

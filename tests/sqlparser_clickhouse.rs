@@ -1082,9 +1082,9 @@ fn parse_select_order_by_with_fill_interpolate() {
                     asc: Some(true),
                     nulls_first: Some(true),
                     with_fill: Some(WithFill {
-                        from: Some(Expr::Value((number("10")).with_empty_span())),
-                        to: Some(Expr::Value((number("20")).with_empty_span())),
-                        step: Some(Expr::Value((number("2")).with_empty_span())),
+                        from: Some(Expr::value(number("10"))),
+                        to: Some(Expr::value(number("20"))),
+                        step: Some(Expr::value(number("2"))),
                     }),
                 },
                 OrderByExpr {
@@ -1092,9 +1092,9 @@ fn parse_select_order_by_with_fill_interpolate() {
                     asc: Some(false),
                     nulls_first: Some(false),
                     with_fill: Some(WithFill {
-                        from: Some(Expr::Value((number("30")).with_empty_span())),
-                        to: Some(Expr::Value((number("40")).with_empty_span())),
-                        step: Some(Expr::Value((number("3")).with_empty_span())),
+                        from: Some(Expr::value(number("30"))),
+                        to: Some(Expr::value(number("40"))),
+                        step: Some(Expr::value(number("3"))),
                     }),
                 },
             ],
@@ -1104,17 +1104,14 @@ fn parse_select_order_by_with_fill_interpolate() {
                     expr: Some(Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("col1"))),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Value((number("1")).with_empty_span())),
+                        right: Box::new(Expr::value(number("1"))),
                     }),
                 }])
             })
         },
         select.order_by.expect("ORDER BY expected")
     );
-    assert_eq!(
-        Some(Expr::Value((number("2")).with_empty_span())),
-        select.limit
-    );
+    assert_eq!(Some(Expr::value(number("2"))), select.limit);
 }
 
 #[test]
@@ -1155,9 +1152,9 @@ fn parse_with_fill() {
     let select = clickhouse().verified_query(sql);
     assert_eq!(
         Some(WithFill {
-            from: Some(Expr::Value((number("10")).with_empty_span())),
-            to: Some(Expr::Value((number("20")).with_empty_span())),
-            step: Some(Expr::Value((number("2")).with_empty_span())),
+            from: Some(Expr::value(number("10"))),
+            to: Some(Expr::value(number("20"))),
+            step: Some(Expr::value(number("2"))),
         }),
         select.order_by.expect("ORDER BY expected").exprs[0].with_fill
     );
@@ -1194,7 +1191,7 @@ fn parse_interpolate_body_with_columns() {
                     expr: Some(Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("col1"))),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Value((number("1")).with_empty_span())),
+                        right: Box::new(Expr::value(number("1"))),
                     }),
                 },
                 InterpolateExpr {
@@ -1206,7 +1203,7 @@ fn parse_interpolate_body_with_columns() {
                     expr: Some(Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("col4"))),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Value((number("4")).with_empty_span())),
+                        right: Box::new(Expr::value(number("4"))),
                     }),
                 },
             ])

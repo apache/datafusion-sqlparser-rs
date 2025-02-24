@@ -210,7 +210,7 @@ fn test_create_macro_default_args() {
             MacroArg::new("a"),
             MacroArg {
                 name: Ident::new("b"),
-                default_expr: Some(Expr::Value((number("5")).with_empty_span())),
+                default_expr: Some(Expr::value(number("5"))),
             },
         ]),
         definition: MacroDefinition::Expr(Expr::BinaryOp {
@@ -363,15 +363,15 @@ fn test_duckdb_struct_literal() {
         &Expr::Dictionary(vec![
             DictionaryField {
                 key: Ident::with_quote('\'', "a"),
-                value: Box::new(Expr::Value((number("1")).with_empty_span())),
+                value: Box::new(Expr::value(number("1"))),
             },
             DictionaryField {
                 key: Ident::with_quote('\'', "b"),
-                value: Box::new(Expr::Value((number("2")).with_empty_span())),
+                value: Box::new(Expr::value(number("2"))),
             },
             DictionaryField {
                 key: Ident::with_quote('\'', "c"),
-                value: Box::new(Expr::Value((number("3")).with_empty_span())),
+                value: Box::new(Expr::value(number("3"))),
             },
         ],),
         expr_from_projection(&select.projection[0])
@@ -393,7 +393,7 @@ fn test_duckdb_struct_literal() {
         &Expr::Dictionary(vec![
             DictionaryField {
                 key: Ident::with_quote('\'', "a"),
-                value: Box::new(Expr::Value((number("1")).with_empty_span())),
+                value: Box::new(Expr::value(number("1"))),
             },
             DictionaryField {
                 key: Ident::with_quote('\'', "b"),
@@ -412,7 +412,7 @@ fn test_duckdb_struct_literal() {
         &Expr::Dictionary(vec![
             DictionaryField {
                 key: Ident::with_quote('\'', "a"),
-                value: Expr::Value((number("1")).with_empty_span()).into(),
+                value: Expr::value(number("1")).into(),
             },
             DictionaryField {
                 key: Ident::with_quote('\'', "b"),
@@ -436,7 +436,7 @@ fn test_duckdb_struct_literal() {
             key: Ident::with_quote('\'', "a"),
             value: Expr::Dictionary(vec![DictionaryField {
                 key: Ident::with_quote('\'', "aa"),
-                value: Expr::Value((number("1")).with_empty_span()).into(),
+                value: Expr::value(number("1")).into(),
             }],)
             .into(),
         }],),
@@ -644,7 +644,7 @@ fn test_array_index() {
                 named: false
             })),
             access_chain: vec![AccessExpr::Subscript(Subscript::Index {
-                index: Expr::Value((number("3")).with_empty_span())
+                index: Expr::value(number("3"))
             })]
         },
         expr

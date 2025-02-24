@@ -570,8 +570,8 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                                 IdentityProperty {
                                     parameters: Some(IdentityPropertyFormatKind::FunctionCall(
                                         IdentityParameters {
-                                            seed: Expr::Value((number("100")).with_empty_span()),
-                                            increment: Expr::Value((number("1")).with_empty_span()),
+                                            seed: Expr::value(number("100")),
+                                            increment: Expr::value(number("1")),
                                         }
                                     )),
                                     order: Some(IdentityPropertyOrder::NoOrder),
@@ -1112,9 +1112,9 @@ fn parse_semi_structured_data_traversal() {
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
                     key: Expr::BinaryOp {
-                        left: Box::new(Expr::Value((number("2")).with_empty_span())),
+                        left: Box::new(Expr::value(number("2"))),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Value((number("2")).with_empty_span()))
+                        right: Box::new(Expr::value(number("2")))
                     },
                 }]
             },
@@ -1192,7 +1192,7 @@ fn parse_semi_structured_data_traversal() {
                         quoted: false,
                     },
                     JsonPathElem::Bracket {
-                        key: Expr::Value((number("0")).with_empty_span()),
+                        key: Expr::value(number("0")),
                     },
                     JsonPathElem::Dot {
                         key: "bar".to_owned(),
@@ -1214,7 +1214,7 @@ fn parse_semi_structured_data_traversal() {
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Bracket {
-                        key: Expr::Value((number("0")).with_empty_span()),
+                        key: Expr::value(number("0")),
                     },
                     JsonPathElem::Dot {
                         key: "foo".to_owned(),
@@ -1280,7 +1280,7 @@ fn parse_semi_structured_data_traversal() {
             }),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
-                    key: Expr::Value((number("1")).with_empty_span())
+                    key: Expr::value(number("1"))
                 }]
             }
         }
@@ -1666,14 +1666,14 @@ fn parse_snowflake_declare_result_set() {
             "DECLARE res RESULTSET DEFAULT 42",
             "res",
             Some(DeclareAssignment::Default(
-                Expr::Value(number("42").with_empty_span()).into(),
+                Expr::value(number("42")).into(),
             )),
         ),
         (
             "DECLARE res RESULTSET := 42",
             "res",
             Some(DeclareAssignment::DuckAssignment(
-                Expr::Value(number("42").with_empty_span()).into(),
+                Expr::value(number("42")).into(),
             )),
         ),
         ("DECLARE res RESULTSET", "res", None),
@@ -1723,7 +1723,7 @@ fn parse_snowflake_declare_exception() {
             "ex",
             Some(DeclareAssignment::Expr(
                 Expr::Tuple(vec![
-                    Expr::Value((number("42")).with_empty_span()),
+                    Expr::value(number("42")),
                     Expr::Value((Value::SingleQuotedString("ERROR".to_string())).with_empty_span()),
                 ])
                 .into(),
@@ -1761,7 +1761,7 @@ fn parse_snowflake_declare_variable() {
             "profit",
             Some(DataType::Text),
             Some(DeclareAssignment::Default(
-                Expr::Value(number("42").with_empty_span()).into(),
+                Expr::value(number("42")).into(),
             )),
         ),
         (
@@ -1769,7 +1769,7 @@ fn parse_snowflake_declare_variable() {
             "profit",
             None,
             Some(DeclareAssignment::Default(
-                Expr::Value(number("42").with_empty_span()).into(),
+                Expr::value(number("42")).into(),
             )),
         ),
         ("DECLARE profit TEXT", "profit", Some(DataType::Text), None),
@@ -2690,7 +2690,7 @@ fn parse_comma_outer_join() {
                 "myudf",
                 [Expr::UnaryOp {
                     op: UnaryOperator::Plus,
-                    expr: Box::new(Expr::Value((number("42")).with_empty_span()))
+                    expr: Box::new(Expr::value(number("42")))
                 }]
             )),
         })

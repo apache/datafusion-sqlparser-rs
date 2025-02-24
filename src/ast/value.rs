@@ -63,6 +63,12 @@ impl core::hash::Hash for ValueWithSpan {
     }
 }
 
+impl From<Value> for ValueWithSpan {
+    fn from(value: Value) -> Self {
+        value.with_empty_span()
+    }
+}
+
 impl From<ValueWithSpan> for Value {
     fn from(value: ValueWithSpan) -> Self {
         value.value

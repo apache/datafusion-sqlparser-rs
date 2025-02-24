@@ -490,7 +490,7 @@ fn parse_create_table_with_defaults() {
                 vec![
                     SqlOption::KeyValue {
                         key: "fillfactor".into(),
-                        value: Expr::Value((number("20")).with_empty_span())
+                        value: Expr::value(number("20"))
                     },
                     SqlOption::KeyValue {
                         key: "user_catalog_table".into(),
@@ -498,7 +498,7 @@ fn parse_create_table_with_defaults() {
                     },
                     SqlOption::KeyValue {
                         key: "autovacuum_vacuum_threshold".into(),
-                        value: Expr::Value((number("100")).with_empty_span())
+                        value: Expr::value(number("100"))
                     },
                 ]
             );
@@ -1283,7 +1283,7 @@ fn parse_copy_to() {
                     top_before_distinct: false,
                     projection: vec![
                         SelectItem::ExprWithAlias {
-                            expr: Expr::Value((number("42")).with_empty_span()),
+                            expr: Expr::value(number("42")),
                             alias: Ident {
                                 value: "a".into(),
                                 quote_style: None,
@@ -1464,7 +1464,7 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::Value((number("0")).with_empty_span())],
+            value: vec![Expr::value(number("0"))],
         }
     );
 
@@ -1677,7 +1677,7 @@ fn parse_execute() {
         Statement::Execute {
             name: Some(ObjectName::from(vec!["a".into()])),
             parameters: vec![
-                Expr::Value((number("1")).with_empty_span()),
+                Expr::value(number("1")),
                 Expr::Value((Value::SingleQuotedString("t".to_string())).with_empty_span())
             ],
             has_parentheses: true,
@@ -2339,7 +2339,7 @@ fn parse_array_subscript() {
         (
             "(ARRAY[1, 2, 3, 4, 5, 6])[2]",
             Subscript::Index {
-                index: Expr::Value(number("2").with_empty_span()),
+                index: Expr::value(number("2")),
             },
         ),
         (
@@ -2351,17 +2351,17 @@ fn parse_array_subscript() {
         (
             "(ARRAY[1, 2, 3, 4, 5, 6])[2:5]",
             Subscript::Slice {
-                lower_bound: Some(Expr::Value(number("2").with_empty_span())),
-                upper_bound: Some(Expr::Value(number("5").with_empty_span())),
+                lower_bound: Some(Expr::value(number("2"))),
+                upper_bound: Some(Expr::value(number("5"))),
                 stride: None,
             },
         ),
         (
             "(ARRAY[1, 2, 3, 4, 5, 6])[2:5:3]",
             Subscript::Slice {
-                lower_bound: Some(Expr::Value(number("2").with_empty_span())),
-                upper_bound: Some(Expr::Value(number("5").with_empty_span())),
-                stride: Some(Expr::Value(number("3").with_empty_span())),
+                lower_bound: Some(Expr::value(number("2"))),
+                upper_bound: Some(Expr::value(number("5"))),
+                stride: Some(Expr::value(number("3"))),
             },
         ),
         (
@@ -2370,12 +2370,12 @@ fn parse_array_subscript() {
                 lower_bound: Some(Expr::BinaryOp {
                     left: Box::new(call("array_length", [Expr::Identifier(Ident::new("arr"))])),
                     op: BinaryOperator::Minus,
-                    right: Box::new(Expr::Value(number("3").with_empty_span())),
+                    right: Box::new(Expr::value(number("3"))),
                 }),
                 upper_bound: Some(Expr::BinaryOp {
                     left: Box::new(call("array_length", [Expr::Identifier(Ident::new("arr"))])),
                     op: BinaryOperator::Minus,
-                    right: Box::new(Expr::Value(number("1").with_empty_span())),
+                    right: Box::new(Expr::value(number("1"))),
                 }),
                 stride: None,
             },
@@ -2384,14 +2384,14 @@ fn parse_array_subscript() {
             "(ARRAY[1, 2, 3, 4, 5, 6])[:5]",
             Subscript::Slice {
                 lower_bound: None,
-                upper_bound: Some(Expr::Value(number("5").with_empty_span())),
+                upper_bound: Some(Expr::value(number("5"))),
                 stride: None,
             },
         ),
         (
             "(ARRAY[1, 2, 3, 4, 5, 6])[2:]",
             Subscript::Slice {
-                lower_bound: Some(Expr::Value(number("2").with_empty_span())),
+                lower_bound: Some(Expr::value(number("2"))),
                 upper_bound: None,
                 stride: None,
             },
@@ -2427,19 +2427,19 @@ fn parse_array_multi_subscript() {
             root: Box::new(call(
                 "make_array",
                 vec![
-                    Expr::Value((number("1")).with_empty_span()),
-                    Expr::Value((number("2")).with_empty_span()),
-                    Expr::Value((number("3")).with_empty_span())
+                    Expr::value(number("1")),
+                    Expr::value(number("2")),
+                    Expr::value(number("3"))
                 ]
             )),
             access_chain: vec![
                 AccessExpr::Subscript(Subscript::Slice {
-                    lower_bound: Some(Expr::Value((number("1")).with_empty_span())),
-                    upper_bound: Some(Expr::Value((number("2")).with_empty_span())),
+                    lower_bound: Some(Expr::value(number("1"))),
+                    upper_bound: Some(Expr::value(number("2"))),
                     stride: None,
                 }),
                 AccessExpr::Subscript(Subscript::Index {
-                    index: Expr::Value((number("2")).with_empty_span()),
+                    index: Expr::value(number("2")),
                 }),
             ],
         },
@@ -2827,7 +2827,7 @@ fn test_json() {
         SelectItem::UnnamedExpr(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("obj"))),
             op: BinaryOperator::Arrow,
-            right: Box::new(Expr::Value((number("42")).with_empty_span())),
+            right: Box::new(Expr::value(number("42"))),
         }),
         select.projection[0]
     );
@@ -2852,9 +2852,9 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::new("obj"))),
             op: BinaryOperator::Arrow,
             right: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value((number("3")).with_empty_span())),
+                left: Box::new(Expr::value(number("3"))),
                 op: BinaryOperator::Multiply,
-                right: Box::new(Expr::Value((number("2")).with_empty_span())),
+                right: Box::new(Expr::value(number("2"))),
             }),
         }),
         select.projection[0]
@@ -3068,7 +3068,7 @@ fn test_composite_value() {
                 access_chain: vec![AccessExpr::Dot(Expr::Identifier(Ident::new("price")))]
             }),
             op: BinaryOperator::Gt,
-            right: Box::new(Expr::Value((number("9")).with_empty_span()))
+            right: Box::new(Expr::value(number("9")))
         }
     );
 
@@ -3576,7 +3576,7 @@ fn parse_alter_role() {
                     RoleOption::Login(true),
                     RoleOption::Replication(true),
                     RoleOption::BypassRLS(true),
-                    RoleOption::ConnectionLimit(Expr::Value((number("100")).with_empty_span())),
+                    RoleOption::ConnectionLimit(Expr::value(number("100"))),
                     RoleOption::Password({
                         Password::Password(Expr::Value(
                             (Value::SingleQuotedString("abcdef".into())).with_empty_span(),
@@ -4772,7 +4772,7 @@ fn parse_create_table_with_options() {
                     },
                     SqlOption::KeyValue {
                         key: "a".into(),
-                        value: Expr::Value((number("123")).with_empty_span()),
+                        value: Expr::value(number("123")),
                     },
                 ],
                 with_options
@@ -4876,7 +4876,7 @@ fn parse_create_after_update_trigger_with_condition() {
                 Ident::new("balance"),
             ])),
             op: BinaryOperator::Gt,
-            right: Box::new(Expr::Value(number("10000").with_empty_span())),
+            right: Box::new(Expr::value(number("10000"))),
         }))),
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,

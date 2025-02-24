@@ -1081,14 +1081,14 @@ fn parse_convert() {
         unreachable!()
     };
     assert!(!is_try);
-    assert_eq!(Expr::Value((number("1")).with_empty_span()), *expr);
+    assert_eq!(Expr::value(number("1")), *expr);
     assert_eq!(Some(DataType::Int(None)), data_type);
     assert!(charset.is_none());
     assert!(target_before_value);
     assert_eq!(
         vec![
-            Expr::Value((number("2")).with_empty_span()),
-            Expr::Value((number("3")).with_empty_span()),
+            Expr::value(number("2")),
+            Expr::value(number("3")),
             Expr::Value((Value::Null).with_empty_span()),
         ],
         styles
@@ -1681,8 +1681,8 @@ fn parse_create_table_with_identity_column() {
                         IdentityProperty {
                             parameters: Some(IdentityPropertyFormatKind::FunctionCall(
                                 IdentityParameters {
-                                    seed: Expr::Value((number("1")).with_empty_span()),
-                                    increment: Expr::Value((number("1")).with_empty_span()),
+                                    seed: Expr::value(number("1")),
+                                    increment: Expr::value(number("1")),
                                 },
                             )),
                             order: None,

@@ -621,7 +621,7 @@ fn parse_set_variables() {
             local: true,
             hivevar: false,
             variables: OneOrManyWithParens::One(ObjectName::from(vec!["autocommit".into()])),
-            value: vec![Expr::Value((number("1")).with_empty_span())],
+            value: vec![Expr::value(number("1"))],
         }
     );
 }
@@ -1419,21 +1419,21 @@ fn parse_simple_insert() {
                                     (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                         .with_empty_span()
                                 ),
-                                Expr::Value((number("1")).with_empty_span())
+                                Expr::value(number("1"))
                             ],
                             vec![
                                 Expr::Value(
                                     (Value::SingleQuotedString("Test Entry 2".to_string()))
                                         .with_empty_span()
                                 ),
-                                Expr::Value((number("2")).with_empty_span())
+                                Expr::value(number("2"))
                             ],
                             vec![
                                 Expr::Value(
                                     (Value::SingleQuotedString("Test Entry 3".to_string()))
                                         .with_empty_span()
                                 ),
-                                Expr::Value((number("3")).with_empty_span())
+                                Expr::value(number("3"))
                             ]
                         ]
                     })),
@@ -1484,7 +1484,7 @@ fn parse_ignore_insert() {
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
-                            Expr::Value((number("1")).with_empty_span())
+                            Expr::value(number("1"))
                         ]]
                     })),
                     order_by: None,
@@ -1534,7 +1534,7 @@ fn parse_priority_insert() {
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
-                            Expr::Value((number("1")).with_empty_span())
+                            Expr::value(number("1"))
                         ]]
                     })),
                     order_by: None,
@@ -1581,7 +1581,7 @@ fn parse_priority_insert() {
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
-                            Expr::Value((number("1")).with_empty_span())
+                            Expr::value(number("1"))
                         ]]
                     })),
                     order_by: None,
@@ -1690,7 +1690,7 @@ fn parse_insert_as() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value((number("1")).with_empty_span()),
+                            Expr::value(number("1")),
                             Expr::Value(
                                 (Value::SingleQuotedString("2024-01-01".to_string()))
                                     .with_empty_span()
@@ -1745,7 +1745,7 @@ fn parse_replace_insert() {
                                 (Value::SingleQuotedString("Test Some Inserts".to_string()))
                                     .with_empty_span()
                             ),
-                            Expr::Value((number("1")).with_empty_span())
+                            Expr::value(number("1"))
                         ]]
                     })),
                     order_by: None,
@@ -1974,7 +1974,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
-                        SelectItem::UnnamedExpr(Expr::Value((number("123e4")).with_empty_span())),
+                        SelectItem::UnnamedExpr(Expr::value(number("123e4"))),
                         SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
                     ],
                     into: None,
@@ -2142,7 +2142,7 @@ fn parse_delete_with_limit() {
     let sql = "DELETE FROM customers LIMIT 100";
     match mysql().verified_stmt(sql) {
         Statement::Delete(Delete { limit, .. }) => {
-            assert_eq!(Some(Expr::Value((number("100")).with_empty_span())), limit);
+            assert_eq!(Some(Expr::value(number("100"))), limit);
         }
         _ => unreachable!(),
     }

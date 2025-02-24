@@ -624,16 +624,16 @@ fn parse_tuple_struct_literal() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Tuple(vec![
-            Expr::Value(number("1").with_empty_span()),
-            Expr::Value(number("2").with_empty_span()),
-            Expr::Value(number("3").with_empty_span()),
+            Expr::value(number("1")),
+            Expr::value(number("2")),
+            Expr::value(number("3")),
         ]),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
         &Expr::Tuple(vec![
-            Expr::Value(number("1").with_empty_span()),
-            Expr::Value(number("1.0").with_empty_span()),
+            Expr::value(number("1")),
+            Expr::value(number("1.0")),
             Expr::Value(Value::SingleQuotedString("123".into()).with_empty_span()),
             Expr::Value(Value::Boolean(true).with_empty_span())
         ]),
@@ -651,9 +651,9 @@ fn parse_typeless_struct_syntax() {
     assert_eq!(
         &Expr::Struct {
             values: vec![
-                Expr::Value(number("1").with_empty_span()),
-                Expr::Value(number("2").with_empty_span()),
-                Expr::Value(number("3").with_empty_span()),
+                Expr::value(number("1")),
+                Expr::value(number("2")),
+                Expr::value(number("3")),
             ],
             fields: Default::default()
         },
@@ -673,7 +673,7 @@ fn parse_typeless_struct_syntax() {
     assert_eq!(
         &Expr::Struct {
             values: vec![
-                Expr::Value(number("1").with_empty_span()),
+                Expr::value(number("1")),
                 Expr::CompoundIdentifier(vec![Ident::from("t"), Ident::from("str_col")]),
             ],
             fields: Default::default()
@@ -685,7 +685,7 @@ fn parse_typeless_struct_syntax() {
         &Expr::Struct {
             values: vec![
                 Expr::Named {
-                    expr: Expr::Value(number("1").with_empty_span()).into(),
+                    expr: Expr::value(number("1")).into(),
                     name: Ident::from("a")
                 },
                 Expr::Named {
@@ -721,7 +721,7 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5").with_empty_span())],
+            values: vec![Expr::value(number("5"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
@@ -732,7 +732,7 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(
         &Expr::Struct {
             values: vec![
-                Expr::Value(number("1").with_empty_span()),
+                Expr::value(number("1")),
                 Expr::CompoundIdentifier(vec![
                     Ident {
                         value: "t".into(),
@@ -881,7 +881,7 @@ fn parse_typed_struct_syntax_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5.0").with_empty_span())],
+            values: vec![Expr::value(number("5.0"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Float64
@@ -891,7 +891,7 @@ fn parse_typed_struct_syntax_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("1").with_empty_span())],
+            values: vec![Expr::value(number("1"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64
@@ -1016,10 +1016,7 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![
-                Expr::Value(number("1").with_empty_span()),
-                Expr::Value(number("2").with_empty_span()),
-            ],
+            values: vec![Expr::value(number("1")), Expr::value(number("2")),],
             fields: vec![
                 StructField {
                     field_name: Some("key".into()),
@@ -1045,7 +1042,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5").with_empty_span())],
+            values: vec![Expr::value(number("5"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
@@ -1056,7 +1053,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(
         &Expr::Struct {
             values: vec![
-                Expr::Value(number("1").with_empty_span()),
+                Expr::value(number("1")),
                 Expr::CompoundIdentifier(vec![
                     Ident {
                         value: "t".into(),
@@ -1177,7 +1174,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5.0").with_empty_span())],
+            values: vec![Expr::value(number("5.0"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Float64
@@ -1187,7 +1184,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("1").with_empty_span())],
+            values: vec![Expr::value(number("1"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64
@@ -1314,7 +1311,7 @@ fn parse_typed_struct_with_field_name_bigquery() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5").with_empty_span())],
+            values: vec![Expr::value(number("5"))],
             fields: vec![StructField {
                 field_name: Some(Ident::from("x")),
                 field_type: DataType::Int64
@@ -1340,10 +1337,7 @@ fn parse_typed_struct_with_field_name_bigquery() {
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![
-                Expr::Value(number("5").with_empty_span()),
-                Expr::Value(number("5").with_empty_span()),
-            ],
+            values: vec![Expr::value(number("5")), Expr::value(number("5")),],
             fields: vec![
                 StructField {
                     field_name: Some(Ident::from("x")),
@@ -1366,7 +1360,7 @@ fn parse_typed_struct_with_field_name_bigquery_and_generic() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5").with_empty_span())],
+            values: vec![Expr::value(number("5"))],
             fields: vec![StructField {
                 field_name: Some(Ident::from("x")),
                 field_type: DataType::Int64
@@ -1392,10 +1386,7 @@ fn parse_typed_struct_with_field_name_bigquery_and_generic() {
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![
-                Expr::Value(number("5").with_empty_span()),
-                Expr::Value(number("5").with_empty_span()),
-            ],
+            values: vec![Expr::value(number("5")), Expr::value(number("5")),],
             fields: vec![
                 StructField {
                     field_name: Some(Ident::from("x")),
@@ -1683,21 +1674,18 @@ fn parse_merge() {
         columns: vec![Ident::new("product"), Ident::new("quantity")],
         kind: MergeInsertKind::Values(Values {
             explicit_row: false,
-            rows: vec![vec![
-                Expr::Value(number("1").with_empty_span()),
-                Expr::Value(number("2").with_empty_span()),
-            ]],
+            rows: vec![vec![Expr::value(number("1")), Expr::value(number("2"))]],
         }),
     });
     let update_action = MergeAction::Update {
         assignments: vec![
             Assignment {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("a")])),
-                value: Expr::Value(number("1").with_empty_span()),
+                value: Expr::value(number("1")),
             },
             Assignment {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("b")])),
-                value: Expr::Value(number("2").with_empty_span()),
+                value: Expr::value(number("2")),
             },
         ],
     };
@@ -1751,12 +1739,12 @@ fn parse_merge() {
                 vec![
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatched,
-                        predicate: Some(Expr::Value(number("1").with_empty_span())),
+                        predicate: Some(Expr::value(number("1"))),
                         action: insert_action.clone(),
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatchedByTarget,
-                        predicate: Some(Expr::Value(number("1").with_empty_span())),
+                        predicate: Some(Expr::value(number("1"))),
                         action: insert_action.clone(),
                     },
                     MergeClause {
@@ -1766,7 +1754,7 @@ fn parse_merge() {
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatchedBySource,
-                        predicate: Some(Expr::Value(number("2").with_empty_span())),
+                        predicate: Some(Expr::value(number("2"))),
                         action: MergeAction::Delete
                     },
                     MergeClause {
@@ -1776,12 +1764,12 @@ fn parse_merge() {
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatchedBySource,
-                        predicate: Some(Expr::Value(number("1").with_empty_span())),
+                        predicate: Some(Expr::value(number("1"))),
                         action: update_action.clone(),
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatched,
-                        predicate: Some(Expr::Value(number("1").with_empty_span())),
+                        predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Insert(MergeInsertExpr {
                             columns: vec![Ident::new("product"), Ident::new("quantity"),],
                             kind: MergeInsertKind::Row,
@@ -1797,7 +1785,7 @@ fn parse_merge() {
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatched,
-                        predicate: Some(Expr::Value(number("1").with_empty_span())),
+                        predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Insert(MergeInsertExpr {
                             columns: vec![],
                             kind: MergeInsertKind::Row
@@ -1813,7 +1801,7 @@ fn parse_merge() {
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::Matched,
-                        predicate: Some(Expr::Value(number("1").with_empty_span())),
+                        predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Delete,
                     },
                     MergeClause {
@@ -1829,7 +1817,7 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 explicit_row: false,
                                 rows: vec![vec![
-                                    Expr::Value(number("1").with_empty_span()),
+                                    Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
                                 ]]
                             })
@@ -1843,7 +1831,7 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 explicit_row: false,
                                 rows: vec![vec![
-                                    Expr::Value(number("1").with_empty_span()),
+                                    Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
                                 ]]
                             })
@@ -2044,7 +2032,7 @@ fn parse_map_access_expr() {
             AccessExpr::Subscript(Subscript::Index {
                 index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
-                    expr: Expr::Value(number("1").with_empty_span()).into(),
+                    expr: Expr::value(number("1")).into(),
                 },
             }),
             AccessExpr::Subscript(Subscript::Index {

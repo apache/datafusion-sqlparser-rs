@@ -95,9 +95,9 @@ fn parse_function_object_name() {
 #[test]
 fn parse_insert_values() {
     let row = vec![
-        Expr::Value((number("1")).with_empty_span()),
-        Expr::Value((number("2")).with_empty_span()),
-        Expr::Value((number("3")).with_empty_span()),
+        Expr::value(number("1")),
+        Expr::value(number("2")),
+        Expr::value(number("3")),
     ];
     let rows1 = vec![row.clone()];
     let rows2 = vec![row.clone(), row];
@@ -386,15 +386,15 @@ fn parse_update() {
                 vec![
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec!["a".into()])),
-                        value: Expr::Value((number("1")).with_empty_span()),
+                        value: Expr::value(number("1")),
                     },
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec!["b".into()])),
-                        value: Expr::Value((number("2")).with_empty_span()),
+                        value: Expr::value(number("2")),
                     },
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec!["c".into()])),
-                        value: Expr::Value((number("3")).with_empty_span()),
+                        value: Expr::value(number("3")),
                     },
                 ]
             );
@@ -801,7 +801,7 @@ fn parse_where_delete_statement() {
                 Expr::BinaryOp {
                     left: Box::new(Expr::Identifier(Ident::new("name"))),
                     op: Eq,
-                    right: Box::new(Expr::Value((number("5")).with_empty_span())),
+                    right: Box::new(Expr::value(number("5"))),
                 },
                 selection.unwrap(),
             );
@@ -901,7 +901,7 @@ fn parse_simple_select() {
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
     assert_eq!(
-        Some(Expr::Value((number("5")).with_empty_span())),
+        Some(Expr::value(number("5"))),
         select.limit
     );
 }
@@ -916,13 +916,13 @@ fn parse_limit_is_not_an_alias() {
     // In dialects supporting LIMIT it shouldn't be parsed as a table alias
     let ast = verified_query("SELECT id FROM customer LIMIT 1");
     assert_eq!(
-        Some(Expr::Value((number("1")).with_empty_span())),
+        Some(Expr::value(number("1"))),
         ast.limit
     );
 
     let ast = verified_query("SELECT 1 LIMIT 5");
     assert_eq!(
-        Some(Expr::Value((number("5")).with_empty_span())),
+        Some(Expr::value(number("5"))),
         ast.limit
     );
 }
@@ -1143,7 +1143,7 @@ fn parse_column_aliases() {
     {
         assert_eq!(&BinaryOperator::Plus, op);
         assert_eq!(
-            &Expr::Value((number("1")).with_empty_span()),
+            &Expr::value(number("1")),
             right.as_ref()
         );
         assert_eq!(&Ident::new("newname"), alias);
@@ -1409,17 +1409,17 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
     assert_eq!(
         &vec![
             SelectItem::UnnamedExpr(Expr::Value((number("10e-20")).with_empty_span())),
-            SelectItem::UnnamedExpr(Expr::Value((number("1e3")).with_empty_span())),
+            SelectItem::UnnamedExpr(Expr::value(number("1e3"))),
             SelectItem::UnnamedExpr(Expr::Value((number("1e+3")).with_empty_span())),
             SelectItem::ExprWithAlias {
-                expr: Expr::Value((number("1e3")).with_empty_span()),
+                expr: Expr::value(number("1e3")),
                 alias: Ident::new("a")
             },
             SelectItem::ExprWithAlias {
-                expr: Expr::Value((number("1")).with_empty_span()),
+                expr: Expr::value(number("1")),
                 alias: Ident::new("e")
             },
-            SelectItem::UnnamedExpr(Expr::Value((number("0.5e2")).with_empty_span())),
+            SelectItem::UnnamedExpr(Expr::value(number("0.5e2"))),
         ],
         &select.projection
     );
@@ -1661,7 +1661,7 @@ fn parse_json_object() {
                 },
                 FunctionArg::ExprNamed {
                     name: Expr::Value((Value::SingleQuotedString("type".into())).with_empty_span()),
-                    arg: FunctionArgExpr::Expr(Expr::Value((number("1")).with_empty_span())),
+                    arg: FunctionArgExpr::Expr(Expr::value(number("1"))),
                     operator: FunctionArgOperator::Colon
                 }
             ],
@@ -1909,9 +1909,9 @@ fn parse_not_precedence() {
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             expr: Box::new(Expr::Between {
-                expr: Box::new(Expr::Value((number("1")).with_empty_span())),
-                low: Box::new(Expr::Value((number("1")).with_empty_span())),
-                high: Box::new(Expr::Value((number("2")).with_empty_span())),
+                expr: Box::new(Expr::value(number("1"))),
+                low: Box::new(Expr::value(number("1"))),
+                high: Box::new(Expr::value(number("2"))),
                 negated: true,
             }),
         },
@@ -2340,8 +2340,8 @@ fn parse_between() {
         assert_eq!(
             Expr::Between {
                 expr: Box::new(Expr::Identifier(Ident::new("age"))),
-                low: Box::new(Expr::Value((number("25")).with_empty_span())),
-                high: Box::new(Expr::Value((number("32")).with_empty_span())),
+                low: Box::new(Expr::value(number("25"))),
+                high: Box::new(Expr::value(number("32"))),
                 negated,
             },
             select.selection.unwrap()
@@ -2358,16 +2358,16 @@ fn parse_between_with_expr() {
     let select = verified_only_select(sql);
     assert_eq!(
         Expr::IsNull(Box::new(Expr::Between {
-            expr: Box::new(Expr::Value((number("1")).with_empty_span())),
+            expr: Box::new(Expr::value(number("1"))),
             low: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value((number("1")).with_empty_span())),
+                left: Box::new(Expr::value(number("1"))),
                 op: Plus,
-                right: Box::new(Expr::Value((number("2")).with_empty_span())),
+                right: Box::new(Expr::value(number("2"))),
             }),
             high: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value((number("3")).with_empty_span())),
+                left: Box::new(Expr::value(number("3"))),
                 op: Plus,
-                right: Box::new(Expr::Value((number("4")).with_empty_span())),
+                right: Box::new(Expr::value(number("4"))),
             }),
             negated: false,
         })),
@@ -2379,19 +2379,19 @@ fn parse_between_with_expr() {
     assert_eq!(
         Expr::BinaryOp {
             left: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value((number("1")).with_empty_span())),
+                left: Box::new(Expr::value(number("1"))),
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::Value((number("1")).with_empty_span())),
+                right: Box::new(Expr::value(number("1"))),
             }),
             op: BinaryOperator::And,
             right: Box::new(Expr::Between {
                 expr: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Value((number("1")).with_empty_span())),
+                    left: Box::new(Expr::value(number("1"))),
                     op: BinaryOperator::Plus,
                     right: Box::new(Expr::Identifier(Ident::new("x"))),
                 }),
-                low: Box::new(Expr::Value((number("1")).with_empty_span())),
-                high: Box::new(Expr::Value((number("2")).with_empty_span())),
+                low: Box::new(Expr::value(number("1"))),
+                high: Box::new(Expr::value(number("2"))),
                 negated: false,
             }),
         },
@@ -2406,15 +2406,15 @@ fn parse_tuples() {
     assert_eq!(
         vec![
             SelectItem::UnnamedExpr(Expr::Tuple(vec![
-                Expr::Value((number("1")).with_empty_span()),
-                Expr::Value((number("2")).with_empty_span()),
+                Expr::value(number("1")),
+                Expr::value(number("2")),
             ])),
             SelectItem::UnnamedExpr(Expr::Nested(Box::new(Expr::Value(
                 (number("1")).with_empty_span()
             )))),
             SelectItem::UnnamedExpr(Expr::Tuple(vec![
                 Expr::Value((Value::SingleQuotedString("foo".into())).with_empty_span()),
-                Expr::Value((number("3")).with_empty_span()),
+                Expr::value(number("3")),
                 Expr::Identifier(Ident::new("baz")),
             ])),
         ],
@@ -2496,7 +2496,7 @@ fn parse_select_order_by_limit() {
         select.order_by.expect("ORDER BY expected").exprs
     );
     assert_eq!(
-        Some(Expr::Value((number("2")).with_empty_span())),
+        Some(Expr::value(number("2"))),
         select.limit
     );
 }
@@ -2524,7 +2524,7 @@ fn parse_select_order_by_nulls_order() {
         select.order_by.expect("ORDER BY expeccted").exprs
     );
     assert_eq!(
-        Some(Expr::Value((number("2")).with_empty_span())),
+        Some(Expr::value(number("2"))),
         select.limit
     );
 }
@@ -2670,7 +2670,7 @@ fn parse_select_having() {
                 within_group: vec![]
             })),
             op: BinaryOperator::Gt,
-            right: Box::new(Expr::Value((number("1")).with_empty_span())),
+            right: Box::new(Expr::value(number("1"))),
         }),
         select.having
     );
@@ -2711,7 +2711,7 @@ fn parse_select_qualify() {
                 within_group: vec![]
             })),
             op: BinaryOperator::Eq,
-            right: Box::new(Expr::Value((number("1")).with_empty_span())),
+            right: Box::new(Expr::value(number("1"))),
         }),
         select.qualify
     );
@@ -2722,7 +2722,7 @@ fn parse_select_qualify() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("row_num"))),
             op: BinaryOperator::Eq,
-            right: Box::new(Expr::Value((number("1")).with_empty_span())),
+            right: Box::new(Expr::value(number("1"))),
         }),
         select.qualify
     );
@@ -3363,13 +3363,13 @@ fn gen_number_case(value: &str) -> (Vec<String>, Vec<SelectItem>) {
         format!("{} AS col_alias", value),
     ];
     let expected = vec![
-        SelectItem::UnnamedExpr(Expr::Value((number(value)).with_empty_span())),
+        SelectItem::UnnamedExpr(Expr::value(number(value))),
         SelectItem::ExprWithAlias {
-            expr: Expr::Value((number(value)).with_empty_span()),
+            expr: Expr::value(number(value)),
             alias: Ident::new("col_alias"),
         },
         SelectItem::ExprWithAlias {
-            expr: Expr::Value((number(value)).with_empty_span()),
+            expr: Expr::value(number(value)),
             alias: Ident::new("col_alias"),
         },
     ];
@@ -3390,19 +3390,19 @@ fn gen_sign_number_case(value: &str, op: UnaryOperator) -> (Vec<String>, Vec<Sel
     let expected = vec![
         SelectItem::UnnamedExpr(Expr::UnaryOp {
             op,
-            expr: Box::new(Expr::Value((number(value)).with_empty_span())),
+            expr: Box::new(Expr::value(number(value))),
         }),
         SelectItem::ExprWithAlias {
             expr: Expr::UnaryOp {
                 op,
-                expr: Box::new(Expr::Value((number(value)).with_empty_span())),
+                expr: Box::new(Expr::value(number(value))),
             },
             alias: Ident::new("col_alias"),
         },
         SelectItem::ExprWithAlias {
             expr: Expr::UnaryOp {
                 op,
-                expr: Box::new(Expr::Value((number(value)).with_empty_span())),
+                expr: Box::new(Expr::value(number(value))),
             },
             alias: Ident::new("col_alias"),
         },
@@ -4242,7 +4242,7 @@ fn parse_create_table_with_options() {
                     },
                     SqlOption::KeyValue {
                         key: "a".into(),
-                        value: Expr::Value((number("123")).with_empty_span()),
+                        value: Expr::value(number("123")),
                     },
                 ],
                 with_options
@@ -4620,7 +4620,7 @@ fn parse_alter_view_with_options() {
                     },
                     SqlOption::KeyValue {
                         key: "a".into(),
-                        value: Expr::Value((number("123")).with_empty_span()),
+                        value: Expr::value(number("123")),
                     },
                 ],
                 with_options
@@ -5193,7 +5193,7 @@ fn parse_named_argument_function_with_eq_operator() {
             [Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("bar"))),
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::Value((number("42")).with_empty_span())),
+                right: Box::new(Expr::value(number("42"))),
             }]
         ),
     );
@@ -5539,14 +5539,14 @@ fn parse_literal_integer() {
     let select = verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
-        &Expr::Value((number("1")).with_empty_span()),
+        &Expr::value(number("1")),
         expr_from_projection(&select.projection[0]),
     );
     // negative literal is parsed as a - and expr
     assert_eq!(
         &UnaryOp {
             op: UnaryOperator::Minus,
-            expr: Box::new(Expr::Value((number("10")).with_empty_span()))
+            expr: Box::new(Expr::value(number("10")))
         },
         expr_from_projection(&select.projection[1]),
     );
@@ -5554,7 +5554,7 @@ fn parse_literal_integer() {
     assert_eq!(
         &UnaryOp {
             op: UnaryOperator::Plus,
-            expr: Box::new(Expr::Value((number("20")).with_empty_span()))
+            expr: Box::new(Expr::value(number("20")))
         },
         expr_from_projection(&select.projection[2]),
     )
@@ -5568,11 +5568,11 @@ fn parse_literal_decimal() {
     let select = verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
-        &Expr::Value((number("0.300000000000000004")).with_empty_span()),
+        &Expr::value(number("0.300000000000000004")),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Value((number("9007199254740993.0")).with_empty_span()),
+        &Expr::value(number("9007199254740993.0")),
         expr_from_projection(&select.projection[1]),
     )
 }
@@ -5738,7 +5738,7 @@ fn parse_interval_all() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value((number("5")).with_empty_span())),
+            value: Box::new(Expr::value(number("5"))),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
@@ -5751,7 +5751,7 @@ fn parse_interval_all() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Interval(Interval {
-            value: Box::new(Expr::Value((number("5")).with_empty_span())),
+            value: Box::new(Expr::value(number("5"))),
             leading_field: Some(DateTimeField::Days),
             leading_precision: None,
             last_field: None,
@@ -5874,9 +5874,9 @@ fn parse_interval_require_qualifier() {
         expr_from_projection(only(&select.projection)),
         &Expr::Interval(Interval {
             value: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value((number("1")).with_empty_span())),
+                left: Box::new(Expr::value(number("1"))),
                 op: BinaryOperator::Plus,
-                right: Box::new(Expr::Value((number("1")).with_empty_span())),
+                right: Box::new(Expr::value(number("1"))),
             }),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
@@ -6168,7 +6168,7 @@ fn parse_interval_and_or_xor() {
 
 #[test]
 fn parse_at_timezone() {
-    let zero = Expr::Value(number("0").with_empty_span());
+    let zero = Expr::value(number("0"));
     let sql = "SELECT FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00' FROM t";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -6555,9 +6555,9 @@ fn parse_unnest_in_from_clause() {
                 array_exprs: vec![call(
                     "make_array",
                     [
-                        Expr::Value((number("1")).with_empty_span()),
-                        Expr::Value((number("2")).with_empty_span()),
-                        Expr::Value((number("3")).with_empty_span()),
+                        Expr::value(number("1")),
+                        Expr::value(number("2")),
+                        Expr::value(number("3")),
                     ],
                 )],
                 with_offset: false,
@@ -6581,16 +6581,16 @@ fn parse_unnest_in_from_clause() {
                     call(
                         "make_array",
                         [
-                            Expr::Value((number("1")).with_empty_span()),
-                            Expr::Value((number("2")).with_empty_span()),
-                            Expr::Value((number("3")).with_empty_span()),
+                            Expr::value(number("1")),
+                            Expr::value(number("2")),
+                            Expr::value(number("3")),
                         ],
                     ),
                     call(
                         "make_array",
                         [
-                            Expr::Value((number("5")).with_empty_span()),
-                            Expr::Value((number("6")).with_empty_span()),
+                            Expr::value(number("5")),
+                            Expr::value(number("6")),
                         ],
                     ),
                 ],
@@ -6640,12 +6640,12 @@ fn parse_searched_case_expr() {
                 BinaryOp {
                     left: Box::new(Identifier(Ident::new("bar"))),
                     op: Eq,
-                    right: Box::new(Expr::Value((number("0")).with_empty_span())),
+                    right: Box::new(Expr::value(number("0"))),
                 },
                 BinaryOp {
                     left: Box::new(Identifier(Ident::new("bar"))),
                     op: GtEq,
-                    right: Box::new(Expr::Value((number("0")).with_empty_span())),
+                    right: Box::new(Expr::value(number("0"))),
                 },
             ],
             results: vec![
@@ -6670,7 +6670,7 @@ fn parse_simple_case_expr() {
     assert_eq!(
         &Case {
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
-            conditions: vec![Expr::Value((number("1")).with_empty_span())],
+            conditions: vec![Expr::value(number("1"))],
             results: vec![Expr::Value(
                 (Value::SingleQuotedString("Y".to_string())).with_empty_span()
             )],
@@ -7429,11 +7429,11 @@ fn parse_overlay() {
                 (Value::SingleQuotedString("abcdef".to_string())).with_empty_span()
             )),
             overlay_what: Box::new(Expr::Identifier(Ident::new("name"))),
-            overlay_from: Box::new(Expr::Value((number("3")).with_empty_span())),
+            overlay_from: Box::new(Expr::value(number("3"))),
             overlay_for: Some(Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("id"))),
                 op: BinaryOperator::Plus,
-                right: Box::new(Expr::Value((number("1")).with_empty_span())),
+                right: Box::new(Expr::value(number("1"))),
             })),
         },
         expr_from_projection(only(&select.projection))
@@ -7667,7 +7667,7 @@ fn parse_create_view_with_options() {
                     },
                     SqlOption::KeyValue {
                         key: "a".into(),
-                        value: Expr::Value((number("123")).with_empty_span()),
+                        value: Expr::value(number("123")),
                     },
                 ]),
                 options
@@ -8010,7 +8010,7 @@ fn parse_offset() {
         all_dialects_where(|d| !d.is_column_alias(&Keyword::OFFSET, &mut Parser::new(d)));
 
     let expect = Some(Offset {
-        value: Expr::Value(number("2").with_empty_span()),
+        value: Expr::value(number("2")),
         rows: OffsetRows::Rows,
     });
     let ast = dialects.verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
@@ -8038,7 +8038,7 @@ fn parse_offset() {
     assert_eq!(
         ast.offset,
         Some(Offset {
-            value: Expr::Value((number("0")).with_empty_span()),
+            value: Expr::value(number("0")),
             rows: OffsetRows::Rows,
         })
     );
@@ -8046,7 +8046,7 @@ fn parse_offset() {
     assert_eq!(
         ast.offset,
         Some(Offset {
-            value: Expr::Value((number("1")).with_empty_span()),
+            value: Expr::value(number("1")),
             rows: OffsetRows::Row,
         })
     );
@@ -8054,7 +8054,7 @@ fn parse_offset() {
     assert_eq!(
         ast.offset,
         Some(Offset {
-            value: Expr::Value((number("1")).with_empty_span()),
+            value: Expr::value(number("1")),
             rows: OffsetRows::None,
         })
     );
@@ -8065,7 +8065,7 @@ fn parse_fetch() {
     let fetch_first_two_rows_only = Some(Fetch {
         with_ties: false,
         percent: false,
-        quantity: Some(Expr::Value(number("2").with_empty_span())),
+        quantity: Some(Expr::value(number("2"))),
     });
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
@@ -8092,7 +8092,7 @@ fn parse_fetch() {
         Some(Fetch {
             with_ties: true,
             percent: false,
-            quantity: Some(Expr::Value((number("2")).with_empty_span())),
+            quantity: Some(Expr::value(number("2"))),
         })
     );
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 50 PERCENT ROWS ONLY");
@@ -8101,7 +8101,7 @@ fn parse_fetch() {
         Some(Fetch {
             with_ties: false,
             percent: true,
-            quantity: Some(Expr::Value((number("50")).with_empty_span())),
+            quantity: Some(Expr::value(number("50"))),
         })
     );
     let ast = verified_query(
@@ -8110,7 +8110,7 @@ fn parse_fetch() {
     assert_eq!(
         ast.offset,
         Some(Offset {
-            value: Expr::Value((number("2")).with_empty_span()),
+            value: Expr::value(number("2")),
             rows: OffsetRows::Rows,
         })
     );
@@ -8132,7 +8132,7 @@ fn parse_fetch() {
     assert_eq!(
         ast.offset,
         Some(Offset {
-            value: Expr::Value((number("2")).with_empty_span()),
+            value: Expr::value(number("2")),
             rows: OffsetRows::Rows,
         })
     );
@@ -8143,7 +8143,7 @@ fn parse_fetch() {
                 assert_eq!(
                     subquery.offset,
                     Some(Offset {
-                        value: Expr::Value((number("2")).with_empty_span()),
+                        value: Expr::value(number("2")),
                         rows: OffsetRows::Rows,
                     })
                 );
@@ -8451,9 +8451,9 @@ fn parse_set_variable() {
             assert_eq!(
                 value,
                 vec![
-                    Expr::Value((number("1")).with_empty_span()),
-                    Expr::Value((number("2")).with_empty_span()),
-                    Expr::Value((number("3")).with_empty_span()),
+                    Expr::value(number("1")),
+                    Expr::value(number("2")),
+                    Expr::value(number("3")),
                 ]
             );
         }
@@ -8789,7 +8789,7 @@ fn test_create_index_with_with_clause() {
         Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("fillfactor"))),
             op: BinaryOperator::Eq,
-            right: Box::new(Expr::Value((number("70")).with_empty_span())),
+            right: Box::new(Expr::value(number("70"))),
         },
         Expr::Identifier(Ident::new("single_param")),
     ];
@@ -9607,14 +9607,14 @@ fn verified_expr(query: &str) -> Expr {
 fn parse_offset_and_limit() {
     let sql = "SELECT foo FROM bar LIMIT 1 OFFSET 2";
     let expect = Some(Offset {
-        value: Expr::Value(number("2").with_empty_span()),
+        value: Expr::value(number("2")),
         rows: OffsetRows::None,
     });
     let ast = verified_query(sql);
     assert_eq!(ast.offset, expect);
     assert_eq!(
         ast.limit,
-        Some(Expr::Value((number("1")).with_empty_span()))
+        Some(Expr::value(number("1")))
     );
 
     // different order is OK
@@ -9635,18 +9635,18 @@ fn parse_offset_and_limit() {
     assert_eq!(
         ast.limit,
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Value((number("1")).with_empty_span())),
+            left: Box::new(Expr::value(number("1"))),
             op: BinaryOperator::Plus,
-            right: Box::new(Expr::Value((number("2")).with_empty_span())),
+            right: Box::new(Expr::value(number("2"))),
         }),
     );
     assert_eq!(
         ast.offset,
         Some(Offset {
             value: Expr::BinaryOp {
-                left: Box::new(Expr::Value((number("3")).with_empty_span())),
+                left: Box::new(Expr::value(number("3"))),
                 op: BinaryOperator::Multiply,
-                right: Box::new(Expr::Value((number("4")).with_empty_span())),
+                right: Box::new(Expr::value(number("4"))),
             },
             rows: OffsetRows::None,
         }),
@@ -9732,7 +9732,7 @@ fn parse_position() {
             [
                 Expr::Value((Value::SingleQuotedString("an".to_owned())).with_empty_span()),
                 Expr::Value((Value::SingleQuotedString("banana".to_owned())).with_empty_span()),
-                Expr::Value((number("1")).with_empty_span()),
+                Expr::value(number("1")),
             ]
         ),
         verified_expr("position('an', 'banana', 1)")
@@ -9989,7 +9989,7 @@ fn parse_cache_table() {
                 },
                 SqlOption::KeyValue {
                     key: Ident::with_quote('\'', "K2"),
-                    value: Expr::Value((number("0.88")).with_empty_span()),
+                    value: Expr::value(number("0.88")),
                 },
             ],
             query: None,
@@ -10014,7 +10014,7 @@ fn parse_cache_table() {
                 },
                 SqlOption::KeyValue {
                     key: Ident::with_quote('\'', "K2"),
-                    value: Expr::Value((number("0.88")).with_empty_span()),
+                    value: Expr::value(number("0.88")),
                 },
             ],
             query: Some(query.clone().into()),
@@ -10039,7 +10039,7 @@ fn parse_cache_table() {
                 },
                 SqlOption::KeyValue {
                     key: Ident::with_quote('\'', "K2"),
-                    value: Expr::Value((number("0.88")).with_empty_span()),
+                    value: Expr::value(number("0.88")),
                 },
             ],
             query: Some(query.clone().into()),
@@ -10365,7 +10365,7 @@ fn parse_pivot_table() {
             value_column: vec![Ident::new("a"), Ident::new("MONTH")],
             value_source: PivotValueSource::List(vec![
                 ExprWithAlias {
-                    expr: Expr::Value((number("1")).with_empty_span()),
+                    expr: Expr::value(number("1")),
                     alias: Some(Ident::new("x"))
                 },
                 ExprWithAlias {
@@ -10921,7 +10921,7 @@ fn parse_execute_immediate() {
         )],
         immediate: true,
         using: vec![ExprWithAlias {
-            expr: Expr::Value((number("1")).with_empty_span()),
+            expr: Expr::value(number("1")),
             alias: Some(Ident::new("b")),
         }],
         into: vec![Ident::new("a")],
@@ -11181,7 +11181,7 @@ fn parse_map_access_expr() {
             AccessExpr::Subscript(Subscript::Index {
                 index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
-                    expr: Expr::Value((number("1")).with_empty_span()).into(),
+                    expr: Expr::value(number("1")).into(),
                 },
             }),
             AccessExpr::Subscript(Subscript::Index {
@@ -11317,7 +11317,7 @@ fn parse_connect_by() {
             selection: Some(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("employee_id"))),
                 op: BinaryOperator::NotEq,
-                right: Box::new(Expr::Value((number("42")).with_empty_span())),
+                right: Box::new(Expr::value(number("42"))),
             }),
             group_by: GroupByExpr::Expressions(vec![], vec![]),
             cluster_by: vec![],
@@ -11796,13 +11796,13 @@ fn test_select_wildcard_with_replace() {
                     expr: Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("quantity"))),
                         op: BinaryOperator::Divide,
-                        right: Box::new(Expr::Value((number("2")).with_empty_span())),
+                        right: Box::new(Expr::value(number("2"))),
                     },
                     column_name: Ident::new("quantity"),
                     as_keyword: true,
                 }),
                 Box::new(ReplaceSelectElement {
-                    expr: Expr::Value((number("3")).with_empty_span()),
+                    expr: Expr::value(number("3")),
                     column_name: Ident::new("order_id"),
                     as_keyword: true,
                 }),
@@ -11961,7 +11961,7 @@ fn test_map_syntax() {
     );
 
     fn number_expr(s: &str) -> Expr {
-        Expr::Value(number(s).with_empty_span())
+        Expr::value(number(s))
     }
 
     check(
@@ -11989,14 +11989,14 @@ fn test_map_syntax() {
                         elem: vec![number_expr("1"), number_expr("2"), number_expr("3")],
                         named: false,
                     })),
-                    value: Box::new(Expr::Value((number("10.0")).with_empty_span())),
+                    value: Box::new(Expr::value(number("10.0"))),
                 },
                 MapEntry {
                     key: Box::new(Expr::Array(Array {
                         elem: vec![number_expr("4"), number_expr("5"), number_expr("6")],
                         named: false,
                     })),
-                    value: Box::new(Expr::Value((number("20.0")).with_empty_span())),
+                    value: Box::new(Expr::value(number("20.0"))),
                 },
             ],
         }),
@@ -13991,13 +13991,13 @@ fn test_lambdas() {
                             }
                         ],
                         results: vec![
-                            Expr::Value((number("0")).with_empty_span()),
+                            Expr::value(number("0")),
                             Expr::UnaryOp {
                                 op: UnaryOperator::Minus,
-                                expr: Box::new(Expr::Value((number("1")).with_empty_span()))
+                                expr: Box::new(Expr::value(number("1")))
                             }
                         ],
-                        else_result: Some(Box::new(Expr::Value((number("1")).with_empty_span())))
+                        else_result: Some(Box::new(Expr::value(number("1"))))
                     })
                 })
             ]

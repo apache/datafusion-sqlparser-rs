@@ -7654,18 +7654,10 @@ impl<'a> Parser<'a> {
         let expr = self.parse_index_expr()?;
         let options = self.parse_order_by_options()?;
 
-        let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
-            && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
-        {
-            Some(self.parse_with_fill()?)
-        } else {
-            None
-        };
-
         Ok(OrderByExpr {
             expr,
             options,
-            with_fill,
+            with_fill: None,
         })
     }
 

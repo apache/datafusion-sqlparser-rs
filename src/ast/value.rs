@@ -31,7 +31,7 @@ use crate::{ast::Ident, tokenizer::Span};
 use sqlparser_derive::{Visit, VisitMut};
 
 /// Primitive SQL values such as number and string
-#[derive(Debug, Clone, Eq, Ord)]
+#[derive(Debug, Clone, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ValueWithSpan {
@@ -48,6 +48,12 @@ impl PartialEq for ValueWithSpan {
 impl PartialOrd for ValueWithSpan {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         self.value.partial_cmp(&other.value)
+    }
+}
+
+impl Ord for ValueWithSpan {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.value.cmp(&other.value)
     }
 }
 

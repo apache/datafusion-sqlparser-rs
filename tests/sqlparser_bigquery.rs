@@ -1968,25 +1968,19 @@ fn parse_big_query_declare() {
             "DECLARE x INT64 DEFAULT 42",
             vec![Ident::new("x")],
             Some(DataType::Int64),
-            Some(DeclareAssignment::Default(Box::new(Expr::Value(
-                number("42").with_empty_span(),
-            )))),
+            Some(DeclareAssignment::Default(Box::new(Expr::Value(number("42").with_empty_span().with_empty_span())))),
         ),
         (
             "DECLARE x, y, z INT64 DEFAULT 42",
             vec![Ident::new("x"), Ident::new("y"), Ident::new("z")],
             Some(DataType::Int64),
-            Some(DeclareAssignment::Default(Box::new(Expr::Value(
-                number("42").with_empty_span(),
-            )))),
+            Some(DeclareAssignment::Default(Box::new(Expr::Value(number("42").with_empty_span().with_empty_span())))),
         ),
         (
             "DECLARE x DEFAULT 42",
             vec![Ident::new("x")],
             None,
-            Some(DeclareAssignment::Default(Box::new(Expr::Value(
-                number("42").with_empty_span(),
-            )))),
+            Some(DeclareAssignment::Default(Box::new(Expr::Value(number("42").with_empty_span().with_empty_span())))),
         ),
     ] {
         match bigquery().verified_stmt(sql) {

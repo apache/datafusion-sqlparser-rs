@@ -6078,7 +6078,7 @@ fn parse_interval_and_or_xor() {
 
 #[test]
 fn parse_at_timezone() {
-    let zero = Expr::Value(number("0"));
+    let zero = Expr::Value(number("0").with_empty_span());
     let sql = "SELECT FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00' FROM t";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -7907,7 +7907,7 @@ fn parse_offset() {
         all_dialects_where(|d| !d.is_column_alias(&Keyword::OFFSET, &mut Parser::new(d)));
 
     let expect = Some(Offset {
-        value: Expr::Value(number("2")),
+        value: Expr::Value(number("2").with_empty_span()),
         rows: OffsetRows::Rows,
     });
     let ast = dialects.verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
@@ -7962,7 +7962,7 @@ fn parse_fetch() {
     let fetch_first_two_rows_only = Some(Fetch {
         with_ties: false,
         percent: false,
-        quantity: Some(Expr::Value(number("2"))),
+        quantity: Some(Expr::Value(number("2").with_empty_span())),
     });
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
@@ -9478,7 +9478,7 @@ fn verified_expr(query: &str) -> Expr {
 fn parse_offset_and_limit() {
     let sql = "SELECT foo FROM bar LIMIT 1 OFFSET 2";
     let expect = Some(Offset {
-        value: Expr::Value(number("2")),
+        value: Expr::Value(number("2").with_empty_span()),
         rows: OffsetRows::None,
     });
     let ast = verified_query(sql);
@@ -11101,7 +11101,7 @@ fn parse_connect_by() {
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::SingleQuotedString(
                     "president".to_owned(),
-                ))),
+                ).with_empty_span())),
             },
             relationships: vec![Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
@@ -11807,7 +11807,7 @@ fn test_map_syntax() {
     );
 
     fn number_expr(s: &str) -> Expr {
-        Expr::Value(number(s))
+        Expr::Value(number(s).with_empty_span())
     }
 
     check(
@@ -13184,7 +13184,7 @@ fn parse_bang_not() {
         Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("b"))),
             op: BinaryOperator::Gt,
-            right: Box::new(Expr::Value(Value::Number("3".parse().unwrap(), false))),
+            right: Box::new(Expr::Value(Value::Number("3".parse().unwrap(), false).with_empty_span())),
         }))),
     ]
     .into_iter()

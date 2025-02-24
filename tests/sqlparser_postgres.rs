@@ -768,7 +768,7 @@ fn parse_alter_table_alter_column() {
     ) {
         AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
-            let using_expr = Expr::Value(Value::SingleQuotedString("text".to_string()));
+            let using_expr = Expr::Value(Value::SingleQuotedString("text".to_string()).with_empty_span());
             assert_eq!(
                 op,
                 AlterColumnOperation::SetDataType {
@@ -2201,7 +2201,7 @@ fn parse_pg_like_match_ops() {
 #[test]
 fn parse_array_index_expr() {
     let num: Vec<Expr> = (0..=10)
-        .map(|s| Expr::Value(number(&s.to_string())))
+        .map(|s| Expr::Value(number(&s.to_string()).with_empty_span()))
         .collect();
 
     let sql = "SELECT foo[0] FROM foos";
@@ -2312,7 +2312,7 @@ fn parse_array_subscript() {
         (
             "(ARRAY[1, 2, 3, 4, 5, 6])[2]",
             Subscript::Index {
-                index: Expr::Value(number("2")),
+                index: Expr::Value(number("2").with_empty_span()),
             },
         ),
         (
@@ -2324,17 +2324,17 @@ fn parse_array_subscript() {
         (
             "(ARRAY[1, 2, 3, 4, 5, 6])[2:5]",
             Subscript::Slice {
-                lower_bound: Some(Expr::Value(number("2"))),
-                upper_bound: Some(Expr::Value(number("5"))),
+                lower_bound: Some(Expr::Value(number("2").with_empty_span())),
+                upper_bound: Some(Expr::Value(number("5").with_empty_span())),
                 stride: None,
             },
         ),
         (
             "(ARRAY[1, 2, 3, 4, 5, 6])[2:5:3]",
             Subscript::Slice {
-                lower_bound: Some(Expr::Value(number("2"))),
-                upper_bound: Some(Expr::Value(number("5"))),
-                stride: Some(Expr::Value(number("3"))),
+                lower_bound: Some(Expr::Value(number("2").with_empty_span())),
+                upper_bound: Some(Expr::Value(number("5").with_empty_span())),
+                stride: Some(Expr::Value(number("3").with_empty_span())),
             },
         ),
         (
@@ -2343,12 +2343,12 @@ fn parse_array_subscript() {
                 lower_bound: Some(Expr::BinaryOp {
                     left: Box::new(call("array_length", [Expr::Identifier(Ident::new("arr"))])),
                     op: BinaryOperator::Minus,
-                    right: Box::new(Expr::Value(number("3"))),
+                    right: Box::new(Expr::Value(number("3").with_empty_span())),
                 }),
                 upper_bound: Some(Expr::BinaryOp {
                     left: Box::new(call("array_length", [Expr::Identifier(Ident::new("arr"))])),
                     op: BinaryOperator::Minus,
-                    right: Box::new(Expr::Value(number("1"))),
+                    right: Box::new(Expr::Value(number("1").with_empty_span())),
                 }),
                 stride: None,
             },
@@ -2357,14 +2357,14 @@ fn parse_array_subscript() {
             "(ARRAY[1, 2, 3, 4, 5, 6])[:5]",
             Subscript::Slice {
                 lower_bound: None,
-                upper_bound: Some(Expr::Value(number("5"))),
+                upper_bound: Some(Expr::Value(number("5").with_empty_span())),
                 stride: None,
             },
         ),
         (
             "(ARRAY[1, 2, 3, 4, 5, 6])[2:]",
             Subscript::Slice {
-                lower_bound: Some(Expr::Value(number("2"))),
+                lower_bound: Some(Expr::Value(number("2").with_empty_span())),
                 upper_bound: None,
                 stride: None,
             },
@@ -4652,7 +4652,7 @@ fn parse_at_time_zone() {
                 kind: CastKind::DoubleColon,
                 expr: Box::new(Expr::Value(Value::SingleQuotedString(
                     "America/Los_Angeles".to_owned(),
-                ))),
+                ).with_empty_span())),
                 data_type: DataType::Text,
                 format: None,
             }),
@@ -4661,7 +4661,7 @@ fn parse_at_time_zone() {
         right: Box::new(Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(
                 "23 hours".to_owned(),
-            ))),
+            ).with_empty_span())),
             leading_field: None,
             leading_precision: None,
             last_field: None,
@@ -4790,7 +4790,7 @@ fn parse_create_after_update_trigger_with_condition() {
                 Ident::new("balance"),
             ])),
             op: BinaryOperator::Gt,
-            right: Box::new(Expr::Value(number("10000"))),
+            right: Box::new(Expr::Value(number("10000").with_empty_span())),
         }))),
         exec_body: TriggerExecBody {
             exec_type: TriggerExecBodyType::Function,

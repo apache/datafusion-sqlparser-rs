@@ -1393,7 +1393,7 @@ fn parse_freeze_and_unfreeze_partition() {
 
         let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
             "2024-08-14".to_string(),
-        )));
+        ).with_empty_span()));
         match clickhouse_and_generic().verified_stmt(&sql) {
             Statement::AlterTable { operations, .. } => {
                 assert_eq!(operations.len(), 1);
@@ -1423,7 +1423,7 @@ fn parse_freeze_and_unfreeze_partition() {
                 assert_eq!(operations.len(), 1);
                 let expected_partition = Partition::Expr(Expr::Value(Value::SingleQuotedString(
                     "2024-08-14".to_string(),
-                )));
+                ).with_empty_span()));
                 let expected_operation = if operation_name == &"FREEZE" {
                     AlterTableOperation::FreezePartition {
                         partition: expected_partition,

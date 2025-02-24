@@ -30,8 +30,6 @@ use crate::{ast::Ident, tokenizer::Span};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-
-
 /// Wraps a primitive SQL [`Value`]  with its [`Span`] location
 ///
 /// # Example: create a `ValueWithSpan` from a `Value`

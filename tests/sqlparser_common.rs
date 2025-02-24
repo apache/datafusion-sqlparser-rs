@@ -900,10 +900,7 @@ fn parse_simple_select() {
     assert!(select.distinct.is_none());
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
-    assert_eq!(
-        Some(Expr::value(number("5"))),
-        select.limit
-    );
+    assert_eq!(Some(Expr::value(number("5"))), select.limit);
 }
 
 #[test]
@@ -915,16 +912,10 @@ fn parse_limit() {
 fn parse_limit_is_not_an_alias() {
     // In dialects supporting LIMIT it shouldn't be parsed as a table alias
     let ast = verified_query("SELECT id FROM customer LIMIT 1");
-    assert_eq!(
-        Some(Expr::value(number("1"))),
-        ast.limit
-    );
+    assert_eq!(Some(Expr::value(number("1"))), ast.limit);
 
     let ast = verified_query("SELECT 1 LIMIT 5");
-    assert_eq!(
-        Some(Expr::value(number("5"))),
-        ast.limit
-    );
+    assert_eq!(Some(Expr::value(number("5"))), ast.limit);
 }
 
 #[test]
@@ -1142,10 +1133,7 @@ fn parse_column_aliases() {
     } = only(&select.projection)
     {
         assert_eq!(&BinaryOperator::Plus, op);
-        assert_eq!(
-            &Expr::value(number("1")),
-            right.as_ref()
-        );
+        assert_eq!(&Expr::value(number("1")), right.as_ref());
         assert_eq!(&Ident::new("newname"), alias);
     } else {
         panic!("Expected: ExprWithAlias")
@@ -2495,10 +2483,7 @@ fn parse_select_order_by_limit() {
         ],
         select.order_by.expect("ORDER BY expected").exprs
     );
-    assert_eq!(
-        Some(Expr::value(number("2"))),
-        select.limit
-    );
+    assert_eq!(Some(Expr::value(number("2"))), select.limit);
 }
 
 #[test]
@@ -2523,10 +2508,7 @@ fn parse_select_order_by_nulls_order() {
         ],
         select.order_by.expect("ORDER BY expeccted").exprs
     );
-    assert_eq!(
-        Some(Expr::value(number("2"))),
-        select.limit
-    );
+    assert_eq!(Some(Expr::value(number("2"))), select.limit);
 }
 
 #[test]
@@ -6588,10 +6570,7 @@ fn parse_unnest_in_from_clause() {
                     ),
                     call(
                         "make_array",
-                        [
-                            Expr::value(number("5")),
-                            Expr::value(number("6")),
-                        ],
+                        [Expr::value(number("5")), Expr::value(number("6"))],
                     ),
                 ],
                 with_offset: false,
@@ -9612,10 +9591,7 @@ fn parse_offset_and_limit() {
     });
     let ast = verified_query(sql);
     assert_eq!(ast.offset, expect);
-    assert_eq!(
-        ast.limit,
-        Some(Expr::value(number("1")))
-    );
+    assert_eq!(ast.limit, Some(Expr::value(number("1"))));
 
     // different order is OK
     one_statement_parses_to("SELECT foo FROM bar OFFSET 2 LIMIT 1", sql);

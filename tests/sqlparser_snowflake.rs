@@ -1665,9 +1665,7 @@ fn parse_snowflake_declare_result_set() {
         (
             "DECLARE res RESULTSET DEFAULT 42",
             "res",
-            Some(DeclareAssignment::Default(
-                Expr::value(number("42")).into(),
-            )),
+            Some(DeclareAssignment::Default(Expr::value(number("42")).into())),
         ),
         (
             "DECLARE res RESULTSET := 42",
@@ -1760,17 +1758,13 @@ fn parse_snowflake_declare_variable() {
             "DECLARE profit TEXT DEFAULT 42",
             "profit",
             Some(DataType::Text),
-            Some(DeclareAssignment::Default(
-                Expr::value(number("42")).into(),
-            )),
+            Some(DeclareAssignment::Default(Expr::value(number("42")).into())),
         ),
         (
             "DECLARE profit DEFAULT 42",
             "profit",
             None,
-            Some(DeclareAssignment::Default(
-                Expr::value(number("42")).into(),
-            )),
+            Some(DeclareAssignment::Default(Expr::value(number("42")).into())),
         ),
         ("DECLARE profit TEXT", "profit", Some(DataType::Text), None),
         ("DECLARE profit", "profit", None, None),

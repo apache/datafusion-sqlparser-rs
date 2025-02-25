@@ -48,6 +48,130 @@ pub enum ParserError {
     RecursionLimitExceeded,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Compression {
+    Zlib,
+    Lz4,
+    None,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum DelayKeyWrite {
+    Disabled,
+    Enabled,
+}
+impl fmt::Display for DelayKeyWrite {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DelayKeyWrite::Disabled => write!(f, "DISABLED"),
+            DelayKeyWrite::Enabled => write!(f, "ENABLED"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Encryption {
+    Yes,
+    No,
+}
+
+impl fmt::Display for Encryption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Encryption::Yes => write!(f, "Y"),
+            Encryption::No => write!(f, "N"),
+        }
+    }
+}
+
+impl fmt::Display for Compression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Compression::Zlib => write!(f, "ZLIB"),
+            Compression::Lz4 => write!(f, "LZ4"),
+            Compression::None => write!(f, "NONE"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum InsertMethod {
+    No,
+    First,
+    Last,
+}
+impl fmt::Display for InsertMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InsertMethod::No => write!(f, "NO"),
+            InsertMethod::First => write!(f, "FIRST"),
+            InsertMethod::Last => write!(f, "LAST"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum RowFormat {
+    Default,
+    Dynamic,
+    Fixed,
+    Compressed,
+    Redundant,
+    Compact,
+}
+impl fmt::Display for RowFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RowFormat::Default => write!(f, "DEFAULT"),
+            RowFormat::Dynamic => write!(f, "DYNAMIC"),
+            RowFormat::Fixed => write!(f, "FIXED"),
+            RowFormat::Compressed => write!(f, "COMPRESSED"),
+            RowFormat::Redundant => write!(f, "REDUNDANT"),
+            RowFormat::Compact => write!(f, "COMPACT"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum DirectoryType {
+    Data,
+    Index,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct DirectoryOption {
+    pub directory_type: DirectoryType,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum OptionState {
+    Zero,
+    One,
+    Default,
+}
+impl fmt::Display for OptionState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OptionState::Zero => write!(f, "0"),
+            OptionState::One => write!(f, "1"),
+            OptionState::Default => write!(f, "DEFAULT"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum StorageType {
+    Disk,
+    Memory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TablespaceOption {
+    pub name: String,
+    pub storage: Option<StorageType>,
+}
+
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr, $loc:expr) => {
@@ -6572,35 +6696,616 @@ impl<'a> Parser<'a> {
         let with_options = self.parse_options(Keyword::WITH)?;
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
-        let engine = if self.parse_keyword(Keyword::ENGINE) {
-            self.expect_token(&Token::Eq)?;
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Word(w) => {
-                    let name = w.value;
-                    let parameters = if self.peek_token() == Token::LParen {
-                        Some(self.parse_parenthesized_identifiers()?)
+        let mut engine = None;
+        let mut auto_increment_offset = None;
+        let mut default_charset = None;
+        let mut collation = None;
+        let mut insert_method = None;
+        let mut key_block_size = None;
+        let mut row_format = None;
+        let mut data_directory = None;
+        let mut index_directory = None;
+        let mut pack_keys = None;
+        let mut stats_auto_recalc = None;
+        let mut stats_persistent = None;
+        let mut stats_sample_pages = None;
+        let mut delay_key_write = None;
+        let mut compression = None;
+        let mut encryption = None;
+        let mut max_rows = None;
+        let mut min_rows = None;
+        let mut autoextend_size = None;
+        let mut avg_row_length = None;
+        let mut checksum = None;
+        let mut connection = None;
+        let mut engine_attribute = None;
+        let mut password = None;
+        let mut secondary_engine_attribute = None;
+        let mut start_transaction = None;
+        let mut tablespace_option = None;
+        let mut union_tables = None;
+
+        // Parse table options in any order
+        while let Some(keyword) = self.parse_one_of_keywords(&[
+            Keyword::ENGINE,
+            Keyword::AUTO_INCREMENT,
+            Keyword::DEFAULT,
+            Keyword::CHARSET,
+            Keyword::COLLATE,
+            Keyword::INSERT_METHOD,
+            Keyword::KEY_BLOCK_SIZE,
+            Keyword::ROW_FORMAT,
+            Keyword::DATA,
+            Keyword::INDEX,
+            Keyword::PACK_KEYS,
+            Keyword::STATS_AUTO_RECALC,
+            Keyword::STATS_PERSISTENT,
+            Keyword::STATS_SAMPLE_PAGES,
+            Keyword::DELAY_KEY_WRITE,
+            Keyword::COMPRESSION,
+            Keyword::ENCRYPTION,
+            Keyword::MAX_ROWS,
+            Keyword::MIN_ROWS,
+            Keyword::AUTOEXTEND_SIZE,
+            Keyword::AVG_ROW_LENGTH,
+            Keyword::CHECKSUM,
+            Keyword::CONNECTION,
+            Keyword::ENGINE_ATTRIBUTE,
+            Keyword::PASSWORD,
+            Keyword::SECONDARY_ENGINE_ATTRIBUTE,
+            Keyword::START,
+            Keyword::TABLESPACE,
+            Keyword::UNION,
+        ]) {
+            match keyword {
+                Keyword::ENGINE => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Word(w) => {
+                            let name = w.value;
+                            let parameters = if self.peek_token() == Token::LParen {
+                                Some(self.parse_parenthesized_identifiers()?)
+                            } else {
+                                None
+                            };
+                            engine = Some(TableEngine { name, parameters });
+                        }
+                        _ => self.expected("identifier", next_token)?,
+                    }
+                }
+
+                Keyword::AUTO_INCREMENT => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => {
+                            auto_increment_offset =
+                                Some(Self::parse::<u32>(s, next_token.span.start)?)
+                        }
+                        _ => self.expected("literal int", next_token)?,
+                    }
+                }
+
+                Keyword::DEFAULT => {
+                    if self.parse_keyword(Keyword::CHARSET) {
+                        let _ = self.consume_token(&Token::Eq);
+                        let next_token = self.next_token();
+                        match next_token.token {
+                            Token::Word(w) => default_charset = Some(w.value),
+                            _ => self.expected("identifier", next_token)?,
+                        }
+                    } else if self.parse_keyword(Keyword::COLLATE) {
+                        let _ = self.consume_token(&Token::Eq);
+                        let next_token = self.next_token();
+                        match next_token.token {
+                            Token::Word(w) => collation = Some(w.value),
+                            _ => self.expected("identifier", next_token)?,
+                        }
+                    } else {
+                        return Err(ParserError::ParserError(
+                            "Expected CHARACTER SET or COLLATE after DEFAULT".to_string(),
+                        ));
+                    }
+                }
+
+                Keyword::CHARSET => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Word(w) => default_charset = Some(w.value),
+                        _ => self.expected("identifier", next_token)?,
+                    }
+                }
+
+                Keyword::COLLATE => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Word(w) => collation = Some(w.value),
+                        _ => self.expected("identifier", next_token)?,
+                    }
+                }
+
+                Keyword::INSERT_METHOD => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let token = self.next_token();
+                    match token.token {
+                        Token::Word(w) => match w.value.to_uppercase().as_str() {
+                            "NO" => insert_method = Some(InsertMethod::No),
+                            "FIRST" => insert_method = Some(InsertMethod::First),
+                            "LAST" => insert_method = Some(InsertMethod::Last),
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Invalid INSERT_METHOD value".to_string(),
+                                ))
+                            }
+                        },
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected INSERT_METHOD value".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::KEY_BLOCK_SIZE => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => {
+                            key_block_size = Some(Self::parse::<u32>(s, next_token.span.start)?)
+                        }
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected KEY_BLOCK_SIZE value".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::ROW_FORMAT => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let token = self.next_token();
+                    match token.token {
+                        Token::Word(w) => match w.value.to_uppercase().as_str() {
+                            "DEFAULT" => row_format = Some(RowFormat::Default),
+                            "DYNAMIC" => row_format = Some(RowFormat::Dynamic),
+                            "FIXED" => row_format = Some(RowFormat::Fixed),
+                            "COMPRESSED" => row_format = Some(RowFormat::Compressed),
+                            "REDUNDANT" => row_format = Some(RowFormat::Redundant),
+                            "COMPACT" => row_format = Some(RowFormat::Compact),
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Invalid ROW_FORMAT value".to_string(),
+                                ))
+                            }
+                        },
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected ROW_FORMAT value".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::DATA => {
+                    if self.parse_keyword(Keyword::DIRECTORY) {
+                        let _ = self.consume_token(&Token::Eq);
+                        let next_token = self.next_token();
+                        match next_token.token {
+                            Token::SingleQuotedString(path) => {
+                                data_directory = Some(DirectoryOption {
+                                    directory_type: DirectoryType::Data,
+                                    path,
+                                })
+                            }
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Expected path for DATA DIRECTORY".to_string(),
+                                ));
+                            }
+                        }
+                    } else {
+                        return Err(ParserError::ParserError(
+                            "Expected DIRECTORY after DATA".to_string(),
+                        ));
+                    }
+                }
+
+                Keyword::INDEX => {
+                    if self.parse_keyword(Keyword::DIRECTORY) {
+                        let _ = self.consume_token(&Token::Eq);
+                        let next_token = self.next_token();
+                        match next_token.token {
+                            Token::SingleQuotedString(path) => {
+                                index_directory = Some(DirectoryOption {
+                                    directory_type: DirectoryType::Index,
+                                    path,
+                                })
+                            }
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Expected path for INDEX DIRECTORY".to_string(),
+                                ));
+                            }
+                        }
+                    } else {
+                        return Err(ParserError::ParserError(
+                            "Expected DIRECTORY after INDEX".to_string(),
+                        ));
+                    }
+                }
+
+                Keyword::PACK_KEYS => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => match s.as_str() {
+                            "0" => pack_keys = Some(OptionState::Zero),
+                            "1" => pack_keys = Some(OptionState::One),
+                            _ => {
+                                return Err(ParserError::ParserError(format!(
+                                    "PACK_KEYS can only be 0, 1, or DEFAULT, found: {}",
+                                    s
+                                )))
+                            }
+                        },
+                        Token::Word(w) if w.value.to_uppercase() == "DEFAULT" => {
+                            pack_keys = Some(OptionState::Default)
+                        }
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected numeric value for PACK_KEYS".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::STATS_AUTO_RECALC => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => match s.as_str() {
+                            "0" => stats_auto_recalc = Some(OptionState::Zero),
+                            "1" => stats_auto_recalc = Some(OptionState::One),
+                            _ => {
+                                return Err(ParserError::ParserError(format!(
+                                    "STATS_AUTO_RECALC can only be 0, 1, or DEFAULT, found: {}",
+                                    s
+                                )))
+                            }
+                        },
+                        Token::Word(w) if w.value.to_uppercase() == "DEFAULT" => {
+                            stats_auto_recalc = Some(OptionState::Default)
+                        }
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected STATS_AUTO_RECALC value (0, 1, or DEFAULT)".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::STATS_PERSISTENT => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => match s.as_str() {
+                            "0" => stats_persistent = Some(OptionState::Zero),
+                            "1" => stats_persistent = Some(OptionState::One),
+                            _ => {
+                                return Err(ParserError::ParserError(format!(
+                                    "STATS_PERSISTENT can only be 0, 1, or DEFAULT, found: {}",
+                                    s
+                                )))
+                            }
+                        },
+                        Token::Word(w) if w.value.to_uppercase() == "DEFAULT" => {
+                            stats_persistent = Some(OptionState::Default)
+                        }
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected STATS_PERSISTENT value (0, 1, or DEFAULT)".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::STATS_SAMPLE_PAGES => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => {
+                            stats_sample_pages = Some(Self::parse::<u32>(s, next_token.span.start)?)
+                        }
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected numeric value for STATS_SAMPLE_PAGES".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::DELAY_KEY_WRITE => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => match s.to_uppercase().as_str() {
+                            "0" => delay_key_write = Some(DelayKeyWrite::Disabled),
+                            "1" => delay_key_write = Some(DelayKeyWrite::Enabled),
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Invalid DELAY_KEY_WRITE value (expected 0 or 1)".to_string(),
+                                ))
+                            }
+                        },
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected DELAY_KEY_WRITE value".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::COMPRESSION => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let token = self.next_token();
+                    match token.token {
+                        Token::Word(w) => match w.value.to_uppercase().as_str() {
+                            "ZLIB" => compression = Some(Compression::Zlib),
+                            "LZ4" => compression = Some(Compression::Lz4),
+                            "NONE" => compression = Some(Compression::None),
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Invalid COMPRESSION value".to_string(),
+                                ))
+                            }
+                        },
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected COMPRESSION value".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::ENCRYPTION => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let token = self.next_token();
+                    match token.token {
+                        Token::SingleQuotedString(s) => match s.to_uppercase().as_str() {
+                            "Y" => encryption = Some(Encryption::Yes),
+                            "N" => encryption = Some(Encryption::No),
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Invalid ENCRYPTION value (expected 'Y' or 'N')".to_string(),
+                                ))
+                            }
+                        },
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected ENCRYPTION value".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::MAX_ROWS => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => {
+                            max_rows = Some(Self::parse::<u32>(s, next_token.span.start)?)
+                        }
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected numeric value for MAX_ROWS".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::MIN_ROWS => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => {
+                            min_rows = Some(Self::parse::<u32>(s, next_token.span.start)?)
+                        }
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected numeric value for MIN_ROWS".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::AUTOEXTEND_SIZE => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => {
+                            autoextend_size = Some(Self::parse::<u32>(s, next_token.span.start)?)
+                        }
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected numeric value for AUTOEXTEND_SIZE".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::AVG_ROW_LENGTH => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => {
+                            avg_row_length = Some(Self::parse::<u32>(s, next_token.span.start)?)
+                        }
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected numeric value for AVG_ROW_LENGTH".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::CHECKSUM => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+                    match next_token.token {
+                        Token::Number(s, _) => match s.as_str() {
+                            "0" => checksum = Some(false),
+                            "1" => checksum = Some(true),
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Invalid CHECKSUM value (expected 0 or 1)".to_string(),
+                                ))
+                            }
+                        },
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected a numeric value for CHECKSUM".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::CONNECTION => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let token = self.next_token();
+                    match token.token {
+                        Token::SingleQuotedString(s) => connection = Some(s),
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected CONNECTION value as a single-quoted string".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::ENGINE_ATTRIBUTE => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let token = self.next_token();
+                    match token.token {
+                        Token::SingleQuotedString(s) => engine_attribute = Some(s),
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected ENGINE_ATTRIBUTE value as a single-quoted string"
+                                    .to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::PASSWORD => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let token = self.next_token();
+                    match token.token {
+                        Token::SingleQuotedString(s) => password = Some(s),
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected PASSWORD value as a single-quoted string".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                Keyword::SECONDARY_ENGINE_ATTRIBUTE => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let token = self.next_token();
+                    match token.token {
+                        Token::SingleQuotedString(s) => secondary_engine_attribute = Some(s),
+                        _ => return Err(ParserError::ParserError(
+                            "Expected SECONDARY_ENGINE_ATTRIBUTE value as a single-quoted string"
+                                .to_string(),
+                        )),
+                    }
+                }
+
+                Keyword::START => {
+                    if self.parse_keyword(Keyword::TRANSACTION) {
+                        start_transaction = Some(true);
+                    } else {
+                        return Err(ParserError::ParserError(
+                            "Expected TRANSACTION after START".to_string(),
+                        ));
+                    }
+                }
+
+                Keyword::TABLESPACE => {
+                    let _ = self.consume_token(&Token::Eq);
+                    let next_token = self.next_token();
+
+                    let name = match next_token.token {
+                        Token::Word(w) => w.value.clone(),
+                        Token::SingleQuotedString(s) => s.clone(),
+                        _ => {
+                            return Err(ParserError::ParserError(
+                                "Expected TABLESPACE name".to_string(),
+                            ));
+                        }
+                    };
+
+                    let storage = if self.parse_keyword(Keyword::STORAGE) {
+                        let _ = self.consume_token(&Token::Eq);
+                        let storage_token = self.next_token();
+                        match storage_token.token {
+                            Token::Word(w) => match w.value.to_uppercase().as_str() {
+                                "DISK" => Some(StorageType::Disk),
+                                "MEMORY" => Some(StorageType::Memory),
+                                _ => {
+                                    return Err(ParserError::ParserError(
+                                        "Invalid STORAGE type (expected DISK or MEMORY)"
+                                            .to_string(),
+                                    ))
+                                }
+                            },
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Expected STORAGE type".to_string(),
+                                ))
+                            }
+                        }
                     } else {
                         None
                     };
-                    Some(TableEngine { name, parameters })
-                }
-                _ => self.expected("identifier", next_token)?,
-            }
-        } else {
-            None
-        };
 
-        let auto_increment_offset = if self.parse_keyword(Keyword::AUTO_INCREMENT) {
-            let _ = self.consume_token(&Token::Eq);
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Number(s, _) => Some(Self::parse::<u32>(s, next_token.span.start)?),
-                _ => self.expected("literal int", next_token)?,
+                    tablespace_option = Some(TablespaceOption { name, storage });
+                }
+
+                Keyword::UNION => {
+                    let _ = self.consume_token(&Token::Eq);
+                    self.expect_token(&Token::LParen)?;
+                    let mut tables = Vec::new();
+
+                    loop {
+                        let next_token = self.next_token();
+                        match next_token.token {
+                            Token::Word(w) => tables.push(w.value),
+                            Token::Comma => continue,
+                            Token::RParen => break,
+                            _ => {
+                                return Err(ParserError::ParserError(
+                                    "Expected table name or ')' in UNION".to_string(),
+                                ));
+                            }
+                        }
+                    }
+                    union_tables = Some(tables);
+                }
+
+                _ => {
+                    return Err(ParserError::ParserError(format!(
+                        "Unexpected keyword: {:?}",
+                        keyword
+                    )));
+                }
             }
-        } else {
-            None
-        };
+        }
+
+        let create_table_config = self.parse_optional_create_table_config()?;
 
         // ClickHouse supports `PRIMARY KEY`, before `ORDER BY`
         // https://clickhouse.com/docs/en/sql-reference/statements/create/table#primary-key
@@ -6623,30 +7328,6 @@ impl<'a> Parser<'a> {
                 Some(OneOrManyWithParens::Many(columns))
             } else {
                 Some(OneOrManyWithParens::One(self.parse_expr()?))
-            }
-        } else {
-            None
-        };
-
-        let create_table_config = self.parse_optional_create_table_config()?;
-
-        let default_charset = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
-            self.expect_token(&Token::Eq)?;
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Word(w) => Some(w.value),
-                _ => self.expected("identifier", next_token)?,
-            }
-        } else {
-            None
-        };
-
-        let collation = if self.parse_keywords(&[Keyword::COLLATE]) {
-            self.expect_token(&Token::Eq)?;
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::Word(w) => Some(w.value),
-                _ => self.expected("identifier", next_token)?,
             }
         } else {
             None
@@ -6701,6 +7382,30 @@ impl<'a> Parser<'a> {
             .order_by(order_by)
             .default_charset(default_charset)
             .collation(collation)
+            .compression(compression)
+            .insert_method(insert_method)
+            .encryption(encryption)
+            .key_block_size(key_block_size)
+            .row_format(row_format)
+            .data_directory(data_directory)
+            .index_directory(index_directory)
+            .pack_keys(pack_keys)
+            .stats_auto_recalc(stats_auto_recalc)
+            .stats_persistent(stats_persistent)
+            .stats_sample_pages(stats_sample_pages)
+            .delay_key_write(delay_key_write)
+            .max_rows(max_rows)
+            .min_rows(min_rows)
+            .autoextend_size(autoextend_size)
+            .avg_row_length(avg_row_length)
+            .checksum(checksum)
+            .connection(connection)
+            .engine_attribute(engine_attribute)
+            .password(password)
+            .secondary_engine_attribute(secondary_engine_attribute)
+            .start_transaction(start_transaction)
+            .tablespace_option(tablespace_option)
+            .union_tables(union_tables)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
             .clustered_by(clustered_by)

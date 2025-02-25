@@ -1043,7 +1043,7 @@ pub enum IndexType {
     Bloom,
     /// Users may define their own index types, which would
     /// not be covered by the above variants.
-    Custom(ObjectName),
+    Custom(Ident),
 }
 
 impl fmt::Display for IndexType {

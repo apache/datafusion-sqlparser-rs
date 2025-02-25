@@ -7509,7 +7509,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::BLOOM) {
             IndexType::Bloom
         } else {
-            IndexType::Custom(self.parse_object_name(false)?)
+            IndexType::Custom(self.parse_identifier()?)
         })
     }
 

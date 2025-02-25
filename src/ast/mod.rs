@@ -6662,6 +6662,7 @@ impl fmt::Display for HavingBoundKind {
 pub enum ObjectType {
     Table,
     View,
+    MaterializedView,
     Index,
     Schema,
     Database,
@@ -6676,6 +6677,7 @@ impl fmt::Display for ObjectType {
         f.write_str(match self {
             ObjectType::Table => "TABLE",
             ObjectType::View => "VIEW",
+            ObjectType::MaterializedView => "MATERIALIZED VIEW",
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
             ObjectType::Database => "DATABASE",

@@ -3824,6 +3824,18 @@ impl<'a> Parser<'a> {
         true
     }
 
+    /// If the current token is one of the given `keywords`, returns the keyword
+    /// that matches, without consuming the token. Otherwise, returns [`None`].
+    #[must_use]
+    pub fn peek_one_of_keywords(&self, keywords: &[Keyword]) -> Option<Keyword> {
+        for keyword in keywords {
+            if self.peek_keyword(*keyword) {
+                return Some(*keyword);
+            }
+        }
+        None
+    }
+
     /// If the current token is one of the given `keywords`, consume the token
     /// and return the keyword that matches. Otherwise, no tokens are consumed
     /// and returns [`None`].
@@ -6255,32 +6267,10 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
         self.expect_token(&Token::LParen)?;
-        let columns = if let Some(using) = &using {
-            match using {
-                IndexType::GIN => {
-                    self.parse_comma_separated(Parser::parse_create_index_expr::<GINOperatorClass>)?
-                }
-                IndexType::GiST => self
-                    .parse_comma_separated(Parser::parse_create_index_expr::<GiSTOperatorClass>)?,
-                IndexType::Hash => self
-                    .parse_comma_separated(Parser::parse_create_index_expr::<HashOperatorClass>)?,
-                IndexType::Bloom => self
-                    .parse_comma_separated(Parser::parse_create_index_expr::<BloomOperatorClass>)?,
-                IndexType::BTree => self
-                    .parse_comma_separated(Parser::parse_create_index_expr::<BTreeOperatorClass>)?,
-                IndexType::SPGiST | IndexType::BRIN => self
-                    .parse_comma_separated(Parser::parse_order_by_expr)?
-                    .into_iter()
-                    .map(|expr| expr.into())
-                    .collect(),
-            }
-        } else {
-            self.parse_comma_separated(Parser::parse_order_by_expr)?
-                .into_iter()
-                .map(|expr| expr.into())
-                .collect()
-        };
+        let columns = self.parse_comma_separated(Parser::parse_create_index_expr::<true>)?;
+        println!("columns: {:?}", columns.len());
         self.expect_token(&Token::RParen)?;
 
         let include = if self.parse_keyword(Keyword::INCLUDE) {
@@ -7504,37 +7494,34 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_index_type(&mut self) -> Result<IndexType, ParserError> {
-        if self.parse_keyword(Keyword::BTREE) {
-            Ok(IndexType::BTree)
+        Ok(if self.parse_keyword(Keyword::BTREE) {
+            IndexType::BTree
         } else if self.parse_keyword(Keyword::HASH) {
-            Ok(IndexType::Hash)
+            IndexType::Hash
         } else if self.parse_keyword(Keyword::GIN) {
-            Ok(IndexType::GIN)
+            IndexType::GIN
         } else if self.parse_keyword(Keyword::GIST) {
-            Ok(IndexType::GiST)
+            IndexType::GiST
         } else if self.parse_keyword(Keyword::SPGIST) {
-            Ok(IndexType::SPGiST)
+            IndexType::SPGiST
         } else if self.parse_keyword(Keyword::BRIN) {
-            Ok(IndexType::BRIN)
+            IndexType::BRIN
         } else if self.parse_keyword(Keyword::BLOOM) {
-            Ok(IndexType::Bloom)
+            IndexType::Bloom
         } else {
-            self.expected(
-                "index type {BTREE | HASH | GIN | GIST | SPGIST | BRIN | BLOOM}",
-                self.peek_token(),
-            )
-        }
+            IndexType::Custom(self.parse_object_name(false)?)
+        })
     }
 
-    /// Parse [USING {BTREE | HASH}]
+    /// Parse [USING {BTREE | HASH | GIN | GIST | SPGIST | BRIN | BLOOM | identifier}]
     pub fn parse_optional_using_then_index_type(
         &mut self,
     ) -> Result<Option<IndexType>, ParserError> {
-        if self.parse_keyword(Keyword::USING) {
-            Ok(Some(self.parse_index_type()?))
+        Ok(if self.parse_keyword(Keyword::USING) {
+            Some(self.parse_index_type()?)
         } else {
-            Ok(None)
-        }
+            None
+        })
     }
 
     /// Parse `[ident]`, mostly `ident` is name, like:
@@ -13348,41 +13335,31 @@ impl<'a> Parser<'a> {
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
-        let expr = self.parse_expr()?;
-
-        let asc = self.parse_asc_desc();
-
-        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
-            Some(true)
-        } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
-            Some(false)
-        } else {
-            None
-        };
-
-        let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
-            && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
-        {
-            Some(self.parse_with_fill()?)
-        } else {
-            None
-        };
-
-        Ok(OrderByExpr {
-            expr,
-            asc,
-            nulls_first,
-            with_fill,
-        })
+        self.parse_create_index_expr::<false>()
+            .map(|index_column| index_column.column)
     }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
-    pub fn parse_create_index_expr<OPS: OperatorClass>(
+    pub fn parse_create_index_expr<const PARSE_OPERATOR_CLASS: bool>(
         &mut self,
     ) -> Result<IndexColumn, ParserError> {
         let expr = self.parse_expr()?;
 
-        let operator_class: Option<OPS> = self.parse_one_of_keywords(OPS::KEYWORDS).map(Into::into);
+        let operator_class: Option<Ident> = if PARSE_OPERATOR_CLASS {
+            // We check that if non of the following keywords are present, then we parse an
+            // identifier as operator class.
+            if self
+                .peek_one_of_keywords(&[Keyword::ASC, Keyword::DESC, Keyword::NULLS, Keyword::WITH])
+                .is_some()
+            {
+                None
+            } else {
+                self.maybe_parse(|parser| parser.parse_identifier())?
+            }
+        } else {
+            None
+        };
+
         let asc = self.parse_asc_desc();
 
         let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {

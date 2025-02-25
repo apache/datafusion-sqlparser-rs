@@ -2537,7 +2537,7 @@ fn parse_create_users_name_trgm_index() {
                         nulls_first: None,
                         with_fill: None,
                     },
-                    operator_class: Some(GINOperatorClass::TRGM.into()),
+                    operator_class: Some(Ident::new("gin_trgm_ops")),
                 },
                 columns[0],
             );
@@ -2611,7 +2611,7 @@ fn parse_create_projects_name_description_trgm_index() {
                         nulls_first: None,
                         with_fill: None,
                     },
-                    operator_class: Some(GINOperatorClass::TRGM.into()),
+                    operator_class: Some(Ident::new("gin_trgm_ops")),
                 },
                 columns[0],
             );
@@ -2658,7 +2658,7 @@ fn parse_create_nameplates_barcode_trgm_index() {
                         nulls_first: None,
                         with_fill: None,
                     },
-                    operator_class: Some(GINOperatorClass::TRGM.into()),
+                    operator_class: Some(Ident::new("gin_trgm_ops")),
                 },
                 columns[0],
             );
@@ -2704,7 +2704,7 @@ fn parse_create_sample_containers_barcode_trgm_index() {
                         nulls_first: None,
                         with_fill: None,
                     },
-                    operator_class: Some(GiSTOperatorClass::TRGM.into()),
+                    operator_class: Some(Ident::new("gist_trgm_ops")),
                 },
                 columns[0],
             );
@@ -2716,16 +2716,6 @@ fn parse_create_sample_containers_barcode_trgm_index() {
         }
         _ => unreachable!(),
     }
-}
-
-#[test]
-fn test_incompatible_index_and_operator_class() {
-    let sql = "CREATE INDEX teams_name_description_trgm_idx ON teams USING BTree (concat_teams_name_description(name, description) gin_trgm_ops)";
-    let err = pg().parse_sql_statements(sql).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "sql parser error: Expected: ), found: gin_trgm_ops"
-    );
 }
 
 #[test]

@@ -87,11 +87,6 @@ pub use self::value::{
     NormalizationForm, TrimWhereField, Value,
 };
 
-pub use self::operator_classes::{
-    BTreeOperatorClass, BloomOperatorClass, GINOperatorClass, GiSTOperatorClass, HashOperatorClass,
-    OperatorClass,
-};
-
 use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
 };
@@ -105,7 +100,6 @@ mod ddl;
 mod dml;
 pub mod helpers;
 mod operator;
-mod operator_classes;
 mod query;
 mod spans;
 pub use spans::Spanned;

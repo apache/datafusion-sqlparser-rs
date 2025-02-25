@@ -32,12 +32,12 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, operator_classes::IndexOperatorClass,
-    query::InputFormatClause, Assignment, ClusteredBy, CommentDef, Expr, FileFormat, FromTable,
-    HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat, Ident, IndexType,
-    InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert, OneOrManyWithParens,
-    OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting, SqlOption, SqliteOnConflict,
-    StorageSerializationPolicy, TableEngine, TableObject, TableWithJoins, Tag, WrappedCollection,
+    display_comma_separated, display_separated, query::InputFormatClause, Assignment, ClusteredBy,
+    CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
+    HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit,
+    OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting,
+    SqlOption, SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject,
+    TableWithJoins, Tag, WrappedCollection,
 };
 
 /// Index column type.
@@ -46,16 +46,7 @@ use super::{
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IndexColumn {
     pub column: OrderByExpr,
-    pub operator_class: Option<IndexOperatorClass>,
-}
-
-impl From<OrderByExpr> for IndexColumn {
-    fn from(column: OrderByExpr) -> Self {
-        Self {
-            column,
-            operator_class: None,
-        }
-    }
+    pub operator_class: Option<Ident>,
 }
 
 impl Display for IndexColumn {

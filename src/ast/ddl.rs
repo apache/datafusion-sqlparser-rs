@@ -1030,7 +1030,7 @@ impl fmt::Display for KeyOrIndexDisplay {
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
 /// [2]: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
 /// [3]: https://www.postgresql.org/docs/14/sql-createindex.html
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum IndexType {
@@ -1041,6 +1041,9 @@ pub enum IndexType {
     SPGiST,
     BRIN,
     Bloom,
+    /// Users may define their own index types, which would
+    /// not be covered by the above variants.
+    Custom(ObjectName),
 }
 
 impl fmt::Display for IndexType {
@@ -1053,6 +1056,7 @@ impl fmt::Display for IndexType {
             Self::SPGiST => write!(f, "SPGIST"),
             Self::BRIN => write!(f, "BRIN"),
             Self::Bloom => write!(f, "BLOOM"),
+            Self::Custom(name) => write!(f, "{}", name),
         }
     }
 }

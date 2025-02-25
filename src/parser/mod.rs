@@ -4990,14 +4990,17 @@ impl<'a> Parser<'a> {
     /// DROP TRIGGER [ IF EXISTS ] name ON table_name [ CASCADE | RESTRICT ]
     /// ```
     pub fn parse_drop_trigger(&mut self) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect) {
             self.prev_token();
             return self.expected("an object type after DROP", self.peek_token());
         }
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let trigger_name = self.parse_object_name(false)?;
-        self.expect_keyword_is(Keyword::ON)?;
-        let table_name = self.parse_object_name(false)?;
+        let table_name = if self.parse_keyword(Keyword::ON) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
         let option = self
             .parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT])
             .map(|keyword| match keyword {
@@ -5018,7 +5021,7 @@ impl<'a> Parser<'a> {
         or_replace: bool,
         is_constraint: bool,
     ) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect) {
             self.prev_token();
             return self.expected("an object type after CREATE", self.peek_token());
         }

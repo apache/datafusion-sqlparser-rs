@@ -3256,7 +3256,7 @@ pub enum Statement {
     DropTrigger {
         if_exists: bool,
         trigger_name: ObjectName,
-        table_name: ObjectName,
+        table_name: Option<ObjectName>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
@@ -4062,7 +4062,10 @@ impl fmt::Display for Statement {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {trigger_name} ON {table_name}")?;
+                match &table_name {
+                    Some(table_name) => write!(f, " {trigger_name} ON {table_name}")?,
+                    None => write!(f, " {trigger_name}")?,
+                };
                 if let Some(option) = option {
                     write!(f, " {option}")?;
                 }

@@ -580,6 +580,30 @@ impl Spanned for CreateTable {
             auto_increment_offset: _,           // u32, no span
             default_charset: _,                 // string, no span
             collation: _,                       // string, no span
+            compression: _,                     // enum
+            encryption: _,                      // enum
+            key_block_size: _,                  // u32, no span
+            insert_method: _,                   // enum
+            row_format: _,                      // enum
+            data_directory: _,                  // string, no span
+            index_directory: _,                 // string, no span
+            stats_auto_recalc: _,               // enum
+            stats_persistent: _,                // enum
+            pack_keys: _,                       // enum
+            stats_sample_pages: _,              // u32, no span
+            delay_key_write: _,                 // enum
+            max_rows: _,                        // u32, no span
+            min_rows: _,                        // u32, no span
+            avg_row_length: _,                  // u32, no span
+            autoextend_size: _,                 // u32, no span
+            checksum: _,                        // bool, no span
+            connection: _,                      // string, no span
+            password: _,                        // string, no span
+            engine_attribute: _,                // string, no span
+            secondary_engine_attribute: _,      // string, no span
+            start_transaction: _,               // bool
+            tablespace_option: _,               // enum
+            union_tables: _,                    // list of strings, no span
             on_commit: _,                       // enum
             on_cluster: _,                      // todo, clickhouse specific
             primary_key: _,                     // todo, clickhouse specific

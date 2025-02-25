@@ -25,7 +25,7 @@ use matches::assert_matches;
 use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
+use sqlparser::parser::{ParserError, ParserOptions, RowFormat, StorageType, TablespaceOption};
 use sqlparser::tokenizer::Span;
 use sqlparser::tokenizer::Token;
 use test_utils::*;
@@ -859,26 +859,172 @@ fn parse_create_table_comment() {
 
 #[test]
 fn parse_create_table_auto_increment_offset() {
-    let canonical =
-        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT 123";
-    let with_equal =
-        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT=123";
+    let sql = "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT=123";
 
-    for sql in [canonical, with_equal] {
-        match mysql().one_statement_parses_to(sql, canonical) {
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            auto_increment_offset,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                auto_increment_offset.expect("Should exist").to_string(),
+                "123"
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_multiple_options_order_independent() {
+    let sql1 = "CREATE TABLE mytable (id INT) ENGINE=InnoDB ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=8";
+    let sql2 = "CREATE TABLE mytable (id INT) KEY_BLOCK_SIZE=8 ENGINE=InnoDB ROW_FORMAT=DYNAMIC";
+    let sql3 = "CREATE TABLE mytable (id INT) ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=8 ENGINE=InnoDB";
+
+    for sql in [sql1, sql2, sql3] {
+        match mysql().parse_sql_statements(sql).unwrap().pop().unwrap() {
             Statement::CreateTable(CreateTable {
                 name,
-                auto_increment_offset,
+                engine,
+                row_format,
+                key_block_size,
                 ..
             }) => {
-                assert_eq!(name.to_string(), "foo");
+                assert_eq!(name.to_string(), "mytable");
                 assert_eq!(
-                    auto_increment_offset.expect("Should exist").to_string(),
-                    "123"
+                    engine,
+                    Some(TableEngine {
+                        name: "InnoDB".to_string(),
+                        parameters: None
+                    })
                 );
+                assert_eq!(row_format, Some(RowFormat::Dynamic));
+                assert_eq!(key_block_size.expect("Should exist").to_string(), "8");
             }
             _ => unreachable!(),
         }
+    }
+}
+
+#[test]
+fn parse_create_table_with_all_table_options() {
+    let sql =
+        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT=123 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci INSERT_METHOD=FIRST KEY_BLOCK_SIZE=8 ROW_FORMAT=DYNAMIC DATA DIRECTORY='/var/lib/mysql/data' INDEX DIRECTORY='/var/lib/mysql/index' PACK_KEYS=1 STATS_AUTO_RECALC=1 STATS_PERSISTENT=0 STATS_SAMPLE_PAGES=128 DELAY_KEY_WRITE=1 COMPRESSION=ZLIB ENCRYPTION='Y' MAX_ROWS=10000 MIN_ROWS=10 AUTOEXTEND_SIZE=64 AVG_ROW_LENGTH=128 CHECKSUM=1 CONNECTION='mysql://localhost' ENGINE_ATTRIBUTE='primary' PASSWORD='secure_password' SECONDARY_ENGINE_ATTRIBUTE='secondary_attr' START TRANSACTION TABLESPACE my_tablespace STORAGE DISK UNION=(table1, table2, table3)";
+
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            engine,
+            default_charset,
+            auto_increment_offset,
+            key_block_size,
+            row_format,
+            data_directory,
+            index_directory,
+            pack_keys,
+            stats_auto_recalc,
+            stats_persistent,
+            stats_sample_pages,
+            compression,
+            insert_method,
+            encryption,
+            max_rows,
+            min_rows,
+            collation,
+            autoextend_size,
+            avg_row_length,
+            checksum,
+            connection,
+            engine_attribute,
+            password,
+            secondary_engine_attribute,
+            start_transaction,
+            tablespace_option,
+            union_tables,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                engine,
+                Some(TableEngine {
+                    name: "InnoDB".to_string(),
+                    parameters: None
+                })
+            );
+            assert_eq!(default_charset, Some("utf8mb4".to_string()));
+            assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
+            assert_eq!(
+                auto_increment_offset.expect("Should exist").to_string(),
+                "123"
+            );
+            assert_eq!(key_block_size.expect("Should exist").to_string(), "8");
+            assert_eq!(row_format.expect("Should exist").to_string(), "DYNAMIC");
+            assert_eq!(pack_keys.expect("Should exist").to_string(), "1");
+            assert_eq!(stats_auto_recalc.expect("Should exist").to_string(), "1");
+            assert_eq!(stats_persistent.expect("Should exist").to_string(), "0");
+            assert_eq!(stats_sample_pages.expect("Should exist").to_string(), "128");
+            assert_eq!(insert_method.expect("Should exist").to_string(), "FIRST");
+            assert_eq!(compression.expect("Should exist").to_string(), "ZLIB");
+            assert_eq!(encryption.expect("Should exist").to_string(), "Y");
+            assert_eq!(max_rows.expect("Should exist").to_string(), "10000");
+            assert_eq!(min_rows.expect("Should exist").to_string(), "10");
+            assert_eq!(autoextend_size.expect("Should exist").to_string(), "64");
+            assert_eq!(avg_row_length.expect("Should exist").to_string(), "128");
+            assert_eq!(
+                if checksum.expect("Should exist") {
+                    "1"
+                } else {
+                    "0"
+                },
+                "1"
+            );
+            assert_eq!(
+                connection.expect("Should exist").to_string(),
+                "mysql://localhost"
+            );
+            assert_eq!(
+                engine_attribute.expect("Should exist").to_string(),
+                "primary"
+            );
+            assert_eq!(
+                password.expect("Should exist").to_string(),
+                "secure_password"
+            );
+            assert_eq!(
+                secondary_engine_attribute
+                    .expect("Should exist")
+                    .to_string(),
+                "secondary_attr"
+            );
+
+            assert_eq!(start_transaction.expect("Should exist"), true);
+            assert_eq!(
+                tablespace_option.expect("Should exist"),
+                TablespaceOption {
+                    name: "my_tablespace".to_string(),
+                    storage: Some(StorageType::Disk),
+                }
+            );
+            assert_eq!(
+                union_tables.expect("Should exist"),
+                vec![
+                    "table1".to_string(),
+                    "table2".to_string(),
+                    "table3".to_string()
+                ]
+            );
+            assert_eq!(
+                data_directory.expect("Should exist").path,
+                "/var/lib/mysql/data"
+            );
+            assert_eq!(
+                index_directory.expect("Should exist").path,
+                "/var/lib/mysql/index"
+            );
+        }
+        _ => unreachable!(),
     }
 }
 

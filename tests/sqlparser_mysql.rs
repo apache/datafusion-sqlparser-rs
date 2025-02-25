@@ -665,7 +665,7 @@ fn table_constraint_unique_primary_ctor(
     name: Option<Ident>,
     index_name: Option<Ident>,
     index_type: Option<IndexType>,
-    index_exprs: Vec<OrderByExpr>,
+    index_exprs: Vec<IndexExpr>,
     index_options: Vec<IndexOption>,
     characteristics: Option<ConstraintCharacteristics>,
     unique_index_type_display: Option<KeyOrIndexDisplay>,
@@ -713,13 +713,14 @@ fn parse_create_table_primary_and_unique_key() {
                     Some(Ident::new("bar_key")),
                     None,
                     None,
-                    vec![OrderByExpr {
+                    vec![IndexExpr {
                         expr: Expr::Identifier(Ident::new("bar")),
-                        options: OrderByOptions {
+                        collation: None,
+                        operator_class: None,
+                        order_options: OrderByOptions {
                             asc: None,
                             nulls_first: None,
                         },
-                        with_fill: None,
                     }],
                     vec![],
                     None,
@@ -784,21 +785,23 @@ fn parse_create_table_primary_and_unique_key_with_index_options() {
                     Some(Ident::new("index_name")),
                     None,
                     vec![
-                        OrderByExpr {
+                        IndexExpr {
                             expr: Expr::Identifier(Ident::new("bar")),
-                            options: OrderByOptions {
+                            collation: None,
+                            operator_class: None,
+                            order_options: OrderByOptions {
                                 asc: None,
                                 nulls_first: None,
                             },
-                            with_fill: None,
                         },
-                        OrderByExpr {
+                        IndexExpr {
                             expr: Expr::Identifier(Ident::new("var")),
-                            options: OrderByOptions {
+                            collation: None,
+                            operator_class: None,
+                            order_options: OrderByOptions {
                                 asc: None,
                                 nulls_first: None,
                             },
-                            with_fill: None,
                         },
                     ],
                     vec![
@@ -838,13 +841,14 @@ fn parse_create_table_primary_and_unique_key_with_index_type() {
                     None,
                     Some(Ident::new("index_name")),
                     Some(IndexType::BTree),
-                    vec![OrderByExpr {
+                    vec![IndexExpr {
                         expr: Expr::Identifier(Ident::new("bar")),
-                        options: OrderByOptions {
+                        collation: None,
+                        operator_class: None,
+                        order_options: OrderByOptions {
                             asc: None,
                             nulls_first: None,
                         },
-                        with_fill: None,
                     }],
                     vec![IndexOption::Using(IndexType::Hash)],
                     None,
@@ -2286,13 +2290,14 @@ fn parse_alter_table_add_keys() {
                     AlterTableOperation::AddConstraint(TableConstraint::PrimaryKey {
                         name: None,
                         index_name: None,
-                        index_exprs: vec![OrderByExpr {
+                        index_exprs: vec![IndexExpr {
                             expr: Expr::Identifier(Ident::new("a")),
-                            options: OrderByOptions {
+                            collation: None,
+                            operator_class: None,
+                            order_options: OrderByOptions {
                                 asc: None,
                                 nulls_first: None,
                             },
-                            with_fill: None,
                         }],
                         index_type: None,
                         index_options: vec![],
@@ -2303,24 +2308,38 @@ fn parse_alter_table_add_keys() {
                         name: Some(Ident::new("b")),
                         index_type: None,
                         index_exprs: vec![
-                            OrderByExpr {
-                                expr: Expr::ColumnPrefix {
-                                    column: Ident::new("b"),
-                                    length: 20
-                                },
-                                options: OrderByOptions {
+                            IndexExpr {
+                                expr: Expr::Function(Function {
+                                    name: ObjectName::from(vec![Ident::new("b")]),
+                                    uses_odbc_syntax: false,
+                                    parameters: FunctionArguments::None,
+                                    args: FunctionArguments::List(FunctionArgumentList {
+                                        duplicate_treatment: None,
+                                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                            Expr::Value(crate::test_utils::number("20"))
+                                        )),],
+                                        clauses: vec![],
+                                    }),
+                                    filter: None,
+                                    null_treatment: None,
+                                    over: None,
+                                    within_group: vec![],
+                                }),
+                                collation: None,
+                                operator_class: None,
+                                order_options: OrderByOptions {
                                     asc: None,
                                     nulls_first: None,
                                 },
-                                with_fill: None,
                             },
-                            OrderByExpr {
+                            IndexExpr {
                                 expr: Expr::Identifier(Ident::new("c")),
-                                options: OrderByOptions {
+                                collation: None,
+                                operator_class: None,
+                                order_options: OrderByOptions {
                                     asc: None,
                                     nulls_first: None,
                                 },
-                                with_fill: None,
                             },
                         ]
                     })

@@ -8701,6 +8701,37 @@ pub enum CopyIntoSnowflakeKind {
     Location,
 }
 
+/// Index Field
+///
+/// This structure used here [`MySQL` CREATE INDEX][1], [`PostgreSQL` CREATE INDEX][2], [`MySQL` CREATE TABLE][3].
+///
+/// [1]: https://dev.mysql.com/doc/refman/8.3/en/create-index.html
+/// [2]: https://www.postgresql.org/docs/17/sql-createindex.html
+/// [3]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IndexExpr {
+    pub expr: Expr,
+    pub collation: Option<ObjectName>,
+    pub operator_class: Option<Expr>,
+    pub order_options: OrderByOptions,
+}
+
+impl fmt::Display for IndexExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.expr)?;
+        if let Some(collation) = &self.collation {
+            write!(f, "{collation}")?;
+        }
+        if let Some(operator) = &self.operator_class {
+            write!(f, "{operator}")?;
+        }
+        write!(f, "{}", self.order_options)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

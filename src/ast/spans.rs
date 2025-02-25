@@ -27,8 +27,8 @@ use super::{
     CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate,
     ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable, Function,
     FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments,
-    GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
+    GroupByExpr, HavingBound, IlikeSelectItem, IndexExpr, Insert, Interpolate, InterpolateExpr,
+    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
     Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
     OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource,
     ProjectionSelect, Query, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
@@ -2176,6 +2176,19 @@ impl Spanned for TableObject {
             }
             TableObject::TableFunction(func) => func.span(),
         }
+    }
+}
+
+impl Spanned for IndexExpr {
+    fn span(&self) -> Span {
+        let IndexExpr {
+            expr,
+            collation: _,
+            operator_class: _,
+            order_options: _,
+        } = self;
+
+        union_spans(core::iter::once(expr.span()))
     }
 }
 

@@ -274,7 +274,6 @@ enum ParserState {
     ConnectBy,
 }
 
-#[cfg_attr(feature = "std", derive(Debug))]
 /// A SQL Parser
 ///
 /// This struct is the main entry point for parsing SQL queries.

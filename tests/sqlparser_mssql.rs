@@ -68,7 +68,7 @@ fn parse_table_time_travel() {
                 args: None,
                 with_hints: vec![],
                 version: Some(TableVersion::ForSystemTimeAsOf(Expr::Value(
-                    Value::SingleQuotedString(version)
+                    (Value::SingleQuotedString(version)).with_empty_span()
                 ))),
                 partitions: vec![],
                 with_ordinality: false,
@@ -121,7 +121,9 @@ fn parse_create_procedure() {
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(
+                        (number("1")).with_empty_span()
+                    ))],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -473,7 +475,9 @@ fn parse_mssql_top_paren() {
     let select = ms_and_generic().verified_only_select(sql);
     let top = select.top.unwrap();
     assert_eq!(
-        Some(TopQuantity::Expr(Expr::Value(number("5")))),
+        Some(TopQuantity::Expr(Expr::Value(
+            (number("5")).with_empty_span()
+        ))),
         top.quantity
     );
     assert!(!top.percent);
@@ -485,7 +489,9 @@ fn parse_mssql_top_percent() {
     let select = ms_and_generic().verified_only_select(sql);
     let top = select.top.unwrap();
     assert_eq!(
-        Some(TopQuantity::Expr(Expr::Value(number("5")))),
+        Some(TopQuantity::Expr(Expr::Value(
+            (number("5")).with_empty_span()
+        ))),
         top.quantity
     );
     assert!(top.percent);
@@ -497,7 +503,9 @@ fn parse_mssql_top_with_ties() {
     let select = ms_and_generic().verified_only_select(sql);
     let top = select.top.unwrap();
     assert_eq!(
-        Some(TopQuantity::Expr(Expr::Value(number("5")))),
+        Some(TopQuantity::Expr(Expr::Value(
+            (number("5")).with_empty_span()
+        ))),
         top.quantity
     );
     assert!(top.with_ties);
@@ -509,7 +517,9 @@ fn parse_mssql_top_percent_with_ties() {
     let select = ms_and_generic().verified_only_select(sql);
     let top = select.top.unwrap();
     assert_eq!(
-        Some(TopQuantity::Expr(Expr::Value(number("10")))),
+        Some(TopQuantity::Expr(Expr::Value(
+            (number("10")).with_empty_span()
+        ))),
         top.quantity
     );
     assert!(top.percent);
@@ -746,7 +756,10 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[0],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    name: Expr::Value(ValueWithSpan {
+                        value: Value::SingleQuotedString(_),
+                        span: _
+                    }),
                     arg: FunctionArgExpr::Expr(Expr::Function(_)),
                     operator: FunctionArgOperator::Colon
                 }
@@ -762,7 +775,10 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[2],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    name: Expr::Value(ValueWithSpan {
+                        value: Value::SingleQuotedString(_),
+                        span: _
+                    }),
                     arg: FunctionArgExpr::Expr(Expr::Subquery(_)),
                     operator: FunctionArgOperator::Colon
                 }
@@ -793,7 +809,10 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[0],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    name: Expr::Value(ValueWithSpan {
+                        value: Value::SingleQuotedString(_),
+                        span: _
+                    }),
                     arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
                     operator: FunctionArgOperator::Colon
                 }
@@ -801,7 +820,10 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[1],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    name: Expr::Value(ValueWithSpan {
+                        value: Value::SingleQuotedString(_),
+                        span: _
+                    }),
                     arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
                     operator: FunctionArgOperator::Colon
                 }
@@ -809,7 +831,10 @@ fn parse_mssql_json_object() {
             assert!(matches!(
                 args[2],
                 FunctionArg::ExprNamed {
-                    name: Expr::Value(Value::SingleQuotedString(_)),
+                    name: Expr::Value(ValueWithSpan {
+                        value: Value::SingleQuotedString(_),
+                        span: _
+                    }),
                     arg: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
                     operator: FunctionArgOperator::Colon
                 }
@@ -830,11 +855,17 @@ fn parse_mssql_json_array() {
             assert_eq!(
                 &[
                     FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("a".into())
+                        (Value::SingleQuotedString("a".into())).with_empty_span()
                     ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Null))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        (number("1")).with_empty_span()
+                    ))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        (Value::Null).with_empty_span()
+                    ))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        (number("2")).with_empty_span()
+                    ))),
                 ],
                 &args[..]
             );
@@ -856,11 +887,17 @@ fn parse_mssql_json_array() {
             assert_eq!(
                 &[
                     FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("a".into())
+                        (Value::SingleQuotedString("a".into())).with_empty_span()
                     ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Null))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        (number("1")).with_empty_span()
+                    ))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        (Value::Null).with_empty_span()
+                    ))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        (number("2")).with_empty_span()
+                    ))),
                 ],
                 &args[..]
             );
@@ -915,7 +952,7 @@ fn parse_mssql_json_array() {
         }) => {
             assert_eq!(
                 &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    Value::SingleQuotedString("a".into())
+                    (Value::SingleQuotedString("a".into())).with_empty_span()
                 ))),
                 &args[0]
             );
@@ -942,7 +979,7 @@ fn parse_mssql_json_array() {
         }) => {
             assert_eq!(
                 &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    Value::SingleQuotedString("a".into())
+                    (Value::SingleQuotedString("a".into())).with_empty_span()
                 ))),
                 &args[0]
             );
@@ -964,7 +1001,9 @@ fn parse_mssql_json_array() {
             ..
         }) => {
             assert_eq!(
-                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                    (number("1")).with_empty_span()
+                ))),
                 &args[0]
             );
             assert!(matches!(
@@ -1042,15 +1081,15 @@ fn parse_convert() {
         unreachable!()
     };
     assert!(!is_try);
-    assert_eq!(Expr::Value(number("1")), *expr);
+    assert_eq!(Expr::value(number("1")), *expr);
     assert_eq!(Some(DataType::Int(None)), data_type);
     assert!(charset.is_none());
     assert!(target_before_value);
     assert_eq!(
         vec![
-            Expr::Value(number("2")),
-            Expr::Value(number("3")),
-            Expr::Value(Value::Null),
+            Expr::value(number("2")),
+            Expr::value(number("3")),
+            Expr::Value((Value::Null).with_empty_span()),
         ],
         styles
     );
@@ -1089,8 +1128,12 @@ fn parse_substring_in_select() {
                                 quote_style: None,
                                 span: Span::empty(),
                             })),
-                            substring_from: Some(Box::new(Expr::Value(number("0")))),
-                            substring_for: Some(Box::new(Expr::Value(number("1")))),
+                            substring_from: Some(Box::new(Expr::Value(
+                                (number("0")).with_empty_span()
+                            ))),
+                            substring_for: Some(Box::new(Expr::Value(
+                                (number("1")).with_empty_span()
+                            ))),
                             special: true,
                         })],
                         into: None,
@@ -1179,9 +1222,9 @@ fn parse_mssql_declare() {
                         span: Span::empty(),
                     }],
                     data_type: Some(Text),
-                    assignment: Some(MsSqlAssignment(Box::new(Expr::Value(SingleQuotedString(
-                        "foobar".to_string()
-                    ))))),
+                    assignment: Some(MsSqlAssignment(Box::new(Expr::Value(
+                        (SingleQuotedString("foobar".to_string())).with_empty_span()
+                    )))),
                     declare_type: None,
                     binary: None,
                     sensitive: None,
@@ -1215,7 +1258,9 @@ fn parse_mssql_declare() {
                 local: false,
                 hivevar: false,
                 variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("@bar")])),
-                value: vec![Expr::Value(Value::Number("2".parse().unwrap(), false))],
+                value: vec![Expr::Value(
+                    (Value::Number("2".parse().unwrap(), false)).with_empty_span()
+                )],
             },
             Statement::Query(Box::new(Query {
                 with: None,
@@ -1236,7 +1281,9 @@ fn parse_mssql_declare() {
                     projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("@bar"))),
                         op: BinaryOperator::Multiply,
-                        right: Box::new(Expr::Value(Value::Number("4".parse().unwrap(), false))),
+                        right: Box::new(Expr::Value(
+                            (Value::Number("4".parse().unwrap(), false)).with_empty_span()
+                        )),
                     })],
                     into: None,
                     from: vec![],
@@ -1268,11 +1315,15 @@ fn test_parse_raiserror() {
     assert_eq!(
         s,
         Statement::RaisError {
-            message: Box::new(Expr::Value(Value::SingleQuotedString(
-                "This is a test".to_string()
-            ))),
-            severity: Box::new(Expr::Value(Value::Number("16".parse().unwrap(), false))),
-            state: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+            message: Box::new(Expr::Value(
+                (Value::SingleQuotedString("This is a test".to_string())).with_empty_span()
+            )),
+            severity: Box::new(Expr::Value(
+                (Value::Number("16".parse().unwrap(), false)).with_empty_span()
+            )),
+            state: Box::new(Expr::Value(
+                (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+            )),
             arguments: vec![],
             options: vec![],
         }
@@ -1347,7 +1398,7 @@ fn parse_create_table_with_valid_options() {
                 SqlOption::Partition {
                     column_name: "column_a".into(),
                     range_direction: None,
-                    for_values: vec![Expr::Value(test_utils::number("10")), Expr::Value(test_utils::number("11"))] ,
+                    for_values: vec![Expr::Value((test_utils::number("10")).with_empty_span()), Expr::Value((test_utils::number("11")).with_empty_span())] ,
                 },
             ],
         ),
@@ -1358,8 +1409,8 @@ fn parse_create_table_with_valid_options() {
                         column_name: "column_a".into(),
                         range_direction: Some(PartitionRangeDirection::Left),
                         for_values: vec![
-                            Expr::Value(test_utils::number("10")),
-                            Expr::Value(test_utils::number("11")),
+                            Expr::Value((test_utils::number("10")).with_empty_span()),
+                            Expr::Value((test_utils::number("11")).with_empty_span()),
                         ],
                     }
             ],
@@ -1630,8 +1681,8 @@ fn parse_create_table_with_identity_column() {
                         IdentityProperty {
                             parameters: Some(IdentityPropertyFormatKind::FunctionCall(
                                 IdentityParameters {
-                                    seed: Expr::Value(number("1")),
-                                    increment: Expr::Value(number("1")),
+                                    seed: Expr::value(number("1")),
+                                    increment: Expr::value(number("1")),
                                 },
                             )),
                             order: None,

@@ -570,8 +570,8 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                                 IdentityProperty {
                                     parameters: Some(IdentityPropertyFormatKind::FunctionCall(
                                         IdentityParameters {
-                                            seed: Expr::Value(number("100")),
-                                            increment: Expr::Value(number("1")),
+                                            seed: Expr::value(number("100")),
+                                            increment: Expr::value(number("1")),
                                         }
                                     )),
                                     order: Some(IdentityPropertyOrder::NoOrder),
@@ -602,8 +602,12 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                                     parameters: Some(
                                         IdentityPropertyFormatKind::StartAndIncrement(
                                             IdentityParameters {
-                                                seed: Expr::Value(number("100")),
-                                                increment: Expr::Value(number("1")),
+                                                seed: Expr::Value(
+                                                    (number("100")).with_empty_span()
+                                                ),
+                                                increment: Expr::Value(
+                                                    (number("1")).with_empty_span()
+                                                ),
                                             }
                                         )
                                     ),
@@ -1108,9 +1112,9 @@ fn parse_semi_structured_data_traversal() {
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
                     key: Expr::BinaryOp {
-                        left: Box::new(Expr::Value(number("2"))),
+                        left: Box::new(Expr::value(number("2"))),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Value(number("2")))
+                        right: Box::new(Expr::value(number("2")))
                     },
                 }]
             },
@@ -1188,7 +1192,7 @@ fn parse_semi_structured_data_traversal() {
                         quoted: false,
                     },
                     JsonPathElem::Bracket {
-                        key: Expr::Value(number("0")),
+                        key: Expr::value(number("0")),
                     },
                     JsonPathElem::Dot {
                         key: "bar".to_owned(),
@@ -1210,7 +1214,7 @@ fn parse_semi_structured_data_traversal() {
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Bracket {
-                        key: Expr::Value(number("0")),
+                        key: Expr::value(number("0")),
                     },
                     JsonPathElem::Dot {
                         key: "foo".to_owned(),
@@ -1276,7 +1280,7 @@ fn parse_semi_structured_data_traversal() {
             }),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
-                    key: Expr::Value(number("1"))
+                    key: Expr::value(number("1"))
                 }]
             }
         }
@@ -1661,13 +1665,13 @@ fn parse_snowflake_declare_result_set() {
         (
             "DECLARE res RESULTSET DEFAULT 42",
             "res",
-            Some(DeclareAssignment::Default(Expr::Value(number("42")).into())),
+            Some(DeclareAssignment::Default(Expr::value(number("42")).into())),
         ),
         (
             "DECLARE res RESULTSET := 42",
             "res",
             Some(DeclareAssignment::DuckAssignment(
-                Expr::Value(number("42")).into(),
+                Expr::value(number("42")).into(),
             )),
         ),
         ("DECLARE res RESULTSET", "res", None),
@@ -1717,8 +1721,8 @@ fn parse_snowflake_declare_exception() {
             "ex",
             Some(DeclareAssignment::Expr(
                 Expr::Tuple(vec![
-                    Expr::Value(number("42")),
-                    Expr::Value(Value::SingleQuotedString("ERROR".to_string())),
+                    Expr::value(number("42")),
+                    Expr::Value((Value::SingleQuotedString("ERROR".to_string())).with_empty_span()),
                 ])
                 .into(),
             )),
@@ -1754,13 +1758,13 @@ fn parse_snowflake_declare_variable() {
             "DECLARE profit TEXT DEFAULT 42",
             "profit",
             Some(DataType::Text),
-            Some(DeclareAssignment::Default(Expr::Value(number("42")).into())),
+            Some(DeclareAssignment::Default(Expr::value(number("42")).into())),
         ),
         (
             "DECLARE profit DEFAULT 42",
             "profit",
             None,
-            Some(DeclareAssignment::Default(Expr::Value(number("42")).into())),
+            Some(DeclareAssignment::Default(Expr::value(number("42")).into())),
         ),
         ("DECLARE profit TEXT", "profit", Some(DataType::Text), None),
         ("DECLARE profit", "profit", None, None),
@@ -2509,10 +2513,14 @@ fn test_snowflake_trim() {
     let select = snowflake().verified_only_select(sql_only_select);
     assert_eq!(
         &Expr::Trim {
-            expr: Box::new(Expr::Value(Value::SingleQuotedString("xyz".to_owned()))),
+            expr: Box::new(Expr::Value(
+                (Value::SingleQuotedString("xyz".to_owned())).with_empty_span()
+            )),
             trim_where: None,
             trim_what: None,
-            trim_characters: Some(vec![Expr::Value(Value::SingleQuotedString("a".to_owned()))]),
+            trim_characters: Some(vec![Expr::Value(
+                (Value::SingleQuotedString("a".to_owned())).with_empty_span()
+            )]),
         },
         expr_from_projection(only(&select.projection))
     );
@@ -2530,7 +2538,7 @@ fn test_number_placeholder() {
     let sql_only_select = "SELECT :1";
     let select = snowflake().verified_only_select(sql_only_select);
     assert_eq!(
-        &Expr::Value(Value::Placeholder(":1".into())),
+        &Expr::Value((Value::Placeholder(":1".into())).with_empty_span()),
         expr_from_projection(only(&select.projection))
     );
 
@@ -2676,7 +2684,7 @@ fn parse_comma_outer_join() {
                 "myudf",
                 [Expr::UnaryOp {
                     op: UnaryOperator::Plus,
-                    expr: Box::new(Expr::Value(number("42")))
+                    expr: Box::new(Expr::value(number("42")))
                 }]
             )),
         })

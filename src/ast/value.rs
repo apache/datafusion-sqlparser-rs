@@ -26,9 +26,87 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ast::Ident;
+use crate::{ast::Ident, tokenizer::Span};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
+
+/// Wraps a primitive SQL [`Value`]  with its [`Span`] location
+///
+/// # Example: create a `ValueWithSpan` from a `Value`
+/// ```
+/// # use sqlparser::ast::{Value, ValueWithSpan};
+/// # use sqlparser::tokenizer::{Location, Span};
+/// let value = Value::SingleQuotedString(String::from("endpoint"));
+/// // from line 1, column 1 to line 1, column 7
+/// let span = Span::new(Location::new(1, 1), Location::new(1, 7));
+/// let value_with_span = value.with_span(span);
+/// ```
+///
+/// # Example: create a `ValueWithSpan` from a `Value` with an empty span
+///
+/// You can call [`Value::with_empty_span`] to create a `ValueWithSpan` with an empty span
+/// ```
+/// # use sqlparser::ast::{Value, ValueWithSpan};
+/// # use sqlparser::tokenizer::{Location, Span};
+/// let value = Value::SingleQuotedString(String::from("endpoint"));
+/// let value_with_span = value.with_empty_span();
+/// assert_eq!(value_with_span.span, Span::empty());
+/// ```
+///
+/// You can also use the [`From`] trait to convert  `ValueWithSpan` to/from `Value`s
+/// ```
+/// # use sqlparser::ast::{Value, ValueWithSpan};
+/// # use sqlparser::tokenizer::{Location, Span};
+/// let value = Value::SingleQuotedString(String::from("endpoint"));
+/// // converting `Value` to `ValueWithSpan` results in an empty span
+/// let value_with_span: ValueWithSpan = value.into();
+/// assert_eq!(value_with_span.span, Span::empty());
+/// // convert back to `Value`
+/// let value: Value = value_with_span.into();
+/// ```
+#[derive(Debug, Clone, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ValueWithSpan {
+    pub value: Value,
+    pub span: Span,
+}
+
+impl PartialEq for ValueWithSpan {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Ord for ValueWithSpan {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.value.cmp(&other.value)
+    }
+}
+
+impl PartialOrd for ValueWithSpan {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(Ord::cmp(self, other))
+    }
+}
+
+impl core::hash::Hash for ValueWithSpan {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
+impl From<Value> for ValueWithSpan {
+    fn from(value: Value) -> Self {
+        value.with_empty_span()
+    }
+}
+
+impl From<ValueWithSpan> for Value {
+    fn from(value: ValueWithSpan) -> Self {
+        value.value
+    }
+}
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -102,6 +180,13 @@ pub enum Value {
     Placeholder(String),
 }
 
+impl ValueWithSpan {
+    /// If the underlying literal is a string, regardless of quote style, returns the associated string value
+    pub fn into_string(self) -> Option<String> {
+        self.value.into_string()
+    }
+}
+
 impl Value {
     /// If the underlying literal is a string, regardless of quote style, returns the associated string value
     pub fn into_string(self) -> Option<String> {
@@ -125,6 +210,20 @@ impl Value {
             Value::DollarQuotedString(s) => Some(s.value),
             _ => None,
         }
+    }
+
+    pub fn with_span(self, span: Span) -> ValueWithSpan {
+        ValueWithSpan { value: self, span }
+    }
+
+    pub fn with_empty_span(self) -> ValueWithSpan {
+        self.with_span(Span::empty())
+    }
+}
+
+impl fmt::Display for ValueWithSpan {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.value)
     }
 }
 

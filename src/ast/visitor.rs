@@ -547,7 +547,7 @@ where
 ///
 /// visit_expressions_mut(&mut statements, |expr| {
 ///   if matches!(expr, Expr::Identifier(col_name) if col_name.value == "x") {
-///     let old_expr = std::mem::replace(expr, Expr::Value(Value::Null));
+///     let old_expr = std::mem::replace(expr, Expr::value(Value::Null));
 ///     *expr = Expr::Function(Function {
 ///           name: ObjectName::from(vec![Ident::new("f")]),
 ///           uses_odbc_syntax: false,

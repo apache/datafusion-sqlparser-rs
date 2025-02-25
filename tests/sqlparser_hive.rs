@@ -409,7 +409,8 @@ fn parse_create_function() {
             assert_eq!(
                 function_body,
                 Some(CreateFunctionBody::AsBeforeOptions(Expr::Value(
-                    Value::SingleQuotedString("org.random.class.Name".to_string())
+                    (Value::SingleQuotedString("org.random.class.Name".to_string()))
+                        .with_empty_span()
                 )))
             );
             assert_eq!(

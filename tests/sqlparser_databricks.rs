@@ -47,7 +47,9 @@ fn test_databricks_identifiers() {
         databricks()
             .verified_only_select(r#"SELECT "Ä""#)
             .projection[0],
-        SelectItem::UnnamedExpr(Expr::Value(Value::DoubleQuotedString("Ä".to_owned())))
+        SelectItem::UnnamedExpr(Expr::Value(
+            (Value::DoubleQuotedString("Ä".to_owned())).with_empty_span()
+        ))
     );
 }
 
@@ -62,9 +64,9 @@ fn test_databricks_exists() {
                 call(
                     "array",
                     [
-                        Expr::Value(number("1")),
-                        Expr::Value(number("2")),
-                        Expr::Value(number("3"))
+                        Expr::value(number("1")),
+                        Expr::value(number("2")),
+                        Expr::value(number("3"))
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
@@ -99,8 +101,8 @@ fn test_databricks_lambdas() {
                 call(
                     "array",
                     [
-                        Expr::Value(Value::SingleQuotedString("Hello".to_owned())),
-                        Expr::Value(Value::SingleQuotedString("World".to_owned()))
+                        Expr::value(Value::SingleQuotedString("Hello".to_owned())),
+                        Expr::value(Value::SingleQuotedString("World".to_owned()))
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
@@ -114,7 +116,7 @@ fn test_databricks_lambdas() {
                                     op: BinaryOperator::Eq,
                                     right: Box::new(Expr::Identifier(Ident::new("p2")))
                                 },
-                                result: Expr::Value(number("0"))
+                                result: Expr::value(number("0"))
                             },
                             CaseWhen {
                                 condition: Expr::BinaryOp {
@@ -130,11 +132,11 @@ fn test_databricks_lambdas() {
                                 },
                                 result: Expr::UnaryOp {
                                     op: UnaryOperator::Minus,
-                                    expr: Box::new(Expr::Value(number("1")))
+                                    expr: Box::new(Expr::value(number("1")))
                                 }
                             },
                         ],
-                        else_result: Some(Box::new(Expr::Value(number("1"))))
+                        else_result: Some(Box::new(Expr::value(number("1"))))
                     })
                 })
             ]
@@ -154,12 +156,12 @@ fn test_values_clause() {
         explicit_row: false,
         rows: vec![
             vec![
-                Expr::Value(Value::DoubleQuotedString("one".to_owned())),
-                Expr::Value(number("1")),
+                Expr::Value((Value::DoubleQuotedString("one".to_owned())).with_empty_span()),
+                Expr::value(number("1")),
             ],
             vec![
-                Expr::Value(Value::SingleQuotedString("two".to_owned())),
-                Expr::Value(number("2")),
+                Expr::Value((Value::SingleQuotedString("two".to_owned())).with_empty_span()),
+                Expr::value(number("2")),
             ],
         ],
     };
@@ -286,8 +288,8 @@ fn parse_databricks_struct_function() {
             .projection[0],
         SelectItem::UnnamedExpr(Expr::Struct {
             values: vec![
-                Expr::Value(number("1")),
-                Expr::Value(Value::SingleQuotedString("foo".to_string()))
+                Expr::value(number("1")),
+                Expr::Value((Value::SingleQuotedString("foo".to_string())).with_empty_span())
             ],
             fields: vec![]
         })
@@ -299,14 +301,17 @@ fn parse_databricks_struct_function() {
         SelectItem::UnnamedExpr(Expr::Struct {
             values: vec![
                 Expr::Named {
-                    expr: Expr::Value(number("1")).into(),
+                    expr: Expr::value(number("1")).into(),
                     name: Ident::new("one")
                 },
                 Expr::Named {
-                    expr: Expr::Value(Value::SingleQuotedString("foo".to_string())).into(),
+                    expr: Expr::Value(
+                        (Value::SingleQuotedString("foo".to_string())).with_empty_span()
+                    )
+                    .into(),
                     name: Ident::new("foo")
                 },
-                Expr::Value(Value::Boolean(false))
+                Expr::Value((Value::Boolean(false)).with_empty_span())
             ],
             fields: vec![]
         })

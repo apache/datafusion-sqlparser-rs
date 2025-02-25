@@ -13619,13 +13619,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
+    /// Parse an OrderByExpr expression, optionally followed by ASC or DESC (used in ORDER BY)
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
         self.parse_create_index_expr::<false>()
             .map(|index_column| index_column.column)
     }
 
-    /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
+    /// Parse an IndexColumn expression (used in CREATE INDEX)
     pub fn parse_create_index_expr<const PARSE_OPERATOR_CLASS: bool>(
         &mut self,
     ) -> Result<IndexColumn, ParserError> {

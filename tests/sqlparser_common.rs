@@ -8847,22 +8847,24 @@ fn parse_create_index() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("name")),
+                with_fill: None,
                 options: OrderByOptions {
-                asc: None,
-                nulls_first: None,
-            },
+                    asc: None,
+                    nulls_first: None,
+                },
             },
         },
         IndexColumn {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("age")),
-                 options: OrderByOptions {
-                  asc: None,
-                  nulls_first: None,
-              },
+                with_fill: None,
+                options: OrderByOptions {
+                    asc: Some(false),
+                    nulls_first: None,
+                },
             },
-      }
+        },
     ];
     match verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
@@ -8891,19 +8893,24 @@ fn test_create_index_with_using_function() {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("name")),
-                asc: None,
-                nulls_first: None,
                 with_fill: None,
+                options: OrderByOptions {
+                    asc: None,
+                    nulls_first: None,
+                },
             },
         },
         IndexColumn {
             operator_class: None,
             column: OrderByExpr {
                 expr: Expr::Identifier(Ident::new("age")),
-                asc: Some(false),
-                nulls_first: None,
                 with_fill: None,
+                options: OrderByOptions {
+                    asc: Some(false),
+                    nulls_first: None,
+                },
             },
+        },
     ];
     match verified_stmt(sql) {
         Statement::CreateIndex(CreateIndex {
@@ -8939,8 +8946,10 @@ fn test_create_index_with_with_clause() {
     let indexed_columns: Vec<IndexColumn> = vec![IndexColumn {
         column: OrderByExpr {
             expr: Expr::Identifier(Ident::new("title")),
-            asc: None,
-            nulls_first: None,
+            options: OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            },
             with_fill: None,
         },
         operator_class: None,

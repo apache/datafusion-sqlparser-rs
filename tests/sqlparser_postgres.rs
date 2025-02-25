@@ -2565,8 +2565,10 @@ fn parse_create_users_name_trgm_index() {
                             over: None,
                             within_group: vec![]
                         }),
-                        asc: None,
-                        nulls_first: None,
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
                         with_fill: None,
                     },
                     operator_class: Some(Ident::new("gin_trgm_ops")),
@@ -2639,8 +2641,10 @@ fn parse_create_projects_name_description_trgm_index() {
                             over: None,
                             within_group: vec![]
                         }),
-                        asc: None,
-                        nulls_first: None,
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
                         with_fill: None,
                     },
                     operator_class: Some(Ident::new("gin_trgm_ops")),
@@ -2686,8 +2690,10 @@ fn parse_create_nameplates_barcode_trgm_index() {
                             quote_style: None,
                             span: Span::empty()
                         }),
-                        asc: None,
-                        nulls_first: None,
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
                         with_fill: None,
                     },
                     operator_class: Some(Ident::new("gin_trgm_ops")),
@@ -2732,8 +2738,10 @@ fn parse_create_sample_containers_barcode_trgm_index() {
                             quote_style: None,
                             span: Span::empty()
                         }),
-                        asc: None,
-                        nulls_first: None,
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
                         with_fill: None,
                     },
                     operator_class: Some(Ident::new("gist_trgm_ops")),

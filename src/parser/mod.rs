@@ -13648,17 +13648,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let asc = self.parse_asc_desc();
-
-        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
-            Some(true)
-        } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
-            Some(false)
-        } else {
-            None
-        };
-
-      let options = self.parse_order_by_options()?;
+        let options = self.parse_order_by_options()?;
 
         let with_fill = if dialect_of!(self is ClickHouseDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::WITH, Keyword::FILL])
@@ -13671,11 +13661,11 @@ impl<'a> Parser<'a> {
         Ok(IndexColumn {
             column: OrderByExpr {
                 expr,
-                asc,
-                nulls_first,
+                options,
                 with_fill,
             },
-            operator_class: operator_class.map(Into::into),        })
+            operator_class: operator_class.map(Into::into),
+        })
     }
 
     fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {

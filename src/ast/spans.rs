@@ -1479,7 +1479,6 @@ impl Spanned for Expr {
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),
             Expr::Lambda(_) => Span::empty(),
-            Expr::ColumnPrefix { .. } => Span::empty(),
         }
     }
 }

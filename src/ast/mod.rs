@@ -1049,16 +1049,6 @@ pub enum Expr {
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html)
     /// [DuckDb](https://duckdb.org/docs/sql/functions/lambda.html)
     Lambda(LambdaFunction),
-    /// A ColumnPrefix used in MySQL indexes.
-    /// ```sql
-    /// CREATE INDEX ON tbl (col(10));
-    /// ```
-    ///
-    /// [MySQL](https://dev.mysql.com/doc/refman/8.0/en/create-index.html)
-    ColumnPrefix {
-        column: Ident,
-        length: u64,
-    },
 }
 
 /// The contents inside the `[` and `]` in a subscript expression.
@@ -1827,7 +1817,6 @@ impl fmt::Display for Expr {
             }
             Expr::Prior(expr) => write!(f, "PRIOR {expr}"),
             Expr::Lambda(lambda) => write!(f, "{lambda}"),
-            Expr::ColumnPrefix { column, length } => write!(f, "{column}({length})"),
         }
     }
 }

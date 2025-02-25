@@ -6427,7 +6427,6 @@ impl<'a> Parser<'a> {
 
         self.expect_token(&Token::LParen)?;
         let columns = self.parse_comma_separated(Parser::parse_create_index_expr::<true>)?;
-        println!("columns: {:?}", columns.len());
         self.expect_token(&Token::RParen)?;
 
         let include = if self.parse_keyword(Keyword::INCLUDE) {
@@ -13664,7 +13663,7 @@ impl<'a> Parser<'a> {
                 options,
                 with_fill,
             },
-            operator_class: operator_class.map(Into::into),
+            operator_class,
         })
     }
 

@@ -19,9 +19,8 @@
 //! Test SQL syntax specific to Snowflake. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
-use sqlparser::ast::helpers::stmt_data_loading::{
-    DataLoadingOption, DataLoadingOptionType, StageLoadSelectItem,
-};
+use sqlparser::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionType};
+use sqlparser::ast::helpers::stmt_data_loading::StageLoadSelectItem;
 use sqlparser::ast::*;
 use sqlparser::dialect::{Dialect, GenericDialect, SnowflakeDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
@@ -346,7 +345,6 @@ fn test_snowflake_create_table_column_comment() {
                         name: None,
                         option: ColumnOption::Comment("some comment".to_string())
                     }],
-                    collation: None
                 }],
                 columns
             )
@@ -553,7 +551,6 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                     ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
@@ -567,15 +564,14 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                     ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Identity(IdentityPropertyKind::Autoincrement(
                                 IdentityProperty {
                                     parameters: Some(IdentityPropertyFormatKind::FunctionCall(
                                         IdentityParameters {
-                                            seed: Expr::Value(number("100")),
-                                            increment: Expr::Value(number("1")),
+                                            seed: Expr::value(number("100")),
+                                            increment: Expr::value(number("1")),
                                         }
                                     )),
                                     order: Some(IdentityPropertyOrder::NoOrder),
@@ -586,7 +582,6 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                     ColumnDef {
                         name: "c".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Identity(IdentityPropertyKind::Identity(
@@ -600,7 +595,6 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                     ColumnDef {
                         name: "d".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Identity(IdentityPropertyKind::Identity(
@@ -608,8 +602,12 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                                     parameters: Some(
                                         IdentityPropertyFormatKind::StartAndIncrement(
                                             IdentityParameters {
-                                                seed: Expr::Value(number("100")),
-                                                increment: Expr::Value(number("1")),
+                                                seed: Expr::Value(
+                                                    (number("100")).with_empty_span()
+                                                ),
+                                                increment: Expr::Value(
+                                                    (number("1")).with_empty_span()
+                                                ),
                                             }
                                         )
                                     ),
@@ -634,8 +632,12 @@ fn test_snowflake_create_table_with_collated_column() {
                 vec![ColumnDef {
                     name: "a".into(),
                     data_type: DataType::Text,
-                    collation: Some(ObjectName::from(vec![Ident::with_quote('\'', "de_DE")])),
-                    options: vec![]
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Collation(ObjectName::from(vec![Ident::with_quote(
+                            '\'', "de_DE"
+                        )])),
+                    }]
                 },]
             );
         }
@@ -674,7 +676,6 @@ fn test_snowflake_create_table_with_columns_masking_policy() {
                     vec![ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
@@ -709,7 +710,6 @@ fn test_snowflake_create_table_with_columns_projection_policy() {
                     vec![ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
@@ -747,7 +747,6 @@ fn test_snowflake_create_table_with_columns_tags() {
                     vec![ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Tags(TagsColumnOption {
@@ -782,7 +781,6 @@ fn test_snowflake_create_table_with_several_column_options() {
                     ColumnDef {
                         name: "a".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -818,8 +816,13 @@ fn test_snowflake_create_table_with_several_column_options() {
                     ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Text,
-                        collation: Some(ObjectName::from(vec![Ident::with_quote('\'', "de_DE")])),
                         options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Collation(ObjectName::from(vec![
+                                    Ident::with_quote('\'', "de_DE")
+                                ])),
+                            },
                             ColumnOptionDef {
                                 name: None,
                                 option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
@@ -1109,9 +1112,9 @@ fn parse_semi_structured_data_traversal() {
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
                     key: Expr::BinaryOp {
-                        left: Box::new(Expr::Value(number("2"))),
+                        left: Box::new(Expr::value(number("2"))),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Value(number("2")))
+                        right: Box::new(Expr::value(number("2")))
                     },
                 }]
             },
@@ -1189,7 +1192,7 @@ fn parse_semi_structured_data_traversal() {
                         quoted: false,
                     },
                     JsonPathElem::Bracket {
-                        key: Expr::Value(number("0")),
+                        key: Expr::value(number("0")),
                     },
                     JsonPathElem::Dot {
                         key: "bar".to_owned(),
@@ -1211,7 +1214,7 @@ fn parse_semi_structured_data_traversal() {
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Bracket {
-                        key: Expr::Value(number("0")),
+                        key: Expr::value(number("0")),
                     },
                     JsonPathElem::Dot {
                         key: "foo".to_owned(),
@@ -1277,7 +1280,7 @@ fn parse_semi_structured_data_traversal() {
             }),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
-                    key: Expr::Value(number("1"))
+                    key: Expr::value(number("1"))
                 }]
             }
         }
@@ -1662,13 +1665,13 @@ fn parse_snowflake_declare_result_set() {
         (
             "DECLARE res RESULTSET DEFAULT 42",
             "res",
-            Some(DeclareAssignment::Default(Expr::Value(number("42")).into())),
+            Some(DeclareAssignment::Default(Expr::value(number("42")).into())),
         ),
         (
             "DECLARE res RESULTSET := 42",
             "res",
             Some(DeclareAssignment::DuckAssignment(
-                Expr::Value(number("42")).into(),
+                Expr::value(number("42")).into(),
             )),
         ),
         ("DECLARE res RESULTSET", "res", None),
@@ -1718,8 +1721,8 @@ fn parse_snowflake_declare_exception() {
             "ex",
             Some(DeclareAssignment::Expr(
                 Expr::Tuple(vec![
-                    Expr::Value(number("42")),
-                    Expr::Value(Value::SingleQuotedString("ERROR".to_string())),
+                    Expr::value(number("42")),
+                    Expr::Value((Value::SingleQuotedString("ERROR".to_string())).with_empty_span()),
                 ])
                 .into(),
             )),
@@ -1755,13 +1758,13 @@ fn parse_snowflake_declare_variable() {
             "DECLARE profit TEXT DEFAULT 42",
             "profit",
             Some(DataType::Text),
-            Some(DeclareAssignment::Default(Expr::Value(number("42")).into())),
+            Some(DeclareAssignment::Default(Expr::value(number("42")).into())),
         ),
         (
             "DECLARE profit DEFAULT 42",
             "profit",
             None,
-            Some(DeclareAssignment::Default(Expr::Value(number("42")).into())),
+            Some(DeclareAssignment::Default(Expr::value(number("42")).into())),
         ),
         ("DECLARE profit TEXT", "profit", Some(DataType::Text), None),
         ("DECLARE profit", "profit", None, None),
@@ -1914,38 +1917,26 @@ fn test_create_stage_with_stage_params() {
                 "<s3_api_compatible_endpoint>",
                 stage_params.endpoint.unwrap()
             );
-            assert!(stage_params
-                .credentials
-                .options
-                .contains(&DataLoadingOption {
-                    option_name: "AWS_KEY_ID".to_string(),
-                    option_type: DataLoadingOptionType::STRING,
-                    value: "1a2b3c".to_string()
-                }));
-            assert!(stage_params
-                .credentials
-                .options
-                .contains(&DataLoadingOption {
-                    option_name: "AWS_SECRET_KEY".to_string(),
-                    option_type: DataLoadingOptionType::STRING,
-                    value: "4x5y6z".to_string()
-                }));
-            assert!(stage_params
-                .encryption
-                .options
-                .contains(&DataLoadingOption {
-                    option_name: "MASTER_KEY".to_string(),
-                    option_type: DataLoadingOptionType::STRING,
-                    value: "key".to_string()
-                }));
-            assert!(stage_params
-                .encryption
-                .options
-                .contains(&DataLoadingOption {
-                    option_name: "TYPE".to_string(),
-                    option_type: DataLoadingOptionType::STRING,
-                    value: "AWS_SSE_KMS".to_string()
-                }));
+            assert!(stage_params.credentials.options.contains(&KeyValueOption {
+                option_name: "AWS_KEY_ID".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "1a2b3c".to_string()
+            }));
+            assert!(stage_params.credentials.options.contains(&KeyValueOption {
+                option_name: "AWS_SECRET_KEY".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "4x5y6z".to_string()
+            }));
+            assert!(stage_params.encryption.options.contains(&KeyValueOption {
+                option_name: "MASTER_KEY".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "key".to_string()
+            }));
+            assert!(stage_params.encryption.options.contains(&KeyValueOption {
+                option_name: "TYPE".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "AWS_SSE_KMS".to_string()
+            }));
         }
         _ => unreachable!(),
     };
@@ -1966,19 +1957,19 @@ fn test_create_stage_with_directory_table_params() {
             directory_table_params,
             ..
         } => {
-            assert!(directory_table_params.options.contains(&DataLoadingOption {
+            assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "ENABLE".to_string(),
-                option_type: DataLoadingOptionType::BOOLEAN,
+                option_type: KeyValueOptionType::BOOLEAN,
                 value: "TRUE".to_string()
             }));
-            assert!(directory_table_params.options.contains(&DataLoadingOption {
+            assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "REFRESH_ON_CREATE".to_string(),
-                option_type: DataLoadingOptionType::BOOLEAN,
+                option_type: KeyValueOptionType::BOOLEAN,
                 value: "FALSE".to_string()
             }));
-            assert!(directory_table_params.options.contains(&DataLoadingOption {
+            assert!(directory_table_params.options.contains(&KeyValueOption {
                 option_name: "NOTIFICATION_INTEGRATION".to_string(),
-                option_type: DataLoadingOptionType::STRING,
+                option_type: KeyValueOptionType::STRING,
                 value: "some-string".to_string()
             }));
         }
@@ -1997,19 +1988,19 @@ fn test_create_stage_with_file_format() {
 
     match snowflake_without_unescape().verified_stmt(sql) {
         Statement::CreateStage { file_format, .. } => {
-            assert!(file_format.options.contains(&DataLoadingOption {
+            assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_type: DataLoadingOptionType::ENUM,
+                option_type: KeyValueOptionType::ENUM,
                 value: "AUTO".to_string()
             }));
-            assert!(file_format.options.contains(&DataLoadingOption {
+            assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_type: DataLoadingOptionType::ENUM,
+                option_type: KeyValueOptionType::ENUM,
                 value: "HEX".to_string()
             }));
-            assert!(file_format.options.contains(&DataLoadingOption {
+            assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_type: DataLoadingOptionType::STRING,
+                option_type: KeyValueOptionType::STRING,
                 value: r#"\\"#.to_string()
             }));
         }
@@ -2030,14 +2021,14 @@ fn test_create_stage_with_copy_options() {
     );
     match snowflake().verified_stmt(sql) {
         Statement::CreateStage { copy_options, .. } => {
-            assert!(copy_options.options.contains(&DataLoadingOption {
+            assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_type: DataLoadingOptionType::ENUM,
+                option_type: KeyValueOptionType::ENUM,
                 value: "CONTINUE".to_string()
             }));
-            assert!(copy_options.options.contains(&DataLoadingOption {
+            assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_type: DataLoadingOptionType::BOOLEAN,
+                option_type: KeyValueOptionType::BOOLEAN,
                 value: "TRUE".to_string()
             }));
         }
@@ -2167,38 +2158,26 @@ fn test_copy_into_with_stage_params() {
                 "<s3_api_compatible_endpoint>",
                 stage_params.endpoint.unwrap()
             );
-            assert!(stage_params
-                .credentials
-                .options
-                .contains(&DataLoadingOption {
-                    option_name: "AWS_KEY_ID".to_string(),
-                    option_type: DataLoadingOptionType::STRING,
-                    value: "1a2b3c".to_string()
-                }));
-            assert!(stage_params
-                .credentials
-                .options
-                .contains(&DataLoadingOption {
-                    option_name: "AWS_SECRET_KEY".to_string(),
-                    option_type: DataLoadingOptionType::STRING,
-                    value: "4x5y6z".to_string()
-                }));
-            assert!(stage_params
-                .encryption
-                .options
-                .contains(&DataLoadingOption {
-                    option_name: "MASTER_KEY".to_string(),
-                    option_type: DataLoadingOptionType::STRING,
-                    value: "key".to_string()
-                }));
-            assert!(stage_params
-                .encryption
-                .options
-                .contains(&DataLoadingOption {
-                    option_name: "TYPE".to_string(),
-                    option_type: DataLoadingOptionType::STRING,
-                    value: "AWS_SSE_KMS".to_string()
-                }));
+            assert!(stage_params.credentials.options.contains(&KeyValueOption {
+                option_name: "AWS_KEY_ID".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "1a2b3c".to_string()
+            }));
+            assert!(stage_params.credentials.options.contains(&KeyValueOption {
+                option_name: "AWS_SECRET_KEY".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "4x5y6z".to_string()
+            }));
+            assert!(stage_params.encryption.options.contains(&KeyValueOption {
+                option_name: "MASTER_KEY".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "key".to_string()
+            }));
+            assert!(stage_params.encryption.options.contains(&KeyValueOption {
+                option_name: "TYPE".to_string(),
+                option_type: KeyValueOptionType::STRING,
+                value: "AWS_SSE_KMS".to_string()
+            }));
         }
         _ => unreachable!(),
     };
@@ -2326,19 +2305,19 @@ fn test_copy_into_file_format() {
 
     match snowflake_without_unescape().verified_stmt(sql) {
         Statement::CopyIntoSnowflake { file_format, .. } => {
-            assert!(file_format.options.contains(&DataLoadingOption {
+            assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_type: DataLoadingOptionType::ENUM,
+                option_type: KeyValueOptionType::ENUM,
                 value: "AUTO".to_string()
             }));
-            assert!(file_format.options.contains(&DataLoadingOption {
+            assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_type: DataLoadingOptionType::ENUM,
+                option_type: KeyValueOptionType::ENUM,
                 value: "HEX".to_string()
             }));
-            assert!(file_format.options.contains(&DataLoadingOption {
+            assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_type: DataLoadingOptionType::STRING,
+                option_type: KeyValueOptionType::STRING,
                 value: r#"\\"#.to_string()
             }));
         }
@@ -2365,19 +2344,19 @@ fn test_copy_into_file_format() {
         .unwrap()
     {
         Statement::CopyIntoSnowflake { file_format, .. } => {
-            assert!(file_format.options.contains(&DataLoadingOption {
+            assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "COMPRESSION".to_string(),
-                option_type: DataLoadingOptionType::ENUM,
+                option_type: KeyValueOptionType::ENUM,
                 value: "AUTO".to_string()
             }));
-            assert!(file_format.options.contains(&DataLoadingOption {
+            assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "BINARY_FORMAT".to_string(),
-                option_type: DataLoadingOptionType::ENUM,
+                option_type: KeyValueOptionType::ENUM,
                 value: "HEX".to_string()
             }));
-            assert!(file_format.options.contains(&DataLoadingOption {
+            assert!(file_format.options.contains(&KeyValueOption {
                 option_name: "ESCAPE".to_string(),
-                option_type: DataLoadingOptionType::STRING,
+                option_type: KeyValueOptionType::STRING,
                 value: r#"\\"#.to_string()
             }));
         }
@@ -2397,14 +2376,14 @@ fn test_copy_into_copy_options() {
 
     match snowflake().verified_stmt(sql) {
         Statement::CopyIntoSnowflake { copy_options, .. } => {
-            assert!(copy_options.options.contains(&DataLoadingOption {
+            assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "ON_ERROR".to_string(),
-                option_type: DataLoadingOptionType::ENUM,
+                option_type: KeyValueOptionType::ENUM,
                 value: "CONTINUE".to_string()
             }));
-            assert!(copy_options.options.contains(&DataLoadingOption {
+            assert!(copy_options.options.contains(&KeyValueOption {
                 option_name: "FORCE".to_string(),
-                option_type: DataLoadingOptionType::BOOLEAN,
+                option_type: KeyValueOptionType::BOOLEAN,
                 value: "TRUE".to_string()
             }));
         }
@@ -2534,10 +2513,14 @@ fn test_snowflake_trim() {
     let select = snowflake().verified_only_select(sql_only_select);
     assert_eq!(
         &Expr::Trim {
-            expr: Box::new(Expr::Value(Value::SingleQuotedString("xyz".to_owned()))),
+            expr: Box::new(Expr::Value(
+                (Value::SingleQuotedString("xyz".to_owned())).with_empty_span()
+            )),
             trim_where: None,
             trim_what: None,
-            trim_characters: Some(vec![Expr::Value(Value::SingleQuotedString("a".to_owned()))]),
+            trim_characters: Some(vec![Expr::Value(
+                (Value::SingleQuotedString("a".to_owned())).with_empty_span()
+            )]),
         },
         expr_from_projection(only(&select.projection))
     );
@@ -2555,7 +2538,7 @@ fn test_number_placeholder() {
     let sql_only_select = "SELECT :1";
     let select = snowflake().verified_only_select(sql_only_select);
     assert_eq!(
-        &Expr::Value(Value::Placeholder(":1".into())),
+        &Expr::Value((Value::Placeholder(":1".into())).with_empty_span()),
         expr_from_projection(only(&select.projection))
     );
 
@@ -2701,7 +2684,7 @@ fn parse_comma_outer_join() {
                 "myudf",
                 [Expr::UnaryOp {
                     op: UnaryOperator::Plus,
-                    expr: Box::new(Expr::Value(number("42")))
+                    expr: Box::new(Expr::value(number("42")))
                 }]
             )),
         })
@@ -3474,4 +3457,36 @@ fn test_grant_role_to() {
 fn test_grant_database_role_to() {
     snowflake_and_generic().verified_stmt("GRANT DATABASE ROLE r1 TO ROLE r2");
     snowflake_and_generic().verified_stmt("GRANT DATABASE ROLE db1.sc1.r1 TO ROLE db1.sc1.r2");
+}
+
+#[test]
+fn test_alter_session() {
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("ALTER SESSION SET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: expected at least one option"
+    );
+    assert_eq!(
+        snowflake()
+            .parse_sql_statements("ALTER SESSION UNSET")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: expected at least one option"
+    );
+
+    snowflake().verified_stmt("ALTER SESSION SET AUTOCOMMIT=TRUE");
+    snowflake().verified_stmt("ALTER SESSION SET AUTOCOMMIT=FALSE QUERY_TAG='tag'");
+    snowflake().verified_stmt("ALTER SESSION UNSET AUTOCOMMIT");
+    snowflake().verified_stmt("ALTER SESSION UNSET AUTOCOMMIT, QUERY_TAG");
+    snowflake().one_statement_parses_to(
+        "ALTER SESSION SET A=false, B='tag';",
+        "ALTER SESSION SET A=FALSE B='tag'",
+    );
+    snowflake().one_statement_parses_to(
+        "ALTER SESSION SET A=true \nB='tag'",
+        "ALTER SESSION SET A=TRUE B='tag'",
+    );
+    snowflake().one_statement_parses_to("ALTER SESSION UNSET a\nB", "ALTER SESSION UNSET a, B");
 }

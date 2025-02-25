@@ -47,7 +47,6 @@ use crate::parser::ParserError;
 ///    .columns(vec![ColumnDef {
 ///        name: Ident::new("c1"),
 ///        data_type: DataType::Int(None),
-///        collation: None,
 ///        options: vec![],
 /// }]);
 /// // You can access internal elements with ease

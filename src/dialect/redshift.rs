@@ -113,4 +113,12 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_string_escape_constant(&self) -> bool {
         true
     }
+
+    fn supports_geometric_types(&self) -> bool {
+        true
+    }
+
+    fn supports_array_typedef_with_brackets(&self) -> bool {
+        true
+    }
 }

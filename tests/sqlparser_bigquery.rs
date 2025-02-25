@@ -29,19 +29,19 @@ use test_utils::*;
 #[test]
 fn parse_literal_string() {
     let sql = concat!(
-        "SELECT ",
-        "'single', ",
-        r#""double", "#,
-        "'''triple-single''', ",
-        r#""""triple-double""", "#,
-        r#"'single\'escaped', "#,
-        r#"'''triple-single\'escaped''', "#,
-        r#"'''triple-single'unescaped''', "#,
-        r#""double\"escaped", "#,
-        r#""""triple-double\"escaped""", "#,
-        r#""""triple-double"unescaped""", "#,
-        r#""""triple-double'unescaped""", "#,
-        r#"'''triple-single"unescaped'''"#,
+        "SELECT ",                            // line 1, column 1
+        "'single', ",                         // line 1, column 7
+        r#""double", "#,                      // line 1, column 14
+        "'''triple-single''', ",              // line 1, column 22
+        r#""""triple-double""", "#,           // line 1, column 33
+        r#"'single\'escaped', "#,             // line 1, column 43
+        r#"'''triple-single\'escaped''', "#,  // line 1, column 55
+        r#"'''triple-single'unescaped''', "#, // line 1, column 68
+        r#""double\"escaped", "#,             // line 1, column 83
+        r#""""triple-double\"escaped""", "#,  // line 1, column 92
+        r#""""triple-double"unescaped""", "#, // line 1, column 105
+        r#""""triple-double'unescaped""", "#, // line 1, column 118
+        r#"'''triple-single"unescaped'''"#,   // line 1, column 131
     );
     let dialect = TestedDialects::new_with_options(
         vec![Box::new(BigQueryDialect {})],
@@ -50,63 +50,67 @@ fn parse_literal_string() {
     let select = dialect.verified_only_select(sql);
     assert_eq!(12, select.projection.len());
     assert_eq!(
-        &Expr::Value(Value::SingleQuotedString("single".into())),
+        &Expr::Value(Value::SingleQuotedString("single".into()).with_empty_span()),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
-        &Expr::Value(Value::DoubleQuotedString("double".into())),
+        &Expr::Value(Value::DoubleQuotedString("double".into()).with_empty_span()),
         expr_from_projection(&select.projection[1])
     );
     assert_eq!(
-        &Expr::Value(Value::TripleSingleQuotedString("triple-single".into())),
+        &Expr::Value(Value::TripleSingleQuotedString("triple-single".into()).with_empty_span()),
         expr_from_projection(&select.projection[2])
     );
     assert_eq!(
-        &Expr::Value(Value::TripleDoubleQuotedString("triple-double".into())),
+        &Expr::Value(Value::TripleDoubleQuotedString("triple-double".into()).with_empty_span()),
         expr_from_projection(&select.projection[3])
     );
     assert_eq!(
-        &Expr::Value(Value::SingleQuotedString(r#"single\'escaped"#.into())),
+        &Expr::Value(Value::SingleQuotedString(r#"single\'escaped"#.into()).with_empty_span()),
         expr_from_projection(&select.projection[4])
     );
     assert_eq!(
-        &Expr::Value(Value::TripleSingleQuotedString(
-            r#"triple-single\'escaped"#.into()
-        )),
+        &Expr::Value(
+            Value::TripleSingleQuotedString(r#"triple-single\'escaped"#.into()).with_empty_span()
+        ),
         expr_from_projection(&select.projection[5])
     );
     assert_eq!(
-        &Expr::Value(Value::TripleSingleQuotedString(
-            r#"triple-single'unescaped"#.into()
-        )),
+        &Expr::Value(
+            Value::TripleSingleQuotedString(r#"triple-single'unescaped"#.into()).with_empty_span()
+        ),
         expr_from_projection(&select.projection[6])
     );
     assert_eq!(
-        &Expr::Value(Value::DoubleQuotedString(r#"double\"escaped"#.to_string())),
+        &Expr::Value(Value::DoubleQuotedString(r#"double\"escaped"#.to_string()).with_empty_span()),
         expr_from_projection(&select.projection[7])
     );
     assert_eq!(
-        &Expr::Value(Value::TripleDoubleQuotedString(
-            r#"triple-double\"escaped"#.to_string()
-        )),
+        &Expr::Value(
+            Value::TripleDoubleQuotedString(r#"triple-double\"escaped"#.to_string())
+                .with_empty_span()
+        ),
         expr_from_projection(&select.projection[8])
     );
     assert_eq!(
-        &Expr::Value(Value::TripleDoubleQuotedString(
-            r#"triple-double"unescaped"#.to_string()
-        )),
+        &Expr::Value(
+            Value::TripleDoubleQuotedString(r#"triple-double"unescaped"#.to_string())
+                .with_empty_span()
+        ),
         expr_from_projection(&select.projection[9])
     );
     assert_eq!(
-        &Expr::Value(Value::TripleDoubleQuotedString(
-            r#"triple-double'unescaped"#.to_string()
-        )),
+        &Expr::Value(
+            Value::TripleDoubleQuotedString(r#"triple-double'unescaped"#.to_string())
+                .with_empty_span()
+        ),
         expr_from_projection(&select.projection[10])
     );
     assert_eq!(
-        &Expr::Value(Value::TripleSingleQuotedString(
-            r#"triple-single"unescaped"#.to_string()
-        )),
+        &Expr::Value(
+            Value::TripleSingleQuotedString(r#"triple-single"unescaped"#.to_string())
+                .with_empty_span()
+        ),
         expr_from_projection(&select.projection[11])
     );
 }
@@ -114,48 +118,56 @@ fn parse_literal_string() {
 #[test]
 fn parse_byte_literal() {
     let sql = concat!(
-        "SELECT ",
-        "B'abc', ",
-        r#"B"abc", "#,
-        r#"B'f\(abc,(.*),def\)', "#,
-        r#"B"f\(abc,(.*),def\)", "#,
-        r#"B'''abc''', "#,
-        r#"B"""abc""""#,
+        "SELECT ",                   // line 1, column 1
+        "B'abc', ",                  // line 1, column 8
+        r#"B"abc", "#,               // line 1, column 15
+        r#"B'f\(abc,(.*),def\)', "#, // line 1, column 22
+        r#"B"f\(abc,(.*),def\)", "#, // line 1, column 42
+        r#"B'''abc''', "#,           // line 1, column 62
+        r#"B"""abc""""#,             // line 1, column 74
     );
     let stmt = bigquery().verified_stmt(sql);
     if let Statement::Query(query) = stmt {
         if let SetExpr::Select(select) = *query.body {
             assert_eq!(6, select.projection.len());
             assert_eq!(
-                &Expr::Value(Value::SingleQuotedByteStringLiteral("abc".to_string())),
+                &Expr::Value(
+                    Value::SingleQuotedByteStringLiteral("abc".to_string()).with_empty_span()
+                ),
                 expr_from_projection(&select.projection[0])
             );
             assert_eq!(
-                &Expr::Value(Value::DoubleQuotedByteStringLiteral("abc".to_string())),
+                &Expr::Value(
+                    Value::DoubleQuotedByteStringLiteral("abc".to_string()).with_empty_span()
+                ),
                 expr_from_projection(&select.projection[1])
             );
             assert_eq!(
-                &Expr::Value(Value::SingleQuotedByteStringLiteral(
-                    r"f\(abc,(.*),def\)".to_string()
-                )),
+                &Expr::Value(
+                    Value::SingleQuotedByteStringLiteral(r"f\(abc,(.*),def\)".to_string())
+                        .with_empty_span()
+                ),
                 expr_from_projection(&select.projection[2])
             );
             assert_eq!(
-                &Expr::Value(Value::DoubleQuotedByteStringLiteral(
-                    r"f\(abc,(.*),def\)".to_string()
-                )),
+                &Expr::Value(
+                    Value::DoubleQuotedByteStringLiteral(r"f\(abc,(.*),def\)".to_string())
+                        .with_empty_span()
+                ),
                 expr_from_projection(&select.projection[3])
             );
             assert_eq!(
-                &Expr::Value(Value::TripleSingleQuotedByteStringLiteral(
-                    r"abc".to_string()
-                )),
+                &Expr::Value(
+                    Value::TripleSingleQuotedByteStringLiteral(r"abc".to_string())
+                        .with_empty_span()
+                ),
                 expr_from_projection(&select.projection[4])
             );
             assert_eq!(
-                &Expr::Value(Value::TripleDoubleQuotedByteStringLiteral(
-                    r"abc".to_string()
-                )),
+                &Expr::Value(
+                    Value::TripleDoubleQuotedByteStringLiteral(r"abc".to_string())
+                        .with_empty_span()
+                ),
                 expr_from_projection(&select.projection[5])
             );
         }
@@ -172,48 +184,54 @@ fn parse_byte_literal() {
 #[test]
 fn parse_raw_literal() {
     let sql = concat!(
-        "SELECT ",
-        "R'abc', ",
-        r#"R"abc", "#,
-        r#"R'f\(abc,(.*),def\)', "#,
-        r#"R"f\(abc,(.*),def\)", "#,
-        r#"R'''abc''', "#,
-        r#"R"""abc""""#,
+        "SELECT ",                   // line 1, column 1
+        "R'abc', ",                  // line 1, column 8
+        r#"R"abc", "#,               // line 1, column 15
+        r#"R'f\(abc,(.*),def\)', "#, // line 1, column 22
+        r#"R"f\(abc,(.*),def\)", "#, // line 1, column 42
+        r#"R'''abc''', "#,           // line 1, column 62
+        r#"R"""abc""""#,             // line 1, column 74
     );
     let stmt = bigquery().verified_stmt(sql);
     if let Statement::Query(query) = stmt {
         if let SetExpr::Select(select) = *query.body {
             assert_eq!(6, select.projection.len());
             assert_eq!(
-                &Expr::Value(Value::SingleQuotedRawStringLiteral("abc".to_string())),
+                &Expr::Value(
+                    Value::SingleQuotedRawStringLiteral("abc".to_string()).with_empty_span()
+                ),
                 expr_from_projection(&select.projection[0])
             );
             assert_eq!(
-                &Expr::Value(Value::DoubleQuotedRawStringLiteral("abc".to_string())),
+                &Expr::Value(
+                    Value::DoubleQuotedRawStringLiteral("abc".to_string()).with_empty_span()
+                ),
                 expr_from_projection(&select.projection[1])
             );
             assert_eq!(
-                &Expr::Value(Value::SingleQuotedRawStringLiteral(
-                    r"f\(abc,(.*),def\)".to_string()
-                )),
+                &Expr::Value(
+                    Value::SingleQuotedRawStringLiteral(r"f\(abc,(.*),def\)".to_string())
+                        .with_empty_span()
+                ),
                 expr_from_projection(&select.projection[2])
             );
             assert_eq!(
-                &Expr::Value(Value::DoubleQuotedRawStringLiteral(
-                    r"f\(abc,(.*),def\)".to_string()
-                )),
+                &Expr::Value(
+                    Value::DoubleQuotedRawStringLiteral(r"f\(abc,(.*),def\)".to_string())
+                        .with_empty_span()
+                ),
                 expr_from_projection(&select.projection[3])
             );
             assert_eq!(
-                &Expr::Value(Value::TripleSingleQuotedRawStringLiteral(
-                    r"abc".to_string()
-                )),
+                &Expr::Value(
+                    Value::TripleSingleQuotedRawStringLiteral(r"abc".to_string()).with_empty_span()
+                ),
                 expr_from_projection(&select.projection[4])
             );
             assert_eq!(
-                &Expr::Value(Value::TripleDoubleQuotedRawStringLiteral(
-                    r"abc".to_string()
-                )),
+                &Expr::Value(
+                    Value::TripleDoubleQuotedRawStringLiteral(r"abc".to_string()).with_empty_span()
+                ),
                 expr_from_projection(&select.projection[5])
             );
         }
@@ -234,6 +252,52 @@ fn parse_big_query_non_reserved_column_alias() {
 
     let sql = r#"SELECT 1 AS OFFSET, 2 AS EXPLAIN, 3 AS ANALYZE FROM T"#;
     bigquery().verified_stmt(sql);
+}
+
+#[test]
+fn parse_at_at_identifier() {
+    bigquery().verified_stmt("SELECT @@error.stack_trace, @@error.message");
+}
+
+#[test]
+fn parse_begin() {
+    let sql = r#"BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2; END"#;
+    let Statement::StartTransaction {
+        statements,
+        exception_statements,
+        has_end_keyword,
+        ..
+    } = bigquery().verified_stmt(sql)
+    else {
+        unreachable!();
+    };
+    assert_eq!(1, statements.len());
+    assert_eq!(1, exception_statements.unwrap().len());
+    assert!(has_end_keyword);
+
+    bigquery().verified_stmt(
+        "BEGIN SELECT 1; SELECT 2; EXCEPTION WHEN ERROR THEN SELECT 2; SELECT 4; END",
+    );
+    bigquery()
+        .verified_stmt("BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT @@error.stack_trace; END");
+    bigquery().verified_stmt("BEGIN EXCEPTION WHEN ERROR THEN SELECT 2; END");
+    bigquery().verified_stmt("BEGIN SELECT 1; SELECT 2; EXCEPTION WHEN ERROR THEN END");
+    bigquery().verified_stmt("BEGIN EXCEPTION WHEN ERROR THEN END");
+    bigquery().verified_stmt("BEGIN SELECT 1; SELECT 2; END");
+    bigquery().verified_stmt("BEGIN END");
+
+    assert_eq!(
+        bigquery()
+            .parse_sql_statements("BEGIN SELECT 1; SELECT 2 END")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ;, found: END".to_string())
+    );
+    assert_eq!(
+        bigquery()
+            .parse_sql_statements("BEGIN SELECT 1; EXCEPTION WHEN ERROR THEN SELECT 2 END")
+            .unwrap_err(),
+        ParserError::ParserError("Expected: ;, found: END".to_string())
+    );
 }
 
 #[test]
@@ -290,7 +354,11 @@ fn parse_create_view_with_options() {
                         data_type: None,
                         options: Some(vec![ColumnOption::Options(vec![SqlOption::KeyValue {
                             key: Ident::new("description"),
-                            value: Expr::Value(Value::DoubleQuotedString("field age".to_string())),
+                            value: Expr::Value(
+                                Value::DoubleQuotedString("field age".to_string()).with_span(
+                                    Span::new(Location::new(1, 42), Location::new(1, 52))
+                                )
+                            ),
                         }])]),
                     },
                 ],
@@ -310,9 +378,10 @@ fn parse_create_view_with_options() {
             assert_eq!(
                 &SqlOption::KeyValue {
                     key: Ident::new("description"),
-                    value: Expr::Value(Value::DoubleQuotedString(
-                        "a view that expires in 2 days".to_string()
-                    )),
+                    value: Expr::Value(
+                        Value::DoubleQuotedString("a view that expires in 2 days".to_string())
+                            .with_empty_span()
+                    ),
                 },
                 &options[2],
             );
@@ -320,6 +389,7 @@ fn parse_create_view_with_options() {
         _ => unreachable!(),
     }
 }
+
 #[test]
 fn parse_create_view_if_not_exists() {
     let sql = "CREATE VIEW IF NOT EXISTS mydataset.newview AS SELECT foo FROM bar";
@@ -389,7 +459,6 @@ fn parse_create_table_with_unquoted_hyphen() {
                 vec![ColumnDef {
                     name: Ident::new("x"),
                     data_type: DataType::Int64,
-                    collation: None,
                     options: vec![]
                 },],
                 columns
@@ -427,7 +496,6 @@ fn parse_create_table_with_options() {
                     ColumnDef {
                         name: Ident::new("x"),
                         data_type: DataType::Int64,
-                        collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -437,9 +505,11 @@ fn parse_create_table_with_options() {
                                 name: None,
                                 option: ColumnOption::Options(vec![SqlOption::KeyValue {
                                     key: Ident::new("description"),
-                                    value: Expr::Value(Value::DoubleQuotedString(
-                                        "field x".to_string()
-                                    )),
+                                    value: Expr::Value(
+                                        Value::DoubleQuotedString("field x".to_string()).with_span(
+                                            Span::new(Location::new(1, 42), Location::new(1, 52))
+                                        )
+                                    ),
                                 },])
                             },
                         ]
@@ -447,14 +517,15 @@ fn parse_create_table_with_options() {
                     ColumnDef {
                         name: Ident::new("y"),
                         data_type: DataType::Bool,
-                        collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Options(vec![SqlOption::KeyValue {
                                 key: Ident::new("description"),
-                                value: Expr::Value(Value::DoubleQuotedString(
-                                    "field y".to_string()
-                                )),
+                                value: Expr::Value(
+                                    Value::DoubleQuotedString("field y".to_string()).with_span(
+                                        Span::new(Location::new(1, 42), Location::new(1, 52))
+                                    )
+                                ),
                             },])
                         }]
                     },
@@ -471,13 +542,22 @@ fn parse_create_table_with_options() {
                     Some(vec![
                         SqlOption::KeyValue {
                             key: Ident::new("partition_expiration_days"),
-                            value: Expr::Value(number("1")),
+                            value: Expr::Value(
+                                number("1").with_span(Span::new(
+                                    Location::new(1, 42),
+                                    Location::new(1, 43)
+                                ))
+                            ),
                         },
                         SqlOption::KeyValue {
                             key: Ident::new("description"),
-                            value: Expr::Value(Value::DoubleQuotedString(
-                                "table option description".to_string()
-                            )),
+                            value: Expr::Value(
+                                Value::DoubleQuotedString("table option description".to_string())
+                                    .with_span(Span::new(
+                                        Location::new(1, 42),
+                                        Location::new(1, 52)
+                                    ))
+                            ),
                         },
                     ])
                 ),
@@ -530,7 +610,6 @@ fn parse_nested_data_types() {
                             ],
                             StructBracketKind::AngleBrackets
                         ),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -544,7 +623,6 @@ fn parse_nested_data_types() {
                                 StructBracketKind::AngleBrackets
                             ),
                         ))),
-                        collation: None,
                         options: vec![],
                     },
                 ]
@@ -587,23 +665,23 @@ fn parse_invalid_brackets() {
 fn parse_tuple_struct_literal() {
     // tuple syntax: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#tuple_syntax
     // syntax: (expr1, expr2 [, ... ])
-    let sql = "SELECT (1, 2, 3), (1, 1.0, '123', true)";
+    let sql = "SELECT (1, 2, 3), (1, 1.0, '123', true)"; // line 1, column 1
     let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Tuple(vec![
-            Expr::Value(number("1")),
-            Expr::Value(number("2")),
-            Expr::Value(number("3")),
+            Expr::value(number("1")),
+            Expr::value(number("2")),
+            Expr::value(number("3")),
         ]),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
         &Expr::Tuple(vec![
-            Expr::Value(number("1")),
-            Expr::Value(number("1.0")),
-            Expr::Value(Value::SingleQuotedString("123".into())),
-            Expr::Value(Value::Boolean(true))
+            Expr::value(number("1")),
+            Expr::value(number("1.0")),
+            Expr::Value(Value::SingleQuotedString("123".into()).with_empty_span()),
+            Expr::Value(Value::Boolean(true).with_empty_span())
         ]),
         expr_from_projection(&select.projection[1])
     );
@@ -619,9 +697,9 @@ fn parse_typeless_struct_syntax() {
     assert_eq!(
         &Expr::Struct {
             values: vec![
-                Expr::Value(number("1")),
-                Expr::Value(number("2")),
-                Expr::Value(number("3")),
+                Expr::value(number("1")),
+                Expr::value(number("2")),
+                Expr::value(number("3")),
             ],
             fields: Default::default()
         },
@@ -630,30 +708,35 @@ fn parse_typeless_struct_syntax() {
 
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::SingleQuotedString("abc".into())),],
+            values: vec![Expr::Value(
+                Value::SingleQuotedString("abc".into()).with_empty_span()
+            )],
             fields: Default::default()
         },
         expr_from_projection(&select.projection[1])
     );
+
     assert_eq!(
         &Expr::Struct {
             values: vec![
-                Expr::Value(number("1")),
+                Expr::value(number("1")),
                 Expr::CompoundIdentifier(vec![Ident::from("t"), Ident::from("str_col")]),
             ],
             fields: Default::default()
         },
         expr_from_projection(&select.projection[2])
     );
+
     assert_eq!(
         &Expr::Struct {
             values: vec![
                 Expr::Named {
-                    expr: Expr::Value(number("1")).into(),
+                    expr: Expr::value(number("1")).into(),
                     name: Ident::from("a")
                 },
                 Expr::Named {
-                    expr: Expr::Value(Value::SingleQuotedString("abc".into())).into(),
+                    expr: Expr::Value(Value::SingleQuotedString("abc".into()).with_empty_span())
+                        .into(),
                     name: Ident::from("b")
                 },
             ],
@@ -661,6 +744,7 @@ fn parse_typeless_struct_syntax() {
         },
         expr_from_projection(&select.projection[3])
     );
+
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::Named {
@@ -683,7 +767,7 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5")),],
+            values: vec![Expr::value(number("5"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
@@ -694,7 +778,7 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(
         &Expr::Struct {
             values: vec![
-                Expr::Value(number("1")),
+                Expr::value(number("1")),
                 Expr::CompoundIdentifier(vec![
                     Ident {
                         value: "t".into(),
@@ -735,7 +819,7 @@ fn parse_typed_struct_syntax_bigquery() {
                 value: "nested_col".into(),
                 quote_style: None,
                 span: Span::empty(),
-            }),],
+            })],
             fields: vec![
                 StructField {
                     field_name: Some("arr".into()),
@@ -767,7 +851,7 @@ fn parse_typed_struct_syntax_bigquery() {
                 value: "nested_col".into(),
                 quote_style: None,
                 span: Span::empty(),
-            }),],
+            })],
             fields: vec![
                 StructField {
                     field_name: Some("x".into()),
@@ -792,7 +876,7 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::Boolean(true)),],
+            values: vec![Expr::Value(Value::Boolean(true).with_empty_span())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Bool
@@ -802,9 +886,9 @@ fn parse_typed_struct_syntax_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::SingleQuotedByteStringLiteral(
-                "abc".into()
-            )),],
+            values: vec![Expr::Value(
+                Value::SingleQuotedByteStringLiteral("abc".into()).with_empty_span()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Bytes(Some(42))
@@ -818,7 +902,9 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(4, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::DoubleQuotedString("2011-05-05".into())),],
+            values: vec![Expr::Value(
+                Value::DoubleQuotedString("2011-05-05".into()).with_empty_span()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Date
@@ -831,7 +917,7 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::TypedString {
                 data_type: DataType::Datetime(None),
                 value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Datetime(None)
@@ -841,7 +927,7 @@ fn parse_typed_struct_syntax_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5.0")),],
+            values: vec![Expr::value(number("5.0"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Float64
@@ -851,7 +937,7 @@ fn parse_typed_struct_syntax_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("1")),],
+            values: vec![Expr::value(number("1"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64
@@ -866,12 +952,14 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::Interval(Interval {
-                value: Box::new(Expr::Value(Value::SingleQuotedString("2".into()))),
+                value: Box::new(Expr::Value(
+                    Value::SingleQuotedString("2".into()).with_empty_span()
+                )),
                 leading_field: Some(DateTimeField::Hour),
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None
-            }),],
+            })],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Interval
@@ -886,7 +974,7 @@ fn parse_typed_struct_syntax_bigquery() {
                 value: Value::SingleQuotedString(
                     r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
                 )
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::JSON
@@ -900,7 +988,9 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::DoubleQuotedString("foo".into())),],
+            values: vec![Expr::Value(
+                Value::DoubleQuotedString("foo".into()).with_empty_span()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::String(Some(42))
@@ -913,7 +1003,7 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
                 value: Value::SingleQuotedString("2008-12-25 15:30:00 America/Los_Angeles".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Timestamp(None, TimezoneInfo::None)
@@ -927,7 +1017,7 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::TypedString {
                 data_type: DataType::Time(None, TimezoneInfo::None),
                 value: Value::SingleQuotedString("15:30:00".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Time(None, TimezoneInfo::None)
@@ -944,7 +1034,7 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::TypedString {
                 data_type: DataType::Numeric(ExactNumberInfo::None),
                 value: Value::SingleQuotedString("1".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Numeric(ExactNumberInfo::None)
@@ -957,7 +1047,7 @@ fn parse_typed_struct_syntax_bigquery() {
             values: vec![Expr::TypedString {
                 data_type: DataType::BigNumeric(ExactNumberInfo::None),
                 value: Value::SingleQuotedString("1".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::BigNumeric(ExactNumberInfo::None)
@@ -972,7 +1062,7 @@ fn parse_typed_struct_syntax_bigquery() {
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("1")), Expr::Value(number("2")),],
+            values: vec![Expr::value(number("1")), Expr::value(number("2")),],
             fields: vec![
                 StructField {
                     field_name: Some("key".into()),
@@ -998,7 +1088,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5")),],
+            values: vec![Expr::value(number("5"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64,
@@ -1009,7 +1099,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(
         &Expr::Struct {
             values: vec![
-                Expr::Value(number("1")),
+                Expr::value(number("1")),
                 Expr::CompoundIdentifier(vec![
                     Ident {
                         value: "t".into(),
@@ -1044,34 +1134,6 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
         },
         expr_from_projection(&select.projection[1])
     );
-    assert_eq!(
-        &Expr::Struct {
-            values: vec![Expr::Identifier(Ident {
-                value: "nested_col".into(),
-                quote_style: None,
-                span: Span::empty(),
-            }),],
-            fields: vec![
-                StructField {
-                    field_name: Some("arr".into()),
-                    field_type: DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
-                        DataType::Float64
-                    )))
-                },
-                StructField {
-                    field_name: Some("str".into()),
-                    field_type: DataType::Struct(
-                        vec![StructField {
-                            field_name: None,
-                            field_type: DataType::Bool
-                        }],
-                        StructBracketKind::AngleBrackets
-                    )
-                },
-            ]
-        },
-        expr_from_projection(&select.projection[2])
-    );
 
     let sql = r#"SELECT STRUCT<x STRUCT, y ARRAY<STRUCT>>(nested_col)"#;
     let select = bigquery_and_generic().verified_only_select(sql);
@@ -1082,7 +1144,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                 value: "nested_col".into(),
                 quote_style: None,
                 span: Span::empty(),
-            }),],
+            })],
             fields: vec![
                 StructField {
                     field_name: Some("x".into()),
@@ -1107,7 +1169,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::Boolean(true)),],
+            values: vec![Expr::Value(Value::Boolean(true).with_empty_span())],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Bool
@@ -1117,9 +1179,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::SingleQuotedByteStringLiteral(
-                "abc".into()
-            )),],
+            values: vec![Expr::Value(
+                Value::SingleQuotedByteStringLiteral("abc".into()).with_empty_span()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Bytes(Some(42))
@@ -1133,7 +1195,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(4, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::SingleQuotedString("2011-05-05".into())),],
+            values: vec![Expr::Value(
+                Value::SingleQuotedString("2011-05-05".into()).with_empty_span()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Date
@@ -1146,7 +1210,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::TypedString {
                 data_type: DataType::Datetime(None),
                 value: Value::SingleQuotedString("1999-01-01 01:23:34.45".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Datetime(None)
@@ -1156,7 +1220,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5.0")),],
+            values: vec![Expr::value(number("5.0"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Float64
@@ -1166,7 +1230,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("1")),],
+            values: vec![Expr::value(number("1"))],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Int64
@@ -1181,12 +1245,14 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(
         &Expr::Struct {
             values: vec![Expr::Interval(Interval {
-                value: Box::new(Expr::Value(Value::SingleQuotedString("1".into()))),
+                value: Box::new(Expr::Value(
+                    Value::SingleQuotedString("1".into()).with_empty_span()
+                )),
                 leading_field: Some(DateTimeField::Month),
                 leading_precision: None,
                 last_field: None,
                 fractional_seconds_precision: None
-            }),],
+            })],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Interval
@@ -1201,7 +1267,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                 value: Value::SingleQuotedString(
                     r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.into()
                 )
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::JSON
@@ -1215,7 +1281,9 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::SingleQuotedString("foo".into())),],
+            values: vec![Expr::Value(
+                Value::SingleQuotedString("foo".into()).with_empty_span()
+            )],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::String(Some(42))
@@ -1228,7 +1296,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::TypedString {
                 data_type: DataType::Timestamp(None, TimezoneInfo::None),
                 value: Value::SingleQuotedString("2008-12-25 15:30:00 America/Los_Angeles".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Timestamp(None, TimezoneInfo::None)
@@ -1242,7 +1310,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::TypedString {
                 data_type: DataType::Time(None, TimezoneInfo::None),
                 value: Value::SingleQuotedString("15:30:00".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Time(None, TimezoneInfo::None)
@@ -1259,7 +1327,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::TypedString {
                 data_type: DataType::Numeric(ExactNumberInfo::None),
                 value: Value::SingleQuotedString("1".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::Numeric(ExactNumberInfo::None)
@@ -1272,7 +1340,7 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
             values: vec![Expr::TypedString {
                 data_type: DataType::BigNumeric(ExactNumberInfo::None),
                 value: Value::SingleQuotedString("1".into())
-            },],
+            }],
             fields: vec![StructField {
                 field_name: None,
                 field_type: DataType::BigNumeric(ExactNumberInfo::None)
@@ -1284,12 +1352,12 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
 
 #[test]
 fn parse_typed_struct_with_field_name_bigquery() {
-    let sql = r#"SELECT STRUCT<x INT64>(5), STRUCT<y STRING>("foo")"#;
+    let sql = r#"SELECT STRUCT<x INT64>(5), STRUCT<y STRING>("foo")"#; // line 1, column 1
     let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5")),],
+            values: vec![Expr::value(number("5"))],
             fields: vec![StructField {
                 field_name: Some(Ident::from("x")),
                 field_type: DataType::Int64
@@ -1299,7 +1367,9 @@ fn parse_typed_struct_with_field_name_bigquery() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::DoubleQuotedString("foo".into())),],
+            values: vec![Expr::Value(
+                Value::DoubleQuotedString("foo".into()).with_empty_span()
+            )],
             fields: vec![StructField {
                 field_name: Some(Ident::from("y")),
                 field_type: DataType::String(None)
@@ -1308,12 +1378,12 @@ fn parse_typed_struct_with_field_name_bigquery() {
         expr_from_projection(&select.projection[1])
     );
 
-    let sql = r#"SELECT STRUCT<x INT64, y INT64>(5, 5)"#;
+    let sql = r#"SELECT STRUCT<x INT64, y INT64>(5, 5)"#; // line 1, column 1
     let select = bigquery().verified_only_select(sql);
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5")), Expr::Value(number("5")),],
+            values: vec![Expr::value(number("5")), Expr::value(number("5")),],
             fields: vec![
                 StructField {
                     field_name: Some(Ident::from("x")),
@@ -1331,12 +1401,12 @@ fn parse_typed_struct_with_field_name_bigquery() {
 
 #[test]
 fn parse_typed_struct_with_field_name_bigquery_and_generic() {
-    let sql = r#"SELECT STRUCT<x INT64>(5), STRUCT<y STRING>('foo')"#;
+    let sql = r#"SELECT STRUCT<x INT64>(5), STRUCT<y STRING>('foo')"#; // line 1, column 1
     let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5")),],
+            values: vec![Expr::value(number("5"))],
             fields: vec![StructField {
                 field_name: Some(Ident::from("x")),
                 field_type: DataType::Int64
@@ -1346,7 +1416,9 @@ fn parse_typed_struct_with_field_name_bigquery_and_generic() {
     );
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(Value::SingleQuotedString("foo".into())),],
+            values: vec![Expr::Value(
+                Value::SingleQuotedString("foo".into()).with_empty_span()
+            )],
             fields: vec![StructField {
                 field_name: Some(Ident::from("y")),
                 field_type: DataType::String(None)
@@ -1355,12 +1427,12 @@ fn parse_typed_struct_with_field_name_bigquery_and_generic() {
         expr_from_projection(&select.projection[1])
     );
 
-    let sql = r#"SELECT STRUCT<x INT64, y INT64>(5, 5)"#;
+    let sql = r#"SELECT STRUCT<x INT64, y INT64>(5, 5)"#; // line 1, column 1
     let select = bigquery_and_generic().verified_only_select(sql);
     assert_eq!(1, select.projection.len());
     assert_eq!(
         &Expr::Struct {
-            values: vec![Expr::Value(number("5")), Expr::Value(number("5")),],
+            values: vec![Expr::value(number("5")), Expr::value(number("5")),],
             fields: vec![
                 StructField {
                     field_name: Some(Ident::from("x")),
@@ -1568,7 +1640,7 @@ fn parse_hyphenated_table_identifiers() {
 #[test]
 fn parse_table_time_travel() {
     let version = "2023-08-18 23:08:18".to_string();
-    let sql = format!("SELECT 1 FROM t1 FOR SYSTEM_TIME AS OF '{version}'");
+    let sql = format!("SELECT 1 FROM t1 FOR SYSTEM_TIME AS OF '{version}'"); // line 1, column 1
     let select = bigquery().verified_only_select(&sql);
     assert_eq!(
         select.from,
@@ -1579,7 +1651,7 @@ fn parse_table_time_travel() {
                 args: None,
                 with_hints: vec![],
                 version: Some(TableVersion::ForSystemTimeAsOf(Expr::Value(
-                    Value::SingleQuotedString(version)
+                    Value::SingleQuotedString(version).with_empty_span()
                 ))),
                 partitions: vec![],
                 with_ordinality: false,
@@ -1648,18 +1720,18 @@ fn parse_merge() {
         columns: vec![Ident::new("product"), Ident::new("quantity")],
         kind: MergeInsertKind::Values(Values {
             explicit_row: false,
-            rows: vec![vec![Expr::Value(number("1")), Expr::Value(number("2"))]],
+            rows: vec![vec![Expr::value(number("1")), Expr::value(number("2"))]],
         }),
     });
     let update_action = MergeAction::Update {
         assignments: vec![
             Assignment {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("a")])),
-                value: Expr::Value(number("1")),
+                value: Expr::value(number("1")),
             },
             Assignment {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("b")])),
-                value: Expr::Value(number("2")),
+                value: Expr::value(number("2")),
             },
         ],
     };
@@ -1708,17 +1780,17 @@ fn parse_merge() {
                 },
                 source
             );
-            assert_eq!(Expr::Value(Value::Boolean(false)), *on);
+            assert_eq!(Expr::Value(Value::Boolean(false).with_empty_span()), *on);
             assert_eq!(
                 vec![
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatched,
-                        predicate: Some(Expr::Value(number("1"))),
+                        predicate: Some(Expr::value(number("1"))),
                         action: insert_action.clone(),
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatchedByTarget,
-                        predicate: Some(Expr::Value(number("1"))),
+                        predicate: Some(Expr::value(number("1"))),
                         action: insert_action.clone(),
                     },
                     MergeClause {
@@ -1728,7 +1800,7 @@ fn parse_merge() {
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatchedBySource,
-                        predicate: Some(Expr::Value(number("2"))),
+                        predicate: Some(Expr::value(number("2"))),
                         action: MergeAction::Delete
                     },
                     MergeClause {
@@ -1738,12 +1810,12 @@ fn parse_merge() {
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatchedBySource,
-                        predicate: Some(Expr::Value(number("1"))),
+                        predicate: Some(Expr::value(number("1"))),
                         action: update_action.clone(),
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatched,
-                        predicate: Some(Expr::Value(number("1"))),
+                        predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Insert(MergeInsertExpr {
                             columns: vec![Ident::new("product"), Ident::new("quantity"),],
                             kind: MergeInsertKind::Row,
@@ -1759,7 +1831,7 @@ fn parse_merge() {
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::NotMatched,
-                        predicate: Some(Expr::Value(number("1"))),
+                        predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Insert(MergeInsertExpr {
                             columns: vec![],
                             kind: MergeInsertKind::Row
@@ -1775,7 +1847,7 @@ fn parse_merge() {
                     },
                     MergeClause {
                         clause_kind: MergeClauseKind::Matched,
-                        predicate: Some(Expr::Value(number("1"))),
+                        predicate: Some(Expr::value(number("1"))),
                         action: MergeAction::Delete,
                     },
                     MergeClause {
@@ -1791,7 +1863,7 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 explicit_row: false,
                                 rows: vec![vec![
-                                    Expr::Value(number("1")),
+                                    Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
                                 ]]
                             })
@@ -1805,7 +1877,7 @@ fn parse_merge() {
                             kind: MergeInsertKind::Values(Values {
                                 explicit_row: false,
                                 rows: vec![vec![
-                                    Expr::Value(number("1")),
+                                    Expr::value(number("1")),
                                     Expr::Identifier(Ident::new("DEFAULT")),
                                 ]]
                             })
@@ -1921,7 +1993,7 @@ fn parse_array_agg_func() {
 fn parse_big_query_declare() {
     for (sql, expected_names, expected_data_type, expected_assigned_expr) in [
         (
-            "DECLARE x INT64",
+            "DECLARE x INT64", // line 1, column 1
             vec![Ident::new("x")],
             Some(DataType::Int64),
             None,
@@ -1930,25 +2002,25 @@ fn parse_big_query_declare() {
             "DECLARE x INT64 DEFAULT 42",
             vec![Ident::new("x")],
             Some(DataType::Int64),
-            Some(DeclareAssignment::Default(Box::new(Expr::Value(number(
-                "42",
-            ))))),
+            Some(DeclareAssignment::Default(Box::new(Expr::Value(
+                number("42").with_empty_span(),
+            )))),
         ),
         (
             "DECLARE x, y, z INT64 DEFAULT 42",
             vec![Ident::new("x"), Ident::new("y"), Ident::new("z")],
             Some(DataType::Int64),
-            Some(DeclareAssignment::Default(Box::new(Expr::Value(number(
-                "42",
-            ))))),
+            Some(DeclareAssignment::Default(Box::new(Expr::Value(
+                number("42").with_empty_span(),
+            )))),
         ),
         (
             "DECLARE x DEFAULT 42",
             vec![Ident::new("x")],
             None,
-            Some(DeclareAssignment::Default(Box::new(Expr::Value(number(
-                "42",
-            ))))),
+            Some(DeclareAssignment::Default(Box::new(Expr::Value(
+                number("42").with_empty_span(),
+            )))),
         ),
     ] {
         match bigquery().verified_stmt(sql) {
@@ -2006,7 +2078,7 @@ fn parse_map_access_expr() {
             AccessExpr::Subscript(Subscript::Index {
                 index: Expr::UnaryOp {
                     op: UnaryOperator::Minus,
-                    expr: Expr::Value(number("1")).into(),
+                    expr: Expr::value(number("1")).into(),
                 },
             }),
             AccessExpr::Subscript(Subscript::Index {
@@ -2019,7 +2091,7 @@ fn parse_map_access_expr() {
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            number("2"),
+                            number("2").with_empty_span(),
                         )))],
                         clauses: vec![],
                     }),
@@ -2070,12 +2142,12 @@ fn test_bigquery_create_function() {
             ]),
             args: Some(vec![OperateFunctionArg::with_name("x", DataType::Float64),]),
             return_type: Some(DataType::Float64),
-            function_body: Some(CreateFunctionBody::AsAfterOptions(Expr::Value(number(
-                "42"
-            )))),
+            function_body: Some(CreateFunctionBody::AsAfterOptions(Expr::Value(
+                number("42").with_empty_span()
+            ))),
             options: Some(vec![SqlOption::KeyValue {
                 key: Ident::new("x"),
-                value: Expr::Value(Value::SingleQuotedString("y".into())),
+                value: Expr::Value(Value::SingleQuotedString("y".into()).with_empty_span()),
             }]),
             behavior: None,
             using: None,
@@ -2194,10 +2266,14 @@ fn test_bigquery_trim() {
     let select = bigquery().verified_only_select(sql_only_select);
     assert_eq!(
         &Expr::Trim {
-            expr: Box::new(Expr::Value(Value::SingleQuotedString("xyz".to_owned()))),
+            expr: Box::new(Expr::Value(
+                Value::SingleQuotedString("xyz".to_owned()).with_empty_span()
+            )),
             trim_where: None,
             trim_what: None,
-            trim_characters: Some(vec![Expr::Value(Value::SingleQuotedString("a".to_owned()))]),
+            trim_characters: Some(vec![Expr::Value(
+                Value::SingleQuotedString("a".to_owned()).with_empty_span()
+            )]),
         },
         expr_from_projection(only(&select.projection))
     );

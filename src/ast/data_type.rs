@@ -85,7 +85,7 @@ pub enum DataType {
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
     /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/data-types/binary-and-varbinary-transact-sql?view=sql-server-ver16
-    Varbinary(Option<u64>),
+    Varbinary(Option<BinaryLength>),
     /// Large binary object with optional length e.g. BLOB, BLOB(1000), [standard], [Oracle]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-large-object-string-type
@@ -386,6 +386,10 @@ pub enum DataType {
     ///
     /// [bigquery]: https://cloud.google.com/bigquery/docs/user-defined-functions#templated-sql-udf-parameters
     AnyType,
+    /// geometric type
+    ///
+    /// [Postgres]: https://www.postgresql.org/docs/9.5/functions-geometry.html
+    GeometricType(GeometricTypeKind),
 }
 
 impl fmt::Display for DataType {
@@ -408,9 +412,7 @@ impl fmt::Display for DataType {
             }
             DataType::Clob(size) => format_type_with_optional_length(f, "CLOB", size, false),
             DataType::Binary(size) => format_type_with_optional_length(f, "BINARY", size, false),
-            DataType::Varbinary(size) => {
-                format_type_with_optional_length(f, "VARBINARY", size, false)
-            }
+            DataType::Varbinary(size) => format_varbinary_type(f, "VARBINARY", size),
             DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
             DataType::TinyBlob => write!(f, "TINYBLOB"),
             DataType::MediumBlob => write!(f, "MEDIUMBLOB"),
@@ -641,6 +643,7 @@ impl fmt::Display for DataType {
             DataType::Trigger => write!(f, "TRIGGER"),
             DataType::AnyType => write!(f, "ANY TYPE"),
             DataType::Table(fields) => write!(f, "TABLE({})", display_comma_separated(fields)),
+            DataType::GeometricType(kind) => write!(f, "{}", kind),
         }
     }
 }
@@ -665,6 +668,18 @@ fn format_character_string_type(
     f: &mut fmt::Formatter,
     sql_type: &str,
     size: &Option<CharacterLength>,
+) -> fmt::Result {
+    write!(f, "{sql_type}")?;
+    if let Some(size) = size {
+        write!(f, "({size})")?;
+    }
+    Ok(())
+}
+
+fn format_varbinary_type(
+    f: &mut fmt::Formatter,
+    sql_type: &str,
+    size: &Option<BinaryLength>,
 ) -> fmt::Result {
     write!(f, "{sql_type}")?;
     if let Some(size) = size {
@@ -862,6 +877,32 @@ impl fmt::Display for CharLengthUnits {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum BinaryLength {
+    IntegerLength {
+        /// Default (if VARYING)
+        length: u64,
+    },
+    /// VARBINARY(MAX) used in T-SQL (Microsoft SQL Server)
+    Max,
+}
+
+impl fmt::Display for BinaryLength {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BinaryLength::IntegerLength { length } => {
+                write!(f, "{}", length)?;
+            }
+            BinaryLength::Max => {
+                write!(f, "MAX")?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Represents the data type of the elements in an array (if any) as well as
 /// the syntax used to declare the array.
 ///
@@ -878,4 +919,35 @@ pub enum ArrayElemTypeDef {
     SquareBracket(Box<DataType>, Option<u64>),
     /// `Array(Int64)`
     Parenthesis(Box<DataType>),
+}
+
+/// Represents different types of geometric shapes which are commonly used in
+/// PostgreSQL/Redshift for spatial operations and geometry-related computations.
+///
+/// [Postgres]: https://www.postgresql.org/docs/9.5/functions-geometry.html
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum GeometricTypeKind {
+    Point,
+    Line,
+    LineSegment,
+    GeometricBox,
+    GeometricPath,
+    Polygon,
+    Circle,
+}
+
+impl fmt::Display for GeometricTypeKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GeometricTypeKind::Point => write!(f, "point"),
+            GeometricTypeKind::Line => write!(f, "line"),
+            GeometricTypeKind::LineSegment => write!(f, "lseg"),
+            GeometricTypeKind::GeometricBox => write!(f, "box"),
+            GeometricTypeKind::GeometricPath => write!(f, "path"),
+            GeometricTypeKind::Polygon => write!(f, "polygon"),
+            GeometricTypeKind::Circle => write!(f, "circle"),
+        }
+    }
 }

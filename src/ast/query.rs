@@ -275,6 +275,19 @@ impl fmt::Display for Table {
     }
 }
 
+/// What did this select look like?
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SelectFlavor {
+    /// `SELECT *`
+    Standard,
+    /// `FROM ... SELECT *`
+    FromFirst,
+    /// `FROM *`
+    FromFirstNoSelect,
+}
+
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.
@@ -328,11 +341,23 @@ pub struct Select {
     pub value_table_mode: Option<ValueTableMode>,
     /// STARTING WITH .. CONNECT BY
     pub connect_by: Option<ConnectBy>,
+    /// Was this a FROM-first query?
+    pub flavor: SelectFlavor,
 }
 
 impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SELECT")?;
+        match self.flavor {
+            SelectFlavor::Standard => {
+                write!(f, "SELECT")?;
+            }
+            SelectFlavor::FromFirst => {
+                write!(f, "FROM {} SELECT", display_comma_separated(&self.from))?;
+            }
+            SelectFlavor::FromFirstNoSelect => {
+                write!(f, "FROM {}", display_comma_separated(&self.from))?;
+            }
+        }
 
         if let Some(value_table_mode) = self.value_table_mode {
             write!(f, " {value_table_mode}")?;
@@ -360,7 +385,7 @@ impl fmt::Display for Select {
             write!(f, " {into}")?;
         }
 
-        if !self.from.is_empty() {
+        if self.flavor == SelectFlavor::Standard && !self.from.is_empty() {
             write!(f, " FROM {}", display_comma_separated(&self.from))?;
         }
         if !self.lateral_views.is_empty() {
@@ -2052,16 +2077,30 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::LeftOuter(constraint) => write!(
+            JoinOperator::Left(constraint) => write!(
                 f,
                 " {}LEFT JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::RightOuter(constraint) => write!(
+            JoinOperator::LeftOuter(constraint) => write!(
+                f,
+                " {}LEFT OUTER JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::Right(constraint) => write!(
                 f,
                 " {}RIGHT JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::RightOuter(constraint) => write!(
+                f,
+                " {}RIGHT OUTER JOIN {}{}",
                 prefix(constraint),
                 self.relation,
                 suffix(constraint)
@@ -2137,7 +2176,9 @@ impl fmt::Display for Join {
 pub enum JoinOperator {
     Join(JoinConstraint),
     Inner(JoinConstraint),
+    Left(JoinConstraint),
     LeftOuter(JoinConstraint),
+    Right(JoinConstraint),
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
     CrossJoin,
@@ -2180,27 +2221,47 @@ pub enum JoinConstraint {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum OrderByKind {
+    /// ALL syntax of [DuckDB] and [ClickHouse].
+    ///
+    /// [DuckDB]:  <https://duckdb.org/docs/sql/query_syntax/orderby>
+    /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
+    All(OrderByOptions),
+
+    /// Expressions
+    Expressions(Vec<OrderByExpr>),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OrderBy {
-    pub exprs: Vec<OrderByExpr>,
+    pub kind: OrderByKind,
+
     /// Optional: `INTERPOLATE`
     /// Supported by [ClickHouse syntax]
-    ///
-    /// [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
     pub interpolate: Option<Interpolate>,
 }
 
 impl fmt::Display for OrderBy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ORDER BY")?;
-        if !self.exprs.is_empty() {
-            write!(f, " {}", display_comma_separated(&self.exprs))?;
+        match &self.kind {
+            OrderByKind::Expressions(exprs) => {
+                write!(f, " {}", display_comma_separated(exprs))?;
+            }
+            OrderByKind::All(all) => {
+                write!(f, " ALL{}", all)?;
+            }
         }
+
         if let Some(ref interpolate) = self.interpolate {
             match &interpolate.exprs {
                 Some(exprs) => write!(f, " INTERPOLATE ({})", display_comma_separated(exprs))?,
                 None => write!(f, " INTERPOLATE")?,
             }
         }
+
         Ok(())
     }
 }
@@ -2211,10 +2272,7 @@ impl fmt::Display for OrderBy {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OrderByExpr {
     pub expr: Expr,
-    /// Optional `ASC` or `DESC`
-    pub asc: Option<bool>,
-    /// Optional `NULLS FIRST` or `NULLS LAST`
-    pub nulls_first: Option<bool>,
+    pub options: OrderByOptions,
     /// Optional: `WITH FILL`
     /// Supported by [ClickHouse syntax]: <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by#order-by-expr-with-fill-modifier>
     pub with_fill: Option<WithFill>,
@@ -2222,17 +2280,7 @@ pub struct OrderByExpr {
 
 impl fmt::Display for OrderByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.expr)?;
-        match self.asc {
-            Some(true) => write!(f, " ASC")?,
-            Some(false) => write!(f, " DESC")?,
-            None => (),
-        }
-        match self.nulls_first {
-            Some(true) => write!(f, " NULLS FIRST")?,
-            Some(false) => write!(f, " NULLS LAST")?,
-            None => (),
-        }
+        write!(f, "{}{}", self.expr, self.options)?;
         if let Some(ref with_fill) = self.with_fill {
             write!(f, " {}", with_fill)?
         }
@@ -2293,6 +2341,32 @@ impl fmt::Display for InterpolateExpr {
         write!(f, "{}", self.column)?;
         if let Some(ref expr) = self.expr {
             write!(f, " AS {}", expr)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OrderByOptions {
+    /// Optional `ASC` or `DESC`
+    pub asc: Option<bool>,
+    /// Optional `NULLS FIRST` or `NULLS LAST`
+    pub nulls_first: Option<bool>,
+}
+
+impl fmt::Display for OrderByOptions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.asc {
+            Some(true) => write!(f, " ASC")?,
+            Some(false) => write!(f, " DESC")?,
+            None => (),
+        }
+        match self.nulls_first {
+            Some(true) => write!(f, " NULLS FIRST")?,
+            Some(false) => write!(f, " NULLS LAST")?,
+            None => (),
         }
         Ok(())
     }
@@ -2522,13 +2596,18 @@ impl fmt::Display for SelectInto {
 /// e.g. GROUP BY year WITH ROLLUP WITH TOTALS
 ///
 /// [ClickHouse]: <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#rollup-modifier>
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GroupByWithModifier {
     Rollup,
     Cube,
     Totals,
+    /// Hive supports GROUP BY GROUPING SETS syntax.
+    /// e.g. GROUP BY year , month GROUPING SETS((year,month),(year),(month))
+    ///
+    /// [Hive]: <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=30151323#EnhancedAggregation,Cube,GroupingandRollup-GROUPINGSETSclause>
+    GroupingSets(Expr),
 }
 
 impl fmt::Display for GroupByWithModifier {
@@ -2537,6 +2616,9 @@ impl fmt::Display for GroupByWithModifier {
             GroupByWithModifier::Rollup => write!(f, "WITH ROLLUP"),
             GroupByWithModifier::Cube => write!(f, "WITH CUBE"),
             GroupByWithModifier::Totals => write!(f, "WITH TOTALS"),
+            GroupByWithModifier::GroupingSets(expr) => {
+                write!(f, "{expr}")
+            }
         }
     }
 }

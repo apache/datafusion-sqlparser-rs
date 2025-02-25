@@ -52,11 +52,11 @@ fn parse_literal_string() {
     let select = mysql().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
-        &Expr::Value(Value::SingleQuotedString("single".to_string())),
+        &Expr::Value((Value::SingleQuotedString("single".to_string())).with_empty_span()),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
-        &Expr::Value(Value::DoubleQuotedString("double".to_string())),
+        &Expr::Value((Value::DoubleQuotedString("double".to_string())).with_empty_span()),
         expr_from_projection(&select.projection[1])
     );
 }
@@ -621,7 +621,7 @@ fn parse_set_variables() {
             local: true,
             hivevar: false,
             variables: OneOrManyWithParens::One(ObjectName::from(vec!["autocommit".into()])),
-            value: vec![Expr::Value(number("1"))],
+            value: vec![Expr::value(number("1"))],
         }
     );
 }
@@ -636,7 +636,6 @@ fn parse_create_table_auto_increment() {
                 vec![ColumnDef {
                     name: Ident::new("bar"),
                     data_type: DataType::Int(None),
-                    collation: None,
                     options: vec![
                         ColumnOptionDef {
                             name: None,
@@ -726,7 +725,6 @@ fn parse_create_table_primary_and_unique_key() {
                         ColumnDef {
                             name: Ident::new("id"),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![
                                 ColumnOptionDef {
                                     name: None,
@@ -746,7 +744,6 @@ fn parse_create_table_primary_and_unique_key() {
                         ColumnDef {
                             name: Ident::new("bar"),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![ColumnOptionDef {
                                 name: None,
                                 option: ColumnOption::NotNull,
@@ -896,7 +893,6 @@ fn parse_create_table_set_enum() {
                     ColumnDef {
                         name: Ident::new("bar"),
                         data_type: DataType::Set(vec!["a".to_string(), "b".to_string()]),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
@@ -908,7 +904,6 @@ fn parse_create_table_set_enum() {
                             ],
                             None
                         ),
-                        collation: None,
                         options: vec![],
                     }
                 ],
@@ -935,7 +930,6 @@ fn parse_create_table_engine_default_charset() {
                 vec![ColumnDef {
                     name: Ident::new("id"),
                     data_type: DataType::Int(Some(11)),
-                    collation: None,
                     options: vec![],
                 },],
                 columns
@@ -968,7 +962,6 @@ fn parse_create_table_collate() {
                 vec![ColumnDef {
                     name: Ident::new("id"),
                     data_type: DataType::Int(Some(11)),
-                    collation: None,
                     options: vec![],
                 },],
                 columns
@@ -993,7 +986,9 @@ fn parse_create_table_both_options_and_as_query() {
             assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
             assert_eq!(
                 query.unwrap().body.as_select().unwrap().projection,
-                vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))]
+                vec![SelectItem::UnnamedExpr(Expr::Value(
+                    (number("1")).with_empty_span()
+                ))]
             );
         }
         _ => unreachable!(),
@@ -1016,7 +1011,6 @@ fn parse_create_table_comment_character_set() {
                 vec![ColumnDef {
                     name: Ident::new("s"),
                     data_type: DataType::Text,
-                    collation: None,
                     options: vec![
                         ColumnOptionDef {
                             name: None,
@@ -1063,7 +1057,6 @@ fn parse_quote_identifiers() {
                 vec![ColumnDef {
                     name: Ident::with_quote('`', "BEGIN"),
                     data_type: DataType::Int(None),
-                    collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: ColumnOption::Unique {
@@ -1111,6 +1104,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1164,6 +1158,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1211,6 +1206,7 @@ fn parse_escaped_backticks_with_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1262,6 +1258,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 window_before_qualify: false,
                 value_table_mode: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -1322,31 +1319,26 @@ fn parse_create_table_with_minimum_display_width() {
                     ColumnDef {
                         name: Ident::new("bar_tinyint"),
                         data_type: DataType::TinyInt(Some(3)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_smallint"),
                         data_type: DataType::SmallInt(Some(5)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_mediumint"),
                         data_type: DataType::MediumInt(Some(6)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_int"),
                         data_type: DataType::Int(Some(11)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_bigint"),
                         data_type: DataType::BigInt(Some(20)),
-                        collation: None,
                         options: vec![],
                     }
                 ],
@@ -1368,31 +1360,26 @@ fn parse_create_table_unsigned() {
                     ColumnDef {
                         name: Ident::new("bar_tinyint"),
                         data_type: DataType::UnsignedTinyInt(Some(3)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_smallint"),
                         data_type: DataType::UnsignedSmallInt(Some(5)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_mediumint"),
                         data_type: DataType::UnsignedMediumInt(Some(13)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_int"),
                         data_type: DataType::UnsignedInt(Some(11)),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("bar_bigint"),
                         data_type: DataType::UnsignedBigInt(Some(20)),
-                        collation: None,
                         options: vec![],
                     },
                 ],
@@ -1428,18 +1415,25 @@ fn parse_simple_insert() {
                         explicit_row: false,
                         rows: vec![
                             vec![
-                                Expr::Value(Value::SingleQuotedString(
-                                    "Test Some Inserts".to_string()
-                                )),
-                                Expr::Value(number("1"))
+                                Expr::Value(
+                                    (Value::SingleQuotedString("Test Some Inserts".to_string()))
+                                        .with_empty_span()
+                                ),
+                                Expr::value(number("1"))
                             ],
                             vec![
-                                Expr::Value(Value::SingleQuotedString("Test Entry 2".to_string())),
-                                Expr::Value(number("2"))
+                                Expr::Value(
+                                    (Value::SingleQuotedString("Test Entry 2".to_string()))
+                                        .with_empty_span()
+                                ),
+                                Expr::value(number("2"))
                             ],
                             vec![
-                                Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
-                                Expr::Value(number("3"))
+                                Expr::Value(
+                                    (Value::SingleQuotedString("Test Entry 3".to_string()))
+                                        .with_empty_span()
+                                ),
+                                Expr::value(number("3"))
                             ]
                         ]
                     })),
@@ -1486,8 +1480,11 @@ fn parse_ignore_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(number("1"))
+                            Expr::Value(
+                                (Value::SingleQuotedString("Test Some Inserts".to_string()))
+                                    .with_empty_span()
+                            ),
+                            Expr::value(number("1"))
                         ]]
                     })),
                     order_by: None,
@@ -1533,8 +1530,11 @@ fn parse_priority_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(number("1"))
+                            Expr::Value(
+                                (Value::SingleQuotedString("Test Some Inserts".to_string()))
+                                    .with_empty_span()
+                            ),
+                            Expr::value(number("1"))
                         ]]
                     })),
                     order_by: None,
@@ -1577,8 +1577,11 @@ fn parse_priority_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(number("1"))
+                            Expr::Value(
+                                (Value::SingleQuotedString("Test Some Inserts".to_string()))
+                                    .with_empty_span()
+                            ),
+                            Expr::value(number("1"))
                         ]]
                     })),
                     order_by: None,
@@ -1626,9 +1629,9 @@ fn parse_insert_as() {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
-                        rows: vec![vec![Expr::Value(Value::SingleQuotedString(
-                            "2024-01-01".to_string()
-                        ))]]
+                        rows: vec![vec![Expr::Value(
+                            (Value::SingleQuotedString("2024-01-01".to_string())).with_empty_span()
+                        )]]
                     })),
                     order_by: None,
                     limit: None,
@@ -1687,8 +1690,11 @@ fn parse_insert_as() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(number("1")),
-                            Expr::Value(Value::SingleQuotedString("2024-01-01".to_string()))
+                            Expr::value(number("1")),
+                            Expr::Value(
+                                (Value::SingleQuotedString("2024-01-01".to_string()))
+                                    .with_empty_span()
+                            )
                         ]]
                     })),
                     order_by: None,
@@ -1735,8 +1741,11 @@ fn parse_replace_insert() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(number("1"))
+                            Expr::Value(
+                                (Value::SingleQuotedString("Test Some Inserts".to_string()))
+                                    .with_empty_span()
+                            ),
+                            Expr::value(number("1"))
                         ]]
                     })),
                     order_by: None,
@@ -1831,16 +1840,20 @@ fn parse_insert_with_on_duplicate_update() {
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
                         rows: vec![vec![
-                            Expr::Value(Value::SingleQuotedString(
-                                "accounting_manager".to_string()
-                            )),
-                            Expr::Value(Value::SingleQuotedString(
-                                "Some description about the group".to_string()
-                            )),
-                            Expr::Value(Value::Boolean(true)),
-                            Expr::Value(Value::Boolean(true)),
-                            Expr::Value(Value::Boolean(true)),
-                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(
+                                (Value::SingleQuotedString("accounting_manager".to_string()))
+                                    .with_empty_span()
+                            ),
+                            Expr::Value(
+                                (Value::SingleQuotedString(
+                                    "Some description about the group".to_string()
+                                ))
+                                .with_empty_span()
+                            ),
+                            Expr::Value((Value::Boolean(true)).with_empty_span()),
+                            Expr::Value((Value::Boolean(true)).with_empty_span()),
+                            Expr::Value((Value::Boolean(true)).with_empty_span()),
+                            Expr::Value((Value::Boolean(true)).with_empty_span()),
                         ]]
                     })),
                     order_by: None,
@@ -1931,6 +1944,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     window_before_qualify: false,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             );
         }
@@ -1960,7 +1974,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
-                        SelectItem::UnnamedExpr(Expr::Value(number("123e4"))),
+                        SelectItem::UnnamedExpr(Expr::value(number("123e4"))),
                         SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
                     ],
                     into: None,
@@ -1983,6 +1997,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     window_before_qualify: false,
                     value_table_mode: None,
                     connect_by: None,
+                    flavor: SelectFlavor::Standard,
                 })))
             );
         }
@@ -2076,7 +2091,7 @@ fn parse_update_with_joins() {
                         Ident::new("o"),
                         Ident::new("completed")
                     ])),
-                    value: Expr::Value(Value::Boolean(true))
+                    value: Expr::Value((Value::Boolean(true)).with_empty_span())
                 }],
                 assignments
             );
@@ -2087,7 +2102,9 @@ fn parse_update_with_joins() {
                         Ident::new("firstname")
                     ])),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("Peter".to_string())))
+                    right: Box::new(Expr::Value(
+                        (Value::SingleQuotedString("Peter".to_string())).with_empty_span()
+                    ))
                 }),
                 selection
             );
@@ -2109,8 +2126,10 @@ fn parse_delete_with_order_by() {
                         quote_style: None,
                         span: Span::empty(),
                     }),
-                    asc: Some(false),
-                    nulls_first: None,
+                    options: OrderByOptions {
+                        asc: Some(false),
+                        nulls_first: None,
+                    },
                     with_fill: None,
                 }],
                 order_by
@@ -2125,7 +2144,7 @@ fn parse_delete_with_limit() {
     let sql = "DELETE FROM customers LIMIT 100";
     match mysql().verified_stmt(sql) {
         Statement::Delete(Delete { limit, .. }) => {
-            assert_eq!(Some(Expr::Value(number("100"))), limit);
+            assert_eq!(Some(Expr::value(number("100"))), limit);
         }
         _ => unreachable!(),
     }
@@ -2153,7 +2172,6 @@ fn parse_alter_table_add_column() {
                     column_def: ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                     column_position: Some(MySQLColumnPosition::First),
@@ -2183,7 +2201,6 @@ fn parse_alter_table_add_column() {
                     column_def: ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                     column_position: Some(MySQLColumnPosition::After(Ident {
@@ -2223,7 +2240,6 @@ fn parse_alter_table_add_columns() {
                         column_def: ColumnDef {
                             name: "a".into(),
                             data_type: DataType::Text,
-                            collation: None,
                             options: vec![],
                         },
                         column_position: Some(MySQLColumnPosition::First),
@@ -2234,7 +2250,6 @@ fn parse_alter_table_add_columns() {
                         column_def: ColumnDef {
                             name: "b".into(),
                             data_type: DataType::Int(None),
-                            collation: None,
                             options: vec![],
                         },
                         column_position: Some(MySQLColumnPosition::After(Ident {
@@ -2477,8 +2492,12 @@ fn parse_substring_in_select() {
                                 quote_style: None,
                                 span: Span::empty(),
                             })),
-                            substring_from: Some(Box::new(Expr::Value(number("0")))),
-                            substring_for: Some(Box::new(Expr::Value(number("1")))),
+                            substring_from: Some(Box::new(Expr::Value(
+                                (number("0")).with_empty_span()
+                            ))),
+                            substring_for: Some(Box::new(Expr::Value(
+                                (number("1")).with_empty_span()
+                            ))),
                             special: true,
                         })],
                         into: None,
@@ -2503,6 +2522,7 @@ fn parse_substring_in_select() {
                         qualify: None,
                         value_table_mode: None,
                         connect_by: None,
+                        flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
                     limit: None,
@@ -2586,7 +2606,6 @@ fn parse_table_column_option_on_update() {
                 vec![ColumnDef {
                     name: Ident::with_quote('`', "modification_time"),
                     data_type: DataType::Datetime(None),
-                    collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: ColumnOption::OnUpdate(call("CURRENT_TIMESTAMP", [])),
@@ -2799,6 +2818,7 @@ fn parse_hex_string_introducer() {
                 value_table_mode: None,
                 into: None,
                 connect_by: None,
+                flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
             limit: None,
@@ -2870,21 +2890,27 @@ fn parse_convert_using() {
 #[test]
 fn parse_create_table_with_column_collate() {
     let sql = "CREATE TABLE tb (id TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci)";
-    let canonical = "CREATE TABLE tb (id TEXT COLLATE utf8mb4_0900_ai_ci CHARACTER SET utf8mb4)";
-    match mysql().one_statement_parses_to(sql, canonical) {
+    match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "tb");
             assert_eq!(
                 vec![ColumnDef {
                     name: Ident::new("id"),
                     data_type: DataType::Text,
-                    collation: Some(ObjectName::from(vec![Ident::new("utf8mb4_0900_ai_ci")])),
-                    options: vec![ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::CharacterSet(ObjectName::from(vec![Ident::new(
-                            "utf8mb4"
-                        )]))
-                    }],
+                    options: vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::CharacterSet(ObjectName::from(vec![Ident::new(
+                                "utf8mb4"
+                            )]))
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Collation(ObjectName::from(vec![Ident::new(
+                                "utf8mb4_0900_ai_ci"
+                            )]))
+                        }
+                    ],
                 },],
                 columns
             );
@@ -2945,7 +2971,7 @@ fn parse_json_table() {
             .from[0]
             .relation,
         TableFactor::JsonTable {
-            json_expr: Expr::Value(Value::SingleQuotedString("[1,2]".to_string())),
+            json_expr: Expr::Value((Value::SingleQuotedString("[1,2]".to_string())).with_empty_span()),
             json_path: Value::SingleQuotedString("$[*]".to_string()),
             columns: vec![
                 JsonTableColumn::Named(JsonTableNamedColumn {
@@ -2983,33 +3009,33 @@ fn parse_logical_xor() {
     let select = mysql_and_generic().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(true))),
+            left: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
             op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(true))),
+            right: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
         }),
         select.projection[0]
     );
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(false))),
+            left: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
             op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(false))),
+            right: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
         }),
         select.projection[1]
     );
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(true))),
+            left: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
             op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(false))),
+            right: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
         }),
         select.projection[2]
     );
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value(Value::Boolean(false))),
+            left: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
             op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value(Value::Boolean(true))),
+            right: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
         }),
         select.projection[3]
     );
@@ -3021,7 +3047,7 @@ fn parse_bitstring_literal() {
     assert_eq!(
         select.projection,
         vec![SelectItem::UnnamedExpr(Expr::Value(
-            Value::SingleQuotedByteStringLiteral("111".to_string())
+            (Value::SingleQuotedByteStringLiteral("111".to_string())).with_empty_span()
         ))]
     );
 }
@@ -3263,5 +3289,53 @@ fn parse_looks_like_single_line_comment() {
             WHERE account_id=5752
         "#,
         "UPDATE account SET balance = balance WHERE account_id = 5752",
+    );
+}
+
+#[test]
+fn parse_create_trigger() {
+    let sql_create_trigger = r#"
+        CREATE TRIGGER emp_stamp BEFORE INSERT ON emp
+            FOR EACH ROW EXECUTE FUNCTION emp_stamp();
+    "#;
+    let create_stmt = mysql().one_statement_parses_to(sql_create_trigger, "");
+    assert_eq!(
+        create_stmt,
+        Statement::CreateTrigger {
+            or_replace: false,
+            is_constraint: false,
+            name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+            period: TriggerPeriod::Before,
+            events: vec![TriggerEvent::Insert],
+            table_name: ObjectName::from(vec![Ident::new("emp")]),
+            referenced_table_name: None,
+            referencing: vec![],
+            trigger_object: TriggerObject::Row,
+            include_each: true,
+            condition: None,
+            exec_body: TriggerExecBody {
+                exec_type: TriggerExecBodyType::Function,
+                func_desc: FunctionDesc {
+                    name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+                    args: None,
+                }
+            },
+            characteristics: None,
+        }
+    );
+}
+
+#[test]
+fn parse_drop_trigger() {
+    let sql_drop_trigger = "DROP TRIGGER emp_stamp;";
+    let drop_stmt = mysql().one_statement_parses_to(sql_drop_trigger, "");
+    assert_eq!(
+        drop_stmt,
+        Statement::DropTrigger {
+            if_exists: false,
+            trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+            table_name: None,
+            option: None,
+        }
     );
 }

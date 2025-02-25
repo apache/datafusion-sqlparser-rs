@@ -53,6 +53,21 @@ pub enum UnaryOperator {
     PGAbs,
     /// Unary logical not operator: e.g. `! false` (Hive-specific)
     BangNot,
+    /// `#` Number of points in path or polygon (PostgreSQL/Redshift geometric operator)
+    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    Hash,
+    /// `@-@` Length or circumference (PostgreSQL/Redshift geometric operator)
+    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    AtDashAt,
+    /// `@@` Center (PostgreSQL/Redshift geometric operator)
+    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    DoubleAt,
+    /// `?-` Is horizontal? (PostgreSQL/Redshift geometric operator)
+    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    QuestionDash,
+    /// `?|` Is vertical? (PostgreSQL/Redshift geometric operator)
+    /// see <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    QuestionPipe,
 }
 
 impl fmt::Display for UnaryOperator {
@@ -68,6 +83,11 @@ impl fmt::Display for UnaryOperator {
             UnaryOperator::PGPrefixFactorial => "!!",
             UnaryOperator::PGAbs => "@",
             UnaryOperator::BangNot => "!",
+            UnaryOperator::Hash => "#",
+            UnaryOperator::AtDashAt => "@-@",
+            UnaryOperator::DoubleAt => "@@",
+            UnaryOperator::QuestionDash => "?-",
+            UnaryOperator::QuestionPipe => "?|",
         })
     }
 }
@@ -253,6 +273,54 @@ pub enum BinaryOperator {
     /// Specifies a test for an overlap between two datetime periods:
     /// <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#overlaps-predicate>
     Overlaps,
+    /// `##` Point of closest proximity (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    DoubleHash,
+    /// `<->` Distance between (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    LtDashGt,
+    /// `&<` Overlaps to left? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    AndLt,
+    /// `&>` Overlaps to right? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    AndGt,
+    /// `<<|` Is strictly below? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    LtLtPipe,
+    /// `|>>` Is strictly above? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    PipeGtGt,
+    /// `&<|` Does not extend above? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    AndLtPipe,
+    /// `|&>` Does not extend below? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    PipeAndGt,
+    /// `<^` Is below? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    LtCaret,
+    /// `>^` Is above? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    GtCaret,
+    /// `?#` Intersects? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    QuestionHash,
+    /// `?-` Is horizontal? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    QuestionDash,
+    /// `?-|` Is perpendicular? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    QuestionDashPipe,
+    /// `?||` Are Parallel? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    QuestionDoublePipe,
+    /// `@` Contained or on? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    At,
+    /// `~=` Same as? (PostgreSQL/Redshift geometric operator)
+    /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
+    TildeEq,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -310,6 +378,22 @@ impl fmt::Display for BinaryOperator {
                 write!(f, "OPERATOR({})", display_separated(idents, "."))
             }
             BinaryOperator::Overlaps => f.write_str("OVERLAPS"),
+            BinaryOperator::DoubleHash => f.write_str("##"),
+            BinaryOperator::LtDashGt => f.write_str("<->"),
+            BinaryOperator::AndLt => f.write_str("&<"),
+            BinaryOperator::AndGt => f.write_str("&>"),
+            BinaryOperator::LtLtPipe => f.write_str("<<|"),
+            BinaryOperator::PipeGtGt => f.write_str("|>>"),
+            BinaryOperator::AndLtPipe => f.write_str("&<|"),
+            BinaryOperator::PipeAndGt => f.write_str("|&>"),
+            BinaryOperator::LtCaret => f.write_str("<^"),
+            BinaryOperator::GtCaret => f.write_str(">^"),
+            BinaryOperator::QuestionHash => f.write_str("?#"),
+            BinaryOperator::QuestionDash => f.write_str("?-"),
+            BinaryOperator::QuestionDashPipe => f.write_str("?-|"),
+            BinaryOperator::QuestionDoublePipe => f.write_str("?||"),
+            BinaryOperator::At => f.write_str("@"),
+            BinaryOperator::TildeEq => f.write_str("~="),
         }
     }
 }

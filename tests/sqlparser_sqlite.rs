@@ -214,7 +214,6 @@ fn parse_create_table_auto_increment() {
                 vec![ColumnDef {
                     name: "bar".into(),
                     data_type: DataType::Int(None),
-                    collation: None,
                     options: vec![
                         ColumnOptionDef {
                             name: None,
@@ -243,7 +242,6 @@ fn parse_create_table_primary_key_asc_desc() {
     let expected_column_def = |kind| ColumnDef {
         name: "bar".into(),
         data_type: DataType::Int(None),
-        collation: None,
         options: vec![
             ColumnOptionDef {
                 name: None,
@@ -286,13 +284,11 @@ fn parse_create_sqlite_quote() {
                     ColumnDef {
                         name: Ident::with_quote('"', "KEY"),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::with_quote('[', "INDEX"),
                         data_type: DataType::Int(None),
-                        collation: None,
                         options: vec![],
                     },
                 ],
@@ -373,7 +369,9 @@ fn test_placeholder() {
     let ast = sqlite().verified_only_select(sql);
     assert_eq!(
         ast.projection[0],
-        UnnamedExpr(Expr::Value(Value::Placeholder("@xxx".into()))),
+        UnnamedExpr(Expr::Value(
+            (Value::Placeholder("@xxx".into())).with_empty_span()
+        )),
     );
 }
 
@@ -450,7 +448,11 @@ fn parse_attach_database() {
     match verified_stmt {
         Statement::AttachDatabase {
             schema_name,
-            database_file_name: Expr::Value(Value::SingleQuotedString(literal_name)),
+            database_file_name:
+                Expr::Value(ValueWithSpan {
+                    value: Value::SingleQuotedString(literal_name),
+                    span: _,
+                }),
             database: true,
         } => {
             assert_eq!(schema_name.value, "test");
@@ -473,8 +475,8 @@ fn parse_update_tuple_row_values() {
                     ObjectName::from(vec![Ident::new("b"),]),
                 ]),
                 value: Expr::Tuple(vec![
-                    Expr::Value(Value::Number("1".parse().unwrap(), false)),
-                    Expr::Value(Value::Number("2".parse().unwrap(), false))
+                    Expr::Value((Value::Number("1".parse().unwrap(), false)).with_empty_span()),
+                    Expr::Value((Value::Number("2".parse().unwrap(), false)).with_empty_span())
                 ])
             }],
             selection: None,
@@ -522,23 +524,6 @@ fn parse_start_transaction_with_modifier() {
     sqlite_and_generic().verified_stmt("BEGIN DEFERRED");
     sqlite_and_generic().verified_stmt("BEGIN IMMEDIATE");
     sqlite_and_generic().verified_stmt("BEGIN EXCLUSIVE");
-
-    let unsupported_dialects = all_dialects_except(|d| d.supports_start_transaction_modifier());
-    let res = unsupported_dialects.parse_sql_statements("BEGIN DEFERRED");
-    assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: DEFERRED".to_string()),
-        res.unwrap_err(),
-    );
-    let res = unsupported_dialects.parse_sql_statements("BEGIN IMMEDIATE");
-    assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: IMMEDIATE".to_string()),
-        res.unwrap_err(),
-    );
-    let res = unsupported_dialects.parse_sql_statements("BEGIN EXCLUSIVE");
-    assert_eq!(
-        ParserError::ParserError("Expected: end of statement, found: EXCLUSIVE".to_string()),
-        res.unwrap_err(),
-    );
 }
 
 #[test]
@@ -551,7 +536,12 @@ fn test_dollar_identifier_as_placeholder() {
         Expr::BinaryOp { op, left, right } => {
             assert_eq!(op, BinaryOperator::Eq);
             assert_eq!(left, Box::new(Expr::Identifier(Ident::new("id"))));
-            assert_eq!(right, Box::new(Expr::Value(Placeholder("$id".to_string()))));
+            assert_eq!(
+                right,
+                Box::new(Expr::Value(
+                    (Placeholder("$id".to_string())).with_empty_span()
+                ))
+            );
         }
         _ => unreachable!(),
     }
@@ -561,7 +551,12 @@ fn test_dollar_identifier_as_placeholder() {
         Expr::BinaryOp { op, left, right } => {
             assert_eq!(op, BinaryOperator::Eq);
             assert_eq!(left, Box::new(Expr::Identifier(Ident::new("id"))));
-            assert_eq!(right, Box::new(Expr::Value(Placeholder("$$".to_string()))));
+            assert_eq!(
+                right,
+                Box::new(Expr::Value(
+                    (Placeholder("$$".to_string())).with_empty_span()
+                ))
+            );
         }
         _ => unreachable!(),
     }

@@ -40,21 +40,23 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::tokenizer::Span;
 
 pub use self::data_type::{
-    ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, EnumMember, ExactNumberInfo,
-    StructBracketKind, TimezoneInfo,
+    ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
+    ExactNumberInfo, StructBracketKind, TimezoneInfo,
 };
 pub use self::dcl::{
     AlterRoleOperation, ResetConfig, RoleOption, SecondaryRoles, SetConfigValue, Use,
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterTableOperation, ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy,
-    ColumnPolicyProperty, ConstraintCharacteristics, CreateConnector, CreateFunction, Deduplicate,
-    DeferrableInitial, DropBehavior, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexOption, IndexType, KeyOrIndexDisplay, NullsDistinctOption, Owner, Partition,
-    ProcedureParam, ReferentialAction, TableConstraint, TagsColumnOption,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ViewColumnDef,
+    AlterTableOperation, AlterType, AlterTypeAddValue, AlterTypeAddValuePosition,
+    AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue, ClusteredBy, ColumnDef,
+    ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty, ConstraintCharacteristics,
+    CreateConnector, CreateFunction, Deduplicate, DeferrableInitial, DropBehavior, GeneratedAs,
+    GeneratedExpressionMode, IdentityParameters, IdentityProperty, IdentityPropertyFormatKind,
+    IdentityPropertyKind, IdentityPropertyOrder, IndexOption, IndexType, KeyOrIndexDisplay,
+    NullsDistinctOption, Owner, Partition, ProcedureParam, ReferentialAction, TableConstraint,
+    TagsColumnOption, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ViewColumnDef,
 };
 pub use self::dml::{CreateIndex, CreateTable, Delete, IndexColumn, Insert};
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -66,11 +68,11 @@ pub use self::query::{
     JsonTableColumn, JsonTableColumnErrorHandling, JsonTableNamedColumn, JsonTableNestedColumn,
     LateralView, LockClause, LockType, MatchRecognizePattern, MatchRecognizeSymbol, Measure,
     NamedWindowDefinition, NamedWindowExpr, NonBlock, Offset, OffsetRows, OpenJsonTableColumn,
-    OrderBy, OrderByExpr, PivotValueSource, ProjectionSelect, Query, RenameSelectItem,
-    RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch, Select,
-    SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SetExpr, SetOperator, SetQuantifier,
-    Setting, SymbolDefinition, Table, TableAlias, TableAliasColumnDef, TableFactor,
-    TableFunctionArgs, TableIndexHintForClause, TableIndexHintType, TableIndexHints,
+    OrderBy, OrderByExpr, OrderByKind, OrderByOptions, PivotValueSource, ProjectionSelect, Query,
+    RenameSelectItem, RepetitionQuantifier, ReplaceSelectElement, ReplaceSelectItem, RowsPerMatch,
+    Select, SelectFlavor, SelectInto, SelectItem, SelectItemQualifiedWildcardKind, SetExpr,
+    SetOperator, SetQuantifier, Setting, SymbolDefinition, Table, TableAlias, TableAliasColumnDef,
+    TableFactor, TableFunctionArgs, TableIndexHintForClause, TableIndexHintType, TableIndexHints,
     TableIndexType, TableSample, TableSampleBucket, TableSampleKind, TableSampleMethod,
     TableSampleModifier, TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier,
     TableSampleUnit, TableVersion, TableWithJoins, Top, TopQuantity, UpdateTableFromKind,
@@ -84,15 +86,16 @@ pub use self::trigger::{
 
 pub use self::value::{
     escape_double_quote_string, escape_quoted_string, DateTimeField, DollarQuotedString,
-    NormalizationForm, TrimWhereField, Value,
+    NormalizationForm, TrimWhereField, Value, ValueWithSpan,
 };
 
-use crate::ast::helpers::stmt_data_loading::{
-    DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
-};
+use crate::ast::helpers::key_value_options::KeyValueOptions;
+use crate::ast::helpers::stmt_data_loading::{StageLoadSelectItem, StageParamsObject};
 
 #[cfg(feature = "visitor")]
 pub use visitor::*;
+
+pub use self::data_type::GeometricTypeKind;
 
 mod data_type;
 mod dcl;
@@ -598,6 +601,22 @@ pub enum CeilFloorKind {
     Scale(Value),
 }
 
+/// A WHEN clause in a CASE expression containing both
+/// the condition and its corresponding result
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CaseWhen {
+    pub condition: Expr,
+    pub result: Expr,
+}
+
+impl fmt::Display for CaseWhen {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "WHEN {} THEN {}", self.condition, self.result)
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// # Semantics / Type Checking
@@ -659,11 +678,6 @@ pub enum Expr {
         value: Box<Expr>,
         /// The path to the data to extract.
         path: JsonPath,
-    },
-    /// CompositeAccess eg: SELECT foo(bar).z, (information_schema._pg_expandarray(array['i','i'])).n
-    CompositeAccess {
-        expr: Box<Expr>,
-        key: Ident,
     },
     /// `IS FALSE` operator
     IsFalse(Box<Expr>),
@@ -895,7 +909,7 @@ pub enum Expr {
     /// Nested expression e.g. `(foo > bar)` or `(1)`
     Nested(Box<Expr>),
     /// A literal value, such as string, number, date or NULL
-    Value(Value),
+    Value(ValueWithSpan),
     /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
     IntroducedString {
         introducer: String,
@@ -914,23 +928,6 @@ pub enum Expr {
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
-    /// Arbitrary expr method call
-    ///
-    /// Syntax:
-    ///
-    /// `<arbitrary-expr>.<function-call>.<function-call-expr>...`
-    ///
-    /// > `arbitrary-expr` can be any expression including a function call.
-    ///
-    /// Example:
-    ///
-    /// ```sql
-    /// SELECT (SELECT ',' + name FROM sys.objects  FOR XML PATH(''), TYPE).value('.','NVARCHAR(MAX)')
-    /// SELECT CONVERT(XML,'<Book>abc</Book>').value('.','NVARCHAR(MAX)').value('.','NVARCHAR(MAX)')
-    /// ```
-    ///
-    /// (mssql): <https://learn.microsoft.com/en-us/sql/t-sql/xml/xml-data-type-methods?view=sql-server-ver16>
-    Method(Method),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -938,8 +935,7 @@ pub enum Expr {
     /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
     Case {
         operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
+        conditions: Vec<CaseWhen>,
         else_result: Option<Box<Expr>>,
     },
     /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
@@ -1054,6 +1050,13 @@ pub enum Expr {
     /// [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-lambda-functions.html)
     /// [DuckDb](https://duckdb.org/docs/sql/functions/lambda.html)
     Lambda(LambdaFunction),
+}
+
+impl Expr {
+    /// Creates a new [`Expr::Value`]
+    pub fn value(value: impl Into<ValueWithSpan>) -> Self {
+        Expr::Value(value.into())
+    }
 }
 
 /// The contents inside the `[` and `]` in a subscript expression.
@@ -1534,7 +1537,15 @@ impl fmt::Display for Expr {
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{expr}{op}")
-                } else if op == &UnaryOperator::Not {
+                } else if matches!(
+                    op,
+                    UnaryOperator::Not
+                        | UnaryOperator::Hash
+                        | UnaryOperator::AtDashAt
+                        | UnaryOperator::DoubleAt
+                        | UnaryOperator::QuestionDash
+                        | UnaryOperator::QuestionPipe
+                ) {
                     write!(f, "{op} {expr}")
                 } else {
                     write!(f, "{op}{expr}")
@@ -1630,21 +1641,18 @@ impl fmt::Display for Expr {
                 write!(f, " {value}")
             }
             Expr::Function(fun) => write!(f, "{fun}"),
-            Expr::Method(method) => write!(f, "{method}"),
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
             } => {
                 write!(f, "CASE")?;
                 if let Some(operand) = operand {
                     write!(f, " {operand}")?;
                 }
-                for (c, r) in conditions.iter().zip(results) {
-                    write!(f, " WHEN {c} THEN {r}")?;
+                for when in conditions {
+                    write!(f, " {when}")?;
                 }
-
                 if let Some(else_result) = else_result {
                     write!(f, " ELSE {else_result}")?;
                 }
@@ -1787,9 +1795,6 @@ impl fmt::Display for Expr {
             }
             Expr::JsonAccess { value, path } => {
                 write!(f, "{value}{path}")
-            }
-            Expr::CompositeAccess { expr, key } => {
-                write!(f, "{expr}.{key}")
             }
             Expr::AtTimeZone {
                 timestamp,
@@ -2519,8 +2524,8 @@ pub enum Statement {
         from_query: Option<Box<Query>>,
         files: Option<Vec<String>>,
         pattern: Option<String>,
-        file_format: DataLoadingOptions,
-        copy_options: DataLoadingOptions,
+        file_format: KeyValueOptions,
+        copy_options: KeyValueOptions,
         validation_mode: Option<String>,
         partition: Option<Box<Expr>>,
     },
@@ -2692,6 +2697,11 @@ pub enum Statement {
         with_options: Vec<SqlOption>,
     },
     /// ```sql
+    /// ALTER TYPE
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-altertype.html)
+    /// ```
+    AlterType(AlterType),
+    /// ```sql
     /// ALTER ROLE
     /// ```
     AlterRole {
@@ -2721,6 +2731,17 @@ pub enum Statement {
         properties: Option<Vec<SqlOption>>,
         url: Option<String>,
         owner: Option<ddl::AlterConnectorOwner>,
+    },
+    /// ```sql
+    /// ALTER SESSION SET sessionParam
+    /// ALTER SESSION UNSET <param_name> [ , <param_name> , ... ]
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/alter-session>
+    AlterSession {
+        /// true is to set for the session parameters, false is to unset
+        set: bool,
+        /// The session parameters to set or unset
+        session_params: KeyValueOptions,
     },
     /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
@@ -3059,6 +3080,28 @@ pub enum Statement {
         begin: bool,
         transaction: Option<BeginTransactionKind>,
         modifier: Option<TransactionModifier>,
+        /// List of statements belonging to the `BEGIN` block.
+        /// Example:
+        /// ```sql
+        /// BEGIN
+        ///     SELECT 1;
+        ///     SELECT 2;
+        /// END;
+        /// ```
+        statements: Vec<Statement>,
+        /// Statements of an exception clause.
+        /// Example:
+        /// ```sql
+        /// BEGIN
+        ///     SELECT 1;
+        /// EXCEPTION WHEN ERROR THEN
+        ///     SELECT 2;
+        ///     SELECT 3;
+        /// END;
+        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend>
+        exception_statements: Option<Vec<Statement>>,
+        /// TRUE if the statement has an `END` keyword.
+        has_end_keyword: bool,
     },
     /// ```sql
     /// SET TRANSACTION ...
@@ -3214,7 +3257,7 @@ pub enum Statement {
     DropTrigger {
         if_exists: bool,
         trigger_name: ObjectName,
-        table_name: ObjectName,
+        table_name: Option<ObjectName>,
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
@@ -3250,9 +3293,9 @@ pub enum Statement {
         if_not_exists: bool,
         name: ObjectName,
         stage_params: StageParamsObject,
-        directory_table_params: DataLoadingOptions,
-        file_format: DataLoadingOptions,
-        copy_options: DataLoadingOptions,
+        directory_table_params: KeyValueOptions,
+        file_format: KeyValueOptions,
+        copy_options: KeyValueOptions,
         comment: Option<String>,
     },
     /// ```sql
@@ -3289,18 +3332,21 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement.
     Deallocate { name: Ident, prepare: bool },
     /// ```sql
-    /// EXECUTE name [ ( parameter [, ...] ) ] [USING <expr>]
+    /// An `EXECUTE` statement
     /// ```
-    ///
-    /// Note: this statement is supported by Postgres and MSSQL, with slight differences in syntax.
     ///
     /// Postgres: <https://www.postgresql.org/docs/current/sql-execute.html>
     /// MSSQL: <https://learn.microsoft.com/en-us/sql/relational-databases/stored-procedures/execute-a-stored-procedure>
+    /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate>
+    /// Snowflake: <https://docs.snowflake.com/en/sql-reference/sql/execute-immediate>
     Execute {
-        name: ObjectName,
+        name: Option<ObjectName>,
         parameters: Vec<Expr>,
         has_parentheses: bool,
-        using: Vec<Expr>,
+        /// Is this an `EXECUTE IMMEDIATE`
+        immediate: bool,
+        into: Vec<Ident>,
+        using: Vec<ExprWithAlias>,
     },
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
@@ -4017,7 +4063,10 @@ impl fmt::Display for Statement {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {trigger_name} ON {table_name}")?;
+                match &table_name {
+                    Some(table_name) => write!(f, " {trigger_name} ON {table_name}")?,
+                    None => write!(f, " {trigger_name}")?,
+                };
                 if let Some(option) = option {
                     write!(f, " {option}")?;
                 }
@@ -4439,6 +4488,9 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " AS {query}")
             }
+            Statement::AlterType(AlterType { name, operation }) => {
+                write!(f, "ALTER TYPE {name} {operation}")
+            }
             Statement::AlterRole { name, operation } => {
                 write!(f, "ALTER ROLE {name} {operation}")
             }
@@ -4468,6 +4520,29 @@ impl fmt::Display for Statement {
                 }
                 if let Some(owner) = owner {
                     write!(f, " SET OWNER {owner}")?;
+                }
+                Ok(())
+            }
+            Statement::AlterSession {
+                set,
+                session_params,
+            } => {
+                write!(
+                    f,
+                    "ALTER SESSION {set}",
+                    set = if *set { "SET" } else { "UNSET" }
+                )?;
+                if !session_params.options.is_empty() {
+                    if *set {
+                        write!(f, " {}", session_params)?;
+                    } else {
+                        let options = session_params
+                            .options
+                            .iter()
+                            .map(|p| p.option_name.clone())
+                            .collect::<Vec<_>>();
+                        write!(f, " {}", display_separated(&options, ", "))?;
+                    }
                 }
                 Ok(())
             }
@@ -4773,6 +4848,9 @@ impl fmt::Display for Statement {
                 begin: syntax_begin,
                 transaction,
                 modifier,
+                statements,
+                exception_statements,
+                has_end_keyword,
             } => {
                 if *syntax_begin {
                     if let Some(modifier) = *modifier {
@@ -4788,6 +4866,24 @@ impl fmt::Display for Statement {
                 }
                 if !modes.is_empty() {
                     write!(f, " {}", display_comma_separated(modes))?;
+                }
+                if !statements.is_empty() {
+                    write!(f, " {}", display_separated(statements, "; "))?;
+                    // We manually insert semicolon for the last statement,
+                    // since display_separated doesn't handle that case.
+                    write!(f, ";")?;
+                }
+                if let Some(exception_statements) = exception_statements {
+                    write!(f, " EXCEPTION WHEN ERROR THEN")?;
+                    if !exception_statements.is_empty() {
+                        write!(f, " {}", display_separated(exception_statements, "; "))?;
+                        // We manually insert semicolon for the last statement,
+                        // since display_separated doesn't handle that case.
+                        write!(f, ";")?;
+                    }
+                }
+                if *has_end_keyword {
+                    write!(f, " END")?;
                 }
                 Ok(())
             }
@@ -4906,6 +5002,8 @@ impl fmt::Display for Statement {
                 name,
                 parameters,
                 has_parentheses,
+                immediate,
+                into,
                 using,
             } => {
                 let (open, close) = if *has_parentheses {
@@ -4913,11 +5011,17 @@ impl fmt::Display for Statement {
                 } else {
                     (if parameters.is_empty() { "" } else { " " }, "")
                 };
-                write!(
-                    f,
-                    "EXECUTE {name}{open}{}{close}",
-                    display_comma_separated(parameters),
-                )?;
+                write!(f, "EXECUTE")?;
+                if *immediate {
+                    write!(f, " IMMEDIATE")?;
+                }
+                if let Some(name) = name {
+                    write!(f, " {name}")?;
+                }
+                write!(f, "{open}{}{close}", display_comma_separated(parameters),)?;
+                if !into.is_empty() {
+                    write!(f, " INTO {}", display_comma_separated(into))?;
+                }
                 if !using.is_empty() {
                     write!(f, " USING {}", display_comma_separated(using))?;
                 };
@@ -8696,9 +8800,9 @@ mod tests {
     #[test]
     fn test_interval_display() {
         let interval = Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
-                "123:45.67",
-            )))),
+            value: Box::new(Expr::Value(
+                Value::SingleQuotedString(String::from("123:45.67")).with_empty_span(),
+            )),
             leading_field: Some(DateTimeField::Minute),
             leading_precision: Some(10),
             last_field: Some(DateTimeField::Second),
@@ -8710,7 +8814,9 @@ mod tests {
         );
 
         let interval = Expr::Interval(Interval {
-            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("5")))),
+            value: Box::new(Expr::Value(
+                Value::SingleQuotedString(String::from("5")).with_empty_span(),
+            )),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(1),
             last_field: None,

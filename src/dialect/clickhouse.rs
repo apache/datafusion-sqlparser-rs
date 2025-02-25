@@ -75,4 +75,23 @@ impl Dialect for ClickHouseDialect {
     fn supports_lambda_functions(&self) -> bool {
         true
     }
+
+    fn supports_from_first_select(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/order-by>
+    fn supports_order_by_all(&self) -> bool {
+        true
+    }
+
+    // See <https://clickhouse.com/docs/en/sql-reference/aggregate-functions/grouping_function#grouping-sets>
+    fn supports_group_by_expr(&self) -> bool {
+        true
+    }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/select/group-by#rollup-modifier>
+    fn supports_group_by_with_modifier(&self) -> bool {
+        true
+    }
 }

@@ -24,11 +24,11 @@ use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::fmt;
-use core::fmt::Formatter;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::ast::helpers::key_value_options::KeyValueOptions;
 use crate::ast::{Ident, ObjectName};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
@@ -38,36 +38,10 @@ use sqlparser_derive::{Visit, VisitMut};
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct StageParamsObject {
     pub url: Option<String>,
-    pub encryption: DataLoadingOptions,
+    pub encryption: KeyValueOptions,
     pub endpoint: Option<String>,
     pub storage_integration: Option<String>,
-    pub credentials: DataLoadingOptions,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct DataLoadingOptions {
-    pub options: Vec<DataLoadingOption>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum DataLoadingOptionType {
-    STRING,
-    BOOLEAN,
-    ENUM,
-    NUMBER,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct DataLoadingOption {
-    pub option_name: String,
-    pub option_type: DataLoadingOptionType,
-    pub value: String,
+    pub credentials: KeyValueOptions,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -102,39 +76,6 @@ impl fmt::Display for StageParamsObject {
             write!(f, " ENCRYPTION=({})", self.encryption)?;
         }
 
-        Ok(())
-    }
-}
-
-impl fmt::Display for DataLoadingOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if !self.options.is_empty() {
-            let mut first = false;
-            for option in &self.options {
-                if !first {
-                    first = true;
-                } else {
-                    f.write_str(" ")?;
-                }
-                write!(f, "{}", option)?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Display for DataLoadingOption {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.option_type {
-            DataLoadingOptionType::STRING => {
-                write!(f, "{}='{}'", self.option_name, self.value)?;
-            }
-            DataLoadingOptionType::ENUM
-            | DataLoadingOptionType::BOOLEAN
-            | DataLoadingOptionType::NUMBER => {
-                write!(f, "{}={}", self.option_name, self.value)?;
-            }
-        }
         Ok(())
     }
 }

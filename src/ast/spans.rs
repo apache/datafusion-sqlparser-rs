@@ -21,21 +21,21 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    dcl::SecondaryRoles, AccessExpr, AlterColumnOperation, AlterIndexOperation,
-    AlterTableOperation, Array, Assignment, AssignmentTarget, CloseCursor, ClusteredIndex,
-    ColumnDef, ColumnOption, ColumnOptionDef, ConflictTarget, ConnectBy, ConstraintCharacteristics,
-    CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate,
-    ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable, Function,
-    FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments,
-    GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
-    Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
-    OnConflictAction, OnInsert, OrderBy, OrderByExpr, Partition, PivotValueSource,
-    ProjectionSelect, Query, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
-    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
-    WildcardAdditionalOptions, With, WithFill,
+    dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
+    AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, CloseCursor,
+    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConflictTarget, ConnectBy,
+    ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
+    Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
+    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
+    FunctionArguments, GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate,
+    InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
+    MatchRecognizePattern, Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset,
+    OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition,
+    PivotValueSource, ProjectionSelect, Query, ReferentialAction, RenameSelectItem,
+    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
+    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
+    TableFactor, TableObject, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
+    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -215,6 +215,7 @@ impl Spanned for Values {
 /// - [Statement::CopyIntoSnowflake]
 /// - [Statement::CreateSecret]
 /// - [Statement::CreateRole]
+/// - [Statement::AlterType]
 /// - [Statement::AlterRole]
 /// - [Statement::AttachDatabase]
 /// - [Statement::AttachDuckDBDatabase]
@@ -427,7 +428,9 @@ impl Spanned for Statement {
                     .chain(with_options.iter().map(|i| i.span())),
             ),
             // These statements need to be implemented
+            Statement::AlterType { .. } => Span::empty(),
             Statement::AlterRole { .. } => Span::empty(),
+            Statement::AlterSession { .. } => Span::empty(),
             Statement::AttachDatabase { .. } => Span::empty(),
             Statement::AttachDuckDBDatabase { .. } => Span::empty(),
             Statement::DetachDuckDBDatabase { .. } => Span::empty(),
@@ -602,15 +605,10 @@ impl Spanned for ColumnDef {
         let ColumnDef {
             name,
             data_type: _, // enum
-            collation,
             options,
         } = self;
 
-        union_spans(
-            core::iter::once(name.span)
-                .chain(collation.iter().map(|i| i.span()))
-                .chain(options.iter().map(|i| i.span())),
-        )
+        union_spans(core::iter::once(name.span).chain(options.iter().map(|i| i.span())))
     }
 }
 
@@ -764,6 +762,7 @@ impl Spanned for ColumnOption {
             ColumnOption::Check(expr) => expr.span(),
             ColumnOption::DialectSpecific(_) => Span::empty(),
             ColumnOption::CharacterSet(object_name) => object_name.span(),
+            ColumnOption::Collation(object_name) => object_name.span(),
             ColumnOption::Comment(_) => Span::empty(),
             ColumnOption::OnUpdate(expr) => expr.span(),
             ColumnOption::Generated { .. } => Span::empty(),
@@ -1095,16 +1094,21 @@ impl Spanned for ProjectionSelect {
     }
 }
 
+/// # partial span
+///
+/// Missing spans:
+/// - [OrderByKind::All]
 impl Spanned for OrderBy {
     fn span(&self) -> Span {
-        let OrderBy { exprs, interpolate } = self;
-
-        union_spans(
-            exprs
-                .iter()
-                .map(|i| i.span())
-                .chain(interpolate.iter().map(|i| i.span())),
-        )
+        match &self.kind {
+            OrderByKind::All(_) => Span::empty(),
+            OrderByKind::Expressions(exprs) => union_spans(
+                exprs
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(self.interpolate.iter().map(|i| i.span())),
+            ),
+        }
     }
 }
 
@@ -1285,7 +1289,6 @@ impl Spanned for Expr {
         match self {
             Expr::Identifier(ident) => ident.span,
             Expr::CompoundIdentifier(vec) => union_spans(vec.iter().map(|i| i.span)),
-            Expr::CompositeAccess { expr, key } => expr.span().union(&key.span),
             Expr::CompoundFieldAccess { root, access_chain } => {
                 union_spans(iter::once(root.span()).chain(access_chain.iter().map(|i| i.span())))
             }
@@ -1446,15 +1449,15 @@ impl Spanned for Expr {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
             } => union_spans(
                 operand
                     .as_ref()
                     .map(|i| i.span())
                     .into_iter()
-                    .chain(conditions.iter().map(|i| i.span()))
-                    .chain(results.iter().map(|i| i.span()))
+                    .chain(conditions.iter().flat_map(|case_when| {
+                        [case_when.condition.span(), case_when.result.span()]
+                    }))
                     .chain(else_result.as_ref().map(|i| i.span())),
             ),
             Expr::Exists { subquery, .. } => subquery.span(),
@@ -1475,7 +1478,6 @@ impl Spanned for Expr {
             Expr::OuterJoin(expr) => expr.span(),
             Expr::Prior(expr) => expr.span(),
             Expr::Lambda(_) => Span::empty(),
-            Expr::Method(_) => Span::empty(),
         }
     }
 }
@@ -1904,8 +1906,7 @@ impl Spanned for OrderByExpr {
     fn span(&self) -> Span {
         let OrderByExpr {
             expr,
-            asc: _,         // bool
-            nulls_first: _, // bool
+            options: _,
             with_fill,
         } = self;
 
@@ -1976,10 +1977,13 @@ impl Spanned for TableAliasColumnDef {
     }
 }
 
-/// # missing span
-///
-/// The span of a `Value` is currently not implemented, as doing so
-/// requires a breaking changes, which may be done in a future release.
+impl Spanned for ValueWithSpan {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+/// The span is stored in the `ValueWrapper` struct
 impl Spanned for Value {
     fn span(&self) -> Span {
         Span::empty() // # todo: Value needs to store spans before this is possible
@@ -2009,7 +2013,9 @@ impl Spanned for JoinOperator {
         match self {
             JoinOperator::Join(join_constraint) => join_constraint.span(),
             JoinOperator::Inner(join_constraint) => join_constraint.span(),
+            JoinOperator::Left(join_constraint) => join_constraint.span(),
             JoinOperator::LeftOuter(join_constraint) => join_constraint.span(),
+            JoinOperator::Right(join_constraint) => join_constraint.span(),
             JoinOperator::RightOuter(join_constraint) => join_constraint.span(),
             JoinOperator::FullOuter(join_constraint) => join_constraint.span(),
             JoinOperator::CrossJoin => Span::empty(),
@@ -2076,6 +2082,7 @@ impl Spanned for Select {
             value_table_mode: _,      // todo, BigQuery specific
             connect_by,
             top_before_distinct: _,
+            flavor: _,
         } = self;
 
         union_spans(

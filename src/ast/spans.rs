@@ -704,7 +704,7 @@ impl Spanned for CreateIndex {
         let CreateIndex {
             name,
             table_name,
-            using,
+            using: _,
             columns,
             unique: _,        // bool
             concurrently: _,  // bool
@@ -719,8 +719,7 @@ impl Spanned for CreateIndex {
             name.iter()
                 .map(|i| i.span())
                 .chain(core::iter::once(table_name.span()))
-                .chain(using.iter().map(|i| i.span))
-                .chain(columns.iter().map(|i| i.span()))
+                .chain(columns.iter().map(|i| i.column.span()))
                 .chain(include.iter().map(|i| i.span))
                 .chain(with.iter().map(|i| i.span()))
                 .chain(predicate.iter().map(|i| i.span())),

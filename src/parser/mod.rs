@@ -63,6 +63,7 @@ mod recursion {
 
     use super::ParserError;
 
+    #[derive(Debug)]
     /// Tracks remaining recursion depth. This value is decremented on
     /// each call to [`RecursionCounter::try_decrease()`], when it reaches 0 an error will
     /// be returned.
@@ -263,7 +264,7 @@ impl ParserOptions {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum ParserState {
     /// The default state of the parser.
     Normal,
@@ -3955,6 +3956,18 @@ impl<'a> Parser<'a> {
         true
     }
 
+    /// If the current token is one of the given `keywords`, returns the keyword
+    /// that matches, without consuming the token. Otherwise, returns [`None`].
+    #[must_use]
+    pub fn peek_one_of_keywords(&self, keywords: &[Keyword]) -> Option<Keyword> {
+        for keyword in keywords {
+            if self.peek_keyword(*keyword) {
+                return Some(*keyword);
+            }
+        }
+        None
+    }
+
     /// If the current token is one of the given `keywords`, consume the token
     /// and return the keyword that matches. Otherwise, no tokens are consumed
     /// and returns [`None`].
@@ -6406,12 +6419,13 @@ impl<'a> Parser<'a> {
         };
         let table_name = self.parse_object_name(false)?;
         let using = if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_identifier()?)
+            Some(self.parse_index_type()?)
         } else {
             None
         };
+
         self.expect_token(&Token::LParen)?;
-        let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+        let columns = self.parse_comma_separated(Parser::parse_create_index_expr::<true>)?;
         self.expect_token(&Token::RParen)?;
 
         let include = if self.parse_keyword(Keyword::INCLUDE) {
@@ -7629,24 +7643,34 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_index_type(&mut self) -> Result<IndexType, ParserError> {
-        if self.parse_keyword(Keyword::BTREE) {
-            Ok(IndexType::BTree)
+        Ok(if self.parse_keyword(Keyword::BTREE) {
+            IndexType::BTree
         } else if self.parse_keyword(Keyword::HASH) {
-            Ok(IndexType::Hash)
+            IndexType::Hash
+        } else if self.parse_keyword(Keyword::GIN) {
+            IndexType::GIN
+        } else if self.parse_keyword(Keyword::GIST) {
+            IndexType::GiST
+        } else if self.parse_keyword(Keyword::SPGIST) {
+            IndexType::SPGiST
+        } else if self.parse_keyword(Keyword::BRIN) {
+            IndexType::BRIN
+        } else if self.parse_keyword(Keyword::BLOOM) {
+            IndexType::Bloom
         } else {
-            self.expected("index type {BTREE | HASH}", self.peek_token())
-        }
+            IndexType::Custom(self.parse_identifier()?)
+        })
     }
 
-    /// Parse [USING {BTREE | HASH}]
+    /// Parse [USING {BTREE | HASH | GIN | GIST | SPGIST | BRIN | BLOOM | identifier}]
     pub fn parse_optional_using_then_index_type(
         &mut self,
     ) -> Result<Option<IndexType>, ParserError> {
-        if self.parse_keyword(Keyword::USING) {
-            Ok(Some(self.parse_index_type()?))
+        Ok(if self.parse_keyword(Keyword::USING) {
+            Some(self.parse_index_type()?)
         } else {
-            Ok(None)
-        }
+            None
+        })
     }
 
     /// Parse `[ident]`, mostly `ident` is name, like:
@@ -13627,9 +13651,32 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
+    /// Parse an OrderByExpr expression, optionally followed by ASC or DESC (used in ORDER BY)
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
+        self.parse_create_index_expr::<false>()
+            .map(|index_column| index_column.column)
+    }
+
+    /// Parse an IndexColumn expression (used in CREATE INDEX)
+    pub fn parse_create_index_expr<const PARSE_OPERATOR_CLASS: bool>(
+        &mut self,
+    ) -> Result<IndexColumn, ParserError> {
         let expr = self.parse_expr()?;
+
+        let operator_class: Option<Ident> = if PARSE_OPERATOR_CLASS {
+            // We check that if non of the following keywords are present, then we parse an
+            // identifier as operator class.
+            if self
+                .peek_one_of_keywords(&[Keyword::ASC, Keyword::DESC, Keyword::NULLS, Keyword::WITH])
+                .is_some()
+            {
+                None
+            } else {
+                self.maybe_parse(|parser| parser.parse_identifier())?
+            }
+        } else {
+            None
+        };
 
         let options = self.parse_order_by_options()?;
 
@@ -13641,10 +13688,13 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(OrderByExpr {
-            expr,
-            options,
-            with_fill,
+        Ok(IndexColumn {
+            column: OrderByExpr {
+                expr,
+                options,
+                with_fill,
+            },
+            operator_class,
         })
     }
 

@@ -2510,6 +2510,340 @@ fn parse_create_anonymous_index() {
 }
 
 #[test]
+fn parse_create_users_name_trgm_index() {
+    let sql = "CREATE INDEX users_name_trgm_idx ON users USING GIN (concat_users_name(first_name, last_name) gin_trgm_ops)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+            assert_eq_vec(&["users_name_trgm_idx"], &name);
+            assert_eq_vec(&["users"], &table_name);
+            assert_eq!(IndexType::GIN, using);
+            assert_eq!(
+                IndexColumn {
+                    column: OrderByExpr {
+                        expr: Expr::Function(Function {
+                            name: ObjectName(vec![ObjectNamePart::Identifier(Ident {
+                                value: "concat_users_name".to_owned(),
+                                quote_style: None,
+                                span: Span::empty()
+                            })]),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                duplicate_treatment: None,
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident {
+                                            value: "first_name".to_owned(),
+                                            quote_style: None,
+                                            span: Span::empty()
+                                        }
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident {
+                                            value: "last_name".to_owned(),
+                                            quote_style: None,
+                                            span: Span::empty()
+                                        }
+                                    )))
+                                ],
+                                clauses: vec![]
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![]
+                        }),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
+                    },
+                    operator_class: Some(Ident::new("gin_trgm_ops")),
+                },
+                columns[0],
+            );
+            assert!(!unique);
+            assert!(!concurrently);
+            assert!(!if_not_exists);
+            assert!(include.is_empty());
+            assert!(with.is_empty());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_projects_name_description_trgm_index() {
+    let sql = "CREATE INDEX projects_name_description_trgm_idx ON projects USING GIN (concat_projects_name_description(name, description) gin_trgm_ops)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+            assert_eq_vec(&["projects_name_description_trgm_idx"], &name);
+            assert_eq_vec(&["projects"], &table_name);
+            assert_eq!(IndexType::GIN, using);
+            assert_eq!(
+                IndexColumn {
+                    column: OrderByExpr {
+                        expr: Expr::Function(Function {
+                            name: ObjectName(vec![ObjectNamePart::Identifier(Ident {
+                                value: "concat_projects_name_description".to_owned(),
+                                quote_style: None,
+                                span: Span::empty()
+                            })]),
+                            uses_odbc_syntax: false,
+                            parameters: FunctionArguments::None,
+                            args: FunctionArguments::List(FunctionArgumentList {
+                                duplicate_treatment: None,
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident {
+                                            value: "name".to_owned(),
+                                            quote_style: None,
+                                            span: Span::empty()
+                                        }
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident {
+                                            value: "description".to_owned(),
+                                            quote_style: None,
+                                            span: Span::empty()
+                                        }
+                                    )))
+                                ],
+                                clauses: vec![]
+                            }),
+                            filter: None,
+                            null_treatment: None,
+                            over: None,
+                            within_group: vec![]
+                        }),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
+                    },
+                    operator_class: Some(Ident::new("gin_trgm_ops")),
+                },
+                columns[0],
+            );
+            assert!(!unique);
+            assert!(!concurrently);
+            assert!(!if_not_exists);
+            assert!(include.is_empty());
+            assert!(with.is_empty());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_nameplates_barcode_trgm_index() {
+    let sql =
+        "CREATE INDEX nameplates_barcode_trgm_idx ON nameplates USING GIN (barcode gin_trgm_ops)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+            assert_eq_vec(&["nameplates_barcode_trgm_idx"], &name);
+            assert_eq_vec(&["nameplates"], &table_name);
+            assert_eq!(IndexType::GIN, using);
+            assert_eq!(
+                IndexColumn {
+                    column: OrderByExpr {
+                        expr: Expr::Identifier(Ident {
+                            value: "barcode".to_owned(),
+                            quote_style: None,
+                            span: Span::empty()
+                        }),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
+                    },
+                    operator_class: Some(Ident::new("gin_trgm_ops")),
+                },
+                columns[0],
+            );
+            assert!(!unique);
+            assert!(!concurrently);
+            assert!(!if_not_exists);
+            assert!(include.is_empty());
+            assert!(with.is_empty());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_multicolumn_nameplates_barcode_trgm_index() {
+    let sql =
+        "CREATE INDEX nameplates_barcode_trgm_idx ON nameplates USING GIN (product,product_name gin_trgm_ops,barcode gin_trgm_ops)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+            assert_eq_vec(&["nameplates_barcode_trgm_idx"], &name);
+            assert_eq_vec(&["nameplates"], &table_name);
+            assert_eq!(IndexType::GIN, using);
+            assert_eq!(
+                IndexColumn {
+                    column: OrderByExpr {
+                        expr: Expr::Identifier(Ident {
+                            value: "product".to_owned(),
+                            quote_style: None,
+                            span: Span::empty()
+                        }),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
+                    },
+                    operator_class: None
+                },
+                columns[0],
+            );
+            assert_eq!(
+                IndexColumn {
+                    column: OrderByExpr {
+                        expr: Expr::Identifier(Ident {
+                            value: "product_name".to_owned(),
+                            quote_style: None,
+                            span: Span::empty()
+                        }),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
+                    },
+                    operator_class: Some(Ident::new("gin_trgm_ops")),
+                },
+                columns[1],
+            );
+            assert_eq!(
+                IndexColumn {
+                    column: OrderByExpr {
+                        expr: Expr::Identifier(Ident {
+                            value: "barcode".to_owned(),
+                            quote_style: None,
+                            span: Span::empty()
+                        }),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
+                    },
+                    operator_class: Some(Ident::new("gin_trgm_ops")),
+                },
+                columns[2],
+            );
+            assert!(!unique);
+            assert!(!concurrently);
+            assert!(!if_not_exists);
+            assert!(include.is_empty());
+            assert!(with.is_empty());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_sample_containers_barcode_trgm_index() {
+    let sql = "CREATE INDEX sample_containers_barcode_trgm_idx ON sample_containers USING GIST (barcode gist_trgm_ops)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+            assert_eq_vec(&["sample_containers_barcode_trgm_idx"], &name);
+            assert_eq_vec(&["sample_containers"], &table_name);
+            assert_eq!(IndexType::GiST, using);
+            assert_eq!(
+                IndexColumn {
+                    column: OrderByExpr {
+                        expr: Expr::Identifier(Ident {
+                            value: "barcode".to_owned(),
+                            quote_style: None,
+                            span: Span::empty()
+                        }),
+                        options: OrderByOptions {
+                            asc: None,
+                            nulls_first: None,
+                        },
+                        with_fill: None,
+                    },
+                    operator_class: Some(Ident::new("gist_trgm_ops")),
+                },
+                columns[0],
+            );
+            assert!(!unique);
+            assert!(!concurrently);
+            assert!(!if_not_exists);
+            assert!(include.is_empty());
+            assert!(with.is_empty());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_index_concurrently() {
     let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
     match pg().verified_stmt(sql) {

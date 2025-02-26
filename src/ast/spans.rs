@@ -1062,6 +1062,7 @@ impl Spanned for AlterTableOperation {
             AlterTableOperation::DropClusteringKey => Span::empty(),
             AlterTableOperation::SuspendRecluster => Span::empty(),
             AlterTableOperation::ResumeRecluster => Span::empty(),
+            AlterTableOperation::Algorithm { .. } => Span::empty(),
         }
     }
 }

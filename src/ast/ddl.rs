@@ -65,7 +65,6 @@ pub enum AlterTableOperation {
         name: Ident,
         select: ProjectionSelect,
     },
-
     /// `DROP PROJECTION [IF EXISTS] name`
     ///
     /// Note: this is a ClickHouse-specific operation.
@@ -74,7 +73,6 @@ pub enum AlterTableOperation {
         if_exists: bool,
         name: Ident,
     },
-
     /// `MATERIALIZE PROJECTION [IF EXISTS] name [IN PARTITION partition_name]`
     ///
     ///  Note: this is a ClickHouse-specific operation.
@@ -84,7 +82,6 @@ pub enum AlterTableOperation {
         name: Ident,
         partition: Option<Ident>,
     },
-
     /// `CLEAR PROJECTION [IF EXISTS] name [IN PARTITION partition_name]`
     ///
     /// Note: this is a ClickHouse-specific operation.
@@ -94,7 +91,6 @@ pub enum AlterTableOperation {
         name: Ident,
         partition: Option<Ident>,
     },
-
     /// `DISABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -272,6 +268,15 @@ pub enum AlterTableOperation {
     DropClusteringKey,
     SuspendRecluster,
     ResumeRecluster,
+    /// `ALGORITHM [=] { DEFAULT | INSTANT | INPLACE | COPY }`
+    ///
+    /// [MySQL]-specific table alter algorithm.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    Algorithm {
+        equals: bool,
+        algorithm: AlterTableAlgorithm,
+    },
 }
 
 /// An `ALTER Policy` (`Statement::AlterPolicy`) operation
@@ -314,6 +319,30 @@ impl fmt::Display for AlterPolicyOperation {
                 Ok(())
             }
         }
+    }
+}
+
+/// [MySQL] `ALTER TABLE` algorithm.
+///
+/// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTableAlgorithm {
+    Default,
+    Instant,
+    Inplace,
+    Copy,
+}
+
+impl fmt::Display for AlterTableAlgorithm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Self::Default => "DEFAULT",
+            Self::Instant => "INSTANT",
+            Self::Inplace => "INPLACE",
+            Self::Copy => "COPY",
+        })
     }
 }
 
@@ -406,6 +435,14 @@ impl fmt::Display for AlterTableOperation {
                     write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {} ({})", name, query)
+            }
+            AlterTableOperation::Algorithm { equals, algorithm } => {
+                write!(
+                    f,
+                    "ALGORITHM {}{}",
+                    if *equals { "= " } else { "" },
+                    algorithm
+                )
             }
             AlterTableOperation::DropProjection { if_exists, name } => {
                 write!(f, "DROP PROJECTION")?;

@@ -132,19 +132,19 @@ pub enum DataType {
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
     TinyInt(Option<u64>),
     /// Unsigned tiny integer with optional display width e.g. TINYINT UNSIGNED or TINYINT(3) UNSIGNED
-    UnsignedTinyInt(Option<u64>),
+    TinyIntUnsigned(Option<u64>),
     /// Int2 as alias for SmallInt in [postgresql]
     /// Note: Int2 mean 2 bytes in postgres (not 2 bits)
     /// Int2 with optional display width e.g. INT2 or INT2(5)
     ///
     /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     Int2(Option<u64>),
-    /// Unsigned Int2 with optional display width e.g. INT2 Unsigned or INT2(5) Unsigned
-    UnsignedInt2(Option<u64>),
+    /// Unsigned Int2 with optional display width e.g. INT2 UNSIGNED or INT2(5) UNSIGNED
+    Int2Unsigned(Option<u64>),
     /// Small integer with optional display width e.g. SMALLINT or SMALLINT(5)
     SmallInt(Option<u64>),
     /// Unsigned small integer with optional display width e.g. SMALLINT UNSIGNED or SMALLINT(5) UNSIGNED
-    UnsignedSmallInt(Option<u64>),
+    SmallIntUnsigned(Option<u64>),
     /// MySQL medium integer ([1]) with optional display width e.g. MEDIUMINT or MEDIUMINT(5)
     ///
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
@@ -152,7 +152,7 @@ pub enum DataType {
     /// Unsigned medium integer ([1]) with optional display width e.g. MEDIUMINT UNSIGNED or MEDIUMINT(5) UNSIGNED
     ///
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
-    UnsignedMediumInt(Option<u64>),
+    MediumIntUnsigned(Option<u64>),
     /// Int with optional display width e.g. INT or INT(11)
     Int(Option<u64>),
     /// Int4 as alias for Integer in [postgresql]
@@ -197,11 +197,11 @@ pub enum DataType {
     /// Integer with optional display width e.g. INTEGER or INTEGER(11)
     Integer(Option<u64>),
     /// Unsigned int with optional display width e.g. INT UNSIGNED or INT(11) UNSIGNED
-    UnsignedInt(Option<u64>),
+    IntUnsigned(Option<u64>),
     /// Unsigned int4 with optional display width e.g. INT4 UNSIGNED or INT4(11) UNSIGNED
-    UnsignedInt4(Option<u64>),
+    Int4Unsigned(Option<u64>),
     /// Unsigned integer with optional display width e.g. INTEGER UNSIGNED or INTEGER(11) UNSIGNED
-    UnsignedInteger(Option<u64>),
+    IntegerUnsigned(Option<u64>),
     /// Unsigned integer type in [clickhouse]
     /// Note: UInt8 mean 8 bits in [clickhouse]
     ///
@@ -235,9 +235,29 @@ pub enum DataType {
     /// Big integer with optional display width e.g. BIGINT or BIGINT(20)
     BigInt(Option<u64>),
     /// Unsigned big integer with optional display width e.g. BIGINT UNSIGNED or BIGINT(20) UNSIGNED
-    UnsignedBigInt(Option<u64>),
+    BigIntUnsigned(Option<u64>),
     /// Unsigned Int8 with optional display width e.g. INT8 UNSIGNED or INT8(11) UNSIGNED
-    UnsignedInt8(Option<u64>),
+    Int8Unsigned(Option<u64>),
+    /// Signed integer as used in [MySQL CAST] target types, without optional `INTEGER` suffix:
+    /// `SIGNED`
+    ///
+    /// [MySQL CAST]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html
+    Signed,
+    /// Signed integer as used in [MySQL CAST] target types, with optional `INTEGER` suffix:
+    /// `SIGNED INTEGER`
+    ///
+    /// [MySQL CAST]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html
+    SignedInteger,
+    /// Signed integer as used in [MySQL CAST] target types, without optional `INTEGER` suffix:
+    /// `SIGNED`
+    ///
+    /// [MySQL CAST]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html
+    Unsigned,
+    /// Unsigned integer as used in [MySQL CAST] target types, with optional `INTEGER` suffix:
+    /// `UNSIGNED INTEGER`
+    ///
+    /// [MySQL CAST]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html
+    UnsignedInteger,
     /// Float4 as alias for Real in [postgresql]
     ///
     /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
@@ -433,29 +453,29 @@ impl fmt::Display for DataType {
             DataType::TinyInt(zerofill) => {
                 format_type_with_optional_length(f, "TINYINT", zerofill, false)
             }
-            DataType::UnsignedTinyInt(zerofill) => {
+            DataType::TinyIntUnsigned(zerofill) => {
                 format_type_with_optional_length(f, "TINYINT", zerofill, true)
             }
             DataType::Int2(zerofill) => {
                 format_type_with_optional_length(f, "INT2", zerofill, false)
             }
-            DataType::UnsignedInt2(zerofill) => {
+            DataType::Int2Unsigned(zerofill) => {
                 format_type_with_optional_length(f, "INT2", zerofill, true)
             }
             DataType::SmallInt(zerofill) => {
                 format_type_with_optional_length(f, "SMALLINT", zerofill, false)
             }
-            DataType::UnsignedSmallInt(zerofill) => {
+            DataType::SmallIntUnsigned(zerofill) => {
                 format_type_with_optional_length(f, "SMALLINT", zerofill, true)
             }
             DataType::MediumInt(zerofill) => {
                 format_type_with_optional_length(f, "MEDIUMINT", zerofill, false)
             }
-            DataType::UnsignedMediumInt(zerofill) => {
+            DataType::MediumIntUnsigned(zerofill) => {
                 format_type_with_optional_length(f, "MEDIUMINT", zerofill, true)
             }
             DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill, false),
-            DataType::UnsignedInt(zerofill) => {
+            DataType::IntUnsigned(zerofill) => {
                 format_type_with_optional_length(f, "INT", zerofill, true)
             }
             DataType::Int4(zerofill) => {
@@ -479,22 +499,22 @@ impl fmt::Display for DataType {
             DataType::Int256 => {
                 write!(f, "Int256")
             }
-            DataType::UnsignedInt4(zerofill) => {
+            DataType::Int4Unsigned(zerofill) => {
                 format_type_with_optional_length(f, "INT4", zerofill, true)
             }
             DataType::Integer(zerofill) => {
                 format_type_with_optional_length(f, "INTEGER", zerofill, false)
             }
-            DataType::UnsignedInteger(zerofill) => {
+            DataType::IntegerUnsigned(zerofill) => {
                 format_type_with_optional_length(f, "INTEGER", zerofill, true)
             }
             DataType::BigInt(zerofill) => {
                 format_type_with_optional_length(f, "BIGINT", zerofill, false)
             }
-            DataType::UnsignedBigInt(zerofill) => {
+            DataType::BigIntUnsigned(zerofill) => {
                 format_type_with_optional_length(f, "BIGINT", zerofill, true)
             }
-            DataType::UnsignedInt8(zerofill) => {
+            DataType::Int8Unsigned(zerofill) => {
                 format_type_with_optional_length(f, "INT8", zerofill, true)
             }
             DataType::UInt8 => {
@@ -514,6 +534,18 @@ impl fmt::Display for DataType {
             }
             DataType::UInt256 => {
                 write!(f, "UInt256")
+            }
+            DataType::Signed => {
+                write!(f, "SIGNED")
+            }
+            DataType::SignedInteger => {
+                write!(f, "SIGNED INTEGER")
+            }
+            DataType::Unsigned => {
+                write!(f, "UNSIGNED")
+            }
+            DataType::UnsignedInteger => {
+                write!(f, "UNSIGNED INTEGER")
             }
             DataType::Real => write!(f, "REAL"),
             DataType::Float4 => write!(f, "FLOAT4"),

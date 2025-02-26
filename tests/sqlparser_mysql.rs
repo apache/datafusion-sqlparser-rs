@@ -2471,6 +2471,19 @@ fn parse_alter_table_with_algorithm() {
 }
 
 #[test]
+fn parse_alter_table_auto_increment() {
+    let sql = "ALTER TABLE tab AUTO_INCREMENT = 42";
+    let expected_operation = AlterTableOperation::AutoIncrement {
+        equals: true,
+        value: number("42").with_empty_span(),
+    };
+    let operation = alter_table_op(mysql().verified_stmt(sql));
+    assert_eq!(expected_operation, operation);
+
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` AUTO_INCREMENT 42");
+}
+
+#[test]
 fn parse_alter_table_modify_column_with_column_position() {
     let expected_name = ObjectName::from(vec![Ident::new("orders")]);
     let expected_operation_first = AlterTableOperation::ModifyColumn {

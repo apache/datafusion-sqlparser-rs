@@ -34,6 +34,7 @@ use crate::ast::{
     CreateFunctionUsing, DataType, Expr, FunctionBehavior, FunctionCalledOnNull,
     FunctionDeterminismSpecifier, FunctionParallel, Ident, MySQLColumnPosition, ObjectName,
     OperateFunctionArg, OrderByExpr, ProjectionSelect, SequenceOptions, SqlOption, Tag, Value,
+    ValueWithSpan,
 };
 use crate::keywords::Keyword;
 use crate::tokenizer::Token;
@@ -276,6 +277,15 @@ pub enum AlterTableOperation {
     Algorithm {
         equals: bool,
         algorithm: AlterTableAlgorithm,
+    },
+    /// `AUTO_INCREMENT [=] <value>`
+    ///
+    /// [MySQL]-specific table option for raising current auto increment value.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    AutoIncrement {
+        equals: bool,
+        value: ValueWithSpan,
     },
 }
 
@@ -662,6 +672,14 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::ResumeRecluster => {
                 write!(f, "RESUME RECLUSTER")?;
                 Ok(())
+            }
+            AlterTableOperation::AutoIncrement { equals, value } => {
+                write!(
+                    f,
+                    "AUTO_INCREMENT {}{}",
+                    if *equals { "= " } else { "" },
+                    value
+                )
             }
         }
     }

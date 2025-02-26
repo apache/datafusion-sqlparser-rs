@@ -8181,6 +8181,10 @@ impl<'a> Parser<'a> {
                 )?,
             };
             AlterTableOperation::Algorithm { equals, algorithm }
+        } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+            let equals = self.consume_token(&Token::Eq);
+            let value = self.parse_number_value()?;
+            AlterTableOperation::AutoIncrement { equals, value }
         } else {
             let options: Vec<SqlOption> =
                 self.parse_options_with_keywords(&[Keyword::SET, Keyword::TBLPROPERTIES])?;

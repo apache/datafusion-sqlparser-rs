@@ -115,7 +115,7 @@ fn test_snowflake_create_or_replace_table_copy_grants_cta() {
 
 #[test]
 fn test_snowflake_create_table_enable_schema_evolution() {
-    let sql = "CREATE TABLE my_table (a number) ENABLE_SCHEMA_EVOLUTION=TRUE";
+    let sql = "CREATE TABLE my_table (a number) ENABLE_SCHEMA_EVOLUTION = TRUE";
     match snowflake().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -131,7 +131,7 @@ fn test_snowflake_create_table_enable_schema_evolution() {
 
 #[test]
 fn test_snowflake_create_table_change_tracking() {
-    let sql = "CREATE TABLE my_table (a number) CHANGE_TRACKING=TRUE";
+    let sql = "CREATE TABLE my_table (a number) CHANGE_TRACKING = TRUE";
     match snowflake().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -147,7 +147,7 @@ fn test_snowflake_create_table_change_tracking() {
 
 #[test]
 fn test_snowflake_create_table_data_retention_time_in_days() {
-    let sql = "CREATE TABLE my_table (a number) DATA_RETENTION_TIME_IN_DAYS=5";
+    let sql = "CREATE TABLE my_table (a number) DATA_RETENTION_TIME_IN_DAYS = 5";
     match snowflake().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -163,7 +163,7 @@ fn test_snowflake_create_table_data_retention_time_in_days() {
 
 #[test]
 fn test_snowflake_create_table_max_data_extension_time_in_days() {
-    let sql = "CREATE TABLE my_table (a number) MAX_DATA_EXTENSION_TIME_IN_DAYS=5";
+    let sql = "CREATE TABLE my_table (a number) MAX_DATA_EXTENSION_TIME_IN_DAYS = 5";
     match snowflake().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -303,7 +303,7 @@ fn test_snowflake_create_table_with_tag() {
 
 #[test]
 fn test_snowflake_create_table_default_ddl_collation() {
-    let sql = "CREATE TABLE my_table (a number) DEFAULT_DDL_COLLATION='de'";
+    let sql = "CREATE TABLE my_table (a number) DEFAULT_DDL_COLLATION = 'de'";
     match snowflake().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -856,7 +856,7 @@ fn test_snowflake_create_table_with_several_column_options() {
 fn test_snowflake_create_iceberg_table_all_options() {
     match snowflake().verified_stmt("CREATE ICEBERG TABLE my_table (a INT, b INT) \
     CLUSTER BY (a, b) EXTERNAL_VOLUME = 'volume' CATALOG = 'SNOWFLAKE' BASE_LOCATION = 'relative/path' CATALOG_SYNC = 'OPEN_CATALOG' \
-    STORAGE_SERIALIZATION_POLICY = COMPATIBLE COPY GRANTS CHANGE_TRACKING=TRUE DATA_RETENTION_TIME_IN_DAYS=5 MAX_DATA_EXTENSION_TIME_IN_DAYS=10 \
+    STORAGE_SERIALIZATION_POLICY = COMPATIBLE COPY GRANTS CHANGE_TRACKING = TRUE DATA_RETENTION_TIME_IN_DAYS = 5 MAX_DATA_EXTENSION_TIME_IN_DAYS = 10 \
     WITH AGGREGATION POLICY policy_name WITH ROW ACCESS POLICY policy_name ON (a) WITH TAG (A='TAG A', B='TAG B')") {
         Statement::CreateTable(CreateTable {
             name, cluster_by, base_location,

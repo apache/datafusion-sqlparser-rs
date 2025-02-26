@@ -219,10 +219,10 @@ fn parse_delimited_identifiers() {
 
 #[test]
 fn parse_create_table() {
-    clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY ("x")"#);
-    clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x""#);
+    clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE = MergeTree ORDER BY ("x")"#);
+    clickhouse().verified_stmt(r#"CREATE TABLE "x" ("a" "int") ENGINE = MergeTree ORDER BY "x""#);
     clickhouse().verified_stmt(
-        r#"CREATE TABLE "x" ("a" "int") ENGINE=MergeTree ORDER BY "x" AS SELECT * FROM "t" WHERE true"#,
+        r#"CREATE TABLE "x" ("a" "int") ENGINE = MergeTree ORDER BY "x" AS SELECT * FROM "t" WHERE true"#,
     );
 }
 
@@ -589,7 +589,7 @@ fn parse_clickhouse_data_types() {
 
 #[test]
 fn parse_create_table_with_nullable() {
-    let sql = r#"CREATE TABLE table (k UInt8, `a` Nullable(String), `b` Nullable(DateTime64(9, 'UTC')), c Nullable(DateTime64(9)), d Date32 NULL) ENGINE=MergeTree ORDER BY (`k`)"#;
+    let sql = r#"CREATE TABLE table (k UInt8, `a` Nullable(String), `b` Nullable(DateTime64(9, 'UTC')), c Nullable(DateTime64(9)), d Date32 NULL) ENGINE = MergeTree ORDER BY (`k`)"#;
     // ClickHouse has a case-sensitive definition of data type, but canonical representation is not
     let canonical_sql = sql.replace("String", "STRING");
 
@@ -638,7 +638,7 @@ fn parse_create_table_with_nested_data_types() {
         " k Array(Tuple(FixedString(128), Int128)),",
         " l Tuple(a DateTime64(9), b Array(UUID)),",
         " m Map(String, UInt16)",
-        ") ENGINE=MergeTree ORDER BY (k)"
+        ") ENGINE = MergeTree ORDER BY (k)"
     );
 
     match clickhouse().one_statement_parses_to(sql, "") {
@@ -714,7 +714,7 @@ fn parse_create_table_with_nested_data_types() {
 fn parse_create_table_with_primary_key() {
     match clickhouse_and_generic().verified_stmt(concat!(
         r#"CREATE TABLE db.table (`i` INT, `k` INT)"#,
-        " ENGINE=SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')",
+        " ENGINE = SharedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}')",
         " PRIMARY KEY tuple(i)",
         " ORDER BY tuple(i)",
     )) {
@@ -798,7 +798,7 @@ fn parse_create_table_with_variant_default_expressions() {
         " b DATETIME EPHEMERAL now(),",
         " c DATETIME EPHEMERAL,",
         " d STRING ALIAS toString(c)",
-        ") ENGINE=MergeTree"
+        ") ENGINE = MergeTree"
     );
     match clickhouse_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { columns, .. }) => {

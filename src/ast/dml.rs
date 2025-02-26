@@ -362,7 +362,7 @@ impl Display for CreateTable {
             write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
         }
         if let Some(engine) = &self.engine {
-            write!(f, " ENGINE={engine}")?;
+            write!(f, " ENGINE = {engine}")?;
         }
         if let Some(comment_def) = &self.comment {
             match comment_def {
@@ -378,7 +378,7 @@ impl Display for CreateTable {
         }
 
         if let Some(auto_increment_offset) = self.auto_increment_offset {
-            write!(f, " AUTO_INCREMENT {auto_increment_offset}")?;
+            write!(f, " AUTO_INCREMENT = {auto_increment_offset}")?;
         }
         if let Some(primary_key) = &self.primary_key {
             write!(f, " PRIMARY KEY {}", primary_key)?;
@@ -433,7 +433,7 @@ impl Display for CreateTable {
         if let Some(is_enabled) = self.enable_schema_evolution {
             write!(
                 f,
-                " ENABLE_SCHEMA_EVOLUTION={}",
+                " ENABLE_SCHEMA_EVOLUTION = {}",
                 if is_enabled { "TRUE" } else { "FALSE" }
             )?;
         }
@@ -441,7 +441,7 @@ impl Display for CreateTable {
         if let Some(is_enabled) = self.change_tracking {
             write!(
                 f,
-                " CHANGE_TRACKING={}",
+                " CHANGE_TRACKING = {}",
                 if is_enabled { "TRUE" } else { "FALSE" }
             )?;
         }
@@ -449,19 +449,19 @@ impl Display for CreateTable {
         if let Some(data_retention_time_in_days) = self.data_retention_time_in_days {
             write!(
                 f,
-                " DATA_RETENTION_TIME_IN_DAYS={data_retention_time_in_days}",
+                " DATA_RETENTION_TIME_IN_DAYS = {data_retention_time_in_days}",
             )?;
         }
 
         if let Some(max_data_extension_time_in_days) = self.max_data_extension_time_in_days {
             write!(
                 f,
-                " MAX_DATA_EXTENSION_TIME_IN_DAYS={max_data_extension_time_in_days}",
+                " MAX_DATA_EXTENSION_TIME_IN_DAYS = {max_data_extension_time_in_days}",
             )?;
         }
 
         if let Some(default_ddl_collation) = &self.default_ddl_collation {
-            write!(f, " DEFAULT_DDL_COLLATION='{default_ddl_collation}'",)?;
+            write!(f, " DEFAULT_DDL_COLLATION = '{default_ddl_collation}'",)?;
         }
 
         if let Some(with_aggregation_policy) = &self.with_aggregation_policy {
@@ -477,10 +477,10 @@ impl Display for CreateTable {
         }
 
         if let Some(default_charset) = &self.default_charset {
-            write!(f, " DEFAULT CHARSET={default_charset}")?;
+            write!(f, " DEFAULT CHARSET = {default_charset}")?;
         }
         if let Some(collation) = &self.collation {
-            write!(f, " COLLATE={collation}")?;
+            write!(f, " COLLATE = {collation}")?;
         }
 
         if self.on_commit.is_some() {

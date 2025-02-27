@@ -7661,7 +7661,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse [USING {BTREE | HASH | GIN | GIST | SPGIST | BRIN | BLOOM | identifier}]
+    /// Optionally parse the `USING` keyword, followed by an [IndexType]
+    /// Example:
+    /// ```sql
+    //// USING BTREE (name, age DESC)
+    /// ```
     pub fn parse_optional_using_then_index_type(
         &mut self,
     ) -> Result<Option<IndexType>, ParserError> {

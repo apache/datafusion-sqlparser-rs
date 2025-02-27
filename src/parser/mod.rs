@@ -13628,7 +13628,7 @@ impl<'a> Parser<'a> {
             .map(|index_column| index_column.column)
     }
 
-    /// Parse an IndexColumn expression (used in CREATE INDEX)
+    /// Parse an [IndexColumn].
     pub fn parse_create_index_expr<const PARSE_OPERATOR_CLASS: bool>(
         &mut self,
     ) -> Result<IndexColumn, ParserError> {

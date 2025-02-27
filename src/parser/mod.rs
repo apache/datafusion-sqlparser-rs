@@ -13622,7 +13622,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an OrderByExpr expression, optionally followed by ASC or DESC (used in ORDER BY)
+    /// Parse an [OrderByExpr] expression.
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
         self.parse_create_index_expr::<false>()
             .map(|index_column| index_column.column)

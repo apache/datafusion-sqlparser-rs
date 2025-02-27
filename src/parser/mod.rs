@@ -7669,8 +7669,8 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_using_then_index_type(
         &mut self,
     ) -> Result<Option<IndexType>, ParserError> {
-        Ok(if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_index_type()?)
+       if self.parse_keyword(Keyword::USING) {
+            Ok(Some(self.parse_index_type()?))
         } else {
             None
         })

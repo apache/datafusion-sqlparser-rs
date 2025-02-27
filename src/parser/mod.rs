@@ -63,7 +63,6 @@ mod recursion {
 
     use super::ParserError;
 
-    #[derive(Debug)]
     /// Tracks remaining recursion depth. This value is decremented on
     /// each call to [`RecursionCounter::try_decrease()`], when it reaches 0 an error will
     /// be returned.

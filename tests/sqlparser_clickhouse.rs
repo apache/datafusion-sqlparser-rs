@@ -55,10 +55,7 @@ fn parse_map_access_expr() {
                         "indexOf",
                         [
                             Expr::Identifier(Ident::new("string_names")),
-                            Expr::Value(
-                                (Value::SingleQuotedString("endpoint".to_string()))
-                                    .with_empty_span()
-                            )
+                            Expr::value(Value::SingleQuotedString("endpoint".to_string()))
                         ]
                     ),
                 })],
@@ -74,9 +71,7 @@ fn parse_map_access_expr() {
                 left: Box::new(BinaryOp {
                     left: Box::new(Identifier(Ident::new("id"))),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("test".to_string())).with_empty_span()
-                    )),
+                    right: Box::new(Expr::value(Value::SingleQuotedString("test".to_string()))),
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
@@ -87,18 +82,13 @@ fn parse_map_access_expr() {
                                 "indexOf",
                                 [
                                     Expr::Identifier(Ident::new("string_name")),
-                                    Expr::Value(
-                                        (Value::SingleQuotedString("app".to_string()))
-                                            .with_empty_span()
-                                    )
+                                    Expr::value(Value::SingleQuotedString("app".to_string()))
                                 ]
                             ),
                         })],
                     }),
                     op: BinaryOperator::NotEq,
-                    right: Box::new(Expr::Value(
-                        (Value::SingleQuotedString("foo".to_string())).with_empty_span()
-                    )),
+                    right: Box::new(Expr::value(Value::SingleQuotedString("foo".to_string()))),
                 }),
             }),
             group_by: GroupByExpr::Expressions(vec![], vec![]),
@@ -124,8 +114,8 @@ fn parse_array_expr() {
     assert_eq!(
         &Expr::Array(Array {
             elem: vec![
-                Expr::Value((Value::SingleQuotedString("1".to_string())).with_empty_span()),
-                Expr::Value((Value::SingleQuotedString("2".to_string())).with_empty_span()),
+                Expr::value(Value::SingleQuotedString("1".to_string())),
+                Expr::value(Value::SingleQuotedString("2".to_string())),
             ],
             named: false,
         }),

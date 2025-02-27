@@ -6424,7 +6424,7 @@ impl<'a> Parser<'a> {
         };
 
         self.expect_token(&Token::LParen)?;
-        let columns = self.parse_comma_separated(Parser::parse_create_index_expr::<true>)?;
+        let columns = self.parse_comma_separated(Parser::parse_create_index_expr)?;
         self.expect_token(&Token::RParen)?;
 
         let include = if self.parse_keyword(Keyword::INCLUDE) {
@@ -7669,11 +7669,11 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_using_then_index_type(
         &mut self,
     ) -> Result<Option<IndexType>, ParserError> {
-       if self.parse_keyword(Keyword::USING) {
+        if self.parse_keyword(Keyword::USING) {
             Ok(Some(self.parse_index_type()?))
         } else {
-            None
-        })
+            Ok(None)
+        }
     }
 
     /// Parse `[ident]`, mostly `ident` is name, like:
@@ -13624,17 +13624,26 @@ impl<'a> Parser<'a> {
 
     /// Parse an [OrderByExpr] expression.
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
-        self.parse_create_index_expr::<false>()
-            .map(|index_column| index_column.column)
+        self.parse_order_by_expr_inner(false)
+            .map(|(order_by, _)| order_by)
     }
 
     /// Parse an [IndexColumn].
-    pub fn parse_create_index_expr<const PARSE_OPERATOR_CLASS: bool>(
+    pub fn parse_create_index_expr(&mut self) -> Result<IndexColumn, ParserError> {
+        self.parse_order_by_expr_inner(true)
+            .map(|(column, operator_class)| IndexColumn {
+                column,
+                operator_class,
+            })
+    }
+
+    fn parse_order_by_expr_inner(
         &mut self,
-    ) -> Result<IndexColumn, ParserError> {
+        with_operator_class: bool,
+    ) -> Result<(OrderByExpr, Option<Ident>), ParserError> {
         let expr = self.parse_expr()?;
 
-        let operator_class: Option<Ident> = if PARSE_OPERATOR_CLASS {
+        let operator_class: Option<Ident> = if with_operator_class {
             // We check that if non of the following keywords are present, then we parse an
             // identifier as operator class.
             if self
@@ -13659,14 +13668,14 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(IndexColumn {
-            column: OrderByExpr {
+        Ok((
+            OrderByExpr {
                 expr,
                 options,
                 with_fill,
             },
             operator_class,
-        })
+        ))
     }
 
     fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {

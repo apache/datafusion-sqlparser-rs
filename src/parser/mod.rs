@@ -263,7 +263,7 @@ impl ParserOptions {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 enum ParserState {
     /// The default state of the parser.
     Normal,

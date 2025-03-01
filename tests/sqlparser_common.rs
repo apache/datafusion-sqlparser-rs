@@ -10387,15 +10387,8 @@ fn parse_with_recursion_limit() {
 
 #[test]
 fn parse_escaped_string_with_unescape() {
-    fn assert_mysql_query_value(sql: &str, quoted: &str) {
-        let stmt = TestedDialects::new(vec![
-            Box::new(MySqlDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(SnowflakeDialect {}),
-        ])
-        .one_statement_parses_to(sql, "");
-
-        match stmt {
+    fn assert_mysql_query_value(dialects: &TestedDialects, sql: &str, quoted: &str) {
+        match dialects.one_statement_parses_to(sql, "") {
             Statement::Query(query) => match *query.body {
                 SetExpr::Select(value) => {
                     let expr = expr_from_projection(only(&value.projection));
@@ -10411,17 +10404,38 @@ fn parse_escaped_string_with_unescape() {
             _ => unreachable!(),
         };
     }
+
+    let escaping_dialects =
+        &all_dialects_where(|dialect| dialect.supports_string_literal_backslash_escape());
+    let no_wildcard_exception = &all_dialects_where(|dialect| {
+        dialect.supports_string_literal_backslash_escape() && !dialect.ignores_wildcard_escapes()
+    });
+    let with_wildcard_exception = &all_dialects_where(|dialect| {
+        dialect.supports_string_literal_backslash_escape() && dialect.ignores_wildcard_escapes()
+    });
+
     let sql = r"SELECT 'I\'m fine'";
-    assert_mysql_query_value(sql, "I'm fine");
+    assert_mysql_query_value(escaping_dialects, sql, "I'm fine");
 
     let sql = r#"SELECT 'I''m fine'"#;
-    assert_mysql_query_value(sql, "I'm fine");
+    assert_mysql_query_value(escaping_dialects, sql, "I'm fine");
 
     let sql = r#"SELECT 'I\"m fine'"#;
-    assert_mysql_query_value(sql, "I\"m fine");
+    assert_mysql_query_value(escaping_dialects, sql, "I\"m fine");
 
     let sql = r"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \h \ '";
-    assert_mysql_query_value(sql, "Testing: \0 \\ % _ \u{8} \n \r \t \u{1a} \u{7} h  ");
+    assert_mysql_query_value(
+        no_wildcard_exception,
+        sql,
+        "Testing: \0 \\ % _ \u{8} \n \r \t \u{1a} \u{7} h  ",
+    );
+
+    // check MySQL doesn't remove backslash from escaped LIKE wildcards
+    assert_mysql_query_value(
+        with_wildcard_exception,
+        sql,
+        "Testing: \0 \\ \\% \\_ \u{8} \n \r \t \u{1a} \u{7} h  ",
+    );
 }
 
 #[test]

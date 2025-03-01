@@ -2696,7 +2696,7 @@ fn parse_set_names() {
     assert_eq!(
         stmt,
         Statement::SetNames {
-            charset_name: "utf8mb4".to_string(),
+            charset_name: "utf8mb4".into(),
             collation_name: None,
         }
     );
@@ -2705,7 +2705,7 @@ fn parse_set_names() {
     assert_eq!(
         stmt,
         Statement::SetNames {
-            charset_name: "utf8mb4".to_string(),
+            charset_name: "utf8mb4".into(),
             collation_name: Some("bogus".to_string()),
         }
     );
@@ -2716,7 +2716,7 @@ fn parse_set_names() {
     assert_eq!(
         stmt,
         vec![Statement::SetNames {
-            charset_name: "utf8mb4".to_string(),
+            charset_name: "utf8mb4".into(),
             collation_name: Some("bogus".to_string()),
         }]
     );

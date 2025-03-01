@@ -14631,3 +14631,11 @@ fn parse_array_type_def_with_brackets() {
     dialects.verified_stmt("SELECT x::INT[]");
     dialects.verified_stmt("SELECT STRING_TO_ARRAY('1,2,3', ',')::INT[3]");
 }
+
+#[test]
+fn parse_set_names() {
+    let dialects = all_dialects_where(|d| d.supports_set_names());
+    dialects.verified_stmt("SET NAMES 'UTF8'");
+    dialects.verified_stmt("SET NAMES 'utf8'");
+    dialects.verified_stmt("SET NAMES UTF8 COLLATE bogus");
+}

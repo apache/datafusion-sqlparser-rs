@@ -10962,14 +10962,14 @@ impl<'a> Parser<'a> {
             OneOrManyWithParens::One(self.parse_object_name(false)?)
         };
 
-        if matches!(&variables, OneOrManyWithParens::One(variable) if variable.to_string().eq_ignore_ascii_case("NAMES")
-            && dialect_of!(self is MySqlDialect | GenericDialect))
-        {
+        let names = matches!(&variables, OneOrManyWithParens::One(variable) if variable.to_string().eq_ignore_ascii_case("NAMES"));
+
+        if names && self.dialect.supports_set_names() {
             if self.parse_keyword(Keyword::DEFAULT) {
                 return Ok(Statement::SetNamesDefault {});
             }
 
-            let charset_name = self.parse_literal_string()?;
+            let charset_name = self.parse_identifier()?;
             let collation_name = if self.parse_one_of_keywords(&[Keyword::COLLATE]).is_some() {
                 Some(self.parse_literal_string()?)
             } else {

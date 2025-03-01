@@ -1621,6 +1621,22 @@ fn parse_create_table_with_valid_options() {
 }
 
 #[test]
+fn parse_nested_slash_star_comment() {
+    let sql = r#"
+    select
+    /*
+       comment level 1
+       /*
+          comment level 2
+       */
+    */
+    1;
+    "#;
+    let canonical = "SELECT 1";
+    ms().one_statement_parses_to(sql, canonical);
+}
+
+#[test]
 fn parse_create_table_with_invalid_options() {
     let invalid_cases = vec![
         (

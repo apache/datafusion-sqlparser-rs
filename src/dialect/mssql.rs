@@ -95,4 +95,9 @@ impl Dialect for MsSqlDialect {
     fn supports_timestamp_versioning(&self) -> bool {
         true
     }
+
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/language-elements/slash-star-comment-transact-sql?view=sql-server-ver16>
+    fn supports_nested_comments(&self) -> bool {
+        true
+    }
 }

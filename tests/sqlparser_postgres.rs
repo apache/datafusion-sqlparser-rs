@@ -2522,6 +2522,7 @@ fn parse_create_indices_with_operator_classes() {
     let indices = [
         IndexType::GIN,
         IndexType::GiST,
+        IndexType::SPGiST,
         IndexType::Custom("CustomIndexType".into()),
     ];
     let operator_classes: [Option<Ident>; 4] = [
@@ -2705,6 +2706,34 @@ fn parse_create_bloom() {
                 ],
                 with
             );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_brin() {
+    let sql = "CREATE INDEX brin_sensor_data_recorded_at ON sensor_data USING BRIN (recorded_at)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique: false,
+            concurrently: false,
+            if_not_exists: false,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+            assert_eq_vec(&["brin_sensor_data_recorded_at"], &name);
+            assert_eq_vec(&["sensor_data"], &table_name);
+            assert_eq!(IndexType::BRIN, using);
+            assert_eq_vec(&["recorded_at"], &columns);
+            assert!(include.is_empty());
+            assert!(with.is_empty());
         }
         _ => unreachable!(),
     }

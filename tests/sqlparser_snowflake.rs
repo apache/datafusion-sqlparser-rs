@@ -977,7 +977,7 @@ fn parse_sf_create_or_replace_with_comment_for_snowflake() {
 }
 
 #[test]
-fn parse_sf_create_table_or_view_with_dollars_comment() {
+fn parse_sf_create_table_or_view_with_dollar_quoted_comment() {
     assert!(snowflake()
         .parse_sql_statements(
             r#"CREATE OR REPLACE TEMPORARY VIEW foo.bar.baz (

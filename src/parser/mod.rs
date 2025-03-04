@@ -6743,7 +6743,7 @@ impl<'a> Parser<'a> {
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {
-            self.expect_token(&Token::Eq)?;
+            let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
                 Token::Word(w) => {
@@ -6800,8 +6800,10 @@ impl<'a> Parser<'a> {
 
         let create_table_config = self.parse_optional_create_table_config()?;
 
-        let default_charset = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
-            self.expect_token(&Token::Eq)?;
+        let default_charset = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET])
+            || self.parse_keyword(Keyword::CHARSET)
+        {
+            let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
                 Token::Word(w) => Some(w.value),
@@ -6811,8 +6813,10 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let collation = if self.parse_keywords(&[Keyword::COLLATE]) {
-            self.expect_token(&Token::Eq)?;
+        let collation = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::COLLATE])
+            || self.parse_keyword(Keyword::COLLATE)
+        {
+            let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
                 Token::Word(w) => Some(w.value),

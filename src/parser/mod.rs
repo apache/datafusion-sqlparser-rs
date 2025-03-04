@@ -3955,6 +3955,18 @@ impl<'a> Parser<'a> {
         true
     }
 
+    /// If the current token is one of the given `keywords`, returns the keyword
+    /// that matches, without consuming the token. Otherwise, returns [`None`].
+    #[must_use]
+    pub fn peek_one_of_keywords(&self, keywords: &[Keyword]) -> Option<Keyword> {
+        for keyword in keywords {
+            if self.peek_keyword(*keyword) {
+                return Some(*keyword);
+            }
+        }
+        None
+    }
+
     /// If the current token is one of the given `keywords`, consume the token
     /// and return the keyword that matches. Otherwise, no tokens are consumed
     /// and returns [`None`].
@@ -6406,12 +6418,13 @@ impl<'a> Parser<'a> {
         };
         let table_name = self.parse_object_name(false)?;
         let using = if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_identifier()?)
+            Some(self.parse_index_type()?)
         } else {
             None
         };
+
         self.expect_token(&Token::LParen)?;
-        let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+        let columns = self.parse_comma_separated(Parser::parse_create_index_expr)?;
         self.expect_token(&Token::RParen)?;
 
         let include = if self.parse_keyword(Keyword::INCLUDE) {
@@ -7629,16 +7642,30 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_index_type(&mut self) -> Result<IndexType, ParserError> {
-        if self.parse_keyword(Keyword::BTREE) {
-            Ok(IndexType::BTree)
+        Ok(if self.parse_keyword(Keyword::BTREE) {
+            IndexType::BTree
         } else if self.parse_keyword(Keyword::HASH) {
-            Ok(IndexType::Hash)
+            IndexType::Hash
+        } else if self.parse_keyword(Keyword::GIN) {
+            IndexType::GIN
+        } else if self.parse_keyword(Keyword::GIST) {
+            IndexType::GiST
+        } else if self.parse_keyword(Keyword::SPGIST) {
+            IndexType::SPGiST
+        } else if self.parse_keyword(Keyword::BRIN) {
+            IndexType::BRIN
+        } else if self.parse_keyword(Keyword::BLOOM) {
+            IndexType::Bloom
         } else {
-            self.expected("index type {BTREE | HASH}", self.peek_token())
-        }
+            IndexType::Custom(self.parse_identifier()?)
+        })
     }
 
-    /// Parse [USING {BTREE | HASH}]
+    /// Optionally parse the `USING` keyword, followed by an [IndexType]
+    /// Example:
+    /// ```sql
+    //// USING BTREE (name, age DESC)
+    /// ```
     pub fn parse_optional_using_then_index_type(
         &mut self,
     ) -> Result<Option<IndexType>, ParserError> {
@@ -13631,9 +13658,41 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
+    /// Parse an [OrderByExpr] expression.
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
+        self.parse_order_by_expr_inner(false)
+            .map(|(order_by, _)| order_by)
+    }
+
+    /// Parse an [IndexColumn].
+    pub fn parse_create_index_expr(&mut self) -> Result<IndexColumn, ParserError> {
+        self.parse_order_by_expr_inner(true)
+            .map(|(column, operator_class)| IndexColumn {
+                column,
+                operator_class,
+            })
+    }
+
+    fn parse_order_by_expr_inner(
+        &mut self,
+        with_operator_class: bool,
+    ) -> Result<(OrderByExpr, Option<Ident>), ParserError> {
         let expr = self.parse_expr()?;
+
+        let operator_class: Option<Ident> = if with_operator_class {
+            // We check that if non of the following keywords are present, then we parse an
+            // identifier as operator class.
+            if self
+                .peek_one_of_keywords(&[Keyword::ASC, Keyword::DESC, Keyword::NULLS, Keyword::WITH])
+                .is_some()
+            {
+                None
+            } else {
+                self.maybe_parse(|parser| parser.parse_identifier())?
+            }
+        } else {
+            None
+        };
 
         let options = self.parse_order_by_options()?;
 
@@ -13645,11 +13704,14 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(OrderByExpr {
-            expr,
-            options,
-            with_fill,
-        })
+        Ok((
+            OrderByExpr {
+                expr,
+                options,
+                with_fill,
+            },
+            operator_class,
+        ))
     }
 
     fn parse_order_by_options(&mut self) -> Result<OrderByOptions, ParserError> {

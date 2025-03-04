@@ -2510,6 +2510,236 @@ fn parse_create_anonymous_index() {
 }
 
 #[test]
+/// Test to verify the correctness of parsing the `CREATE INDEX` statement with optional operator classes.
+///
+/// # Implementative details
+///
+/// At this time, since the parser library is not intended to take care of the semantics of the SQL statements,
+/// there is no way to verify the correctness of the operator classes, nor whether they are valid for the given
+/// index type. This test is only intended to verify that the parser can correctly parse the statement. For this
+/// reason, the test includes a `totally_not_valid` operator class.
+fn parse_create_indices_with_operator_classes() {
+    let indices = [
+        IndexType::GIN,
+        IndexType::GiST,
+        IndexType::SPGiST,
+        IndexType::Custom("CustomIndexType".into()),
+    ];
+    let operator_classes: [Option<Ident>; 4] = [
+        None,
+        Some("gin_trgm_ops".into()),
+        Some("gist_trgm_ops".into()),
+        Some("totally_not_valid".into()),
+    ];
+
+    for expected_index_type in indices {
+        for expected_operator_class in &operator_classes {
+            let single_column_sql_statement = format!(
+                "CREATE INDEX the_index_name ON users USING {expected_index_type} (concat_users_name(first_name, last_name){})",
+                expected_operator_class.as_ref().map(|oc| format!(" {}", oc))
+                    .unwrap_or_default()
+            );
+            let multi_column_sql_statement = format!(
+                "CREATE INDEX the_index_name ON users USING {expected_index_type} (column_name,concat_users_name(first_name, last_name){})",
+                expected_operator_class.as_ref().map(|oc| format!(" {}", oc))
+                    .unwrap_or_default()
+            );
+
+            let expected_function_column = IndexColumn {
+                column: OrderByExpr {
+                    expr: Expr::Function(Function {
+                        name: ObjectName(vec![ObjectNamePart::Identifier(Ident {
+                            value: "concat_users_name".to_owned(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })]),
+                        uses_odbc_syntax: false,
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args: vec![
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                    Ident {
+                                        value: "first_name".to_owned(),
+                                        quote_style: None,
+                                        span: Span::empty(),
+                                    },
+                                ))),
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                    Ident {
+                                        value: "last_name".to_owned(),
+                                        quote_style: None,
+                                        span: Span::empty(),
+                                    },
+                                ))),
+                            ],
+                            clauses: vec![],
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: vec![],
+                    }),
+                    options: OrderByOptions {
+                        asc: None,
+                        nulls_first: None,
+                    },
+                    with_fill: None,
+                },
+                operator_class: expected_operator_class.clone(),
+            };
+
+            match pg().verified_stmt(&single_column_sql_statement) {
+                Statement::CreateIndex(CreateIndex {
+                    name: Some(ObjectName(name)),
+                    table_name: ObjectName(table_name),
+                    using: Some(using),
+                    columns,
+                    unique: false,
+                    concurrently: false,
+                    if_not_exists: false,
+                    include,
+                    nulls_distinct: None,
+                    with,
+                    predicate: None,
+                }) => {
+                    assert_eq_vec(&["the_index_name"], &name);
+                    assert_eq_vec(&["users"], &table_name);
+                    assert_eq!(expected_index_type, using);
+                    assert_eq!(expected_function_column, columns[0],);
+                    assert!(include.is_empty());
+                    assert!(with.is_empty());
+                }
+                _ => unreachable!(),
+            }
+
+            match pg().verified_stmt(&multi_column_sql_statement) {
+                Statement::CreateIndex(CreateIndex {
+                    name: Some(ObjectName(name)),
+                    table_name: ObjectName(table_name),
+                    using: Some(using),
+                    columns,
+                    unique: false,
+                    concurrently: false,
+                    if_not_exists: false,
+                    include,
+                    nulls_distinct: None,
+                    with,
+                    predicate: None,
+                }) => {
+                    assert_eq_vec(&["the_index_name"], &name);
+                    assert_eq_vec(&["users"], &table_name);
+                    assert_eq!(expected_index_type, using);
+                    assert_eq!(
+                        IndexColumn {
+                            column: OrderByExpr {
+                                expr: Expr::Identifier(Ident {
+                                    value: "column_name".to_owned(),
+                                    quote_style: None,
+                                    span: Span::empty()
+                                }),
+                                options: OrderByOptions {
+                                    asc: None,
+                                    nulls_first: None,
+                                },
+                                with_fill: None,
+                            },
+                            operator_class: None
+                        },
+                        columns[0],
+                    );
+                    assert_eq!(expected_function_column, columns[1],);
+                    assert!(include.is_empty());
+                    assert!(with.is_empty());
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
+#[test]
+fn parse_create_bloom() {
+    let sql =
+        "CREATE INDEX bloomidx ON tbloom USING BLOOM (i1,i2,i3) WITH (length = 80, col1 = 2, col2 = 2, col3 = 4)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique: false,
+            concurrently: false,
+            if_not_exists: false,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+            assert_eq_vec(&["bloomidx"], &name);
+            assert_eq_vec(&["tbloom"], &table_name);
+            assert_eq!(IndexType::Bloom, using);
+            assert_eq_vec(&["i1", "i2", "i3"], &columns);
+            assert!(include.is_empty());
+            assert_eq!(
+                vec![
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("length"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(number("80").into())),
+                    },
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(number("2").into())),
+                    },
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col2"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(number("2").into())),
+                    },
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("col3"))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(number("4").into())),
+                    },
+                ],
+                with
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_brin() {
+    let sql = "CREATE INDEX brin_sensor_data_recorded_at ON sensor_data USING BRIN (recorded_at)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex(CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using: Some(using),
+            columns,
+            unique: false,
+            concurrently: false,
+            if_not_exists: false,
+            include,
+            nulls_distinct: None,
+            with,
+            predicate: None,
+        }) => {
+            assert_eq_vec(&["brin_sensor_data_recorded_at"], &name);
+            assert_eq_vec(&["sensor_data"], &table_name);
+            assert_eq!(IndexType::BRIN, using);
+            assert_eq_vec(&["recorded_at"], &columns);
+            assert!(include.is_empty());
+            assert!(with.is_empty());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_index_concurrently() {
     let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
     match pg().verified_stmt(sql) {

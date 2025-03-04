@@ -245,6 +245,14 @@ impl Dialect for SnowflakeDialect {
                     .map(|p| Some(ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(p)))))
             } else if parser.parse_keywords(&[Keyword::TAG]) {
                 Ok(parse_column_tags(parser, with).map(|p| Some(ColumnOption::Tags(p))))
+            } else if parser.parse_keywords(&[Keyword::COMMENT]) {
+                let next_token = parser.next_token();
+                match next_token.token {
+                    Token::DollarQuotedString(value, ..) => {
+                        Ok(Ok(Some(ColumnOption::Comment(value.value))))
+                    }
+                    _ => Err(ParserError::ParserError("not found match".to_string())),
+                }
             } else {
                 Err(ParserError::ParserError("not found match".to_string()))
             }
@@ -422,7 +430,7 @@ pub fn parse_create_table(
                 Keyword::COMMENT => {
                     // Rewind the COMMENT keyword
                     parser.prev_token();
-                    builder = builder.comment(parser.parse_optional_inline_comment()?);
+                    builder = builder.comment(parser.parse_optional_inline_comment(true)?);
                 }
                 Keyword::AS => {
                     let query = parser.parse_query()?;
@@ -646,6 +654,7 @@ pub fn parse_create_stage(
         parser.expect_token(&Token::Eq)?;
         comment = Some(match parser.next_token().token {
             Token::SingleQuotedString(word) => Ok(word),
+            Token::DollarQuotedString(word) => Ok(word.value),
             _ => parser.expected("a comment statement", parser.peek_token()),
         }?)
     }

@@ -5335,6 +5335,7 @@ impl<'a> Parser<'a> {
             let next_token = self.next_token();
             match next_token.token {
                 Token::SingleQuotedString(str) => Some(str),
+                Token::DollarQuotedString(str) => Some(str.value),
                 _ => self.expected("string literal", next_token)?,
             }
         } else {
@@ -5776,7 +5777,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let comment = self.parse_optional_inline_comment()?;
+        let comment = self.parse_optional_inline_comment(false)?;
 
         let with_dcproperties =
             match self.parse_options_with_keywords(&[Keyword::WITH, Keyword::DCPROPERTIES])? {
@@ -6834,7 +6835,8 @@ impl<'a> Parser<'a> {
         if !dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
             // rewind the COMMENT keyword
             self.prev_token();
-            comment = self.parse_optional_inline_comment()?
+            let support_dollar_quoted_comment = dialect_of!(self is SnowflakeDialect);
+            comment = self.parse_optional_inline_comment(support_dollar_quoted_comment)?
         };
 
         // Parse optional `AS ( query )`
@@ -6935,18 +6937,23 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_optional_inline_comment(&mut self) -> Result<Option<CommentDef>, ParserError> {
+    pub fn parse_optional_inline_comment(
+        &mut self,
+        support_dollar_quoted_comment: bool,
+    ) -> Result<Option<CommentDef>, ParserError> {
         let comment = if self.parse_keyword(Keyword::COMMENT) {
             let has_eq = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(str) => Some(if has_eq {
-                    CommentDef::WithEq(str)
-                } else {
-                    CommentDef::WithoutEq(str)
-                }),
+            let comment = match next_token.token {
+                Token::SingleQuotedString(str) => str,
+                Token::DollarQuotedString(str) if support_dollar_quoted_comment => str.value,
                 _ => self.expected("comment", next_token)?,
-            }
+            };
+            Some(if has_eq {
+                CommentDef::WithEq(comment)
+            } else {
+                CommentDef::WithoutEq(comment)
+            })
         } else {
             None
         };

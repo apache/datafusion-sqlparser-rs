@@ -58,6 +58,10 @@ impl Dialect for MsSqlDialect {
         true
     }
 
+    fn supports_set_multiple_values(&self) -> bool {
+        true
+    }
+
     fn supports_try_convert(&self) -> bool {
         true
     }
@@ -82,6 +86,7 @@ impl Dialect for MsSqlDialect {
     fn supports_start_transaction_modifier(&self) -> bool {
         true
     }
+
     fn supports_end_transaction_modifier(&self) -> bool {
         true
     }

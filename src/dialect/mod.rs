@@ -352,6 +352,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports multiple values in a SET expression
+    /// e.g. `SET OFFSETS SELECT, FROM, ORDER, TABLE, PROCEDURE, EXECUTE ON`
+    fn supports_set_multiple_values(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialects supports specifying null treatment
     /// as part of a window function's parameter list as opposed
     /// to after the parameter list.
@@ -396,6 +402,16 @@ pub trait Dialect: Debug + Any {
     /// SET (variable[, ...]) = (expression[, ...]);
     /// ```
     fn supports_parenthesized_set_variables(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports multiple `SET` statements
+    /// in a single statement.
+    ///
+    /// ```sql
+    /// SET variable = expression [, variable = expression];
+    /// ```
+    fn supports_comma_separated_set_assignments(&self) -> bool {
         false
     }
 

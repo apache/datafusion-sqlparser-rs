@@ -10961,6 +10961,37 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_set_values(
+        &mut self,
+        parenthesized_assignment: bool,
+    ) -> Result<Vec<Expr>, ParserError> {
+        let mut values = vec![];
+
+        if parenthesized_assignment {
+            self.expect_token(&Token::LParen)?;
+        }
+
+        loop {
+            let value = if let Some(expr) = self.try_parse_expr_sub_query()? {
+                expr
+            } else if let Ok(expr) = self.parse_expr() {
+                expr
+            } else {
+                self.expected("variable value", self.peek_token())?
+            };
+
+            values.push(value);
+            if self.consume_token(&Token::Comma) {
+                continue;
+            }
+
+            if parenthesized_assignment {
+                self.expect_token(&Token::RParen)?;
+            }
+            return Ok(values);
+        }
+    }
+
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
         let modifier =
             self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
@@ -10989,99 +11020,76 @@ impl<'a> Parser<'a> {
             OneOrManyWithParens::One(self.parse_object_name(false)?)
         };
 
-        let names = matches!(&variables, OneOrManyWithParens::One(variable) if variable.to_string().eq_ignore_ascii_case("NAMES"));
-
-        if names && self.dialect.supports_set_names() {
-            if self.parse_keyword(Keyword::DEFAULT) {
-                return Ok(Statement::SetNamesDefault {});
-            }
-
-            let charset_name = self.parse_identifier()?;
-            let collation_name = if self.parse_one_of_keywords(&[Keyword::COLLATE]).is_some() {
-                Some(self.parse_literal_string()?)
-            } else {
-                None
-            };
-
-            return Ok(Statement::SetNames {
-                charset_name,
-                collation_name,
-            });
-        }
-
-        let parenthesized_assignment = matches!(&variables, OneOrManyWithParens::Many(_));
-
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
-            if parenthesized_assignment {
-                self.expect_token(&Token::LParen)?;
-            }
+            let parenthesized_assignment = matches!(&variables, OneOrManyWithParens::Many(_));
+            let values = self.parse_set_values(parenthesized_assignment);
 
-            let mut values = vec![];
-            loop {
-                let value = if let Some(expr) = self.try_parse_expr_sub_query()? {
-                    expr
-                } else if let Ok(expr) = self.parse_expr() {
-                    expr
-                } else {
-                    self.expected("variable value", self.peek_token())?
-                };
-
-                values.push(value);
-                if self.consume_token(&Token::Comma) {
-                    continue;
-                }
-
-                if parenthesized_assignment {
-                    self.expect_token(&Token::RParen)?;
-                }
-                return Ok(Statement::SetVariable {
-                    local: modifier == Some(Keyword::LOCAL),
-                    hivevar: Some(Keyword::HIVEVAR) == modifier,
-                    variables,
-                    value: values,
-                });
-            }
+            return Ok(Statement::SetVariable {
+                local: modifier == Some(Keyword::LOCAL),
+                hivevar: modifier == Some(Keyword::HIVEVAR),
+                variables,
+                value: values,
+            });
         }
 
         let OneOrManyWithParens::One(variable) = variables else {
             return self.expected("set variable", self.peek_token());
         };
 
-        if variable.to_string().eq_ignore_ascii_case("TIMEZONE") {
-            // for some db (e.g. postgresql), SET TIME ZONE <value> is an alias for SET TIMEZONE [TO|=] <value>
-            match self.parse_expr() {
-                Ok(expr) => Ok(Statement::SetTimeZone {
-                    local: modifier == Some(Keyword::LOCAL),
-                    value: expr,
-                }),
-                _ => self.expected("timezone value", self.peek_token())?,
+        match variable.to_string().to_ascii_uppercase().as_str() {
+            "NAMES" if self.dialect.supports_set_names() => {
+                if self.parse_keyword(Keyword::DEFAULT) {
+                    return Ok(Statement::SetNamesDefault {});
+                }
+                let charset_name = self.parse_identifier()?;
+                let collation_name = if self.parse_one_of_keywords(&[Keyword::COLLATE]).is_some() {
+                    Some(self.parse_literal_string()?)
+                } else {
+                    None
+                };
+
+                return Ok(Statement::SetNames {
+                    charset_name,
+                    collation_name,
+                });
             }
-        } else if variable.to_string() == "CHARACTERISTICS" {
-            self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
-            Ok(Statement::SetTransaction {
-                modes: self.parse_transaction_modes()?,
-                snapshot: None,
-                session: true,
-            })
-        } else if variable.to_string() == "TRANSACTION" && modifier.is_none() {
-            if self.parse_keyword(Keyword::SNAPSHOT) {
-                let snapshot_id = self.parse_value()?.value;
+            "TIMEZONE" => match self.parse_expr() {
+                Ok(expr) => {
+                    return Ok(Statement::SetTimeZone {
+                        local: modifier == Some(Keyword::LOCAL),
+                        value: expr,
+                    })
+                }
+                _ => return self.expected("timezone value", self.peek_token()),
+            },
+            "CHARACTERISTICS" => {
+                self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
                 return Ok(Statement::SetTransaction {
-                    modes: vec![],
-                    snapshot: Some(snapshot_id),
+                    modes: self.parse_transaction_modes()?,
+                    snapshot: None,
+                    session: true,
+                });
+            }
+            "TRANSACTION" if modifier.is_none() => {
+                if self.parse_keyword(Keyword::SNAPSHOT) {
+                    let snapshot_id = self.parse_value()?.value;
+                    return Ok(Statement::SetTransaction {
+                        modes: vec![],
+                        snapshot: Some(snapshot_id),
+                        session: false,
+                    });
+                }
+                return Ok(Statement::SetTransaction {
+                    modes: self.parse_transaction_modes()?,
+                    snapshot: None,
                     session: false,
                 });
             }
-            Ok(Statement::SetTransaction {
-                modes: self.parse_transaction_modes()?,
-                snapshot: None,
-                session: false,
-            })
-        } else if self.dialect.supports_set_stmt_without_operator() {
-            self.prev_token();
-            self.parse_set_session_params()
-        } else {
-            self.expected("equals sign or TO", self.peek_token())
+            _ if self.dialect.supports_set_stmt_without_operator() => {
+                self.prev_token();
+                return self.parse_set_session_params();
+            }
+            _ => return self.expected("equals sign or TO", self.peek_token()),
         }
     }
 

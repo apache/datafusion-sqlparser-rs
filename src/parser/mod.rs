@@ -10992,15 +10992,64 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
+    fn parse_set_assignment(
+        &mut self,
+    ) -> Result<(OneOrManyWithParens<ObjectName>, Expr), ParserError> {
+        let variables = if self.dialect.supports_parenthesized_set_variables()
+            && self.consume_token(&Token::LParen)
+        {
+            let vars = OneOrManyWithParens::Many(
+                self.parse_comma_separated(|parser: &mut Parser<'a>| parser.parse_identifier())?
+                    .into_iter()
+                    .map(|ident| ObjectName::from(vec![ident]))
+                    .collect(),
+            );
+            self.expect_token(&Token::RParen)?;
+            vars
+        } else {
+            OneOrManyWithParens::One(self.parse_object_name(false)?)
+        };
+
+        if !(self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO)) {
+            return self.expected("assignment operator", self.peek_token());
+        }
+
+        let values = self.parse_expr()?;
+
+        Ok((variables, values))
+    }
+
+    fn parse_set(&mut self) -> Result<Statement, ParserError> {
         let modifier =
             self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
+
         if let Some(Keyword::HIVEVAR) = modifier {
             self.expect_token(&Token::Colon)?;
-        } else if let Some(set_role_stmt) =
-            self.maybe_parse(|parser| parser.parse_set_role(modifier))?
-        {
+        }
+
+        if let Some(set_role_stmt) = self.maybe_parse(|parser| parser.parse_set_role(modifier))? {
             return Ok(set_role_stmt);
+        }
+
+        if self.dialect.supports_comma_separated_set_assignments() {
+            if let Ok(v) = self
+                .try_parse(|parser| Ok(parser.parse_comma_separated(Parser::parse_set_assignment)?))
+            {
+                let (variables, values): (Vec<_>, Vec<_>) = v.into_iter().unzip();
+
+                let variables = if variables.len() == 1 {
+                    variables.into_iter().next().unwrap()
+                } else {
+                    OneOrManyWithParens::Many(variables.into_iter().flatten().map(|v| v).collect())
+                };
+
+                return Ok(Statement::SetVariable {
+                    local: modifier == Some(Keyword::LOCAL),
+                    hivevar: modifier == Some(Keyword::HIVEVAR),
+                    variables,
+                    value: values,
+                });
+            }
         }
 
         let variables = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
@@ -11022,7 +11071,7 @@ impl<'a> Parser<'a> {
 
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let parenthesized_assignment = matches!(&variables, OneOrManyWithParens::Many(_));
-            let values = self.parse_set_values(parenthesized_assignment);
+            let values = self.parse_set_values(parenthesized_assignment)?;
 
             return Ok(Statement::SetVariable {
                 local: modifier == Some(Keyword::LOCAL),

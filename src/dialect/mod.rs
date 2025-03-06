@@ -352,12 +352,6 @@ pub trait Dialect: Debug + Any {
         false
     }
 
-    /// Returns true if the dialect supports multiple values in a SET expression
-    /// e.g. `SET OFFSETS SELECT, FROM, ORDER, TABLE, PROCEDURE, EXECUTE ON`
-    fn supports_set_multiple_values(&self) -> bool {
-        false
-    }
-
     /// Returns true if the dialects supports specifying null treatment
     /// as part of a window function's parameter list as opposed
     /// to after the parameter list.

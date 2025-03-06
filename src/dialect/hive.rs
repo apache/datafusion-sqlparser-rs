@@ -44,10 +44,6 @@ impl Dialect for HiveDialect {
         true
     }
 
-    fn supports_set_multiple_values(&self) -> bool {
-        true
-    }
-
     fn supports_numeric_prefix(&self) -> bool {
         true
     }

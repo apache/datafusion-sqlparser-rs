@@ -8618,10 +8618,10 @@ fn parse_set_variable() {
             "SET (a) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)))",
             "SET (a) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)))",
         ),
-        // (
-        //     "SET (a, b) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)), SELECT 33 FROM tbl3)",
-        //     "SET (a, b) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)), (SELECT 33 FROM tbl3))",
-        // ),
+        (
+            "SET (a, b) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)), SELECT 33 FROM tbl3)",
+            "SET (a, b) = ((SELECT 22 FROM tbl1, (SELECT 1 FROM tbl2)), (SELECT 33 FROM tbl3))",
+        ),
     ] {
         multi_variable_dialects.one_statement_parses_to(sql, canonical);
     }
@@ -14653,8 +14653,8 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
         Statement::SetVariable {
             variables, value, ..
         } => {
-            assert_eq!(variables.len(), 2);
             assert_eq!(value.len(), 2);
+            assert_eq!(variables.len(), 2);
         }
         _ => assert!(false, "Expected SetVariable with 2 variables and 2 values"),
     };

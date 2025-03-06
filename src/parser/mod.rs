@@ -11033,14 +11033,14 @@ impl<'a> Parser<'a> {
 
         if self.dialect.supports_comma_separated_set_assignments() {
             if let Ok(v) = self
-                .try_parse(|parser| Ok(parser.parse_comma_separated(Parser::parse_set_assignment)?))
+                .try_parse(|parser| parser.parse_comma_separated(Parser::parse_set_assignment))
             {
                 let (variables, values): (Vec<_>, Vec<_>) = v.into_iter().unzip();
 
                 let variables = if variables.len() == 1 {
                     variables.into_iter().next().unwrap()
                 } else {
-                    OneOrManyWithParens::Many(variables.into_iter().flatten().map(|v| v).collect())
+                    OneOrManyWithParens::Many(variables.into_iter().flatten().collect())
                 };
 
                 return Ok(Statement::SetVariable {
@@ -11097,27 +11097,27 @@ impl<'a> Parser<'a> {
                     None
                 };
 
-                return Ok(Statement::SetNames {
+                Ok(Statement::SetNames {
                     charset_name,
                     collation_name,
-                });
+                })
             }
             "TIMEZONE" => match self.parse_expr() {
                 Ok(expr) => {
-                    return Ok(Statement::SetTimeZone {
+                    Ok(Statement::SetTimeZone {
                         local: modifier == Some(Keyword::LOCAL),
                         value: expr,
                     })
                 }
-                _ => return self.expected("timezone value", self.peek_token()),
+                _ => self.expected("timezone value", self.peek_token()),
             },
             "CHARACTERISTICS" => {
                 self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
-                return Ok(Statement::SetTransaction {
+                Ok(Statement::SetTransaction {
                     modes: self.parse_transaction_modes()?,
                     snapshot: None,
                     session: true,
-                });
+                })
             }
             "TRANSACTION" if modifier.is_none() => {
                 if self.parse_keyword(Keyword::SNAPSHOT) {
@@ -11128,17 +11128,17 @@ impl<'a> Parser<'a> {
                         session: false,
                     });
                 }
-                return Ok(Statement::SetTransaction {
+                Ok(Statement::SetTransaction {
                     modes: self.parse_transaction_modes()?,
                     snapshot: None,
                     session: false,
-                });
+                })
             }
             _ if self.dialect.supports_set_stmt_without_operator() => {
                 self.prev_token();
-                return self.parse_set_session_params();
+                self.parse_set_session_params()
             }
-            _ => return self.expected("equals sign or TO", self.peek_token()),
+            _ => self.expected("equals sign or TO", self.peek_token()),
         }
     }
 

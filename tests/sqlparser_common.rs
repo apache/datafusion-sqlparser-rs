@@ -14648,7 +14648,6 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
 
     let stmt = stmt[0].clone();
 
-    assert!(matches!(stmt, Statement::SetVariable { .. }));
     match stmt {
         Statement::SetVariable {
             variables, value, ..
@@ -14656,7 +14655,7 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
             assert_eq!(value.len(), 2);
             assert_eq!(variables.len(), 2);
         }
-        _ => assert!(false, "Expected SetVariable with 2 variables and 2 values"),
+        _ => panic!("Expected SetVariable with 2 variables and 2 values"),
     };
 
     Ok(())

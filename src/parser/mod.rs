@@ -11032,8 +11032,8 @@ impl<'a> Parser<'a> {
         }
 
         if self.dialect.supports_comma_separated_set_assignments() {
-            if let Ok(v) = self
-                .try_parse(|parser| parser.parse_comma_separated(Parser::parse_set_assignment))
+            if let Ok(v) =
+                self.try_parse(|parser| parser.parse_comma_separated(Parser::parse_set_assignment))
             {
                 let (variables, values): (Vec<_>, Vec<_>) = v.into_iter().unzip();
 
@@ -11103,12 +11103,10 @@ impl<'a> Parser<'a> {
                 })
             }
             "TIMEZONE" => match self.parse_expr() {
-                Ok(expr) => {
-                    Ok(Statement::SetTimeZone {
-                        local: modifier == Some(Keyword::LOCAL),
-                        value: expr,
-                    })
-                }
+                Ok(expr) => Ok(Statement::SetTimeZone {
+                    local: modifier == Some(Keyword::LOCAL),
+                    value: expr,
+                }),
                 _ => self.expected("timezone value", self.peek_token()),
             },
             "CHARACTERISTICS" => {

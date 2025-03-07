@@ -82,6 +82,7 @@ impl Dialect for MsSqlDialect {
     fn supports_start_transaction_modifier(&self) -> bool {
         true
     }
+
     fn supports_end_transaction_modifier(&self) -> bool {
         true
     }

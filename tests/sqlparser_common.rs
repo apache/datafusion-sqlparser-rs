@@ -8729,20 +8729,6 @@ fn parse_set_time_zone() {
 }
 
 #[test]
-fn parse_set_time_zone_alias() {
-    match verified_stmt("SET TIME ZONE 'UTC'") {
-        Statement::SetTimeZone { local, value } => {
-            assert!(!local);
-            assert_eq!(
-                value,
-                Expr::Value((Value::SingleQuotedString("UTC".into())).with_empty_span())
-            );
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn parse_commit() {
     match verified_stmt("COMMIT") {
         Statement::Commit { chain: false, .. } => (),
@@ -14653,4 +14639,28 @@ fn parse_set_names() {
     dialects.verified_stmt("SET NAMES 'UTF8'");
     dialects.verified_stmt("SET NAMES 'utf8'");
     dialects.verified_stmt("SET NAMES UTF8 COLLATE bogus");
+}
+
+#[test]
+fn parse_multiple_set_statements() -> Result<(), ParserError> {
+    let dialects = all_dialects_where(|d| d.supports_comma_separated_set_assignments());
+    let stmt = dialects.verified_stmt("SET @a = 1, b = 2");
+
+    match stmt {
+        Statement::SetVariables { variables, values } => {
+            assert_eq!(values.len(), 2);
+            assert_eq!(variables.len(), 2);
+        }
+        _ => panic!("Expected SetVariable with 2 variables and 2 values"),
+    };
+
+    Ok(())
+}
+
+#[test]
+fn parse_set_time_zone_alias() {
+    // not sure what other dialects support this
+    all_dialects_but_pg()
+        .parse_sql_statements("SET TIME ZONE 'UTC'")
+        .unwrap_err();
 }

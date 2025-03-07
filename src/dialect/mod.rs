@@ -399,6 +399,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports multiple `SET` statements
+    /// in a single statement.
+    ///
+    /// ```sql
+    /// SET variable = expression [, variable = expression];
+    /// ```
+    fn supports_comma_separated_set_assignments(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports an `EXCEPT` clause following a
     /// wildcard in a select list.
     ///

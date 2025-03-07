@@ -92,7 +92,7 @@ fn parse_msck() {
 }
 
 #[test]
-fn parse_set() {
+fn parse_set_hivevar() {
     let set = "SET HIVEVAR:name = a, b, c_d";
     hive().verified_stmt(set);
 }

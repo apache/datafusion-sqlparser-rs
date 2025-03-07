@@ -5345,16 +5345,17 @@ impl fmt::Display for Statement {
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
             Statement::SetSessionParam(kind) => write!(f, "SET {kind}"),
-            Statement::SetVariables { variables, values } => {
-                write!(f, "SET ")?;
-                variables
-                    .iter()
-                    .zip(values.iter())
-                    .map(|(var, val)| format!("{var} = {val}"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-                    .fmt(f)
-            }
+            Statement::SetVariables { variables, values } => write!(
+                f,
+                "SET {}",
+                display_comma_separated(
+                    &variables
+                        .iter()
+                        .zip(values.iter())
+                        .map(|(var, val)| format!("{var} = {val}"))
+                        .collect::<Vec<_>>()
+                )
+            ),
         }
     }
 }

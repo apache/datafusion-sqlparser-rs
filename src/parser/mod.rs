@@ -11042,13 +11042,15 @@ impl<'a> Parser<'a> {
                     variables: OneOrManyWithParens::One(ObjectName::from(vec!["TIMEZONE".into()])),
                     value: self.parse_set_values(false)?,
                 });
+            } else if self.dialect.is::<PostgreSqlDialect>() {
+                // Special case for Postgres
+                return Ok(Statement::SetTimeZone {
+                    local: modifier == Some(Keyword::LOCAL),
+                    value: self.parse_expr()?,
+                });
+            } else {
+                return self.expected("assignment operator", self.peek_token());
             }
-
-            // Special case for Postgres
-            return Ok(Statement::SetTimeZone {
-                local: modifier == Some(Keyword::LOCAL),
-                value: self.parse_expr()?,
-            });
         } else if self.dialect.supports_set_names() && self.parse_keyword(Keyword::NAMES) {
             if self.parse_keyword(Keyword::DEFAULT) {
                 return Ok(Statement::SetNamesDefault {});

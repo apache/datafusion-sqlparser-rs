@@ -14656,3 +14656,11 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
 
     Ok(())
 }
+
+#[test]
+fn parse_set_time_zone_alias() {
+    // not sure what other dialects support this
+    all_dialects_but_pg()
+        .parse_sql_statements("SET TIME ZONE 'UTC'")
+        .unwrap_err();
+}

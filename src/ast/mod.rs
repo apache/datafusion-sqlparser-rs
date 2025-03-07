@@ -2947,6 +2947,17 @@ pub enum Statement {
         variables: OneOrManyWithParens<ObjectName>,
         value: Vec<Expr>,
     },
+
+    /// ```sql
+    /// SET <variable> = expression [, <variable> = expression]*;
+    /// ```
+    ///
+    /// Note: this is a MySQL-specific statement.
+    /// Refer to [`Dialect.supports_comma_separated_set_assignments`]
+    SetVariables {
+        variables: Vec<ObjectName>,
+        values: Vec<Expr>,
+    },
     /// ```sql
     /// SET TIME ZONE <value>
     /// ```
@@ -5334,6 +5345,16 @@ impl fmt::Display for Statement {
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
             Statement::SetSessionParam(kind) => write!(f, "SET {kind}"),
+            Statement::SetVariables { variables, values } => {
+                write!(f, "SET ")?;
+                variables
+                    .iter()
+                    .zip(values.iter())
+                    .map(|(var, val)| format!("{var} = {val}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+                    .fmt(f)
+            }
         }
     }
 }

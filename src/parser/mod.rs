@@ -11091,20 +11091,31 @@ impl<'a> Parser<'a> {
             if let Ok(v) =
                 self.try_parse(|parser| parser.parse_comma_separated(Parser::parse_set_assignment))
             {
-                let (variables, values): (Vec<_>, Vec<_>) = v.into_iter().unzip();
+                let (vars, values): (Vec<_>, Vec<_>) = v.into_iter().unzip();
 
-                let variables = if variables.len() == 1 {
-                    variables.into_iter().next().unwrap()
+                return if vars.len() > 1 {
+                    let variables = vars
+                        .into_iter()
+                        .map(|v| match v {
+                            OneOrManyWithParens::One(v) => Ok(v),
+                            _ => self.expected("List of single identifiers", self.peek_token()),
+                        })
+                        .collect::<Result<_, _>>()?;
+
+                    Ok(Statement::SetVariables { variables, values })
                 } else {
-                    OneOrManyWithParens::Many(variables.into_iter().flatten().collect())
-                };
+                    let variable = match vars.into_iter().next() {
+                        Some(v) => Ok(v),
+                        None => self.expected("At least one identifier", self.peek_token()),
+                    }?;
 
-                return Ok(Statement::SetVariable {
-                    local: modifier == Some(Keyword::LOCAL),
-                    hivevar: modifier == Some(Keyword::HIVEVAR),
-                    variables,
-                    value: values,
-                });
+                    Ok(Statement::SetVariable {
+                        local: modifier == Some(Keyword::LOCAL),
+                        hivevar: modifier == Some(Keyword::HIVEVAR),
+                        variables: variable,
+                        value: values,
+                    })
+                };
             }
         }
 

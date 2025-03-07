@@ -14644,15 +14644,11 @@ fn parse_set_names() {
 #[test]
 fn parse_multiple_set_statements() -> Result<(), ParserError> {
     let dialects = all_dialects_where(|d| d.supports_comma_separated_set_assignments());
-    let stmt = dialects.parse_sql_statements("SET @a = 1, b = 2")?;
-
-    let stmt = stmt[0].clone();
+    let stmt = dialects.verified_stmt("SET @a = 1, b = 2");
 
     match stmt {
-        Statement::SetVariable {
-            variables, value, ..
-        } => {
-            assert_eq!(value.len(), 2);
+        Statement::SetVariables { variables, values } => {
+            assert_eq!(values.len(), 2);
             assert_eq!(variables.len(), 2);
         }
         _ => panic!("Expected SetVariable with 2 variables and 2 values"),

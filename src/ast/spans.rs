@@ -509,6 +509,7 @@ impl Spanned for Statement {
             Statement::RaisError { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
             Statement::SetSessionParam { .. } => Span::empty(),
+            Statement::SetVariables { .. } => Span::empty(),
         }
     }
 }

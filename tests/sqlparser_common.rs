@@ -491,6 +491,7 @@ fn parse_update_set_from() {
                         for_clause: None,
                         settings: None,
                         format_clause: None,
+                        pipe_operators: vec![],
                     }),
                     alias: Some(TableAlias {
                         name: Ident::new("t2"),
@@ -4255,6 +4256,7 @@ fn parse_create_table_as_table() {
         for_clause: None,
         settings: None,
         format_clause: None,
+        pipe_operators: vec![],
     });
 
     match verified_stmt(sql1) {
@@ -4282,6 +4284,7 @@ fn parse_create_table_as_table() {
         for_clause: None,
         settings: None,
         format_clause: None,
+        pipe_operators: vec![],
     });
 
     match verified_stmt(sql2) {
@@ -6281,6 +6284,7 @@ fn parse_interval_and_or_xor() {
         for_clause: None,
         settings: None,
         format_clause: None,
+        pipe_operators: vec![],
     }))];
 
     assert_eq!(actual_ast, expected_ast);
@@ -9369,6 +9373,7 @@ fn parse_merge() {
                         for_clause: None,
                         settings: None,
                         format_clause: None,
+                        pipe_operators: vec![],
                     }),
                     alias: Some(TableAlias {
                         name: Ident {
@@ -11239,6 +11244,7 @@ fn parse_unload() {
                 order_by: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             }),
             to: Ident {
                 value: "s3://...".to_string(),
@@ -12411,6 +12417,7 @@ fn test_extract_seconds_ok() {
         for_clause: None,
         settings: None,
         format_clause: None,
+        pipe_operators: vec![],
     }))];
 
     assert_eq!(actual_ast, expected_ast);
@@ -14276,6 +14283,7 @@ fn test_select_from_first() {
             for_clause: None,
             settings: None,
             format_clause: None,
+            pipe_operators: vec![],
         };
         assert_eq!(expected, ast);
         assert_eq!(ast.to_string(), q);
@@ -14653,4 +14661,72 @@ fn parse_set_names() {
     dialects.verified_stmt("SET NAMES 'UTF8'");
     dialects.verified_stmt("SET NAMES 'utf8'");
     dialects.verified_stmt("SET NAMES UTF8 COLLATE bogus");
+}
+
+#[test]
+fn parse_pipeline_operator() {
+    let dialects = all_dialects_where(|d| d.supports_pipe_operator());
+
+    // select pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> SELECT id");
+    dialects.verified_stmt("SELECT * FROM users |> SELECT id, name");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM users |> SELECT id user_id",
+        "SELECT * FROM users |> SELECT id AS user_id",
+    );
+    dialects.verified_stmt("SELECT * FROM users |> SELECT id AS user_id");
+
+    // extend pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> EXTEND id + 1 AS new_id");
+    dialects.verified_stmt("SELECT * FROM users |> EXTEND id AS new_id, name AS new_name");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM users |> EXTEND id user_id",
+        "SELECT * FROM users |> EXTEND id AS user_id",
+    );
+
+    // set pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> SET id = id + 1");
+    dialects.verified_stmt("SELECT * FROM users |> SET id = id + 1, name = name + ' Doe'");
+
+    // drop pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> DROP id");
+    dialects.verified_stmt("SELECT * FROM users |> DROP id, name");
+
+    // as pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> AS new_users");
+
+    // limit pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> LIMIT 10");
+    dialects.verified_stmt("SELECT * FROM users |> LIMIT 10 OFFSET 5");
+    dialects.verified_stmt("SELECT * FROM users |> LIMIT 10 |> LIMIT 5");
+    dialects.verified_stmt("SELECT * FROM users |> LIMIT 10 |> WHERE true");
+
+    // where pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> WHERE id = 1");
+    dialects.verified_stmt("SELECT * FROM users |> WHERE id = 1 AND name = 'John'");
+    dialects.verified_stmt("SELECT * FROM users |> WHERE id = 1 OR name = 'John'");
+
+    // aggregate pipe operator full table
+    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE COUNT(*)");
+    dialects.verified_query_with_canonical(
+        "SELECT * FROM users |> AGGREGATE COUNT(*) total_users",
+        "SELECT * FROM users |> AGGREGATE COUNT(*) AS total_users",
+    );
+    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE COUNT(*) AS total_users");
+    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE COUNT(*), MIN(id)");
+
+    // aggregate pipe opeprator with grouping
+    dialects.verified_stmt(
+        "SELECT * FROM users |> AGGREGATE SUM(o_totalprice) AS price, COUNT(*) AS cnt GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year",
+    );
+    dialects.verified_stmt(
+        "SELECT * FROM users |> AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate) AS year",
+    );
+    dialects
+        .verified_stmt("SELECT * FROM users |> AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate)");
+
+    // order by pipe operator
+    dialects.verified_stmt("SELECT * FROM users |> ORDER BY id ASC");
+    dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC");
+    dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC, name ASC");
 }

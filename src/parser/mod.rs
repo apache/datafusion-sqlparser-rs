@@ -10231,6 +10231,7 @@ impl<'a> Parser<'a> {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             }
             .into())
         } else if self.parse_keyword(Keyword::UPDATE) {
@@ -10246,6 +10247,7 @@ impl<'a> Parser<'a> {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             }
             .into())
         } else {
@@ -10319,6 +10321,104 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let mut pipe_operators = Vec::new();
+
+            // Syntax from "SQL Has Problems. We Can Fix Them: Pipe Syntax In SQL"
+            // https://storage.googleapis.com/gweb-research2023-media/pubtools/1004848.pdf
+            while self.consume_token(&Token::VerticalBarRightAngleBracket) {
+                let kw = self.expect_one_of_keywords(&[
+                    Keyword::SELECT,
+                    Keyword::EXTEND,
+                    Keyword::SET,
+                    Keyword::DROP,
+                    Keyword::AS,
+                    Keyword::WHERE,
+                    Keyword::LIMIT,
+                    Keyword::AGGREGATE,
+                    Keyword::ORDER,
+                ])?;
+                match kw {
+                    // SELECT <expr> [[AS] alias], ...
+                    Keyword::SELECT => {
+                        let exprs = self.parse_comma_separated(Parser::parse_select_item)?;
+                        pipe_operators.push(PipeOperator::Select { exprs })
+                    }
+                    // EXTEND <expr> [[AS] alias], ...
+                    Keyword::EXTEND => {
+                        let exprs = self.parse_comma_separated(Parser::parse_select_item)?;
+                        pipe_operators.push(PipeOperator::Extend { exprs })
+                    }
+                    // SET <column> = <expression>, ...
+                    Keyword::SET => {
+                        let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
+                        pipe_operators.push(PipeOperator::Set { assignments })
+                    }
+                    // DROP <column>, ...
+                    Keyword::DROP => {
+                        let columns = self.parse_identifiers()?;
+                        pipe_operators.push(PipeOperator::Drop { columns })
+                    }
+                    // AS <alias>
+                    Keyword::AS => {
+                        let alias = self.parse_identifier()?;
+                        pipe_operators.push(PipeOperator::Alias { alias })
+                    }
+                    // WHERE <condition>
+                    Keyword::WHERE => {
+                        let expr = self.parse_expr()?;
+                        pipe_operators.push(PipeOperator::Where { expr })
+                    }
+                    // LIMIT <n> [OFFSET <m>]
+                    Keyword::LIMIT => {
+                        let expr = self.parse_expr()?;
+                        let offset = if self.parse_keyword(Keyword::OFFSET) {
+                            Some(self.parse_expr()?)
+                        } else {
+                            None
+                        };
+                        pipe_operators.push(PipeOperator::Limit { expr, offset })
+                    }
+                    // AGGREGATE <agg_expr> [[AS] alias], ...
+                    //
+                    // and
+                    //
+                    // AGGREGATE [<agg_expr> [[AS] alias], ...]
+                    // GROUP BY <grouping_expr> [AS alias], ...
+                    Keyword::AGGREGATE => {
+                        let full_table_exprs = self.parse_comma_separated0(
+                            |parser| {
+                                let expr = parser.parse_expr()?;
+                                let alias = parser.maybe_parse_select_item_alias()?;
+                                Ok(ExprWithAlias { expr, alias })
+                            },
+                            Token::make_keyword(keywords::GROUP),
+                        )?;
+
+                        let group_by_exprs = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY])
+                        {
+                            self.parse_comma_separated(|parser| {
+                                let expr = parser.parse_expr()?;
+                                let alias = parser.maybe_parse_select_item_alias()?;
+                                Ok(ExprWithAlias { expr, alias })
+                            })?
+                        } else {
+                            vec![]
+                        };
+                        pipe_operators.push(PipeOperator::Aggregate {
+                            full_table_exprs,
+                            group_by_exprs,
+                        })
+                    }
+                    // ORDER BY <expr> [ASC|DESC], ...
+                    Keyword::ORDER => {
+                        self.expect_one_of_keywords(&[Keyword::BY])?;
+                        let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+                        pipe_operators.push(PipeOperator::OrderBy { exprs })
+                    }
+                    _ => {}
+                }
+            }
+
             Ok(Query {
                 with,
                 body,
@@ -10331,6 +10431,7 @@ impl<'a> Parser<'a> {
                 for_clause,
                 settings,
                 format_clause,
+                pipe_operators,
             }
             .into())
         }
@@ -11688,6 +11789,7 @@ impl<'a> Parser<'a> {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 }),
                 alias,
             })

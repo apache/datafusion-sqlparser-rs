@@ -508,6 +508,20 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Return true if the dialect supports pipe operator.
+    ///
+    /// Example:
+    /// ```sql
+    /// SELECT *
+    /// FROM table
+    /// |> limit 1
+    /// ```
+    ///
+    /// See "SQL Has Problems. We Can Fix Them: Pipe Syntax In SQL" https://research.google/pubs/sql-has-problems-we-can-fix-them-pipe-syntax-in-sql/
+    fn supports_pipe_operator(&self) -> bool {
+        false
+    }
+
     /// Does the dialect support MySQL-style `'user'@'host'` grantee syntax?
     fn supports_user_host_grantee(&self) -> bool {
         false

@@ -98,10 +98,11 @@ impl Spanned for Query {
             limit_by,
             offset,
             fetch,
-            locks: _,         // todo
-            for_clause: _,    // todo, mssql specific
-            settings: _,      // todo, clickhouse specific
-            format_clause: _, // todo, clickhouse specific
+            locks: _,          // todo
+            for_clause: _,     // todo, mssql specific
+            settings: _,       // todo, clickhouse specific
+            format_clause: _,  // todo, clickhouse specific
+            pipe_operators: _, // todo bigquery specific
         } = self;
 
         union_spans(

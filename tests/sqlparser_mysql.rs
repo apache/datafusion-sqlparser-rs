@@ -1115,6 +1115,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             for_clause: None,
             settings: None,
             format_clause: None,
+            pipe_operators: vec![],
         }))
     );
 }
@@ -1169,6 +1170,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             for_clause: None,
             settings: None,
             format_clause: None,
+            pipe_operators: vec![],
         }))
     );
 }
@@ -1217,6 +1219,7 @@ fn parse_escaped_backticks_with_escape() {
             for_clause: None,
             settings: None,
             format_clause: None,
+            pipe_operators: vec![],
         }))
     );
 }
@@ -1269,6 +1272,7 @@ fn parse_escaped_backticks_with_no_escape() {
             for_clause: None,
             settings: None,
             format_clause: None,
+            pipe_operators: vec![],
         }))
     );
 }
@@ -1446,6 +1450,7 @@ fn parse_simple_insert() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 })),
                 source
             );
@@ -1496,6 +1501,7 @@ fn parse_ignore_insert() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 })),
                 source
             );
@@ -1546,6 +1552,7 @@ fn parse_priority_insert() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 })),
                 source
             );
@@ -1593,6 +1600,7 @@ fn parse_priority_insert() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 })),
                 source
             );
@@ -1642,6 +1650,7 @@ fn parse_insert_as() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 })),
                 source
             );
@@ -1706,6 +1715,7 @@ fn parse_insert_as() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 })),
                 source
             );
@@ -1757,6 +1767,7 @@ fn parse_replace_insert() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 })),
                 source
             );
@@ -1799,6 +1810,7 @@ fn parse_empty_row_insert() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 })),
                 source
             );
@@ -1865,6 +1877,7 @@ fn parse_insert_with_on_duplicate_update() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 })),
                 source
             );
@@ -2594,6 +2607,7 @@ fn parse_substring_in_select() {
                     for_clause: None,
                     settings: None,
                     format_clause: None,
+                    pipe_operators: vec![],
                 }),
                 query
             );
@@ -2901,6 +2915,7 @@ fn parse_hex_string_introducer() {
             for_clause: None,
             settings: None,
             format_clause: None,
+            pipe_operators: vec![],
         }))
     )
 }

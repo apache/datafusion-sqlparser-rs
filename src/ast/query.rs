@@ -68,6 +68,9 @@ pub struct Query {
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/format)
     /// (ClickHouse-specific)
     pub format_clause: Option<FormatClause>,
+
+    /// Pipe operator
+    pub pipe_operators: Vec<PipeOperator>,
 }
 
 impl fmt::Display for Query {
@@ -102,6 +105,9 @@ impl fmt::Display for Query {
         }
         if let Some(ref format) = self.format_clause {
             write!(f, " {}", format)?;
+        }
+        for pipe_operator in &self.pipe_operators {
+            write!(f, " |> {}", pipe_operator)?;
         }
         Ok(())
     }
@@ -2403,6 +2409,98 @@ impl fmt::Display for OffsetRows {
             OffsetRows::None => Ok(()),
             OffsetRows::Row => write!(f, " ROW"),
             OffsetRows::Rows => write!(f, " ROWS"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum PipeOperator {
+    Limit {
+        expr: Expr,
+        offset: Option<Expr>,
+    },
+    Where {
+        expr: Expr,
+    },
+    OrderBy {
+        exprs: Vec<OrderByExpr>,
+    },
+    Select {
+        exprs: Vec<SelectItem>,
+    },
+    Extend {
+        exprs: Vec<SelectItem>,
+    },
+    Set {
+        assignments: Vec<Assignment>,
+    },
+    Drop {
+        columns: Vec<Ident>,
+    },
+    Alias {
+        alias: Ident,
+    },
+    Aggregate {
+        full_table_exprs: Vec<ExprWithAlias>,
+        group_by_exprs: Vec<ExprWithAlias>,
+    },
+}
+
+impl fmt::Display for PipeOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PipeOperator::Select { exprs } => {
+                write!(f, "SELECT {}", display_comma_separated(exprs.as_slice()))
+            }
+            PipeOperator::Extend { exprs } => {
+                write!(f, "EXTEND {}", display_comma_separated(exprs.as_slice()))
+            }
+            PipeOperator::Set { assignments } => {
+                write!(f, "SET {}", display_comma_separated(assignments.as_slice()))
+            }
+            PipeOperator::Drop { columns } => {
+                write!(f, "DROP {}", display_comma_separated(columns.as_slice()))
+            }
+            PipeOperator::Alias { alias } => {
+                write!(f, "AS {}", alias)
+            }
+            PipeOperator::Limit { expr, offset } => {
+                write!(f, "LIMIT {}", expr)?;
+                if let Some(offset) = offset {
+                    write!(f, " OFFSET {}", offset)?;
+                }
+                Ok(())
+            }
+            PipeOperator::Aggregate {
+                full_table_exprs,
+                group_by_exprs,
+            } => {
+                write!(f, "AGGREGATE")?;
+                if !full_table_exprs.is_empty() {
+                    write!(
+                        f,
+                        " {}",
+                        display_comma_separated(full_table_exprs.as_slice())
+                    )?;
+                }
+                if !group_by_exprs.is_empty() {
+                    write!(
+                        f,
+                        " GROUP BY {}",
+                        display_comma_separated(group_by_exprs.as_slice())
+                    )?;
+                }
+                Ok(())
+            }
+
+            PipeOperator::Where { expr } => {
+                write!(f, "WHERE {}", expr)
+            }
+            PipeOperator::OrderBy { exprs } => {
+                write!(f, "ORDER BY {}", display_comma_separated(exprs.as_slice()))
+            }
         }
     }
 }

@@ -1107,9 +1107,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,
@@ -1161,9 +1159,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,
@@ -1209,9 +1205,7 @@ fn parse_escaped_backticks_with_escape() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,
@@ -1261,9 +1255,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,
@@ -1438,9 +1430,7 @@ fn parse_simple_insert() {
                         ]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1488,9 +1478,7 @@ fn parse_ignore_insert() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1538,9 +1526,7 @@ fn parse_priority_insert() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1585,9 +1571,7 @@ fn parse_priority_insert() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1634,9 +1618,7 @@ fn parse_insert_as() {
                         )]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1698,9 +1680,7 @@ fn parse_insert_as() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1749,9 +1729,7 @@ fn parse_replace_insert() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1791,9 +1769,7 @@ fn parse_empty_row_insert() {
                         rows: vec![vec![], vec![]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1857,9 +1833,7 @@ fn parse_insert_with_on_duplicate_update() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -2596,9 +2570,7 @@ fn parse_substring_in_select() {
                         flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -2737,10 +2709,8 @@ fn parse_set_names() {
 
 #[test]
 fn parse_limit_my_sql_syntax() {
-    mysql_and_generic().one_statement_parses_to(
-        "SELECT id, fname, lname FROM customer LIMIT 5, 10",
-        "SELECT id, fname, lname FROM customer LIMIT 10 OFFSET 5",
-    );
+    mysql_and_generic().verified_stmt("SELECT id, fname, lname FROM customer LIMIT 10 OFFSET 5");
+    mysql_and_generic().verified_stmt("SELECT id, fname, lname FROM customer LIMIT 5, 10");
     mysql_and_generic().verified_stmt("SELECT * FROM user LIMIT ? OFFSET ?");
 }
 
@@ -2903,9 +2873,7 @@ fn parse_hex_string_introducer() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,

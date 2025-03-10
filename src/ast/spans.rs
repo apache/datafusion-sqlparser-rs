@@ -998,6 +998,7 @@ impl Spanned for AlterTableOperation {
                 .span()
                 .union_opt(&with_name.as_ref().map(|n| n.span)),
             AlterTableOperation::DropPrimaryKey => Span::empty(),
+            AlterTableOperation::DropForeignKey { name } => name.span,
             AlterTableOperation::EnableAlwaysRule { name } => name.span,
             AlterTableOperation::EnableAlwaysTrigger { name } => name.span,
             AlterTableOperation::EnableReplicaRule { name } => name.span,

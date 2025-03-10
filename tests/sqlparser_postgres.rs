@@ -1432,81 +1432,77 @@ fn parse_set() {
     let stmt = pg_and_generic().verified_stmt("SET a = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::Identifier(Ident {
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::Identifier(Ident {
                 value: "b".into(),
                 quote_style: None,
                 span: Span::empty(),
             })],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = 'b'");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::Value(
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::Value(
                 (Value::SingleQuotedString("b".into())).with_empty_span()
             )],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = 0");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::value(number("0"))],
-        }
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::value(number("0"))],
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = DEFAULT");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::Identifier(Ident::new("DEFAULT"))],
-        }
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::Identifier(Ident::new("DEFAULT"))],
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET LOCAL a = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local: true,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::Identifier("b".into())],
-        }
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::Identifier("b".into())],
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a.b.c = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![
-                Ident::new("a"),
-                Ident::new("b"),
-                Ident::new("c")
-            ])),
-            value: vec![Expr::Identifier(Ident {
+            variable: ObjectName::from(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
+            values: vec![Expr::Identifier(Ident {
                 value: "b".into(),
                 quote_style: None,
                 span: Span::empty(),
             })],
-        }
+        })
     );
 
     let stmt = pg_and_generic().one_statement_parses_to(
@@ -1515,18 +1511,18 @@ fn parse_set() {
     );
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![
+            variable: ObjectName::from(vec![
                 Ident::new("hive"),
                 Ident::new("tez"),
                 Ident::new("auto"),
                 Ident::new("reducer"),
                 Ident::new("parallelism")
-            ])),
-            value: vec![Expr::Value((Value::Boolean(false)).with_empty_span())],
-        }
+            ]),
+            values: vec![Expr::Value((Value::Boolean(false)).with_empty_span())],
+        })
     );
 
     pg_and_generic().one_statement_parses_to("SET a TO b", "SET a = b");
@@ -1560,10 +1556,10 @@ fn parse_set_role() {
     let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
-        Statement::SetRole {
+        Statement::Set(Set::SetRole {
             context_modifier: ContextModifier::Session,
             role_name: None,
-        }
+        })
     );
     assert_eq!(query, stmt.to_string());
 
@@ -1571,14 +1567,14 @@ fn parse_set_role() {
     let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
-        Statement::SetRole {
+        Statement::Set(Set::SetRole {
             context_modifier: ContextModifier::Local,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\"'),
                 span: Span::empty(),
             }),
-        }
+        })
     );
     assert_eq!(query, stmt.to_string());
 
@@ -1586,14 +1582,14 @@ fn parse_set_role() {
     let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
-        Statement::SetRole {
+        Statement::Set(Set::SetRole {
             context_modifier: ContextModifier::None,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\''),
                 span: Span::empty(),
             }),
-        }
+        })
     );
     assert_eq!(query, stmt.to_string());
 }
@@ -1812,7 +1808,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(vec![Ident::from("did")], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
-                    assignments: vec![Assignment {
+                    assignments: vec![UpdateAssignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(
                             vec!["dname".into()]
                         )),
@@ -1845,7 +1841,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
-                        Assignment {
+                        UpdateAssignment {
                             target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                 "dname".into()
                             ])),
@@ -1854,7 +1850,7 @@ fn parse_pg_on_conflict() {
                                 "dname".into()
                             ])
                         },
-                        Assignment {
+                        UpdateAssignment {
                             target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                 "area".into()
                             ])),
@@ -1906,7 +1902,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(vec![Ident::from("did")], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
-                    assignments: vec![Assignment {
+                    assignments: vec![UpdateAssignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(
                             vec!["dname".into()]
                         )),
@@ -1953,7 +1949,7 @@ fn parse_pg_on_conflict() {
             );
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
-                    assignments: vec![Assignment {
+                    assignments: vec![UpdateAssignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(
                             vec!["dname".into()]
                         )),
@@ -2982,16 +2978,16 @@ fn test_transaction_statement() {
     let statement = pg().verified_stmt("SET TRANSACTION SNAPSHOT '000003A1-1'");
     assert_eq!(
         statement,
-        Statement::SetTransaction {
+        Statement::Set(Set::SetTransaction {
             modes: vec![],
             snapshot: Some(Value::SingleQuotedString(String::from("000003A1-1"))),
             session: false
-        }
+        })
     );
     let statement = pg().verified_stmt("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE");
     assert_eq!(
         statement,
-        Statement::SetTransaction {
+        Statement::Set(Set::SetTransaction {
             modes: vec![
                 TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
                 TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
@@ -2999,7 +2995,7 @@ fn test_transaction_statement() {
             ],
             snapshot: None,
             session: true
-        }
+        })
     );
 }
 
@@ -5641,7 +5637,7 @@ fn parse_create_type_as_enum() {
 #[test]
 fn parse_set_time_zone_alias() {
     match pg().verified_stmt("SET TIME ZONE 'UTC'") {
-        Statement::SetTimeZone { local, value } => {
+        Statement::Set(Set::SetTimeZone { local, value }) => {
             assert!(!local);
             assert_eq!(
                 value,

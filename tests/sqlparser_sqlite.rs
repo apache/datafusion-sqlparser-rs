@@ -469,7 +469,7 @@ fn parse_update_tuple_row_values() {
         sqlite().verified_stmt("UPDATE x SET (a, b) = (1, 2)"),
         Statement::Update {
             or: None,
-            assignments: vec![Assignment {
+            assignments: vec![UpdateAssignment {
                 target: AssignmentTarget::Tuple(vec![
                     ObjectName::from(vec![Ident::new("a"),]),
                     ObjectName::from(vec![Ident::new("b"),]),

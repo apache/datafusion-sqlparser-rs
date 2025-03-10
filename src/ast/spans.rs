@@ -22,20 +22,20 @@ use crate::tokenizer::Span;
 
 use super::{
     dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, CloseCursor,
-    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConflictTarget, ConnectBy,
-    ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
-    Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
-    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
-    FunctionArguments, GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate,
-    InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
-    MatchRecognizePattern, Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset,
-    OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition,
-    PivotValueSource, ProjectionSelect, Query, ReferentialAction, RenameSelectItem,
-    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
-    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
-    TableFactor, TableObject, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
-    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
+    AlterIndexOperation, AlterTableOperation, Array, AssignmentTarget, CloseCursor, ClusteredIndex,
+    ColumnDef, ColumnOption, ColumnOptionDef, ConflictTarget, ConnectBy, ConstraintCharacteristics,
+    CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate,
+    ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable, Function,
+    FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments,
+    GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
+    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern,
+    Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource,
+    ProjectionSelect, Query, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, UpdateAssignment, UpdateTableFromKind, Use, Value,
+    Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -229,11 +229,7 @@ impl Spanned for Values {
 /// - [Statement::Fetch]
 /// - [Statement::Flush]
 /// - [Statement::Discard]
-/// - [Statement::SetRole]
-/// - [Statement::SetVariable]
-/// - [Statement::SetTimeZone]
-/// - [Statement::SetNames]
-/// - [Statement::SetNamesDefault]
+/// - [Statement::Set]
 /// - [Statement::ShowFunctions]
 /// - [Statement::ShowVariable]
 /// - [Statement::ShowStatus]
@@ -243,7 +239,6 @@ impl Spanned for Values {
 /// - [Statement::ShowTables]
 /// - [Statement::ShowCollation]
 /// - [Statement::StartTransaction]
-/// - [Statement::SetTransaction]
 /// - [Statement::Comment]
 /// - [Statement::Commit]
 /// - [Statement::Rollback]
@@ -444,11 +439,7 @@ impl Spanned for Statement {
             Statement::Fetch { .. } => Span::empty(),
             Statement::Flush { .. } => Span::empty(),
             Statement::Discard { .. } => Span::empty(),
-            Statement::SetRole { .. } => Span::empty(),
-            Statement::SetVariable { .. } => Span::empty(),
-            Statement::SetTimeZone { .. } => Span::empty(),
-            Statement::SetNames { .. } => Span::empty(),
-            Statement::SetNamesDefault {} => Span::empty(),
+            Statement::Set(_) => Span::empty(),
             Statement::ShowFunctions { .. } => Span::empty(),
             Statement::ShowVariable { .. } => Span::empty(),
             Statement::ShowStatus { .. } => Span::empty(),
@@ -459,7 +450,6 @@ impl Spanned for Statement {
             Statement::ShowCollation { .. } => Span::empty(),
             Statement::Use(u) => u.span(),
             Statement::StartTransaction { .. } => Span::empty(),
-            Statement::SetTransaction { .. } => Span::empty(),
             Statement::Comment { .. } => Span::empty(),
             Statement::Commit { .. } => Span::empty(),
             Statement::Rollback { .. } => Span::empty(),
@@ -508,8 +498,6 @@ impl Spanned for Statement {
             Statement::RenameTable { .. } => Span::empty(),
             Statement::RaisError { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
-            Statement::SetSessionParam { .. } => Span::empty(),
-            Statement::SetVariables { .. } => Span::empty(),
         }
     }
 }
@@ -1256,9 +1244,9 @@ impl Spanned for DoUpdate {
     }
 }
 
-impl Spanned for Assignment {
+impl Spanned for UpdateAssignment {
     fn span(&self) -> Span {
-        let Assignment { target, value } = self;
+        let UpdateAssignment { target, value } = self;
 
         target.span().union(&value.span())
     }

@@ -1254,14 +1254,14 @@ fn parse_mssql_declare() {
                     for_query: None
                 }]
             },
-            Statement::SetVariable {
+            Statement::Set(Set::SingleAssignment {
                 local: false,
                 hivevar: false,
-                variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("@bar")])),
-                value: vec![Expr::Value(
+                variable: ObjectName::from(vec![Ident::new("@bar")]),
+                values: vec![Expr::Value(
                     (Value::Number("2".parse().unwrap(), false)).with_empty_span()
                 )],
-            },
+            }),
             Statement::Query(Box::new(Query {
                 with: None,
                 limit: None,

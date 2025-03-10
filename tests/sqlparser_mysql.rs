@@ -617,12 +617,12 @@ fn parse_set_variables() {
     mysql_and_generic().verified_stmt("SET sql_mode = CONCAT(@@sql_mode, ',STRICT_TRANS_TABLES')");
     assert_eq!(
         mysql_and_generic().verified_stmt("SET LOCAL autocommit = 1"),
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local: true,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec!["autocommit".into()])),
-            value: vec![Expr::value(number("1"))],
-        }
+            variable: ObjectName::from(vec!["autocommit".into()]),
+            values: vec![Expr::value(number("1"))],
+        })
     );
 }
 
@@ -1870,31 +1870,31 @@ fn parse_insert_with_on_duplicate_update() {
             );
             assert_eq!(
                 Some(OnInsert::DuplicateKeyUpdate(vec![
-                    Assignment {
+                    UpdateAssignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "description".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("description"))]),
                     },
-                    Assignment {
+                    UpdateAssignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_create".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_create"))]),
                     },
-                    Assignment {
+                    UpdateAssignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_read".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_read"))]),
                     },
-                    Assignment {
+                    UpdateAssignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_update".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_update"))]),
                     },
-                    Assignment {
+                    UpdateAssignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_delete".to_string()
                         )])),
@@ -2086,7 +2086,7 @@ fn parse_update_with_joins() {
                 table
             );
             assert_eq!(
-                vec![Assignment {
+                vec![UpdateAssignment {
                     target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                         Ident::new("o"),
                         Ident::new("completed")
@@ -2695,19 +2695,19 @@ fn parse_set_names() {
     let stmt = mysql_and_generic().verified_stmt("SET NAMES utf8mb4");
     assert_eq!(
         stmt,
-        Statement::SetNames {
+        Statement::Set(Set::SetNames {
             charset_name: "utf8mb4".into(),
             collation_name: None,
-        }
+        })
     );
 
     let stmt = mysql_and_generic().verified_stmt("SET NAMES utf8mb4 COLLATE bogus");
     assert_eq!(
         stmt,
-        Statement::SetNames {
+        Statement::Set(Set::SetNames {
             charset_name: "utf8mb4".into(),
             collation_name: Some("bogus".to_string()),
-        }
+        })
     );
 
     let stmt = mysql_and_generic()
@@ -2715,14 +2715,14 @@ fn parse_set_names() {
         .unwrap();
     assert_eq!(
         stmt,
-        vec![Statement::SetNames {
+        vec![Statement::Set(Set::SetNames {
             charset_name: "utf8mb4".into(),
             collation_name: Some("bogus".to_string()),
-        }]
+        })]
     );
 
     let stmt = mysql_and_generic().verified_stmt("SET NAMES DEFAULT");
-    assert_eq!(stmt, Statement::SetNamesDefault {});
+    assert_eq!(stmt, Statement::Set(Set::SetNamesDefault {}));
 }
 
 #[test]

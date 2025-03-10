@@ -10955,10 +10955,10 @@ impl<'a> Parser<'a> {
         } else {
             Some(self.parse_identifier()?)
         };
-        Ok(Statement::SetRole {
+        Ok(Statement::Set(Set::SetRole {
             context_modifier,
             role_name,
-        })
+        }))
     }
 
     fn parse_set_values(
@@ -11036,24 +11036,26 @@ impl<'a> Parser<'a> {
             || self.parse_keyword(Keyword::TIMEZONE)
         {
             if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
-                return Ok(Statement::SetVariable {
+                return Ok(Set::SingleAssignment {
                     local: modifier == Some(Keyword::LOCAL),
                     hivevar: modifier == Some(Keyword::HIVEVAR),
-                    variables: OneOrManyWithParens::One(ObjectName::from(vec!["TIMEZONE".into()])),
-                    value: self.parse_set_values(false)?,
-                });
+                    variable: ObjectName::from(vec!["TIMEZONE".into()]),
+                    values: self.parse_set_values(false)?,
+                }
+                .into());
             } else if self.dialect.is::<PostgreSqlDialect>() {
                 // Special case for Postgres
-                return Ok(Statement::SetTimeZone {
+                return Ok(Set::SetTimeZone {
                     local: modifier == Some(Keyword::LOCAL),
                     value: self.parse_expr()?,
-                });
+                }
+                .into());
             } else {
                 return self.expected("assignment operator", self.peek_token());
             }
         } else if self.dialect.supports_set_names() && self.parse_keyword(Keyword::NAMES) {
             if self.parse_keyword(Keyword::DEFAULT) {
-                return Ok(Statement::SetNamesDefault {});
+                return Ok(Set::SetNamesDefault {}.into());
             }
             let charset_name = self.parse_identifier()?;
             let collation_name = if self.parse_one_of_keywords(&[Keyword::COLLATE]).is_some() {
@@ -11062,61 +11064,75 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            return Ok(Statement::SetNames {
+            return Ok(Set::SetNames {
                 charset_name,
                 collation_name,
-            });
+            }
+            .into());
         } else if self.parse_keyword(Keyword::CHARACTERISTICS) {
             self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
-            return Ok(Statement::SetTransaction {
+            return Ok(Set::SetTransaction {
                 modes: self.parse_transaction_modes()?,
                 snapshot: None,
                 session: true,
-            });
+            }
+            .into());
         } else if self.parse_keyword(Keyword::TRANSACTION) {
             if self.parse_keyword(Keyword::SNAPSHOT) {
                 let snapshot_id = self.parse_value()?.value;
-                return Ok(Statement::SetTransaction {
+                return Ok(Set::SetTransaction {
                     modes: vec![],
                     snapshot: Some(snapshot_id),
                     session: false,
-                });
+                }
+                .into());
             }
-            return Ok(Statement::SetTransaction {
+            return Ok(Set::SetTransaction {
                 modes: self.parse_transaction_modes()?,
                 snapshot: None,
                 session: false,
-            });
+            }
+            .into());
         }
 
         if self.dialect.supports_comma_separated_set_assignments() {
-            if let Ok(v) =
+            if let Ok(assignments) =
                 self.try_parse(|parser| parser.parse_comma_separated(Parser::parse_set_assignment))
             {
-                let (vars, values): (Vec<_>, Vec<_>) = v.into_iter().unzip();
-
-                return if vars.len() > 1 {
-                    let variables = vars
+                return if assignments.len() > 1 {
+                    let assignments = assignments
                         .into_iter()
-                        .map(|v| match v {
-                            OneOrManyWithParens::One(v) => Ok(v),
-                            _ => self.expected("List of single identifiers", self.peek_token()),
+                        .map(|(var, val)| match var {
+                            OneOrManyWithParens::One(v) => Ok(SetAssignment {
+                                name: v,
+                                value: val,
+                            }),
+                            OneOrManyWithParens::Many(_) => {
+                                self.expected("List of single identifiers", self.peek_token())
+                            }
                         })
                         .collect::<Result<_, _>>()?;
 
-                    Ok(Statement::SetVariables { variables, values })
+                    Ok(Set::MultipleAssignments { assignments }.into())
                 } else {
+                    let (vars, values): (Vec<_>, Vec<_>) = assignments.into_iter().unzip();
+
                     let variable = match vars.into_iter().next() {
-                        Some(v) => Ok(v),
+                        Some(OneOrManyWithParens::One(v)) => Ok(v),
+                        Some(OneOrManyWithParens::Many(_)) => self.expected(
+                            "Single assignment or list of assignments",
+                            self.peek_token(),
+                        ),
                         None => self.expected("At least one identifier", self.peek_token()),
                     }?;
 
-                    Ok(Statement::SetVariable {
+                    Ok(Set::SingleAssignment {
                         local: modifier == Some(Keyword::LOCAL),
                         hivevar: modifier == Some(Keyword::HIVEVAR),
-                        variables: variable,
-                        value: values,
-                    })
+                        variable,
+                        values,
+                    }
+                    .into())
                 };
             }
         }
@@ -11137,15 +11153,20 @@ impl<'a> Parser<'a> {
         };
 
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
-            let parenthesized_assignment = matches!(&variables, OneOrManyWithParens::Many(_));
-            let values = self.parse_set_values(parenthesized_assignment)?;
+            let stmt = match variables {
+                OneOrManyWithParens::One(var) => Set::SingleAssignment {
+                    local: modifier == Some(Keyword::LOCAL),
+                    hivevar: modifier == Some(Keyword::HIVEVAR),
+                    variable: var,
+                    values: self.parse_set_values(false)?,
+                },
+                OneOrManyWithParens::Many(vars) => Set::ParenthesizedAssignments {
+                    variables: vars,
+                    values: self.parse_set_values(true)?,
+                },
+            };
 
-            return Ok(Statement::SetVariable {
-                local: modifier == Some(Keyword::LOCAL),
-                hivevar: modifier == Some(Keyword::HIVEVAR),
-                variables,
-                value: values,
-            });
+            return Ok(stmt.into());
         }
 
         if self.dialect.supports_set_stmt_without_operator() {
@@ -11171,15 +11192,20 @@ impl<'a> Parser<'a> {
                 _ => return self.expected("IO, PROFILE, TIME or XML", self.peek_token()),
             };
             let value = self.parse_session_param_value()?;
-            Ok(Statement::SetSessionParam(SetSessionParamKind::Statistics(
-                SetSessionParamStatistics { topic, value },
-            )))
+            Ok(
+                Set::SetSessionParam(SetSessionParamKind::Statistics(SetSessionParamStatistics {
+                    topic,
+                    value,
+                }))
+                .into(),
+            )
         } else if self.parse_keyword(Keyword::IDENTITY_INSERT) {
             let obj = self.parse_object_name(false)?;
             let value = self.parse_session_param_value()?;
-            Ok(Statement::SetSessionParam(
-                SetSessionParamKind::IdentityInsert(SetSessionParamIdentityInsert { obj, value }),
+            Ok(Set::SetSessionParam(SetSessionParamKind::IdentityInsert(
+                SetSessionParamIdentityInsert { obj, value },
             ))
+            .into())
         } else if self.parse_keyword(Keyword::OFFSETS) {
             let keywords = self.parse_comma_separated(|parser| {
                 let next_token = parser.next_token();
@@ -11189,9 +11215,13 @@ impl<'a> Parser<'a> {
                 }
             })?;
             let value = self.parse_session_param_value()?;
-            Ok(Statement::SetSessionParam(SetSessionParamKind::Offsets(
-                SetSessionParamOffsets { keywords, value },
-            )))
+            Ok(
+                Set::SetSessionParam(SetSessionParamKind::Offsets(SetSessionParamOffsets {
+                    keywords,
+                    value,
+                }))
+                .into(),
+            )
         } else {
             let names = self.parse_comma_separated(|parser| {
                 let next_token = parser.next_token();
@@ -11201,9 +11231,13 @@ impl<'a> Parser<'a> {
                 }
             })?;
             let value = self.parse_expr()?.to_string();
-            Ok(Statement::SetSessionParam(SetSessionParamKind::Generic(
-                SetSessionParamGeneric { names, value },
-            )))
+            Ok(
+                Set::SetSessionParam(SetSessionParamKind::Generic(SetSessionParamGeneric {
+                    names,
+                    value,
+                }))
+                .into(),
+            )
         }
     }
 
@@ -13277,11 +13311,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement
-    pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
+    pub fn parse_assignment(&mut self) -> Result<UpdateAssignment, ParserError> {
         let target = self.parse_assignment_target()?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_expr()?;
-        Ok(Assignment { target, value })
+        Ok(UpdateAssignment { target, value })
     }
 
     /// Parse the left-hand side of an assignment, used in an UPDATE statement

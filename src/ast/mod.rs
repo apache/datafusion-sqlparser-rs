@@ -2394,6 +2394,167 @@ pub enum CreatePolicyCommand {
     Delete,
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Set {
+    /// SQL Standard-style
+    /// SET a = 1;
+    SingleAssignment {
+        local: bool,
+        hivevar: bool,
+        variable: ObjectName,
+        values: Vec<Expr>,
+    },
+    /// Snowflake-style
+    /// SET (a, b, ..) = (1, 2, ..);
+    ParenthesizedAssignments {
+        variables: Vec<ObjectName>,
+        values: Vec<Expr>,
+    },
+    /// MySQL-style
+    /// SET a = 1, b = 2, ..;
+    MultipleAssignments { assignments: Vec<SetAssignment> },
+    /// MS-SQL session
+    ///
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/set-statements-transact-sql>
+    SetSessionParam(SetSessionParamKind),
+    /// ```sql
+    /// SET [ SESSION | LOCAL ] ROLE role_name
+    /// ```
+    ///
+    /// Sets session state. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4]
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#set-role-statement
+    /// [2]: https://www.postgresql.org/docs/14/sql-set-role.html
+    /// [3]: https://dev.mysql.com/doc/refman/8.0/en/set-role.html
+    /// [4]: https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_10004.htm
+    SetRole {
+        /// Non-ANSI optional identifier to inform if the role is defined inside the current session (`SESSION`) or transaction (`LOCAL`).
+        context_modifier: ContextModifier,
+        /// Role name. If NONE is specified, then the current role name is removed.
+        role_name: Option<Ident>,
+    },
+    /// ```sql
+    /// SET TIME ZONE <value>
+    /// ```
+    ///
+    /// Note: this is a PostgreSQL-specific statements
+    /// `SET TIME ZONE <value>` is an alias for `SET timezone TO <value>` in PostgreSQL
+    SetTimeZone { local: bool, value: Expr },
+    /// ```sql
+    /// SET NAMES 'charset_name' [COLLATE 'collation_name']
+    /// ```
+    SetNames {
+        charset_name: Ident,
+        collation_name: Option<String>,
+    },
+    /// ```sql
+    /// SET NAMES DEFAULT
+    /// ```
+    ///
+    /// Note: this is a MySQL-specific statement.
+    SetNamesDefault {},
+    /// ```sql
+    /// SET TRANSACTION ...
+    /// ```
+    SetTransaction {
+        modes: Vec<TransactionMode>,
+        snapshot: Option<Value>,
+        session: bool,
+    },
+}
+
+impl Display for Set {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::ParenthesizedAssignments { variables, values } => write!(
+                f,
+                "SET ({}) = ({})",
+                display_comma_separated(variables),
+                display_comma_separated(values)
+            ),
+            Self::MultipleAssignments { assignments } => {
+                write!(f, "SET {}", display_comma_separated(assignments))
+            }
+            Self::SetRole {
+                context_modifier,
+                role_name,
+            } => {
+                let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
+                write!(f, "SET{context_modifier} ROLE {role_name}")
+            }
+            Self::SetSessionParam(kind) => write!(f, "SET {kind}"),
+            Self::SetTransaction {
+                modes,
+                snapshot,
+                session,
+            } => {
+                if *session {
+                    write!(f, "SET SESSION CHARACTERISTICS AS TRANSACTION")?;
+                } else {
+                    write!(f, "SET TRANSACTION")?;
+                }
+                if !modes.is_empty() {
+                    write!(f, " {}", display_comma_separated(modes))?;
+                }
+                if let Some(snapshot_id) = snapshot {
+                    write!(f, " SNAPSHOT {snapshot_id}")?;
+                }
+                Ok(())
+            }
+            Self::SetTimeZone { local, value } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(f, "TIME ZONE {value}")
+            }
+            Self::SetNames {
+                charset_name,
+                collation_name,
+            } => {
+                write!(f, "SET NAMES {}", charset_name)?;
+
+                if let Some(collation) = collation_name {
+                    f.write_str(" COLLATE ")?;
+                    f.write_str(collation)?;
+                };
+
+                Ok(())
+            }
+            Self::SetNamesDefault {} => {
+                f.write_str("SET NAMES DEFAULT")?;
+
+                Ok(())
+            }
+            Set::SingleAssignment {
+                local,
+                hivevar,
+                variable,
+                values,
+            } => {
+                write!(
+                    f,
+                    "SET {}{}{} = {}",
+                    if *local { "LOCAL " } else { "" },
+                    if *hivevar { "HIVEVAR:" } else { "" },
+                    variable,
+                    display_comma_separated(values)
+                )
+            }
+        }
+    }
+}
+
+/// Convert a `Set` into a `Statement`.
+/// Convenience function, instead of writing `Statement::Set(Set::Set...{...})`
+impl From<Set> for Statement {
+    fn from(set: Set) -> Self {
+        Statement::Set(set)
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -2419,6 +2580,7 @@ pub enum Statement {
         compute_statistics: bool,
         has_table_keyword: bool,
     },
+    Set(Set),
     /// ```sql
     /// TRUNCATE
     /// ```
@@ -2545,7 +2707,7 @@ pub enum Statement {
         /// TABLE
         table: TableWithJoins,
         /// Column assignments
-        assignments: Vec<Assignment>,
+        assignments: Vec<UpdateAssignment>,
         /// Table which provide value to be set
         from: Option<UpdateTableFromKind>,
         /// WHERE
@@ -2846,7 +3008,10 @@ pub enum Statement {
     /// DROP CONNECTOR
     /// ```
     /// See [Hive](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=27362034#LanguageManualDDL-DropConnector)
-    DropConnector { if_exists: bool, name: Ident },
+    DropConnector {
+        if_exists: bool,
+        name: Ident,
+    },
     /// ```sql
     /// DECLARE
     /// ```
@@ -2854,7 +3019,9 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Declare { stmts: Vec<Declare> },
+    Declare {
+        stmts: Vec<Declare>,
+    },
     /// ```sql
     /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
     ///     [ WITH ] [ SCHEMA schema_name ]
@@ -2916,78 +3083,23 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Discard { object_type: DiscardObject },
-    /// ```sql
-    /// SET [ SESSION | LOCAL ] ROLE role_name
-    /// ```
-    ///
-    /// Sets session state. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4]
-    ///
-    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#set-role-statement
-    /// [2]: https://www.postgresql.org/docs/14/sql-set-role.html
-    /// [3]: https://dev.mysql.com/doc/refman/8.0/en/set-role.html
-    /// [4]: https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_10004.htm
-    SetRole {
-        /// Non-ANSI optional identifier to inform if the role is defined inside the current session (`SESSION`) or transaction (`LOCAL`).
-        context_modifier: ContextModifier,
-        /// Role name. If NONE is specified, then the current role name is removed.
-        role_name: Option<Ident>,
+    Discard {
+        object_type: DiscardObject,
     },
-    /// ```sql
-    /// SET <variable> = expression;
-    /// SET (variable[, ...]) = (expression[, ...]);
-    /// ```
-    ///
-    /// Note: this is not a standard SQL statement, but it is supported by at
-    /// least MySQL and PostgreSQL. Not all MySQL-specific syntactic forms are
-    /// supported yet.
-    SetVariable {
-        local: bool,
-        hivevar: bool,
-        variables: OneOrManyWithParens<ObjectName>,
-        value: Vec<Expr>,
-    },
-
-    /// ```sql
-    /// SET <variable> = expression [, <variable> = expression]*;
-    /// ```
-    ///
-    /// Note: this is a MySQL-specific statement.
-    /// Refer to [`Dialect.supports_comma_separated_set_assignments`]
-    SetVariables {
-        variables: Vec<ObjectName>,
-        values: Vec<Expr>,
-    },
-    /// ```sql
-    /// SET TIME ZONE <value>
-    /// ```
-    ///
-    /// Note: this is a PostgreSQL-specific statements
-    /// `SET TIME ZONE <value>` is an alias for `SET timezone TO <value>` in PostgreSQL
-    SetTimeZone { local: bool, value: Expr },
-    /// ```sql
-    /// SET NAMES 'charset_name' [COLLATE 'collation_name']
-    /// ```
-    SetNames {
-        charset_name: Ident,
-        collation_name: Option<String>,
-    },
-    /// ```sql
-    /// SET NAMES DEFAULT
-    /// ```
-    ///
-    /// Note: this is a MySQL-specific statement.
-    SetNamesDefault {},
     /// `SHOW FUNCTIONS`
     ///
     /// Note: this is a Presto-specific statement.
-    ShowFunctions { filter: Option<ShowStatementFilter> },
+    ShowFunctions {
+        filter: Option<ShowStatementFilter>,
+    },
     /// ```sql
     /// SHOW <variable>
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable { variable: Vec<Ident> },
+    ShowVariable {
+        variable: Vec<Ident>,
+    },
     /// ```sql
     /// SHOW [GLOBAL | SESSION] STATUS [LIKE 'pattern' | WHERE expr]
     /// ```
@@ -3071,7 +3183,9 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowCollation { filter: Option<ShowStatementFilter> },
+    ShowCollation {
+        filter: Option<ShowStatementFilter>,
+    },
     /// ```sql
     /// `USE ...`
     /// ```
@@ -3112,14 +3226,6 @@ pub enum Statement {
         exception_statements: Option<Vec<Statement>>,
         /// TRUE if the statement has an `END` keyword.
         has_end_keyword: bool,
-    },
-    /// ```sql
-    /// SET TRANSACTION ...
-    /// ```
-    SetTransaction {
-        modes: Vec<TransactionMode>,
-        snapshot: Option<Value>,
-        session: bool,
     },
     /// ```sql
     /// COMMENT ON ...
@@ -3340,7 +3446,10 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate { name: Ident, prepare: bool },
+    Deallocate {
+        name: Ident,
+        prepare: bool,
+    },
     /// ```sql
     /// An `EXECUTE` statement
     /// ```
@@ -3426,11 +3535,15 @@ pub enum Statement {
     /// SAVEPOINT
     /// ```
     /// Define a new savepoint within the current transaction
-    Savepoint { name: Ident },
+    Savepoint {
+        name: Ident,
+    },
     /// ```sql
     /// RELEASE [ SAVEPOINT ] savepoint_name
     /// ```
-    ReleaseSavepoint { name: Ident },
+    ReleaseSavepoint {
+        name: Ident,
+    },
     /// A `MERGE` statement.
     ///
     /// ```sql
@@ -3510,7 +3623,9 @@ pub enum Statement {
     /// LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    LockTables { tables: Vec<LockTable> },
+    LockTables {
+        tables: Vec<LockTable>,
+    },
     /// ```sql
     /// UNLOCK TABLES
     /// ```
@@ -3544,14 +3659,18 @@ pub enum Statement {
     /// listen for a notification channel
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-listen.html>
-    LISTEN { channel: Ident },
+    LISTEN {
+        channel: Ident,
+    },
     /// ```sql
     /// UNLISTEN
     /// ```
     /// stop listening for a notification
     ///
     /// See Postgres <https://www.postgresql.org/docs/current/sql-unlisten.html>
-    UNLISTEN { channel: Ident },
+    UNLISTEN {
+        channel: Ident,
+    },
     /// ```sql
     /// NOTIFY channel [ , payload ]
     /// ```
@@ -3591,10 +3710,6 @@ pub enum Statement {
     /// Snowflake `REMOVE`
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/remove>
     Remove(FileStagingCommand),
-    /// MS-SQL session
-    ///
-    /// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/set-statements-transact-sql>
-    SetSessionParam(SetSessionParamKind),
     /// RaiseError (MSSQL)
     /// RAISERROR ( { msg_id | msg_str | @local_variable }
     /// { , severity , state }
@@ -4655,59 +4770,7 @@ impl fmt::Display for Statement {
                 write!(f, "DISCARD {object_type}")?;
                 Ok(())
             }
-            Self::SetRole {
-                context_modifier,
-                role_name,
-            } => {
-                let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
-                write!(f, "SET{context_modifier} ROLE {role_name}")
-            }
-            Statement::SetVariable {
-                local,
-                variables,
-                hivevar,
-                value,
-            } => {
-                f.write_str("SET ")?;
-                if *local {
-                    f.write_str("LOCAL ")?;
-                }
-                let parenthesized = matches!(variables, OneOrManyWithParens::Many(_));
-                write!(
-                    f,
-                    "{hivevar}{name} = {l_paren}{value}{r_paren}",
-                    hivevar = if *hivevar { "HIVEVAR:" } else { "" },
-                    name = variables,
-                    l_paren = parenthesized.then_some("(").unwrap_or_default(),
-                    value = display_comma_separated(value),
-                    r_paren = parenthesized.then_some(")").unwrap_or_default(),
-                )
-            }
-            Statement::SetTimeZone { local, value } => {
-                f.write_str("SET ")?;
-                if *local {
-                    f.write_str("LOCAL ")?;
-                }
-                write!(f, "TIME ZONE {value}")
-            }
-            Statement::SetNames {
-                charset_name,
-                collation_name,
-            } => {
-                write!(f, "SET NAMES {}", charset_name)?;
-
-                if let Some(collation) = collation_name {
-                    f.write_str(" COLLATE ")?;
-                    f.write_str(collation)?;
-                };
-
-                Ok(())
-            }
-            Statement::SetNamesDefault {} => {
-                f.write_str("SET NAMES DEFAULT")?;
-
-                Ok(())
-            }
+            Self::Set(set) => write!(f, "{set}"),
             Statement::ShowVariable { variable } => {
                 write!(f, "SHOW")?;
                 if !variable.is_empty() {
@@ -4893,24 +4956,6 @@ impl fmt::Display for Statement {
                 }
                 if *has_end_keyword {
                     write!(f, " END")?;
-                }
-                Ok(())
-            }
-            Statement::SetTransaction {
-                modes,
-                snapshot,
-                session,
-            } => {
-                if *session {
-                    write!(f, "SET SESSION CHARACTERISTICS AS TRANSACTION")?;
-                } else {
-                    write!(f, "SET TRANSACTION")?;
-                }
-                if !modes.is_empty() {
-                    write!(f, " {}", display_comma_separated(modes))?;
-                }
-                if let Some(snapshot_id) = snapshot {
-                    write!(f, " SNAPSHOT {snapshot_id}")?;
                 }
                 Ok(())
             }
@@ -5344,18 +5389,6 @@ impl fmt::Display for Statement {
 
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
-            Statement::SetSessionParam(kind) => write!(f, "SET {kind}"),
-            Statement::SetVariables { variables, values } => write!(
-                f,
-                "SET {}",
-                display_comma_separated(
-                    &variables
-                        .iter()
-                        .zip(values.iter())
-                        .map(|(var, val)| format!("{var} = {val}"))
-                        .collect::<Vec<_>>()
-                )
-            ),
         }
     }
 }
@@ -5416,6 +5449,21 @@ impl fmt::Display for SequenceOptions {
                 write!(f, " {}CYCLE", if *no { "NO " } else { "" })
             }
         }
+    }
+}
+
+/// Assignment for a `SET` statement (name [=|TO] value)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct SetAssignment {
+    pub name: ObjectName,
+    pub value: Expr,
+}
+
+impl fmt::Display for SetAssignment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} = {}", self.name, self.value)
     }
 }
 
@@ -5504,7 +5552,7 @@ pub enum MinMaxValue {
 #[non_exhaustive]
 pub enum OnInsert {
     /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
-    DuplicateKeyUpdate(Vec<Assignment>),
+    DuplicateKeyUpdate(Vec<UpdateAssignment>),
     /// ON CONFLICT is a PostgreSQL and Sqlite extension
     OnConflict(OnConflict),
 }
@@ -5544,7 +5592,7 @@ pub enum OnConflictAction {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DoUpdate {
     /// Column assignments
-    pub assignments: Vec<Assignment>,
+    pub assignments: Vec<UpdateAssignment>,
     /// WHERE
     pub selection: Option<Expr>,
 }
@@ -6170,12 +6218,12 @@ impl fmt::Display for GrantObjects {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct Assignment {
+pub struct UpdateAssignment {
     pub target: AssignmentTarget,
     pub value: Expr,
 }
 
-impl fmt::Display for Assignment {
+impl fmt::Display for UpdateAssignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} = {}", self.target, self.value)
     }
@@ -7504,7 +7552,7 @@ pub enum MergeAction {
     /// ```sql
     /// UPDATE SET quantity = T.quantity + S.quantity
     /// ```
-    Update { assignments: Vec<Assignment> },
+    Update { assignments: Vec<UpdateAssignment> },
     /// A plain `DELETE` clause
     Delete,
 }

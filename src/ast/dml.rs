@@ -32,12 +32,12 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
-    display_comma_separated, display_separated, query::InputFormatClause, Assignment, ClusteredBy,
-    CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
-    HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit,
-    OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting,
-    SqlOption, SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject,
-    TableWithJoins, Tag, WrappedCollection,
+    display_comma_separated, display_separated, query::InputFormatClause, ClusteredBy, CommentDef,
+    Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat, HiveRowFormat,
+    Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit, OnInsert,
+    OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting, SqlOption,
+    SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject, TableWithJoins, Tag,
+    UpdateAssignment, WrappedCollection,
 };
 
 /// Index column type.
@@ -544,7 +544,7 @@ pub struct Insert {
     pub source: Option<Box<Query>>,
     /// MySQL `INSERT INTO ... SET`
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/insert.html>
-    pub assignments: Vec<Assignment>,
+    pub assignments: Vec<UpdateAssignment>,
     /// partitioned insert (Hive)
     pub partitioned: Option<Vec<Expr>>,
     /// Columns defined after PARTITION

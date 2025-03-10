@@ -10049,6 +10049,13 @@ impl<'a> Parser<'a> {
         Ok(parent_type(inside_type.into()))
     }
 
+    /// Parse a DELETE statement, returning a `Box`ed SetExpr
+    ///
+    /// This is used to reduce the size of the stack frames in debug builds
+    fn parse_delete_setexpr_boxed(&mut self) -> Result<Box<SetExpr>, ParserError> {
+        Ok(Box::new(SetExpr::Delete(self.parse_delete()?)))
+    }
+
     pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
         let (tables, with_from_keyword) = if !self.parse_keyword(Keyword::FROM) {
             // `FROM` keyword is optional in BigQuery SQL.
@@ -10202,6 +10209,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a `WITH` clause, i.e. a `WITH` keyword followed by a `RECURSIVE` keyword
+    /// and a comma-separated list of CTE declarations.
+    fn parse_with_clause(&mut self) -> Result<With, ParserError> {
+        let with_token = self.get_current_token();
+        Ok(With {
+            with_token: with_token.clone().into(),
+            recursive: self.parse_keyword(Keyword::RECURSIVE),
+            cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+        })
+    }
+
     /// Parse a query expression, i.e. a `SELECT` statement optionally
     /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
@@ -10209,12 +10227,7 @@ impl<'a> Parser<'a> {
     pub fn parse_query(&mut self) -> Result<Box<Query>, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if self.parse_keyword(Keyword::WITH) {
-            let with_token = self.get_current_token();
-            Some(With {
-                with_token: with_token.clone().into(),
-                recursive: self.parse_keyword(Keyword::RECURSIVE),
-                cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
-            })
+            Some(self.parse_with_clause()?)
         } else {
             None
         };
@@ -10237,6 +10250,21 @@ impl<'a> Parser<'a> {
             Ok(Query {
                 with,
                 body: self.parse_update_setexpr_boxed()?,
+                limit: None,
+                limit_by: vec![],
+                order_by: None,
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                settings: None,
+                format_clause: None,
+            }
+            .into())
+        } else if self.parse_keyword(Keyword::DELETE) {
+            Ok(Query {
+                with,
+                body: self.parse_delete_setexpr_boxed()?,
                 limit: None,
                 limit_by: vec![],
                 order_by: None,

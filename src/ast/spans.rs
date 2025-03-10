@@ -191,6 +191,7 @@ impl Spanned for SetExpr {
             SetExpr::Insert(statement) => statement.span(),
             SetExpr::Table(_) => Span::empty(),
             SetExpr::Update(statement) => statement.span(),
+            SetExpr::Delete(statement) => statement.span(),
         }
     }
 }

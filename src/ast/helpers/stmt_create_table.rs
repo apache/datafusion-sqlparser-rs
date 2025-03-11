@@ -28,12 +28,10 @@ use super::super::dml::CreateTable;
 use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident,
     ObjectName, OnCommit, OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement,
-    StorageSerializationPolicy, TableConstraint, TableEngine, Tag, WrappedCollection,
+    StorageSerializationPolicy, TableConstraint, Tag, WrappedCollection,
 };
-use crate::parser::{
-    Compression, DelayKeyWrite, DirectoryOption, Encryption, InsertMethod, OptionState,
-    ParserError, RowFormat, TablespaceOption,
-};
+
+use crate::parser::ParserError;
 
 /// Builder for create table statement variant ([1]).
 ///
@@ -81,41 +79,15 @@ pub struct CreateTableBuilder {
     pub hive_formats: Option<HiveFormat>,
     pub table_properties: Vec<SqlOption>,
     pub with_options: Vec<SqlOption>,
+    pub options: Option<Vec<SqlOption>>,
+    pub plain_options: Vec<SqlOption>,
     pub file_format: Option<FileFormat>,
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub engine: Option<TableEngine>,
     pub comment: Option<CommentDef>,
-    pub auto_increment_offset: Option<u32>,
-    pub default_charset: Option<String>,
-    pub collation: Option<String>,
-    pub key_block_size: Option<u32>,
-    pub max_rows: Option<u32>,
-    pub min_rows: Option<u32>,
-    pub autoextend_size: Option<u32>,
-    pub avg_row_length: Option<u32>,
-    pub checksum: Option<bool>,
-    pub row_format: Option<RowFormat>,
-    pub compression: Option<Compression>,
-    pub encryption: Option<Encryption>,
-    pub insert_method: Option<InsertMethod>,
-    pub pack_keys: Option<OptionState>,
-    pub stats_auto_recalc: Option<OptionState>,
-    pub stats_persistent: Option<OptionState>,
-    pub stats_sample_pages: Option<u32>,
-    pub delay_key_write: Option<DelayKeyWrite>,
-    pub connection: Option<String>,
-    pub engine_attribute: Option<String>,
-    pub password: Option<String>,
-    pub secondary_engine_attribute: Option<String>,
-    pub start_transaction: Option<bool>,
-    pub tablespace_option: Option<TablespaceOption>,
-    pub union_tables: Option<Vec<String>>,
-    pub data_directory: Option<DirectoryOption>,
-    pub index_directory: Option<DirectoryOption>,
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<Ident>,
     pub primary_key: Option<Box<Expr>>,
@@ -123,7 +95,6 @@ pub struct CreateTableBuilder {
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub clustered_by: Option<ClusteredBy>,
-    pub options: Option<Vec<SqlOption>>,
     pub strict: bool,
     pub copy_grants: bool,
     pub enable_schema_evolution: Option<bool>,
@@ -158,6 +129,7 @@ impl CreateTableBuilder {
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
             table_properties: vec![],
+            plain_options: vec![],
             with_options: vec![],
             file_format: None,
             location: None,
@@ -165,35 +137,7 @@ impl CreateTableBuilder {
             without_rowid: false,
             like: None,
             clone: None,
-            engine: None,
             comment: None,
-            auto_increment_offset: None,
-            compression: None,
-            encryption: None,
-            insert_method: None,
-            key_block_size: None,
-            row_format: None,
-            data_directory: None,
-            index_directory: None,
-            pack_keys: None,
-            stats_auto_recalc: None,
-            stats_persistent: None,
-            stats_sample_pages: None,
-            delay_key_write: None,
-            max_rows: None,
-            min_rows: None,
-            autoextend_size: None,
-            avg_row_length: None,
-            checksum: None,
-            connection: None,
-            engine_attribute: None,
-            password: None,
-            secondary_engine_attribute: None,
-            start_transaction: None,
-            tablespace_option: None,
-            union_tables: None,
-            default_charset: None,
-            collation: None,
             on_commit: None,
             on_cluster: None,
             primary_key: None,
@@ -317,140 +261,8 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn engine(mut self, engine: Option<TableEngine>) -> Self {
-        self.engine = engine;
-        self
-    }
-
     pub fn comment(mut self, comment: Option<CommentDef>) -> Self {
         self.comment = comment;
-        self
-    }
-
-    pub fn auto_increment_offset(mut self, offset: Option<u32>) -> Self {
-        self.auto_increment_offset = offset;
-        self
-    }
-
-    pub fn default_charset(mut self, default_charset: Option<String>) -> Self {
-        self.default_charset = default_charset;
-        self
-    }
-
-    pub fn collation(mut self, collation: Option<String>) -> Self {
-        self.collation = collation;
-        self
-    }
-    pub fn compression(mut self, compression: Option<Compression>) -> Self {
-        self.compression = compression;
-        self
-    }
-    pub fn encryption(mut self, encryption: Option<Encryption>) -> Self {
-        self.encryption = encryption;
-        self
-    }
-    pub fn delay_key_write(mut self, delay_key_write: Option<DelayKeyWrite>) -> Self {
-        self.delay_key_write = delay_key_write;
-        self
-    }
-    pub fn insert_method(mut self, insert_method: Option<InsertMethod>) -> Self {
-        self.insert_method = insert_method;
-        self
-    }
-
-    pub fn key_block_size(mut self, key_block_size: Option<u32>) -> Self {
-        self.key_block_size = key_block_size;
-        self
-    }
-    pub fn max_rows(mut self, max_rows: Option<u32>) -> Self {
-        self.max_rows = max_rows;
-        self
-    }
-
-    pub fn min_rows(mut self, min_rows: Option<u32>) -> Self {
-        self.min_rows = min_rows;
-        self
-    }
-
-    pub fn autoextend_size(mut self, autoextend_size: Option<u32>) -> Self {
-        self.autoextend_size = autoextend_size;
-        self
-    }
-    pub fn avg_row_length(mut self, avg_row_length: Option<u32>) -> Self {
-        self.avg_row_length = avg_row_length;
-        self
-    }
-
-    pub fn checksum(mut self, checksum: Option<bool>) -> Self {
-        self.checksum = checksum;
-        self
-    }
-    pub fn connection(mut self, connection: Option<String>) -> Self {
-        self.connection = connection;
-        self
-    }
-    pub fn engine_attribute(mut self, engine_attribute: Option<String>) -> Self {
-        self.engine_attribute = engine_attribute;
-        self
-    }
-    pub fn password(mut self, password: Option<String>) -> Self {
-        self.password = password;
-        self
-    }
-    pub fn secondary_engine_attribute(
-        mut self,
-        secondary_engine_attribute: Option<String>,
-    ) -> Self {
-        self.secondary_engine_attribute = secondary_engine_attribute;
-        self
-    }
-
-    pub fn start_transaction(mut self, start_transaction: Option<bool>) -> Self {
-        self.start_transaction = start_transaction;
-        self
-    }
-
-    pub fn tablespace_option(mut self, tablespace_option: Option<TablespaceOption>) -> Self {
-        self.tablespace_option = tablespace_option;
-        self
-    }
-    pub fn union_tables(mut self, union_tables: Option<Vec<String>>) -> Self {
-        self.union_tables = union_tables;
-        self
-    }
-
-    pub fn row_format(mut self, row_format: Option<RowFormat>) -> Self {
-        self.row_format = row_format;
-        self
-    }
-
-    pub fn data_directory(mut self, directory_option: Option<DirectoryOption>) -> Self {
-        self.data_directory = directory_option;
-        self
-    }
-
-    pub fn index_directory(mut self, directory_option: Option<DirectoryOption>) -> Self {
-        self.index_directory = directory_option;
-        self
-    }
-
-    pub fn pack_keys(mut self, pack_keys: Option<OptionState>) -> Self {
-        self.pack_keys = pack_keys;
-        self
-    }
-
-    pub fn stats_auto_recalc(mut self, stats_auto_recalc: Option<OptionState>) -> Self {
-        self.stats_auto_recalc = stats_auto_recalc;
-        self
-    }
-
-    pub fn stats_persistent(mut self, stats_persistent: Option<OptionState>) -> Self {
-        self.stats_persistent = stats_persistent;
-        self
-    }
-
-    pub fn stats_sample_pages(mut self, stats_sample_pages: Option<u32>) -> Self {
-        self.stats_sample_pages = stats_sample_pages;
         self
     }
 
@@ -491,6 +303,11 @@ impl CreateTableBuilder {
 
     pub fn options(mut self, options: Option<Vec<SqlOption>>) -> Self {
         self.options = options;
+        self
+    }
+
+    pub fn plain_options(mut self, options: Vec<SqlOption>) -> Self {
+        self.plain_options = options;
         self
     }
 
@@ -601,35 +418,7 @@ impl CreateTableBuilder {
             without_rowid: self.without_rowid,
             like: self.like,
             clone: self.clone,
-            engine: self.engine,
             comment: self.comment,
-            auto_increment_offset: self.auto_increment_offset,
-            default_charset: self.default_charset,
-            collation: self.collation,
-            compression: self.compression,
-            encryption: self.encryption,
-            insert_method: self.insert_method,
-            key_block_size: self.key_block_size,
-            row_format: self.row_format,
-            data_directory: self.data_directory,
-            index_directory: self.index_directory,
-            pack_keys: self.pack_keys,
-            stats_auto_recalc: self.stats_auto_recalc,
-            stats_persistent: self.stats_persistent,
-            stats_sample_pages: self.stats_sample_pages,
-            delay_key_write: self.delay_key_write,
-            max_rows: self.max_rows,
-            min_rows: self.min_rows,
-            autoextend_size: self.autoextend_size,
-            avg_row_length: self.avg_row_length,
-            checksum: self.checksum,
-            connection: self.connection,
-            engine_attribute: self.engine_attribute,
-            password: self.password,
-            secondary_engine_attribute: self.secondary_engine_attribute,
-            start_transaction: self.start_transaction,
-            tablespace_option: self.tablespace_option,
-            union_tables: self.union_tables,
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
             primary_key: self.primary_key,
@@ -653,6 +442,7 @@ impl CreateTableBuilder {
             catalog: self.catalog,
             catalog_sync: self.catalog_sync,
             storage_serialization_policy: self.storage_serialization_policy,
+            plain_options: self.plain_options,
         })
     }
 }
@@ -686,35 +476,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 without_rowid,
                 like,
                 clone,
-                engine,
                 comment,
-                auto_increment_offset,
-                compression,
-                encryption,
-                insert_method,
-                key_block_size,
-                row_format,
-                data_directory,
-                index_directory,
-                pack_keys,
-                stats_auto_recalc,
-                stats_persistent,
-                stats_sample_pages,
-                delay_key_write,
-                max_rows,
-                min_rows,
-                autoextend_size,
-                avg_row_length,
-                checksum,
-                connection,
-                engine_attribute,
-                password,
-                secondary_engine_attribute,
-                start_transaction,
-                tablespace_option,
-                union_tables,
-                default_charset,
-                collation,
                 on_commit,
                 on_cluster,
                 primary_key,
@@ -738,6 +500,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog,
                 catalog_sync,
                 storage_serialization_policy,
+                plain_options,
             }) => Ok(Self {
                 or_replace,
                 temporary,
@@ -758,35 +521,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 without_rowid,
                 like,
                 clone,
-                engine,
                 comment,
-                auto_increment_offset,
-                compression,
-                encryption,
-                insert_method,
-                key_block_size,
-                row_format,
-                data_directory,
-                index_directory,
-                pack_keys,
-                stats_auto_recalc,
-                stats_persistent,
-                stats_sample_pages,
-                delay_key_write,
-                max_rows,
-                min_rows,
-                autoextend_size,
-                avg_row_length,
-                checksum,
-                connection,
-                engine_attribute,
-                password,
-                secondary_engine_attribute,
-                start_transaction,
-                tablespace_option,
-                union_tables,
-                default_charset,
-                collation,
                 on_commit,
                 on_cluster,
                 primary_key,
@@ -812,6 +547,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog,
                 catalog_sync,
                 storage_serialization_policy,
+                plain_options,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"
@@ -826,6 +562,7 @@ pub(crate) struct CreateTableConfiguration {
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub options: Option<Vec<SqlOption>>,
+    pub plain_options: Vec<SqlOption>,
 }
 
 #[cfg(test)]

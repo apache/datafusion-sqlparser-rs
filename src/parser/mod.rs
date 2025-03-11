@@ -10209,17 +10209,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a `WITH` clause, i.e. a `WITH` keyword followed by a `RECURSIVE` keyword
-    /// and a comma-separated list of CTE declarations.
-    fn parse_with_clause(&mut self) -> Result<With, ParserError> {
-        let with_token = self.get_current_token();
-        Ok(With {
-            with_token: with_token.clone().into(),
-            recursive: self.parse_keyword(Keyword::RECURSIVE),
-            cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
-        })
-    }
-
     /// Parse a query expression, i.e. a `SELECT` statement optionally
     /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
@@ -10227,7 +10216,12 @@ impl<'a> Parser<'a> {
     pub fn parse_query(&mut self) -> Result<Box<Query>, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
         let with = if self.parse_keyword(Keyword::WITH) {
-            Some(self.parse_with_clause()?)
+            let with_token = self.get_current_token();
+            Some(With {
+                with_token: with_token.clone().into(),
+                recursive: self.parse_keyword(Keyword::RECURSIVE),
+                cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
+            })
         } else {
             None
         };

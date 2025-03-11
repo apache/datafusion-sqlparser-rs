@@ -348,7 +348,7 @@ fn parse_create_table_with_defaults() {
             name,
             columns,
             constraints,
-            with_options,
+            table_options,
             if_not_exists: false,
             external: false,
             file_format: None,
@@ -485,6 +485,11 @@ fn parse_create_table_with_defaults() {
                 ]
             );
             assert!(constraints.is_empty());
+
+            let with_options = match table_options {
+                CreateTableOptions::With(options) => options,
+                _ => unreachable!(),
+            };
             assert_eq!(
                 with_options,
                 vec![
@@ -4668,7 +4673,6 @@ fn parse_create_table_with_alias() {
             name,
             columns,
             constraints,
-            with_options: _with_options,
             if_not_exists: false,
             external: false,
             file_format: None,
@@ -5078,7 +5082,11 @@ fn parse_at_time_zone() {
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
     match pg().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { with_options, .. }) => {
+        Statement::CreateTable(CreateTable { table_options, .. }) => {
+            let with_options = match table_options {
+                CreateTableOptions::With(options) => options,
+                _ => unreachable!(),
+            };
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
@@ -5506,43 +5514,13 @@ fn parse_trigger_related_functions() {
                 storage: None,
                 location: None
             }),
-            table_properties: vec![],
-            with_options: vec![],
             file_format: None,
             location: None,
             query: None,
             without_rowid: false,
             like: None,
             clone: None,
-            engine: None,
-            comment: None,
-            auto_increment_offset: None,
-            default_charset: None,
-            insert_method: None,
-            data_directory: None,
-            key_block_size: None,
-            pack_keys: None,
-            row_format: None,
-            stats_auto_recalc: None,
-            stats_persistent: None,
-            stats_sample_pages: None,
-            max_rows: None,
-            min_rows: None,
-            autoextend_size: None,
-            avg_row_length: None,
-            checksum: None,
-            connection: None,
-            engine_attribute: None,
-            password: None,
-            secondary_engine_attribute: None,
-            tablespace_option: None,
-            compression: None,
-            delay_key_write: None,
-            encryption: None,
-            start_transaction: None,
-            union_tables: None,
-            index_directory: None,
-            collation: None,
+            comment_after_column_def: None,
             on_commit: None,
             on_cluster: None,
             primary_key: None,
@@ -5550,7 +5528,6 @@ fn parse_trigger_related_functions() {
             partition_by: None,
             cluster_by: None,
             clustered_by: None,
-            options: None,
             inherits: None,
             strict: false,
             copy_grants: false,
@@ -5567,6 +5544,7 @@ fn parse_trigger_related_functions() {
             catalog: None,
             catalog_sync: None,
             storage_serialization_policy: None,
+            table_options: CreateTableOptions::None
         }
     );
 

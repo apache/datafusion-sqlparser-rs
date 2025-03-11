@@ -29,20 +29,15 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::parser::{
-    Compression, DelayKeyWrite, DirectoryOption, Encryption, InsertMethod, OptionState, RowFormat,
-    StorageType, TablespaceOption,
-};
-
 pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
     display_comma_separated, display_separated, query::InputFormatClause, Assignment, ClusteredBy,
-    CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
-    HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit,
-    OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting,
-    SqlOption, SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject,
-    TableWithJoins, Tag, WrappedCollection,
+    CommentDef, CreateTableOptions, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat,
+    HiveIOFormat, HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName,
+    OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem,
+    Setting, SqliteOnConflict, StorageSerializationPolicy, TableObject, TableWithJoins, Tag,
+    WrappedCollection,
 };
 
 /// Index column type.
@@ -151,43 +146,17 @@ pub struct CreateTable {
     pub constraints: Vec<TableConstraint>,
     pub hive_distribution: HiveDistributionStyle,
     pub hive_formats: Option<HiveFormat>,
-    pub table_properties: Vec<SqlOption>,
-    pub with_options: Vec<SqlOption>,
+    pub table_options: CreateTableOptions,
     pub file_format: Option<FileFormat>,
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub engine: Option<TableEngine>,
-    pub comment: Option<CommentDef>,
-    pub auto_increment_offset: Option<u32>,
-    pub key_block_size: Option<u32>,
-    pub max_rows: Option<u32>,
-    pub min_rows: Option<u32>,
-    pub autoextend_size: Option<u32>,
-    pub avg_row_length: Option<u32>,
-    pub checksum: Option<bool>,
-    pub connection: Option<String>,
-    pub engine_attribute: Option<String>,
-    pub password: Option<String>,
-    pub secondary_engine_attribute: Option<String>,
-    pub tablespace_option: Option<TablespaceOption>,
-    pub row_format: Option<RowFormat>,
-    pub insert_method: Option<InsertMethod>,
-    pub compression: Option<Compression>,
-    pub delay_key_write: Option<DelayKeyWrite>,
-    pub encryption: Option<Encryption>,
-    pub pack_keys: Option<OptionState>,
-    pub stats_auto_recalc: Option<OptionState>,
-    pub stats_persistent: Option<OptionState>,
-    pub stats_sample_pages: Option<u32>,
-    pub start_transaction: Option<bool>,
-    pub union_tables: Option<Vec<String>>,
-    pub data_directory: Option<DirectoryOption>,
-    pub index_directory: Option<DirectoryOption>,
-    pub default_charset: Option<String>,
-    pub collation: Option<String>,
+    // For Hive dialect, the table comment is after the column definitions without `=`,
+    // so we need to add an extra variant to allow to identify this case when displaying.
+    // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
+    pub comment_after_column_def: Option<CommentDef>,
     pub on_commit: Option<OnCommit>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
@@ -208,9 +177,6 @@ pub struct CreateTable {
     /// Hive: Table clustering column list.
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,
-    /// BigQuery: Table options list.
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-    pub options: Option<Vec<SqlOption>>,
     /// Postgres `INHERITs` clause, which contains the list of tables from which
     /// the new table inherits.
     /// <https://www.postgresql.org/docs/current/ddl-inherit.html>
@@ -311,7 +277,7 @@ impl Display for CreateTable {
 
         // Hive table comment should be after column definitions, please refer to:
         // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
-        if let Some(CommentDef::AfterColumnDefsWithoutEq(comment)) = &self.comment {
+        if let Some(comment) = &self.comment_after_column_def {
             write!(f, " COMMENT '{comment}'")?;
         }
 
@@ -404,35 +370,14 @@ impl Display for CreateTable {
             }
             write!(f, " LOCATION '{}'", self.location.as_ref().unwrap())?;
         }
-        if !self.table_properties.is_empty() {
-            write!(
-                f,
-                " TBLPROPERTIES ({})",
-                display_comma_separated(&self.table_properties)
-            )?;
-        }
-        if !self.with_options.is_empty() {
-            write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
-        }
-        if let Some(engine) = &self.engine {
-            write!(f, " ENGINE={engine}")?;
-        }
-        if let Some(comment_def) = &self.comment {
-            match comment_def {
-                CommentDef::WithEq(comment) => {
-                    write!(f, " COMMENT = '{comment}'")?;
-                }
-                CommentDef::WithoutEq(comment) => {
-                    write!(f, " COMMENT '{comment}'")?;
-                }
-                // For CommentDef::AfterColumnDefsWithoutEq will be displayed after column definition
-                CommentDef::AfterColumnDefsWithoutEq(_) => (),
-            }
+
+        match &self.table_options {
+            options @ CreateTableOptions::With(_)
+            | options @ CreateTableOptions::Plain(_)
+            | options @ CreateTableOptions::TableProperties(_) => write!(f, " {}", options)?,
+            _ => (),
         }
 
-        if let Some(auto_increment_offset) = self.auto_increment_offset {
-            write!(f, " AUTO_INCREMENT={auto_increment_offset}")?;
-        }
         if let Some(primary_key) = &self.primary_key {
             write!(f, " PRIMARY KEY {}", primary_key)?;
         }
@@ -448,15 +393,9 @@ impl Display for CreateTable {
         if let Some(cluster_by) = self.cluster_by.as_ref() {
             write!(f, " CLUSTER BY {cluster_by}")?;
         }
-
-        if let Some(options) = self.options.as_ref() {
-            write!(
-                f,
-                " OPTIONS({})",
-                display_comma_separated(options.as_slice())
-            )?;
+        if let options @ CreateTableOptions::Options(_) = &self.table_options {
+            write!(f, " {}", options)?;
         }
-
         if let Some(external_volume) = self.external_volume.as_ref() {
             write!(f, " EXTERNAL_VOLUME = '{external_volume}'")?;
         }
@@ -530,165 +469,6 @@ impl Display for CreateTable {
 
         if let Some(tag) = &self.with_tags {
             write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
-        }
-
-        if let Some(default_charset) = &self.default_charset {
-            write!(f, " DEFAULT CHARSET={default_charset}")?;
-        }
-        if let Some(collation) = &self.collation {
-            write!(f, " COLLATE={collation}")?;
-        }
-
-        if let Some(insert_method) = &self.insert_method {
-            match insert_method {
-                InsertMethod::No => write!(f, " INSERT_METHOD=NO")?,
-                InsertMethod::First => write!(f, " INSERT_METHOD=FIRST")?,
-                InsertMethod::Last => write!(f, " INSERT_METHOD=LAST")?,
-            }
-        }
-
-        if let Some(key_block_size) = self.key_block_size {
-            write!(f, " KEY_BLOCK_SIZE={key_block_size}")?;
-        }
-
-        if let Some(row_format) = &self.row_format {
-            match row_format {
-                RowFormat::Default => write!(f, " ROW_FORMAT=DEFAULT")?,
-                RowFormat::Dynamic => write!(f, " ROW_FORMAT=DYNAMIC")?,
-                RowFormat::Fixed => write!(f, " ROW_FORMAT=FIXED")?,
-                RowFormat::Compressed => write!(f, " ROW_FORMAT=COMPRESSED")?,
-                RowFormat::Redundant => write!(f, " ROW_FORMAT=REDUNDANT")?,
-                RowFormat::Compact => write!(f, " ROW_FORMAT=COMPACT")?,
-            }
-        }
-
-        if let Some(data_dir) = &self.data_directory {
-            write!(f, " DATA DIRECTORY='{}'", data_dir.path)?;
-        }
-
-        if let Some(index_dir) = &self.index_directory {
-            write!(f, " INDEX DIRECTORY='{}'", index_dir.path)?;
-        }
-
-        if let Some(pack_keys) = &self.pack_keys {
-            match pack_keys {
-                OptionState::Default => write!(f, " PACK_KEYS=DEFAULT")?,
-                OptionState::One => write!(f, " PACK_KEYS=1")?,
-                OptionState::Zero => write!(f, " PACK_KEYS=0")?,
-            }
-        }
-
-        if let Some(stats_auto_recalc) = &self.stats_auto_recalc {
-            match stats_auto_recalc {
-                OptionState::Default => write!(f, " STATS_AUTO_RECALC=DEFAULT")?,
-                OptionState::One => write!(f, " STATS_AUTO_RECALC=1")?,
-                OptionState::Zero => write!(f, " STATS_AUTO_RECALC=0")?,
-            }
-        }
-
-        if let Some(stats_persistent) = &self.stats_persistent {
-            match stats_persistent {
-                OptionState::Default => write!(f, " STATS_PERSISTENT=DEFAULT")?,
-                OptionState::One => write!(f, " STATS_PERSISTENT=1")?,
-                OptionState::Zero => write!(f, " STATS_PERSISTENT=0")?,
-            }
-        }
-
-        if let Some(stats_sample_pages) = self.stats_sample_pages {
-            write!(f, " STATS_SAMPLE_PAGES={stats_sample_pages}")?;
-        }
-
-        if let Some(delay_key_write) = &self.delay_key_write {
-            match delay_key_write {
-                DelayKeyWrite::Enabled => write!(f, " DELAY_KEY_WRITE=1")?,
-                DelayKeyWrite::Disabled => write!(f, " DELAY_KEY_WRITE=0")?,
-            }
-        }
-
-        if let Some(compression) = &self.compression {
-            match compression {
-                Compression::Lz4 => write!(f, " COMPRESSION=LZ4")?,
-                Compression::Zlib => write!(f, " COMPRESSION=ZLIB")?,
-                Compression::None => write!(f, " COMPRESSION=NONE")?,
-            }
-        }
-
-        if let Some(encryption) = &self.encryption {
-            match encryption {
-                Encryption::Yes => write!(f, " ENCRYPTION='Y'")?,
-                Encryption::No => write!(f, " ENCRYPTION='N'")?,
-            }
-        }
-
-        if let Some(max_rows) = &self.max_rows {
-            write!(f, " MAX_ROWS={}", max_rows)?;
-        }
-
-        if let Some(min_rows) = &self.min_rows {
-            write!(f, " MIN_ROWS={}", min_rows)?;
-        }
-
-        if let Some(autoextend_size) = &self.autoextend_size {
-            write!(f, " AUTOEXTEND_SIZE={}", autoextend_size)?;
-        }
-
-        if let Some(avg_row_length) = &self.avg_row_length {
-            write!(f, " AVG_ROW_LENGTH={}", avg_row_length)?;
-        }
-
-        if let Some(checksum) = &self.checksum {
-            match checksum {
-                true => write!(f, " CHECKSUM=1")?,
-                false => write!(f, " CHECKSUM=0")?,
-            }
-        }
-
-        if let Some(connection) = &self.connection {
-            write!(f, " CONNECTION='{}'", connection)?;
-        }
-
-        if let Some(engine_attribute) = &self.engine_attribute {
-            write!(f, " ENGINE_ATTRIBUTE='{}'", engine_attribute)?;
-        }
-
-        if let Some(password) = &self.password {
-            write!(f, " PASSWORD='{}'", password)?;
-        }
-
-        if let Some(secondary_engine_attribute) = &self.secondary_engine_attribute {
-            write!(
-                f,
-                " SECONDARY_ENGINE_ATTRIBUTE='{}'",
-                secondary_engine_attribute
-            )?;
-        }
-
-        if self.start_transaction.unwrap_or(false) {
-            write!(f, " START TRANSACTION")?;
-        }
-
-        if let Some(tablespace_option) = &self.tablespace_option {
-            write!(f, " TABLESPACE {}", tablespace_option.name)?;
-            if let Some(storage) = &tablespace_option.storage {
-                match storage {
-                    StorageType::Disk => write!(f, " STORAGE DISK")?,
-                    StorageType::Memory => write!(f, " STORAGE MEMORY")?,
-                }
-            }
-        }
-
-        if let Some(union_tables) = &self.union_tables {
-            if !union_tables.is_empty() {
-                write!(
-                    f,
-                    " UNION=({})",
-                    union_tables
-                        .iter()
-                        .map(|table| table.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                )?;
-            }
         }
 
         if self.on_commit.is_some() {

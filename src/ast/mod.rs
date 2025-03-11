@@ -2681,6 +2681,18 @@ pub enum CreateTableOptions {
     ///
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     Options(Vec<SqlOption>),
+
+    /// Plain options, options which are not part on any declerative statement e.g. WITH/OPTIONS/...
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    Plain(Vec<SqlOption>),
+
+    TableProperties(Vec<SqlOption>),
+}
+
+impl Default for CreateTableOptions {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 impl fmt::Display for CreateTableOptions {
@@ -2691,6 +2703,12 @@ impl fmt::Display for CreateTableOptions {
             }
             CreateTableOptions::Options(options) => {
                 write!(f, "OPTIONS({})", display_comma_separated(options))
+            }
+            CreateTableOptions::TableProperties(options) => {
+                write!(f, "TBLPROPERTIES ({})", display_comma_separated(options))
+            }
+            CreateTableOptions::Plain(options) => {
+                write!(f, "{}", display_separated(options, " "))
             }
             CreateTableOptions::None => Ok(()),
         }
@@ -7548,7 +7566,10 @@ pub enum SqlOption {
     /// Any option that consists of a key value pair where the value is an expression. e.g.
     ///
     ///   WITH(DISTRIBUTION = ROUND_ROBIN)
-    KeyValue { key: Ident, value: Expr },
+    KeyValue {
+        key: Ident,
+        value: Expr,
+    },
     /// One or more table partitions and represents which partition the boundary values belong to,
     /// e.g.
     ///
@@ -7560,6 +7581,16 @@ pub enum SqlOption {
         range_direction: Option<PartitionRangeDirection>,
         for_values: Vec<Expr>,
     },
+
+    Comment(CommentDef),
+
+    TableSpace(TablespaceOption),
+
+    // Advanced parameter formations
+    // UNION  = (tbl_name[,tbl_name]...)
+    // ENGINE = ReplicatedMergeTree('/table_name','{replica}', ver)
+    // ENGINE = SummingMergeTree([columns])
+    NamedParenthesizedList(NamedParenthesizedList),
 }
 
 impl fmt::Display for SqlOption {
@@ -7591,8 +7622,50 @@ impl fmt::Display for SqlOption {
                     display_comma_separated(for_values)
                 )
             }
+            SqlOption::TableSpace(tablespace_option) => {
+                write!(f, "TABLESPACE {}", tablespace_option.name)?;
+                match tablespace_option.storage {
+                    Some(StorageType::Disk) => write!(f, " STORAGE DISK"),
+                    Some(StorageType::Memory) => write!(f, " STORAGE MEMORY"),
+                    _ => Ok(()),
+                }
+            }
+            SqlOption::Comment(comment) => match comment {
+                CommentDef::WithEq(comment) => {
+                    write!(f, "COMMENT = '{comment}'")
+                }
+                CommentDef::WithoutEq(comment) => {
+                    write!(f, "COMMENT '{comment}'")
+                }
+            },
+            SqlOption::NamedParenthesizedList(value) => {
+                write!(f, "{} = ", value.key)?;
+                if let Some(key) = &value.value {
+                    write!(f, "{}", key)?;
+                }
+                if !value.parameters.is_empty() {
+                    write!(f, "({})", display_comma_separated(&value.parameters))?
+                }
+                Ok(())
+            }
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum StorageType {
+    Disk,
+    Memory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TablespaceOption {
+    pub name: String,
+    pub storage: Option<StorageType>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -8860,27 +8933,13 @@ impl Display for CreateViewParams {
     }
 }
 
-/// Engine of DB. Some warehouse has parameters of engine, e.g. [ClickHouse]
-///
-/// [ClickHouse]: https://clickhouse.com/docs/en/engines/table-engines
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct TableEngine {
-    pub name: String,
-    pub parameters: Option<Vec<Ident>>,
-}
-
-impl Display for TableEngine {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name)?;
-
-        if let Some(parameters) = self.parameters.as_ref() {
-            write!(f, "({})", display_comma_separated(parameters))?;
-        }
-
-        Ok(())
-    }
+pub struct NamedParenthesizedList {
+    pub key: Ident,
+    pub value: Option<Ident>,
+    pub parameters: Vec<Ident>,
 }
 
 /// Snowflake `WITH ROW ACCESS POLICY policy_name ON (identifier, ...)`
@@ -8944,18 +9003,12 @@ pub enum CommentDef {
     /// Does not include `=` when printing the comment, as `COMMENT 'comment'`
     WithEq(String),
     WithoutEq(String),
-    // For Hive dialect, the table comment is after the column definitions without `=`,
-    // so we need to add an extra variant to allow to identify this case when displaying.
-    // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
-    AfterColumnDefsWithoutEq(String),
 }
 
 impl Display for CommentDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CommentDef::WithEq(comment)
-            | CommentDef::WithoutEq(comment)
-            | CommentDef::AfterColumnDefsWithoutEq(comment) => write!(f, "{comment}"),
+            CommentDef::WithEq(comment) | CommentDef::WithoutEq(comment) => write!(f, "{comment}"),
         }
     }
 }

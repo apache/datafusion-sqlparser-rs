@@ -10419,7 +10419,9 @@ impl<'a> Parser<'a> {
                     let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;
                     pipe_operators.push(PipeOperator::OrderBy { exprs })
                 }
-                _ => {}
+                unhandled => {
+                    unreachable!("`expect_one_of_keywords` further up allowed unhandled keyword: {unhandled:?}");
+                }
             }
         }
         Ok(pipe_operators)

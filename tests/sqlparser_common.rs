@@ -7384,6 +7384,33 @@ fn parse_recursive_cte() {
 }
 
 #[test]
+fn parse_cte_in_data_modification_statements() {
+    match verified_stmt("WITH x AS (SELECT 1) UPDATE t SET bar = (SELECT * FROM x)") {
+        Statement::Query(query) => {
+            assert_eq!(query.with.unwrap().to_string(), "WITH x AS (SELECT 1)");
+            assert!(matches!(*query.body, SetExpr::Update(_)));
+        }
+        other => panic!("Expected: UPDATE, got: {:?}", other),
+    }
+
+    match verified_stmt("WITH t (x) AS (SELECT 9) DELETE FROM q WHERE id IN (SELECT x FROM t)") {
+        Statement::Query(query) => {
+            assert_eq!(query.with.unwrap().to_string(), "WITH t (x) AS (SELECT 9)");
+            assert!(matches!(*query.body, SetExpr::Delete(_)));
+        }
+        other => panic!("Expected: DELETE, got: {:?}", other),
+    }
+
+    match verified_stmt("WITH x AS (SELECT 42) INSERT INTO t SELECT foo FROM x") {
+        Statement::Query(query) => {
+            assert_eq!(query.with.unwrap().to_string(), "WITH x AS (SELECT 42)");
+            assert!(matches!(*query.body, SetExpr::Insert(_)));
+        }
+        other => panic!("Expected: INSERT, got: {:?}", other),
+    }
+}
+
+#[test]
 fn parse_derived_tables() {
     let sql = "SELECT a.x, b.y FROM (SELECT x FROM foo) AS a CROSS JOIN (SELECT y FROM bar) AS b";
     let _ = verified_only_select(sql);

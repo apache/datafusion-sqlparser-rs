@@ -29,8 +29,8 @@ use super::{
     Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
     FunctionArguments, GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate,
     InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
-    MatchRecognizePattern, Measure, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset,
-    OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition,
+    LimitClause, MatchRecognizePattern, Measure, NamedWindowDefinition, ObjectName, ObjectNamePart,
+    Offset, OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition,
     PivotValueSource, ProjectionSelect, Query, ReferentialAction, RenameSelectItem,
     ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
     Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
@@ -94,9 +94,7 @@ impl Spanned for Query {
             with,
             body,
             order_by,
-            limit,
-            limit_by,
-            offset,
+            limit_clause,
             fetch,
             locks: _,         // todo
             for_clause: _,    // todo, mssql specific
@@ -109,11 +107,28 @@ impl Spanned for Query {
                 .map(|i| i.span())
                 .chain(core::iter::once(body.span()))
                 .chain(order_by.as_ref().map(|i| i.span()))
-                .chain(limit.as_ref().map(|i| i.span()))
-                .chain(limit_by.iter().map(|i| i.span()))
-                .chain(offset.as_ref().map(|i| i.span()))
+                .chain(limit_clause.as_ref().map(|i| i.span()))
                 .chain(fetch.as_ref().map(|i| i.span())),
         )
+    }
+}
+
+impl Spanned for LimitClause {
+    fn span(&self) -> Span {
+        match self {
+            LimitClause::LimitOffset {
+                limit,
+                offset,
+                limit_by,
+            } => union_spans(
+                limit
+                    .iter()
+                    .map(|i| i.span())
+                    .chain(offset.as_ref().map(|i| i.span()))
+                    .chain(limit_by.iter().map(|i| i.span())),
+            ),
+            LimitClause::OffsetCommaLimit { offset, limit } => offset.span().union(&limit.span()),
+        }
     }
 }
 

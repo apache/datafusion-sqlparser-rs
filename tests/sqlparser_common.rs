@@ -483,9 +483,7 @@ fn parse_update_set_from() {
                             flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
-                        limit: None,
-                        limit_by: vec![],
-                        offset: None,
+                        limit_clause: None,
                         fetch: None,
                         locks: vec![],
                         for_clause: None,
@@ -900,7 +898,12 @@ fn parse_simple_select() {
     assert!(select.distinct.is_none());
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
-    assert_eq!(Some(Expr::value(number("5"))), select.limit);
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: Some(Expr::value(number("5"))),
+        offset: None,
+        limit_by: vec![],
+    };
+    assert_eq!(Some(expected_limit_clause), select.limit_clause);
 }
 
 #[test]
@@ -909,13 +912,30 @@ fn parse_limit() {
 }
 
 #[test]
+fn parse_invalid_limit_by() {
+    all_dialects()
+        .parse_sql_statements("SELECT * FROM user BY name")
+        .expect_err("BY without LIMIT");
+}
+
+#[test]
 fn parse_limit_is_not_an_alias() {
     // In dialects supporting LIMIT it shouldn't be parsed as a table alias
     let ast = verified_query("SELECT id FROM customer LIMIT 1");
-    assert_eq!(Some(Expr::value(number("1"))), ast.limit);
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: Some(Expr::value(number("1"))),
+        offset: None,
+        limit_by: vec![],
+    };
+    assert_eq!(Some(expected_limit_clause), ast.limit_clause);
 
     let ast = verified_query("SELECT 1 LIMIT 5");
-    assert_eq!(Some(Expr::value(number("5"))), ast.limit);
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: Some(Expr::value(number("5"))),
+        offset: None,
+        limit_by: vec![],
+    };
+    assert_eq!(Some(expected_limit_clause), ast.limit_clause);
 }
 
 #[test]
@@ -2493,7 +2513,12 @@ fn parse_select_order_by_limit() {
         ]),
         select.order_by.expect("ORDER BY expected").kind
     );
-    assert_eq!(Some(Expr::value(number("2"))), select.limit);
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: Some(Expr::value(number("2"))),
+        offset: None,
+        limit_by: vec![],
+    };
+    assert_eq!(Some(expected_limit_clause), select.limit_clause);
 }
 
 #[test]
@@ -2654,7 +2679,12 @@ fn parse_select_order_by_nulls_order() {
         ]),
         select.order_by.expect("ORDER BY expeccted").kind
     );
-    assert_eq!(Some(Expr::value(number("2"))), select.limit);
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: Some(Expr::value(number("2"))),
+        offset: None,
+        limit_by: vec![],
+    };
+    assert_eq!(Some(expected_limit_clause), select.limit_clause);
 }
 
 #[test]
@@ -2863,6 +2893,14 @@ fn parse_limit_accepts_all() {
     one_statement_parses_to(
         "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT ALL",
         "SELECT id, fname, lname FROM customer WHERE id = 1",
+    );
+    one_statement_parses_to(
+        "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT ALL OFFSET 1",
+        "SELECT id, fname, lname FROM customer WHERE id = 1 OFFSET 1",
+    );
+    one_statement_parses_to(
+        "SELECT id, fname, lname FROM customer WHERE id = 1 OFFSET 1 LIMIT ALL",
+        "SELECT id, fname, lname FROM customer WHERE id = 1 OFFSET 1",
     );
 }
 
@@ -4247,9 +4285,7 @@ fn parse_create_table_as_table() {
             schema_name: None,
         }))),
         order_by: None,
-        limit: None,
-        limit_by: vec![],
-        offset: None,
+        limit_clause: None,
         fetch: None,
         locks: vec![],
         for_clause: None,
@@ -4274,9 +4310,7 @@ fn parse_create_table_as_table() {
             schema_name: Some("schema_name".to_string()),
         }))),
         order_by: None,
-        limit: None,
-        limit_by: vec![],
-        offset: None,
+        limit_clause: None,
         fetch: None,
         locks: vec![],
         for_clause: None,
@@ -6273,9 +6307,7 @@ fn parse_interval_and_or_xor() {
             flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
-        limit: None,
-        limit_by: vec![],
-        offset: None,
+        limit_clause: None,
         fetch: None,
         locks: vec![],
         for_clause: None,
@@ -8175,55 +8207,65 @@ fn parse_offset() {
     let dialects =
         all_dialects_where(|d| !d.is_column_alias(&Keyword::OFFSET, &mut Parser::new(d)));
 
-    let expect = Some(Offset {
-        value: Expr::value(number("2")),
-        rows: OffsetRows::Rows,
+    let expected_limit_clause = &Some(LimitClause::LimitOffset {
+        limit: None,
+        offset: Some(Offset {
+            value: Expr::value(number("2")),
+            rows: OffsetRows::Rows,
+        }),
+        limit_by: vec![],
     });
     let ast = dialects.verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
-    assert_eq!(ast.offset, expect);
+    assert_eq!(&ast.limit_clause, expected_limit_clause);
     let ast = dialects.verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
-    assert_eq!(ast.offset, expect);
+    assert_eq!(&ast.limit_clause, expected_limit_clause);
     let ast = dialects.verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
-    assert_eq!(ast.offset, expect);
+    assert_eq!(&ast.limit_clause, expected_limit_clause);
     let ast =
         dialects.verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
-    assert_eq!(ast.offset, expect);
+    assert_eq!(&ast.limit_clause, expected_limit_clause);
     let ast =
         dialects.verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
-    assert_eq!(ast.offset, expect);
+    assert_eq!(&ast.limit_clause, expected_limit_clause);
     match *ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(subquery.offset, expect);
+                assert_eq!(&subquery.limit_clause, expected_limit_clause);
             }
             _ => panic!("Test broke"),
         },
         _ => panic!("Test broke"),
     }
-    let ast = dialects.verified_query("SELECT 'foo' OFFSET 0 ROWS");
-    assert_eq!(
-        ast.offset,
-        Some(Offset {
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: None,
+        offset: Some(Offset {
             value: Expr::value(number("0")),
             rows: OffsetRows::Rows,
-        })
-    );
-    let ast = dialects.verified_query("SELECT 'foo' OFFSET 1 ROW");
-    assert_eq!(
-        ast.offset,
-        Some(Offset {
+        }),
+        limit_by: vec![],
+    };
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 0 ROWS");
+    assert_eq!(ast.limit_clause, Some(expected_limit_clause));
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: None,
+        offset: Some(Offset {
             value: Expr::value(number("1")),
             rows: OffsetRows::Row,
-        })
-    );
-    let ast = dialects.verified_query("SELECT 'foo' OFFSET 1");
-    assert_eq!(
-        ast.offset,
-        Some(Offset {
-            value: Expr::value(number("1")),
+        }),
+        limit_by: vec![],
+    };
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 1 ROW");
+    assert_eq!(ast.limit_clause, Some(expected_limit_clause));
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: None,
+        offset: Some(Offset {
+            value: Expr::value(number("2")),
             rows: OffsetRows::None,
-        })
-    );
+        }),
+        limit_by: vec![],
+    };
+    let ast = dialects.verified_query("SELECT 'foo' OFFSET 2");
+    assert_eq!(ast.limit_clause, Some(expected_limit_clause));
 }
 
 #[test]
@@ -8273,13 +8315,15 @@ fn parse_fetch() {
     let ast = verified_query(
         "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY",
     );
-    assert_eq!(
-        ast.offset,
-        Some(Offset {
+    let expected_limit_clause = Some(LimitClause::LimitOffset {
+        limit: None,
+        offset: Some(Offset {
             value: Expr::value(number("2")),
             rows: OffsetRows::Rows,
-        })
-    );
+        }),
+        limit_by: vec![],
+    });
+    assert_eq!(ast.limit_clause, expected_limit_clause);
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query(
         "SELECT foo FROM (SELECT * FROM bar FETCH FIRST 2 ROWS ONLY) FETCH FIRST 2 ROWS ONLY",
@@ -8295,24 +8339,20 @@ fn parse_fetch() {
         _ => panic!("Test broke"),
     }
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(
-        ast.offset,
-        Some(Offset {
+    let expected_limit_clause = &Some(LimitClause::LimitOffset {
+        limit: None,
+        offset: Some(Offset {
             value: Expr::value(number("2")),
             rows: OffsetRows::Rows,
-        })
-    );
+        }),
+        limit_by: vec![],
+    });
+    assert_eq!(&ast.limit_clause, expected_limit_clause);
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
     match *ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(
-                    subquery.offset,
-                    Some(Offset {
-                        value: Expr::value(number("2")),
-                        rows: OffsetRows::Rows,
-                    })
-                );
+                assert_eq!(&subquery.limit_clause, expected_limit_clause);
                 assert_eq!(subquery.fetch, fetch_first_two_rows_only);
             }
             _ => panic!("Test broke"),
@@ -9358,9 +9398,7 @@ fn parse_merge() {
                             flavor: SelectFlavor::Standard,
                         }))),
                         order_by: None,
-                        limit: None,
-                        limit_by: vec![],
-                        offset: None,
+                        limit_clause: None,
                         fetch: None,
                         locks: vec![],
                         for_clause: None,
@@ -9678,21 +9716,18 @@ fn test_placeholder() {
         })
     );
 
-    let sql = "SELECT * FROM student LIMIT $1 OFFSET $2";
-    let ast = dialects.verified_query(sql);
-    assert_eq!(
-        ast.limit,
-        Some(Expr::Value(
-            (Value::Placeholder("$1".into())).with_empty_span()
-        ))
-    );
-    assert_eq!(
-        ast.offset,
-        Some(Offset {
+    let ast = dialects.verified_query("SELECT * FROM student LIMIT $1 OFFSET $2");
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: Some(Expr::Value(
+            (Value::Placeholder("$1".into())).with_empty_span(),
+        )),
+        offset: Some(Offset {
             value: Expr::Value((Value::Placeholder("$2".into())).with_empty_span()),
             rows: OffsetRows::None,
         }),
-    );
+        limit_by: vec![],
+    };
+    assert_eq!(ast.limit_clause, Some(expected_limit_clause));
 
     let dialects = TestedDialects::new(vec![
         Box::new(GenericDialect {}),
@@ -9772,40 +9807,34 @@ fn verified_expr(query: &str) -> Expr {
 #[test]
 fn parse_offset_and_limit() {
     let sql = "SELECT foo FROM bar LIMIT 1 OFFSET 2";
-    let expect = Some(Offset {
-        value: Expr::value(number("2")),
-        rows: OffsetRows::None,
+    let expected_limit_clause = Some(LimitClause::LimitOffset {
+        limit: Some(Expr::value(number("1"))),
+        offset: Some(Offset {
+            value: Expr::value(number("2")),
+            rows: OffsetRows::None,
+        }),
+        limit_by: vec![],
     });
     let ast = verified_query(sql);
-    assert_eq!(ast.offset, expect);
-    assert_eq!(ast.limit, Some(Expr::value(number("1"))));
+    assert_eq!(ast.limit_clause, expected_limit_clause);
 
     // different order is OK
     one_statement_parses_to("SELECT foo FROM bar OFFSET 2 LIMIT 1", sql);
 
     // mysql syntax is ok for some dialects
-    TestedDialects::new(vec![
-        Box::new(GenericDialect {}),
-        Box::new(MySqlDialect {}),
-        Box::new(SQLiteDialect {}),
-        Box::new(ClickHouseDialect {}),
-    ])
-    .one_statement_parses_to("SELECT foo FROM bar LIMIT 2, 1", sql);
+    all_dialects_where(|d| d.supports_limit_comma())
+        .verified_query("SELECT foo FROM bar LIMIT 2, 1");
 
     // expressions are allowed
     let sql = "SELECT foo FROM bar LIMIT 1 + 2 OFFSET 3 * 4";
     let ast = verified_query(sql);
-    assert_eq!(
-        ast.limit,
-        Some(Expr::BinaryOp {
+    let expected_limit_clause = LimitClause::LimitOffset {
+        limit: Some(Expr::BinaryOp {
             left: Box::new(Expr::value(number("1"))),
             op: BinaryOperator::Plus,
             right: Box::new(Expr::value(number("2"))),
         }),
-    );
-    assert_eq!(
-        ast.offset,
-        Some(Offset {
+        offset: Some(Offset {
             value: Expr::BinaryOp {
                 left: Box::new(Expr::value(number("3"))),
                 op: BinaryOperator::Multiply,
@@ -9813,7 +9842,12 @@ fn parse_offset_and_limit() {
             },
             rows: OffsetRows::None,
         }),
-    );
+        limit_by: vec![],
+    };
+    assert_eq!(ast.limit_clause, Some(expected_limit_clause),);
+
+    // OFFSET without LIMIT
+    verified_stmt("SELECT foo FROM bar OFFSET 2");
 
     // Can't repeat OFFSET / LIMIT
     let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 OFFSET 2");
@@ -11227,9 +11261,7 @@ fn parse_unload() {
                     flavor: SelectFlavor::Standard,
                 }))),
                 with: None,
-                limit: None,
-                limit_by: vec![],
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -12400,9 +12432,7 @@ fn test_extract_seconds_ok() {
             flavor: SelectFlavor::Standard,
         }))),
         order_by: None,
-        limit: None,
-        limit_by: vec![],
-        offset: None,
+        limit_clause: None,
         fetch: None,
         locks: vec![],
         for_clause: None,
@@ -14265,11 +14295,9 @@ fn test_select_from_first() {
                 flavor,
             }))),
             order_by: None,
-            limit: None,
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
-            limit_by: vec![],
             for_clause: None,
             settings: None,
             format_clause: None,

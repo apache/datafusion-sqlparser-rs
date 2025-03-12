@@ -9491,6 +9491,60 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_optional_limit_clause(&mut self) -> Result<Option<LimitClause>, ParserError> {
+        let mut offset = if self.parse_keyword(Keyword::OFFSET) {
+            Some(self.parse_offset()?)
+        } else {
+            None
+        };
+
+        let (limit, limit_by) = if self.parse_keyword(Keyword::LIMIT) {
+            let expr = self.parse_limit()?;
+
+            if self.dialect.supports_limit_comma()
+                && offset.is_none()
+                && expr.is_some() // ALL not supported with comma
+                && self.consume_token(&Token::Comma)
+            {
+                let offset = expr.ok_or_else(|| {
+                    ParserError::ParserError(
+                        "Missing offset for LIMIT <offset>, <limit>".to_string(),
+                    )
+                })?;
+                return Ok(Some(LimitClause::OffsetCommaLimit {
+                    offset,
+                    limit: self.parse_expr()?,
+                }));
+            }
+
+            let limit_by = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+                && self.parse_keyword(Keyword::BY)
+            {
+                Some(self.parse_comma_separated(Parser::parse_expr)?)
+            } else {
+                None
+            };
+
+            (Some(expr), limit_by)
+        } else {
+            (None, None)
+        };
+
+        if offset.is_none() && limit.is_some() && self.parse_keyword(Keyword::OFFSET) {
+            offset = Some(self.parse_offset()?);
+        }
+
+        if offset.is_some() || (limit.is_some() && limit != Some(None)) || limit_by.is_some() {
+            Ok(Some(LimitClause::LimitOffset {
+                limit: limit.unwrap_or_default(),
+                offset,
+                limit_by: limit_by.unwrap_or_default(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Parse a table object for insertion
     /// e.g. `some_database.some_table` or `FUNCTION some_table_func(...)`
     pub fn parse_table_object(&mut self) -> Result<TableObject, ParserError> {
@@ -10231,10 +10285,8 @@ impl<'a> Parser<'a> {
             Ok(Query {
                 with,
                 body: self.parse_insert_setexpr_boxed()?,
-                limit: None,
-                limit_by: vec![],
                 order_by: None,
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -10246,10 +10298,8 @@ impl<'a> Parser<'a> {
             Ok(Query {
                 with,
                 body: self.parse_update_setexpr_boxed()?,
-                limit: None,
-                limit_by: vec![],
                 order_by: None,
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -10261,10 +10311,8 @@ impl<'a> Parser<'a> {
             Ok(Query {
                 with,
                 body: self.parse_delete_setexpr_boxed()?,
-                limit: None,
-                limit_by: vec![],
+                limit_clause: None,
                 order_by: None,
-                offset: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -10277,40 +10325,7 @@ impl<'a> Parser<'a> {
 
             let order_by = self.parse_optional_order_by()?;
 
-            let mut limit = None;
-            let mut offset = None;
-
-            for _x in 0..2 {
-                if limit.is_none() && self.parse_keyword(Keyword::LIMIT) {
-                    limit = self.parse_limit()?
-                }
-
-                if offset.is_none() && self.parse_keyword(Keyword::OFFSET) {
-                    offset = Some(self.parse_offset()?)
-                }
-
-                if self.dialect.supports_limit_comma()
-                    && limit.is_some()
-                    && offset.is_none()
-                    && self.consume_token(&Token::Comma)
-                {
-                    // MySQL style LIMIT x,y => LIMIT y OFFSET x.
-                    // Check <https://dev.mysql.com/doc/refman/8.0/en/select.html> for more details.
-                    offset = Some(Offset {
-                        value: limit.unwrap(),
-                        rows: OffsetRows::None,
-                    });
-                    limit = Some(self.parse_expr()?);
-                }
-            }
-
-            let limit_by = if dialect_of!(self is ClickHouseDialect | GenericDialect)
-                && self.parse_keyword(Keyword::BY)
-            {
-                self.parse_comma_separated(Parser::parse_expr)?
-            } else {
-                vec![]
-            };
+            let limit_clause = self.parse_optional_limit_clause()?;
 
             let settings = self.parse_settings()?;
 
@@ -10347,9 +10362,7 @@ impl<'a> Parser<'a> {
                 with,
                 body,
                 order_by,
-                limit,
-                limit_by,
-                offset,
+                limit_clause,
                 fetch,
                 locks,
                 for_clause,
@@ -11809,9 +11822,7 @@ impl<'a> Parser<'a> {
                     with: None,
                     body: Box::new(values),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,

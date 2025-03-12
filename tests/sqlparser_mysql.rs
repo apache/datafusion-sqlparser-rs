@@ -25,9 +25,9 @@ use matches::assert_matches;
 use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
-use sqlparser::tokenizer::Span;
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Token;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 #[macro_use]
@@ -859,26 +859,239 @@ fn parse_create_table_comment() {
 
 #[test]
 fn parse_create_table_auto_increment_offset() {
-    let canonical =
-        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT 123";
-    let with_equal =
-        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT=123";
+    let sql =
+        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE = InnoDB AUTO_INCREMENT = 123";
 
-    for sql in [canonical, with_equal] {
-        match mysql().one_statement_parses_to(sql, canonical) {
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            plain_options,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "foo");
+
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("AUTO_INCREMENT"),
+                value: Expr::Value(
+                    Value::Number(
+                        Parser::parse("123".to_owned(), Location::empty()).unwrap(),
+                        false
+                    )
+                    .into()
+                )
+            }));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_multiple_options_order_independent() {
+    let sql1 = "CREATE TABLE mytable (id INT) ENGINE=InnoDB ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=8";
+    let sql2 = "CREATE TABLE mytable (id INT) KEY_BLOCK_SIZE=8 ENGINE=InnoDB ROW_FORMAT=DYNAMIC";
+    let sql3 = "CREATE TABLE mytable (id INT) ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=8 ENGINE=InnoDB";
+
+    for sql in [sql1, sql2, sql3] {
+        match mysql().parse_sql_statements(sql).unwrap().pop().unwrap() {
             Statement::CreateTable(CreateTable {
                 name,
-                auto_increment_offset,
+                plain_options,
                 ..
             }) => {
-                assert_eq!(name.to_string(), "foo");
-                assert_eq!(
-                    auto_increment_offset.expect("Should exist").to_string(),
-                    "123"
-                );
+                assert_eq!(name.to_string(), "mytable");
+
+                assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
+                    name: "InnoDB".to_owned(),
+                    parameters: None
+                })));
+                assert!(plain_options.contains(&SqlOption::KeyValue {
+                    key: Ident::new("KEY_BLOCK_SIZE"),
+                    value: Expr::Value(
+                        Value::Number(
+                            Parser::parse("8".to_owned(), Location::empty()).unwrap(),
+                            false
+                        )
+                        .into()
+                    )
+                }));
+
+                assert!(plain_options.contains(&SqlOption::KeyValue {
+                    key: Ident::new("ROW_FORMAT"),
+                    value: Expr::Identifier(Ident::new("DYNAMIC".to_owned()))
+                }));
             }
             _ => unreachable!(),
         }
+    }
+}
+
+#[test]
+fn parse_create_table_with_all_table_options() {
+    let sql =
+        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE = InnoDB AUTO_INCREMENT = 123 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci INSERT_METHOD = FIRST KEY_BLOCK_SIZE = 8 ROW_FORMAT = DYNAMIC DATA DIRECTORY = '/var/lib/mysql/data' INDEX DIRECTORY = '/var/lib/mysql/index' PACK_KEYS = 1 STATS_AUTO_RECALC = 1 STATS_PERSISTENT = 0 STATS_SAMPLE_PAGES = 128 DELAY_KEY_WRITE = 1 COMPRESSION = 'ZLIB' ENCRYPTION = 'Y' MAX_ROWS = 10000 MIN_ROWS = 10 AUTOEXTEND_SIZE = 64 AVG_ROW_LENGTH = 128 CHECKSUM = 1 CONNECTION = 'mysql://localhost' ENGINE_ATTRIBUTE = 'primary' PASSWORD = 'secure_password' SECONDARY_ENGINE_ATTRIBUTE = 'secondary_attr' START TRANSACTION TABLESPACE my_tablespace STORAGE DISK UNION = (table1, table2, table3)";
+
+    let x = mysql().verified_stmt(sql);
+    println!("{x:?}");
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable(CreateTable {
+            name,
+            plain_options,
+            ..
+        }) => {
+            assert_eq!(name, vec![Ident::new("foo".to_owned())].into());
+
+            assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
+                name: "InnoDB".to_owned(),
+                parameters: None
+            })));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("COLLATE"),
+                value: Expr::Identifier(Ident::new("utf8mb4_0900_ai_ci".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("DEFAULT CHARSET"),
+                value: Expr::Identifier(Ident::new("utf8mb4".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("AUTO_INCREMENT"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("123".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("KEY_BLOCK_SIZE"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("8".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("ROW_FORMAT"),
+                value: Expr::Identifier(Ident::new("DYNAMIC".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("PACK_KEYS"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("1".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("STATS_AUTO_RECALC"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("1".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("STATS_PERSISTENT"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("0".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("STATS_SAMPLE_PAGES"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("128".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("STATS_SAMPLE_PAGES"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("128".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("INSERT_METHOD"),
+                value: Expr::Identifier(Ident::new("FIRST".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("COMPRESSION"),
+                value: Expr::value(Value::SingleQuotedString("ZLIB".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("ENCRYPTION"),
+                value: Expr::value(Value::SingleQuotedString("Y".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("MAX_ROWS"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("10000".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("MIN_ROWS"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("10".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("AUTOEXTEND_SIZE"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("64".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("AVG_ROW_LENGTH"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("128".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("CHECKSUM"),
+                value: Expr::value(Value::Number(
+                    Parser::parse("1".to_owned(), Location::empty()).unwrap(),
+                    false
+                ))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("CONNECTION"),
+                value: Expr::value(Value::SingleQuotedString("mysql://localhost".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("ENGINE_ATTRIBUTE"),
+                value: Expr::value(Value::SingleQuotedString("primary".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("PASSWORD"),
+                value: Expr::value(Value::SingleQuotedString("secure_password".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("SECONDARY_ENGINE_ATTRIBUTE"),
+                value: Expr::value(Value::SingleQuotedString("secondary_attr".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::Ident(Ident::new(
+                "START TRANSACTION".to_owned()
+            ))));
+            assert!(
+                plain_options.contains(&SqlOption::TableSpace(TablespaceOption {
+                    name: "my_tablespace".to_string(),
+                    storage: Some(StorageType::Disk),
+                }))
+            );
+            assert!(plain_options.contains(&SqlOption::Union(vec![
+                Ident::new("table1".to_string()),
+                Ident::new("table2".to_string()),
+                Ident::new("table3".to_string())
+            ])));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("DATA DIRECTORY"),
+                value: Expr::value(Value::SingleQuotedString("/var/lib/mysql/data".to_owned()))
+            }));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("INDEX DIRECTORY"),
+                value: Expr::value(Value::SingleQuotedString("/var/lib/mysql/index".to_owned()))
+            }));
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -916,13 +1129,12 @@ fn parse_create_table_set_enum() {
 
 #[test]
 fn parse_create_table_engine_default_charset() {
-    let sql = "CREATE TABLE foo (id INT(11)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3";
+    let sql = "CREATE TABLE foo (id INT(11)) ENGINE = InnoDB DEFAULT CHARSET = utf8mb3";
     match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
             columns,
-            engine,
-            default_charset,
+            plain_options,
             ..
         }) => {
             assert_eq!(name.to_string(), "foo");
@@ -934,14 +1146,16 @@ fn parse_create_table_engine_default_charset() {
                 },],
                 columns
             );
-            assert_eq!(
-                engine,
-                Some(TableEngine {
-                    name: "InnoDB".to_string(),
-                    parameters: None
-                })
-            );
-            assert_eq!(default_charset, Some("utf8mb3".to_string()));
+
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("DEFAULT CHARSET"),
+                value: Expr::Identifier(Ident::new("utf8mb3".to_owned()))
+            }));
+
+            assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
+                name: "InnoDB".to_owned(),
+                parameters: None
+            })));
         }
         _ => unreachable!(),
     }
@@ -949,12 +1163,12 @@ fn parse_create_table_engine_default_charset() {
 
 #[test]
 fn parse_create_table_collate() {
-    let sql = "CREATE TABLE foo (id INT(11)) COLLATE=utf8mb4_0900_ai_ci";
+    let sql = "CREATE TABLE foo (id INT(11)) COLLATE = utf8mb4_0900_ai_ci";
     match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
             columns,
-            collation,
+            plain_options,
             ..
         }) => {
             assert_eq!(name.to_string(), "foo");
@@ -966,7 +1180,10 @@ fn parse_create_table_collate() {
                 },],
                 columns
             );
-            assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("COLLATE"),
+                value: Expr::Identifier(Ident::new("utf8mb4_0900_ai_ci".to_owned()))
+            }));
         }
         _ => unreachable!(),
     }
@@ -974,16 +1191,21 @@ fn parse_create_table_collate() {
 
 #[test]
 fn parse_create_table_both_options_and_as_query() {
-    let sql = "CREATE TABLE foo (id INT(11)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb4_0900_ai_ci AS SELECT 1";
+    let sql = "CREATE TABLE foo (id INT(11)) ENGINE = InnoDB DEFAULT CHARSET = utf8mb3 COLLATE = utf8mb4_0900_ai_ci AS SELECT 1";
     match mysql_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
-            collation,
             query,
+            plain_options,
             ..
         }) => {
             assert_eq!(name.to_string(), "foo");
-            assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
+
+            assert!(plain_options.contains(&SqlOption::KeyValue {
+                key: Ident::new("COLLATE"),
+                value: Expr::Identifier(Ident::new("utf8mb4_0900_ai_ci".to_owned()))
+            }));
+
             assert_eq!(
                 query.unwrap().body.as_select().unwrap().projection,
                 vec![SelectItem::UnnamedExpr(Expr::Value(
@@ -994,7 +1216,8 @@ fn parse_create_table_both_options_and_as_query() {
         _ => unreachable!(),
     }
 
-    let sql = r"CREATE TABLE foo (id INT(11)) ENGINE=InnoDB AS SELECT 1 DEFAULT CHARSET=utf8mb3";
+    let sql =
+        r"CREATE TABLE foo (id INT(11)) ENGINE = InnoDB AS SELECT 1 DEFAULT CHARSET = utf8mb3";
     assert!(matches!(
         mysql_and_generic().parse_sql_statements(sql),
         Err(ParserError::ParserError(_))

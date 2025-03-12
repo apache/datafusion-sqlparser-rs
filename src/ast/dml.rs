@@ -36,8 +36,8 @@ use super::{
     CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
     HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit,
     OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting,
-    SqlOption, SqliteOnConflict, StorageSerializationPolicy, TableEngine, TableObject,
-    TableWithJoins, Tag, WrappedCollection,
+    SqlOption, SqliteOnConflict, StorageSerializationPolicy, TableObject, TableWithJoins, Tag,
+    WrappedCollection,
 };
 
 /// Index column type.
@@ -148,17 +148,19 @@ pub struct CreateTable {
     pub hive_formats: Option<HiveFormat>,
     pub table_properties: Vec<SqlOption>,
     pub with_options: Vec<SqlOption>,
+    /// BigQuery: Table options list.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
+    pub options: Option<Vec<SqlOption>>,
+    /// Plain options, options which are not part on any declerative statement e.g. WITH/OPTIONS/...
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    pub plain_options: Vec<SqlOption>,
     pub file_format: Option<FileFormat>,
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub engine: Option<TableEngine>,
     pub comment: Option<CommentDef>,
-    pub auto_increment_offset: Option<u32>,
-    pub default_charset: Option<String>,
-    pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
@@ -179,9 +181,6 @@ pub struct CreateTable {
     /// Hive: Table clustering column list.
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,
-    /// BigQuery: Table options list.
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-    pub options: Option<Vec<SqlOption>>,
     /// SQLite "STRICT" clause.
     /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
     /// then strict typing rules apply to that table.
@@ -380,9 +379,11 @@ impl Display for CreateTable {
         if !self.with_options.is_empty() {
             write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
         }
-        if let Some(engine) = &self.engine {
-            write!(f, " ENGINE={engine}")?;
+
+        if !self.plain_options.is_empty() {
+            write!(f, " {}", display_separated(&self.plain_options, " "))?;
         }
+
         if let Some(comment_def) = &self.comment {
             match comment_def {
                 CommentDef::WithEq(comment) => {
@@ -396,9 +397,6 @@ impl Display for CreateTable {
             }
         }
 
-        if let Some(auto_increment_offset) = self.auto_increment_offset {
-            write!(f, " AUTO_INCREMENT {auto_increment_offset}")?;
-        }
         if let Some(primary_key) = &self.primary_key {
             write!(f, " PRIMARY KEY {}", primary_key)?;
         }
@@ -493,13 +491,6 @@ impl Display for CreateTable {
 
         if let Some(tag) = &self.with_tags {
             write!(f, " WITH TAG ({})", display_comma_separated(tag.as_slice()))?;
-        }
-
-        if let Some(default_charset) = &self.default_charset {
-            write!(f, " DEFAULT CHARSET={default_charset}")?;
-        }
-        if let Some(collation) = &self.collation {
-            write!(f, " COLLATE={collation}")?;
         }
 
         if self.on_commit.is_some() {

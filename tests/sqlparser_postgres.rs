@@ -5427,11 +5427,7 @@ fn parse_trigger_related_functions() {
             without_rowid: false,
             like: None,
             clone: None,
-            engine: None,
             comment: None,
-            auto_increment_offset: None,
-            default_charset: None,
-            collation: None,
             on_commit: None,
             on_cluster: None,
             primary_key: None,
@@ -5455,6 +5451,7 @@ fn parse_trigger_related_functions() {
             catalog: None,
             catalog_sync: None,
             storage_serialization_policy: None,
+            plain_options: vec![]
         }
     );
 

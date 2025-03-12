@@ -28,8 +28,9 @@ use super::super::dml::CreateTable;
 use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident,
     ObjectName, OnCommit, OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement,
-    StorageSerializationPolicy, TableConstraint, TableEngine, Tag, WrappedCollection,
+    StorageSerializationPolicy, TableConstraint, Tag, WrappedCollection,
 };
+
 use crate::parser::ParserError;
 
 /// Builder for create table statement variant ([1]).
@@ -78,17 +79,15 @@ pub struct CreateTableBuilder {
     pub hive_formats: Option<HiveFormat>,
     pub table_properties: Vec<SqlOption>,
     pub with_options: Vec<SqlOption>,
+    pub options: Option<Vec<SqlOption>>,
+    pub plain_options: Vec<SqlOption>,
     pub file_format: Option<FileFormat>,
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub engine: Option<TableEngine>,
     pub comment: Option<CommentDef>,
-    pub auto_increment_offset: Option<u32>,
-    pub default_charset: Option<String>,
-    pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<Ident>,
     pub primary_key: Option<Box<Expr>>,
@@ -96,7 +95,6 @@ pub struct CreateTableBuilder {
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub clustered_by: Option<ClusteredBy>,
-    pub options: Option<Vec<SqlOption>>,
     pub strict: bool,
     pub copy_grants: bool,
     pub enable_schema_evolution: Option<bool>,
@@ -131,6 +129,7 @@ impl CreateTableBuilder {
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
             table_properties: vec![],
+            plain_options: vec![],
             with_options: vec![],
             file_format: None,
             location: None,
@@ -138,11 +137,7 @@ impl CreateTableBuilder {
             without_rowid: false,
             like: None,
             clone: None,
-            engine: None,
             comment: None,
-            auto_increment_offset: None,
-            default_charset: None,
-            collation: None,
             on_commit: None,
             on_cluster: None,
             primary_key: None,
@@ -266,28 +261,8 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn engine(mut self, engine: Option<TableEngine>) -> Self {
-        self.engine = engine;
-        self
-    }
-
     pub fn comment(mut self, comment: Option<CommentDef>) -> Self {
         self.comment = comment;
-        self
-    }
-
-    pub fn auto_increment_offset(mut self, offset: Option<u32>) -> Self {
-        self.auto_increment_offset = offset;
-        self
-    }
-
-    pub fn default_charset(mut self, default_charset: Option<String>) -> Self {
-        self.default_charset = default_charset;
-        self
-    }
-
-    pub fn collation(mut self, collation: Option<String>) -> Self {
-        self.collation = collation;
         self
     }
 
@@ -328,6 +303,11 @@ impl CreateTableBuilder {
 
     pub fn options(mut self, options: Option<Vec<SqlOption>>) -> Self {
         self.options = options;
+        self
+    }
+
+    pub fn plain_options(mut self, options: Vec<SqlOption>) -> Self {
+        self.plain_options = options;
         self
     }
 
@@ -438,11 +418,7 @@ impl CreateTableBuilder {
             without_rowid: self.without_rowid,
             like: self.like,
             clone: self.clone,
-            engine: self.engine,
             comment: self.comment,
-            auto_increment_offset: self.auto_increment_offset,
-            default_charset: self.default_charset,
-            collation: self.collation,
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
             primary_key: self.primary_key,
@@ -466,6 +442,7 @@ impl CreateTableBuilder {
             catalog: self.catalog,
             catalog_sync: self.catalog_sync,
             storage_serialization_policy: self.storage_serialization_policy,
+            plain_options: self.plain_options,
         })
     }
 }
@@ -499,11 +476,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 without_rowid,
                 like,
                 clone,
-                engine,
                 comment,
-                auto_increment_offset,
-                default_charset,
-                collation,
                 on_commit,
                 on_cluster,
                 primary_key,
@@ -527,6 +500,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog,
                 catalog_sync,
                 storage_serialization_policy,
+                plain_options,
             }) => Ok(Self {
                 or_replace,
                 temporary,
@@ -547,11 +521,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 without_rowid,
                 like,
                 clone,
-                engine,
                 comment,
-                auto_increment_offset,
-                default_charset,
-                collation,
                 on_commit,
                 on_cluster,
                 primary_key,
@@ -577,6 +547,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog,
                 catalog_sync,
                 storage_serialization_policy,
+                plain_options,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"
@@ -591,6 +562,7 @@ pub(crate) struct CreateTableConfiguration {
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub options: Option<Vec<SqlOption>>,
+    pub plain_options: Vec<SqlOption>,
 }
 
 #[cfg(test)]

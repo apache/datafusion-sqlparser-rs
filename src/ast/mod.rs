@@ -6913,7 +6913,10 @@ pub enum SqlOption {
     /// Any option that consists of a key value pair where the value is an expression. e.g.
     ///
     ///   WITH(DISTRIBUTION = ROUND_ROBIN)
-    KeyValue { key: Ident, value: Expr },
+    KeyValue {
+        key: Ident,
+        value: Expr,
+    },
     /// One or more table partitions and represents which partition the boundary values belong to,
     /// e.g.
     ///
@@ -6925,6 +6928,12 @@ pub enum SqlOption {
         range_direction: Option<PartitionRangeDirection>,
         for_values: Vec<Expr>,
     },
+
+    TableSpace(TablespaceOption),
+
+    Union(Vec<Ident>),
+
+    TableEngine(TableEngine),
 }
 
 impl fmt::Display for SqlOption {
@@ -6956,8 +6965,44 @@ impl fmt::Display for SqlOption {
                     display_comma_separated(for_values)
                 )
             }
+            SqlOption::TableSpace(tablespace_option) => {
+                write!(f, "TABLESPACE {}", tablespace_option.name)?;
+                match tablespace_option.storage {
+                    Some(StorageType::Disk) => write!(f, " STORAGE DISK"),
+                    Some(StorageType::Memory) => write!(f, " STORAGE MEMORY"),
+                    _ => Ok(()),
+                }
+            }
+            SqlOption::Union(tables) => {
+                write!(
+                    f,
+                    "UNION = ({})",
+                    tables
+                        .iter()
+                        .map(|table| table.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )
+            }
+            SqlOption::TableEngine(table_engine) => write!(f, "ENGINE = {}", table_engine),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum StorageType {
+    Disk,
+    Memory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct TablespaceOption {
+    pub name: String,
+    pub storage: Option<StorageType>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

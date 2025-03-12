@@ -717,11 +717,7 @@ fn test_duckdb_union_datatype() {
             without_rowid: Default::default(),
             like: Default::default(),
             clone: Default::default(),
-            engine: Default::default(),
             comment: Default::default(),
-            auto_increment_offset: Default::default(),
-            default_charset: Default::default(),
-            collation: Default::default(),
             on_commit: Default::default(),
             on_cluster: Default::default(),
             primary_key: Default::default(),
@@ -745,6 +741,7 @@ fn test_duckdb_union_datatype() {
             catalog: Default::default(),
             catalog_sync: Default::default(),
             storage_serialization_policy: Default::default(),
+            plain_options: Default::default()
         }),
         stmt
     );

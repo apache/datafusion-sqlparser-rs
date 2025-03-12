@@ -14654,8 +14654,14 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
 
 #[test]
 fn parse_set_time_zone_alias() {
-    // not sure what other dialects support this
-    all_dialects_but_pg()
-        .parse_sql_statements("SET TIME ZONE 'UTC'")
-        .unwrap_err();
+    match all_dialects().verified_stmt("SET TIME ZONE 'UTC'") {
+        Statement::Set(Set::SetTimeZone { local, value }) => {
+            assert!(!local);
+            assert_eq!(
+                value,
+                Expr::Value((Value::SingleQuotedString("UTC".into())).with_empty_span())
+            );
+        }
+        _ => unreachable!(),
+    }
 }

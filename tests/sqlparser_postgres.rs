@@ -5635,20 +5635,6 @@ fn parse_create_type_as_enum() {
 }
 
 #[test]
-fn parse_set_time_zone_alias() {
-    match pg().verified_stmt("SET TIME ZONE 'UTC'") {
-        Statement::Set(Set::SetTimeZone { local, value }) => {
-            assert!(!local);
-            assert_eq!(
-                value,
-                Expr::Value((Value::SingleQuotedString("UTC".into())).with_empty_span())
-            );
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn parse_alter_type() {
     struct TestCase {
         sql: &'static str,

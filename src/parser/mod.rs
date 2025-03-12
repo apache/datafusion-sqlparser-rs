@@ -4314,7 +4314,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Run a parser method `f`, reverting back to the current position if unsuccessful.
-    /// Returns `None` if `f` returns an error
+    /// Returns `ParserError::RecursionLimitExceeded` if `f` returns a `RecursionLimitExceeded`.
+    /// Returns `Ok(None)` if `f` returns any other error.
     pub fn maybe_parse<T, F>(&mut self, f: F) -> Result<Option<T>, ParserError>
     where
         F: FnMut(&mut Parser) -> Result<T, ParserError>,
@@ -11043,15 +11044,15 @@ impl<'a> Parser<'a> {
                     values: self.parse_set_values(false)?,
                 }
                 .into());
-            } else if self.dialect.is::<PostgreSqlDialect>() {
-                // Special case for Postgres
+            } else {
+                // A shorthand alias for SET TIME ZONE that doesn't require
+                // the assignment operator. It's originally PostgreSQL specific,
+                // but we allow it for all the dialects
                 return Ok(Set::SetTimeZone {
                     local: modifier == Some(Keyword::LOCAL),
                     value: self.parse_expr()?,
                 }
                 .into());
-            } else {
-                return self.expected("assignment operator", self.peek_token());
             }
         } else if self.dialect.supports_set_names() && self.parse_keyword(Keyword::NAMES) {
             if self.parse_keyword(Keyword::DEFAULT) {
@@ -11096,8 +11097,8 @@ impl<'a> Parser<'a> {
         }
 
         if self.dialect.supports_comma_separated_set_assignments() {
-            if let Ok(assignments) =
-                self.try_parse(|parser| parser.parse_comma_separated(Parser::parse_set_assignment))
+            if let Some(assignments) = self
+                .maybe_parse(|parser| parser.parse_comma_separated(Parser::parse_set_assignment))?
             {
                 return if assignments.len() > 1 {
                     let assignments = assignments

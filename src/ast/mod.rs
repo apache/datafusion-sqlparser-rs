@@ -2441,6 +2441,7 @@ pub enum Set {
     ///
     /// Note: this is a PostgreSQL-specific statements
     /// `SET TIME ZONE <value>` is an alias for `SET timezone TO <value>` in PostgreSQL
+    /// However, we allow it for all dialects.
     SetTimeZone { local: bool, value: Expr },
     /// ```sql
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']

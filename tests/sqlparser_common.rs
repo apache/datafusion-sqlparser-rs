@@ -8555,11 +8555,11 @@ fn parse_set_transaction() {
     // TRANSACTION, so no need to duplicate the tests here. We just do a quick
     // sanity check.
     match verified_stmt("SET TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
-        Statement::SetTransaction {
+        Statement::Set(Set::SetTransaction {
             modes,
             session,
             snapshot,
-        } => {
+        }) => {
             assert_eq!(
                 modes,
                 vec![
@@ -8578,20 +8578,17 @@ fn parse_set_transaction() {
 #[test]
 fn parse_set_variable() {
     match verified_stmt("SET SOMETHING = '1'") {
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local,
             hivevar,
-            variables,
-            value,
-        } => {
+            variable,
+            values,
+        }) => {
             assert!(!local);
             assert!(!hivevar);
+            assert_eq!(variable, ObjectName::from(vec!["SOMETHING".into()]));
             assert_eq!(
-                variables,
-                OneOrManyWithParens::One(ObjectName::from(vec!["SOMETHING".into()]))
-            );
-            assert_eq!(
-                value,
+                values,
                 vec![Expr::Value(
                     (Value::SingleQuotedString("1".into())).with_empty_span()
                 )]
@@ -8603,24 +8600,17 @@ fn parse_set_variable() {
     let multi_variable_dialects = all_dialects_where(|d| d.supports_parenthesized_set_variables());
     let sql = r#"SET (a, b, c) = (1, 2, 3)"#;
     match multi_variable_dialects.verified_stmt(sql) {
-        Statement::SetVariable {
-            local,
-            hivevar,
-            variables,
-            value,
-        } => {
-            assert!(!local);
-            assert!(!hivevar);
+        Statement::Set(Set::ParenthesizedAssignments { variables, values }) => {
             assert_eq!(
                 variables,
-                OneOrManyWithParens::Many(vec![
+                vec![
                     ObjectName::from(vec!["a".into()]),
                     ObjectName::from(vec!["b".into()]),
                     ObjectName::from(vec!["c".into()]),
-                ])
+                ]
             );
             assert_eq!(
-                value,
+                values,
                 vec![
                     Expr::value(number("1")),
                     Expr::value(number("2")),
@@ -8680,20 +8670,17 @@ fn parse_set_variable() {
 #[test]
 fn parse_set_role_as_variable() {
     match verified_stmt("SET role = 'foobar'") {
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local,
             hivevar,
-            variables,
-            value,
-        } => {
+            variable,
+            values,
+        }) => {
             assert!(!local);
             assert!(!hivevar);
+            assert_eq!(variable, ObjectName::from(vec!["role".into()]));
             assert_eq!(
-                variables,
-                OneOrManyWithParens::One(ObjectName::from(vec!["role".into()]))
-            );
-            assert_eq!(
-                value,
+                values,
                 vec![Expr::Value(
                     (Value::SingleQuotedString("foobar".into())).with_empty_span()
                 )]
@@ -8730,20 +8717,17 @@ fn parse_double_colon_cast_at_timezone() {
 #[test]
 fn parse_set_time_zone() {
     match verified_stmt("SET TIMEZONE = 'UTC'") {
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local,
             hivevar,
-            variables: variable,
-            value,
-        } => {
+            variable,
+            values,
+        }) => {
             assert!(!local);
             assert!(!hivevar);
+            assert_eq!(variable, ObjectName::from(vec!["TIMEZONE".into()]));
             assert_eq!(
-                variable,
-                OneOrManyWithParens::One(ObjectName::from(vec!["TIMEZONE".into()]))
-            );
-            assert_eq!(
-                value,
+                values,
                 vec![Expr::Value(
                     (Value::SingleQuotedString("UTC".into())).with_empty_span()
                 )]
@@ -8753,20 +8737,6 @@ fn parse_set_time_zone() {
     }
 
     one_statement_parses_to("SET TIME ZONE TO 'UTC'", "SET TIMEZONE = 'UTC'");
-}
-
-#[test]
-fn parse_set_time_zone_alias() {
-    match verified_stmt("SET TIME ZONE 'UTC'") {
-        Statement::SetTimeZone { local, value } => {
-            assert!(!local);
-            assert_eq!(
-                value,
-                Expr::Value((Value::SingleQuotedString("UTC".into())).with_empty_span())
-            );
-        }
-        _ => unreachable!(),
-    }
 }
 
 #[test]
@@ -14680,4 +14650,45 @@ fn parse_set_names() {
     dialects.verified_stmt("SET NAMES 'UTF8'");
     dialects.verified_stmt("SET NAMES 'utf8'");
     dialects.verified_stmt("SET NAMES UTF8 COLLATE bogus");
+}
+
+#[test]
+fn parse_multiple_set_statements() -> Result<(), ParserError> {
+    let dialects = all_dialects_where(|d| d.supports_comma_separated_set_assignments());
+    let stmt = dialects.verified_stmt("SET @a = 1, b = 2");
+
+    match stmt {
+        Statement::Set(Set::MultipleAssignments { assignments }) => {
+            assert_eq!(
+                assignments,
+                vec![
+                    SetAssignment {
+                        name: ObjectName::from(vec!["@a".into()]),
+                        value: Expr::value(number("1"))
+                    },
+                    SetAssignment {
+                        name: ObjectName::from(vec!["b".into()]),
+                        value: Expr::value(number("2"))
+                    }
+                ]
+            );
+        }
+        _ => panic!("Expected SetVariable with 2 variables and 2 values"),
+    };
+
+    Ok(())
+}
+
+#[test]
+fn parse_set_time_zone_alias() {
+    match all_dialects().verified_stmt("SET TIME ZONE 'UTC'") {
+        Statement::Set(Set::SetTimeZone { local, value }) => {
+            assert!(!local);
+            assert_eq!(
+                value,
+                Expr::Value((Value::SingleQuotedString("UTC".into())).with_empty_span())
+            );
+        }
+        _ => unreachable!(),
+    }
 }

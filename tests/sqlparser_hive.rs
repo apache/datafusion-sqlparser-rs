@@ -22,9 +22,8 @@
 
 use sqlparser::ast::{
     ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
-    Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName,
-    OneOrManyWithParens, OrderByExpr, OrderByOptions, SelectItem, Statement, TableFactor,
-    UnaryOperator, Use, Value,
+    Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName, OrderByExpr,
+    OrderByOptions, SelectItem, Set, Statement, TableFactor, UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::ParserError;
@@ -92,7 +91,7 @@ fn parse_msck() {
 }
 
 #[test]
-fn parse_set() {
+fn parse_set_hivevar() {
     let set = "SET HIVEVAR:name = a, b, c_d";
     hive().verified_stmt(set);
 }
@@ -369,20 +368,20 @@ fn from_cte() {
 fn set_statement_with_minus() {
     assert_eq!(
         hive().verified_stmt("SET hive.tez.java.opts = -Xmx4g"),
-        Statement::SetVariable {
+        Statement::Set(Set::SingleAssignment {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![
+            variable: ObjectName::from(vec![
                 Ident::new("hive"),
                 Ident::new("tez"),
                 Ident::new("java"),
                 Ident::new("opts")
-            ])),
-            value: vec![Expr::UnaryOp {
+            ]),
+            values: vec![Expr::UnaryOp {
                 op: UnaryOperator::Minus,
                 expr: Box::new(Expr::Identifier(Ident::new("Xmx4g")))
             }],
-        }
+        })
     );
 
     assert_eq!(

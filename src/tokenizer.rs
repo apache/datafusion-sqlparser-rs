@@ -246,6 +246,8 @@ pub enum Token {
     ShiftLeftVerticalBar,
     /// `|>> PostgreSQL/Redshift geometrical binary operator (Is strictly above?)
     VerticalBarShiftRight,
+    /// `|> BigQuery pipe operator
+    VerticalBarRightAngleBracket,
     /// `#>>`, extracts JSON sub-object at the specified path as text
     HashLongArrow,
     /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
@@ -359,6 +361,7 @@ impl fmt::Display for Token {
             Token::AmpersandRightAngleBracket => f.write_str("&>"),
             Token::AmpersandLeftAngleBracketVerticalBar => f.write_str("&<|"),
             Token::VerticalBarAmpersandRightAngleBracket => f.write_str("|&>"),
+            Token::VerticalBarRightAngleBracket => f.write_str("|>"),
             Token::TwoWayArrow => f.write_str("<->"),
             Token::LeftAngleBracketCaret => f.write_str("<^"),
             Token::RightAngleBracketCaret => f.write_str(">^"),
@@ -1377,6 +1380,9 @@ impl<'a> Tokenizer<'a> {
                                 ),
                                 _ => self.start_binop_opt(chars, "|>", None),
                             }
+                        }
+                        Some('>') if self.dialect.supports_pipe_operator() => {
+                            self.consume_for_binop(chars, "|>", Token::VerticalBarRightAngleBracket)
                         }
                         // Bitshift '|' operator
                         _ => self.start_binop(chars, "|", Token::Pipe),

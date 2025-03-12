@@ -151,8 +151,18 @@ pub enum AlterTableOperation {
     },
     /// `DROP PRIMARY KEY`
     ///
-    /// Note: this is a MySQL-specific operation.
+    /// Note: this is a [MySQL]-specific operation.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
     DropPrimaryKey,
+    /// `DROP FOREIGN KEY <fk_symbol>`
+    ///
+    /// Note: this is a [MySQL]-specific operation.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    DropForeignKey {
+        name: Ident,
+    },
     /// `ENABLE ALWAYS RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -530,6 +540,7 @@ impl fmt::Display for AlterTableOperation {
                 )
             }
             AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
+            AlterTableOperation::DropForeignKey { name } => write!(f, "DROP FOREIGN KEY {name}"),
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,

@@ -7998,10 +7998,11 @@ impl<'a> Parser<'a> {
                     name,
                     drop_behavior,
                 }
-            } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY])
-                && dialect_of!(self is MySqlDialect | GenericDialect)
-            {
+            } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
                 AlterTableOperation::DropPrimaryKey
+            } else if self.parse_keywords(&[Keyword::FOREIGN, Keyword::KEY]) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::DropForeignKey { name }
             } else if self.parse_keyword(Keyword::PROJECTION)
                 && dialect_of!(self is ClickHouseDialect|GenericDialect)
             {

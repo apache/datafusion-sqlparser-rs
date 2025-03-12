@@ -2274,6 +2274,16 @@ fn parse_alter_table_drop_primary_key() {
 }
 
 #[test]
+fn parse_alter_table_drop_foreign_key() {
+    assert_matches!(
+        alter_table_op(
+            mysql_and_generic().verified_stmt("ALTER TABLE tab DROP FOREIGN KEY foo_ibfk_1")
+        ),
+        AlterTableOperation::DropForeignKey { name } if name.value == "foo_ibfk_1"
+    );
+}
+
+#[test]
 fn parse_alter_table_change_column() {
     let expected_name = ObjectName::from(vec![Ident::new("orders")]);
     let expected_operation = AlterTableOperation::ChangeColumn {

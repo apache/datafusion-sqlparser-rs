@@ -517,7 +517,7 @@ pub trait Dialect: Debug + Any {
     /// |> limit 1
     /// ```
     ///
-    /// See "SQL Has Problems. We Can Fix Them: Pipe Syntax In SQL" https://research.google/pubs/sql-has-problems-we-can-fix-them-pipe-syntax-in-sql/
+    /// See https://cloud.google.com/bigquery/docs/pipe-syntax-guide#basic_syntax
     fn supports_pipe_operator(&self) -> bool {
         false
     }

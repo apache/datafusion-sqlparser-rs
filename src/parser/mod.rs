@@ -10336,37 +10336,30 @@ impl<'a> Parser<'a> {
                     Keyword::ORDER,
                 ])?;
                 match kw {
-                    // SELECT <expr> [[AS] alias], ...
                     Keyword::SELECT => {
                         let exprs = self.parse_comma_separated(Parser::parse_select_item)?;
                         pipe_operators.push(PipeOperator::Select { exprs })
                     }
-                    // EXTEND <expr> [[AS] alias], ...
                     Keyword::EXTEND => {
                         let exprs = self.parse_comma_separated(Parser::parse_select_item)?;
                         pipe_operators.push(PipeOperator::Extend { exprs })
                     }
-                    // SET <column> = <expression>, ...
                     Keyword::SET => {
                         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
                         pipe_operators.push(PipeOperator::Set { assignments })
                     }
-                    // DROP <column>, ...
                     Keyword::DROP => {
                         let columns = self.parse_identifiers()?;
                         pipe_operators.push(PipeOperator::Drop { columns })
                     }
-                    // AS <alias>
                     Keyword::AS => {
                         let alias = self.parse_identifier()?;
-                        pipe_operators.push(PipeOperator::Alias { alias })
+                        pipe_operators.push(PipeOperator::As { alias })
                     }
-                    // WHERE <condition>
                     Keyword::WHERE => {
                         let expr = self.parse_expr()?;
                         pipe_operators.push(PipeOperator::Where { expr })
                     }
-                    // LIMIT <n> [OFFSET <m>]
                     Keyword::LIMIT => {
                         let expr = self.parse_expr()?;
                         let offset = if self.parse_keyword(Keyword::OFFSET) {
@@ -10376,12 +10369,6 @@ impl<'a> Parser<'a> {
                         };
                         pipe_operators.push(PipeOperator::Limit { expr, offset })
                     }
-                    // AGGREGATE <agg_expr> [[AS] alias], ...
-                    //
-                    // and
-                    //
-                    // AGGREGATE [<agg_expr> [[AS] alias], ...]
-                    // GROUP BY <grouping_expr> [AS alias], ...
                     Keyword::AGGREGATE => {
                         let full_table_exprs = self.parse_comma_separated0(
                             |parser| {
@@ -10407,7 +10394,6 @@ impl<'a> Parser<'a> {
                             group_by_exprs,
                         })
                     }
-                    // ORDER BY <expr> [ASC|DESC], ...
                     Keyword::ORDER => {
                         self.expect_one_of_keywords(&[Keyword::BY])?;
                         let exprs = self.parse_comma_separated(Parser::parse_order_by_expr)?;

@@ -1808,7 +1808,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(vec![Ident::from("did")], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
-                    assignments: vec![UpdateAssignment {
+                    assignments: vec![Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(
                             vec!["dname".into()]
                         )),
@@ -1841,7 +1841,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
-                        UpdateAssignment {
+                        Assignment {
                             target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                 "dname".into()
                             ])),
@@ -1850,7 +1850,7 @@ fn parse_pg_on_conflict() {
                                 "dname".into()
                             ])
                         },
-                        UpdateAssignment {
+                        Assignment {
                             target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                 "area".into()
                             ])),
@@ -1902,7 +1902,7 @@ fn parse_pg_on_conflict() {
             assert_eq!(vec![Ident::from("did")], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
-                    assignments: vec![UpdateAssignment {
+                    assignments: vec![Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(
                             vec!["dname".into()]
                         )),
@@ -1949,7 +1949,7 @@ fn parse_pg_on_conflict() {
             );
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
-                    assignments: vec![UpdateAssignment {
+                    assignments: vec![Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(
                             vec!["dname".into()]
                         )),

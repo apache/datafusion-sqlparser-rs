@@ -1870,31 +1870,31 @@ fn parse_insert_with_on_duplicate_update() {
             );
             assert_eq!(
                 Some(OnInsert::DuplicateKeyUpdate(vec![
-                    UpdateAssignment {
+                    Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "description".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("description"))]),
                     },
-                    UpdateAssignment {
+                    Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_create".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_create"))]),
                     },
-                    UpdateAssignment {
+                    Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_read".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_read"))]),
                     },
-                    UpdateAssignment {
+                    Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_update".to_string()
                         )])),
                         value: call("VALUES", [Expr::Identifier(Ident::new("perm_update"))]),
                     },
-                    UpdateAssignment {
+                    Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new(
                             "perm_delete".to_string()
                         )])),
@@ -2086,7 +2086,7 @@ fn parse_update_with_joins() {
                 table
             );
             assert_eq!(
-                vec![UpdateAssignment {
+                vec![Assignment {
                     target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                         Ident::new("o"),
                         Ident::new("completed")

@@ -2708,7 +2708,7 @@ pub enum Statement {
         /// TABLE
         table: TableWithJoins,
         /// Column assignments
-        assignments: Vec<UpdateAssignment>,
+        assignments: Vec<Assignment>,
         /// Table which provide value to be set
         from: Option<UpdateTableFromKind>,
         /// WHERE
@@ -5553,7 +5553,7 @@ pub enum MinMaxValue {
 #[non_exhaustive]
 pub enum OnInsert {
     /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
-    DuplicateKeyUpdate(Vec<UpdateAssignment>),
+    DuplicateKeyUpdate(Vec<Assignment>),
     /// ON CONFLICT is a PostgreSQL and Sqlite extension
     OnConflict(OnConflict),
 }
@@ -5593,7 +5593,7 @@ pub enum OnConflictAction {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DoUpdate {
     /// Column assignments
-    pub assignments: Vec<UpdateAssignment>,
+    pub assignments: Vec<Assignment>,
     /// WHERE
     pub selection: Option<Expr>,
 }
@@ -6219,12 +6219,12 @@ impl fmt::Display for GrantObjects {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct UpdateAssignment {
+pub struct Assignment {
     pub target: AssignmentTarget,
     pub value: Expr,
 }
 
-impl fmt::Display for UpdateAssignment {
+impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} = {}", self.target, self.value)
     }
@@ -7553,7 +7553,7 @@ pub enum MergeAction {
     /// ```sql
     /// UPDATE SET quantity = T.quantity + S.quantity
     /// ```
-    Update { assignments: Vec<UpdateAssignment> },
+    Update { assignments: Vec<Assignment> },
     /// A plain `DELETE` clause
     Delete,
 }

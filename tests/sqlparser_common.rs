@@ -384,15 +384,15 @@ fn parse_update() {
             assert_eq!(
                 assignments,
                 vec![
-                    UpdateAssignment {
+                    Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec!["a".into()])),
                         value: Expr::value(number("1")),
                     },
-                    UpdateAssignment {
+                    Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec!["b".into()])),
                         value: Expr::value(number("2")),
                     },
-                    UpdateAssignment {
+                    Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName::from(vec!["c".into()])),
                         value: Expr::value(number("3")),
                     },
@@ -441,7 +441,7 @@ fn parse_update_set_from() {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("t1")])),
                 joins: vec![],
             },
-            assignments: vec![UpdateAssignment {
+            assignments: vec![Assignment {
                 target: AssignmentTarget::ColumnName(ObjectName::from(vec![Ident::new("name")])),
                 value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
             }],
@@ -553,7 +553,7 @@ fn parse_update_with_table_alias() {
                 table
             );
             assert_eq!(
-                vec![UpdateAssignment {
+                vec![Assignment {
                     target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                         Ident::new("u"),
                         Ident::new("username")
@@ -9423,7 +9423,7 @@ fn parse_merge() {
                         }),
                         action: MergeAction::Update {
                             assignments: vec![
-                                UpdateAssignment {
+                                Assignment {
                                     target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                         Ident::new("dest"),
                                         Ident::new("F")
@@ -9433,7 +9433,7 @@ fn parse_merge() {
                                         Ident::new("F"),
                                     ]),
                                 },
-                                UpdateAssignment {
+                                Assignment {
                                     target: AssignmentTarget::ColumnName(ObjectName::from(vec![
                                         Ident::new("dest"),
                                         Ident::new("G")

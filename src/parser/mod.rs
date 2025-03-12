@@ -10323,8 +10323,6 @@ impl<'a> Parser<'a> {
 
             let mut pipe_operators = Vec::new();
 
-            // Syntax from "SQL Has Problems. We Can Fix Them: Pipe Syntax In SQL"
-            // https://storage.googleapis.com/gweb-research2023-media/pubtools/1004848.pdf
             while self.consume_token(&Token::VerticalBarRightAngleBracket) {
                 let kw = self.expect_one_of_keywords(&[
                     Keyword::SELECT,

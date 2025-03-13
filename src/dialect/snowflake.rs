@@ -245,14 +245,6 @@ impl Dialect for SnowflakeDialect {
                     .map(|p| Some(ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(p)))))
             } else if parser.parse_keywords(&[Keyword::TAG]) {
                 Ok(parse_column_tags(parser, with).map(|p| Some(ColumnOption::Tags(p))))
-            } else if parser.parse_keywords(&[Keyword::COMMENT]) {
-                let next_token = parser.next_token();
-                match next_token.token {
-                    Token::DollarQuotedString(value, ..) => {
-                        Ok(Ok(Some(ColumnOption::Comment(value.value))))
-                    }
-                    _ => Err(ParserError::ParserError("not found match".to_string())),
-                }
             } else {
                 Err(ParserError::ParserError("not found match".to_string()))
             }
@@ -430,7 +422,7 @@ pub fn parse_create_table(
                 Keyword::COMMENT => {
                     // Rewind the COMMENT keyword
                     parser.prev_token();
-                    builder = builder.comment(parser.parse_optional_inline_comment(true)?);
+                    builder = builder.comment(parser.parse_optional_inline_comment()?);
                 }
                 Keyword::AS => {
                     let query = parser.parse_query()?;

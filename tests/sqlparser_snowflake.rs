@@ -978,23 +978,17 @@ fn parse_sf_create_or_replace_with_comment_for_snowflake() {
 
 #[test]
 fn parse_sf_create_table_or_view_with_dollar_quoted_comment() {
-    assert!(snowflake()
-        .parse_sql_statements(
-            r#"CREATE OR REPLACE TEMPORARY VIEW foo.bar.baz (
-            "COL_1" COMMENT $$comment 1$$
-        ) COMMENT = $$view comment$$ AS (
-            SELECT 1
-        )"#
-        )
-        .is_ok());
+    // Snowflake transforms dollar quoted comments into a common comment in DDL representation of creation
+    snowflake()
+        .one_statement_parses_to(
+            r#"CREATE OR REPLACE TEMPORARY VIEW foo.bar.baz ("COL_1" COMMENT $$comment 1$$) COMMENT = $$view comment$$ AS (SELECT 1)"#,
+            r#"CREATE OR REPLACE TEMPORARY VIEW foo.bar.baz ("COL_1" COMMENT 'comment 1') COMMENT = 'view comment' AS (SELECT 1)"#
+        );
 
-    assert!(snowflake()
-        .parse_sql_statements(
-            r#"CREATE TABLE my_table (
-            a STRING COMMENT $$comment 1$$
-        ) COMMENT = $$table comment$$"#
-        )
-        .is_ok());
+    snowflake().one_statement_parses_to(
+        r#"CREATE TABLE my_table (a STRING COMMENT $$comment 1$$) COMMENT = $$table comment$$"#,
+        r#"CREATE TABLE my_table (a STRING COMMENT 'comment 1') COMMENT = 'table comment'"#,
+    );
 }
 
 #[test]

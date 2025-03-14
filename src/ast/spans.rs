@@ -22,20 +22,21 @@ use crate::tokenizer::Span;
 
 use super::{
     dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
-    AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, CloseCursor,
-    ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConflictTarget, ConnectBy,
-    ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
-    Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
-    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
-    FunctionArguments, GroupByExpr, HavingBound, IlikeSelectItem, Insert, Interpolate,
-    InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
-    LimitClause, MatchRecognizePattern, Measure, NamedWindowDefinition, ObjectName, ObjectNamePart,
-    Offset, OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition,
-    PivotValueSource, ProjectionSelect, Query, ReferentialAction, RenameSelectItem,
-    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
-    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
-    TableFactor, TableObject, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
-    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
+    AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, CaseStatement,
+    CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatements,
+    ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
+    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
+    ExprWithAlias, Fetch, FromTable, Function, FunctionArg, FunctionArgExpr,
+    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
+    IfStatement, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint,
+    JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource, ProjectionSelect,
+    Query, ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
+    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
+    TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
+    WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -334,6 +335,8 @@ impl Spanned for Statement {
                 file_format: _,
                 source,
             } => source.span(),
+            Statement::Case(stmt) => stmt.span(),
+            Statement::If(stmt) => stmt.span(),
             Statement::Call(function) => function.span(),
             Statement::Copy {
                 source,
@@ -729,6 +732,53 @@ impl Spanned for CreateIndex {
                 .chain(with.iter().map(|i| i.span()))
                 .chain(predicate.iter().map(|i| i.span())),
         )
+    }
+}
+
+impl Spanned for CaseStatement {
+    fn span(&self) -> Span {
+        let CaseStatement {
+            match_expr,
+            when_blocks,
+            else_block,
+            has_end_case: _,
+        } = self;
+
+        union_spans(
+            match_expr
+                .iter()
+                .map(|e| e.span())
+                .chain(when_blocks.iter().map(|b| b.span()))
+                .chain(else_block.iter().flat_map(|e| e.iter().map(|s| s.span()))),
+        )
+    }
+}
+
+impl Spanned for IfStatement {
+    fn span(&self) -> Span {
+        let IfStatement {
+            if_block,
+            elseif_blocks,
+            else_block,
+        } = self;
+
+        union_spans(
+            iter::once(if_block.span())
+                .chain(elseif_blocks.iter().map(|b| b.span()))
+                .chain(else_block.iter().flat_map(|e| e.iter().map(|s| s.span()))),
+        )
+    }
+}
+
+impl Spanned for ConditionalStatements {
+    fn span(&self) -> Span {
+        let ConditionalStatements {
+            condition,
+            statements,
+            kind: _,
+        } = self;
+
+        union_spans(iter::once(condition.span()).chain(statements.iter().map(|s| s.span())))
     }
 }
 

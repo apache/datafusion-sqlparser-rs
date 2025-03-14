@@ -14180,6 +14180,120 @@ fn test_visit_order() {
 }
 
 #[test]
+fn parse_case_statement() {
+    let sql = "CASE 1 WHEN 2 THEN SELECT 1; SELECT 2; ELSE SELECT 3; END CASE";
+    let Statement::Case(stmt) = verified_stmt(sql) else {
+        unreachable!()
+    };
+
+    assert_eq!(Some(Expr::value(number("1"))), stmt.match_expr);
+    assert_eq!(Expr::value(number("2")), stmt.when_blocks[0].condition);
+    assert_eq!(2, stmt.when_blocks[0].statements.len());
+    assert_eq!(1, stmt.else_block.unwrap().len());
+
+    verified_stmt(concat!(
+        "CASE 1",
+        " WHEN a THEN",
+        " SELECT 1; SELECT 2; SELECT 3;",
+        " WHEN b THEN",
+        " SELECT 4; SELECT 5;",
+        " ELSE",
+        " SELECT 7; SELECT 8;",
+        " END CASE"
+    ));
+    verified_stmt(concat!(
+        "CASE 1",
+        " WHEN a THEN",
+        " SELECT 1; SELECT 2; SELECT 3;",
+        " WHEN b THEN",
+        " SELECT 4; SELECT 5;",
+        " END CASE"
+    ));
+    verified_stmt(concat!(
+        "CASE 1",
+        " WHEN a THEN",
+        " SELECT 1; SELECT 2; SELECT 3;",
+        " END CASE"
+    ));
+    verified_stmt(concat!(
+        "CASE 1",
+        " WHEN a THEN",
+        " SELECT 1; SELECT 2; SELECT 3;",
+        " END"
+    ));
+
+    assert_eq!(
+        ParserError::ParserError("Expected: THEN, found: END".to_string()),
+        parse_sql_statements("CASE 1 WHEN a END").unwrap_err()
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected: WHEN, found: ELSE".to_string()),
+        parse_sql_statements("CASE 1 ELSE SELECT 1; END").unwrap_err()
+    );
+}
+
+#[test]
+fn parse_if_statement() {
+    let sql = "IF 1 THEN SELECT 1; ELSEIF 2 THEN SELECT 2; ELSE SELECT 3; END IF";
+    let Statement::If(stmt) = verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(Expr::value(number("1")), stmt.if_block.condition);
+    assert_eq!(Expr::value(number("2")), stmt.elseif_blocks[0].condition);
+    assert_eq!(1, stmt.else_block.unwrap().len());
+
+    verified_stmt(concat!(
+        "IF 1 THEN",
+        " SELECT 1;",
+        " SELECT 2;",
+        " SELECT 3;",
+        " ELSEIF 2 THEN",
+        " SELECT 4;",
+        " SELECT 5;",
+        " ELSEIF 3 THEN",
+        " SELECT 6;",
+        " SELECT 7;",
+        " ELSE",
+        " SELECT 8;",
+        " SELECT 9;",
+        " END IF"
+    ));
+    verified_stmt(concat!(
+        "IF 1 THEN",
+        " SELECT 1;",
+        " SELECT 2;",
+        " ELSE",
+        " SELECT 3;",
+        " SELECT 4;",
+        " END IF"
+    ));
+    verified_stmt(concat!(
+        "IF 1 THEN",
+        " SELECT 1;",
+        " SELECT 2;",
+        " SELECT 3;",
+        " ELSEIF 2 THEN",
+        " SELECT 3;",
+        " SELECT 4;",
+        " END IF"
+    ));
+    verified_stmt(concat!("IF 1 THEN", " SELECT 1;", " SELECT 2;", " END IF"));
+    verified_stmt(concat!(
+        "IF (1) THEN",
+        " SELECT 1;",
+        " SELECT 2;",
+        " END IF"
+    ));
+    verified_stmt("IF 1 THEN END IF");
+    verified_stmt("IF 1 THEN SELECT 1; ELSEIF 1 THEN END IF");
+
+    assert_eq!(
+        ParserError::ParserError("Expected: IF, found: EOF".to_string()),
+        parse_sql_statements("IF 1 THEN SELECT 1; ELSEIF 1 THEN SELECT 2; END").unwrap_err()
+    );
+}
+
+#[test]
 fn test_lambdas() {
     let dialects = all_dialects_where(|d| d.supports_lambda_functions());
 

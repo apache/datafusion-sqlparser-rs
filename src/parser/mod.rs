@@ -6933,7 +6933,7 @@ impl<'a> Parser<'a> {
         Ok(comment)
     }
 
-    fn parse_comment_value(&mut self) -> Result<String, ParserError> {
+    pub fn parse_comment_value(&mut self) -> Result<String, ParserError> {
         let next_token = self.next_token();
         let value = match next_token.token {
             Token::SingleQuotedString(str) => str,

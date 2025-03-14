@@ -644,11 +644,7 @@ pub fn parse_create_stage(
     // [ comment ]
     if parser.parse_keyword(Keyword::COMMENT) {
         parser.expect_token(&Token::Eq)?;
-        comment = Some(match parser.next_token().token {
-            Token::SingleQuotedString(word) => Ok(word),
-            Token::DollarQuotedString(word) => Ok(word.value),
-            _ => parser.expected("a comment statement", parser.peek_token()),
-        }?)
+        comment = Some(parser.parse_comment_value()?);
     }
 
     Ok(Statement::CreateStage {

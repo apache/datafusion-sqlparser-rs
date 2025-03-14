@@ -4208,6 +4208,11 @@ fn parse_create_schema() {
         }
         _ => unreachable!(),
     }
+
+    verified_stmt(r#"CREATE SCHEMA a.b.c OPTIONS(key1 = 'value1', key2 = 'value2')"#);
+    verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a OPTIONS(key1 = 'value1')"#);
+    verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a OPTIONS()"#);
+    verified_stmt(r#"CREATE SCHEMA IF NOT EXISTS a DEFAULT COLLATE 'und:ci' OPTIONS()"#);
 }
 
 #[test]

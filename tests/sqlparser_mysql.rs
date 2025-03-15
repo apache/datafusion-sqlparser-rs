@@ -860,11 +860,11 @@ fn parse_create_table_comment() {
 #[test]
 fn parse_create_table_auto_increment_offset() {
     let canonical =
-        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT 123";
-    let with_equal =
-        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT=123";
+        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE = InnoDB AUTO_INCREMENT = 123";
+    let without_equal =
+        "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE = InnoDB AUTO_INCREMENT 123";
 
-    for sql in [canonical, with_equal] {
+    for sql in [canonical, without_equal] {
         match mysql().one_statement_parses_to(sql, canonical) {
             Statement::CreateTable(CreateTable {
                 name,
@@ -916,7 +916,7 @@ fn parse_create_table_set_enum() {
 
 #[test]
 fn parse_create_table_engine_default_charset() {
-    let sql = "CREATE TABLE foo (id INT(11)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3";
+    let sql = "CREATE TABLE foo (id INT(11)) ENGINE = InnoDB DEFAULT CHARSET = utf8mb3";
     match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -949,7 +949,7 @@ fn parse_create_table_engine_default_charset() {
 
 #[test]
 fn parse_create_table_collate() {
-    let sql = "CREATE TABLE foo (id INT(11)) COLLATE=utf8mb4_0900_ai_ci";
+    let sql = "CREATE TABLE foo (id INT(11)) COLLATE = utf8mb4_0900_ai_ci";
     match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -974,7 +974,7 @@ fn parse_create_table_collate() {
 
 #[test]
 fn parse_create_table_both_options_and_as_query() {
-    let sql = "CREATE TABLE foo (id INT(11)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb4_0900_ai_ci AS SELECT 1";
+    let sql = "CREATE TABLE foo (id INT(11)) ENGINE = InnoDB DEFAULT CHARSET = utf8mb3 COLLATE = utf8mb4_0900_ai_ci AS SELECT 1";
     match mysql_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -994,7 +994,7 @@ fn parse_create_table_both_options_and_as_query() {
         _ => unreachable!(),
     }
 
-    let sql = r"CREATE TABLE foo (id INT(11)) ENGINE=InnoDB AS SELECT 1 DEFAULT CHARSET=utf8mb3";
+    let sql = r"CREATE TABLE foo (id INT(11)) ENGINE = InnoDB AS SELECT 1 DEFAULT CHARSET=utf8mb3";
     assert!(matches!(
         mysql_and_generic().parse_sql_statements(sql),
         Err(ParserError::ParserError(_))
@@ -1045,6 +1045,174 @@ fn parse_create_table_gencol() {
     mysql_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2))");
     mysql_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2) VIRTUAL)");
     mysql_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2) STORED)");
+}
+
+#[test]
+fn parse_create_table_without_equals() {
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) CHARSET utf8mb4",
+        "CREATE TABLE foo (id INT) DEFAULT CHARSET = utf8mb4",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) COLLATE utf8mb4_unicode_ci",
+        "CREATE TABLE foo (id INT) COLLATE = utf8mb4_unicode_ci",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) ENGINE InnoDB",
+        "CREATE TABLE foo (id INT) ENGINE = InnoDB",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) DEFAULT CHARSET utf8mb4",
+        "CREATE TABLE foo (id INT) DEFAULT CHARSET = utf8mb4",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) DEFAULT COLLATE utf8mb4_unicode_ci",
+        "CREATE TABLE foo (id INT) COLLATE = utf8mb4_unicode_ci",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) AUTO_INCREMENT 123",
+        "CREATE TABLE foo (id INT) AUTO_INCREMENT = 123",
+    );
+
+    // Test multiple options
+    mysql_and_generic().one_statement_parses_to(
+            "CREATE TABLE foo (id INT) ENGINE InnoDB AUTO_INCREMENT 100 CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci",
+            "CREATE TABLE foo (id INT) ENGINE = InnoDB AUTO_INCREMENT = 100 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci",
+        );
+
+    // Test mixing options with and without equals sign
+    mysql_and_generic().one_statement_parses_to(
+            "CREATE TABLE foo (id INT) ENGINE InnoDB AUTO_INCREMENT = 100 CHARSET = utf8mb4 COLLATE utf8mb4_unicode_ci",
+            "CREATE TABLE foo (id INT) ENGINE = InnoDB AUTO_INCREMENT = 100 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci",
+        );
+}
+
+#[test]
+#[ignore = "not yet supported"]
+fn parse_unsupported_create_table_options() {
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) AVG_ROW_LENGTH 100",
+        "CREATE TABLE foo (id INT) AVG_ROW_LENGTH = 100",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) KEY_BLOCK_SIZE 8",
+        "CREATE TABLE foo (id INT) KEY_BLOCK_SIZE = 8",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) MAX_ROWS 1000000",
+        "CREATE TABLE foo (id INT) MAX_ROWS = 1000000",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) MIN_ROWS 10",
+        "CREATE TABLE foo (id INT) MIN_ROWS = 10",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) CHECKSUM 0",
+        "CREATE TABLE foo (id INT) CHECKSUM = 0",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) DELAY_KEY_WRITE 1",
+        "CREATE TABLE foo (id INT) DELAY_KEY_WRITE = 1",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) COMPRESSION 'ZLIB'",
+        "CREATE TABLE foo (id INT) COMPRESSION = 'ZLIB'",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) CONNECTION 'connection_string'",
+        "CREATE TABLE foo (id INT) CONNECTION = 'connection_string'",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) DATA DIRECTORY '/var/lib/mysql/data'",
+        "CREATE TABLE foo (id INT) DATA DIRECTORY = '/var/lib/mysql/data'",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) INDEX DIRECTORY '/var/lib/mysql/index'",
+        "CREATE TABLE foo (id INT) INDEX DIRECTORY = '/var/lib/mysql/index'",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) ENCRYPTION 'Y'",
+        "CREATE TABLE foo (id INT) ENCRYPTION = 'Y'",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) PACK_KEYS DEFAULT",
+        "CREATE TABLE foo (id INT) PACK_KEYS = DEFAULT",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) ROW_FORMAT DYNAMIC",
+        "CREATE TABLE foo (id INT) ROW_FORMAT = DYNAMIC",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) STATS_AUTO_RECALC DEFAULT",
+        "CREATE TABLE foo (id INT) STATS_AUTO_RECALC = DEFAULT",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) STATS_PERSISTENT DEFAULT",
+        "CREATE TABLE foo (id INT) STATS_PERSISTENT = DEFAULT",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) STATS_SAMPLE_PAGES 50",
+        "CREATE TABLE foo (id INT) STATS_SAMPLE_PAGES = 50",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) INSERT_METHOD NO",
+        "CREATE TABLE foo (id INT) INSERT_METHOD = NO",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) INSERT_METHOD FIRST",
+        "CREATE TABLE foo (id INT) INSERT_METHOD = FIRST",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) ENGINE_ATTRIBUTE 'custom-option'",
+        "CREATE TABLE foo (id INT) ENGINE_ATTRIBUTE = 'custom-option'",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) SECONDARY_ENGINE_ATTRIBUTE 'custom-option'",
+        "CREATE TABLE foo (id INT) SECONDARY_ENGINE_ATTRIBUTE = 'custom-option'",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) AUTOEXTEND_SIZE 4M",
+        "CREATE TABLE foo (id INT) AUTOEXTEND_SIZE = 4M",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) PASSWORD 'secret'",
+        "CREATE TABLE foo (id INT) PASSWORD = 'secret'",
+    );
+
+    // Test UNION
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE foo (id INT) UNION (t1,t2)",
+        "CREATE TABLE foo (id INT) UNION = (t1,t2)",
+    );
+
+    // Test START TRANSACTION which doesn't take a value at all
+    mysql_and_generic().verified_stmt("CREATE TABLE foo (id INT) START TRANSACTION");
 }
 
 #[test]

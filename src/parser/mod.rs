@@ -5451,11 +5451,7 @@ impl<'a> Parser<'a> {
             && self.parse_keyword(Keyword::COMMENT)
         {
             self.expect_token(&Token::Eq)?;
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(str) => Some(str),
-                _ => self.expected("string literal", next_token)?,
-            }
+            Some(self.parse_comment_value()?)
         } else {
             None
         };
@@ -7059,19 +7055,26 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_inline_comment(&mut self) -> Result<Option<CommentDef>, ParserError> {
         let comment = if self.parse_keyword(Keyword::COMMENT) {
             let has_eq = self.consume_token(&Token::Eq);
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(str) => Some(if has_eq {
-                    CommentDef::WithEq(str)
-                } else {
-                    CommentDef::WithoutEq(str)
-                }),
-                _ => self.expected("comment", next_token)?,
-            }
+            let comment = self.parse_comment_value()?;
+            Some(if has_eq {
+                CommentDef::WithEq(comment)
+            } else {
+                CommentDef::WithoutEq(comment)
+            })
         } else {
             None
         };
         Ok(comment)
+    }
+
+    pub fn parse_comment_value(&mut self) -> Result<String, ParserError> {
+        let next_token = self.next_token();
+        let value = match next_token.token {
+            Token::SingleQuotedString(str) => str,
+            Token::DollarQuotedString(str) => str.value,
+            _ => self.expected("string literal", next_token)?,
+        };
+        Ok(value)
     }
 
     pub fn parse_optional_procedure_parameters(
@@ -7209,11 +7212,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
             Ok(Some(ColumnOption::NotNull))
         } else if self.parse_keywords(&[Keyword::COMMENT]) {
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(value, ..) => Ok(Some(ColumnOption::Comment(value))),
-                _ => self.expected("string", next_token),
-            }
+            Ok(Some(ColumnOption::Comment(self.parse_comment_value()?)))
         } else if self.parse_keyword(Keyword::NULL) {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {

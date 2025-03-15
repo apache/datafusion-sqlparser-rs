@@ -977,6 +977,21 @@ fn parse_sf_create_or_replace_with_comment_for_snowflake() {
 }
 
 #[test]
+fn parse_sf_create_table_or_view_with_dollar_quoted_comment() {
+    // Snowflake transforms dollar quoted comments into a common comment in DDL representation of creation
+    snowflake()
+        .one_statement_parses_to(
+            r#"CREATE OR REPLACE TEMPORARY VIEW foo.bar.baz ("COL_1" COMMENT $$comment 1$$) COMMENT = $$view comment$$ AS (SELECT 1)"#,
+            r#"CREATE OR REPLACE TEMPORARY VIEW foo.bar.baz ("COL_1" COMMENT 'comment 1') COMMENT = 'view comment' AS (SELECT 1)"#
+        );
+
+    snowflake().one_statement_parses_to(
+        r#"CREATE TABLE my_table (a STRING COMMENT $$comment 1$$) COMMENT = $$table comment$$"#,
+        r#"CREATE TABLE my_table (a STRING COMMENT 'comment 1') COMMENT = 'table comment'"#,
+    );
+}
+
+#[test]
 fn test_sf_derived_table_in_parenthesis() {
     // Nesting a subquery in an extra set of parentheses is non-standard,
     // but supported in Snowflake SQL

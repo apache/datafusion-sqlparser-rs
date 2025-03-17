@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::tokenizer::Span;
+use crate::{keywords::Keyword, tokenizer::Span};
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
@@ -2578,7 +2578,7 @@ pub enum Set {
     /// SQL Standard-style
     /// SET a = 1;
     SingleAssignment {
-        local: bool,
+        scope: ContextModifier,
         hivevar: bool,
         variable: ObjectName,
         values: Vec<Expr>,
@@ -2660,7 +2660,7 @@ impl Display for Set {
                 role_name,
             } => {
                 let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
-                write!(f, "SET{context_modifier} ROLE {role_name}")
+                write!(f, "SET {context_modifier}ROLE {role_name}")
             }
             Self::SetSessionParam(kind) => write!(f, "SET {kind}"),
             Self::SetTransaction {
@@ -2707,7 +2707,7 @@ impl Display for Set {
                 Ok(())
             }
             Set::SingleAssignment {
-                local,
+                scope,
                 hivevar,
                 variable,
                 values,
@@ -2715,7 +2715,7 @@ impl Display for Set {
                 write!(
                     f,
                     "SET {}{}{} = {}",
-                    if *local { "LOCAL " } else { "" },
+                    scope,
                     if *hivevar { "HIVEVAR:" } else { "" },
                     variable,
                     display_comma_separated(values)
@@ -7910,6 +7910,8 @@ pub enum ContextModifier {
     Local,
     /// `SESSION` identifier
     Session,
+    /// `GLOBAL` identifier
+    Global,
 }
 
 impl fmt::Display for ContextModifier {
@@ -7919,11 +7921,28 @@ impl fmt::Display for ContextModifier {
                 write!(f, "")
             }
             Self::Local => {
-                write!(f, " LOCAL")
+                write!(f, "LOCAL ")
             }
             Self::Session => {
-                write!(f, " SESSION")
+                write!(f, "SESSION ")
             }
+            Self::Global => {
+                write!(f, "GLOBAL ")
+            }
+        }
+    }
+}
+
+impl From<Option<Keyword>> for ContextModifier {
+    fn from(kw: Option<Keyword>) -> Self {
+        match kw {
+            Some(kw) => match kw {
+                Keyword::LOCAL => Self::Local,
+                Keyword::SESSION => Self::Session,
+                Keyword::GLOBAL => Self::Global,
+                _ => Self::None,
+            },
+            None => Self::None,
         }
     }
 }

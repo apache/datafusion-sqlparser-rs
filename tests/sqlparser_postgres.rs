@@ -988,8 +988,7 @@ fn parse_create_schema_if_not_exists() {
         Statement::CreateSchema {
             if_not_exists: true,
             schema_name,
-            options: _,
-            default_collate_spec: _,
+            ..
         } => assert_eq!("schema_name", schema_name.to_string()),
         _ => unreachable!(),
     }
@@ -1433,7 +1432,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            local: false,
+            scope: ContextModifier::None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::Identifier(Ident {
@@ -1448,7 +1447,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            local: false,
+            scope: ContextModifier::None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::Value(
@@ -1461,7 +1460,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            local: false,
+            scope: ContextModifier::None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::value(number("0"))],
@@ -1472,7 +1471,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            local: false,
+            scope: ContextModifier::None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::Identifier(Ident::new("DEFAULT"))],
@@ -1483,7 +1482,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            local: true,
+            scope: ContextModifier::Local,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::Identifier("b".into())],
@@ -1494,7 +1493,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            local: false,
+            scope: ContextModifier::None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
             values: vec![Expr::Identifier(Ident {
@@ -1512,7 +1511,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            local: false,
+            scope: ContextModifier::None,
             hivevar: false,
             variable: ObjectName::from(vec![
                 Ident::new("hive"),
@@ -1526,7 +1525,6 @@ fn parse_set() {
     );
 
     pg_and_generic().one_statement_parses_to("SET a TO b", "SET a = b");
-    pg_and_generic().one_statement_parses_to("SET SESSION a = b", "SET a = b");
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET"),

@@ -11100,11 +11100,7 @@ impl<'a> Parser<'a> {
     /// Parse a `SET ROLE` statement. Expects SET to be consumed already.
     fn parse_set_role(&mut self, modifier: Option<Keyword>) -> Result<Statement, ParserError> {
         self.expect_keyword_is(Keyword::ROLE)?;
-        let context_modifier = match modifier {
-            Some(Keyword::LOCAL) => ContextModifier::Local,
-            Some(Keyword::SESSION) => ContextModifier::Session,
-            _ => ContextModifier::None,
-        };
+        let context_modifier = ContextModifier::from(modifier);
 
         let role_name = if self.parse_keyword(Keyword::NONE) {
             None
@@ -11176,8 +11172,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_set(&mut self) -> Result<Statement, ParserError> {
-        let modifier =
-            self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
+        let modifier = self.parse_one_of_keywords(&[
+            Keyword::SESSION,
+            Keyword::LOCAL,
+            Keyword::HIVEVAR,
+            Keyword::GLOBAL,
+        ]);
 
         if let Some(Keyword::HIVEVAR) = modifier {
             self.expect_token(&Token::Colon)?;
@@ -11193,7 +11193,7 @@ impl<'a> Parser<'a> {
         {
             if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
                 return Ok(Set::SingleAssignment {
-                    local: modifier == Some(Keyword::LOCAL),
+                    scope: ContextModifier::from(modifier),
                     hivevar: modifier == Some(Keyword::HIVEVAR),
                     variable: ObjectName::from(vec!["TIMEZONE".into()]),
                     values: self.parse_set_values(false)?,
@@ -11283,7 +11283,7 @@ impl<'a> Parser<'a> {
                     }?;
 
                     Ok(Set::SingleAssignment {
-                        local: modifier == Some(Keyword::LOCAL),
+                        scope: ContextModifier::from(modifier),
                         hivevar: modifier == Some(Keyword::HIVEVAR),
                         variable,
                         values,
@@ -11311,7 +11311,7 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let stmt = match variables {
                 OneOrManyWithParens::One(var) => Set::SingleAssignment {
-                    local: modifier == Some(Keyword::LOCAL),
+                    scope: ContextModifier::from(modifier),
                     hivevar: modifier == Some(Keyword::HIVEVAR),
                     variable: var,
                     values: self.parse_set_values(false)?,

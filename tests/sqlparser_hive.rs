@@ -21,9 +21,10 @@
 //! is also tested (on the inputs it can handle).
 
 use sqlparser::ast::{
-    ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
-    Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName, OrderByExpr,
-    OrderByOptions, SelectItem, Set, Statement, TableFactor, UnaryOperator, Use, Value,
+    ClusteredBy, CommentDef, ContextModifier, CreateFunction, CreateFunctionBody,
+    CreateFunctionUsing, CreateTable, Expr, Function, FunctionArgumentList, FunctionArguments,
+    Ident, ObjectName, OrderByExpr, OrderByOptions, SelectItem, Set, Statement, TableFactor,
+    UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::ParserError;
@@ -369,7 +370,7 @@ fn set_statement_with_minus() {
     assert_eq!(
         hive().verified_stmt("SET hive.tez.java.opts = -Xmx4g"),
         Statement::Set(Set::SingleAssignment {
-            local: false,
+            scope: ContextModifier::None,
             hivevar: false,
             variable: ObjectName::from(vec![
                 Ident::new("hive"),

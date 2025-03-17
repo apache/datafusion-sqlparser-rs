@@ -8645,6 +8645,26 @@ fn parse_set_variable() {
         _ => unreachable!(),
     }
 
+    match verified_stmt("SET GLOBAL VARIABLE = 'Value'") {
+        Statement::Set(Set::SingleAssignment {
+            scope,
+            hivevar,
+            variable,
+            values,
+        }) => {
+            assert_eq!(scope, ContextModifier::Global);
+            assert!(!hivevar);
+            assert_eq!(variable, ObjectName::from(vec!["VARIABLE".into()]));
+            assert_eq!(
+                values,
+                vec![Expr::Value(
+                    (Value::SingleQuotedString("Value".into())).with_empty_span()
+                )]
+            );
+        }
+        _ => unreachable!(),
+    }
+
     let multi_variable_dialects = all_dialects_where(|d| d.supports_parenthesized_set_variables());
     let sql = r#"SET (a, b, c) = (1, 2, 3)"#;
     match multi_variable_dialects.verified_stmt(sql) {

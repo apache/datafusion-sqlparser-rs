@@ -2455,6 +2455,52 @@ fn parse_alter_table_with_algorithm() {
 }
 
 #[test]
+fn parse_alter_table_with_lock() {
+    let sql = "ALTER TABLE tab LOCK = SHARED";
+    let expected_operation = AlterTableOperation::Lock {
+        equals: true,
+        lock: AlterTableLock::Shared,
+    };
+    let operation = alter_table_op(mysql_and_generic().verified_stmt(sql));
+    assert_eq!(expected_operation, operation);
+
+    let sql =
+        "ALTER TABLE users DROP COLUMN password_digest, LOCK = EXCLUSIVE, RENAME COLUMN name TO username";
+    let stmt = mysql_and_generic().verified_stmt(sql);
+    match stmt {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::DropColumn {
+                        column_name: Ident::new("password_digest"),
+                        if_exists: false,
+                        drop_behavior: None,
+                    },
+                    AlterTableOperation::Lock {
+                        equals: true,
+                        lock: AlterTableLock::Exclusive,
+                    },
+                    AlterTableOperation::RenameColumn {
+                        old_column_name: Ident::new("name"),
+                        new_column_name: Ident::new("username")
+                    },
+                ]
+            )
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK DEFAULT");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK SHARED");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK NONE");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK EXCLUSIVE");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK = DEFAULT");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK = SHARED");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK = NONE");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK = EXCLUSIVE");
+}
+
+#[test]
 fn parse_alter_table_auto_increment() {
     let sql = "ALTER TABLE tab AUTO_INCREMENT = 42";
     let expected_operation = AlterTableOperation::AutoIncrement {

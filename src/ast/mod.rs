@@ -48,7 +48,7 @@ pub use self::dcl::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterConnectorOwner, AlterIndexOperation, AlterPolicyOperation,
-    AlterTableAlgorithm, AlterTableOperation, AlterType, AlterTypeAddValue,
+    AlterTableAlgorithm, AlterTableLock, AlterTableOperation, AlterType, AlterTypeAddValue,
     AlterTypeAddValuePosition, AlterTypeOperation, AlterTypeRename, AlterTypeRenameValue,
     ClusteredBy, ColumnDef, ColumnOption, ColumnOptionDef, ColumnPolicy, ColumnPolicyProperty,
     ConstraintCharacteristics, CreateConnector, CreateFunction, Deduplicate, DeferrableInitial,

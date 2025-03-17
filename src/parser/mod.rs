@@ -8311,6 +8311,24 @@ impl<'a> Parser<'a> {
             AlterTableOperation::SuspendRecluster
         } else if self.parse_keywords(&[Keyword::RESUME, Keyword::RECLUSTER]) {
             AlterTableOperation::ResumeRecluster
+        } else if self.parse_keyword(Keyword::LOCK) {
+            let equals = self.consume_token(&Token::Eq);
+            let lock = match self.parse_one_of_keywords(&[
+                Keyword::DEFAULT,
+                Keyword::EXCLUSIVE,
+                Keyword::NONE,
+                Keyword::SHARED,
+            ]) {
+                Some(Keyword::DEFAULT) => AlterTableLock::Default,
+                Some(Keyword::EXCLUSIVE) => AlterTableLock::Exclusive,
+                Some(Keyword::NONE) => AlterTableLock::None,
+                Some(Keyword::SHARED) => AlterTableLock::Shared,
+                _ => self.expected(
+                    "DEFAULT, EXCLUSIVE, NONE or SHARED after LOCK [=]",
+                    self.peek_token(),
+                )?,
+            };
+            AlterTableOperation::Lock { equals, lock }
         } else if self.parse_keyword(Keyword::ALGORITHM) {
             let equals = self.consume_token(&Token::Eq);
             let algorithm = match self.parse_one_of_keywords(&[

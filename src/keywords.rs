@@ -797,6 +797,7 @@ define_keywords!(
     SETS,
     SETTINGS,
     SHARE,
+    SHARED,
     SHARING,
     SHOW,
     SIGNED,

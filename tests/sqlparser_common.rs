@@ -7607,6 +7607,9 @@ fn parse_substring() {
     verified_stmt("SELECT SUBSTRING('1', 1, 3)");
     verified_stmt("SELECT SUBSTRING('1', 1)");
     verified_stmt("SELECT SUBSTRING('1' FOR 3)");
+    verified_stmt("SELECT SUBSTRING('foo' FROM 1 FOR 2) FROM t");
+    verified_stmt("SELECT SUBSTR('foo' FROM 1 FOR 2) FROM t");
+    verified_stmt("SELECT SUBSTR('foo', 1, 2) FROM t");
 }
 
 #[test]

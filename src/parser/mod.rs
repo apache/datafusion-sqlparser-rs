@@ -1302,7 +1302,10 @@ impl<'a> Parser<'a> {
             Keyword::POSITION if self.peek_token_ref().token == Token::LParen => {
                 Ok(Some(self.parse_position_expr(w.clone().into_ident(w_span))?))
             }
-            Keyword::SUBSTRING => Ok(Some(self.parse_substring_expr()?)),
+            Keyword::SUBSTR | Keyword::SUBSTRING => {
+                self.prev_token();
+                Ok(Some(self.parse_substring()?))
+            }
             Keyword::OVERLAY => Ok(Some(self.parse_overlay_expr()?)),
             Keyword::TRIM => Ok(Some(self.parse_trim_expr()?)),
             Keyword::INTERVAL => Ok(Some(self.parse_interval()?)),
@@ -2412,8 +2415,16 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_substring_expr(&mut self) -> Result<Expr, ParserError> {
-        // PARSE SUBSTRING (EXPR [FROM 1] [FOR 3])
+    // { SUBSTRING | SUBSTR } (<EXPR> [FROM 1] [FOR 3])
+    pub fn parse_substring(&mut self) -> Result<Expr, ParserError> {
+        let shorthand = match self.expect_one_of_keywords(&[Keyword::SUBSTR, Keyword::SUBSTRING])? {
+            Keyword::SUBSTR => true,
+            Keyword::SUBSTRING => false,
+            _ => {
+                self.prev_token();
+                return self.expected("SUBSTR or SUBSTRING", self.peek_token());
+            }
+        };
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         let mut from_expr = None;
@@ -2433,6 +2444,7 @@ impl<'a> Parser<'a> {
             substring_from: from_expr.map(Box::new),
             substring_for: to_expr.map(Box::new),
             special,
+            shorthand,
         })
     }
 

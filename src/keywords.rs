@@ -841,6 +841,7 @@ define_keywords!(
     STRING,
     STRUCT,
     SUBMULTISET,
+    SUBSTR,
     SUBSTRING,
     SUBSTRING_REGEX,
     SUCCEEDS,

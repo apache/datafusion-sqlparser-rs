@@ -890,6 +890,10 @@ pub enum Expr {
         /// true if the expression is represented using the `SUBSTRING(expr, start, len)` syntax
         /// This flag is used for formatting.
         special: bool,
+
+        /// true if the expression is represented using the `SUBSTR` shorthand
+        /// This flag is used for formatting.
+        shorthand: bool,
     },
     /// ```sql
     /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)
@@ -1719,8 +1723,13 @@ impl fmt::Display for Expr {
                 substring_from,
                 substring_for,
                 special,
+                shorthand,
             } => {
-                write!(f, "SUBSTRING({expr}")?;
+                f.write_str("SUBSTR")?;
+                if !*shorthand {
+                    f.write_str("ING")?;
+                }
+                write!(f, "({expr}")?;
                 if let Some(from_part) = substring_from {
                     if *special {
                         write!(f, ", {from_part}")?;

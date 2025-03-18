@@ -1503,6 +1503,7 @@ impl Spanned for Expr {
                 substring_from,
                 substring_for,
                 special: _,
+                shorthand: _,
             } => union_spans(
                 core::iter::once(expr.span())
                     .chain(substring_from.as_ref().map(|i| i.span()))

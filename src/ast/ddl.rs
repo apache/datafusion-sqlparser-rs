@@ -288,6 +288,16 @@ pub enum AlterTableOperation {
         equals: bool,
         algorithm: AlterTableAlgorithm,
     },
+
+    /// `LOCK [=] { DEFAULT | NONE | SHARED | EXCLUSIVE }`
+    ///
+    /// [MySQL]-specific table alter lock.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    Lock {
+        equals: bool,
+        lock: AlterTableLock,
+    },
     /// `AUTO_INCREMENT [=] <value>`
     ///
     /// [MySQL]-specific table option for raising current auto increment value.
@@ -362,6 +372,30 @@ impl fmt::Display for AlterTableAlgorithm {
             Self::Instant => "INSTANT",
             Self::Inplace => "INPLACE",
             Self::Copy => "COPY",
+        })
+    }
+}
+
+/// [MySQL] `ALTER TABLE` lock.
+///
+/// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTableLock {
+    Default,
+    None,
+    Shared,
+    Exclusive,
+}
+
+impl fmt::Display for AlterTableLock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Self::Default => "DEFAULT",
+            Self::None => "NONE",
+            Self::Shared => "SHARED",
+            Self::Exclusive => "EXCLUSIVE",
         })
     }
 }
@@ -691,6 +725,9 @@ impl fmt::Display for AlterTableOperation {
                     if *equals { "= " } else { "" },
                     value
                 )
+            }
+            AlterTableOperation::Lock { equals, lock } => {
+                write!(f, "LOCK {}{}", if *equals { "= " } else { "" }, lock)
             }
         }
     }

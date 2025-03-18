@@ -2256,6 +2256,57 @@ impl fmt::Display for ConditionalStatements {
     }
 }
 
+/// A `RAISE` statement.
+///
+/// Examples:
+/// ```sql
+/// RAISE USING MESSAGE = 'error';
+///
+/// RAISE myerror;
+/// ```
+///
+/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#raise)
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/snowflake-scripting/raise)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct RaiseStatement {
+    pub value: Option<RaiseStatementValue>,
+}
+
+impl fmt::Display for RaiseStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let RaiseStatement { value } = self;
+
+        write!(f, "RAISE")?;
+        if let Some(value) = value {
+            write!(f, " {value}")?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Represents the error value of a [RaiseStatement].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RaiseStatementValue {
+    /// `RAISE USING MESSAGE = 'error'`
+    UsingMessage(Expr),
+    /// `RAISE myerror`
+    Expr(Expr),
+}
+
+impl fmt::Display for RaiseStatementValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RaiseStatementValue::Expr(expr) => write!(f, "{expr}"),
+            RaiseStatementValue::UsingMessage(expr) => write!(f, "USING MESSAGE = {expr}"),
+        }
+    }
+}
+
 /// Represents an expression assignment within a variable `DECLARE` statement.
 ///
 /// Examples:
@@ -2827,6 +2878,8 @@ pub enum Statement {
     Case(CaseStatement),
     /// An `IF` statement.
     If(IfStatement),
+    /// A `RAISE` statement.
+    Raise(RaiseStatement),
     /// ```sql
     /// CALL <function>
     /// ```
@@ -4140,6 +4193,9 @@ impl fmt::Display for Statement {
                 write!(f, "{stmt}")
             }
             Statement::If(stmt) => {
+                write!(f, "{stmt}")
+            }
+            Statement::Raise(stmt) => {
                 write!(f, "{stmt}")
             }
             Statement::AttachDatabase {

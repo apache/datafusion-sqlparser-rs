@@ -14299,6 +14299,29 @@ fn parse_if_statement() {
 }
 
 #[test]
+fn parse_raise_statement() {
+    let sql = "RAISE USING MESSAGE = 42";
+    let Statement::Raise(stmt) = verified_stmt(sql) else {
+        unreachable!()
+    };
+    assert_eq!(
+        Some(RaiseStatementValue::UsingMessage(Expr::value(number("42")))),
+        stmt.value
+    );
+
+    verified_stmt("RAISE USING MESSAGE = 'error'");
+    verified_stmt("RAISE myerror");
+    verified_stmt("RAISE 42");
+    verified_stmt("RAISE using");
+    verified_stmt("RAISE");
+
+    assert_eq!(
+        ParserError::ParserError("Expected: =, found: error".to_string()),
+        parse_sql_statements("RAISE USING MESSAGE error").unwrap_err()
+    );
+}
+
+#[test]
 fn test_lambdas() {
     let dialects = all_dialects_where(|d| d.supports_lambda_functions());
 

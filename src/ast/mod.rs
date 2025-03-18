@@ -7899,7 +7899,7 @@ impl fmt::Display for FlushLocation {
     }
 }
 
-/// Optional context modifier for statements that can be or `LOCAL`, or `SESSION`.
+/// Optional context modifier for statements that can be or `LOCAL`, 'GLOBAL', or `SESSION`.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

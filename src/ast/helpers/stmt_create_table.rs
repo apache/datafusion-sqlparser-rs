@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     pub fn test_from_valid_statement() {
-        let builder = CreateTableBuilder::new(ObjectName::from(vec![Ident::new("table_name")]));
+        let builder = CreateTableBuilder::new(ObjectName(vec![Ident::new("table_name")]));
 
         let stmt = builder.clone().build();
 

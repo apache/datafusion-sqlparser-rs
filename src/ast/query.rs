@@ -894,7 +894,7 @@ impl fmt::Display for SelectItem {
             SelectItem::UnnamedExpr(expr) => write!(f, "{expr}"),
             SelectItem::ExprWithAlias { expr, alias } => write!(f, "{expr} AS {alias}"),
             SelectItem::QualifiedWildcard(kind, additional_options) => {
-                write!(f, "{kind}")?;
+                write!(f, "{kind}.*")?;
                 write!(f, "{additional_options}")?;
                 Ok(())
             }

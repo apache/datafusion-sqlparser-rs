@@ -688,7 +688,7 @@ pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, Par
                     break;
                 }
             }
-            Ok(ObjectName::from(idents))
+            Ok(ObjectName(idents))
         }
         _ => {
             parser.prev_token();

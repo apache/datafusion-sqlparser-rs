@@ -368,7 +368,7 @@ fn set_statement_with_minus() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![
+            variables: OneOrManyWithParens::One(ObjectName(vec![
                 Ident::new("hive"),
                 Ident::new("tez"),
                 Ident::new("java"),
@@ -463,7 +463,7 @@ fn parse_delimited_identifiers() {
             index_hints: _,
         } => {
             assert_eq!(
-                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                ObjectName(vec![Ident::with_quote('"', "a table")]),
                 name
             );
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -484,7 +484,7 @@ fn parse_delimited_identifiers() {
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -520,7 +520,7 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             hive().verified_stmt(&format!("USE {}", object_name)),
-            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
                 object_name.to_string()
             )])))
         );
@@ -528,7 +528,7 @@ fn parse_use() {
             // Test single identifier with different type of quotes
             assert_eq!(
                 hive().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
-                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
                 )])))

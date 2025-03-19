@@ -634,7 +634,7 @@ fn test_snowflake_create_table_with_collated_column() {
                 vec![ColumnDef {
                     name: "a".into(),
                     data_type: DataType::Text,
-                    collation: Some(ObjectName::from(vec![Ident::with_quote('\'', "de_DE")])),
+                    collation: Some(ObjectName(vec![Ident::with_quote('\'', "de_DE")])),
                     options: vec![]
                 },]
             );
@@ -818,7 +818,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                     ColumnDef {
                         name: "b".into(),
                         data_type: DataType::Text,
-                        collation: Some(ObjectName::from(vec![Ident::with_quote('\'', "de_DE")])),
+                        collation: Some(ObjectName(vec![Ident::with_quote('\'', "de_DE")])),
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -1275,7 +1275,7 @@ fn parse_delimited_identifiers() {
             ..
         } => {
             assert_eq!(
-                ObjectName::from(vec![Ident::with_quote('"', "a table")]),
+                ObjectName(vec![Ident::with_quote('"', "a table")]),
                 name
             );
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -1296,7 +1296,7 @@ fn parse_delimited_identifiers() {
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName::from(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
@@ -1368,7 +1368,7 @@ fn test_select_wildcard_with_exclude() {
     let select = snowflake_and_generic()
         .verified_only_select("SELECT name.* EXCLUDE department_id FROM employee_table");
     let expected = SelectItem::QualifiedWildcard(
-        SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("name")])),
+        SelectItemQualifiedWildcardKind::ObjectName(ObjectName(vec![Ident::new("name")])),
         WildcardAdditionalOptions {
             opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
             ..Default::default()
@@ -1405,7 +1405,7 @@ fn test_select_wildcard_with_rename() {
         "SELECT name.* RENAME (department_id AS new_dep, employee_id AS new_emp) FROM employee_table",
     );
     let expected = SelectItem::QualifiedWildcard(
-        SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(vec![Ident::new("name")])),
+        SelectItemQualifiedWildcardKind::ObjectName(ObjectName(vec![Ident::new("name")])),
         WildcardAdditionalOptions {
             opt_rename: Some(RenameSelectItem::Multiple(vec![
                 IdentWithAlias {
@@ -1508,7 +1508,7 @@ fn test_alter_table_clustering() {
                     Expr::Identifier(Ident::new("c1")),
                     Expr::Identifier(Ident::with_quote('"', "c2")),
                     Expr::Function(Function {
-                        name: ObjectName::from(vec![Ident::new("TO_DATE")]),
+                        name: ObjectName(vec![Ident::new("TO_DATE")]),
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
@@ -2037,11 +2037,11 @@ fn test_copy_into() {
         } => {
             assert_eq!(
                 into,
-                ObjectName::from(vec![Ident::new("my_company"), Ident::new("emp_basic")])
+                ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")])
             );
             assert_eq!(
                 from_stage,
-                ObjectName::from(vec![Ident::with_quote('\'', "gcs://mybucket/./../a.csv")])
+                ObjectName(vec![Ident::with_quote('\'', "gcs://mybucket/./../a.csv")])
             );
             assert!(files.is_none());
             assert!(pattern.is_none());
@@ -2072,7 +2072,7 @@ fn test_copy_into_with_stage_params() {
             //assert_eq!("s3://load/files/", stage_params.url.unwrap());
             assert_eq!(
                 from_stage,
-                ObjectName::from(vec![Ident::with_quote('\'', "s3://load/files/")])
+                ObjectName(vec![Ident::with_quote('\'', "s3://load/files/")])
             );
             assert_eq!("myint", stage_params.storage_integration.unwrap());
             assert_eq!(
@@ -2131,7 +2131,7 @@ fn test_copy_into_with_stage_params() {
         } => {
             assert_eq!(
                 from_stage,
-                ObjectName::from(vec![Ident::with_quote('\'', "s3://load/files/")])
+                ObjectName(vec![Ident::with_quote('\'', "s3://load/files/")])
             );
             assert_eq!("myint", stage_params.storage_integration.unwrap());
         }
@@ -2185,7 +2185,7 @@ fn test_copy_into_with_transformations() {
         } => {
             assert_eq!(
                 from_stage,
-                ObjectName::from(vec![Ident::new("@schema"), Ident::new("general_finished")])
+                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
             );
             assert_eq!(
                 from_transformations.as_ref().unwrap()[0],
@@ -2294,17 +2294,17 @@ fn test_snowflake_stage_object_names() {
         "@~/path",
     ];
     let mut allowed_object_names = [
-        ObjectName::from(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
-        ObjectName::from(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
-        ObjectName::from(vec![
+        ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
+        ObjectName(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
+        ObjectName(vec![
             Ident::new("@namespace"),
             Ident::new("%table_name/path"),
         ]),
-        ObjectName::from(vec![
+        ObjectName(vec![
             Ident::new("@namespace"),
             Ident::new("stage_name/path"),
         ]),
-        ObjectName::from(vec![Ident::new("@~/path")]),
+        ObjectName(vec![Ident::new("@~/path")]),
     ];
 
     for it in allowed_formatted_names
@@ -2335,11 +2335,11 @@ fn test_snowflake_copy_into() {
         } => {
             assert_eq!(
                 into,
-                ObjectName::from(vec![Ident::new("a"), Ident::new("b")])
+                ObjectName(vec![Ident::new("a"), Ident::new("b")])
             );
             assert_eq!(
                 from_stage,
-                ObjectName::from(vec![Ident::new("@namespace"), Ident::new("stage_name")])
+                ObjectName(vec![Ident::new("@namespace"), Ident::new("stage_name")])
             )
         }
         _ => unreachable!(),
@@ -2356,14 +2356,14 @@ fn test_snowflake_copy_into_stage_name_ends_with_parens() {
         } => {
             assert_eq!(
                 into,
-                ObjectName::from(vec![
+                ObjectName(vec![
                     Ident::new("SCHEMA"),
                     Ident::new("SOME_MONITORING_SYSTEM")
                 ])
             );
             assert_eq!(
                 from_stage,
-                ObjectName::from(vec![Ident::new("@schema"), Ident::new("general_finished")])
+                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
             )
         }
         _ => unreachable!(),
@@ -2791,7 +2791,7 @@ fn parse_use() {
         // Test single identifier without quotes
         assert_eq!(
             snowflake().verified_stmt(&format!("USE {}", object_name)),
-            Statement::Use(Use::Object(ObjectName::from(vec![Ident::new(
+            Statement::Use(Use::Object(ObjectName(vec![Ident::new(
                 object_name.to_string()
             )])))
         );
@@ -2799,7 +2799,7 @@ fn parse_use() {
             // Test single identifier with different type of quotes
             assert_eq!(
                 snowflake().verified_stmt(&format!("USE {}{}{}", quote, object_name, quote)),
-                Statement::Use(Use::Object(ObjectName::from(vec![Ident::with_quote(
+                Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
                 )])))
@@ -2811,7 +2811,7 @@ fn parse_use() {
         // Test double identifier with different type of quotes
         assert_eq!(
             snowflake().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
-            Statement::Use(Use::Object(ObjectName::from(vec![
+            Statement::Use(Use::Object(ObjectName(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
             ])))
@@ -2820,7 +2820,7 @@ fn parse_use() {
     // Test double identifier without quotes
     assert_eq!(
         snowflake().verified_stmt("USE mydb.my_schema"),
-        Statement::Use(Use::Object(ObjectName::from(vec![
+        Statement::Use(Use::Object(ObjectName(vec![
             Ident::new("mydb"),
             Ident::new("my_schema")
         ])))
@@ -2830,35 +2830,35 @@ fn parse_use() {
         // Test single and double identifier with keyword and different type of quotes
         assert_eq!(
             snowflake().verified_stmt(&format!("USE DATABASE {0}my_database{0}", quote)),
-            Statement::Use(Use::Database(ObjectName::from(vec![Ident::with_quote(
+            Statement::Use(Use::Database(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_database".to_string(),
             )])))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE SCHEMA {0}my_schema{0}", quote)),
-            Statement::Use(Use::Schema(ObjectName::from(vec![Ident::with_quote(
+            Statement::Use(Use::Schema(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_schema".to_string(),
             )])))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE SCHEMA {0}CATALOG{0}.{0}my_schema{0}", quote)),
-            Statement::Use(Use::Schema(ObjectName::from(vec![
+            Statement::Use(Use::Schema(ObjectName(vec![
                 Ident::with_quote(quote, "CATALOG"),
                 Ident::with_quote(quote, "my_schema")
             ])))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE ROLE {0}my_role{0}", quote)),
-            Statement::Use(Use::Role(ObjectName::from(vec![Ident::with_quote(
+            Statement::Use(Use::Role(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_role".to_string(),
             )])))
         );
         assert_eq!(
             snowflake().verified_stmt(&format!("USE WAREHOUSE {0}my_wh{0}", quote)),
-            Statement::Use(Use::Warehouse(ObjectName::from(vec![Ident::with_quote(
+            Statement::Use(Use::Warehouse(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_wh".to_string(),
             )])))
@@ -3115,7 +3115,7 @@ fn parse_ls_and_rm() {
         .verified_stmt("LIST @SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/");
     match statement {
         Statement::List(command) => {
-            assert_eq!(command.stage, ObjectName::from(vec!["@SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/".into()]));
+            assert_eq!(command.stage, ObjectName(vec!["@SNOWFLAKE_KAFKA_CONNECTOR_externalDataLakeSnowflakeConnector_STAGE_call_tracker_stream/".into()]));
             assert!(command.pattern.is_none());
         }
         _ => unreachable!(),
@@ -3127,7 +3127,7 @@ fn parse_ls_and_rm() {
         Statement::Remove(command) => {
             assert_eq!(
                 command.stage,
-                ObjectName::from(vec!["@my_csv_stage/analysis/".into()])
+                ObjectName(vec!["@my_csv_stage/analysis/".into()])
             );
             assert_eq!(command.pattern, Some(".*data_0.*".to_string()));
         }

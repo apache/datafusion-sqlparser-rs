@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::{keywords::Keyword, tokenizer::Span};
+use crate::tokenizer::Span;
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
@@ -7899,7 +7899,7 @@ impl fmt::Display for FlushLocation {
     }
 }
 
-/// Optional context modifier for statements that can be or `LOCAL`, 'GLOBAL', or `SESSION`.
+/// Optional context modifier for statements that can be or `LOCAL`, `GLOBAL`, or `SESSION`.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -7929,20 +7929,6 @@ impl fmt::Display for ContextModifier {
             Self::Global => {
                 write!(f, "GLOBAL ")
             }
-        }
-    }
-}
-
-impl From<Option<Keyword>> for ContextModifier {
-    fn from(kw: Option<Keyword>) -> Self {
-        match kw {
-            Some(kw) => match kw {
-                Keyword::LOCAL => Self::Local,
-                Keyword::SESSION => Self::Session,
-                Keyword::GLOBAL => Self::Global,
-                _ => Self::None,
-            },
-            None => Self::None,
         }
     }
 }

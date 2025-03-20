@@ -14901,7 +14901,7 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
                 ]
             );
         }
-        _ => panic!("Expected SetVariable with 2 variables and 2 values"),
+        _ => panic!("Expected MultipleAssignments with 4 scoped variables and 4 values"),
     };
 
     Ok(())

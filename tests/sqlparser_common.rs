@@ -8627,18 +8627,38 @@ fn parse_set_transaction() {
 fn parse_set_variable() {
     match verified_stmt("SET SOMETHING = '1'") {
         Statement::Set(Set::SingleAssignment {
-            local,
+            scope,
             hivevar,
             variable,
             values,
         }) => {
-            assert!(!local);
+            assert_eq!(scope, ContextModifier::None);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["SOMETHING".into()]));
             assert_eq!(
                 values,
                 vec![Expr::Value(
                     (Value::SingleQuotedString("1".into())).with_empty_span()
+                )]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("SET GLOBAL VARIABLE = 'Value'") {
+        Statement::Set(Set::SingleAssignment {
+            scope,
+            hivevar,
+            variable,
+            values,
+        }) => {
+            assert_eq!(scope, ContextModifier::Global);
+            assert!(!hivevar);
+            assert_eq!(variable, ObjectName::from(vec!["VARIABLE".into()]));
+            assert_eq!(
+                values,
+                vec![Expr::Value(
+                    (Value::SingleQuotedString("Value".into())).with_empty_span()
                 )]
             );
         }
@@ -8719,12 +8739,12 @@ fn parse_set_variable() {
 fn parse_set_role_as_variable() {
     match verified_stmt("SET role = 'foobar'") {
         Statement::Set(Set::SingleAssignment {
-            local,
+            scope,
             hivevar,
             variable,
             values,
         }) => {
-            assert!(!local);
+            assert_eq!(scope, ContextModifier::None);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["role".into()]));
             assert_eq!(
@@ -8766,12 +8786,12 @@ fn parse_double_colon_cast_at_timezone() {
 fn parse_set_time_zone() {
     match verified_stmt("SET TIMEZONE = 'UTC'") {
         Statement::Set(Set::SingleAssignment {
-            local,
+            scope,
             hivevar,
             variable,
             values,
         }) => {
-            assert!(!local);
+            assert_eq!(scope, ContextModifier::None);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["TIMEZONE".into()]));
             assert_eq!(

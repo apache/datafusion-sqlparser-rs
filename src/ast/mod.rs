@@ -2629,7 +2629,7 @@ pub enum Set {
     /// SQL Standard-style
     /// SET a = 1;
     SingleAssignment {
-        local: bool,
+        scope: ContextModifier,
         hivevar: bool,
         variable: ObjectName,
         values: Vec<Expr>,
@@ -2711,7 +2711,7 @@ impl Display for Set {
                 role_name,
             } => {
                 let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
-                write!(f, "SET{context_modifier} ROLE {role_name}")
+                write!(f, "SET {context_modifier}ROLE {role_name}")
             }
             Self::SetSessionParam(kind) => write!(f, "SET {kind}"),
             Self::SetTransaction {
@@ -2758,7 +2758,7 @@ impl Display for Set {
                 Ok(())
             }
             Set::SingleAssignment {
-                local,
+                scope,
                 hivevar,
                 variable,
                 values,
@@ -2766,7 +2766,7 @@ impl Display for Set {
                 write!(
                     f,
                     "SET {}{}{} = {}",
-                    if *local { "LOCAL " } else { "" },
+                    scope,
                     if *hivevar { "HIVEVAR:" } else { "" },
                     variable,
                     display_comma_separated(values)
@@ -7955,7 +7955,7 @@ impl fmt::Display for FlushLocation {
     }
 }
 
-/// Optional context modifier for statements that can be or `LOCAL`, or `SESSION`.
+/// Optional context modifier for statements that can be or `LOCAL`, `GLOBAL`, or `SESSION`.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -7966,6 +7966,8 @@ pub enum ContextModifier {
     Local,
     /// `SESSION` identifier
     Session,
+    /// `GLOBAL` identifier
+    Global,
 }
 
 impl fmt::Display for ContextModifier {
@@ -7975,10 +7977,13 @@ impl fmt::Display for ContextModifier {
                 write!(f, "")
             }
             Self::Local => {
-                write!(f, " LOCAL")
+                write!(f, "LOCAL ")
             }
             Self::Session => {
-                write!(f, " SESSION")
+                write!(f, "SESSION ")
+            }
+            Self::Global => {
+                write!(f, "GLOBAL ")
             }
         }
     }

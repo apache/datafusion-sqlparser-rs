@@ -14856,12 +14856,47 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
                 assignments,
                 vec![
                     SetAssignment {
+                        scope: ContextModifier::None,
                         name: ObjectName::from(vec!["@a".into()]),
                         value: Expr::value(number("1"))
                     },
                     SetAssignment {
+                        scope: ContextModifier::None,
                         name: ObjectName::from(vec!["b".into()]),
                         value: Expr::value(number("2"))
+                    }
+                ]
+            );
+        }
+        _ => panic!("Expected SetVariable with 2 variables and 2 values"),
+    };
+
+    let stmt = dialects.verified_stmt("SET GLOBAL @a = 1, SESSION b = 2, LOCAL c = 3, d = 4");
+
+    match stmt {
+        Statement::Set(Set::MultipleAssignments { assignments }) => {
+            assert_eq!(
+                assignments,
+                vec![
+                    SetAssignment {
+                        scope: ContextModifier::Global,
+                        name: ObjectName::from(vec!["@a".into()]),
+                        value: Expr::value(number("1"))
+                    },
+                    SetAssignment {
+                        scope: ContextModifier::Session,
+                        name: ObjectName::from(vec!["b".into()]),
+                        value: Expr::value(number("2"))
+                    },
+                    SetAssignment {
+                        scope: ContextModifier::Local,
+                        name: ObjectName::from(vec!["c".into()]),
+                        value: Expr::value(number("3"))
+                    },
+                    SetAssignment {
+                        scope: ContextModifier::None,
+                        name: ObjectName::from(vec!["d".into()]),
+                        value: Expr::value(number("4"))
                     }
                 ]
             );

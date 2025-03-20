@@ -5727,13 +5727,14 @@ impl fmt::Display for SequenceOptions {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SetAssignment {
+    pub scope: ContextModifier,
     pub name: ObjectName,
     pub value: Expr,
 }
 
 impl fmt::Display for SetAssignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.name, self.value)
+        write!(f, "{}{} = {}", self.scope, self.name, self.value)
     }
 }
 

@@ -1251,7 +1251,7 @@ fn parse_mssql_declare() {
                 }]
             },
             Statement::Set(Set::SingleAssignment {
-                scope: ContextModifier::None,
+                scope: None,
                 hivevar: false,
                 variable: ObjectName::from(vec![Ident::new("@bar")]),
                 values: vec![Expr::Value(

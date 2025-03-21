@@ -8632,7 +8632,7 @@ fn parse_set_variable() {
             variable,
             values,
         }) => {
-            assert_eq!(scope, ContextModifier::None);
+            assert_eq!(scope, None);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["SOMETHING".into()]));
             assert_eq!(
@@ -8652,7 +8652,7 @@ fn parse_set_variable() {
             variable,
             values,
         }) => {
-            assert_eq!(scope, ContextModifier::Global);
+            assert_eq!(scope, Some(ContextModifier::Global));
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["VARIABLE".into()]));
             assert_eq!(
@@ -8744,7 +8744,7 @@ fn parse_set_role_as_variable() {
             variable,
             values,
         }) => {
-            assert_eq!(scope, ContextModifier::None);
+            assert_eq!(scope, None);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["role".into()]));
             assert_eq!(
@@ -8791,7 +8791,7 @@ fn parse_set_time_zone() {
             variable,
             values,
         }) => {
-            assert_eq!(scope, ContextModifier::None);
+            assert_eq!(scope, None);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["TIMEZONE".into()]));
             assert_eq!(
@@ -14856,12 +14856,12 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
                 assignments,
                 vec![
                     SetAssignment {
-                        scope: ContextModifier::None,
+                        scope: None,
                         name: ObjectName::from(vec!["@a".into()]),
                         value: Expr::value(number("1"))
                     },
                     SetAssignment {
-                        scope: ContextModifier::None,
+                        scope: None,
                         name: ObjectName::from(vec!["b".into()]),
                         value: Expr::value(number("2"))
                     }
@@ -14879,22 +14879,22 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
                 assignments,
                 vec![
                     SetAssignment {
-                        scope: ContextModifier::Global,
+                        scope: Some(ContextModifier::Global),
                         name: ObjectName::from(vec!["@a".into()]),
                         value: Expr::value(number("1"))
                     },
                     SetAssignment {
-                        scope: ContextModifier::Session,
+                        scope: Some(ContextModifier::Session),
                         name: ObjectName::from(vec!["b".into()]),
                         value: Expr::value(number("2"))
                     },
                     SetAssignment {
-                        scope: ContextModifier::Local,
+                        scope: Some(ContextModifier::Local),
                         name: ObjectName::from(vec!["c".into()]),
                         value: Expr::value(number("3"))
                     },
                     SetAssignment {
-                        scope: ContextModifier::None,
+                        scope: None,
                         name: ObjectName::from(vec!["d".into()]),
                         value: Expr::value(number("4"))
                     }

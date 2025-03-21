@@ -2629,7 +2629,7 @@ pub enum Set {
     /// SQL Standard-style
     /// SET a = 1;
     SingleAssignment {
-        scope: ContextModifier,
+        scope: Option<ContextModifier>,
         hivevar: bool,
         variable: ObjectName,
         values: Vec<Expr>,
@@ -2659,7 +2659,7 @@ pub enum Set {
     /// [4]: https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_10004.htm
     SetRole {
         /// Non-ANSI optional identifier to inform if the role is defined inside the current session (`SESSION`) or transaction (`LOCAL`).
-        context_modifier: ContextModifier,
+        context_modifier: Option<ContextModifier>,
         /// Role name. If NONE is specified, then the current role name is removed.
         role_name: Option<Ident>,
     },
@@ -2711,7 +2711,13 @@ impl Display for Set {
                 role_name,
             } => {
                 let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
-                write!(f, "SET {context_modifier}ROLE {role_name}")
+                write!(
+                    f,
+                    "SET {modifier}ROLE {role_name}",
+                    modifier = context_modifier
+                        .map(|m| format!("{}", m))
+                        .unwrap_or_default()
+                )
             }
             Self::SetSessionParam(kind) => write!(f, "SET {kind}"),
             Self::SetTransaction {
@@ -2766,7 +2772,7 @@ impl Display for Set {
                 write!(
                     f,
                     "SET {}{}{} = {}",
-                    scope,
+                    scope.map(|s| format!("{}", s)).unwrap_or_default(),
                     if *hivevar { "HIVEVAR:" } else { "" },
                     variable,
                     display_comma_separated(values)
@@ -5727,14 +5733,20 @@ impl fmt::Display for SequenceOptions {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SetAssignment {
-    pub scope: ContextModifier,
+    pub scope: Option<ContextModifier>,
     pub name: ObjectName,
     pub value: Expr,
 }
 
 impl fmt::Display for SetAssignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{} = {}", self.scope, self.name, self.value)
+        write!(
+            f,
+            "{}{} = {}",
+            self.scope.map(|s| format!("{}", s)).unwrap_or_default(),
+            self.name,
+            self.value
+        )
     }
 }
 
@@ -7961,8 +7973,6 @@ impl fmt::Display for FlushLocation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ContextModifier {
-    /// No context defined. Each dialect defines the default in this scenario.
-    None,
     /// `LOCAL` identifier, usually related to transactional states.
     Local,
     /// `SESSION` identifier
@@ -7974,9 +7984,6 @@ pub enum ContextModifier {
 impl fmt::Display for ContextModifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::None => {
-                write!(f, "")
-            }
             Self::Local => {
                 write!(f, "LOCAL ")
             }

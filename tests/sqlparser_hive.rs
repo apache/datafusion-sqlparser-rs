@@ -370,7 +370,7 @@ fn set_statement_with_minus() {
     assert_eq!(
         hive().verified_stmt("SET hive.tez.java.opts = -Xmx4g"),
         Statement::Set(Set::SingleAssignment {
-            scope: ContextModifier::None,
+            scope: None,
             hivevar: false,
             variable: ObjectName::from(vec![
                 Ident::new("hive"),

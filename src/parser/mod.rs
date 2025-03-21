@@ -1819,12 +1819,12 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn keyword_to_modifier(k: Option<Keyword>) -> ContextModifier {
+    fn keyword_to_modifier(k: Keyword) -> Option<ContextModifier> {
         match k {
-            Some(Keyword::LOCAL) => ContextModifier::Local,
-            Some(Keyword::GLOBAL) => ContextModifier::Global,
-            Some(Keyword::SESSION) => ContextModifier::Session,
-            _ => ContextModifier::None,
+            Keyword::LOCAL => Some(ContextModifier::Local),
+            Keyword::GLOBAL => Some(ContextModifier::Global),
+            Keyword::SESSION => Some(ContextModifier::Session),
+            _ => None,
         }
     }
 
@@ -11145,7 +11145,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `SET ROLE` statement. Expects SET to be consumed already.
-    fn parse_set_role(&mut self, modifier: ContextModifier) -> Result<Statement, ParserError> {
+    fn parse_set_role(
+        &mut self,
+        modifier: Option<ContextModifier>,
+    ) -> Result<Statement, ParserError> {
         self.expect_keyword_is(Keyword::ROLE)?;
 
         let role_name = if self.parse_keyword(Keyword::NONE) {
@@ -11190,9 +11193,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_context_modifier(&mut self) -> ContextModifier {
+    fn parse_context_modifier(&mut self) -> Option<ContextModifier> {
         let modifier =
-            self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::GLOBAL]);
+            self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::GLOBAL])?;
 
         Self::keyword_to_modifier(modifier)
     }
@@ -11228,7 +11231,7 @@ impl<'a> Parser<'a> {
         let scope = if !hivevar {
             self.parse_context_modifier()
         } else {
-            ContextModifier::None
+            None
         };
 
         if hivevar {
@@ -11256,7 +11259,7 @@ impl<'a> Parser<'a> {
                 // the assignment operator. It's originally PostgreSQL specific,
                 // but we allow it for all the dialects
                 return Ok(Set::SetTimeZone {
-                    local: scope == ContextModifier::Local,
+                    local: scope == Some(ContextModifier::Local),
                     value: self.parse_expr()?,
                 }
                 .into());
@@ -11304,7 +11307,7 @@ impl<'a> Parser<'a> {
         }
 
         if self.dialect.supports_comma_separated_set_assignments() {
-            if scope != ContextModifier::None {
+            if scope.is_some() {
                 self.prev_token();
             }
 

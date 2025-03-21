@@ -21,10 +21,9 @@
 //! is also tested (on the inputs it can handle).
 
 use sqlparser::ast::{
-    ClusteredBy, CommentDef, ContextModifier, CreateFunction, CreateFunctionBody,
-    CreateFunctionUsing, CreateTable, Expr, Function, FunctionArgumentList, FunctionArguments,
-    Ident, ObjectName, OrderByExpr, OrderByOptions, SelectItem, Set, Statement, TableFactor,
-    UnaryOperator, Use, Value,
+    ClusteredBy, CommentDef, CreateFunction, CreateFunctionBody, CreateFunctionUsing, CreateTable,
+    Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName, OrderByExpr,
+    OrderByOptions, SelectItem, Set, Statement, TableFactor, UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::ParserError;

@@ -1133,6 +1133,7 @@ fn parse_substring_in_select() {
                                 (number("1")).with_empty_span()
                             ))),
                             special: true,
+                            shorthand: false,
                         })],
                         into: None,
                         from: vec![TableWithJoins {

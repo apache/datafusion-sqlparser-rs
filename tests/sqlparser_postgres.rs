@@ -1432,7 +1432,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            scope: ContextModifier::None,
+            scope: None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::Identifier(Ident {
@@ -1447,7 +1447,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            scope: ContextModifier::None,
+            scope: None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::Value(
@@ -1460,7 +1460,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            scope: ContextModifier::None,
+            scope: None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::value(number("0"))],
@@ -1471,7 +1471,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            scope: ContextModifier::None,
+            scope: None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::Identifier(Ident::new("DEFAULT"))],
@@ -1482,7 +1482,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            scope: ContextModifier::Local,
+            scope: Some(ContextModifier::Local),
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a")]),
             values: vec![Expr::Identifier("b".into())],
@@ -1493,7 +1493,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            scope: ContextModifier::None,
+            scope: None,
             hivevar: false,
             variable: ObjectName::from(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
             values: vec![Expr::Identifier(Ident {
@@ -1511,7 +1511,7 @@ fn parse_set() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SingleAssignment {
-            scope: ContextModifier::None,
+            scope: None,
             hivevar: false,
             variable: ObjectName::from(vec![
                 Ident::new("hive"),
@@ -1555,7 +1555,7 @@ fn parse_set_role() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SetRole {
-            context_modifier: ContextModifier::Session,
+            context_modifier: Some(ContextModifier::Session),
             role_name: None,
         })
     );
@@ -1566,7 +1566,7 @@ fn parse_set_role() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SetRole {
-            context_modifier: ContextModifier::Local,
+            context_modifier: Some(ContextModifier::Local),
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\"'),
@@ -1581,7 +1581,7 @@ fn parse_set_role() {
     assert_eq!(
         stmt,
         Statement::Set(Set::SetRole {
-            context_modifier: ContextModifier::None,
+            context_modifier: None,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\''),

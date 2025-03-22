@@ -8635,7 +8635,7 @@ fn parse_set_variable() {
             variable,
             values,
         }) => {
-            assert_eq!(scope, ContextModifier::None);
+            assert_eq!(scope, None);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["SOMETHING".into()]));
             assert_eq!(
@@ -8655,7 +8655,7 @@ fn parse_set_variable() {
             variable,
             values,
         }) => {
-            assert_eq!(scope, ContextModifier::Global);
+            assert_eq!(scope, Some(ContextModifier::Global));
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["VARIABLE".into()]));
             assert_eq!(
@@ -8747,7 +8747,7 @@ fn parse_set_role_as_variable() {
             variable,
             values,
         }) => {
-            assert_eq!(scope, ContextModifier::None);
+            assert_eq!(scope, None);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["role".into()]));
             assert_eq!(
@@ -8794,7 +8794,7 @@ fn parse_set_time_zone() {
             variable,
             values,
         }) => {
-            assert_eq!(scope, ContextModifier::None);
+            assert_eq!(scope, None);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName::from(vec!["TIMEZONE".into()]));
             assert_eq!(
@@ -14859,10 +14859,12 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
                 assignments,
                 vec![
                     SetAssignment {
+                        scope: None,
                         name: ObjectName::from(vec!["@a".into()]),
                         value: Expr::value(number("1"))
                     },
                     SetAssignment {
+                        scope: None,
                         name: ObjectName::from(vec!["b".into()]),
                         value: Expr::value(number("2"))
                     }
@@ -14870,6 +14872,39 @@ fn parse_multiple_set_statements() -> Result<(), ParserError> {
             );
         }
         _ => panic!("Expected SetVariable with 2 variables and 2 values"),
+    };
+
+    let stmt = dialects.verified_stmt("SET GLOBAL @a = 1, SESSION b = 2, LOCAL c = 3, d = 4");
+
+    match stmt {
+        Statement::Set(Set::MultipleAssignments { assignments }) => {
+            assert_eq!(
+                assignments,
+                vec![
+                    SetAssignment {
+                        scope: Some(ContextModifier::Global),
+                        name: ObjectName::from(vec!["@a".into()]),
+                        value: Expr::value(number("1"))
+                    },
+                    SetAssignment {
+                        scope: Some(ContextModifier::Session),
+                        name: ObjectName::from(vec!["b".into()]),
+                        value: Expr::value(number("2"))
+                    },
+                    SetAssignment {
+                        scope: Some(ContextModifier::Local),
+                        name: ObjectName::from(vec!["c".into()]),
+                        value: Expr::value(number("3"))
+                    },
+                    SetAssignment {
+                        scope: None,
+                        name: ObjectName::from(vec!["d".into()]),
+                        value: Expr::value(number("4"))
+                    }
+                ]
+            );
+        }
+        _ => panic!("Expected MultipleAssignments with 4 scoped variables and 4 values"),
     };
 
     Ok(())

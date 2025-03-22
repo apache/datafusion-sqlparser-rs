@@ -1822,12 +1822,12 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn keyword_to_modifier(k: Option<Keyword>) -> ContextModifier {
+    fn keyword_to_modifier(k: Keyword) -> Option<ContextModifier> {
         match k {
-            Some(Keyword::LOCAL) => ContextModifier::Local,
-            Some(Keyword::GLOBAL) => ContextModifier::Global,
-            Some(Keyword::SESSION) => ContextModifier::Session,
-            _ => ContextModifier::None,
+            Keyword::LOCAL => Some(ContextModifier::Local),
+            Keyword::GLOBAL => Some(ContextModifier::Global),
+            Keyword::SESSION => Some(ContextModifier::Session),
+            _ => None,
         }
     }
 
@@ -11157,9 +11157,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `SET ROLE` statement. Expects SET to be consumed already.
-    fn parse_set_role(&mut self, modifier: Option<Keyword>) -> Result<Statement, ParserError> {
+    fn parse_set_role(
+        &mut self,
+        modifier: Option<ContextModifier>,
+    ) -> Result<Statement, ParserError> {
         self.expect_keyword_is(Keyword::ROLE)?;
-        let context_modifier = Self::keyword_to_modifier(modifier);
 
         let role_name = if self.parse_keyword(Keyword::NONE) {
             None
@@ -11167,7 +11169,7 @@ impl<'a> Parser<'a> {
             Some(self.parse_identifier()?)
         };
         Ok(Statement::Set(Set::SetRole {
-            context_modifier,
+            context_modifier: modifier,
             role_name,
         }))
     }
@@ -11203,46 +11205,52 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_set_assignment(
-        &mut self,
-    ) -> Result<(OneOrManyWithParens<ObjectName>, Expr), ParserError> {
-        let variables = if self.dialect.supports_parenthesized_set_variables()
+    fn parse_context_modifier(&mut self) -> Option<ContextModifier> {
+        let modifier =
+            self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::GLOBAL])?;
+
+        Self::keyword_to_modifier(modifier)
+    }
+
+    /// Parse a single SET statement assignment `var = expr`.
+    fn parse_set_assignment(&mut self) -> Result<SetAssignment, ParserError> {
+        let scope = self.parse_context_modifier();
+
+        let name = if self.dialect.supports_parenthesized_set_variables()
             && self.consume_token(&Token::LParen)
         {
-            let vars = OneOrManyWithParens::Many(
-                self.parse_comma_separated(|parser: &mut Parser<'a>| parser.parse_identifier())?
-                    .into_iter()
-                    .map(|ident| ObjectName::from(vec![ident]))
-                    .collect(),
-            );
-            self.expect_token(&Token::RParen)?;
-            vars
+            // Parenthesized assignments are handled in the `parse_set` function after
+            // trying to parse list of assignments using this function.
+            // If a dialect supports both, and we find a LParen, we early exit from this function.
+            self.expected("Unparenthesized assignment", self.peek_token())?
         } else {
-            OneOrManyWithParens::One(self.parse_object_name(false)?)
+            self.parse_object_name(false)?
         };
 
         if !(self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO)) {
             return self.expected("assignment operator", self.peek_token());
         }
 
-        let values = self.parse_expr()?;
+        let value = self.parse_expr()?;
 
-        Ok((variables, values))
+        Ok(SetAssignment { scope, name, value })
     }
 
     fn parse_set(&mut self) -> Result<Statement, ParserError> {
-        let modifier = self.parse_one_of_keywords(&[
-            Keyword::SESSION,
-            Keyword::LOCAL,
-            Keyword::HIVEVAR,
-            Keyword::GLOBAL,
-        ]);
+        let hivevar = self.parse_keyword(Keyword::HIVEVAR);
 
-        if let Some(Keyword::HIVEVAR) = modifier {
+        // Modifier is either HIVEVAR: or a ContextModifier (LOCAL, SESSION, etc), not both
+        let scope = if !hivevar {
+            self.parse_context_modifier()
+        } else {
+            None
+        };
+
+        if hivevar {
             self.expect_token(&Token::Colon)?;
         }
 
-        if let Some(set_role_stmt) = self.maybe_parse(|parser| parser.parse_set_role(modifier))? {
+        if let Some(set_role_stmt) = self.maybe_parse(|parser| parser.parse_set_role(scope))? {
             return Ok(set_role_stmt);
         }
 
@@ -11252,8 +11260,8 @@ impl<'a> Parser<'a> {
         {
             if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
                 return Ok(Set::SingleAssignment {
-                    scope: Self::keyword_to_modifier(modifier),
-                    hivevar: modifier == Some(Keyword::HIVEVAR),
+                    scope,
+                    hivevar,
                     variable: ObjectName::from(vec!["TIMEZONE".into()]),
                     values: self.parse_set_values(false)?,
                 }
@@ -11263,7 +11271,7 @@ impl<'a> Parser<'a> {
                 // the assignment operator. It's originally PostgreSQL specific,
                 // but we allow it for all the dialects
                 return Ok(Set::SetTimeZone {
-                    local: modifier == Some(Keyword::LOCAL),
+                    local: scope == Some(ContextModifier::Local),
                     value: self.parse_expr()?,
                 }
                 .into());
@@ -11311,41 +11319,26 @@ impl<'a> Parser<'a> {
         }
 
         if self.dialect.supports_comma_separated_set_assignments() {
+            if scope.is_some() {
+                self.prev_token();
+            }
+
             if let Some(assignments) = self
                 .maybe_parse(|parser| parser.parse_comma_separated(Parser::parse_set_assignment))?
             {
                 return if assignments.len() > 1 {
-                    let assignments = assignments
-                        .into_iter()
-                        .map(|(var, val)| match var {
-                            OneOrManyWithParens::One(v) => Ok(SetAssignment {
-                                name: v,
-                                value: val,
-                            }),
-                            OneOrManyWithParens::Many(_) => {
-                                self.expected("List of single identifiers", self.peek_token())
-                            }
-                        })
-                        .collect::<Result<_, _>>()?;
-
                     Ok(Set::MultipleAssignments { assignments }.into())
                 } else {
-                    let (vars, values): (Vec<_>, Vec<_>) = assignments.into_iter().unzip();
-
-                    let variable = match vars.into_iter().next() {
-                        Some(OneOrManyWithParens::One(v)) => Ok(v),
-                        Some(OneOrManyWithParens::Many(_)) => self.expected(
-                            "Single assignment or list of assignments",
-                            self.peek_token(),
-                        ),
-                        None => self.expected("At least one identifier", self.peek_token()),
-                    }?;
+                    let SetAssignment { scope, name, value } =
+                        assignments.into_iter().next().ok_or_else(|| {
+                            ParserError::ParserError("Expected at least one assignment".to_string())
+                        })?;
 
                     Ok(Set::SingleAssignment {
-                        scope: Self::keyword_to_modifier(modifier),
-                        hivevar: modifier == Some(Keyword::HIVEVAR),
-                        variable,
-                        values,
+                        scope,
+                        hivevar,
+                        variable: name,
+                        values: vec![value],
                     }
                     .into())
                 };
@@ -11370,8 +11363,8 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let stmt = match variables {
                 OneOrManyWithParens::One(var) => Set::SingleAssignment {
-                    scope: Self::keyword_to_modifier(modifier),
-                    hivevar: modifier == Some(Keyword::HIVEVAR),
+                    scope,
+                    hivevar,
                     variable: var,
                     values: self.parse_set_values(false)?,
                 },

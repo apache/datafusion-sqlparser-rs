@@ -618,7 +618,7 @@ fn parse_set_variables() {
     assert_eq!(
         mysql_and_generic().verified_stmt("SET LOCAL autocommit = 1"),
         Statement::Set(Set::SingleAssignment {
-            scope: ContextModifier::Local,
+            scope: Some(ContextModifier::Local),
             hivevar: false,
             variable: ObjectName::from(vec!["autocommit".into()]),
             values: vec![Expr::value(number("1"))],

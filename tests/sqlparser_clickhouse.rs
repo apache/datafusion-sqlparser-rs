@@ -721,7 +721,7 @@ fn parse_create_table_with_primary_key() {
         Statement::CreateTable(CreateTable {
             name,
             columns,
-            plain_options,
+            table_options,
             primary_key,
             order_by,
             ..
@@ -742,6 +742,11 @@ fn parse_create_table_with_primary_key() {
                 ],
                 columns
             );
+
+            let plain_options = match table_options {
+                CreateTableOptions::Plain(options) => options,
+                _ => unreachable!(),
+            };
 
             assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
                 name: "SharedMergeTree".to_owned(),

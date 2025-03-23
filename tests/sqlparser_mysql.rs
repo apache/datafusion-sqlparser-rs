@@ -850,11 +850,16 @@ fn parse_create_table_comment() {
         match mysql().verified_stmt(sql) {
             Statement::CreateTable(CreateTable {
                 name,
-                plain_options,
+                table_options,
                 ..
             }) => {
                 assert_eq!(name.to_string(), "foo");
-                let comment = match plain_options.get(0).unwrap() {
+
+                let plain_options = match table_options {
+                    CreateTableOptions::Plain(options) => options,
+                    _ => unreachable!(),
+                };
+                let comment = match plain_options.first().unwrap() {
                     SqlOption::Comment(CommentDef::WithEq(c))
                     | SqlOption::Comment(CommentDef::WithoutEq(c)) => c,
                     _ => unreachable!(),
@@ -874,10 +879,15 @@ fn parse_create_table_auto_increment_offset() {
     match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
-            plain_options,
+            table_options,
             ..
         }) => {
             assert_eq!(name.to_string(), "foo");
+
+            let plain_options = match table_options {
+                CreateTableOptions::Plain(options) => options,
+                _ => unreachable!(),
+            };
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("AUTO_INCREMENT"),
@@ -896,18 +906,23 @@ fn parse_create_table_auto_increment_offset() {
 
 #[test]
 fn parse_create_table_multiple_options_order_independent() {
-    let sql1 = "CREATE TABLE mytable (id INT) ENGINE=InnoDB ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=8";
-    let sql2 = "CREATE TABLE mytable (id INT) KEY_BLOCK_SIZE=8 ENGINE=InnoDB ROW_FORMAT=DYNAMIC";
-    let sql3 = "CREATE TABLE mytable (id INT) ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=8 ENGINE=InnoDB";
+    let sql1 = "CREATE TABLE mytable (id INT) ENGINE=InnoDB ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=8 COMMENT='abc'";
+    let sql2 = "CREATE TABLE mytable (id INT) KEY_BLOCK_SIZE=8 COMMENT='abc' ENGINE=InnoDB ROW_FORMAT=DYNAMIC";
+    let sql3 = "CREATE TABLE mytable (id INT) ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=8 COMMENT='abc' ENGINE=InnoDB";
 
     for sql in [sql1, sql2, sql3] {
         match mysql().parse_sql_statements(sql).unwrap().pop().unwrap() {
             Statement::CreateTable(CreateTable {
                 name,
-                plain_options,
+                table_options,
                 ..
             }) => {
                 assert_eq!(name.to_string(), "mytable");
+
+                let plain_options = match table_options {
+                    CreateTableOptions::Plain(options) => options,
+                    _ => unreachable!(),
+                };
 
                 assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
                     name: "InnoDB".to_owned(),
@@ -923,6 +938,9 @@ fn parse_create_table_multiple_options_order_independent() {
                         .into()
                     )
                 }));
+
+                assert!(plain_options
+                    .contains(&SqlOption::Comment(CommentDef::WithEq("abc".to_owned()))));
 
                 assert!(plain_options.contains(&SqlOption::KeyValue {
                     key: Ident::new("ROW_FORMAT"),
@@ -944,10 +962,15 @@ fn parse_create_table_with_all_table_options() {
     match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
-            plain_options,
+            table_options,
             ..
         }) => {
             assert_eq!(name, vec![Ident::new("foo".to_owned())].into());
+
+            let plain_options = match table_options {
+                CreateTableOptions::Plain(options) => options,
+                _ => unreachable!(),
+            };
 
             assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
                 name: "InnoDB".to_owned(),
@@ -1143,7 +1166,7 @@ fn parse_create_table_engine_default_charset() {
         Statement::CreateTable(CreateTable {
             name,
             columns,
-            plain_options,
+            table_options,
             ..
         }) => {
             assert_eq!(name.to_string(), "foo");
@@ -1155,6 +1178,11 @@ fn parse_create_table_engine_default_charset() {
                 },],
                 columns
             );
+
+            let plain_options = match table_options {
+                CreateTableOptions::Plain(options) => options,
+                _ => unreachable!(),
+            };
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("DEFAULT CHARSET"),
@@ -1177,7 +1205,7 @@ fn parse_create_table_collate() {
         Statement::CreateTable(CreateTable {
             name,
             columns,
-            plain_options,
+            table_options,
             ..
         }) => {
             assert_eq!(name.to_string(), "foo");
@@ -1189,6 +1217,12 @@ fn parse_create_table_collate() {
                 },],
                 columns
             );
+
+            let plain_options = match table_options {
+                CreateTableOptions::Plain(options) => options,
+                _ => unreachable!(),
+            };
+
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("COLLATE"),
                 value: Expr::Identifier(Ident::new("utf8mb4_0900_ai_ci".to_owned()))
@@ -1205,10 +1239,15 @@ fn parse_create_table_both_options_and_as_query() {
         Statement::CreateTable(CreateTable {
             name,
             query,
-            plain_options,
+            table_options,
             ..
         }) => {
             assert_eq!(name.to_string(), "foo");
+
+            let plain_options = match table_options {
+                CreateTableOptions::Plain(options) => options,
+                _ => unreachable!(),
+            };
 
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("COLLATE"),

@@ -6879,17 +6879,16 @@ impl<'a> Parser<'a> {
 
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
-        let mut comment = if dialect_of!(self is HiveDialect)
-            && self.parse_keyword(Keyword::COMMENT)
-        {
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(str) => Some(CommentDef::AfterColumnDefsWithoutEq(str)),
-                _ => self.expected("comment", next_token)?,
-            }
-        } else {
-            None
-        };
+        let comment_after_column_def =
+            if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
+                let next_token = self.next_token();
+                match next_token.token {
+                    Token::SingleQuotedString(str) => Some(CommentDef::WithoutEq(str)),
+                    _ => self.expected("comment", next_token)?,
+                }
+            } else {
+                None
+            };
 
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
@@ -6937,13 +6936,6 @@ impl<'a> Parser<'a> {
 
         let strict = self.parse_keyword(Keyword::STRICT);
 
-        // Excludes Hive dialect here since it has been handled after table column definitions.
-        if !dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::COMMENT) {
-            // rewind the COMMENT keyword
-            self.prev_token();
-            comment = self.parse_optional_inline_comment()?
-        };
-
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_query()?)
@@ -6972,7 +6964,7 @@ impl<'a> Parser<'a> {
             .without_rowid(without_rowid)
             .like(like)
             .clone_clause(clone)
-            .comment(comment)
+            .comment_after_column_def(comment_after_column_def)
             .order_by(order_by)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
@@ -7033,7 +7025,11 @@ impl<'a> Parser<'a> {
             };
         }
 
-        let plain_options = self.parse_plain_options()?;
+        let plain_options = if dialect_of!(self is HiveDialect) {
+            vec![]
+        } else {
+            self.parse_plain_options()?
+        };
 
         Ok(CreateTableConfiguration {
             partition_by,
@@ -7056,11 +7052,19 @@ impl<'a> Parser<'a> {
             Keyword::CHARSET,
             Keyword::COLLATE,
             Keyword::INSERT_METHOD,
+            Keyword::COMMENT,
         ]) {
-            let _ = self.consume_token(&Token::Eq);
+            let has_eq = self.consume_token(&Token::Eq);
             let value = self.next_token();
 
             match (keyword, value.token) {
+                (Keyword::COMMENT, Token::SingleQuotedString(s)) => {
+                    let comment = match has_eq {
+                        true => CommentDef::WithEq(s),
+                        false => CommentDef::WithoutEq(s),
+                    };
+                    return Ok(Some(SqlOption::Comment(comment)));
+                }
                 (Keyword::AUTO_INCREMENT, Token::Number(n, l)) => {
                     // validation
                     let _ = Some(Self::parse::<u32>(n.clone(), value.span.start)?);

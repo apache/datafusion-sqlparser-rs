@@ -848,9 +848,18 @@ fn parse_create_table_comment() {
 
     for sql in [without_equal, with_equal] {
         match mysql().verified_stmt(sql) {
-            Statement::CreateTable(CreateTable { name, comment, .. }) => {
+            Statement::CreateTable(CreateTable {
+                name,
+                plain_options,
+                ..
+            }) => {
                 assert_eq!(name.to_string(), "foo");
-                assert_eq!(comment.expect("Should exist").to_string(), "baz");
+                let comment = match plain_options.get(0).unwrap() {
+                    SqlOption::Comment(CommentDef::WithEq(c))
+                    | SqlOption::Comment(CommentDef::WithoutEq(c)) => c,
+                    _ => unreachable!(),
+                };
+                assert_eq!(comment, "baz");
             }
             _ => unreachable!(),
         }

@@ -160,7 +160,10 @@ pub struct CreateTable {
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub comment: Option<CommentDef>,
+    // For Hive dialect, the table comment is after the column definitions without `=`,
+    // so we need to add an extra variant to allow to identify this case when displaying.
+    // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
+    pub comment_after_column_def: Option<CommentDef>,
     pub on_commit: Option<OnCommit>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
@@ -276,7 +279,7 @@ impl Display for CreateTable {
 
         // Hive table comment should be after column definitions, please refer to:
         // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
-        if let Some(CommentDef::AfterColumnDefsWithoutEq(comment)) = &self.comment {
+        if let Some(comment) = &self.comment_after_column_def {
             write!(f, " COMMENT '{comment}'")?;
         }
 
@@ -382,19 +385,6 @@ impl Display for CreateTable {
 
         if !self.plain_options.is_empty() {
             write!(f, " {}", display_separated(&self.plain_options, " "))?;
-        }
-
-        if let Some(comment_def) = &self.comment {
-            match comment_def {
-                CommentDef::WithEq(comment) => {
-                    write!(f, " COMMENT = '{comment}'")?;
-                }
-                CommentDef::WithoutEq(comment) => {
-                    write!(f, " COMMENT '{comment}'")?;
-                }
-                // For CommentDef::AfterColumnDefsWithoutEq will be displayed after column definition
-                CommentDef::AfterColumnDefsWithoutEq(_) => (),
-            }
         }
 
         if let Some(primary_key) = &self.primary_key {

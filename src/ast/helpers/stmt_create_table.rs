@@ -87,7 +87,7 @@ pub struct CreateTableBuilder {
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub comment: Option<CommentDef>,
+    pub comment_after_column_def: Option<CommentDef>,
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<Ident>,
     pub primary_key: Option<Box<Expr>>,
@@ -137,7 +137,7 @@ impl CreateTableBuilder {
             without_rowid: false,
             like: None,
             clone: None,
-            comment: None,
+            comment_after_column_def: None,
             on_commit: None,
             on_cluster: None,
             primary_key: None,
@@ -261,8 +261,8 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn comment(mut self, comment: Option<CommentDef>) -> Self {
-        self.comment = comment;
+    pub fn comment_after_column_def(mut self, comment: Option<CommentDef>) -> Self {
+        self.comment_after_column_def = comment;
         self
     }
 
@@ -418,7 +418,7 @@ impl CreateTableBuilder {
             without_rowid: self.without_rowid,
             like: self.like,
             clone: self.clone,
-            comment: self.comment,
+            comment_after_column_def: self.comment_after_column_def,
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
             primary_key: self.primary_key,
@@ -476,7 +476,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 without_rowid,
                 like,
                 clone,
-                comment,
+                comment_after_column_def: comment,
                 on_commit,
                 on_cluster,
                 primary_key,
@@ -521,7 +521,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 without_rowid,
                 like,
                 clone,
-                comment,
+                comment_after_column_def: comment,
                 on_commit,
                 on_cluster,
                 primary_key,

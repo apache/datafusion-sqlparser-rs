@@ -11369,7 +11369,9 @@ fn test_parse_inline_comment() {
     // [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
     match all_dialects_except(|d| d.is::<HiveDialect>()).verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
-            columns, comment, ..
+            columns,
+            plain_options,
+            ..
         }) => {
             assert_eq!(
                 columns,
@@ -11383,8 +11385,10 @@ fn test_parse_inline_comment() {
                 }]
             );
             assert_eq!(
-                comment.unwrap(),
-                CommentDef::WithEq("comment with equal".to_string())
+                plain_options,
+                vec![SqlOption::Comment(CommentDef::WithEq(
+                    "comment with equal".to_string()
+                ))]
             );
         }
         _ => unreachable!(),

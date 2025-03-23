@@ -470,9 +470,18 @@ fn test_snowflake_create_table_cluster_by() {
 #[test]
 fn test_snowflake_create_table_comment() {
     match snowflake().verified_stmt("CREATE TABLE my_table (a INT) COMMENT = 'some comment'") {
-        Statement::CreateTable(CreateTable { name, comment, .. }) => {
+        Statement::CreateTable(CreateTable {
+            name,
+            plain_options,
+            ..
+        }) => {
             assert_eq!("my_table", name.to_string());
-            assert_eq!("some comment", comment.unwrap().to_string());
+            let comment = match plain_options.get(0).unwrap() {
+                SqlOption::Comment(CommentDef::WithEq(c))
+                | SqlOption::Comment(CommentDef::WithoutEq(c)) => c,
+                _ => unreachable!(),
+            };
+            assert_eq!("some comment", comment);
         }
         _ => unreachable!(),
     }

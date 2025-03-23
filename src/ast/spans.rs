@@ -566,7 +566,7 @@ impl Spanned for CreateTable {
             without_rowid: _, // bool
             like,
             clone,
-            comment: _, // todo, no span
+            comment_after_column_def: _, // todo, no span
             on_commit: _,
             on_cluster: _,                      // todo, clickhouse specific
             primary_key: _,                     // todo, clickhouse specific
@@ -973,6 +973,7 @@ impl Spanned for SqlOption {
             SqlOption::Union(idents) => union_spans(idents.iter().map(|i| i.span)),
             SqlOption::TableSpace(_) => Span::empty(),
             SqlOption::TableEngine(_) => Span::empty(),
+            SqlOption::Comment(_) => Span::empty(),
         }
     }
 }

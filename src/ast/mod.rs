@@ -2557,6 +2557,18 @@ pub enum CreateTableOptions {
     ///
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     Options(Vec<SqlOption>),
+
+    /// Plain options, options which are not part on any declerative statement e.g. WITH/OPTIONS/...
+    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
+    Plain(Vec<SqlOption>),
+
+    TableProperties(Vec<SqlOption>),
+}
+
+impl Default for CreateTableOptions {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 impl fmt::Display for CreateTableOptions {
@@ -2567,6 +2579,12 @@ impl fmt::Display for CreateTableOptions {
             }
             CreateTableOptions::Options(options) => {
                 write!(f, "OPTIONS({})", display_comma_separated(options))
+            }
+            CreateTableOptions::TableProperties(options) => {
+                write!(f, "TBLPROPERTIES ({})", display_comma_separated(options))
+            }
+            CreateTableOptions::Plain(options) => {
+                write!(f, "{}", display_separated(options, " "))
             }
             CreateTableOptions::None => Ok(()),
         }

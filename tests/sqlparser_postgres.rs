@@ -348,7 +348,7 @@ fn parse_create_table_with_defaults() {
             name,
             columns,
             constraints,
-            with_options,
+            table_options,
             if_not_exists: false,
             external: false,
             file_format: None,
@@ -485,6 +485,11 @@ fn parse_create_table_with_defaults() {
                 ]
             );
             assert!(constraints.is_empty());
+
+            let with_options = match table_options {
+                CreateTableOptions::With(options) => options,
+                _ => unreachable!(),
+            };
             assert_eq!(
                 with_options,
                 vec![
@@ -4570,7 +4575,6 @@ fn parse_create_table_with_alias() {
             name,
             columns,
             constraints,
-            with_options: _with_options,
             if_not_exists: false,
             external: false,
             file_format: None,
@@ -4977,7 +4981,11 @@ fn parse_at_time_zone() {
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
     match pg().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { with_options, .. }) => {
+        Statement::CreateTable(CreateTable { table_options, .. }) => {
+            let with_options = match table_options {
+                CreateTableOptions::With(options) => options,
+                _ => unreachable!(),
+            };
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
@@ -5405,8 +5413,6 @@ fn parse_trigger_related_functions() {
                 storage: None,
                 location: None
             }),
-            table_properties: vec![],
-            with_options: vec![],
             file_format: None,
             location: None,
             query: None,
@@ -5421,7 +5427,6 @@ fn parse_trigger_related_functions() {
             partition_by: None,
             cluster_by: None,
             clustered_by: None,
-            options: None,
             strict: false,
             copy_grants: false,
             enable_schema_evolution: None,
@@ -5437,7 +5442,7 @@ fn parse_trigger_related_functions() {
             catalog: None,
             catalog_sync: None,
             storage_serialization_policy: None,
-            plain_options: vec![]
+            table_options: CreateTableOptions::None
         }
     );
 

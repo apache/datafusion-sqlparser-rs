@@ -558,10 +558,8 @@ impl Spanned for CreateTable {
             constraints,
             hive_distribution: _, // hive specific
             hive_formats: _,      // hive specific
-            table_properties,
-            with_options,
-            file_format: _, // enum
-            location: _,    // string, no span
+            file_format: _,       // enum
+            location: _,          // string, no span
             query,
             without_rowid: _, // bool
             like,
@@ -574,7 +572,6 @@ impl Spanned for CreateTable {
             partition_by: _,                    // todo, BigQuery specific
             cluster_by: _,                      // todo, BigQuery specific
             clustered_by: _,                    // todo, Hive specific
-            options: _,                         // todo, BigQuery specific
             strict: _,                          // bool
             copy_grants: _,                     // bool
             enable_schema_evolution: _,         // bool
@@ -590,16 +587,14 @@ impl Spanned for CreateTable {
             catalog: _,                         // todo, Snowflake specific
             catalog_sync: _,                    // todo, Snowflake specific
             storage_serialization_policy: _,
-            plain_options,
+            table_options,
         } = self;
 
         union_spans(
             core::iter::once(name.span())
+                .chain(core::iter::once(table_options.span()))
                 .chain(columns.iter().map(|i| i.span()))
                 .chain(constraints.iter().map(|i| i.span()))
-                .chain(table_properties.iter().map(|i| i.span()))
-                .chain(with_options.iter().map(|i| i.span()))
-                .chain(plain_options.iter().map(|i| i.span()))
                 .chain(query.iter().map(|i| i.span()))
                 .chain(like.iter().map(|i| i.span()))
                 .chain(clone.iter().map(|i| i.span())),
@@ -1011,6 +1006,8 @@ impl Spanned for CreateTableOptions {
             CreateTableOptions::None => Span::empty(),
             CreateTableOptions::With(vec) => union_spans(vec.iter().map(|i| i.span())),
             CreateTableOptions::Options(vec) => union_spans(vec.iter().map(|i| i.span())),
+            CreateTableOptions::Plain(vec) => union_spans(vec.iter().map(|i| i.span())),
+            CreateTableOptions::TableProperties(vec) => union_spans(vec.iter().map(|i| i.span())),
         }
     }
 }

@@ -587,8 +587,13 @@ pub fn parse_create_table(
             }
         }
     }
+    let table_options = if !plain_options.is_empty() {
+        crate::ast::CreateTableOptions::Plain(plain_options)
+    } else {
+        crate::ast::CreateTableOptions::None
+    };
 
-    builder = builder.plain_options(plain_options);
+    builder = builder.table_options(table_options);
 
     if iceberg && builder.base_location.is_none() {
         return Err(ParserError::ParserError(

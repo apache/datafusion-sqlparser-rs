@@ -33,10 +33,10 @@ pub use super::ddl::{ColumnDef, TableConstraint};
 
 use super::{
     display_comma_separated, display_separated, query::InputFormatClause, Assignment, ClusteredBy,
-    CommentDef, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat, HiveIOFormat,
-    HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName, OnCommit,
-    OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem, Setting,
-    SqlOption, SqliteOnConflict, StorageSerializationPolicy, TableObject, TableWithJoins, Tag,
+    CommentDef, CreateTableOptions, Expr, FileFormat, FromTable, HiveDistributionStyle, HiveFormat,
+    HiveIOFormat, HiveRowFormat, Ident, IndexType, InsertAliases, MysqlInsertPriority, ObjectName,
+    OnCommit, OnInsert, OneOrManyWithParens, OrderByExpr, Query, RowAccessPolicy, SelectItem,
+    Setting, SqliteOnConflict, StorageSerializationPolicy, TableObject, TableWithJoins, Tag,
     WrappedCollection,
 };
 
@@ -146,14 +146,7 @@ pub struct CreateTable {
     pub constraints: Vec<TableConstraint>,
     pub hive_distribution: HiveDistributionStyle,
     pub hive_formats: Option<HiveFormat>,
-    pub table_properties: Vec<SqlOption>,
-    pub with_options: Vec<SqlOption>,
-    /// BigQuery: Table options list.
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-    pub options: Option<Vec<SqlOption>>,
-    /// Plain options, options which are not part on any declerative statement e.g. WITH/OPTIONS/...
-    /// <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
-    pub plain_options: Vec<SqlOption>,
+    pub table_options: CreateTableOptions,
     pub file_format: Option<FileFormat>,
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
@@ -372,19 +365,12 @@ impl Display for CreateTable {
             }
             write!(f, " LOCATION '{}'", self.location.as_ref().unwrap())?;
         }
-        if !self.table_properties.is_empty() {
-            write!(
-                f,
-                " TBLPROPERTIES ({})",
-                display_comma_separated(&self.table_properties)
-            )?;
-        }
-        if !self.with_options.is_empty() {
-            write!(f, " WITH ({})", display_comma_separated(&self.with_options))?;
-        }
 
-        if !self.plain_options.is_empty() {
-            write!(f, " {}", display_separated(&self.plain_options, " "))?;
+        match &self.table_options {
+            options @ CreateTableOptions::With(_)
+            | options @ CreateTableOptions::Plain(_)
+            | options @ CreateTableOptions::TableProperties(_) => write!(f, " {}", options)?,
+            _ => (),
         }
 
         if let Some(primary_key) = &self.primary_key {
@@ -399,15 +385,9 @@ impl Display for CreateTable {
         if let Some(cluster_by) = self.cluster_by.as_ref() {
             write!(f, " CLUSTER BY {cluster_by}")?;
         }
-
-        if let Some(options) = self.options.as_ref() {
-            write!(
-                f,
-                " OPTIONS({})",
-                display_comma_separated(options.as_slice())
-            )?;
+        if let options @ CreateTableOptions::Options(_) = &self.table_options {
+            write!(f, " {}", options)?;
         }
-
         if let Some(external_volume) = self.external_volume.as_ref() {
             write!(f, " EXTERNAL_VOLUME = '{external_volume}'")?;
         }

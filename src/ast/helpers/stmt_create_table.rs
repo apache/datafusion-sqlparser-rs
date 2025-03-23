@@ -26,9 +26,10 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use super::super::dml::CreateTable;
 use crate::ast::{
-    ClusteredBy, ColumnDef, CommentDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident,
-    ObjectName, OnCommit, OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement,
-    StorageSerializationPolicy, TableConstraint, Tag, WrappedCollection,
+    ClusteredBy, ColumnDef, CommentDef, CreateTableOptions, Expr, FileFormat,
+    HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit, OneOrManyWithParens, Query,
+    RowAccessPolicy, Statement, StorageSerializationPolicy, TableConstraint, Tag,
+    WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -77,10 +78,6 @@ pub struct CreateTableBuilder {
     pub constraints: Vec<TableConstraint>,
     pub hive_distribution: HiveDistributionStyle,
     pub hive_formats: Option<HiveFormat>,
-    pub table_properties: Vec<SqlOption>,
-    pub with_options: Vec<SqlOption>,
-    pub options: Option<Vec<SqlOption>>,
-    pub plain_options: Vec<SqlOption>,
     pub file_format: Option<FileFormat>,
     pub location: Option<String>,
     pub query: Option<Box<Query>>,
@@ -110,6 +107,7 @@ pub struct CreateTableBuilder {
     pub catalog: Option<String>,
     pub catalog_sync: Option<String>,
     pub storage_serialization_policy: Option<StorageSerializationPolicy>,
+    pub table_options: CreateTableOptions,
 }
 
 impl CreateTableBuilder {
@@ -128,9 +126,6 @@ impl CreateTableBuilder {
             constraints: vec![],
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
-            table_properties: vec![],
-            plain_options: vec![],
-            with_options: vec![],
             file_format: None,
             location: None,
             query: None,
@@ -145,7 +140,6 @@ impl CreateTableBuilder {
             partition_by: None,
             cluster_by: None,
             clustered_by: None,
-            options: None,
             strict: false,
             copy_grants: false,
             enable_schema_evolution: None,
@@ -161,6 +155,7 @@ impl CreateTableBuilder {
             catalog: None,
             catalog_sync: None,
             storage_serialization_policy: None,
+            table_options: CreateTableOptions::None,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -223,15 +218,6 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn table_properties(mut self, table_properties: Vec<SqlOption>) -> Self {
-        self.table_properties = table_properties;
-        self
-    }
-
-    pub fn with_options(mut self, with_options: Vec<SqlOption>) -> Self {
-        self.with_options = with_options;
-        self
-    }
     pub fn file_format(mut self, file_format: Option<FileFormat>) -> Self {
         self.file_format = file_format;
         self
@@ -298,16 +284,6 @@ impl CreateTableBuilder {
 
     pub fn clustered_by(mut self, clustered_by: Option<ClusteredBy>) -> Self {
         self.clustered_by = clustered_by;
-        self
-    }
-
-    pub fn options(mut self, options: Option<Vec<SqlOption>>) -> Self {
-        self.options = options;
-        self
-    }
-
-    pub fn plain_options(mut self, options: Vec<SqlOption>) -> Self {
-        self.plain_options = options;
         self
     }
 
@@ -395,6 +371,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn table_options(mut self, table_options: CreateTableOptions) -> Self {
+        self.table_options = table_options;
+        self
+    }
+
     pub fn build(self) -> Statement {
         Statement::CreateTable(CreateTable {
             or_replace: self.or_replace,
@@ -410,8 +391,6 @@ impl CreateTableBuilder {
             constraints: self.constraints,
             hive_distribution: self.hive_distribution,
             hive_formats: self.hive_formats,
-            table_properties: self.table_properties,
-            with_options: self.with_options,
             file_format: self.file_format,
             location: self.location,
             query: self.query,
@@ -426,7 +405,6 @@ impl CreateTableBuilder {
             partition_by: self.partition_by,
             cluster_by: self.cluster_by,
             clustered_by: self.clustered_by,
-            options: self.options,
             strict: self.strict,
             copy_grants: self.copy_grants,
             enable_schema_evolution: self.enable_schema_evolution,
@@ -442,7 +420,7 @@ impl CreateTableBuilder {
             catalog: self.catalog,
             catalog_sync: self.catalog_sync,
             storage_serialization_policy: self.storage_serialization_policy,
-            plain_options: self.plain_options,
+            table_options: self.table_options,
         })
     }
 }
@@ -468,8 +446,6 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 constraints,
                 hive_distribution,
                 hive_formats,
-                table_properties,
-                with_options,
                 file_format,
                 location,
                 query,
@@ -484,7 +460,6 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 partition_by,
                 cluster_by,
                 clustered_by,
-                options,
                 strict,
                 copy_grants,
                 enable_schema_evolution,
@@ -500,7 +475,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog,
                 catalog_sync,
                 storage_serialization_policy,
-                plain_options,
+                table_options,
             }) => Ok(Self {
                 or_replace,
                 temporary,
@@ -513,8 +488,6 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 constraints,
                 hive_distribution,
                 hive_formats,
-                table_properties,
-                with_options,
                 file_format,
                 location,
                 query,
@@ -529,7 +502,6 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 partition_by,
                 cluster_by,
                 clustered_by,
-                options,
                 strict,
                 iceberg,
                 copy_grants,
@@ -547,7 +519,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 catalog,
                 catalog_sync,
                 storage_serialization_policy,
-                plain_options,
+                table_options,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"
@@ -561,8 +533,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
 pub(crate) struct CreateTableConfiguration {
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
-    pub options: Option<Vec<SqlOption>>,
-    pub plain_options: Vec<SqlOption>,
+    pub table_options: CreateTableOptions,
 }
 
 #[cfg(test)]

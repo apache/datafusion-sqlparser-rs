@@ -2704,7 +2704,7 @@ impl<'a> Parser<'a> {
     /// This method will raise an error if the column list is empty or with invalid identifiers,
     /// the match expression is not a literal string, or if the search modifier is not valid.
     pub fn parse_match_against(&mut self) -> Result<Expr, ParserError> {
-        let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+        let columns = self.parse_parenthesized_qualified_column_list(Mandatory, false)?;
 
         self.expect_keyword_is(Keyword::AGAINST)?;
 

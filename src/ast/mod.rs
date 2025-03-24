@@ -1027,7 +1027,7 @@ pub enum Expr {
     /// [(1)]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
     MatchAgainst {
         /// `(<col>, <col>, ...)`.
-        columns: Vec<Ident>,
+        columns: Vec<ObjectName>,
         /// `<expr>`.
         match_value: Value,
         /// `<search modifier>`

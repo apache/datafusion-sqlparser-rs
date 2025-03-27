@@ -3522,10 +3522,9 @@ fn test_variable_assignment_using_colon_equal() {
                                 span: Span::empty(),
                             })),
                             op: BinaryOperator::Multiply,
-                            right: Box::new(Expr::Value(ValueWithSpan {
-                                value: Value::Number("0.1".to_string(), false),
-                                span: Span::empty(),
-                            })),
+                            right: Box::new(Expr::Value(
+                                (test_utils::number("0.1")).with_empty_span()
+                            )),
                         }),
                     }),
                 ]
@@ -3540,10 +3539,7 @@ fn test_variable_assignment_using_colon_equal() {
                         span: Span::empty(),
                     })),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value(ValueWithSpan {
-                        value: Value::Number("1".to_string(), false),
-                        span: Span::empty(),
-                    })),
+                    right: Box::new(Expr::Value((test_utils::number("1")).with_empty_span())),
                 })
             );
         }
@@ -3580,10 +3576,9 @@ fn test_variable_assignment_using_colon_equal() {
                                 span: Span::empty(),
                             })),
                             op: BinaryOperator::Multiply,
-                            right: Box::new(Expr::Value(ValueWithSpan {
-                                value: Value::Number("1.1".to_string(), false),
-                                span: Span::empty(),
-                            })),
+                            right: Box::new(Expr::Value(
+                                (test_utils::number("1.1")).with_empty_span()
+                            )),
                         }),
                     },
                 }]

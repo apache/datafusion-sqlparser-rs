@@ -620,7 +620,8 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
             Token::Period => Ok(p!(Period)),
-            Token::Eq
+            Token::Assignment
+            | Token::Eq
             | Token::Lt
             | Token::LtEq
             | Token::Neq

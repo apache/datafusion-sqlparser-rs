@@ -3483,3 +3483,107 @@ fn parse_match_against_with_alias() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn test_variable_assignment_using_colon_equal() {
+    let sql_select = "SELECT @price := price, @tax := price * 0.1 FROM products WHERE id = 1";
+    let stmt = mysql().verified_stmt(sql_select);
+    match stmt {
+        Statement::Query(query) => {
+            let select = query.body.as_select().unwrap();
+
+            assert_eq!(
+                select.projection,
+                vec![
+                    SelectItem::UnnamedExpr(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "@price".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })),
+                        op: BinaryOperator::Assignment,
+                        right: Box::new(Expr::Identifier(Ident {
+                            value: "price".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })),
+                    }),
+                    SelectItem::UnnamedExpr(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "@tax".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })),
+                        op: BinaryOperator::Assignment,
+                        right: Box::new(Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident {
+                                value: "price".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            })),
+                            op: BinaryOperator::Multiply,
+                            right: Box::new(Expr::Value(
+                                (test_utils::number("0.1")).with_empty_span()
+                            )),
+                        }),
+                    }),
+                ]
+            );
+
+            assert_eq!(
+                select.selection,
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident {
+                        value: "id".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    })),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value((test_utils::number("1")).with_empty_span())),
+                })
+            );
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+
+    let sql_update =
+        "UPDATE products SET price = @new_price := price * 1.1 WHERE category = 'Books'";
+    let stmt = mysql().verified_stmt(sql_update);
+
+    match stmt {
+        Statement::Update { assignments, .. } => {
+            assert_eq!(
+                assignments,
+                vec![Assignment {
+                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                        ObjectNamePart::Identifier(Ident {
+                            value: "price".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })
+                    ])),
+                    value: Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "@new_price".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })),
+                        op: BinaryOperator::Assignment,
+                        right: Box::new(Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident {
+                                value: "price".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            })),
+                            op: BinaryOperator::Multiply,
+                            right: Box::new(Expr::Value(
+                                (test_utils::number("1.1")).with_empty_span()
+                            )),
+                        }),
+                    },
+                }]
+            )
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+}

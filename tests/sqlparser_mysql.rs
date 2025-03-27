@@ -3455,6 +3455,7 @@ fn parse_cast_integers() {
         .expect_err("CAST doesn't allow display width");
 }
 
+#[test]
 fn parse_match_against_with_alias() {
     let sql = "SELECT tbl.ProjectID FROM surveys.tbl1 AS tbl WHERE MATCH (tbl.ReferenceID) AGAINST ('AAA' IN BOOLEAN MODE)";
     match mysql().verified_stmt(sql) {

@@ -3455,6 +3455,34 @@ fn parse_cast_integers() {
         .expect_err("CAST doesn't allow display width");
 }
 
+fn parse_match_against_with_alias() {
+    let sql = "SELECT tbl.ProjectID FROM surveys.tbl1 AS tbl WHERE MATCH (tbl.ReferenceID) AGAINST ('AAA' IN BOOLEAN MODE)";
+    match mysql().verified_stmt(sql) {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => match select.selection {
+                Some(Expr::MatchAgainst {
+                    columns,
+                    match_value,
+                    opt_search_modifier,
+                }) => {
+                    assert_eq!(
+                        columns,
+                        vec![ObjectName::from(vec![
+                            Ident::new("tbl"),
+                            Ident::new("ReferenceID")
+                        ])]
+                    );
+                    assert_eq!(match_value, Value::SingleQuotedString("AAA".to_owned()));
+                    assert_eq!(opt_search_modifier, Some(SearchModifier::InBooleanMode));
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+}
+
 #[test]
 fn test_variable_assignment_using_colon_equal() {
     let sql_select = "SELECT @price := price, @tax := price * 0.1 FROM products WHERE id = 1";

@@ -49,7 +49,7 @@ pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
-use crate::ast::{ColumnOption, Expr, Statement};
+use crate::ast::{ColumnOption, Expr, SqlOption, Statement};
 pub use crate::keywords;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -700,6 +700,16 @@ pub trait Dialect: Debug + Any {
         &self,
         _parser: &mut Parser,
     ) -> Result<Option<Result<Option<ColumnOption>, ParserError>>, ParserError> {
+        // return None to fall back to the default behavior
+        Ok(None)
+    }
+
+    /// Dialect-specific table/view option parser override
+    ///
+    /// This method is called to parse the next table/view option.
+    ///
+    /// If `None` is returned, falls back to the default behavior.
+    fn parse_plain_option(&self, _parser: &mut Parser) -> Result<Option<SqlOption>, ParserError> {
         // return None to fall back to the default behavior
         Ok(None)
     }

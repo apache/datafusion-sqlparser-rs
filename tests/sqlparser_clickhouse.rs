@@ -44,22 +44,25 @@ fn parse_map_access_expr() {
             select_token: AttachedToken::empty(),
             top: None,
             top_before_distinct: false,
-            projection: vec![UnnamedExpr(Expr::CompoundFieldAccess {
-                root: Box::new(Identifier(Ident {
-                    value: "string_values".to_string(),
-                    quote_style: None,
-                    span: Span::empty(),
-                })),
-                access_chain: vec![AccessExpr::Subscript(Subscript::Index {
-                    index: call(
-                        "indexOf",
-                        [
-                            Expr::Identifier(Ident::new("string_names")),
-                            Expr::value(Value::SingleQuotedString("endpoint".to_string()))
-                        ]
-                    ),
-                })],
-            })],
+            projection: vec![UnnamedExpr {
+                expr: Expr::CompoundFieldAccess {
+                    root: Box::new(Identifier(Ident {
+                        value: "string_values".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    })),
+                    access_chain: vec![AccessExpr::Subscript(Subscript::Index {
+                        index: call(
+                            "indexOf",
+                            [
+                                Expr::Identifier(Ident::new("string_names")),
+                                Expr::value(Value::SingleQuotedString("endpoint".to_string()))
+                            ]
+                        ),
+                    })],
+                },
+                prefix: None
+            }],
             into: None,
             from: vec![TableWithJoins {
                 relation: table_from_name(ObjectName::from(vec![Ident::new("foos")])),
@@ -205,7 +208,11 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
+        SelectItem::ExprWithAlias {
+            expr,
+            alias,
+            prefix: _,
+        } => {
             assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
@@ -315,8 +322,14 @@ fn parse_alter_table_add_projection() {
                     name: "my_name".into(),
                     select: ProjectionSelect {
                         projection: vec![
-                            UnnamedExpr(Identifier(Ident::new("a"))),
-                            UnnamedExpr(Identifier(Ident::new("b"))),
+                            UnnamedExpr {
+                                expr: Identifier(Ident::new("a")),
+                                prefix: None
+                            },
+                            UnnamedExpr {
+                                expr: Identifier(Ident::new("b")),
+                                prefix: None
+                            },
                         ],
                         group_by: Some(GroupByExpr::Expressions(
                             vec![Identifier(Ident::new("a"))],
@@ -1000,7 +1013,10 @@ fn parse_select_parametric_function() {
             let projection: &Vec<SelectItem> = query.body.as_select().unwrap().projection.as_ref();
             assert_eq!(projection.len(), 1);
             match &projection[0] {
-                UnnamedExpr(Expr::Function(f)) => {
+                UnnamedExpr {
+                    expr: Expr::Function(f),
+                    ..
+                } => {
                     let args = match &f.args {
                         FunctionArguments::List(ref args) => args,
                         _ => unreachable!(),
@@ -1418,9 +1434,12 @@ fn parse_create_table_on_commit_and_as_query() {
             assert_eq!(on_commit, Some(OnCommit::PreserveRows));
             assert_eq!(
                 query.unwrap().body.as_select().unwrap().projection,
-                vec![UnnamedExpr(Expr::Value(
-                    (Value::Number("1".parse().unwrap(), false)).with_empty_span()
-                ))]
+                vec![UnnamedExpr {
+                    expr: Expr::Value(
+                        (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+                    ),
+                    prefix: None
+                }]
             );
         }
         _ => unreachable!(),

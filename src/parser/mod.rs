@@ -1237,6 +1237,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    //Select item operators
+    fn parse_select_item_prefix_by_reserved_word(&mut self) -> Result<Option<Expr>, ParserError> {
+        if let Some(kw) = self.peek_one_of_keywords(
+            self.dialect
+                .get_reserved_keywords_for_select_item_operator(),
+        ) {
+            if let TokenWithSpan {
+                span,
+                token: Token::Word(word),
+            } = self.expect_keyword(kw)?
+            {
+                return Ok(Some(Expr::Identifier(word.clone().into_ident(span))));
+            }
+        }
+        Ok(None)
+    }
+
     /// Tries to parse an expression by matching the specified word to known keywords that have a special meaning in the dialect.
     /// Returns `None if no match is found.
     fn parse_expr_prefix_by_reserved_word(
@@ -13732,6 +13749,10 @@ impl<'a> Parser<'a> {
 
     /// Parse a comma-delimited list of projections after SELECT
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
+        let prefix = self
+            .maybe_parse(|parser| parser.parse_select_item_prefix_by_reserved_word())?
+            .flatten();
+
         match self.parse_wildcard_expr()? {
             Expr::QualifiedWildcard(prefix, token) => Ok(SelectItem::QualifiedWildcard(
                 SelectItemQualifiedWildcardKind::ObjectName(prefix),
@@ -13762,6 +13783,7 @@ impl<'a> Parser<'a> {
                 Ok(SelectItem::ExprWithAlias {
                     expr: *right,
                     alias,
+                    prefix,
                 })
             }
             expr if self.dialect.supports_select_expr_star()
@@ -13776,8 +13798,12 @@ impl<'a> Parser<'a> {
             expr => self
                 .maybe_parse_select_item_alias()
                 .map(|alias| match alias {
-                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
-                    None => SelectItem::UnnamedExpr(expr),
+                    Some(alias) => SelectItem::ExprWithAlias {
+                        expr,
+                        alias,
+                        prefix,
+                    },
+                    None => SelectItem::UnnamedExpr { expr, prefix },
                 }),
         }
     }

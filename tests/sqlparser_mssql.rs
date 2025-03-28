@@ -119,9 +119,10 @@ fn parse_create_procedure() {
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(
-                        (number("1")).with_empty_span()
-                    ))],
+                    projection: vec![SelectItem::UnnamedExpr {
+                        expr: Expr::Value((number("1")).with_empty_span()),
+                        prefix: None
+                    }],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -671,7 +672,11 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
+        SelectItem::ExprWithAlias {
+            expr,
+            alias,
+            prefix: _,
+        } => {
             assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
@@ -1120,21 +1125,24 @@ fn parse_substring_in_select() {
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         top_before_distinct: false,
-                        projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
-                            expr: Box::new(Expr::Identifier(Ident {
-                                value: "description".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            })),
-                            substring_from: Some(Box::new(Expr::Value(
-                                (number("0")).with_empty_span()
-                            ))),
-                            substring_for: Some(Box::new(Expr::Value(
-                                (number("1")).with_empty_span()
-                            ))),
-                            special: true,
-                            shorthand: false,
-                        })],
+                        projection: vec![SelectItem::UnnamedExpr {
+                            expr: Expr::Substring {
+                                expr: Box::new(Expr::Identifier(Ident {
+                                    value: "description".to_string(),
+                                    quote_style: None,
+                                    span: Span::empty(),
+                                })),
+                                substring_from: Some(Box::new(Expr::Value(
+                                    (number("0")).with_empty_span()
+                                ))),
+                                substring_for: Some(Box::new(Expr::Value(
+                                    (number("1")).with_empty_span()
+                                ))),
+                                special: true,
+                                shorthand: false,
+                            },
+                            prefix: None
+                        }],
                         into: None,
                         from: vec![TableWithJoins {
                             relation: table_from_name(ObjectName::from(vec![Ident {
@@ -1273,13 +1281,16 @@ fn parse_mssql_declare() {
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("@bar"))),
-                        op: BinaryOperator::Multiply,
-                        right: Box::new(Expr::Value(
-                            (Value::Number("4".parse().unwrap(), false)).with_empty_span()
-                        )),
-                    })],
+                    projection: vec![SelectItem::UnnamedExpr {
+                        expr: Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident::new("@bar"))),
+                            op: BinaryOperator::Multiply,
+                            right: Box::new(Expr::Value(
+                                (Value::Number("4".parse().unwrap(), false)).with_empty_span()
+                            )),
+                        },
+                        prefix: None
+                    }],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],

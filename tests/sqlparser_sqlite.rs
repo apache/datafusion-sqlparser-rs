@@ -369,9 +369,10 @@ fn test_placeholder() {
     let ast = sqlite().verified_only_select(sql);
     assert_eq!(
         ast.projection[0],
-        UnnamedExpr(Expr::Value(
-            (Value::Placeholder("@xxx".into())).with_empty_span()
-        )),
+        UnnamedExpr {
+            expr: Expr::Value((Value::Placeholder("@xxx".into())).with_empty_span()),
+            prefix: None
+        },
     );
 }
 
@@ -415,27 +416,30 @@ fn parse_window_function_with_filter() {
         assert_eq!(select.to_string(), sql);
         assert_eq!(
             select.projection,
-            vec![SelectItem::UnnamedExpr(Expr::Function(Function {
-                name: ObjectName::from(vec![Ident::new(func_name)]),
-                uses_odbc_syntax: false,
-                parameters: FunctionArguments::None,
-                args: FunctionArguments::List(FunctionArgumentList {
-                    duplicate_treatment: None,
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("x"))
-                    ))],
-                    clauses: vec![],
+            vec![SelectItem::UnnamedExpr {
+                expr: Expr::Function(Function {
+                    name: ObjectName::from(vec![Ident::new(func_name)]),
+                    uses_odbc_syntax: false,
+                    parameters: FunctionArguments::None,
+                    args: FunctionArguments::List(FunctionArgumentList {
+                        duplicate_treatment: None,
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::Identifier(Ident::new("x"))
+                        ))],
+                        clauses: vec![],
+                    }),
+                    null_treatment: None,
+                    over: Some(WindowType::WindowSpec(WindowSpec {
+                        window_name: None,
+                        partition_by: vec![],
+                        order_by: vec![],
+                        window_frame: None,
+                    })),
+                    filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),
+                    within_group: vec![],
                 }),
-                null_treatment: None,
-                over: Some(WindowType::WindowSpec(WindowSpec {
-                    window_name: None,
-                    partition_by: vec![],
-                    order_by: vec![],
-                    window_frame: None,
-                })),
-                filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),
-                within_group: vec![],
-            }))]
+                prefix: None
+            }]
         );
     }
 }

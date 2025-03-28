@@ -346,6 +346,13 @@ impl Dialect for SnowflakeDialect {
     fn supports_group_by_expr(&self) -> bool {
         true
     }
+
+    /// See: <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>
+    fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {
+        const RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR: [Keyword; 1] = [Keyword::CONNECT_BY_ROOT];
+
+        &RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR
+    }
 }
 
 fn parse_file_staging_command(kw: Keyword, parser: &mut Parser) -> Result<Statement, ParserError> {

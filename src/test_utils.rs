@@ -311,7 +311,7 @@ pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {
 
 pub fn expr_from_projection(item: &SelectItem) -> &Expr {
     match item {
-        SelectItem::UnnamedExpr(expr) => expr,
+        SelectItem::UnnamedExpr { expr, .. } => expr,
         _ => panic!("Expected UnnamedExpr"),
     }
 }

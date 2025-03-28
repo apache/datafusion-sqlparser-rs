@@ -1090,15 +1090,18 @@ fn parse_semi_structured_data_traversal() {
     let sql = "SELECT a:b FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![JsonPathElem::Dot {
-                    key: "b".to_owned(),
-                    quoted: false
-                }]
+        SelectItem::UnnamedExpr {
+            expr: Expr::JsonAccess {
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![JsonPathElem::Dot {
+                        key: "b".to_owned(),
+                        quoted: false
+                    }]
+                },
             },
-        }),
+            prefix: None
+        },
         select.projection[0]
     );
 
@@ -1106,15 +1109,18 @@ fn parse_semi_structured_data_traversal() {
     let sql = r#"SELECT a:"my long object key name" FROM t"#;
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![JsonPathElem::Dot {
-                    key: "my long object key name".to_owned(),
-                    quoted: true
-                }]
+        SelectItem::UnnamedExpr {
+            expr: Expr::JsonAccess {
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![JsonPathElem::Dot {
+                        key: "my long object key name".to_owned(),
+                        quoted: true
+                    }]
+                },
             },
-        }),
+            prefix: None
+        },
         select.projection[0]
     );
 
@@ -1122,18 +1128,21 @@ fn parse_semi_structured_data_traversal() {
     let sql = r#"SELECT a[2 + 2] FROM t"#;
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![JsonPathElem::Bracket {
-                    key: Expr::BinaryOp {
-                        left: Box::new(Expr::value(number("2"))),
-                        op: BinaryOperator::Plus,
-                        right: Box::new(Expr::value(number("2")))
-                    },
-                }]
+        SelectItem::UnnamedExpr {
+            expr: Expr::JsonAccess {
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![JsonPathElem::Bracket {
+                        key: Expr::BinaryOp {
+                            left: Box::new(Expr::value(number("2"))),
+                            op: BinaryOperator::Plus,
+                            right: Box::new(Expr::value(number("2")))
+                        },
+                    }]
+                },
             },
-        }),
+            prefix: None
+        },
         select.projection[0]
     );
 
@@ -1144,24 +1153,30 @@ fn parse_semi_structured_data_traversal() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         vec![
-            SelectItem::UnnamedExpr(Expr::JsonAccess {
-                value: Box::new(Expr::Identifier(Ident::new("a"))),
-                path: JsonPath {
-                    path: vec![JsonPathElem::Dot {
-                        key: "select".to_owned(),
-                        quoted: false
-                    }]
+            SelectItem::UnnamedExpr {
+                expr: Expr::JsonAccess {
+                    value: Box::new(Expr::Identifier(Ident::new("a"))),
+                    path: JsonPath {
+                        path: vec![JsonPathElem::Dot {
+                            key: "select".to_owned(),
+                            quoted: false
+                        }]
+                    },
                 },
-            }),
-            SelectItem::UnnamedExpr(Expr::JsonAccess {
-                value: Box::new(Expr::Identifier(Ident::new("a"))),
-                path: JsonPath {
-                    path: vec![JsonPathElem::Dot {
-                        key: "from".to_owned(),
-                        quoted: false
-                    }]
+                prefix: None
+            },
+            SelectItem::UnnamedExpr {
+                expr: Expr::JsonAccess {
+                    value: Box::new(Expr::Identifier(Ident::new("a"))),
+                    path: JsonPath {
+                        path: vec![JsonPathElem::Dot {
+                            key: "from".to_owned(),
+                            quoted: false
+                        }]
+                    },
                 },
-            })
+                prefix: None
+            }
         ],
         select.projection
     );
@@ -1171,25 +1186,28 @@ fn parse_semi_structured_data_traversal() {
     let sql = r#"SELECT a:foo."bar".baz"#;
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![
-                    JsonPathElem::Dot {
-                        key: "foo".to_owned(),
-                        quoted: false,
-                    },
-                    JsonPathElem::Dot {
-                        key: "bar".to_owned(),
-                        quoted: true,
-                    },
-                    JsonPathElem::Dot {
-                        key: "baz".to_owned(),
-                        quoted: false,
-                    }
-                ]
+        vec![SelectItem::UnnamedExpr {
+            expr: Expr::JsonAccess {
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![
+                        JsonPathElem::Dot {
+                            key: "foo".to_owned(),
+                            quoted: false,
+                        },
+                        JsonPathElem::Dot {
+                            key: "bar".to_owned(),
+                            quoted: true,
+                        },
+                        JsonPathElem::Dot {
+                            key: "baz".to_owned(),
+                            quoted: false,
+                        }
+                    ]
+                },
             },
-        })],
+            prefix: None
+        }],
         select.projection
     );
 
@@ -1198,24 +1216,27 @@ fn parse_semi_structured_data_traversal() {
     let sql = r#"SELECT a:foo[0].bar"#;
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![
-                    JsonPathElem::Dot {
-                        key: "foo".to_owned(),
-                        quoted: false,
-                    },
-                    JsonPathElem::Bracket {
-                        key: Expr::value(number("0")),
-                    },
-                    JsonPathElem::Dot {
-                        key: "bar".to_owned(),
-                        quoted: false,
-                    }
-                ]
+        vec![SelectItem::UnnamedExpr {
+            expr: Expr::JsonAccess {
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![
+                        JsonPathElem::Dot {
+                            key: "foo".to_owned(),
+                            quoted: false,
+                        },
+                        JsonPathElem::Bracket {
+                            key: Expr::value(number("0")),
+                        },
+                        JsonPathElem::Dot {
+                            key: "bar".to_owned(),
+                            quoted: false,
+                        }
+                    ]
+                },
             },
-        })],
+            prefix: None
+        }],
         select.projection
     );
 
@@ -1224,24 +1245,27 @@ fn parse_semi_structured_data_traversal() {
     let sql = r#"SELECT a[0].foo.bar"#;
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
-            path: JsonPath {
-                path: vec![
-                    JsonPathElem::Bracket {
-                        key: Expr::value(number("0")),
-                    },
-                    JsonPathElem::Dot {
-                        key: "foo".to_owned(),
-                        quoted: false,
-                    },
-                    JsonPathElem::Dot {
-                        key: "bar".to_owned(),
-                        quoted: false,
-                    }
-                ]
+        vec![SelectItem::UnnamedExpr {
+            expr: Expr::JsonAccess {
+                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                path: JsonPath {
+                    path: vec![
+                        JsonPathElem::Bracket {
+                            key: Expr::value(number("0")),
+                        },
+                        JsonPathElem::Dot {
+                            key: "foo".to_owned(),
+                            quoted: false,
+                        },
+                        JsonPathElem::Dot {
+                            key: "bar".to_owned(),
+                            quoted: false,
+                        }
+                    ]
+                },
             },
-        })],
+            prefix: None
+        }],
         select.projection
     );
 
@@ -1356,7 +1380,11 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
+        SelectItem::ExprWithAlias {
+            expr,
+            alias,
+            prefix: _,
+        } => {
             assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
@@ -1646,9 +1674,10 @@ fn parse_snowflake_declare_cursor() {
                                 .projection
                                 .iter()
                                 .map(|item| match item {
-                                    SelectItem::UnnamedExpr(Expr::Identifier(ident)) => {
-                                        ident.value.as_str()
-                                    }
+                                    SelectItem::UnnamedExpr {
+                                        expr: Expr::Identifier(ident),
+                                        ..
+                                    } => ident.value.as_str(),
                                     _ => unreachable!(),
                                 })
                                 .collect::<Vec<_>>(),
@@ -3504,4 +3533,36 @@ fn test_alter_session() {
         "ALTER SESSION SET A=TRUE B='tag'",
     );
     snowflake().one_statement_parses_to("ALTER SESSION UNSET a\nB", "ALTER SESSION UNSET a, B");
+}
+
+#[test]
+fn parse_connect_by_root_operator() {
+    let sql = "SELECT CONNECT_BY_ROOT name AS root_name FROM Tbl1";
+    match snowflake().verified_stmt(sql) {
+        Statement::Query(query) => {
+            assert_eq!(
+                query.body.as_select().unwrap().projection[0],
+                SelectItem::ExprWithAlias {
+                    expr: Expr::Identifier(Ident::new("name")),
+                    alias: Ident::new("root_name"),
+                    prefix: Some(Expr::Identifier(Ident::new("CONNECT_BY_ROOT")))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "SELECT CONNECT_BY_ROOT name FROM Tbl2";
+    match snowflake().verified_stmt(sql) {
+        Statement::Query(query) => {
+            assert_eq!(
+                query.body.as_select().unwrap().projection[0],
+                SelectItem::UnnamedExpr {
+                    expr: Expr::Identifier(Ident::new("name")),
+                    prefix: Some(Expr::Identifier(Ident::new("CONNECT_BY_ROOT")))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
 }

@@ -39,7 +39,10 @@ fn test_databricks_identifiers() {
     // databricks uses backtick for delimited identifiers
     assert_eq!(
         databricks().verified_only_select("SELECT `Ä`").projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident::with_quote('`', "Ä")))
+        SelectItem::UnnamedExpr {
+            expr: Expr::Identifier(Ident::with_quote('`', "Ä")),
+            prefix: None
+        }
     );
 
     // double quotes produce string literals, not delimited identifiers
@@ -47,9 +50,10 @@ fn test_databricks_identifiers() {
         databricks()
             .verified_only_select(r#"SELECT "Ä""#)
             .projection[0],
-        SelectItem::UnnamedExpr(Expr::Value(
-            (Value::DoubleQuotedString("Ä".to_owned())).with_empty_span()
-        ))
+        SelectItem::UnnamedExpr {
+            expr: Expr::Value((Value::DoubleQuotedString("Ä".to_owned())).with_empty_span()),
+            prefix: None
+        }
     );
 }
 
@@ -95,52 +99,55 @@ fn test_databricks_lambdas() {
                         "ELSE 1 END)",
     );
     pretty_assertions::assert_eq!(
-        SelectItem::UnnamedExpr(call(
-            "array_sort",
-            [
-                call(
-                    "array",
-                    [
-                        Expr::value(Value::SingleQuotedString("Hello".to_owned())),
-                        Expr::value(Value::SingleQuotedString("World".to_owned()))
-                    ]
-                ),
-                Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
-                    body: Box::new(Expr::Case {
-                        operand: None,
-                        conditions: vec![
-                            CaseWhen {
-                                condition: Expr::BinaryOp {
-                                    left: Box::new(Expr::Identifier(Ident::new("p1"))),
-                                    op: BinaryOperator::Eq,
-                                    right: Box::new(Expr::Identifier(Ident::new("p2")))
+        SelectItem::UnnamedExpr {
+            expr: call(
+                "array_sort",
+                [
+                    call(
+                        "array",
+                        [
+                            Expr::value(Value::SingleQuotedString("Hello".to_owned())),
+                            Expr::value(Value::SingleQuotedString("World".to_owned()))
+                        ]
+                    ),
+                    Expr::Lambda(LambdaFunction {
+                        params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
+                        body: Box::new(Expr::Case {
+                            operand: None,
+                            conditions: vec![
+                                CaseWhen {
+                                    condition: Expr::BinaryOp {
+                                        left: Box::new(Expr::Identifier(Ident::new("p1"))),
+                                        op: BinaryOperator::Eq,
+                                        right: Box::new(Expr::Identifier(Ident::new("p2")))
+                                    },
+                                    result: Expr::value(number("0"))
                                 },
-                                result: Expr::value(number("0"))
-                            },
-                            CaseWhen {
-                                condition: Expr::BinaryOp {
-                                    left: Box::new(call(
-                                        "reverse",
-                                        [Expr::Identifier(Ident::new("p1"))]
-                                    )),
-                                    op: BinaryOperator::Lt,
-                                    right: Box::new(call(
-                                        "reverse",
-                                        [Expr::Identifier(Ident::new("p2"))]
-                                    )),
+                                CaseWhen {
+                                    condition: Expr::BinaryOp {
+                                        left: Box::new(call(
+                                            "reverse",
+                                            [Expr::Identifier(Ident::new("p1"))]
+                                        )),
+                                        op: BinaryOperator::Lt,
+                                        right: Box::new(call(
+                                            "reverse",
+                                            [Expr::Identifier(Ident::new("p2"))]
+                                        )),
+                                    },
+                                    result: Expr::UnaryOp {
+                                        op: UnaryOperator::Minus,
+                                        expr: Box::new(Expr::value(number("1")))
+                                    }
                                 },
-                                result: Expr::UnaryOp {
-                                    op: UnaryOperator::Minus,
-                                    expr: Box::new(Expr::value(number("1")))
-                                }
-                            },
-                        ],
-                        else_result: Some(Box::new(Expr::value(number("1"))))
+                            ],
+                            else_result: Some(Box::new(Expr::value(number("1"))))
+                        })
                     })
-                })
-            ]
-        )),
+                ]
+            ),
+            prefix: None
+        },
         databricks().verified_only_select(sql).projection[0]
     );
 
@@ -286,34 +293,40 @@ fn parse_databricks_struct_function() {
         databricks_and_generic()
             .verified_only_select("SELECT STRUCT(1, 'foo')")
             .projection[0],
-        SelectItem::UnnamedExpr(Expr::Struct {
-            values: vec![
-                Expr::value(number("1")),
-                Expr::Value((Value::SingleQuotedString("foo".to_string())).with_empty_span())
-            ],
-            fields: vec![]
-        })
+        SelectItem::UnnamedExpr {
+            expr: Expr::Struct {
+                values: vec![
+                    Expr::value(number("1")),
+                    Expr::Value((Value::SingleQuotedString("foo".to_string())).with_empty_span())
+                ],
+                fields: vec![]
+            },
+            prefix: None
+        }
     );
     assert_eq!(
         databricks_and_generic()
             .verified_only_select("SELECT STRUCT(1 AS one, 'foo' AS foo, false)")
             .projection[0],
-        SelectItem::UnnamedExpr(Expr::Struct {
-            values: vec![
-                Expr::Named {
-                    expr: Expr::value(number("1")).into(),
-                    name: Ident::new("one")
-                },
-                Expr::Named {
-                    expr: Expr::Value(
-                        (Value::SingleQuotedString("foo".to_string())).with_empty_span()
-                    )
-                    .into(),
-                    name: Ident::new("foo")
-                },
-                Expr::Value((Value::Boolean(false)).with_empty_span())
-            ],
-            fields: vec![]
-        })
+        SelectItem::UnnamedExpr {
+            expr: Expr::Struct {
+                values: vec![
+                    Expr::Named {
+                        expr: Expr::value(number("1")).into(),
+                        name: Ident::new("one")
+                    },
+                    Expr::Named {
+                        expr: Expr::Value(
+                            (Value::SingleQuotedString("foo".to_string())).with_empty_span()
+                        )
+                        .into(),
+                        name: Ident::new("foo")
+                    },
+                    Expr::Value((Value::Boolean(false)).with_empty_span())
+                ],
+                fields: vec![]
+            },
+            prefix: None
+        }
     );
 }

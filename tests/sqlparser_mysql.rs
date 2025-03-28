@@ -986,9 +986,10 @@ fn parse_create_table_both_options_and_as_query() {
             assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
             assert_eq!(
                 query.unwrap().body.as_select().unwrap().projection,
-                vec![SelectItem::UnnamedExpr(Expr::Value(
-                    (number("1")).with_empty_span()
-                ))]
+                vec![SelectItem::UnnamedExpr {
+                    expr: Expr::Value((number("1")).with_empty_span()),
+                    prefix: None
+                }]
             );
         }
         _ => unreachable!(),
@@ -1084,11 +1085,14 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "quoted ` identifier".into(),
-                    quote_style: Some('`'),
-                    span: Span::empty(),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "quoted ` identifier".into(),
+                        quote_style: Some('`'),
+                        span: Span::empty(),
+                    }),
+                    prefix: None
+                }],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1136,11 +1140,14 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "quoted `` identifier".into(),
-                    quote_style: Some('`'),
-                    span: Span::empty(),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "quoted `` identifier".into(),
+                        quote_style: Some('`'),
+                        span: Span::empty(),
+                    }),
+                    prefix: None
+                }],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1182,11 +1189,14 @@ fn parse_escaped_backticks_with_escape() {
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "`quoted identifier`".into(),
-                    quote_style: Some('`'),
-                    span: Span::empty(),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "`quoted identifier`".into(),
+                        quote_style: Some('`'),
+                        span: Span::empty(),
+                    }),
+                    prefix: None
+                }],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1232,11 +1242,14 @@ fn parse_escaped_backticks_with_no_escape() {
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "``quoted identifier``".into(),
-                    quote_style: Some('`'),
-                    span: Span::empty(),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "``quoted identifier``".into(),
+                        quote_style: Some('`'),
+                        span: Span::empty(),
+                    }),
+                    prefix: None
+                }],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1895,9 +1908,10 @@ fn parse_select_with_numeric_prefix_column_name() {
                     distinct: None,
                     top: None,
                     top_before_distinct: false,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
-                        "123col_$@123abc"
-                    )))],
+                    projection: vec![SelectItem::UnnamedExpr {
+                        expr: Expr::Identifier(Ident::new("123col_$@123abc")),
+                        prefix: None
+                    }],
                     into: None,
                     from: vec![TableWithJoins {
                         relation: table_from_name(ObjectName::from(vec![Ident::with_quote(
@@ -1948,8 +1962,14 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     top: None,
                     top_before_distinct: false,
                     projection: vec![
-                        SelectItem::UnnamedExpr(Expr::value(number("123e4"))),
-                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
+                        SelectItem::UnnamedExpr {
+                            expr: Expr::value(number("123e4")),
+                            prefix: None
+                        },
+                        SelectItem::UnnamedExpr {
+                            expr: Expr::Identifier(Ident::new("123col_$@123abc")),
+                            prefix: None
+                        }
                     ],
                     into: None,
                     from: vec![TableWithJoins {
@@ -2577,21 +2597,24 @@ fn parse_substring_in_select() {
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         top_before_distinct: false,
-                        projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
-                            expr: Box::new(Expr::Identifier(Ident {
-                                value: "description".to_string(),
-                                quote_style: None,
-                                span: Span::empty(),
-                            })),
-                            substring_from: Some(Box::new(Expr::Value(
-                                (number("0")).with_empty_span()
-                            ))),
-                            substring_for: Some(Box::new(Expr::Value(
-                                (number("1")).with_empty_span()
-                            ))),
-                            special: true,
-                            shorthand: false,
-                        })],
+                        projection: vec![SelectItem::UnnamedExpr {
+                            expr: Expr::Substring {
+                                expr: Box::new(Expr::Identifier(Ident {
+                                    value: "description".to_string(),
+                                    quote_style: None,
+                                    span: Span::empty(),
+                                })),
+                                substring_from: Some(Box::new(Expr::Value(
+                                    (number("0")).with_empty_span()
+                                ))),
+                                substring_for: Some(Box::new(Expr::Value(
+                                    (number("1")).with_empty_span()
+                                ))),
+                                special: true,
+                                shorthand: false,
+                            },
+                            prefix: None
+                        }],
                         into: None,
                         from: vec![TableWithJoins {
                             relation: table_from_name(ObjectName::from(vec![Ident {
@@ -2898,10 +2921,13 @@ fn parse_hex_string_introducer() {
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
-                projection: vec![SelectItem::UnnamedExpr(Expr::IntroducedString {
-                    introducer: "_latin1".to_string(),
-                    value: Value::HexStringLiteral("4D7953514C".to_string())
-                })],
+                projection: vec![SelectItem::UnnamedExpr {
+                    expr: Expr::IntroducedString {
+                        introducer: "_latin1".to_string(),
+                        value: Value::HexStringLiteral("4D7953514C".to_string())
+                    },
+                    prefix: None
+                }],
                 from: vec![],
                 lateral_views: vec![],
                 prewhere: None,
@@ -3105,35 +3131,47 @@ fn parse_logical_xor() {
     let sql = "SELECT true XOR true, false XOR false, true XOR false, false XOR true";
     let select = mysql_and_generic().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
-        }),
+        SelectItem::UnnamedExpr {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
+                op: BinaryOperator::Xor,
+                right: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
+            },
+            prefix: None
+        },
         select.projection[0]
     );
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
-        }),
+        SelectItem::UnnamedExpr {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
+                op: BinaryOperator::Xor,
+                right: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
+            },
+            prefix: None
+        },
         select.projection[1]
     );
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
-        }),
+        SelectItem::UnnamedExpr {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
+                op: BinaryOperator::Xor,
+                right: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
+            },
+            prefix: None
+        },
         select.projection[2]
     );
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
-            op: BinaryOperator::Xor,
-            right: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
-        }),
+        SelectItem::UnnamedExpr {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::Value((Value::Boolean(false)).with_empty_span())),
+                op: BinaryOperator::Xor,
+                right: Box::new(Expr::Value((Value::Boolean(true)).with_empty_span())),
+            },
+            prefix: None
+        },
         select.projection[3]
     );
 }
@@ -3143,9 +3181,12 @@ fn parse_bitstring_literal() {
     let select = mysql_and_generic().verified_only_select("SELECT B'111'");
     assert_eq!(
         select.projection,
-        vec![SelectItem::UnnamedExpr(Expr::Value(
-            (Value::SingleQuotedByteStringLiteral("111".to_string())).with_empty_span()
-        ))]
+        vec![SelectItem::UnnamedExpr {
+            expr: Expr::Value(
+                (Value::SingleQuotedByteStringLiteral("111".to_string())).with_empty_span()
+            ),
+            prefix: None
+        }]
     );
 }
 
@@ -3495,38 +3536,44 @@ fn test_variable_assignment_using_colon_equal() {
             assert_eq!(
                 select.projection,
                 vec![
-                    SelectItem::UnnamedExpr(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident {
-                            value: "@price".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        })),
-                        op: BinaryOperator::Assignment,
-                        right: Box::new(Expr::Identifier(Ident {
-                            value: "price".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        })),
-                    }),
-                    SelectItem::UnnamedExpr(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident {
-                            value: "@tax".to_string(),
-                            quote_style: None,
-                            span: Span::empty(),
-                        })),
-                        op: BinaryOperator::Assignment,
-                        right: Box::new(Expr::BinaryOp {
+                    SelectItem::UnnamedExpr {
+                        expr: Expr::BinaryOp {
                             left: Box::new(Expr::Identifier(Ident {
+                                value: "@price".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            })),
+                            op: BinaryOperator::Assignment,
+                            right: Box::new(Expr::Identifier(Ident {
                                 value: "price".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
                             })),
-                            op: BinaryOperator::Multiply,
-                            right: Box::new(Expr::Value(
-                                (test_utils::number("0.1")).with_empty_span()
-                            )),
-                        }),
-                    }),
+                        },
+                        prefix: None
+                    },
+                    SelectItem::UnnamedExpr {
+                        expr: Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident {
+                                value: "@tax".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            })),
+                            op: BinaryOperator::Assignment,
+                            right: Box::new(Expr::BinaryOp {
+                                left: Box::new(Expr::Identifier(Ident {
+                                    value: "price".to_string(),
+                                    quote_style: None,
+                                    span: Span::empty(),
+                                })),
+                                op: BinaryOperator::Multiply,
+                                right: Box::new(Expr::Value(
+                                    (test_utils::number("0.1")).with_empty_span()
+                                )),
+                            }),
+                        },
+                        prefix: None
+                    },
                 ]
             );
 

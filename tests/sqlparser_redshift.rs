@@ -30,11 +30,14 @@ fn test_square_brackets_over_db_schema_table_name() {
     let select = redshift().verified_only_select("SELECT [col1] FROM [test_schema].[test_table]");
     assert_eq!(
         select.projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-            value: "col1".to_string(),
-            quote_style: Some('['),
-            span: Span::empty(),
-        })),
+        SelectItem::UnnamedExpr {
+            expr: Expr::Identifier(Ident {
+                value: "col1".to_string(),
+                quote_style: Some('['),
+                span: Span::empty(),
+            }),
+            prefix: None
+        },
     );
     assert_eq!(
         select.from[0],
@@ -72,11 +75,14 @@ fn test_double_quotes_over_db_schema_table_name() {
         redshift().verified_only_select("SELECT \"col1\" FROM \"test_schema\".\"test_table\"");
     assert_eq!(
         select.projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-            value: "col1".to_string(),
-            quote_style: Some('"'),
-            span: Span::empty(),
-        })),
+        SelectItem::UnnamedExpr {
+            expr: Expr::Identifier(Ident {
+                value: "col1".to_string(),
+                quote_style: Some('"'),
+                span: Span::empty(),
+            }),
+            prefix: None
+        },
     );
     assert_eq!(
         select.from[0],
@@ -152,7 +158,11 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
+        SelectItem::ExprWithAlias {
+            expr,
+            alias,
+            prefix: _,
+        } => {
             assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
@@ -182,7 +192,10 @@ fn test_sharp() {
     let sql = "SELECT #_of_values";
     let select = redshift().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values"))),
+        SelectItem::UnnamedExpr {
+            expr: Expr::Identifier(Ident::new("#_of_values")),
+            prefix: None
+        },
         select.projection[0]
     );
 }

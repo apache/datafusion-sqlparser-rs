@@ -1626,14 +1626,17 @@ fn parse_hyphenated_table_identifiers() {
                 "SELECT foo - bar.x FROM t"
             )
             .projection[0],
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("foo"))),
-            op: BinaryOperator::Minus,
-            right: Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("bar"),
-                Ident::new("x")
-            ]))
-        })
+        SelectItem::UnnamedExpr {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("foo"))),
+                op: BinaryOperator::Minus,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("bar"),
+                    Ident::new("x")
+                ]))
+            },
+            prefix: None
+        }
     );
 }
 

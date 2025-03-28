@@ -504,7 +504,11 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
+        SelectItem::ExprWithAlias {
+            expr,
+            alias,
+            prefix: _,
+        } => {
             assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }

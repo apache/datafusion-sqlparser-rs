@@ -622,9 +622,13 @@ pub enum SelectItemQualifiedWildcardKind {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
-    UnnamedExpr(Expr),
+    UnnamedExpr { expr: Expr, prefix: Option<Expr> },
     /// An expression, followed by `[ AS ] alias`
-    ExprWithAlias { expr: Expr, alias: Ident },
+    ExprWithAlias {
+        expr: Expr,
+        alias: Ident,
+        prefix: Option<Expr>,
+    },
     /// An expression, followed by a wildcard expansion.
     /// e.g. `alias.*`, `STRUCT<STRING>('foo').*`
     QualifiedWildcard(SelectItemQualifiedWildcardKind, WildcardAdditionalOptions),
@@ -907,8 +911,22 @@ impl fmt::Display for ReplaceSelectElement {
 impl fmt::Display for SelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self {
-            SelectItem::UnnamedExpr(expr) => write!(f, "{expr}"),
-            SelectItem::ExprWithAlias { expr, alias } => write!(f, "{expr} AS {alias}"),
+            SelectItem::UnnamedExpr { expr, prefix } => {
+                if let Some(expr) = prefix {
+                    write!(f, "{expr} ")?
+                }
+                write!(f, "{expr}")
+            }
+            SelectItem::ExprWithAlias {
+                expr,
+                alias,
+                prefix,
+            } => {
+                if let Some(expr) = prefix {
+                    write!(f, "{expr} ")?
+                }
+                write!(f, "{expr} AS {alias}")
+            }
             SelectItem::QualifiedWildcard(kind, additional_options) => {
                 write!(f, "{kind}")?;
                 write!(f, "{additional_options}")?;

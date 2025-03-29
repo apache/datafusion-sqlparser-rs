@@ -317,3 +317,45 @@ fn parse_databricks_struct_function() {
         })
     );
 }
+
+#[test]
+fn data_type_timestamp_ntz() {
+    // Literal
+    assert_eq!(
+        databricks().verified_expr("TIMESTAMP_NTZ '2025-03-29T18:52:00'"),
+        Expr::TypedString {
+            data_type: DataType::TimestampNtz,
+            value: Value::SingleQuotedString("2025-03-29T18:52:00".to_owned())
+        }
+    );
+
+    // Cast
+    assert_eq!(
+        databricks().verified_expr("(created_at)::TIMESTAMP_NTZ"),
+        Expr::Cast {
+            kind: CastKind::DoubleColon,
+            expr: Box::new(Expr::Nested(
+                Box::new(Expr::Identifier("created_at".into()))
+            )),
+            data_type: DataType::TimestampNtz,
+            format: None
+        }
+    );
+
+    // Column definition
+    match databricks().verified_stmt("CREATE TABLE foo (x TIMESTAMP_NTZ)") {
+        Statement::CreateTable(CreateTable { columns, .. }) => {
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "x".into(),
+                        data_type: DataType::TimestampNtz,
+                        options: vec![],
+                    }
+                ]
+            );
+        }
+        s => panic!("Unexpected statement: {:?}", s),
+    }
+}

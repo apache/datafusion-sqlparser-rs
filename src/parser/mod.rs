@@ -9247,6 +9247,7 @@ impl<'a> Parser<'a> {
                     self.parse_optional_precision()?,
                     TimezoneInfo::Tz,
                 )),
+                Keyword::TIMESTAMP_NTZ => Ok(DataType::TimestampNtz),
                 Keyword::TIME => {
                     let precision = self.parse_optional_precision()?;
                     let tz = if self.parse_keyword(Keyword::WITH) {

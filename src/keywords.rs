@@ -875,6 +875,7 @@ define_keywords!(
     TIME,
     TIMESTAMP,
     TIMESTAMPTZ,
+    TIMESTAMP_NTZ,
     TIMETZ,
     TIMEZONE,
     TIMEZONE_ABBR,

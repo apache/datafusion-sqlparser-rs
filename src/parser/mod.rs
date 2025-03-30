@@ -7051,107 +7051,210 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_plain_option(&mut self) -> Result<Option<SqlOption>, ParserError> {
-        if let Some(option) = self.dialect.parse_plain_option(self)? {
-            return Ok(Some(option));
+        // Single parameter option
+        if self.parse_keywords(&[Keyword::START, Keyword::TRANSACTION]) {
+            return Ok(Some(SqlOption::Ident(Ident::new("START TRANSACTION"))));
         }
 
-        // Parse table options in any order
-        if let Some(keyword) = self.parse_one_of_keywords(&[
-            Keyword::ENGINE,
-            Keyword::AUTO_INCREMENT,
-            Keyword::DEFAULT,
-            Keyword::CHARSET,
-            Keyword::COLLATE,
-            Keyword::INSERT_METHOD,
-            Keyword::COMMENT,
-        ]) {
+        // Custom option
+        if self.parse_keywords(&[Keyword::COMMENT]) {
             let has_eq = self.consume_token(&Token::Eq);
             let value = self.next_token();
 
-            match (keyword, value.token) {
-                (Keyword::COMMENT, Token::SingleQuotedString(s)) => {
-                    let comment = match has_eq {
-                        true => CommentDef::WithEq(s),
-                        false => CommentDef::WithoutEq(s),
-                    };
-                    return Ok(Some(SqlOption::Comment(comment)));
+            let comment = match (has_eq, value.token) {
+                (true, Token::SingleQuotedString(s)) => {
+                    Ok(Some(SqlOption::Comment(CommentDef::WithEq(s))))
                 }
-                (Keyword::AUTO_INCREMENT, Token::Number(n, l)) => {
-                    // validation
-                    let _ = Some(Self::parse::<u32>(n.clone(), value.span.start)?);
-                    return Ok(Some(SqlOption::KeyValue {
-                        key: Ident::new("AUTO_INCREMENT"),
-                        value: Expr::value(Value::Number(Parser::parse(n, value.span.start)?, l)),
-                    }));
+                (false, Token::SingleQuotedString(s)) => {
+                    Ok(Some(SqlOption::Comment(CommentDef::WithoutEq(s))))
                 }
+                (_, token) => {
+                    self.expected("Token::SingleQuotedString", TokenWithSpan::wrap(token))
+                }
+            };
+            return comment;
+        }
 
-                // ENGINE [=] engine_name
-                (Keyword::ENGINE, Token::Word(w)) => {
+        if self.parse_keywords(&[Keyword::ENGINE]) {
+            let _ = self.consume_token(&Token::Eq);
+            let value = self.next_token();
+
+            let engine = match value.token {
+                Token::Word(w) => {
                     let parameters = if self.peek_token() == Token::LParen {
                         Some(self.parse_parenthesized_identifiers()?)
                     } else {
                         None
                     };
 
-                    return Ok(Some(SqlOption::TableEngine(TableEngine {
+                    Ok(Some(SqlOption::TableEngine(TableEngine {
                         name: w.value,
                         parameters,
-                    })));
-                }
-
-                (Keyword::DEFAULT, Token::Word(w)) if w.keyword == Keyword::CHARSET => {
-                    let _ = self.consume_token(&Token::Eq);
-                    let next_token = self.next_token();
-
-                    let value = match next_token.token {
-                        Token::Word(w) => w.value,
-                        _ => self.expected("identifier", next_token)?,
-                    };
-
-                    return Ok(Some(SqlOption::KeyValue {
-                        key: Ident::new("DEFAULT CHARSET"),
-                        value: Expr::Identifier(Ident::new(value)),
-                    }));
-                }
-
-                (Keyword::CHARSET, Token::Word(w)) => {
-                    return Ok(Some(SqlOption::KeyValue {
-                        key: Ident::new("CHARSET"),
-                        value: Expr::Identifier(Ident::new(w.value)),
-                    }));
-                }
-
-                // [DEFAULT] COLLATE [=] collation_name
-                (Keyword::DEFAULT, Token::Word(w)) if w.keyword == Keyword::COLLATE => {
-                    let _ = self.consume_token(&Token::Eq);
-                    let next_token = self.next_token();
-
-                    let value = match next_token.token {
-                        Token::Word(w) => w.value,
-                        _ => self.expected("identifier", next_token)?,
-                    };
-
-                    return Ok(Some(SqlOption::KeyValue {
-                        key: Ident::new("DEFAULT COLLATE"),
-                        value: Expr::Identifier(Ident::new(value)),
-                    }));
-                }
-
-                (Keyword::COLLATE, Token::Word(w)) => {
-                    return Ok(Some(SqlOption::KeyValue {
-                        key: Ident::new("COLLATE"),
-                        value: Expr::Identifier(Ident::new(w.value)),
-                    }));
+                    })))
                 }
                 _ => {
-                    return Err(ParserError::ParserError(format!(
-                        "Unexpected keyword: {:?}",
-                        keyword
-                    )));
+                    return self.expected("Token::Word", value)?;
+                }
+            };
+
+            return engine;
+        }
+
+        if self.parse_keywords(&[Keyword::TABLESPACE]) {
+            let _ = self.consume_token(&Token::Eq);
+            let value = self.next_token();
+
+            let tablespace = match value.token {
+                // TABLESPACE tablespace_name [STORAGE DISK] | [TABLESPACE tablespace_name] STORAGE MEMORY
+                Token::Word(Word { value: name, .. }) | Token::SingleQuotedString(name) => {
+                    let storage = match self.parse_keyword(Keyword::STORAGE) {
+                        true => {
+                            let _ = self.consume_token(&Token::Eq);
+                            let storage_token = self.next_token();
+                            match &storage_token.token {
+                                Token::Word(w) => match w.value.to_uppercase().as_str() {
+                                    "DISK" => Some(StorageType::Disk),
+                                    "MEMORY" => Some(StorageType::Memory),
+                                    _ => self
+                                        .expected("Storage type (DISK or MEMORY)", storage_token)?,
+                                },
+                                _ => self.expected("Token::Word", storage_token)?,
+                            }
+                        }
+                        false => None,
+                    };
+
+                    Ok(Some(SqlOption::TableSpace(TablespaceOption {
+                        name,
+                        storage,
+                    })))
+                }
+                _ => {
+                    return self.expected("Token::Word", value)?;
+                }
+            };
+
+            return tablespace;
+        }
+
+        if self.parse_keyword(Keyword::UNION) {
+            let _ = self.consume_token(&Token::Eq);
+            let value = self.next_token();
+
+            match value.token {
+                // UNION [=] (tbl_name[,tbl_name]...)
+                Token::LParen => {
+                    let tables: Vec<Ident> =
+                        self.parse_comma_separated0(Parser::parse_identifier, Token::RParen)?;
+                    self.expect_token(&Token::RParen)?;
+
+                    return Ok(Some(SqlOption::Union(tables)));
+                }
+                _ => {
+                    return self.expected("Token::LParen", value)?;
                 }
             }
         }
-        Ok(None)
+
+        // Key/Value parameter option
+        let key = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
+            // [DEFAULT] CHARACTER SET [=] charset_name
+            Ident::new("DEFAULT CHARSET")
+        } else if self.parse_keyword(Keyword::CHARSET) {
+            // [DEFAULT] CHARACTER SET [=] charset_name
+            Ident::new("CHARSET")
+        } else if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARACTER, Keyword::SET]) {
+            // [DEFAULT] CHARACTER SET [=] charset_name
+            Ident::new("DEFAULT CHARACTER SET")
+        } else if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
+            // [DEFAULT] CHARACTER SET [=] charset_name
+            Ident::new("CHARACTER SET")
+        } else if self.parse_keywords(&[Keyword::DEFAULT, Keyword::COLLATE]) {
+            // [DEFAULT] COLLATE [=] collation_name
+            Ident::new("DEFAULT COLLATE")
+        } else if self.parse_keyword(Keyword::COLLATE) {
+            // [DEFAULT] COLLATE [=] collation_name
+            Ident::new("COLLATE")
+        } else if self.parse_keywords(&[Keyword::DATA, Keyword::DIRECTORY]) {
+            // {DATA | INDEX} DIRECTORY [=] 'absolute path to directory'
+            Ident::new("DATA DIRECTORY")
+        } else if self.parse_keywords(&[Keyword::INDEX, Keyword::DIRECTORY]) {
+            // {DATA | INDEX} DIRECTORY [=] 'absolute path to directory'
+            Ident::new("INDEX DIRECTORY")
+        } else if self.parse_keyword(Keyword::KEY_BLOCK_SIZE) {
+            // KEY_BLOCK_SIZE [=] value
+            Ident::new("KEY_BLOCK_SIZE")
+        } else if self.parse_keyword(Keyword::ROW_FORMAT) {
+            // ROW_FORMAT [=] {DEFAULT | DYNAMIC | FIXED | COMPRESSED | REDUNDANT | COMPACT}
+            Ident::new("ROW_FORMAT")
+        } else if self.parse_keyword(Keyword::PACK_KEYS) {
+            // PACK_KEYS [=] {0 | 1 | DEFAULT}
+            Ident::new("PACK_KEYS")
+        } else if self.parse_keyword(Keyword::STATS_AUTO_RECALC) {
+            // STATS_AUTO_RECALC [=] {DEFAULT | 0 | 1}
+            Ident::new("STATS_AUTO_RECALC")
+        } else if self.parse_keyword(Keyword::STATS_PERSISTENT) {
+            //STATS_PERSISTENT [=] {DEFAULT | 0 | 1}
+            Ident::new("STATS_PERSISTENT")
+        } else if self.parse_keyword(Keyword::STATS_SAMPLE_PAGES) {
+            // STATS_SAMPLE_PAGES [=] value
+            Ident::new("STATS_SAMPLE_PAGES")
+        } else if self.parse_keyword(Keyword::DELAY_KEY_WRITE) {
+            // DELAY_KEY_WRITE [=] {0 | 1}
+            Ident::new("DELAY_KEY_WRITE")
+        } else if self.parse_keyword(Keyword::COMPRESSION) {
+            // COMPRESSION [=] {'ZLIB' | 'LZ4' | 'NONE'}
+            Ident::new("COMPRESSION")
+        } else if self.parse_keyword(Keyword::ENCRYPTION) {
+            // ENCRYPTION [=] {'Y' | 'N'}
+            Ident::new("ENCRYPTION")
+        } else if self.parse_keyword(Keyword::MAX_ROWS) {
+            // MAX_ROWS [=] value
+            Ident::new("MAX_ROWS")
+        } else if self.parse_keyword(Keyword::MIN_ROWS) {
+            // MIN_ROWS [=] value
+            Ident::new("MIN_ROWS")
+        } else if self.parse_keyword(Keyword::AUTOEXTEND_SIZE) {
+            // AUTOEXTEND_SIZE [=] value
+            Ident::new("AUTOEXTEND_SIZE")
+        } else if self.parse_keyword(Keyword::AVG_ROW_LENGTH) {
+            // AVG_ROW_LENGTH [=] value
+            Ident::new("AVG_ROW_LENGTH")
+        } else if self.parse_keyword(Keyword::CHECKSUM) {
+            // CHECKSUM [=] {0 | 1}
+            Ident::new("CHECKSUM")
+        } else if self.parse_keyword(Keyword::CONNECTION) {
+            // CONNECTION [=] 'connect_string'
+            Ident::new("CONNECTION")
+        } else if self.parse_keyword(Keyword::ENGINE_ATTRIBUTE) {
+            // ENGINE_ATTRIBUTE [=] 'string'
+            Ident::new("ENGINE_ATTRIBUTE")
+        } else if self.parse_keyword(Keyword::PASSWORD) {
+            // PASSWORD [=] 'string'
+            Ident::new("PASSWORD")
+        } else if self.parse_keyword(Keyword::SECONDARY_ENGINE_ATTRIBUTE) {
+            // SECONDARY_ENGINE_ATTRIBUTE [=] 'string'
+            Ident::new("SECONDARY_ENGINE_ATTRIBUTE")
+        } else if self.parse_keyword(Keyword::INSERT_METHOD) {
+            // INSERT_METHOD [=] { NO | FIRST | LAST }
+            Ident::new("INSERT_METHOD")
+        } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+            Ident::new("AUTO_INCREMENT")
+        } else {
+            return Ok(None);
+        };
+
+        let _ = self.consume_token(&Token::Eq);
+
+        let value = match self
+            .maybe_parse(|parser| parser.parse_value())?
+            .map(Expr::Value)
+        {
+            Some(expr) => expr,
+            None => Expr::Identifier(self.parse_identifier()?),
+        };
+
+        Ok(Some(SqlOption::KeyValue { key, value }))
     }
 
     pub fn parse_plain_options(&mut self) -> Result<Vec<SqlOption>, ParserError> {

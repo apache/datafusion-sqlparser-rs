@@ -6946,8 +6946,12 @@ impl<'a> Parser<'a> {
 
         let create_table_config = self.parse_optional_create_table_config()?;
 
-        let default_charset = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
-            self.expect_token(&Token::Eq)?;
+        let default_charset = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET])
+            || self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARACTER, Keyword::SET])
+            || self.parse_keywords(&[Keyword::CHARSET])
+            || self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET])
+        {
+            let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
                 Token::Word(w) => Some(w.value),
@@ -6957,8 +6961,10 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let collation = if self.parse_keywords(&[Keyword::COLLATE]) {
-            self.expect_token(&Token::Eq)?;
+        let collation = if self.parse_keywords(&[Keyword::COLLATE])
+            || self.parse_keywords(&[Keyword::DEFAULT, Keyword::COLLATE])
+        {
+            let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
                 Token::Word(w) => Some(w.value),

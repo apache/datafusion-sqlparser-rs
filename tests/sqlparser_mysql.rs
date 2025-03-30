@@ -948,6 +948,36 @@ fn parse_create_table_engine_default_charset() {
 }
 
 #[test]
+fn parse_create_table_charset_collate() {
+    let sql =
+        "CREATE TABLE foo (id INT(11)) CHARACTER SET utf8mb3 DEFAULT COLLATE utf8mb4_0900_ai_ci";
+    let expected =
+        "CREATE TABLE foo (id INT(11)) DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb4_0900_ai_ci";
+    match mysql().one_statement_parses_to(sql, expected) {
+        Statement::CreateTable(CreateTable {
+            name,
+            columns,
+            collation,
+            default_charset,
+            ..
+        }) => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("id"),
+                    data_type: DataType::Int(Some(11)),
+                    options: vec![],
+                },],
+                columns
+            );
+            assert_eq!(default_charset, Some("utf8mb3".to_string()));
+            assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_collate() {
     let sql = "CREATE TABLE foo (id INT(11)) COLLATE=utf8mb4_0900_ai_ci";
     match mysql().verified_stmt(sql) {

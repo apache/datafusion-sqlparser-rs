@@ -1013,9 +1013,15 @@ fn parse_session_options(
     let mut options: Vec<KeyValueOption> = Vec::new();
     let empty = String::new;
     loop {
-        match parser.next_token().token {
-            Token::Comma => continue,
+        let next_token = parser.peek_token();
+        match next_token.token {
+            Token::SemiColon | Token::EOF => break,
+            Token::Comma => {
+                parser.advance_token();
+                continue;
+            }
             Token::Word(key) => {
+                parser.advance_token();
                 if set {
                     let option = parse_option(parser, key)?;
                     options.push(option);
@@ -1028,10 +1034,7 @@ fn parse_session_options(
                 }
             }
             _ => {
-                if parser.peek_token().token == Token::EOF {
-                    break;
-                }
-                return parser.expected("another option", parser.peek_token());
+                return parser.expected("another option or end of statement", next_token);
             }
         }
     }

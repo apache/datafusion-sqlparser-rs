@@ -101,4 +101,9 @@ impl Dialect for MsSqlDialect {
     fn supports_nested_comments(&self) -> bool {
         true
     }
+
+    /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/from-transact-sql>
+    fn supports_object_name_double_dot_notation(&self) -> bool {
+        true
+    }
 }

@@ -3505,3 +3505,14 @@ fn test_alter_session() {
     );
     snowflake().one_statement_parses_to("ALTER SESSION UNSET a\nB", "ALTER SESSION UNSET a, B");
 }
+
+#[test]
+fn test_alter_session_followed_by_statement() {
+    let stmts = snowflake()
+        .parse_sql_statements("ALTER SESSION SET QUERY_TAG='hello'; SELECT 42")
+        .unwrap();
+    match stmts[..] {
+        [Statement::AlterSession { .. }, Statement::Query { .. }] => {}
+        _ => panic!("Unexpected statements: {:?}", stmts),
+    }
+}

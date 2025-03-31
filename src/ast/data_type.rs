@@ -312,6 +312,10 @@ pub enum DataType {
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     Timestamp(Option<u64>, TimezoneInfo),
+    /// Databricks timestamp without time zone. See [1].
+    ///
+    /// [1]: https://docs.databricks.com/aws/en/sql/language-manual/data-types/timestamp-ntz-type
+    TimestampNtz,
     /// Interval
     Interval,
     /// JSON type
@@ -567,6 +571,7 @@ impl fmt::Display for DataType {
             DataType::Timestamp(precision, timezone_info) => {
                 format_datetime_precision_and_tz(f, "TIMESTAMP", precision, timezone_info)
             }
+            DataType::TimestampNtz => write!(f, "TIMESTAMP_NTZ"),
             DataType::Datetime64(precision, timezone) => {
                 format_clickhouse_datetime_precision_and_timezone(
                     f,

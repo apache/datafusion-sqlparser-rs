@@ -1910,6 +1910,11 @@ fn parse_mssql_varbinary_max_length() {
     }
 }
 
+#[test]
+fn parse_mssql_table_identifier_with_default_schema() {
+    ms().verified_stmt("SELECT * FROM mydatabase..MyTable");
+}
+
 fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }

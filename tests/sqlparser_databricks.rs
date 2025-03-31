@@ -334,9 +334,9 @@ fn data_type_timestamp_ntz() {
         databricks().verified_expr("(created_at)::TIMESTAMP_NTZ"),
         Expr::Cast {
             kind: CastKind::DoubleColon,
-            expr: Box::new(Expr::Nested(
-                Box::new(Expr::Identifier("created_at".into()))
-            )),
+            expr: Box::new(Expr::Nested(Box::new(Expr::Identifier(
+                "created_at".into()
+            )))),
             data_type: DataType::TimestampNtz,
             format: None
         }
@@ -347,13 +347,11 @@ fn data_type_timestamp_ntz() {
         Statement::CreateTable(CreateTable { columns, .. }) => {
             assert_eq!(
                 columns,
-                vec![
-                    ColumnDef {
-                        name: "x".into(),
-                        data_type: DataType::TimestampNtz,
-                        options: vec![],
-                    }
-                ]
+                vec![ColumnDef {
+                    name: "x".into(),
+                    data_type: DataType::TimestampNtz,
+                    options: vec![],
+                }]
             );
         }
         s => panic!("Unexpected statement: {:?}", s),

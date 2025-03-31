@@ -310,7 +310,7 @@ impl Dialect for SnowflakeDialect {
             }
 
             // `FETCH` can be considered an alias as long as it's not followed by `FIRST`` or `NEXT`
-            // which would give it a different meanins, for example: `SELECT 1 FETCH FIRST 10 ROWS` - not an alias
+            // which would give it a different meanings, for example: `SELECT 1 FETCH FIRST 10 ROWS` - not an alias
             Keyword::FETCH
                 if parser.peek_keyword(Keyword::FIRST) || parser.peek_keyword(Keyword::NEXT) =>
             {

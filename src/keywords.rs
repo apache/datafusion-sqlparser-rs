@@ -1084,7 +1084,7 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::END,
 ];
 
-// Global list of reserved keywords alloweed after FROM.
+// Global list of reserved keywords allowed after FROM.
 // Parser should call Dialect::get_reserved_keyword_after_from
 // to allow for each dialect to customize the list.
 pub const RESERVED_FOR_TABLE_FACTOR: &[Keyword] = &[

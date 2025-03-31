@@ -14528,7 +14528,7 @@ fn test_geometric_unary_operators() {
 }
 
 #[test]
-fn test_geomtery_type() {
+fn test_geometry_type() {
     let sql = "point '1,2'";
     assert_eq!(
         all_dialects_where(|d| d.supports_geometric_types()).verified_expr(sql),

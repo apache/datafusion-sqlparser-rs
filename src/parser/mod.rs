@@ -631,7 +631,7 @@ impl<'a> Parser<'a> {
     ///
     /// See [Statement::Case]
     pub fn parse_case_stmt(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword_is(Keyword::CASE)?;
+        let case_token = self.expect_keyword(Keyword::CASE)?;
 
         let match_expr = if self.peek_keyword(Keyword::WHEN) {
             None
@@ -641,26 +641,26 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword_is(Keyword::WHEN)?;
         let when_blocks = self.parse_keyword_separated(Keyword::WHEN, |parser| {
-            parser.parse_conditional_statements(
-                ConditionalStatementKind::When,
-                &[Keyword::WHEN, Keyword::ELSE, Keyword::END],
-            )
+            parser.parse_conditional_statements(&[Keyword::WHEN, Keyword::ELSE, Keyword::END])
         })?;
 
         let else_block = if self.parse_keyword(Keyword::ELSE) {
-            Some(self.parse_statement_list(&[Keyword::END])?)
+            Some(self.parse_conditional_statements(&[Keyword::END])?)
         } else {
             None
         };
 
-        self.expect_keyword_is(Keyword::END)?;
-        let has_end_case = self.parse_keyword(Keyword::CASE);
+        let mut end_case_token = self.expect_keyword(Keyword::END)?;
+        if self.peek_keyword(Keyword::CASE) {
+            end_case_token = self.expect_keyword(Keyword::CASE)?;
+        }
 
         Ok(Statement::Case(CaseStatement {
+            case_token,
             match_expr,
             when_blocks,
             else_block,
-            has_end_case,
+            end_case_token,
         }))
     }
 
@@ -668,35 +668,33 @@ impl<'a> Parser<'a> {
     ///
     /// See [Statement::If]
     pub fn parse_if_stmt(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword_is(Keyword::IF)?;
-        let if_block = self.parse_conditional_statements(
-            ConditionalStatementKind::If,
-            &[Keyword::ELSE, Keyword::ELSEIF, Keyword::END],
-        )?;
+        let if_token = self.expect_keyword(Keyword::IF)?;
+        let if_block =
+            self.parse_conditional_statements(&[Keyword::ELSE, Keyword::ELSEIF, Keyword::END])?;
 
         let elseif_blocks = if self.parse_keyword(Keyword::ELSEIF) {
             self.parse_keyword_separated(Keyword::ELSEIF, |parser| {
-                parser.parse_conditional_statements(
-                    ConditionalStatementKind::ElseIf,
-                    &[Keyword::ELSEIF, Keyword::ELSE, Keyword::END],
-                )
+                parser.parse_conditional_statements(&[Keyword::ELSEIF, Keyword::ELSE, Keyword::END])
             })?
         } else {
             vec![]
         };
 
         let else_block = if self.parse_keyword(Keyword::ELSE) {
-            Some(self.parse_statement_list(&[Keyword::END])?)
+            Some(self.parse_conditional_statements(&[Keyword::END])?)
         } else {
             None
         };
 
-        self.expect_keywords(&[Keyword::END, Keyword::IF])?;
+        self.expect_keyword_is(Keyword::END)?;
+        let end_if_token = self.expect_keyword(Keyword::IF)?;
 
-        Ok(Statement::If(IfStatement {
+        Ok(Statement::If(IfStatement::IfThenElseEnd {
+            if_token,
             if_block,
             elseif_blocks,
             else_block,
+            end_if_token,
         }))
     }
 
@@ -709,17 +707,25 @@ impl<'a> Parser<'a> {
     /// ```
     fn parse_conditional_statements(
         &mut self,
-        kind: ConditionalStatementKind,
         terminal_keywords: &[Keyword],
     ) -> Result<ConditionalStatements, ParserError> {
-        let condition = self.parse_expr()?;
-        self.expect_keyword_is(Keyword::THEN)?;
+        let start_token = self.get_current_token().clone();
+
+        let condition = match &start_token.token {
+            Token::Word(w) if w.keyword == Keyword::ELSE => None,
+            _ => {
+                let expr = self.parse_expr()?;
+                self.expect_keyword_is(Keyword::THEN)?;
+                Some(expr)
+            }
+        };
+
         let statements = self.parse_statement_list(terminal_keywords)?;
 
         Ok(ConditionalStatements {
+            start_token,
             condition,
             statements,
-            kind,
         })
     }
 

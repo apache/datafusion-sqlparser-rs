@@ -30,13 +30,14 @@ use super::{
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
     IfStatement, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint,
     JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure,
-    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource, ProjectionSelect,
-    Query, RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem,
-    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
-    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
-    TableFactor, TableObject, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
-    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
+    MsSqlIfStatements, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource,
+    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
+    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
+    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WildcardAdditionalOptions, With,
+    WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -739,47 +740,63 @@ impl Spanned for CreateIndex {
 impl Spanned for CaseStatement {
     fn span(&self) -> Span {
         let CaseStatement {
-            match_expr,
-            when_blocks,
-            else_block,
-            has_end_case: _,
+            case_token,
+            end_case_token,
+            ..
         } = self;
 
-        union_spans(
-            match_expr
-                .iter()
-                .map(|e| e.span())
-                .chain(when_blocks.iter().map(|b| b.span()))
-                .chain(else_block.iter().flat_map(|e| e.iter().map(|s| s.span()))),
-        )
+        union_spans([case_token.span, end_case_token.span].into_iter())
     }
 }
 
 impl Spanned for IfStatement {
     fn span(&self) -> Span {
-        let IfStatement {
-            if_block,
-            elseif_blocks,
-            else_block,
-        } = self;
+        match self {
+            IfStatement::IfThenElseEnd {
+                if_token,
+                end_if_token,
+                ..
+            } => union_spans([if_token.span, end_if_token.span].into_iter()),
+            IfStatement::MsSqlIfElse {
+                if_token,
+                if_statements,
+                else_statements,
+                ..
+            } => union_spans(
+                [if_token.span, if_statements.span()]
+                    .into_iter()
+                    .chain(else_statements.as_ref().into_iter().map(|s| s.span())),
+            ),
+        }
+    }
+}
 
-        union_spans(
-            iter::once(if_block.span())
-                .chain(elseif_blocks.iter().map(|b| b.span()))
-                .chain(else_block.iter().flat_map(|e| e.iter().map(|s| s.span()))),
-        )
+impl Spanned for MsSqlIfStatements {
+    fn span(&self) -> Span {
+        match self {
+            MsSqlIfStatements::Single(s) => s.span(),
+            MsSqlIfStatements::Block {
+                begin_token,
+                end_token,
+                ..
+            } => union_spans([begin_token.span, end_token.span].into_iter()),
+        }
     }
 }
 
 impl Spanned for ConditionalStatements {
     fn span(&self) -> Span {
         let ConditionalStatements {
+            start_token,
             condition,
             statements,
-            kind: _,
         } = self;
 
-        union_spans(iter::once(condition.span()).chain(statements.iter().map(|s| s.span())))
+        union_spans(
+            iter::once(start_token.span)
+                .chain(condition.as_ref().map(|c| c.span()).into_iter())
+                .chain(statements.iter().map(|s| s.span())),
+        )
     }
 }
 

@@ -14489,7 +14489,10 @@ impl<'a> Parser<'a> {
     pub fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
         let mut clauses = vec![];
         loop {
-            if self.peek_token() == Token::EOF || self.peek_token() == Token::SemiColon {
+            if self.peek_token() == Token::EOF
+                || self.peek_token() == Token::SemiColon
+                || self.peek_keyword(Keyword::OUTPUT)
+            {
                 break;
             }
             self.expect_keyword_is(Keyword::WHEN)?;
@@ -14586,6 +14589,29 @@ impl<'a> Parser<'a> {
         Ok(clauses)
     }
 
+    pub fn parse_output(&mut self) -> Result<Output, ParserError> {
+        self.expect_keyword_is(Keyword::OUTPUT)?;
+        let select_items = self.parse_projection()?;
+        self.expect_keyword_is(Keyword::INTO)?;
+        let temporary = self
+            .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
+            .is_some();
+        let unlogged = self.parse_keyword(Keyword::UNLOGGED);
+        let table = self.parse_keyword(Keyword::TABLE);
+        let name = self.parse_object_name(false)?;
+        let into_table = SelectInto {
+            temporary,
+            unlogged,
+            table,
+            name,
+        };
+
+        Ok(Output {
+            select_items,
+            into_table,
+        })
+    }
+
     pub fn parse_merge(&mut self) -> Result<Statement, ParserError> {
         let into = self.parse_keyword(Keyword::INTO);
 
@@ -14596,6 +14622,11 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::ON)?;
         let on = self.parse_expr()?;
         let clauses = self.parse_merge_clauses()?;
+        let output = if self.peek_keyword(Keyword::OUTPUT) {
+            Some(self.parse_output()?)
+        } else {
+            None
+        };
 
         Ok(Statement::Merge {
             into,
@@ -14603,6 +14634,7 @@ impl<'a> Parser<'a> {
             source,
             on: Box::new(on),
             clauses,
+            output,
         })
     }
 

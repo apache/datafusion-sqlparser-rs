@@ -3828,6 +3828,8 @@ pub enum Statement {
         on: Box<Expr>,
         /// Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
+
+        output: Option<Output>,
     },
     /// ```sql
     /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
@@ -5406,7 +5408,8 @@ impl fmt::Display for Statement {
                 table,
                 source,
                 on,
-                clauses,
+                clauses, 
+                output
             } => {
                 write!(
                     f,
@@ -5414,7 +5417,12 @@ impl fmt::Display for Statement {
                     int = if *into { " INTO" } else { "" }
                 )?;
                 write!(f, "ON {on} ")?;
-                write!(f, "{}", display_separated(clauses, " "))
+                write!(f, "{}", display_separated(clauses, " "))?;
+                if output.is_some() {
+                    let out = output.clone().unwrap();
+                    write!(f, " {out}")?;
+                }
+                Ok(())
             }
             Statement::Cache {
                 table_name,
@@ -7897,6 +7905,33 @@ impl Display for MergeClause {
             write!(f, " AND {pred}")?;
         }
         write!(f, " THEN {action}")
+    }
+}
+
+/// A Output in the end of a 'MERGE' Statement
+///
+/// Example:
+/// OUTPUT $action, deleted.* INTO dbo.temp_products;
+/// [mssql](https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql)
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Output {
+    pub select_items: Vec<SelectItem>,
+    pub into_table: SelectInto,
+}
+
+impl fmt::Display for Output {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Output { select_items, into_table } = self;
+
+        write!(
+            f,
+            "OUTPUT {} {}",
+            display_comma_separated(select_items),
+            into_table
+        )
     }
 }
 

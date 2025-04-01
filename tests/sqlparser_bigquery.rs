@@ -1735,6 +1735,7 @@ fn parse_merge() {
             },
         ],
     };
+
     match bigquery_and_generic().verified_stmt(sql) {
         Statement::Merge {
             into,
@@ -1742,6 +1743,7 @@ fn parse_merge() {
             source,
             on,
             clauses,
+            ..
         } => {
             assert!(!into);
             assert_eq!(

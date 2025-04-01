@@ -9558,12 +9558,10 @@ fn parse_merge() {
 
     let sql = "MERGE INTO s.bar AS dest USING newArrivals AS S ON (1 > 1) WHEN NOT MATCHED THEN INSERT VALUES (stg.A, stg.B, stg.C)";
     verified_stmt(sql);
-
 }
 
 #[test]
 fn test_merge_with_output() {
-
     let sql = "MERGE INTO target_table USING source_table \
         ON target_table.id = source_table.oooid \
         WHEN MATCHED THEN \

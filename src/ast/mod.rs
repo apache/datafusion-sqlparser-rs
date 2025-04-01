@@ -5408,8 +5408,8 @@ impl fmt::Display for Statement {
                 table,
                 source,
                 on,
-                clauses, 
-                output
+                clauses,
+                output,
             } => {
                 write!(
                     f,
@@ -7924,7 +7924,10 @@ pub struct Output {
 
 impl fmt::Display for Output {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Output { select_items, into_table } = self;
+        let Output {
+            select_items,
+            into_table,
+        } = self;
 
         write!(
             f,

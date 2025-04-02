@@ -699,7 +699,7 @@ pub enum Expr {
     IsNotTrue(Box<Expr>),
     /// `IS NULL` operator
     IsNull(Box<Expr>),
-    /// `IS NOT NULL` operatoDeleter
+    /// `IS NOT NULL` operator
     IsNotNull(Box<Expr>),
     /// `IS UNKNOWN` operator
     IsUnknown(Box<Expr>),
@@ -2678,120 +2678,120 @@ pub enum Set {
     ///
     /// Note: this is a PostgreSQL-specific statements
     /// `SET TIME ZONE <value>` is an alias for `SET timezone TO <value>` in PostgreSQL
-/// Convenience function, instead of writing `Statement::Set(Set::Set...{...})`
-impl From<Set> for Statement {
-    fn from(set: Set) -> Self {
-        Statement::Set(set)
+    /// However, we allow it for all dialects.
+    SetTimeZone { local: bool, value: Expr },
+    /// ```sql
+    /// SET NAMES 'charset_name' [COLLATE 'collation_name']
+    /// ```
+    SetNames {
+        charset_name: Ident,
+        collation_name: Option<String>,
+    },
+    /// ```sql
+    /// SET NAMES DEFAULT
+    /// ```
+    ///
+    /// Note: this is a MySQL-specific statement.
+    SetNamesDefault {},
+    /// ```sql
+    /// SET TRANSACTION ...
+    /// ```
+    SetTransaction {
+        modes: Vec<TransactionMode>,
+        snapshot: Option<Value>,
+        session: bool,
+    },
+}
+
+impl Display for Set {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::ParenthesizedAssignments { variables, values } => write!(
+                f,
+                "SET ({}) = ({})",
+                display_comma_separated(variables),
+                display_comma_separated(values)
+            ),
+            Self::MultipleAssignments { assignments } => {
+                write!(f, "SET {}", display_comma_separated(assignments))
+            }
+            Self::SetRole {
+                context_modifier,
+                role_name,
+            } => {
+                let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
+                write!(
+                    f,
+                    "SET {modifier}ROLE {role_name}",
+                    modifier = context_modifier
+                        .map(|m| format!("{}", m))
+                        .unwrap_or_default()
+                )
+            }
+            Self::SetSessionParam(kind) => write!(f, "SET {kind}"),
+            Self::SetTransaction {
+                modes,
+                snapshot,
+                session,
+            } => {
+                if *session {
+                    write!(f, "SET SESSION CHARACTERISTICS AS TRANSACTION")?;
+                } else {
+                    write!(f, "SET TRANSACTION")?;
+                }
+                if !modes.is_empty() {
+                    write!(f, " {}", display_comma_separated(modes))?;
+                }
+                if let Some(snapshot_id) = snapshot {
+                    write!(f, " SNAPSHOT {snapshot_id}")?;
+                }
+                Ok(())
+            }
+            Self::SetTimeZone { local, value } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(f, "TIME ZONE {value}")
+            }
+            Self::SetNames {
+                charset_name,
+                collation_name,
+            } => {
+                write!(f, "SET NAMES {}", charset_name)?;
+
+                if let Some(collation) = collation_name {
+                    f.write_str(" COLLATE ")?;
+                    f.write_str(collation)?;
+                };
+
+                Ok(())
+            }
+            Self::SetNamesDefault {} => {
+                f.write_str("SET NAMES DEFAULT")?;
+
+                Ok(())
+            }
+            Set::SingleAssignment {
+                scope,
+                hivevar,
+                variable,
+                values,
+            } => {
+                write!(
+                    f,
+                    "SET {}{}{} = {}",
+                    scope.map(|s| format!("{}", s)).unwrap_or_default(),
+                    if *hivevar { "HIVEVAR:" } else { "" },
+                    variable,
+                    display_comma_separated(values)
+                )
+            }
+        }
     }
 }
 
-/// A top-level statement (SELECT, INSERT, CREATE, etc.)
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(
-    feature = "visitor",
-    derive(Visit, VisitMut),
-    visit(with = "visit_statement")
-)]
-pub enum Statement {
-    /// ```sql
-    /// ANALYZE
-    /// ```
-    /// Analyze (Hive)
-    Analyze {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        partitions: Option<Vec<Expr>>,
-        for_columns: bool,
-        columns: Vec<Ident>,
-        cache_metadata: bool,
-        noscan: bool,
-        compute_statistics: bool,
-        has_table_keyword: bool,
-    },
-    Set(Set),
-    /// ```sql
-    /// TRUNCATE
-    /// ```
-    /// Truncate (Hive)
-    Truncate {
-        table_names: Vec<TruncateTableTarget>,
-        partitions: Option<Vec<Expr>>,
-        /// TABLE - optional keyword;
-        table: bool,
-        /// Postgres-specific option
-        /// [ TRUNCATE TABLE ONLY ]
-        only: bool,
-        /// Postgres-specific option
-        /// [ RESTART IDENTITY | CONTINUE IDENTITY ]
-        identity: Option<TruncateIdentityOption>,
-        /// Postgres-specific option
-        /// [ CASCADE | RESTRICT ]
-        cascade: Option<CascadeOption>,
-        /// ClickHouse-specific option
-        /// [ ON CLUSTER cluster_name ]
-        ///
-        /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/truncate/)
-        on_cluster: Option<Ident>,
-    },
-    /// ```sql
-    /// MSCK
-    /// ```
-    /// Msck (Hive)
-    Msck {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        repair: bool,
-        partition_action: Option<AddDropSync>,
-    },
-    /// ```sql
-    /// SELECT
-    /// ```
-    Query(Box<Query>),
-    /// ```sql
-    /// INSERT
-    /// ```
-    Insert(Insert),
-    /// ```sql
-    /// INSTALL
-    /// ```
-    Install {
-        /// Only for DuckDB
-        extension_name: Ident,
-    },
-    /// ```sql
-    /// LOAD
-    /// ```
-    Load {
-        /// Only for DuckDB
-        extension_name: Ident,
-    },
-    // TODO: Support ROW FORMAT
-    Directory {
-        overwrite: bool,
-        local: bool,
-        path: String,
-        file_format: Option<FileFormat>,
-        source: Box<Query>,
-    },
-    /// A `CASE` statement.
-    Case(CaseStatement),
-    /// An `IF` statement.
-    If(IfStatement),
-    /// A `RAISE` statement.
-    Raise(RaiseStatement),
-    /// ```sql
-    /// CALL <function>
-    /// ```
-    Call(Function),
-    /// ```sql
-    /// COPY [TO | FROM] ...
-    /// ```
-    Copy {
-        /// The source of 'COPY TO', or the target of 'COPY FROM'
-        source: CopySource,
-        /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
+/// Convert a `Set` into a `Statement`.
 /// Convenience function, instead of writing `Statement::Set(Set::Set...{...})`
 impl From<Set> for Statement {
     fn from(set: Set) -> Self {
@@ -3817,7 +3817,6 @@ pub enum Statement {
     /// ```
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
-    /// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql)
     Merge {
         /// optional INTO keyword
         into: bool,
@@ -3829,7 +3828,7 @@ pub enum Statement {
         on: Box<Expr>,
         /// Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
-        /// Specifies the ouptu clause, to save changed values 
+
         output: Option<Output>,
     },
     /// ```sql

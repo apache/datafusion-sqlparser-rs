@@ -3817,6 +3817,7 @@ pub enum Statement {
     /// ```
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/sql/merge)
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement)
+    /// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/statements/merge-transact-sql?view=sql-server-ver16)
     Merge {
         /// optional INTO keyword
         into: bool,
@@ -3828,7 +3829,7 @@ pub enum Statement {
         on: Box<Expr>,
         /// Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
-
+        // Speccifies the output to save changes in MSSQL
         output: Option<Output>,
     },
     /// ```sql

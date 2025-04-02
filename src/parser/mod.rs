@@ -14489,13 +14489,10 @@ impl<'a> Parser<'a> {
     pub fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
         let mut clauses = vec![];
         loop {
-            if self.peek_token() == Token::EOF
-                || self.peek_token() == Token::SemiColon
-                || self.peek_keyword(Keyword::OUTPUT)
-            {
+            if !(self.parse_keyword(Keyword::WHEN)) {
                 break;
             }
-            self.expect_keyword_is(Keyword::WHEN)?;
+
 
             let mut clause_kind = MergeClauseKind::Matched;
             if self.parse_keyword(Keyword::NOT) {

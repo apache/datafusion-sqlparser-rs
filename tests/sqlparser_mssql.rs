@@ -1924,6 +1924,16 @@ fn ms_and_generic() -> TestedDialects {
 
 #[test]
 fn parse_mssql_merge_with_output() {
-    let stmt = "MERGE dso.products AS t USING dsi.products AS s ON s.ProductID = t.ProductID WHEN MATCHED AND NOT (t.ProductName = s.ProductName OR (ISNULL(t.ProductName, s.ProductName) IS NULL)) THEN UPDATE SET t.ProductName = s.ProductName WHEN NOT MATCHED BY TARGET THEN INSERT (ProductID, ProductName) VALUES (s.ProductID, s.ProductName) WHEN NOT MATCHED BY SOURCE THEN DELETE OUTPUT $action, deleted.ProductID INTO dsi.temp_products";
+    let stmt = "MERGE dso.products AS t\
+        USING dsi.products AS \
+        s ON s.ProductID = t.ProductID \
+        WHEN MATCHED AND \
+        NOT (t.ProductName = s.ProductName OR (ISNULL(t.ProductName, s.ProductName) IS NULL)) \
+        THEN UPDATE SET t.ProductName = s.ProductName \
+        WHEN NOT MATCHED BY TARGET \
+        THEN INSERT (ProductID, ProductName) \
+        VALUES (s.ProductID, s.ProductName) \
+        WHEN NOT MATCHED BY SOURCE THEN DELETE \
+        OUTPUT $action, deleted.ProductID INTO dsi.temp_products";
     ms_and_generic().verified_stmt(stmt);
 }

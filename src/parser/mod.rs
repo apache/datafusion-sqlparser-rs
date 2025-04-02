@@ -27,7 +27,7 @@ use core::{
     str::FromStr,
 };
 use helpers::attached_token::AttachedToken;
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 use log::debug;
 
@@ -10423,7 +10423,7 @@ impl<'a> Parser<'a> {
             let by_num = FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                 Value::SingleQuotedString(by.len().to_string()),
             )));
-            let mut fake_group_by = BTreeSet::new();
+            let mut fake_group_by = HashSet::new();
             let by = by
                 .into_iter()
                 .map(|x| {
@@ -10434,7 +10434,7 @@ impl<'a> Parser<'a> {
             // range_fn(func, range, fill, byc, [byv], align, to)
             // byc are length of variadic arguments [byv]
             let mut rewrite_count = 0;
-            let mut align_fill_rewrite = |expr: Expr, columns: &mut BTreeSet<Expr>| {
+            let mut align_fill_rewrite = |expr: Expr, columns: &mut HashSet<Expr>| {
                 rewrite_calculation_expr(&expr, true, &mut |e: &Expr| match e {
                     Expr::Function(func) => {
                         if let Some(name) = func.name.0.first() {
@@ -14350,7 +14350,7 @@ where
     Ok(())
 }
 
-fn collect_column_from_expr(expr: &Expr, columns: &mut BTreeSet<Expr>, remove: bool) {
+fn collect_column_from_expr(expr: &Expr, columns: &mut HashSet<Expr>, remove: bool) {
     let _ = walk_expr(expr, &mut |e| {
         if matches!(e, Expr::CompoundIdentifier(_) | Expr::Identifier(_)) {
             if remove {

@@ -14493,7 +14493,6 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-
             let mut clause_kind = MergeClauseKind::Matched;
             if self.parse_keyword(Keyword::NOT) {
                 clause_kind = MergeClauseKind::NotMatched;
@@ -14586,26 +14585,31 @@ impl<'a> Parser<'a> {
         Ok(clauses)
     }
 
-    fn parse_output(&mut self) -> Result<Output, ParserError> {
+    fn parse_output(&mut self) -> Result<OutputClause, ParserError> {
         self.expect_keyword_is(Keyword::OUTPUT)?;
         let select_items = self.parse_projection()?;
         self.expect_keyword_is(Keyword::INTO)?;
+        let into_table = self.parse_select_into()?;
+
+        Ok(OutputClause {
+            select_items,
+            into_table,
+        })
+    }
+
+    fn parse_select_into(&mut self) -> Result<SelectInto, ParserError> {
         let temporary = self
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
         let unlogged = self.parse_keyword(Keyword::UNLOGGED);
         let table = self.parse_keyword(Keyword::TABLE);
         let name = self.parse_object_name(false)?;
-        let into_table = SelectInto {
+
+        Ok(SelectInto {
             temporary,
             unlogged,
             table,
             name,
-        };
-
-        Ok(Output {
-            select_items,
-            into_table,
         })
     }
 

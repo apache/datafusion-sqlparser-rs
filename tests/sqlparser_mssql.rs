@@ -1924,7 +1924,7 @@ fn ms_and_generic() -> TestedDialects {
 
 #[test]
 fn parse_mssql_merge_with_output() {
-    let stmt = "MERGE dso.products AS t\
+    let stmt = "MERGE dso.products AS t \
         USING dsi.products AS \
         s ON s.ProductID = t.ProductID \
         WHEN MATCHED AND \

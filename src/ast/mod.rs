@@ -3830,7 +3830,7 @@ pub enum Statement {
         /// Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
         // Specifies the output to save changes in MSSQL
-        output: Option<Output>,
+        output: Option<OutputClause>,
     },
     /// ```sql
     /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
@@ -7908,7 +7908,7 @@ impl Display for MergeClause {
     }
 }
 
-/// A Output in the end of a 'MERGE' Statement
+/// A Output Clause in the end of a 'MERGE' Statement
 ///
 /// Example:
 /// OUTPUT $action, deleted.* INTO dbo.temp_products;
@@ -7921,9 +7921,9 @@ pub struct OutputClause {
     pub into_table: SelectInto,
 }
 
-impl fmt::Display for Output {
+impl fmt::Display for OutputClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Output {
+        let OutputClause {
             select_items,
             into_table,
         } = self;

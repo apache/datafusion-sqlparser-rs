@@ -7914,7 +7914,6 @@ impl Display for MergeClause {
 /// Example:
 /// OUTPUT $action, deleted.* INTO dbo.temp_products;
 /// [mssql](https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql)
-
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

@@ -14589,7 +14589,7 @@ impl<'a> Parser<'a> {
         Ok(clauses)
     }
 
-    pub fn parse_output(&mut self) -> Result<Output, ParserError> {
+    fn parse_output(&mut self) -> Result<Output, ParserError> {
         self.expect_keyword_is(Keyword::OUTPUT)?;
         let select_items = self.parse_projection()?;
         self.expect_keyword_is(Keyword::INTO)?;

@@ -5419,9 +5419,8 @@ impl fmt::Display for Statement {
                 )?;
                 write!(f, "ON {on} ")?;
                 write!(f, "{}", display_separated(clauses, " "))?;
-                if output.is_some() {
-                    let out = output.clone().unwrap();
-                    write!(f, " {out}")?;
+                if let Some(output) = output {
+                    write!(f, " {output}")?;
                 }
                 Ok(())
             }

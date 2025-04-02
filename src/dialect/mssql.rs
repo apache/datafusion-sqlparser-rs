@@ -15,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::ast::{IfStatement, MsSqlIfStatements, Statement};
 use crate::ast::helpers::attached_token::AttachedToken;
+use crate::ast::{IfStatement, MsSqlIfStatements, Statement};
 use crate::dialect::Dialect;
 use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};

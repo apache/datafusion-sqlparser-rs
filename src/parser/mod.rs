@@ -7082,15 +7082,18 @@ impl<'a> Parser<'a> {
             let engine = match value.token {
                 Token::Word(w) => {
                     let parameters = if self.peek_token() == Token::LParen {
-                        Some(self.parse_parenthesized_identifiers()?)
+                        self.parse_parenthesized_identifiers()?
                     } else {
-                        None
+                        vec![]
                     };
 
-                    Ok(Some(SqlOption::TableEngine(TableEngine {
-                        name: w.value,
-                        parameters,
-                    })))
+                    Ok(Some(SqlOption::NamedParenthesizedList(
+                        NamedParenthesizedList {
+                            key: Ident::new("ENGINE"),
+                            value: Some(Ident::new(w.value)),
+                            parameters,
+                        },
+                    )))
                 }
                 _ => {
                     return self.expected("Token::Word", value)?;
@@ -7148,7 +7151,13 @@ impl<'a> Parser<'a> {
                         self.parse_comma_separated0(Parser::parse_identifier, Token::RParen)?;
                     self.expect_token(&Token::RParen)?;
 
-                    return Ok(Some(SqlOption::Union(tables)));
+                    return Ok(Some(SqlOption::NamedParenthesizedList(
+                        NamedParenthesizedList {
+                            key: Ident::new("UNION"),
+                            value: None,
+                            parameters: tables,
+                        },
+                    )));
                 }
                 _ => {
                     return self.expected("Token::LParen", value)?;

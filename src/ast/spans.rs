@@ -30,13 +30,14 @@ use super::{
     FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
     IfStatement, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join, JoinConstraint,
     JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause, MatchRecognizePattern, Measure,
-    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
-    OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource, ProjectionSelect,
-    Query, RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem,
-    ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption,
-    Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint,
-    TableFactor, TableObject, TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use,
-    Value, Values, ViewColumnDef, WildcardAdditionalOptions, With, WithFill,
+    NamedParenthesizedList, NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict,
+    OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition, PivotValueSource,
+    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
+    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins,
+    UpdateTableFromKind, Use, Value, Values, ViewColumnDef, WildcardAdditionalOptions, With,
+    WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -965,10 +966,14 @@ impl Spanned for SqlOption {
             } => union_spans(
                 core::iter::once(column_name.span).chain(for_values.iter().map(|i| i.span())),
             ),
-            SqlOption::Union(idents) => union_spans(idents.iter().map(|i| i.span)),
             SqlOption::TableSpace(_) => Span::empty(),
-            SqlOption::TableEngine(_) => Span::empty(),
             SqlOption::Comment(_) => Span::empty(),
+            SqlOption::NamedParenthesizedList(NamedParenthesizedList {
+                key: name,
+                value,
+                parameters: values,
+            }) => union_spans(core::iter::once(name.span).chain(values.iter().map(|i| i.span)))
+                .union_opt(&value.as_ref().map(|i| i.span)),
         }
     }
 }

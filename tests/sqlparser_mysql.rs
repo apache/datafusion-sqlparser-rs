@@ -924,10 +924,14 @@ fn parse_create_table_multiple_options_order_independent() {
                     _ => unreachable!(),
                 };
 
-                assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
-                    name: "InnoDB".to_owned(),
-                    parameters: None
-                })));
+                assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
+                    NamedParenthesizedList {
+                        key: Ident::new("ENGINE"),
+                        value: Some(Ident::new("InnoDB")),
+                        parameters: vec![]
+                    }
+                )));
+
                 assert!(plain_options.contains(&SqlOption::KeyValue {
                     key: Ident::new("KEY_BLOCK_SIZE"),
                     value: Expr::Value(
@@ -972,10 +976,14 @@ fn parse_create_table_with_all_table_options() {
                 _ => unreachable!(),
             };
 
-            assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
-                name: "InnoDB".to_owned(),
-                parameters: None
-            })));
+            assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
+                NamedParenthesizedList {
+                    key: Ident::new("ENGINE"),
+                    value: Some(Ident::new("InnoDB")),
+                    parameters: vec![]
+                }
+            )));
+
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("COLLATE"),
                 value: Expr::Identifier(Ident::new("utf8mb4_0900_ai_ci".to_owned()))
@@ -1109,11 +1117,19 @@ fn parse_create_table_with_all_table_options() {
                     storage: Some(StorageType::Disk),
                 }))
             );
-            assert!(plain_options.contains(&SqlOption::Union(vec![
-                Ident::new("table1".to_string()),
-                Ident::new("table2".to_string()),
-                Ident::new("table3".to_string())
-            ])));
+
+            assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
+                NamedParenthesizedList {
+                    key: Ident::new("UNION"),
+                    value: None,
+                    parameters: vec![
+                        Ident::new("table1".to_string()),
+                        Ident::new("table2".to_string()),
+                        Ident::new("table3".to_string())
+                    ]
+                }
+            )));
+
             assert!(plain_options.contains(&SqlOption::KeyValue {
                 key: Ident::new("DATA DIRECTORY"),
                 value: Expr::value(Value::SingleQuotedString("/var/lib/mysql/data".to_owned()))
@@ -1189,10 +1205,13 @@ fn parse_create_table_engine_default_charset() {
                 value: Expr::Identifier(Ident::new("utf8mb3".to_owned()))
             }));
 
-            assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
-                name: "InnoDB".to_owned(),
-                parameters: None
-            })));
+            assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
+                NamedParenthesizedList {
+                    key: Ident::new("ENGINE"),
+                    value: Some(Ident::new("InnoDB")),
+                    parameters: vec![]
+                }
+            )));
         }
         _ => unreachable!(),
     }

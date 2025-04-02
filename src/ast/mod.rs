@@ -7315,9 +7315,11 @@ pub enum SqlOption {
 
     TableSpace(TablespaceOption),
 
-    Union(Vec<Ident>),
-
-    TableEngine(TableEngine),
+    // Advanced parameter formations
+    // UNION  = (tbl_name[,tbl_name]...)
+    // ENGINE = ReplicatedMergeTree('/table_name','{replica}', ver)
+    // ENGINE = SummingMergeTree([columns])
+    NamedParenthesizedList(NamedParenthesizedList),
 }
 
 impl fmt::Display for SqlOption {
@@ -7357,18 +7359,7 @@ impl fmt::Display for SqlOption {
                     _ => Ok(()),
                 }
             }
-            SqlOption::Union(tables) => {
-                write!(
-                    f,
-                    "UNION = ({})",
-                    tables
-                        .iter()
-                        .map(|table| table.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                )
-            }
-            SqlOption::TableEngine(table_engine) => write!(f, "ENGINE = {}", table_engine),
+
             SqlOption::Comment(comment) => match comment {
                 CommentDef::WithEq(comment) => {
                     write!(f, "COMMENT = '{comment}'")
@@ -7377,6 +7368,16 @@ impl fmt::Display for SqlOption {
                     write!(f, "COMMENT '{comment}'")
                 }
             },
+            SqlOption::NamedParenthesizedList(value) => {
+                write!(f, "{} = ", value.key)?;
+                if let Some(key) = &value.value {
+                    write!(f, "{}", key)?;
+                }
+                if !value.parameters.is_empty() {
+                    write!(f, "({})", display_comma_separated(&value.parameters))?
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -8616,27 +8617,13 @@ impl Display for CreateViewParams {
     }
 }
 
-/// Engine of DB. Some warehouse has parameters of engine, e.g. [clickhouse]
-///
-/// [clickhouse]: https://clickhouse.com/docs/en/engines/table-engines
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct TableEngine {
-    pub name: String,
-    pub parameters: Option<Vec<Ident>>,
-}
-
-impl Display for TableEngine {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name)?;
-
-        if let Some(parameters) = self.parameters.as_ref() {
-            write!(f, "({})", display_comma_separated(parameters))?;
-        }
-
-        Ok(())
-    }
+pub struct NamedParenthesizedList {
+    pub key: Ident,
+    pub value: Option<Ident>,
+    pub parameters: Vec<Ident>,
 }
 
 /// Snowflake `WITH ROW ACCESS POLICY policy_name ON (identifier, ...)`

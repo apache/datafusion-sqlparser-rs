@@ -748,13 +748,16 @@ fn parse_create_table_with_primary_key() {
                 _ => unreachable!(),
             };
 
-            assert!(plain_options.contains(&SqlOption::TableEngine(TableEngine {
-                name: "SharedMergeTree".to_owned(),
-                parameters: Some(vec![
-                    Ident::with_quote('\'', "/clickhouse/tables/{uuid}/{shard}"),
-                    Ident::with_quote('\'', "{replica}"),
-                ])
-            })));
+            assert!(plain_options.contains(&SqlOption::NamedParenthesizedList(
+                NamedParenthesizedList {
+                    key: Ident::new("ENGINE"),
+                    value: Some(Ident::new("SharedMergeTree")),
+                    parameters: vec![
+                        Ident::with_quote('\'', "/clickhouse/tables/{uuid}/{shard}"),
+                        Ident::with_quote('\'', "{replica}"),
+                    ]
+                }
+            )));
 
             fn assert_function(actual: &Function, name: &str, arg: &str) -> bool {
                 assert_eq!(actual.name, ObjectName::from(vec![Ident::new(name)]));

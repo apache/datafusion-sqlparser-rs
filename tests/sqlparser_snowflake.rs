@@ -3542,10 +3542,3 @@ fn test_alter_session() {
     );
     snowflake().one_statement_parses_to("ALTER SESSION UNSET a\nB", "ALTER SESSION UNSET a, B");
 }
-
-#[test]
-fn test_xxx() {
-    snowflake()
-        .parse_sql_statements("grant monitor on warehouse ETL_ENV_SHARE to role \"abc\"")
-        .unwrap();
-}

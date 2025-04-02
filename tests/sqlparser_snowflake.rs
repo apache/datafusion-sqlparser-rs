@@ -3357,7 +3357,7 @@ fn test_timetravel_at_before() {
 }
 
 #[test]
-fn test_grant_account_privileges() {
+fn test_grant_account_global_privileges() {
     let privileges = vec![
         "ALL",
         "ALL PRIVILEGES",
@@ -3463,6 +3463,43 @@ fn test_grant_account_privileges() {
 }
 
 #[test]
+fn test_grant_account_object_privileges() {
+    let privileges = vec![
+        "ALL",
+        "ALL PRIVILEGES",
+        "APPLYBUDGET",
+        "MODIFY",
+        "MONITOR",
+        "USAGE",
+        "OPERATE",
+    ];
+
+    let objects_types = vec![
+        "USER",
+        "RESOURCE MONITOR",
+        "WAREHOUSE",
+        "COMPUTE POOL",
+        "DATABASE",
+        "INTEGRATION",
+        "CONNECTION",
+        "FAILOVER GROUP",
+        "REPLICATION GROUP",
+        "EXTERNAL VOLUME",
+    ];
+
+    let with_grant_options = vec!["", " WITH GRANT OPTION"];
+
+    for t in &objects_types {
+        for p in &privileges {
+            for wgo in &with_grant_options {
+                let sql = format!("GRANT {p} ON {t} obj1 TO ROLE role1{wgo}");
+                snowflake_and_generic().verified_stmt(&sql);
+            }
+        }
+    }
+}
+
+#[test]
 fn test_grant_role_to() {
     snowflake_and_generic().verified_stmt("GRANT ROLE r1 TO ROLE r2");
     snowflake_and_generic().verified_stmt("GRANT ROLE r1 TO USER u1");
@@ -3504,4 +3541,11 @@ fn test_alter_session() {
         "ALTER SESSION SET A=TRUE B='tag'",
     );
     snowflake().one_statement_parses_to("ALTER SESSION UNSET a\nB", "ALTER SESSION UNSET a, B");
+}
+
+#[test]
+fn test_xxx() {
+    snowflake()
+        .parse_sql_statements("grant monitor on warehouse ETL_ENV_SHARE to role \"abc\"")
+        .unwrap();
 }

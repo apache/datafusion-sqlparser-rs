@@ -6001,10 +6001,10 @@ pub enum Action {
     ManageReleases,
     ManageVersions,
     Modify {
-        modify_type: ActionModifyType,
+        modify_type: Option<ActionModifyType>,
     },
     Monitor {
-        monitor_type: ActionMonitorType,
+        monitor_type: Option<ActionMonitorType>,
     },
     Operate,
     OverrideShareRestrictions,
@@ -6037,7 +6037,7 @@ impl fmt::Display for Action {
         match self {
             Action::AddSearchOptimization => f.write_str("ADD SEARCH OPTIMIZATION")?,
             Action::Apply { apply_type } => write!(f, "APPLY {apply_type}")?,
-            Action::ApplyBudget => f.write_str("APPLY BUDGET")?,
+            Action::ApplyBudget => f.write_str("APPLYBUDGET")?,
             Action::AttachListing => f.write_str("ATTACH LISTING")?,
             Action::AttachPolicy => f.write_str("ATTACH POLICY")?,
             Action::Audit => f.write_str("AUDIT")?,
@@ -6065,8 +6065,18 @@ impl fmt::Display for Action {
             Action::Manage { manage_type } => write!(f, "MANAGE {manage_type}")?,
             Action::ManageReleases => f.write_str("MANAGE RELEASES")?,
             Action::ManageVersions => f.write_str("MANAGE VERSIONS")?,
-            Action::Modify { modify_type } => write!(f, "MODIFY {modify_type}")?,
-            Action::Monitor { monitor_type } => write!(f, "MONITOR {monitor_type}")?,
+            Action::Modify { modify_type } => {
+                write!(f, "MODIFY")?;
+                if let Some(modify_type) = modify_type {
+                    write!(f, " {modify_type}")?;
+                }
+            }
+            Action::Monitor { monitor_type } => {
+                write!(f, "MONITOR")?;
+                if let Some(monitor_type) = monitor_type {
+                    write!(f, " {monitor_type}")?
+                }
+            }
             Action::Operate => f.write_str("OPERATE")?,
             Action::OverrideShareRestrictions => f.write_str("OVERRIDE SHARE RESTRICTIONS")?,
             Action::Ownership => f.write_str("OWNERSHIP")?,
@@ -6384,6 +6394,20 @@ pub enum GrantObjects {
     Warehouses(Vec<ObjectName>),
     /// Grant privileges on specific integrations
     Integrations(Vec<ObjectName>),
+    /// Grant privileges on resource monitors
+    ResourceMonitors(Vec<ObjectName>),
+    /// Grant privileges on users
+    Users(Vec<ObjectName>),
+    /// Grant privileges on compute pools
+    ComputePools(Vec<ObjectName>),
+    /// Grant privileges on connections
+    Connections(Vec<ObjectName>),
+    /// Grant privileges on failover groups
+    FailoverGroup(Vec<ObjectName>),
+    /// Grant privileges on replication group
+    ReplicationGroup(Vec<ObjectName>),
+    /// Grant privileges on external volumes
+    ExternalVolumes(Vec<ObjectName>),
 }
 
 impl fmt::Display for GrantObjects {
@@ -6423,6 +6447,27 @@ impl fmt::Display for GrantObjects {
                     "ALL TABLES IN SCHEMA {}",
                     display_comma_separated(schemas)
                 )
+            }
+            GrantObjects::ResourceMonitors(objects) => {
+                write!(f, "RESOURCE MONITOR {}", display_comma_separated(objects))
+            }
+            GrantObjects::Users(objects) => {
+                write!(f, "USER {}", display_comma_separated(objects))
+            }
+            GrantObjects::ComputePools(objects) => {
+                write!(f, "COMPUTE POOL {}", display_comma_separated(objects))
+            }
+            GrantObjects::Connections(objects) => {
+                write!(f, "CONNECTION {}", display_comma_separated(objects))
+            }
+            GrantObjects::FailoverGroup(objects) => {
+                write!(f, "FAILOVER GROUP {}", display_comma_separated(objects))
+            }
+            GrantObjects::ReplicationGroup(objects) => {
+                write!(f, "REPLICATION GROUP {}", display_comma_separated(objects))
+            }
+            GrantObjects::ExternalVolumes(objects) => {
+                write!(f, "EXTERNAL VOLUME {}", display_comma_separated(objects))
             }
         }
     }

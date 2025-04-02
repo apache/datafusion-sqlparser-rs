@@ -736,6 +736,7 @@ define_keywords!(
     REPLICATION,
     RESET,
     RESOLVE,
+    RESOURCE,
     RESPECT,
     RESTART,
     RESTRICT,

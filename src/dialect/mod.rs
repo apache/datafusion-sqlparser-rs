@@ -888,7 +888,7 @@ pub trait Dialect: Debug + Any {
         keywords::RESERVED_FOR_TABLE_FACTOR
     }
 
-    /// Returns reserved keywords for projection item prefix operator
+    /// Returns reserved keywords that may prefix a select item expression
     /// e.g. `SELECT CONNECT_BY_ROOT name FROM Tbl2` (Snowflake)
     fn get_reserved_keywords_for_select_item(&self) -> &[Keyword] {
         &[]

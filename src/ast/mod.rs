@@ -3829,7 +3829,7 @@ pub enum Statement {
         on: Box<Expr>,
         /// Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
-        // Speccifies the output to save changes in MSSQL
+        // Specifies the output to save changes in MSSQL
         output: Option<Output>,
     },
     /// ```sql

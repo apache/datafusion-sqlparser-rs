@@ -890,7 +890,7 @@ pub trait Dialect: Debug + Any {
 
     /// Returns reserved keywords for projection item prefix operator
     /// e.g. `SELECT CONNECT_BY_ROOT name FROM Tbl2` (Snowflake)
-    fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {
+    fn get_reserved_keywords_for_select_item(&self) -> &[Keyword] {
         &[]
     }
 

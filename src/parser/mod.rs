@@ -656,11 +656,11 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Statement::Case(CaseStatement {
-            case_token,
+            case_token: AttachedToken(case_token),
             match_expr,
             when_blocks,
             else_block,
-            end_case_token,
+            end_case_token: AttachedToken(end_case_token),
         }))
     }
 
@@ -690,11 +690,11 @@ impl<'a> Parser<'a> {
         let end_if_token = self.expect_keyword(Keyword::IF)?;
 
         Ok(Statement::If(IfStatement::IfThenElseEnd {
-            if_token,
+            if_token: AttachedToken(if_token),
             if_block,
             elseif_blocks,
             else_block,
-            end_if_token,
+            end_if_token: AttachedToken(end_if_token),
         }))
     }
 
@@ -723,7 +723,7 @@ impl<'a> Parser<'a> {
         let statements = self.parse_statement_list(terminal_keywords)?;
 
         Ok(ConditionalStatements {
-            start_token,
+            start_token: AttachedToken(start_token),
             condition,
             statements,
         })

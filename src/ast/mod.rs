@@ -38,7 +38,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::keywords::Keyword;
-use crate::tokenizer::{Span, Token, TokenWithSpan};
+use crate::tokenizer::{Span, Token};
 
 pub use self::data_type::{
     ArrayElemTypeDef, BinaryLength, CharLengthUnits, CharacterLength, DataType, EnumMember,
@@ -2120,12 +2120,12 @@ pub enum Password {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CaseStatement {
     /// The `CASE` token that starts the statement.
-    pub case_token: TokenWithSpan,
+    pub case_token: AttachedToken,
     pub match_expr: Option<Expr>,
     pub when_blocks: Vec<ConditionalStatements>,
     pub else_block: Option<ConditionalStatements>,
     /// The last token of the statement (`END` or `CASE`).
-    pub end_case_token: TokenWithSpan,
+    pub end_case_token: AttachedToken,
 }
 
 impl fmt::Display for CaseStatement {
@@ -2135,7 +2135,7 @@ impl fmt::Display for CaseStatement {
             match_expr,
             when_blocks,
             else_block,
-            end_case_token,
+            end_case_token: AttachedToken(end),
         } = self;
 
         write!(f, "CASE")?;
@@ -2154,7 +2154,7 @@ impl fmt::Display for CaseStatement {
 
         write!(f, " END")?;
 
-        if let Token::Word(w) = &end_case_token.token {
+        if let Token::Word(w) = &end.token {
             if w.keyword == Keyword::CASE {
                 write!(f, " CASE")?;
             }
@@ -2187,12 +2187,12 @@ pub enum IfStatement {
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/snowflake-scripting/if)
     IfThenElseEnd {
         /// The `IF` token that starts the statement.
-        if_token: TokenWithSpan,
+        if_token: AttachedToken,
         if_block: ConditionalStatements,
         elseif_blocks: Vec<ConditionalStatements>,
         else_block: Option<ConditionalStatements>,
         /// The `IF` token that ends the statement.
-        end_if_token: TokenWithSpan,
+        end_if_token: AttachedToken,
     },
     /// An MSSQL `IF ... ELSE ...` statement.
     ///
@@ -2203,7 +2203,7 @@ pub enum IfStatement {
     ///
     /// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/if-else-transact-sql?view=sql-server-ver16)
     MsSqlIfElse {
-        if_token: TokenWithSpan,
+        if_token: AttachedToken,
         condition: Expr,
         if_statements: MsSqlIfStatements,
         else_statements: Option<MsSqlIfStatements>,
@@ -2270,9 +2270,9 @@ pub enum MsSqlIfStatements {
     /// END
     /// ```
     Block {
-        begin_token: TokenWithSpan,
+        begin_token: AttachedToken,
         statements: Vec<Statement>,
-        end_token: TokenWithSpan,
+        end_token: AttachedToken,
     },
 }
 
@@ -2310,7 +2310,7 @@ impl fmt::Display for MsSqlIfStatements {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ConditionalStatements {
     /// The start token of the conditional (`WHEN`, `IF`, `ELSEIF` or `ELSE`).
-    pub start_token: TokenWithSpan,
+    pub start_token: AttachedToken,
     /// The condition expression. `None` for `ELSE` statements.
     pub condition: Option<Expr>,
     /// Statement list of the `THEN` clause.
@@ -2320,12 +2320,12 @@ pub struct ConditionalStatements {
 impl fmt::Display for ConditionalStatements {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let ConditionalStatements {
-            start_token,
+            start_token: AttachedToken(start),
             condition,
             statements,
         } = self;
 
-        let keyword = &start_token.token;
+        let keyword = &start.token;
 
         if let Some(expr) = condition {
             write!(f, "{keyword} {expr} THEN")?;

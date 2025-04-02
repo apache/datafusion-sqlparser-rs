@@ -21,7 +21,7 @@ use core::iter;
 use crate::tokenizer::Span;
 
 use super::{
-    dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
+    dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation, AttachedToken,
     AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, CaseStatement,
     CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef, ConditionalStatements,
     ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
@@ -740,12 +740,12 @@ impl Spanned for CreateIndex {
 impl Spanned for CaseStatement {
     fn span(&self) -> Span {
         let CaseStatement {
-            case_token,
-            end_case_token,
+            case_token: AttachedToken(start),
+            end_case_token: AttachedToken(end),
             ..
         } = self;
 
-        union_spans([case_token.span, end_case_token.span].into_iter())
+        union_spans([start.span, end.span].into_iter())
     }
 }
 
@@ -753,17 +753,17 @@ impl Spanned for IfStatement {
     fn span(&self) -> Span {
         match self {
             IfStatement::IfThenElseEnd {
-                if_token,
-                end_if_token,
+                if_token: AttachedToken(start),
+                end_if_token: AttachedToken(end),
                 ..
-            } => union_spans([if_token.span, end_if_token.span].into_iter()),
+            } => union_spans([start.span, end.span].into_iter()),
             IfStatement::MsSqlIfElse {
-                if_token,
+                if_token: AttachedToken(start),
                 if_statements,
                 else_statements,
                 ..
             } => union_spans(
-                [if_token.span, if_statements.span()]
+                [start.span, if_statements.span()]
                     .into_iter()
                     .chain(else_statements.as_ref().into_iter().map(|s| s.span())),
             ),
@@ -776,10 +776,10 @@ impl Spanned for MsSqlIfStatements {
         match self {
             MsSqlIfStatements::Single(s) => s.span(),
             MsSqlIfStatements::Block {
-                begin_token,
-                end_token,
+                begin_token: AttachedToken(start),
+                end_token: AttachedToken(end),
                 ..
-            } => union_spans([begin_token.span, end_token.span].into_iter()),
+            } => union_spans([start.span, end.span].into_iter()),
         }
     }
 }
@@ -787,13 +787,13 @@ impl Spanned for MsSqlIfStatements {
 impl Spanned for ConditionalStatements {
     fn span(&self) -> Span {
         let ConditionalStatements {
-            start_token,
+            start_token: AttachedToken(start),
             condition,
             statements,
         } = self;
 
         union_spans(
-            iter::once(start_token.span)
+            iter::once(start.span)
                 .chain(condition.as_ref().map(|c| c.span()).into_iter())
                 .chain(statements.iter().map(|s| s.span())),
         )

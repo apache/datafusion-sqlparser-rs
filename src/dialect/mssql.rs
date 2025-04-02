@@ -16,6 +16,7 @@
 // under the License.
 
 use crate::ast::{IfStatement, MsSqlIfStatements, Statement};
+use crate::ast::helpers::attached_token::AttachedToken;
 use crate::dialect::Dialect;
 use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
@@ -144,9 +145,9 @@ impl MsSqlDialect {
             let statements = self.parse_statement_list(parser, Some(Keyword::END))?;
             let end_token = parser.expect_keyword(Keyword::END)?;
             if_statements = MsSqlIfStatements::Block {
-                begin_token,
+                begin_token: AttachedToken(begin_token),
                 statements,
-                end_token,
+                end_token: AttachedToken(end_token),
             };
         } else {
             let stmt = parser.parse_statement()?;
@@ -160,9 +161,9 @@ impl MsSqlDialect {
                 let statements = self.parse_statement_list(parser, Some(Keyword::END))?;
                 let end_token = parser.expect_keyword(Keyword::END)?;
                 else_statements = Some(MsSqlIfStatements::Block {
-                    begin_token,
+                    begin_token: AttachedToken(begin_token),
                     statements,
-                    end_token,
+                    end_token: AttachedToken(end_token),
                 });
             } else {
                 let stmt = parser.parse_statement()?;
@@ -171,7 +172,7 @@ impl MsSqlDialect {
         }
 
         Ok(Statement::If(IfStatement::MsSqlIfElse {
-            if_token,
+            if_token: AttachedToken(if_token),
             condition,
             if_statements,
             else_statements,

@@ -12875,6 +12875,26 @@ impl<'a> Parser<'a> {
                 Some(GrantObjects::AllSequencesInSchema {
                     schemas: self.parse_comma_separated(|p| p.parse_object_name(false))?,
                 })
+            } else if self.parse_keywords(&[Keyword::RESOURCE, Keyword::MONITOR]) {
+                Some(GrantObjects::ResourceMonitors(self.parse_comma_separated(
+                    |p| p.parse_object_name_with_wildcards(false, true),
+                )?))
+            } else if self.parse_keywords(&[Keyword::COMPUTE, Keyword::POOL]) {
+                Some(GrantObjects::ComputePools(self.parse_comma_separated(
+                    |p| p.parse_object_name_with_wildcards(false, true),
+                )?))
+            } else if self.parse_keywords(&[Keyword::FAILOVER, Keyword::GROUP]) {
+                Some(GrantObjects::FailoverGroup(self.parse_comma_separated(
+                    |p| p.parse_object_name_with_wildcards(false, true),
+                )?))
+            } else if self.parse_keywords(&[Keyword::REPLICATION, Keyword::GROUP]) {
+                Some(GrantObjects::ReplicationGroup(self.parse_comma_separated(
+                    |p| p.parse_object_name_with_wildcards(false, true),
+                )?))
+            } else if self.parse_keywords(&[Keyword::EXTERNAL, Keyword::VOLUME]) {
+                Some(GrantObjects::ExternalVolumes(self.parse_comma_separated(
+                    |p| p.parse_object_name_with_wildcards(false, true),
+                )?))
             } else {
                 let object_type = self.parse_one_of_keywords(&[
                     Keyword::SEQUENCE,
@@ -12888,6 +12908,8 @@ impl<'a> Parser<'a> {
                     Keyword::VIEW,
                     Keyword::WAREHOUSE,
                     Keyword::INTEGRATION,
+                    Keyword::USER,
+                    Keyword::CONNECTION,
                 ]);
                 let objects =
                     self.parse_comma_separated(|p| p.parse_object_name_with_wildcards(false, true));
@@ -12898,6 +12920,8 @@ impl<'a> Parser<'a> {
                     Some(Keyword::WAREHOUSE) => Some(GrantObjects::Warehouses(objects?)),
                     Some(Keyword::INTEGRATION) => Some(GrantObjects::Integrations(objects?)),
                     Some(Keyword::VIEW) => Some(GrantObjects::Views(objects?)),
+                    Some(Keyword::USER) => Some(GrantObjects::Users(objects?)),
+                    Some(Keyword::CONNECTION) => Some(GrantObjects::Connections(objects?)),
                     Some(Keyword::TABLE) | None => Some(GrantObjects::Tables(objects?)),
                     _ => unreachable!(),
                 }
@@ -12983,10 +13007,10 @@ impl<'a> Parser<'a> {
             let manage_type = self.parse_action_manage_type()?;
             Ok(Action::Manage { manage_type })
         } else if self.parse_keyword(Keyword::MODIFY) {
-            let modify_type = self.parse_action_modify_type()?;
+            let modify_type = self.parse_action_modify_type();
             Ok(Action::Modify { modify_type })
         } else if self.parse_keyword(Keyword::MONITOR) {
-            let monitor_type = self.parse_action_monitor_type()?;
+            let monitor_type = self.parse_action_monitor_type();
             Ok(Action::Monitor { monitor_type })
         } else if self.parse_keyword(Keyword::OPERATE) {
             Ok(Action::Operate)
@@ -13127,29 +13151,29 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_action_modify_type(&mut self) -> Result<ActionModifyType, ParserError> {
+    fn parse_action_modify_type(&mut self) -> Option<ActionModifyType> {
         if self.parse_keywords(&[Keyword::LOG, Keyword::LEVEL]) {
-            Ok(ActionModifyType::LogLevel)
+            Some(ActionModifyType::LogLevel)
         } else if self.parse_keywords(&[Keyword::TRACE, Keyword::LEVEL]) {
-            Ok(ActionModifyType::TraceLevel)
+            Some(ActionModifyType::TraceLevel)
         } else if self.parse_keywords(&[Keyword::SESSION, Keyword::LOG, Keyword::LEVEL]) {
-            Ok(ActionModifyType::SessionLogLevel)
+            Some(ActionModifyType::SessionLogLevel)
         } else if self.parse_keywords(&[Keyword::SESSION, Keyword::TRACE, Keyword::LEVEL]) {
-            Ok(ActionModifyType::SessionTraceLevel)
+            Some(ActionModifyType::SessionTraceLevel)
         } else {
-            self.expected("GRANT MODIFY type", self.peek_token())
+            None
         }
     }
 
-    fn parse_action_monitor_type(&mut self) -> Result<ActionMonitorType, ParserError> {
+    fn parse_action_monitor_type(&mut self) -> Option<ActionMonitorType> {
         if self.parse_keyword(Keyword::EXECUTION) {
-            Ok(ActionMonitorType::Execution)
+            Some(ActionMonitorType::Execution)
         } else if self.parse_keyword(Keyword::SECURITY) {
-            Ok(ActionMonitorType::Security)
+            Some(ActionMonitorType::Security)
         } else if self.parse_keyword(Keyword::USAGE) {
-            Ok(ActionMonitorType::Usage)
+            Some(ActionMonitorType::Usage)
         } else {
-            self.expected("GRANT MONITOR type", self.peek_token())
+            None
         }
     }
 

@@ -3357,7 +3357,7 @@ fn test_timetravel_at_before() {
 }
 
 #[test]
-fn test_grant_account_privileges() {
+fn test_grant_account_global_privileges() {
     let privileges = vec![
         "ALL",
         "ALL PRIVILEGES",
@@ -3458,6 +3458,43 @@ fn test_grant_account_privileges() {
         for wgo in &with_grant_options {
             let sql = format!("GRANT MONITOR {t} ON ACCOUNT TO ROLE role1{wgo}");
             snowflake_and_generic().verified_stmt(&sql);
+        }
+    }
+}
+
+#[test]
+fn test_grant_account_object_privileges() {
+    let privileges = vec![
+        "ALL",
+        "ALL PRIVILEGES",
+        "APPLYBUDGET",
+        "MODIFY",
+        "MONITOR",
+        "USAGE",
+        "OPERATE",
+    ];
+
+    let objects_types = vec![
+        "USER",
+        "RESOURCE MONITOR",
+        "WAREHOUSE",
+        "COMPUTE POOL",
+        "DATABASE",
+        "INTEGRATION",
+        "CONNECTION",
+        "FAILOVER GROUP",
+        "REPLICATION GROUP",
+        "EXTERNAL VOLUME",
+    ];
+
+    let with_grant_options = vec!["", " WITH GRANT OPTION"];
+
+    for t in &objects_types {
+        for p in &privileges {
+            for wgo in &with_grant_options {
+                let sql = format!("GRANT {p} ON {t} obj1 TO ROLE role1{wgo}");
+                snowflake_and_generic().verified_stmt(&sql);
+            }
         }
     }
 }

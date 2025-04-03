@@ -10910,18 +10910,7 @@ impl<'a> Parser<'a> {
             };
 
         let into = if self.parse_keyword(Keyword::INTO) {
-            let temporary = self
-                .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
-                .is_some();
-            let unlogged = self.parse_keyword(Keyword::UNLOGGED);
-            let table = self.parse_keyword(Keyword::TABLE);
-            let name = self.parse_object_name(false)?;
-            Some(SelectInto {
-                temporary,
-                unlogged,
-                table,
-                name,
-            })
+            Some(self.parse_select_into()?)
         } else {
             None
         };

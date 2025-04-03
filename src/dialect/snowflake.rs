@@ -1038,14 +1038,13 @@ fn parse_session_options(
             }
         }
     }
-    options
-        .is_empty()
-        .then(|| {
-            Err(ParserError::ParserError(
-                "expected at least one option".to_string(),
-            ))
-        })
-        .unwrap_or(Ok(options))
+    if options.is_empty() {
+        Err(ParserError::ParserError(
+            "expected at least one option".to_string(),
+        ))
+    } else {
+        Ok(options)
+    }
 }
 
 /// Parses options provided within parentheses like:

@@ -15,14 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#[cfg(not(feature = "std"))]
-use alloc::{vec, vec::Vec};
 use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::{ConditionalStatementBlock, ConditionalStatements, IfStatement, Statement};
 use crate::dialect::Dialect;
 use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
+#[cfg(not(feature = "std"))]
+use alloc::{vec, vec::Vec};
 
 const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[Keyword::IF, Keyword::ELSE];
 

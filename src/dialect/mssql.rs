@@ -15,7 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use crate::ast::helpers::attached_token::AttachedToken;
+use crate::ast::{ConditionalStatementBlock, ConditionalStatements, IfStatement, Statement};
 use crate::dialect::Dialect;
+use crate::keywords::{self, Keyword};
+use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Token;
+#[cfg(not(feature = "std"))]
+use alloc::{vec, vec::Vec};
+
+const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[Keyword::IF, Keyword::ELSE];
 
 /// A [`Dialect`] for [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/)
 #[derive(Debug)]
@@ -105,5 +114,124 @@ impl Dialect for MsSqlDialect {
     /// See <https://learn.microsoft.com/en-us/sql/t-sql/queries/from-transact-sql>
     fn supports_object_name_double_dot_notation(&self) -> bool {
         true
+    }
+
+    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+        !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw) && !RESERVED_FOR_COLUMN_ALIAS.contains(kw)
+    }
+
+    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        if parser.peek_keyword(Keyword::IF) {
+            Some(self.parse_if_stmt(parser))
+        } else {
+            None
+        }
+    }
+}
+
+impl MsSqlDialect {
+    /// ```sql
+    /// IF boolean_expression
+    ///     { sql_statement | statement_block }
+    /// [ ELSE
+    ///     { sql_statement | statement_block } ]
+    /// ```
+    fn parse_if_stmt(&self, parser: &mut Parser) -> Result<Statement, ParserError> {
+        let if_token = parser.expect_keyword(Keyword::IF)?;
+
+        let condition = parser.parse_expr()?;
+
+        let if_block = if parser.peek_keyword(Keyword::BEGIN) {
+            let begin_token = parser.expect_keyword(Keyword::BEGIN)?;
+            let statements = self.parse_statement_list(parser, Some(Keyword::END))?;
+            let end_token = parser.expect_keyword(Keyword::END)?;
+            ConditionalStatementBlock {
+                start_token: AttachedToken(if_token),
+                condition: Some(condition),
+                then_token: None,
+                conditional_statements: ConditionalStatements::BeginEnd {
+                    begin_token: AttachedToken(begin_token),
+                    statements,
+                    end_token: AttachedToken(end_token),
+                },
+            }
+        } else {
+            let stmt = parser.parse_statement()?;
+            ConditionalStatementBlock {
+                start_token: AttachedToken(if_token),
+                condition: Some(condition),
+                then_token: None,
+                conditional_statements: ConditionalStatements::Sequence {
+                    statements: vec![stmt],
+                },
+            }
+        };
+
+        while let Token::SemiColon = parser.peek_token_ref().token {
+            parser.advance_token();
+        }
+
+        let mut else_block = None;
+        if parser.peek_keyword(Keyword::ELSE) {
+            let else_token = parser.expect_keyword(Keyword::ELSE)?;
+            if parser.peek_keyword(Keyword::BEGIN) {
+                let begin_token = parser.expect_keyword(Keyword::BEGIN)?;
+                let statements = self.parse_statement_list(parser, Some(Keyword::END))?;
+                let end_token = parser.expect_keyword(Keyword::END)?;
+                else_block = Some(ConditionalStatementBlock {
+                    start_token: AttachedToken(else_token),
+                    condition: None,
+                    then_token: None,
+                    conditional_statements: ConditionalStatements::BeginEnd {
+                        begin_token: AttachedToken(begin_token),
+                        statements,
+                        end_token: AttachedToken(end_token),
+                    },
+                });
+            } else {
+                let stmt = parser.parse_statement()?;
+                else_block = Some(ConditionalStatementBlock {
+                    start_token: AttachedToken(else_token),
+                    condition: None,
+                    then_token: None,
+                    conditional_statements: ConditionalStatements::Sequence {
+                        statements: vec![stmt],
+                    },
+                });
+            }
+        }
+
+        Ok(Statement::If(IfStatement {
+            if_block,
+            else_block,
+            elseif_blocks: Vec::new(),
+            end_token: None,
+        }))
+    }
+
+    /// Parse a sequence of statements, optionally separated by semicolon.
+    ///
+    /// Stops parsing when reaching EOF or the given keyword.
+    fn parse_statement_list(
+        &self,
+        parser: &mut Parser,
+        terminal_keyword: Option<Keyword>,
+    ) -> Result<Vec<Statement>, ParserError> {
+        let mut stmts = Vec::new();
+        loop {
+            if let Token::EOF = parser.peek_token_ref().token {
+                break;
+            }
+            if let Some(term) = terminal_keyword {
+                if parser.peek_keyword(term) {
+                    break;
+                }
+            }
+            stmts.push(parser.parse_statement()?);
+            while let Token::SemiColon = parser.peek_token_ref().token {
+                parser.advance_token();
+            }
+        }
+        Ok(stmts)
     }
 }

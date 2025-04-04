@@ -3742,15 +3742,13 @@ impl<'a> Parser<'a> {
             });
         }
         self.expect_token(&Token::LParen)?;
-        let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
-            self.prev_token();
-            Expr::InSubquery {
+        let in_op = match self.maybe_parse(|p| p.parse_query_body(p.dialect.prec_unknown()))? {
+            Some(subquery) => Expr::InSubquery {
                 expr: Box::new(expr),
-                subquery: self.parse_query()?,
+                subquery,
                 negated,
-            }
-        } else {
-            Expr::InList {
+            },
+            None => Expr::InList {
                 expr: Box::new(expr),
                 list: if self.dialect.supports_in_empty_list() {
                     self.parse_comma_separated0(Parser::parse_expr, Token::RParen)?
@@ -3758,7 +3756,7 @@ impl<'a> Parser<'a> {
                     self.parse_comma_separated(Parser::parse_expr)?
                 },
                 negated,
-            }
+            },
         };
         self.expect_token(&Token::RParen)?;
         Ok(in_op)

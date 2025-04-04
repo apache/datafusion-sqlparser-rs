@@ -709,19 +709,13 @@ fn test_duckdb_union_datatype() {
                 storage: Default::default(),
                 location: Default::default()
             }),
-            table_properties: Default::default(),
-            with_options: Default::default(),
             file_format: Default::default(),
             location: Default::default(),
             query: Default::default(),
             without_rowid: Default::default(),
             like: Default::default(),
             clone: Default::default(),
-            engine: Default::default(),
-            comment: Default::default(),
-            auto_increment_offset: Default::default(),
-            default_charset: Default::default(),
-            collation: Default::default(),
+            comment_after_column_def: Default::default(),
             on_commit: Default::default(),
             on_cluster: Default::default(),
             primary_key: Default::default(),
@@ -729,7 +723,6 @@ fn test_duckdb_union_datatype() {
             partition_by: Default::default(),
             cluster_by: Default::default(),
             clustered_by: Default::default(),
-            options: Default::default(),
             strict: Default::default(),
             copy_grants: Default::default(),
             enable_schema_evolution: Default::default(),
@@ -745,6 +738,7 @@ fn test_duckdb_union_datatype() {
             catalog: Default::default(),
             catalog_sync: Default::default(),
             storage_serialization_policy: Default::default(),
+            table_options: CreateTableOptions::None
         }),
         stmt
     );

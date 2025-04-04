@@ -24,19 +24,19 @@ use super::{
     dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
     AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, AttachedToken,
     CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef,
-    ConditionalStatements, ConflictTarget, ConnectBy, ConstraintCharacteristics, CopySource,
-    CreateIndex, CreateTable, CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem,
-    ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable, Function, FunctionArg,
-    FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
-    HavingBound, IfStatement, IlikeSelectItem, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, MsSqlIfStatements, NamedWindowDefinition, ObjectName,
-    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr,
-    OrderByKind, Partition, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
-    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
-    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
-    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
+    ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectBy,
+    ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
+    Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
+    Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
+    FunctionArguments, GroupByExpr, HavingBound, IfStatement, IlikeSelectItem, Insert, Interpolate,
+    InterpolateExpr, Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView,
+    LimitClause, MatchRecognizePattern, Measure, NamedWindowDefinition, ObjectName, ObjectNamePart,
+    Offset, OnConflict, OnConflictAction, OnInsert, OrderBy, OrderByExpr, OrderByKind, Partition,
+    PivotValueSource, ProjectionSelect, Query, RaiseStatement, RaiseStatementValue,
+    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
+    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
+    TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
     WildcardAdditionalOptions, With, WithFill,
 };
 
@@ -751,31 +751,34 @@ impl Spanned for CaseStatement {
 
 impl Spanned for IfStatement {
     fn span(&self) -> Span {
-        match self {
-            IfStatement::IfThenElseEnd {
-                if_token: AttachedToken(start),
-                end_if_token: AttachedToken(end),
-                ..
-            } => union_spans([start.span, end.span].into_iter()),
-            IfStatement::MsSqlIfElse {
-                if_token: AttachedToken(start),
-                if_statements,
-                else_statements,
-                ..
-            } => union_spans(
-                [start.span, if_statements.span()]
-                    .into_iter()
-                    .chain(else_statements.as_ref().into_iter().map(|s| s.span())),
-            ),
-        }
+        let IfStatement {
+            if_block,
+            elseif_blocks,
+            else_block,
+            end_token,
+        } = self;
+
+        union_spans(
+            iter::once(if_block.span())
+                .chain(elseif_blocks.iter().map(|b| b.span()))
+                .chain(else_block.as_ref().map(|b| b.span()).into_iter())
+                .chain(
+                    end_token
+                        .as_ref()
+                        .map(|AttachedToken(t)| t.span)
+                        .into_iter(),
+                ),
+        )
     }
 }
 
-impl Spanned for MsSqlIfStatements {
+impl Spanned for ConditionalStatements {
     fn span(&self) -> Span {
         match self {
-            MsSqlIfStatements::Single(s) => s.span(),
-            MsSqlIfStatements::Block {
+            ConditionalStatements::Sequence { statements } => {
+                union_spans(statements.iter().map(|s| s.span()))
+            }
+            ConditionalStatements::BeginEnd {
                 begin_token: AttachedToken(start),
                 end_token: AttachedToken(end),
                 ..
@@ -784,18 +787,25 @@ impl Spanned for MsSqlIfStatements {
     }
 }
 
-impl Spanned for ConditionalStatements {
+impl Spanned for ConditionalStatementBlock {
     fn span(&self) -> Span {
-        let ConditionalStatements {
-            start_token: AttachedToken(start),
+        let ConditionalStatementBlock {
+            start_token: AttachedToken(start_token),
             condition,
-            statements,
+            then_token,
+            conditional_statements,
         } = self;
 
         union_spans(
-            iter::once(start.span)
+            iter::once(start_token.span)
                 .chain(condition.as_ref().map(|c| c.span()).into_iter())
-                .chain(statements.iter().map(|s| s.span())),
+                .chain(
+                    then_token
+                        .as_ref()
+                        .map(|AttachedToken(t)| t.span)
+                        .into_iter(),
+                )
+                .chain(iter::once(conditional_statements.span())),
         )
     }
 }

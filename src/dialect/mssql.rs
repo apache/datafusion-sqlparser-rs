@@ -16,7 +16,7 @@
 // under the License.
 
 use crate::ast::helpers::attached_token::AttachedToken;
-use crate::ast::{IfStatement, MsSqlIfStatements, Statement};
+use crate::ast::{ConditionalStatementBlock, ConditionalStatements, IfStatement, Statement};
 use crate::dialect::Dialect;
 use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
@@ -139,43 +139,72 @@ impl MsSqlDialect {
 
         let condition = parser.parse_expr()?;
 
-        let if_statements;
+        let if_block;
         if parser.peek_keyword(Keyword::BEGIN) {
             let begin_token = parser.expect_keyword(Keyword::BEGIN)?;
             let statements = self.parse_statement_list(parser, Some(Keyword::END))?;
             let end_token = parser.expect_keyword(Keyword::END)?;
-            if_statements = MsSqlIfStatements::Block {
-                begin_token: AttachedToken(begin_token),
-                statements,
-                end_token: AttachedToken(end_token),
+            if_block = ConditionalStatementBlock {
+                start_token: AttachedToken(if_token),
+                condition: Some(condition),
+                then_token: None,
+                conditional_statements: ConditionalStatements::BeginEnd {
+                    begin_token: AttachedToken(begin_token),
+                    statements,
+                    end_token: AttachedToken(end_token),
+                },
             };
         } else {
             let stmt = parser.parse_statement()?;
-            if_statements = MsSqlIfStatements::Single(Box::new(stmt));
+            if_block = ConditionalStatementBlock {
+                start_token: AttachedToken(if_token),
+                condition: Some(condition),
+                then_token: None,
+                conditional_statements: ConditionalStatements::Sequence {
+                    statements: vec![stmt],
+                },
+            };
         }
 
-        let mut else_statements = None;
-        if parser.parse_keyword(Keyword::ELSE) {
+        while let Token::SemiColon = parser.peek_token_ref().token {
+            parser.advance_token();
+        }
+
+        let mut else_block = None;
+        if parser.peek_keyword(Keyword::ELSE) {
+            let else_token = parser.expect_keyword(Keyword::ELSE)?;
             if parser.peek_keyword(Keyword::BEGIN) {
                 let begin_token = parser.expect_keyword(Keyword::BEGIN)?;
                 let statements = self.parse_statement_list(parser, Some(Keyword::END))?;
                 let end_token = parser.expect_keyword(Keyword::END)?;
-                else_statements = Some(MsSqlIfStatements::Block {
-                    begin_token: AttachedToken(begin_token),
-                    statements,
-                    end_token: AttachedToken(end_token),
+                else_block = Some(ConditionalStatementBlock {
+                    start_token: AttachedToken(else_token),
+                    condition: None,
+                    then_token: None,
+                    conditional_statements: ConditionalStatements::BeginEnd {
+                        begin_token: AttachedToken(begin_token),
+                        statements,
+                        end_token: AttachedToken(end_token),
+                    },
                 });
             } else {
                 let stmt = parser.parse_statement()?;
-                else_statements = Some(MsSqlIfStatements::Single(Box::new(stmt)));
+                else_block = Some(ConditionalStatementBlock {
+                    start_token: AttachedToken(else_token),
+                    condition: None,
+                    then_token: None,
+                    conditional_statements: ConditionalStatements::Sequence {
+                        statements: vec![stmt],
+                    },
+                });
             }
         }
 
-        Ok(Statement::If(IfStatement::MsSqlIfElse {
-            if_token: AttachedToken(if_token),
-            condition,
-            if_statements,
-            else_statements,
+        Ok(Statement::If(IfStatement {
+            if_block,
+            else_block,
+            elseif_blocks: Vec::new(),
+            end_token: None,
         }))
     }
 

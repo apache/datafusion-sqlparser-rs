@@ -2122,8 +2122,8 @@ pub struct CaseStatement {
     /// The `CASE` token that starts the statement.
     pub case_token: AttachedToken,
     pub match_expr: Option<Expr>,
-    pub when_blocks: Vec<ConditionalStatements>,
-    pub else_block: Option<ConditionalStatements>,
+    pub when_blocks: Vec<ConditionalStatementBlock>,
+    pub else_block: Option<ConditionalStatementBlock>,
     /// The last token of the statement (`END` or `CASE`).
     pub end_case_token: AttachedToken,
 }
@@ -2165,127 +2165,60 @@ impl fmt::Display for CaseStatement {
 }
 
 /// An `IF` statement.
+///
+/// Example (BigQuery or Snowflake):
+/// ```sql
+/// IF TRUE THEN
+///     SELECT 1;
+///     SELECT 2;
+/// ELSEIF TRUE THEN
+///     SELECT 3;
+/// ELSE
+///     SELECT 4;
+/// END IF
+/// ```
+/// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#if)
+/// [Snowflake](https://docs.snowflake.com/en/sql-reference/snowflake-scripting/if)
+///
+/// Example (MSSQL):
+/// ```sql
+/// IF 1=1 SELECT 1 ELSE SELECT 2
+/// ```
+/// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/if-else-transact-sql?view=sql-server-ver16)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum IfStatement {
-    /// An `IF ... THEN [ELSE[IF] ...] END IF` statement.
-    ///
-    /// Example:
-    /// ```sql
-    /// IF TRUE THEN
-    ///     SELECT 1;
-    ///     SELECT 2;
-    /// ELSEIF TRUE THEN
-    ///     SELECT 3;
-    /// ELSE
-    ///     SELECT 4;
-    /// END IF
-    /// ```
-    ///
-    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#if)
-    /// [Snowflake](https://docs.snowflake.com/en/sql-reference/snowflake-scripting/if)
-    IfThenElseEnd {
-        /// The `IF` token that starts the statement.
-        if_token: AttachedToken,
-        if_block: ConditionalStatements,
-        elseif_blocks: Vec<ConditionalStatements>,
-        else_block: Option<ConditionalStatements>,
-        /// The `IF` token that ends the statement.
-        end_if_token: AttachedToken,
-    },
-    /// An MSSQL `IF ... ELSE ...` statement.
-    ///
-    /// Example:
-    /// ```sql
-    /// IF 1=1 SELECT 1 ELSE SELECT 2
-    /// ```
-    ///
-    /// [MSSQL](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/if-else-transact-sql?view=sql-server-ver16)
-    MsSqlIfElse {
-        if_token: AttachedToken,
-        condition: Expr,
-        if_statements: MsSqlIfStatements,
-        else_statements: Option<MsSqlIfStatements>,
-    },
+pub struct IfStatement {
+    pub if_block: ConditionalStatementBlock,
+    pub elseif_blocks: Vec<ConditionalStatementBlock>,
+    pub else_block: Option<ConditionalStatementBlock>,
+    pub end_token: Option<AttachedToken>,
 }
 
 impl fmt::Display for IfStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            IfStatement::IfThenElseEnd {
-                if_token: _,
-                if_block,
-                elseif_blocks,
-                else_block,
-                end_if_token: _,
-            } => {
-                write!(f, "{if_block}")?;
+        let IfStatement {
+            if_block,
+            elseif_blocks,
+            else_block,
+            end_token,
+        } = self;
 
-                if !elseif_blocks.is_empty() {
-                    write!(f, " {}", display_separated(elseif_blocks, " "))?;
-                }
+        write!(f, "{if_block}")?;
 
-                if let Some(else_block) = else_block {
-                    write!(f, " {else_block}")?;
-                }
-
-                write!(f, " END IF")?;
-
-                Ok(())
-            }
-            IfStatement::MsSqlIfElse {
-                if_token: _,
-                condition,
-                if_statements,
-                else_statements,
-            } => {
-                write!(f, "IF {condition} {if_statements}")?;
-
-                if let Some(els) = else_statements {
-                    write!(f, " ELSE {els}")?;
-                }
-
-                Ok(())
-            }
+        for elseif_block in elseif_blocks {
+            write!(f, " {elseif_block}")?;
         }
-    }
-}
 
-/// (MSSQL) Either a single [Statement] or a block of statements
-/// enclosed in `BEGIN` and `END`.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum MsSqlIfStatements {
-    /// A single statement.
-    Single(Box<Statement>),
-    /// ```sql
-    /// A logical block of statements.
-    ///
-    /// BEGIN
-    ///   <statement>;
-    ///   <statement>;
-    ///   ...
-    /// END
-    /// ```
-    Block {
-        begin_token: AttachedToken,
-        statements: Vec<Statement>,
-        end_token: AttachedToken,
-    },
-}
-
-impl fmt::Display for MsSqlIfStatements {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MsSqlIfStatements::Single(stmt) => stmt.fmt(f),
-            MsSqlIfStatements::Block { statements, .. } => {
-                write!(f, "BEGIN ")?;
-                format_statement_list(f, statements)?;
-                write!(f, " END")
-            }
+        if let Some(else_block) = else_block {
+            write!(f, " {else_block}")?;
         }
+
+        if let Some(AttachedToken(end_token)) = end_token {
+            write!(f, " END {end_token}")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -2308,37 +2241,85 @@ impl fmt::Display for MsSqlIfStatements {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ConditionalStatements {
-    /// The start token of the conditional (`WHEN`, `IF`, `ELSEIF` or `ELSE`).
+pub struct ConditionalStatementBlock {
     pub start_token: AttachedToken,
-    /// The condition expression. `None` for `ELSE` statements.
     pub condition: Option<Expr>,
-    /// Statement list of the `THEN` clause.
-    pub statements: Vec<Statement>,
+    pub then_token: Option<AttachedToken>,
+    pub conditional_statements: ConditionalStatements,
+}
+
+impl ConditionalStatementBlock {
+    pub fn statements(&self) -> &Vec<Statement> {
+        self.conditional_statements.statements()
+    }
+}
+
+impl fmt::Display for ConditionalStatementBlock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ConditionalStatementBlock {
+            start_token: AttachedToken(start_token),
+            condition,
+            then_token,
+            conditional_statements,
+        } = self;
+
+        write!(f, "{start_token}")?;
+
+        if let Some(condition) = condition {
+            write!(f, " {condition}")?;
+        }
+
+        if then_token.is_some() {
+            write!(f, " THEN")?;
+        }
+
+        if conditional_statements.statements().len() > 0 {
+            write!(f, " {conditional_statements}")?;
+        }
+
+        Ok(())
+    }
+}
+
+/// A list of statements in a [ConditionalStatementBlock].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ConditionalStatements {
+    /// SELECT 1; SELECT 2; SELECT 3; ...
+    Sequence { statements: Vec<Statement> },
+    /// BEGIN SELECT 1; SELECT 2; SELECT 3; ... END
+    BeginEnd {
+        begin_token: AttachedToken,
+        statements: Vec<Statement>,
+        end_token: AttachedToken,
+    },
+}
+
+impl ConditionalStatements {
+    pub fn statements(&self) -> &Vec<Statement> {
+        match self {
+            ConditionalStatements::Sequence { statements } => statements,
+            ConditionalStatements::BeginEnd { statements, .. } => statements,
+        }
+    }
 }
 
 impl fmt::Display for ConditionalStatements {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ConditionalStatements {
-            start_token: AttachedToken(start),
-            condition,
-            statements,
-        } = self;
-
-        let keyword = &start.token;
-
-        if let Some(expr) = condition {
-            write!(f, "{keyword} {expr} THEN")?;
-        } else {
-            write!(f, "{keyword}")?;
+        match self {
+            ConditionalStatements::Sequence { statements } => {
+                if statements.len() > 0 {
+                    format_statement_list(f, statements)?;
+                }
+                Ok(())
+            }
+            ConditionalStatements::BeginEnd { statements, .. } => {
+                write!(f, "BEGIN ")?;
+                format_statement_list(f, statements)?;
+                write!(f, " END")
+            }
         }
-
-        if !statements.is_empty() {
-            write!(f, " ")?;
-            format_statement_list(f, statements)?;
-        }
-
-        Ok(())
     }
 }
 

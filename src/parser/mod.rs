@@ -641,11 +641,11 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword_is(Keyword::WHEN)?;
         let when_blocks = self.parse_keyword_separated(Keyword::WHEN, |parser| {
-            parser.parse_conditional_statements(&[Keyword::WHEN, Keyword::ELSE, Keyword::END])
+            parser.parse_conditional_statement_block(&[Keyword::WHEN, Keyword::ELSE, Keyword::END])
         })?;
 
         let else_block = if self.parse_keyword(Keyword::ELSE) {
-            Some(self.parse_conditional_statements(&[Keyword::END])?)
+            Some(self.parse_conditional_statement_block(&[Keyword::END])?)
         } else {
             None
         };
@@ -668,33 +668,39 @@ impl<'a> Parser<'a> {
     ///
     /// See [Statement::If]
     pub fn parse_if_stmt(&mut self) -> Result<Statement, ParserError> {
-        let if_token = self.expect_keyword(Keyword::IF)?;
-        let if_block =
-            self.parse_conditional_statements(&[Keyword::ELSE, Keyword::ELSEIF, Keyword::END])?;
+        self.expect_keyword_is(Keyword::IF)?;
+        let if_block = self.parse_conditional_statement_block(&[
+            Keyword::ELSE,
+            Keyword::ELSEIF,
+            Keyword::END,
+        ])?;
 
         let elseif_blocks = if self.parse_keyword(Keyword::ELSEIF) {
             self.parse_keyword_separated(Keyword::ELSEIF, |parser| {
-                parser.parse_conditional_statements(&[Keyword::ELSEIF, Keyword::ELSE, Keyword::END])
+                parser.parse_conditional_statement_block(&[
+                    Keyword::ELSEIF,
+                    Keyword::ELSE,
+                    Keyword::END,
+                ])
             })?
         } else {
             vec![]
         };
 
         let else_block = if self.parse_keyword(Keyword::ELSE) {
-            Some(self.parse_conditional_statements(&[Keyword::END])?)
+            Some(self.parse_conditional_statement_block(&[Keyword::END])?)
         } else {
             None
         };
 
         self.expect_keyword_is(Keyword::END)?;
-        let end_if_token = self.expect_keyword(Keyword::IF)?;
+        let end_token = self.expect_keyword(Keyword::IF)?;
 
-        Ok(Statement::If(IfStatement::IfThenElseEnd {
-            if_token: AttachedToken(if_token),
+        Ok(Statement::If(IfStatement {
             if_block,
             elseif_blocks,
             else_block,
-            end_if_token: AttachedToken(end_if_token),
+            end_token: Some(AttachedToken(end_token)),
         }))
     }
 
@@ -705,27 +711,29 @@ impl<'a> Parser<'a> {
     /// ```sql
     /// IF condition THEN statement1; statement2;
     /// ```
-    fn parse_conditional_statements(
+    fn parse_conditional_statement_block(
         &mut self,
         terminal_keywords: &[Keyword],
-    ) -> Result<ConditionalStatements, ParserError> {
-        let start_token = self.get_current_token().clone();
+    ) -> Result<ConditionalStatementBlock, ParserError> {
+        let start_token = self.get_current_token().clone(); // self.expect_keyword(keyword)?;
+        let mut then_token = None;
 
         let condition = match &start_token.token {
             Token::Word(w) if w.keyword == Keyword::ELSE => None,
             _ => {
                 let expr = self.parse_expr()?;
-                self.expect_keyword_is(Keyword::THEN)?;
+                then_token = Some(AttachedToken(self.expect_keyword(Keyword::THEN)?));
                 Some(expr)
             }
         };
 
         let statements = self.parse_statement_list(terminal_keywords)?;
 
-        Ok(ConditionalStatements {
+        Ok(ConditionalStatementBlock {
             start_token: AttachedToken(start_token),
             condition,
-            statements,
+            then_token,
+            conditional_statements: ConditionalStatements::Sequence { statements },
         })
     }
 

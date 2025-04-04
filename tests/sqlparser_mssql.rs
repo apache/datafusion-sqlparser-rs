@@ -1860,13 +1860,13 @@ fn parse_mssql_set_session_value() {
 #[test]
 fn parse_mssql_if_else() {
     // Simple statements and blocks
-    ms().verified_stmt("IF 1 = 1 SELECT '1' ELSE SELECT '2'");
-    ms().verified_stmt("IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2");
+    ms().verified_stmt("IF 1 = 1 SELECT '1'; ELSE SELECT '2';");
+    ms().verified_stmt("IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2;");
     ms().verified_stmt(
-        "IF DATENAME(weekday, GETDATE()) IN (N'Saturday', N'Sunday') SELECT 'Weekend' ELSE SELECT 'Weekday'"
+        "IF DATENAME(weekday, GETDATE()) IN (N'Saturday', N'Sunday') SELECT 'Weekend'; ELSE SELECT 'Weekday';"
     );
     ms().verified_stmt(
-        "IF (SELECT COUNT(*) FROM a.b WHERE c LIKE 'x%') > 1 SELECT 'yes' ELSE SELECT 'No'",
+        "IF (SELECT COUNT(*) FROM a.b WHERE c LIKE 'x%') > 1 SELECT 'yes'; ELSE SELECT 'No';",
     );
 
     // Multiple statements
@@ -1877,7 +1877,7 @@ fn parse_mssql_if_else() {
         [Statement::Declare { .. }, Statement::If(stmt)] => {
             assert_eq!(
                 stmt.to_string(),
-                "IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2"
+                "IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2;"
             );
         }
         _ => panic!("Unexpected statements: {:?}", stmts),
@@ -1916,18 +1916,18 @@ fn test_mssql_if_statements_span() {
     let mut sql = "IF 1 = 1 SELECT '1' ELSE SELECT '2'";
     let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
     match parser.parse_statement().unwrap() {
-        Statement::If(IfStatement::MsSqlIfElse {
-            if_statements,
-            else_statements: Some(else_statements),
+        Statement::If(IfStatement {
+            if_block,
+            else_block: Some(else_block),
             ..
         }) => {
             assert_eq!(
-                if_statements.span(),
-                Span::new(Location::new(1, 10), Location::new(1, 20))
+                if_block.span(),
+                Span::new(Location::new(1, 1), Location::new(1, 20))
             );
             assert_eq!(
-                else_statements.span(),
-                Span::new(Location::new(1, 26), Location::new(1, 36))
+                else_block.span(),
+                Span::new(Location::new(1, 21), Location::new(1, 36))
             );
         }
         stmt => panic!("Unexpected statement: {:?}", stmt),
@@ -1937,18 +1937,18 @@ fn test_mssql_if_statements_span() {
     sql = "IF 1 = 1 BEGIN SET @A = 1; END ELSE BEGIN SET @A = 2 END";
     parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
     match parser.parse_statement().unwrap() {
-        Statement::If(IfStatement::MsSqlIfElse {
-            if_statements,
-            else_statements: Some(else_statements),
+        Statement::If(IfStatement {
+            if_block,
+            else_block: Some(else_block),
             ..
         }) => {
             assert_eq!(
-                if_statements.span(),
-                Span::new(Location::new(1, 10), Location::new(1, 31))
+                if_block.span(),
+                Span::new(Location::new(1, 1), Location::new(1, 31))
             );
             assert_eq!(
-                else_statements.span(),
-                Span::new(Location::new(1, 37), Location::new(1, 57))
+                else_block.span(),
+                Span::new(Location::new(1, 32), Location::new(1, 57))
             );
         }
         stmt => panic!("Unexpected statement: {:?}", stmt),

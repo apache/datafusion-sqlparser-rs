@@ -15,6 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#[cfg(not(feature = "std"))]
+use alloc::{vec, vec::Vec};
 use crate::ast::helpers::attached_token::AttachedToken;
 use crate::ast::{ConditionalStatementBlock, ConditionalStatements, IfStatement, Statement};
 use crate::dialect::Dialect;

@@ -761,13 +761,8 @@ impl Spanned for IfStatement {
         union_spans(
             iter::once(if_block.span())
                 .chain(elseif_blocks.iter().map(|b| b.span()))
-                .chain(else_block.as_ref().map(|b| b.span()).into_iter())
-                .chain(
-                    end_token
-                        .as_ref()
-                        .map(|AttachedToken(t)| t.span)
-                        .into_iter(),
-                ),
+                .chain(else_block.as_ref().map(|b| b.span()))
+                .chain(end_token.as_ref().map(|AttachedToken(t)| t.span)),
         )
     }
 }
@@ -798,13 +793,8 @@ impl Spanned for ConditionalStatementBlock {
 
         union_spans(
             iter::once(start_token.span)
-                .chain(condition.as_ref().map(|c| c.span()).into_iter())
-                .chain(
-                    then_token
-                        .as_ref()
-                        .map(|AttachedToken(t)| t.span)
-                        .into_iter(),
-                )
+                .chain(condition.as_ref().map(|c| c.span()))
+                .chain(then_token.as_ref().map(|AttachedToken(t)| t.span))
                 .chain(iter::once(conditional_statements.span())),
         )
     }

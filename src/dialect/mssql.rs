@@ -139,12 +139,11 @@ impl MsSqlDialect {
 
         let condition = parser.parse_expr()?;
 
-        let if_block;
-        if parser.peek_keyword(Keyword::BEGIN) {
+        let if_block = if parser.peek_keyword(Keyword::BEGIN) {
             let begin_token = parser.expect_keyword(Keyword::BEGIN)?;
             let statements = self.parse_statement_list(parser, Some(Keyword::END))?;
             let end_token = parser.expect_keyword(Keyword::END)?;
-            if_block = ConditionalStatementBlock {
+            ConditionalStatementBlock {
                 start_token: AttachedToken(if_token),
                 condition: Some(condition),
                 then_token: None,
@@ -153,18 +152,18 @@ impl MsSqlDialect {
                     statements,
                     end_token: AttachedToken(end_token),
                 },
-            };
+            }
         } else {
             let stmt = parser.parse_statement()?;
-            if_block = ConditionalStatementBlock {
+            ConditionalStatementBlock {
                 start_token: AttachedToken(if_token),
                 condition: Some(condition),
                 then_token: None,
                 conditional_statements: ConditionalStatements::Sequence {
                     statements: vec![stmt],
                 },
-            };
-        }
+            }
+        };
 
         while let Token::SemiColon = parser.peek_token_ref().token {
             parser.advance_token();

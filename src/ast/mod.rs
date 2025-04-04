@@ -2273,7 +2273,7 @@ impl fmt::Display for ConditionalStatementBlock {
             write!(f, " THEN")?;
         }
 
-        if conditional_statements.statements().len() > 0 {
+        if !conditional_statements.statements().is_empty() {
             write!(f, " {conditional_statements}")?;
         }
 
@@ -2309,7 +2309,7 @@ impl fmt::Display for ConditionalStatements {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ConditionalStatements::Sequence { statements } => {
-                if statements.len() > 0 {
+                if !statements.is_empty() {
                     format_statement_list(f, statements)?;
                 }
                 Ok(())

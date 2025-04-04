@@ -395,5 +395,5 @@ fn test_parse_nested_quoted_identifier() {
 #[test]
 fn parse_extract_single_quotes() {
     let sql = "SELECT EXTRACT('month' FROM my_timestamp) FROM my_table";
-    redshift().verified_stmt(&sql);
+    redshift().verified_stmt(sql);
 }

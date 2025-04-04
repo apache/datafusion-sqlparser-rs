@@ -18,14 +18,14 @@
 //! This module defines
 //! 1) a list of constants for every keyword
 //! 2) an `ALL_KEYWORDS` array with every keyword in it
-//!     This is not a list of *reserved* keywords: some of these can be
-//!     parsed as identifiers if the parser decides so. This means that
-//!     new keywords can be added here without affecting the parse result.
+//!    This is not a list of *reserved* keywords: some of these can be
+//!    parsed as identifiers if the parser decides so. This means that
+//!    new keywords can be added here without affecting the parse result.
 //!
-//!     As a matter of fact, most of these keywords are not used at all
-//!     and could be removed.
+//!    As a matter of fact, most of these keywords are not used at all
+//!    and could be removed.
 //! 3) a `RESERVED_FOR_TABLE_ALIAS` array with keywords reserved in a
-//!     "table alias" context.
+//!    "table alias" context.
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

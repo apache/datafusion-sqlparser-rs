@@ -14106,8 +14106,7 @@ fn test_table_sample() {
 
 #[test]
 fn overflow() {
-    let expr = std::iter::repeat("1")
-        .take(1000)
+    let expr = std::iter::repeat_n("1", 1000)
         .collect::<Vec<_>>()
         .join(" + ");
     let sql = format!("SELECT {}", expr);

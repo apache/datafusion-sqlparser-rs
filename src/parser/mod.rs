@@ -10910,18 +10910,7 @@ impl<'a> Parser<'a> {
             };
 
         let into = if self.parse_keyword(Keyword::INTO) {
-            let temporary = self
-                .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
-                .is_some();
-            let unlogged = self.parse_keyword(Keyword::UNLOGGED);
-            let table = self.parse_keyword(Keyword::TABLE);
-            let name = self.parse_object_name(false)?;
-            Some(SelectInto {
-                temporary,
-                unlogged,
-                table,
-                name,
-            })
+            Some(self.parse_select_into()?)
         } else {
             None
         };
@@ -14513,10 +14502,9 @@ impl<'a> Parser<'a> {
     pub fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
         let mut clauses = vec![];
         loop {
-            if self.peek_token() == Token::EOF || self.peek_token() == Token::SemiColon {
+            if !(self.parse_keyword(Keyword::WHEN)) {
                 break;
             }
-            self.expect_keyword_is(Keyword::WHEN)?;
 
             let mut clause_kind = MergeClauseKind::Matched;
             if self.parse_keyword(Keyword::NOT) {
@@ -14610,6 +14598,34 @@ impl<'a> Parser<'a> {
         Ok(clauses)
     }
 
+    fn parse_output(&mut self) -> Result<OutputClause, ParserError> {
+        self.expect_keyword_is(Keyword::OUTPUT)?;
+        let select_items = self.parse_projection()?;
+        self.expect_keyword_is(Keyword::INTO)?;
+        let into_table = self.parse_select_into()?;
+
+        Ok(OutputClause {
+            select_items,
+            into_table,
+        })
+    }
+
+    fn parse_select_into(&mut self) -> Result<SelectInto, ParserError> {
+        let temporary = self
+            .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
+            .is_some();
+        let unlogged = self.parse_keyword(Keyword::UNLOGGED);
+        let table = self.parse_keyword(Keyword::TABLE);
+        let name = self.parse_object_name(false)?;
+
+        Ok(SelectInto {
+            temporary,
+            unlogged,
+            table,
+            name,
+        })
+    }
+
     pub fn parse_merge(&mut self) -> Result<Statement, ParserError> {
         let into = self.parse_keyword(Keyword::INTO);
 
@@ -14620,6 +14636,11 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::ON)?;
         let on = self.parse_expr()?;
         let clauses = self.parse_merge_clauses()?;
+        let output = if self.peek_keyword(Keyword::OUTPUT) {
+            Some(self.parse_output()?)
+        } else {
+            None
+        };
 
         Ok(Statement::Merge {
             into,
@@ -14627,6 +14648,7 @@ impl<'a> Parser<'a> {
             source,
             on: Box::new(on),
             clauses,
+            output,
         })
     }
 

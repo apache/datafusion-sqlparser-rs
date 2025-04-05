@@ -632,6 +632,7 @@ define_keywords!(
     ORGANIZATION,
     OUT,
     OUTER,
+    OUTPUT,
     OUTPUTFORMAT,
     OVER,
     OVERFLOW,

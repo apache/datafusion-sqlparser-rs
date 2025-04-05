@@ -9359,6 +9359,7 @@ fn parse_merge() {
                 source,
                 on,
                 clauses,
+                ..
             },
             Statement::Merge {
                 into: no_into,
@@ -9366,6 +9367,7 @@ fn parse_merge() {
                 source: source_no_into,
                 on: on_no_into,
                 clauses: clauses_no_into,
+                ..
             },
         ) => {
             assert!(into);
@@ -9555,6 +9557,19 @@ fn parse_merge() {
     };
 
     let sql = "MERGE INTO s.bar AS dest USING newArrivals AS S ON (1 > 1) WHEN NOT MATCHED THEN INSERT VALUES (stg.A, stg.B, stg.C)";
+    verified_stmt(sql);
+}
+
+#[test]
+fn test_merge_with_output() {
+    let sql = "MERGE INTO target_table USING source_table \
+        ON target_table.id = source_table.oooid \
+        WHEN MATCHED THEN \
+            UPDATE SET target_table.description = source_table.description \
+        WHEN NOT MATCHED THEN \
+            INSERT (ID, description) VALUES (source_table.id, source_table.description) \
+        OUTPUT inserted.* INTO log_target";
+
     verified_stmt(sql);
 }
 

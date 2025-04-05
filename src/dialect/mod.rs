@@ -995,7 +995,7 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports `SET NAMES <charset_name> [COLLATE <collation_name>]`.
     ///
     /// - [MySQL](https://dev.mysql.com/doc/refman/8.4/en/set-names.html)
-    /// - [Postgres](https://www.postgresql.org/docs/17/sql-set.html)
+    /// - [PostgreSQL](https://www.postgresql.org/docs/17/sql-set.html)
     ///
     /// Note: Postgres doesn't support the `COLLATE` clause, but we permissively parse it anyway.
     fn supports_set_names(&self) -> bool {

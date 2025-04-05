@@ -410,7 +410,7 @@ impl fmt::Display for Interval {
 
 /// A field definition within a struct
 ///
-/// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+/// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -431,7 +431,7 @@ impl fmt::Display for StructField {
 
 /// A field definition within a union
 ///
-/// [duckdb]: https://duckdb.org/docs/sql/data_types/union.html
+/// [DuckDB]: https://duckdb.org/docs/sql/data_types/union.html
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -448,7 +448,7 @@ impl fmt::Display for UnionField {
 
 /// A dictionary field within a dictionary.
 ///
-/// [duckdb]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
+/// [DuckDB]: https://duckdb.org/docs/sql/data_types/struct#creating-structs
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -479,7 +479,7 @@ impl Display for Map {
 
 /// A map field within a map.
 ///
-/// [duckdb]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
+/// [DuckDB]: https://duckdb.org/docs/sql/data_types/map.html#creating-maps
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -2385,10 +2385,10 @@ impl fmt::Display for DeclareAssignment {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DeclareType {
-    /// Cursor variable type. e.g. [Snowflake] [Postgres]
+    /// Cursor variable type. e.g. [Snowflake] [PostgreSQL]
     ///
     /// [Snowflake]: https://docs.snowflake.com/en/developer-guide/snowflake-scripting/cursors#declaring-a-cursor
-    /// [Postgres]: https://www.postgresql.org/docs/current/plpgsql-cursors.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/plpgsql-cursors.html
     Cursor,
 
     /// Result set variable type. [Snowflake]
@@ -2427,7 +2427,7 @@ impl fmt::Display for DeclareType {
 }
 
 /// A `DECLARE` statement.
-/// [Postgres] [Snowflake] [BigQuery]
+/// [PostgreSQL] [Snowflake] [BigQuery]
 ///
 /// Examples:
 /// ```sql
@@ -2435,7 +2435,7 @@ impl fmt::Display for DeclareType {
 /// DECLARE liahona CURSOR FOR SELECT * FROM films;
 /// ```
 ///
-/// [Postgres]: https://www.postgresql.org/docs/current/sql-declare.html
+/// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-declare.html
 /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/snowflake-scripting/declare
 /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#declare
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3020,7 +3020,7 @@ pub enum Statement {
     /// ```sql
     /// CREATE ROLE
     /// ```
-    /// See [postgres](https://www.postgresql.org/docs/current/sql-createrole.html)
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createrole.html)
     CreateRole {
         names: Vec<ObjectName>,
         if_not_exists: bool,
@@ -3046,7 +3046,7 @@ pub enum Statement {
     /// ```sql
     /// CREATE SECRET
     /// ```
-    /// See [duckdb](https://duckdb.org/docs/sql/statements/create_secret.html)
+    /// See [DuckDB](https://duckdb.org/docs/sql/statements/create_secret.html)
     CreateSecret {
         or_replace: bool,
         temporary: Option<bool>,
@@ -3550,7 +3550,7 @@ pub enum Statement {
     ///
     /// Supported variants:
     /// 1. [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction)
-    /// 2. [Postgres](https://www.postgresql.org/docs/15/sql-createfunction.html)
+    /// 2. [PostgreSQL](https://www.postgresql.org/docs/15/sql-createfunction.html)
     /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
     CreateFunction(CreateFunction),
     /// CREATE TRIGGER
@@ -8281,7 +8281,7 @@ impl fmt::Display for FunctionDeterminismSpecifier {
 /// where within the statement, the body shows up.
 ///
 /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
-/// [Postgres]: https://www.postgresql.org/docs/15/sql-createfunction.html
+/// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -8319,7 +8319,7 @@ pub enum CreateFunctionBody {
     /// RETURN a + b;
     /// ```
     ///
-    /// [Postgres]: https://www.postgresql.org/docs/current/sql-createfunction.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/sql-createfunction.html
     Return(Expr),
 }
 
@@ -8625,9 +8625,9 @@ impl Display for CreateViewParams {
     }
 }
 
-/// Engine of DB. Some warehouse has parameters of engine, e.g. [clickhouse]
+/// Engine of DB. Some warehouse has parameters of engine, e.g. [ClickHouse]
 ///
-/// [clickhouse]: https://clickhouse.com/docs/en/engines/table-engines
+/// [ClickHouse]: https://clickhouse.com/docs/en/engines/table-engines
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

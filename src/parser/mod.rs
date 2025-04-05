@@ -3779,7 +3779,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a postgresql casting style which is in the form of `expr::datatype`.
+    /// Parse a PostgreSQL casting style which is in the form of `expr::datatype`.
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         Ok(Expr::Cast {
             kind: CastKind::DoubleColon,
@@ -4873,9 +4873,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse `CREATE FUNCTION` for [Postgres]
+    /// Parse `CREATE FUNCTION` for [PostgreSQL]
     ///
-    /// [Postgres]: https://www.postgresql.org/docs/15/sql-createfunction.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
     fn parse_postgres_create_function(
         &mut self,
         or_replace: bool,
@@ -9171,6 +9171,11 @@ impl<'a> Parser<'a> {
                         Ok(DataType::BigInt(optional_precision?))
                     }
                 }
+                Keyword::HUGEINT => Ok(DataType::HugeInt),
+                Keyword::UBIGINT => Ok(DataType::UBigInt),
+                Keyword::UHUGEINT => Ok(DataType::UHugeInt),
+                Keyword::USMALLINT => Ok(DataType::USmallInt),
+                Keyword::UTINYINT => Ok(DataType::UTinyInt),
                 Keyword::UINT8 => Ok(DataType::UInt8),
                 Keyword::UINT16 => Ok(DataType::UInt16),
                 Keyword::UINT32 => Ok(DataType::UInt32),

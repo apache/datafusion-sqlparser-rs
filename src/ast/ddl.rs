@@ -1276,9 +1276,9 @@ impl fmt::Display for IndexOption {
     }
 }
 
-/// [Postgres] unique index nulls handling option: `[ NULLS [ NOT ] DISTINCT ]`
+/// [PostgreSQL] unique index nulls handling option: `[ NULLS [ NOT ] DISTINCT ]`
 ///
-/// [Postgres]: https://www.postgresql.org/docs/17/sql-altertable.html
+/// [PostgreSQL]: https://www.postgresql.org/docs/17/sql-altertable.html
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -2175,15 +2175,15 @@ pub struct CreateFunction {
     ///
     /// IMMUTABLE | STABLE | VOLATILE
     ///
-    /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub behavior: Option<FunctionBehavior>,
     /// CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
     ///
-    /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub called_on_null: Option<FunctionCalledOnNull>,
     /// PARALLEL { UNSAFE | RESTRICTED | SAFE }
     ///
-    /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub parallel: Option<FunctionParallel>,
     /// USING ... (Hive only)
     pub using: Option<CreateFunctionUsing>,

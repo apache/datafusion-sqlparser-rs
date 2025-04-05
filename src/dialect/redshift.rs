@@ -121,4 +121,8 @@ impl Dialect for RedshiftSqlDialect {
     fn supports_array_typedef_with_brackets(&self) -> bool {
         true
     }
+
+    fn allow_extract_single_quotes(&self) -> bool {
+        true
+    }
 }

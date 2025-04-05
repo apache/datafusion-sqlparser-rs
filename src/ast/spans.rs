@@ -741,8 +741,10 @@ impl Spanned for CaseStatement {
     fn span(&self) -> Span {
         let CaseStatement {
             case_token: AttachedToken(start),
+            match_expr: _,
+            when_blocks: _,
+            else_block: _,
             end_case_token: AttachedToken(end),
-            ..
         } = self;
 
         union_spans([start.span, end.span].into_iter())
@@ -775,8 +777,8 @@ impl Spanned for ConditionalStatements {
             }
             ConditionalStatements::BeginEnd {
                 begin_token: AttachedToken(start),
+                statements: _,
                 end_token: AttachedToken(end),
-                ..
             } => union_spans([start.span, end.span].into_iter()),
         }
     }

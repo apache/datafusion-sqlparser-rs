@@ -3505,3 +3505,91 @@ fn test_alter_session() {
     );
     snowflake().one_statement_parses_to("ALTER SESSION UNSET a\nB", "ALTER SESSION UNSET a, B");
 }
+
+#[test]
+fn test_nested_join_without_parentheses() {
+    let query = "SELECT DISTINCT p.product_id 
+        FROM orders AS o
+        INNER JOIN customers AS c
+        INNER JOIN products AS p
+        ON p.customer_id = c.customer_id
+        ON c.order_id = o.order_id";
+    assert_eq!(
+        only(snowflake().verified_only_select(query).from).joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: Some(TableAlias {
+                            name: Ident {
+                                value: "c".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            },
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: Some(TableAlias {
+                                name: Ident {
+                                    value: "p".to_string(),
+                                    quote_style: None,
+                                    span: Span::empty(),
+                                },
+                                columns: vec![],
+                            }),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::Inner(JoinConstraint::On(
+                            (Expr::BinaryOp {
+                                left: Box::new(Expr::CompoundIdentifier(vec![
+                                    Ident::new("p".to_string()),
+                                    Ident::new("customer_id".to_string())
+                                ])),
+                                op: BinaryOperator::Eq,
+                                right: Box::new(Expr::CompoundIdentifier(vec![
+                                    Ident::new("c".to_string()),
+                                    Ident::new("customer_id".to_string())
+                                ])),
+                            })
+                        )),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::Inner(JoinConstraint::On(
+                (Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("c".to_string()),
+                        Ident::new("order_id".to_string())
+                    ])),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("o".to_string()),
+                        Ident::new("order_id".to_string())
+                    ])),
+                })
+            ))
+        }],
+    );
+}

@@ -14229,9 +14229,12 @@ fn parse_case_statement() {
     };
 
     assert_eq!(Some(Expr::value(number("1"))), stmt.match_expr);
-    assert_eq!(Expr::value(number("2")), stmt.when_blocks[0].condition);
-    assert_eq!(2, stmt.when_blocks[0].statements.len());
-    assert_eq!(1, stmt.else_block.unwrap().len());
+    assert_eq!(
+        Some(Expr::value(number("2"))),
+        stmt.when_blocks[0].condition
+    );
+    assert_eq!(2, stmt.when_blocks[0].statements().len());
+    assert_eq!(1, stmt.else_block.unwrap().statements().len());
 
     verified_stmt(concat!(
         "CASE 1",
@@ -14275,16 +14278,34 @@ fn parse_case_statement() {
 }
 
 #[test]
+fn test_case_statement_span() {
+    let sql = "CASE 1 WHEN 2 THEN SELECT 1; SELECT 2; ELSE SELECT 3; END CASE";
+    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
+    assert_eq!(
+        parser.parse_statement().unwrap().span(),
+        Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
+    );
+}
+
+#[test]
 fn parse_if_statement() {
+    let dialects = all_dialects_except(|d| d.is::<MsSqlDialect>());
+
     let sql = "IF 1 THEN SELECT 1; ELSEIF 2 THEN SELECT 2; ELSE SELECT 3; END IF";
-    let Statement::If(stmt) = verified_stmt(sql) else {
+    let Statement::If(IfStatement {
+        if_block,
+        elseif_blocks,
+        else_block,
+        ..
+    }) = dialects.verified_stmt(sql)
+    else {
         unreachable!()
     };
-    assert_eq!(Expr::value(number("1")), stmt.if_block.condition);
-    assert_eq!(Expr::value(number("2")), stmt.elseif_blocks[0].condition);
-    assert_eq!(1, stmt.else_block.unwrap().len());
+    assert_eq!(Some(Expr::value(number("1"))), if_block.condition);
+    assert_eq!(Some(Expr::value(number("2"))), elseif_blocks[0].condition);
+    assert_eq!(1, else_block.unwrap().statements().len());
 
-    verified_stmt(concat!(
+    dialects.verified_stmt(concat!(
         "IF 1 THEN",
         " SELECT 1;",
         " SELECT 2;",
@@ -14300,7 +14321,7 @@ fn parse_if_statement() {
         " SELECT 9;",
         " END IF"
     ));
-    verified_stmt(concat!(
+    dialects.verified_stmt(concat!(
         "IF 1 THEN",
         " SELECT 1;",
         " SELECT 2;",
@@ -14309,7 +14330,7 @@ fn parse_if_statement() {
         " SELECT 4;",
         " END IF"
     ));
-    verified_stmt(concat!(
+    dialects.verified_stmt(concat!(
         "IF 1 THEN",
         " SELECT 1;",
         " SELECT 2;",
@@ -14319,20 +14340,77 @@ fn parse_if_statement() {
         " SELECT 4;",
         " END IF"
     ));
-    verified_stmt(concat!("IF 1 THEN", " SELECT 1;", " SELECT 2;", " END IF"));
-    verified_stmt(concat!(
+    dialects.verified_stmt(concat!("IF 1 THEN", " SELECT 1;", " SELECT 2;", " END IF"));
+    dialects.verified_stmt(concat!(
         "IF (1) THEN",
         " SELECT 1;",
         " SELECT 2;",
         " END IF"
     ));
-    verified_stmt("IF 1 THEN END IF");
-    verified_stmt("IF 1 THEN SELECT 1; ELSEIF 1 THEN END IF");
+    dialects.verified_stmt("IF 1 THEN END IF");
+    dialects.verified_stmt("IF 1 THEN SELECT 1; ELSEIF 1 THEN END IF");
 
     assert_eq!(
         ParserError::ParserError("Expected: IF, found: EOF".to_string()),
-        parse_sql_statements("IF 1 THEN SELECT 1; ELSEIF 1 THEN SELECT 2; END").unwrap_err()
+        dialects
+            .parse_sql_statements("IF 1 THEN SELECT 1; ELSEIF 1 THEN SELECT 2; END")
+            .unwrap_err()
     );
+}
+
+#[test]
+fn test_if_statement_span() {
+    let sql = "IF 1=1 THEN SELECT 1; ELSEIF 1=2 THEN SELECT 2; ELSE SELECT 3; END IF";
+    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
+    assert_eq!(
+        parser.parse_statement().unwrap().span(),
+        Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
+    );
+}
+
+#[test]
+fn test_if_statement_multiline_span() {
+    let sql_line1 = "IF 1 = 1 THEN SELECT 1;";
+    let sql_line2 = "ELSEIF 1 = 2 THEN SELECT 2;";
+    let sql_line3 = "ELSE SELECT 3;";
+    let sql_line4 = "END IF";
+    let sql = [sql_line1, sql_line2, sql_line3, sql_line4].join("\n");
+    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(&sql).unwrap();
+    assert_eq!(
+        parser.parse_statement().unwrap().span(),
+        Span::new(
+            Location::new(1, 1),
+            Location::new(4, sql_line4.len() as u64 + 1)
+        )
+    );
+}
+
+#[test]
+fn test_conditional_statement_span() {
+    let sql = "IF 1=1 THEN SELECT 1; ELSEIF 1=2 THEN SELECT 2; ELSE SELECT 3; END IF";
+    let mut parser = Parser::new(&GenericDialect {}).try_with_sql(sql).unwrap();
+    match parser.parse_statement().unwrap() {
+        Statement::If(IfStatement {
+            if_block,
+            elseif_blocks,
+            else_block,
+            ..
+        }) => {
+            assert_eq!(
+                Span::new(Location::new(1, 1), Location::new(1, 21)),
+                if_block.span()
+            );
+            assert_eq!(
+                Span::new(Location::new(1, 23), Location::new(1, 47)),
+                elseif_blocks[0].span()
+            );
+            assert_eq!(
+                Span::new(Location::new(1, 49), Location::new(1, 62)),
+                else_block.unwrap().span()
+            );
+        }
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
 }
 
 #[test]

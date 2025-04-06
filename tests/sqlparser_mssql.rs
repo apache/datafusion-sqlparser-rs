@@ -23,7 +23,7 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 use sqlparser::ast::DataType::{Int, Text, Varbinary};
@@ -31,7 +31,7 @@ use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{Parser, ParserError};
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -1858,6 +1858,104 @@ fn parse_mssql_set_session_value() {
 }
 
 #[test]
+fn parse_mssql_if_else() {
+    // Simple statements and blocks
+    ms().verified_stmt("IF 1 = 1 SELECT '1'; ELSE SELECT '2';");
+    ms().verified_stmt("IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2;");
+    ms().verified_stmt(
+        "IF DATENAME(weekday, GETDATE()) IN (N'Saturday', N'Sunday') SELECT 'Weekend'; ELSE SELECT 'Weekday';"
+    );
+    ms().verified_stmt(
+        "IF (SELECT COUNT(*) FROM a.b WHERE c LIKE 'x%') > 1 SELECT 'yes'; ELSE SELECT 'No';",
+    );
+
+    // Multiple statements
+    let stmts = ms()
+        .parse_sql_statements("DECLARE @A INT; IF 1=1 BEGIN SET @A = 1 END ELSE SET @A = 2")
+        .unwrap();
+    match &stmts[..] {
+        [Statement::Declare { .. }, Statement::If(stmt)] => {
+            assert_eq!(
+                stmt.to_string(),
+                "IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2;"
+            );
+        }
+        _ => panic!("Unexpected statements: {:?}", stmts),
+    }
+}
+
+#[test]
+fn test_mssql_if_else_span() {
+    let sql = "IF 1 = 1 SELECT '1' ELSE SELECT '2'";
+    let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
+    assert_eq!(
+        parser.parse_statement().unwrap().span(),
+        Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
+    );
+}
+
+#[test]
+fn test_mssql_if_else_multiline_span() {
+    let sql_line1 = "IF 1 = 1";
+    let sql_line2 = "SELECT '1'";
+    let sql_line3 = "ELSE SELECT '2'";
+    let sql = [sql_line1, sql_line2, sql_line3].join("\n");
+    let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(&sql).unwrap();
+    assert_eq!(
+        parser.parse_statement().unwrap().span(),
+        Span::new(
+            Location::new(1, 1),
+            Location::new(3, sql_line3.len() as u64 + 1)
+        )
+    );
+}
+
+#[test]
+fn test_mssql_if_statements_span() {
+    // Simple statements
+    let mut sql = "IF 1 = 1 SELECT '1' ELSE SELECT '2'";
+    let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
+    match parser.parse_statement().unwrap() {
+        Statement::If(IfStatement {
+            if_block,
+            else_block: Some(else_block),
+            ..
+        }) => {
+            assert_eq!(
+                if_block.span(),
+                Span::new(Location::new(1, 1), Location::new(1, 20))
+            );
+            assert_eq!(
+                else_block.span(),
+                Span::new(Location::new(1, 21), Location::new(1, 36))
+            );
+        }
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Blocks
+    sql = "IF 1 = 1 BEGIN SET @A = 1; END ELSE BEGIN SET @A = 2 END";
+    parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
+    match parser.parse_statement().unwrap() {
+        Statement::If(IfStatement {
+            if_block,
+            else_block: Some(else_block),
+            ..
+        }) => {
+            assert_eq!(
+                if_block.span(),
+                Span::new(Location::new(1, 1), Location::new(1, 31))
+            );
+            assert_eq!(
+                else_block.span(),
+                Span::new(Location::new(1, 32), Location::new(1, 57))
+            );
+        }
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+}
+
+#[test]
 fn parse_mssql_varbinary_max_length() {
     let sql = "CREATE TABLE example (var_binary_col VARBINARY(MAX))";
 
@@ -1918,6 +2016,7 @@ fn parse_mssql_table_identifier_with_default_schema() {
 fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }
+
 fn ms_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
 }

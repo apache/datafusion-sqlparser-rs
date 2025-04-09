@@ -125,4 +125,8 @@ impl Dialect for RedshiftSqlDialect {
     fn allow_extract_single_quotes(&self) -> bool {
         true
     }
+
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        true
+    }
 }

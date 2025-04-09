@@ -1926,6 +1926,106 @@ fn parse_select_with_numeric_prefix_column_name() {
     }
 }
 
+#[test]
+fn parse_qualified_identifiers_with_numeric_prefix() {
+    // Case 1: Qualified column name that starts with digits.
+    mysql().verified_stmt("SELECT t.15to29 FROM my_table AS t");
+    match mysql()
+        .parse_sql_statements("SELECT t.15to29 FROM my_table AS t")
+        .unwrap()
+        .pop()
+    {
+        Some(Statement::Query(q)) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(&[Ident::new("t"), Ident::new("15to29")], &parts[..]);
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 2: Qualified column name that starts with digits and on its own represents a number.
+    mysql().verified_stmt("SELECT t.15e29 FROM my_table AS t");
+    match mysql()
+        .parse_sql_statements("SELECT t.15e29 FROM my_table AS t")
+        .unwrap()
+        .pop()
+    {
+        Some(Statement::Query(q)) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(&[Ident::new("t"), Ident::new("15e29")], &parts[..]);
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 3: Unqualified, the same token is parsed as a number.
+    match mysql()
+        .parse_sql_statements("SELECT 15e29 FROM my_table")
+        .unwrap()
+        .pop()
+    {
+        Some(Statement::Query(q)) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan { value, .. }))) => {
+                    assert_eq!(&number("15e29"), value);
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 4: Quoted simple identifier.
+    mysql().verified_stmt("SELECT `15e29` FROM my_table");
+    match mysql()
+        .parse_sql_statements("SELECT `15e29` FROM my_table")
+        .unwrap()
+        .pop()
+    {
+        Some(Statement::Query(q)) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::Identifier(name))) => {
+                    assert_eq!(&Ident::with_quote('`', "15e29"), name);
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 5: Quoted compound identifier.
+    mysql().verified_stmt("SELECT t.`15e29` FROM my_table");
+    match mysql()
+        .parse_sql_statements("SELECT t.`15e29` FROM my_table AS t")
+        .unwrap()
+        .pop()
+    {
+        Some(Statement::Query(q)) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(
+                        &[Ident::new("t"), Ident::with_quote('`', "15e29")],
+                        &parts[..]
+                    );
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+}
+
 // Don't run with bigdecimal as it fails like this on rust beta:
 //
 // 'parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column'

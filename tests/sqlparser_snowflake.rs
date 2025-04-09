@@ -3523,7 +3523,7 @@ fn test_nested_join_without_parentheses() {
     assert_eq!(
         only(
             snowflake()
-                .verified_only_select_with_canonical(query, "")
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o INNER JOIN (customers AS c INNER JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
                 .from
         )
         .joins,
@@ -3604,7 +3604,7 @@ fn test_nested_join_without_parentheses() {
     assert_eq!(
         only(
             snowflake()
-                .verified_only_select_with_canonical(query, "")
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o JOIN (customers AS c JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
                 .from
         )
         .joins,
@@ -3685,7 +3685,7 @@ fn test_nested_join_without_parentheses() {
     assert_eq!(
         only(
             snowflake()
-                .verified_only_select_with_canonical(query, "")
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o LEFT JOIN (customers AS c LEFT JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
                 .from
         )
         .joins,
@@ -3766,7 +3766,7 @@ fn test_nested_join_without_parentheses() {
     assert_eq!(
         only(
             snowflake()
-                .verified_only_select_with_canonical(query, "")
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o RIGHT JOIN (customers AS c RIGHT JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
                 .from
         )
         .joins,
@@ -3847,7 +3847,7 @@ fn test_nested_join_without_parentheses() {
     assert_eq!(
         only(
             snowflake()
-                .verified_only_select_with_canonical(query, "")
+                .verified_only_select_with_canonical(query, "SELECT DISTINCT p.product_id FROM orders AS o FULL JOIN (customers AS c FULL JOIN products AS p ON p.customer_id = c.customer_id) ON c.order_id = o.order_id")
                 .from
         )
         .joins,

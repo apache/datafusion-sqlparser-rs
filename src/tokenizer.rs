@@ -1272,7 +1272,7 @@ impl<'a> Tokenizer<'a> {
                     if self.dialect.supports_numeric_prefix() {
                         if exponent_part.is_empty() {
                             // If it is not a number with an exponent, it may be
-                            // an unqualified identifier starting with digits.
+                            // an identifier starting with digits.
                             let word =
                                 peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
 

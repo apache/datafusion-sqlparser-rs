@@ -3599,4 +3599,330 @@ fn test_nested_join_without_parentheses() {
             }))
         }],
     );
+
+    let query = "SELECT DISTINCT p.product_id FROM orders AS o JOIN customers AS c JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
+    assert_eq!(
+        only(
+            snowflake()
+                .verified_only_select_with_canonical(query, "")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: Some(TableAlias {
+                            name: Ident {
+                                value: "c".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            },
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: Some(TableAlias {
+                                name: Ident {
+                                    value: "p".to_string(),
+                                    quote_style: None,
+                                    span: Span::empty(),
+                                },
+                                columns: vec![],
+                            }),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("p".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("c".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                        })),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::Join(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("c".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("o".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+            }))
+        }],
+    );
+
+    let query = "SELECT DISTINCT p.product_id FROM orders AS o LEFT JOIN customers AS c LEFT JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
+    assert_eq!(
+        only(
+            snowflake()
+                .verified_only_select_with_canonical(query, "")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: Some(TableAlias {
+                            name: Ident {
+                                value: "c".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            },
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: Some(TableAlias {
+                                name: Ident {
+                                    value: "p".to_string(),
+                                    quote_style: None,
+                                    span: Span::empty(),
+                                },
+                                columns: vec![],
+                            }),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::Left(JoinConstraint::On(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("p".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("c".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                        })),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::Left(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("c".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("o".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+            }))
+        }],
+    );
+
+    let query = "SELECT DISTINCT p.product_id FROM orders AS o RIGHT JOIN customers AS c RIGHT JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
+    assert_eq!(
+        only(
+            snowflake()
+                .verified_only_select_with_canonical(query, "")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: Some(TableAlias {
+                            name: Ident {
+                                value: "c".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            },
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: Some(TableAlias {
+                                name: Ident {
+                                    value: "p".to_string(),
+                                    quote_style: None,
+                                    span: Span::empty(),
+                                },
+                                columns: vec![],
+                            }),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::Right(JoinConstraint::On(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("p".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("c".to_string()),
+                                Ident::new("customer_id".to_string())
+                            ])),
+                        })),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::Right(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("c".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("o".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+            }))
+        }],
+    );
+
+    let query = "SELECT DISTINCT p.product_id FROM orders AS o FULL JOIN customers AS c FULL JOIN products AS p ON p.customer_id = c.customer_id ON c.order_id = o.order_id";
+    assert_eq!(
+        only(
+            snowflake()
+                .verified_only_select_with_canonical(query, "")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::NestedJoin {
+                table_with_joins: Box::new(TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName::from(vec![Ident::new("customers".to_string())]),
+                        alias: Some(TableAlias {
+                            name: Ident {
+                                value: "c".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            },
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                        version: None,
+                        partitions: vec![],
+                        with_ordinality: false,
+                        json_path: None,
+                        sample: None,
+                        index_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName::from(vec![Ident::new("products".to_string())]),
+                            alias: Some(TableAlias {
+                                name: Ident {
+                                    value: "p".to_string(),
+                                    quote_style: None,
+                                    span: Span::empty(),
+                                },
+                                columns: vec![],
+                            }),
+                            args: None,
+                            with_hints: vec![],
+                            version: None,
+                            partitions: vec![],
+                            with_ordinality: false,
+                            json_path: None,
+                            sample: None,
+                            index_hints: vec![],
+                        },
+                        global: false,
+                        join_operator: JoinOperator::FullOuter(JoinConstraint::On(
+                            Expr::BinaryOp {
+                                left: Box::new(Expr::CompoundIdentifier(vec![
+                                    Ident::new("p".to_string()),
+                                    Ident::new("customer_id".to_string())
+                                ])),
+                                op: BinaryOperator::Eq,
+                                right: Box::new(Expr::CompoundIdentifier(vec![
+                                    Ident::new("c".to_string()),
+                                    Ident::new("customer_id".to_string())
+                                ])),
+                            }
+                        )),
+                    }]
+                }),
+                alias: None
+            },
+            global: false,
+            join_operator: JoinOperator::FullOuter(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("c".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("o".to_string()),
+                    Ident::new("order_id".to_string())
+                ])),
+            }))
+        }],
+    );
 }

@@ -11830,7 +11830,7 @@ impl<'a> Parser<'a> {
                 };
                 let mut relation = self.parse_table_factor()?;
 
-                if self.is_next_token_a_join() {
+                if self.peek_parens_less_nested_join() {
                     let joins = self.parse_joins()?;
                     relation = TableFactor::NestedJoin {
                         table_with_joins: Box::new(TableWithJoins { relation, joins }),
@@ -11850,9 +11850,9 @@ impl<'a> Parser<'a> {
         Ok(joins)
     }
 
-    fn is_next_token_a_join(&self) -> bool {
+    fn peek_parens_less_nested_join(&self) -> bool {
         matches!(
-            self.peek_token().token,
+            self.peek_token_ref().token,
             Token::Word(Word {
                 keyword: Keyword::JOIN
                     | Keyword::INNER

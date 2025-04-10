@@ -1929,13 +1929,8 @@ fn parse_select_with_numeric_prefix_column_name() {
 #[test]
 fn parse_qualified_identifiers_with_numeric_prefix() {
     // Case 1: Qualified column name that starts with digits.
-    mysql().verified_stmt("SELECT t.15to29 FROM my_table AS t");
-    match mysql()
-        .parse_sql_statements("SELECT t.15to29 FROM my_table AS t")
-        .unwrap()
-        .pop()
-    {
-        Some(Statement::Query(q)) => match *q.body {
+    match mysql().verified_stmt("SELECT t.15to29 FROM my_table AS t") {
+        Statement::Query(q) => match *q.body {
             SetExpr::Select(s) => match s.projection.last() {
                 Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
                     assert_eq!(&[Ident::new("t"), Ident::new("15to29")], &parts[..]);
@@ -1948,13 +1943,8 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
     }
 
     // Case 2: Qualified column name that starts with digits and on its own represents a number.
-    mysql().verified_stmt("SELECT t.15e29 FROM my_table AS t");
-    match mysql()
-        .parse_sql_statements("SELECT t.15e29 FROM my_table AS t")
-        .unwrap()
-        .pop()
-    {
-        Some(Statement::Query(q)) => match *q.body {
+    match mysql().verified_stmt("SELECT t.15e29 FROM my_table AS t") {
+        Statement::Query(q) => match *q.body {
             SetExpr::Select(s) => match s.projection.last() {
                 Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
                     assert_eq!(&[Ident::new("t"), Ident::new("15e29")], &parts[..]);
@@ -1985,13 +1975,8 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
     }
 
     // Case 4: Quoted simple identifier.
-    mysql().verified_stmt("SELECT `15e29` FROM my_table");
-    match mysql()
-        .parse_sql_statements("SELECT `15e29` FROM my_table")
-        .unwrap()
-        .pop()
-    {
-        Some(Statement::Query(q)) => match *q.body {
+    match mysql().verified_stmt("SELECT `15e29` FROM my_table") {
+        Statement::Query(q) => match *q.body {
             SetExpr::Select(s) => match s.projection.last() {
                 Some(SelectItem::UnnamedExpr(Expr::Identifier(name))) => {
                     assert_eq!(&Ident::with_quote('`', "15e29"), name);
@@ -2004,17 +1989,54 @@ fn parse_qualified_identifiers_with_numeric_prefix() {
     }
 
     // Case 5: Quoted compound identifier.
-    mysql().verified_stmt("SELECT t.`15e29` FROM my_table");
-    match mysql()
-        .parse_sql_statements("SELECT t.`15e29` FROM my_table AS t")
-        .unwrap()
-        .pop()
-    {
-        Some(Statement::Query(q)) => match *q.body {
+    match mysql().verified_stmt("SELECT t.`15e29` FROM my_table AS t") {
+        Statement::Query(q) => match *q.body {
             SetExpr::Select(s) => match s.projection.last() {
                 Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
                     assert_eq!(
                         &[Ident::new("t"), Ident::with_quote('`', "15e29")],
+                        &parts[..]
+                    );
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 6: Multi-level compound identifiers.
+    match mysql().verified_stmt("SELECT 1db.1table.1column") {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(
+                        &[
+                            Ident::new("1db"),
+                            Ident::new("1table"),
+                            Ident::new("1column")
+                        ],
+                        &parts[..]
+                    );
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 7: Multi-level compound quoted identifiers.
+    match mysql().verified_stmt("SELECT `1`.`2`.`3`") {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(
+                        &[
+                            Ident::with_quote('`', "1"),
+                            Ident::with_quote('`', "2"),
+                            Ident::with_quote('`', "3")
+                        ],
                         &parts[..]
                     );
                 }

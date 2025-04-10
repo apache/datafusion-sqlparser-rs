@@ -397,3 +397,8 @@ fn parse_extract_single_quotes() {
     let sql = "SELECT EXTRACT('month' FROM my_timestamp) FROM my_table";
     redshift().verified_stmt(sql);
 }
+
+#[test]
+fn parse_string_literal_backslash_escape() {
+    redshift().one_statement_parses_to(r#"SELECT 'l\'auto'"#, "SELECT 'l''auto'");
+}

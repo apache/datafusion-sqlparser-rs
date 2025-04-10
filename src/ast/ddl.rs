@@ -2157,6 +2157,10 @@ impl fmt::Display for ClusteredBy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateFunction {
+    /// True if this is a `CREATE OR ALTER FUNCTION` statement
+    ///
+    /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql?view=sql-server-ver16#or-alter)
+    pub or_alter: bool,
     pub or_replace: bool,
     pub temporary: bool,
     pub if_not_exists: bool,
@@ -2219,9 +2223,10 @@ impl fmt::Display for CreateFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "CREATE {or_replace}{temp}FUNCTION {if_not_exists}{name}",
+            "CREATE {or_alter}{or_replace}{temp}FUNCTION {if_not_exists}{name}",
             name = self.name,
             temp = if self.temporary { "TEMPORARY " } else { "" },
+            or_alter = if self.or_alter { "OR ALTER " } else { "" },
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             if_not_exists = if self.if_not_exists {
                 "IF NOT EXISTS "

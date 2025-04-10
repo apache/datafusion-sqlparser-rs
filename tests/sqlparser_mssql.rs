@@ -2036,3 +2036,78 @@ fn parse_mssql_merge_with_output() {
         OUTPUT $action, deleted.ProductID INTO dsi.temp_products";
     ms_and_generic().verified_stmt(stmt);
 }
+
+#[test]
+fn parser_mssql_go_keyword() {
+    let single_go_keyword = "USE some_database;\nGO";
+    let stmts = ms().parse_sql_statements(single_go_keyword).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(
+        stmts[1],
+        Statement::Go {
+            count: None,
+        }
+    );
+
+    let go_with_count = "SELECT 1;\nGO 5";
+    let stmts = ms().parse_sql_statements(go_with_count).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(
+        stmts[1],
+        Statement::Go {
+            count: Some(5),
+        }
+    );
+
+    let multiple_gos = "SELECT 1;\nGO 5\nSELECT 2;\n  GO";
+    let stmts = ms().parse_sql_statements(multiple_gos).unwrap();
+    assert_eq!(stmts.len(), 4);
+    assert_eq!(
+        stmts[1],
+        Statement::Go {
+            count: Some(5),
+        }
+    );
+    assert_eq!(
+        stmts[3],
+        Statement::Go {
+            count: None,
+        }
+    );
+
+    let comment_following_go = "USE some_database;\nGO -- okay";
+    let stmts = ms().parse_sql_statements(comment_following_go).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(
+        stmts[1],
+        Statement::Go {
+            count: None,
+        }
+    );
+
+    let actually_column_alias = "SELECT NULL AS GO";
+    let stmt = ms().verified_only_select(actually_column_alias);
+    assert_eq!(
+        only(stmt.projection),
+        SelectItem::ExprWithAlias {
+            expr: Expr::Value(Value::Null.with_empty_span()),
+            alias: Ident::new("GO"),
+        }
+    );
+
+    let invalid_go_position = "SELECT 1; GO";
+    let err = ms().parse_sql_statements(invalid_go_position);
+    assert!(err.is_err());
+    assert_eq!(
+        err.unwrap_err().to_string(),
+        "sql parser error: Expected: newline before GO, found: ;"
+    );
+
+    let invalid_go_count = "SELECT 1\nGO x";
+    let err = ms().parse_sql_statements(invalid_go_count);
+    assert!(err.is_err());
+    assert_eq!(
+        err.unwrap_err().to_string(),
+        "sql parser error: Expected: end of statement, found: x"
+    );
+}

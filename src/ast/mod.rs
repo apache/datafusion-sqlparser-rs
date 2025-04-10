@@ -4050,6 +4050,14 @@ pub enum Statement {
         arguments: Vec<Expr>,
         options: Vec<RaisErrorOption>,
     },
+    /// Go (SQL Server)
+    ///
+    /// GO is not a Transact-SQL statement; it is a command recognized by various tools as a batch delimiter
+    ///
+    /// See: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/sql-server-utilities-statements-go
+    Go {
+        count: Option<u64>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5736,8 +5744,14 @@ impl fmt::Display for Statement {
                     write!(f, " WITH {}", display_comma_separated(options))?;
                 }
                 Ok(())
-            }
-
+            },
+            Statement::Go { count } => {
+                write!(f, "GO")?;
+                if let Some(count) = count {
+                    write!(f, " {count}")?;
+                }
+                Ok(())
+            },
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
         }

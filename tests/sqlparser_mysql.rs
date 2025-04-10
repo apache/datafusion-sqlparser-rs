@@ -3587,3 +3587,10 @@ fn test_variable_assignment_using_colon_equal() {
         _ => panic!("Unexpected statement {stmt}"),
     }
 }
+
+#[test]
+fn parse_straight_join() {
+    mysql().verified_stmt(
+        "SELECT a.*, b.* FROM table_a AS a STRAIGHT_JOIN table_b AS b ON a.b_id = b.id",
+    );
+}

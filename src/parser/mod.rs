@@ -11826,6 +11826,10 @@ impl<'a> Parser<'a> {
                     Keyword::OUTER => {
                         return self.expected("LEFT, RIGHT, or FULL", self.peek_token());
                     }
+                    Keyword::STRAIGHT_JOIN => {
+                        let _ = self.next_token(); // consume STRAIGHT_JOIN
+                        JoinOperator::StraightJoin
+                    }
                     _ if natural => {
                         return self.expected("a join type after NATURAL", self.peek_token());
                     }

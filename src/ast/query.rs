@@ -2157,6 +2157,9 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             ),
+            JoinOperator::StraightJoin(constraint) => {
+                write!(f, " STRAIGHT_JOIN {}{}", self.relation, suffix(constraint))
+            }
         }
     }
 }
@@ -2197,6 +2200,10 @@ pub enum JoinOperator {
         match_condition: Expr,
         constraint: JoinConstraint,
     },
+    /// STRAIGHT_JOIN (non-standard)
+    ///
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/join.html>.
+    StraightJoin(JoinConstraint),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

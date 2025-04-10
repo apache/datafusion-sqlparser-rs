@@ -2523,3 +2523,73 @@ DECLARE @Y AS NVARCHAR(MAX)='y'
     assert_eq!(stmts.len(), 2);
     assert!(stmts.iter().all(|s| matches!(s, Statement::Declare { .. })));
 }
+
+#[test]
+fn parse_mssql_go_keyword() {
+    let single_go_keyword = "USE some_database;\nGO";
+    let stmts = ms().parse_sql_statements(single_go_keyword).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }),);
+
+    let go_with_count = "SELECT 1;\nGO 5";
+    let stmts = ms().parse_sql_statements(go_with_count).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(5) }));
+
+    let bare_go = "GO";
+    let stmts = ms().parse_sql_statements(bare_go).unwrap();
+    assert_eq!(stmts.len(), 1);
+    assert_eq!(stmts[0], Statement::Go(GoStatement { count: None }));
+
+    let go_then_statements = "/* whitespace */ GO\nRAISERROR('This is a test', 16, 1);";
+    let stmts = ms().parse_sql_statements(go_then_statements).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[0], Statement::Go(GoStatement { count: None }));
+    assert_eq!(
+        stmts[1],
+        Statement::RaisError {
+            message: Box::new(Expr::Value(
+                (Value::SingleQuotedString("This is a test".to_string())).with_empty_span()
+            )),
+            severity: Box::new(Expr::Value(number("16").with_empty_span())),
+            state: Box::new(Expr::Value(number("1").with_empty_span())),
+            arguments: vec![],
+            options: vec![],
+        }
+    );
+
+    let multiple_gos = "SELECT 1;\nGO 5\nSELECT 2;\n  GO";
+    let stmts = ms().parse_sql_statements(multiple_gos).unwrap();
+    assert_eq!(stmts.len(), 4);
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(5) }));
+    assert_eq!(stmts[3], Statement::Go(GoStatement { count: None }));
+
+    let comment_following_go = "USE some_database;\nGO -- okay";
+    let stmts = ms().parse_sql_statements(comment_following_go).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
+    let actually_column_alias = "SELECT NULL AS GO";
+    let stmt = ms().verified_only_select(actually_column_alias);
+    assert_eq!(
+        only(stmt.projection),
+        SelectItem::ExprWithAlias {
+            expr: Expr::Value(Value::Null.with_empty_span()),
+            alias: Ident::new("GO"),
+        }
+    );
+
+    let invalid_go_position = "SELECT 1; GO";
+    let err = ms().parse_sql_statements(invalid_go_position);
+    assert_eq!(
+        err.unwrap_err().to_string(),
+        "sql parser error: Expected: newline before GO, found: ;"
+    );
+
+    let invalid_go_count = "SELECT 1\nGO x";
+    let err = ms().parse_sql_statements(invalid_go_count);
+    assert_eq!(
+        err.unwrap_err().to_string(),
+        "sql parser error: Expected: end of statement, found: x"
+    );
+}

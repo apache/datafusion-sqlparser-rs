@@ -188,6 +188,145 @@ fn parse_mssql_create_procedure() {
 }
 
 #[test]
+fn parse_create_function() {
+    let return_expression_function = "CREATE FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) RETURNS INT AS BEGIN RETURN 1 END";
+    assert_eq!(
+        ms().verified_stmt(return_expression_function),
+        sqlparser::ast::Statement::CreateFunction(CreateFunction {
+            or_replace: false,
+            temporary: false,
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident {
+                value: "some_scalar_udf".into(),
+                quote_style: None,
+                span: Span::empty(),
+            }]),
+            args: Some(vec![
+                OperateFunctionArg {
+                    mode: None,
+                    name: Some(Ident {
+                        value: "@foo".into(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }),
+                    data_type: DataType::Int(None),
+                    default_expr: None,
+                },
+                OperateFunctionArg {
+                    mode: None,
+                    name: Some(Ident {
+                        value: "@bar".into(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }),
+                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                        length: 256,
+                        unit: None
+                    })),
+                    default_expr: None,
+                },
+            ]),
+            return_type: Some(DataType::Int(None)),
+            function_body: Some(CreateFunctionBody::MultiStatement(vec![
+                Statement::Return(ReturnStatement {
+                    value: Some(ReturnStatementValue::Expr(Expr::Value((number("1")).with_empty_span()))),
+                }),
+            ])),
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            using: None,
+            language: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        }),
+    );
+
+    let multi_statement_function = "\
+        CREATE FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS INT \
+        AS \
+        BEGIN \
+            SET @foo = @foo + 1; \
+            RETURN @foo \
+        END\
+    ";
+    assert_eq!(
+        ms().verified_stmt(multi_statement_function),
+        sqlparser::ast::Statement::CreateFunction(CreateFunction {
+            or_replace: false,
+            temporary: false,
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident {
+                value: "some_scalar_udf".into(),
+                quote_style: None,
+                span: Span::empty(),
+            }]),
+            args: Some(vec![
+                OperateFunctionArg {
+                    mode: None,
+                    name: Some(Ident {
+                        value: "@foo".into(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }),
+                    data_type: DataType::Int(None),
+                    default_expr: None,
+                },
+                OperateFunctionArg {
+                    mode: None,
+                    name: Some(Ident {
+                        value: "@bar".into(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }),
+                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                        length: 256,
+                        unit: None
+                    })),
+                    default_expr: None,
+                },
+            ]),
+            return_type: Some(DataType::Int(None)),
+            function_body: Some(CreateFunctionBody::MultiStatement(vec![
+                Statement::Set(Set::SingleAssignment {
+                    scope: None,
+                    hivevar: false,
+                    variable: ObjectName::from(vec!["@foo".into()]),
+                    values: vec![sqlparser::ast::Expr::BinaryOp {
+                        left: Box::new(sqlparser::ast::Expr::Identifier(Ident {
+                            value: "@foo".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })),
+                        op: sqlparser::ast::BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(
+                            (Value::Number("1".into(), false)).with_empty_span()
+                        )),
+                    }],
+                }),
+                Statement::Return(ReturnStatement {
+                    value: Some(ReturnStatementValue::Expr(Expr::Identifier(Ident {
+                        value: "@foo".into(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    }))),
+                }),
+            ])),
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            using: None,
+            language: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        }),
+    );
+}
+
+#[test]
 fn parse_mssql_apply_join() {
     let _ = ms_and_generic().verified_only_select(
         "SELECT * FROM sys.dm_exec_query_stats AS deqs \

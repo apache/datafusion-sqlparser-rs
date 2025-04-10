@@ -3614,6 +3614,7 @@ pub enum Statement {
     /// 1. [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction)
     /// 2. [PostgreSQL](https://www.postgresql.org/docs/15/sql-createfunction.html)
     /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
+    /// 4. [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql)
     CreateFunction(CreateFunction),
     /// CREATE TRIGGER
     ///
@@ -4060,6 +4061,12 @@ pub enum Statement {
     ///
     /// See: <https://learn.microsoft.com/en-us/sql/t-sql/statements/print-transact-sql>
     Print(PrintStatement),
+    /// ```sql
+    /// RETURN [ expression ]
+    /// ```
+    ///
+    /// See [ReturnStatement]
+    Return(ReturnStatement),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5752,6 +5759,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Print(s) => write!(f, "{s}"),
+            Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
         }
@@ -8354,6 +8362,7 @@ impl fmt::Display for FunctionDeterminismSpecifier {
 ///
 /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
 /// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
+/// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -8382,6 +8391,22 @@ pub enum CreateFunctionBody {
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
     AsAfterOptions(Expr),
+    /// Function body with statements before the `RETURN` keyword.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION my_scalar_udf(a INT, b INT)
+    /// RETURNS INT
+    /// AS
+    /// BEGIN
+    ///     DECLARE c INT;
+    ///     SET c = a + b;
+    ///     RETURN c;
+    /// END
+    /// ```
+    ///
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
+    MultiStatement(Vec<Statement>),
     /// Function body expression using the 'RETURN' keyword.
     ///
     /// Example:
@@ -9228,6 +9253,41 @@ impl fmt::Display for PrintStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "PRINT {}", self.message)
     }
+}
+
+/// Return (MsSql)
+///
+/// for Functions:
+/// RETURN scalar_expression
+///
+/// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql>
+///
+/// for Triggers:
+/// RETURN
+///
+/// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ReturnStatement {
+    pub value: Option<ReturnStatementValue>,
+}
+
+impl fmt::Display for ReturnStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.value {
+            Some(ReturnStatementValue::Expr(expr)) => write!(f, "RETURN {}", expr),
+            None => write!(f, "RETURN"),
+        }
+    }
+}
+
+/// Variants of a `RETURN` statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ReturnStatementValue {
+    Expr(Expr),
 }
 
 #[cfg(test)]

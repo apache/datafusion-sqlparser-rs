@@ -577,13 +577,7 @@ impl<'a> Parser<'a> {
                 Keyword::GRANT => self.parse_grant(),
                 Keyword::REVOKE => self.parse_revoke(),
                 Keyword::START => self.parse_start_transaction(),
-                // `BEGIN` is a nonstandard but common alias for the
-                // standard `START TRANSACTION` statement. It is supported
-                // by at least PostgreSQL and MySQL.
                 Keyword::BEGIN => self.parse_begin(),
-                // `END` is a nonstandard but common alias for the
-                // standard `COMMIT TRANSACTION` statement. It is supported
-                // by PostgreSQL.
                 Keyword::END => self.parse_end(),
                 Keyword::SAVEPOINT => self.parse_savepoint(),
                 Keyword::RELEASE => self.parse_release(),
@@ -618,6 +612,7 @@ impl<'a> Parser<'a> {
                 // `COMMENT` is snowflake specific https://docs.snowflake.com/en/sql-reference/sql/comment
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
                 Keyword::PRINT => self.parse_print(),
+                Keyword::RETURN => self.parse_return(),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -4880,6 +4875,8 @@ impl<'a> Parser<'a> {
             self.parse_create_macro(or_replace, temporary)
         } else if dialect_of!(self is BigQueryDialect) {
             self.parse_bigquery_create_function(or_replace, temporary)
+        } else if dialect_of!(self is MsSqlDialect) {
+            self.parse_mssql_create_function(or_replace, temporary)
         } else {
             self.prev_token();
             self.expected("an object type after CREATE", self.peek_token())
@@ -5127,6 +5124,72 @@ impl<'a> Parser<'a> {
             determinism_specifier,
             options,
             remote_connection,
+            using: None,
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+        }))
+    }
+
+    /// Parse `CREATE FUNCTION` for [MsSql]
+    ///
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
+    fn parse_mssql_create_function(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+
+        let parse_function_param =
+            |parser: &mut Parser| -> Result<OperateFunctionArg, ParserError> {
+                let name = parser.parse_identifier()?;
+                let data_type = parser.parse_data_type()?;
+                Ok(OperateFunctionArg {
+                    mode: None,
+                    name: Some(name),
+                    data_type,
+                    default_expr: None,
+                })
+            };
+        self.expect_token(&Token::LParen)?;
+        let args = self.parse_comma_separated0(parse_function_param, Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
+
+        let return_type = if self.parse_keyword(Keyword::RETURNS) {
+            Some(self.parse_data_type()?)
+        } else {
+            return parser_err!("Expected RETURNS keyword", self.peek_token().span.start);
+        };
+
+        self.expect_keyword_is(Keyword::AS)?;
+        self.expect_keyword_is(Keyword::BEGIN)?;
+        let mut result = self.parse_statements()?;
+        // note: `parse_statements` will consume the `END` token & produce a Commit statement...
+        if let Some(Statement::Commit {
+            chain,
+            end,
+            modifier,
+        }) = result.last()
+        {
+            if *chain == false && *end == true && *modifier == None {
+                result = result[..result.len() - 1].to_vec();
+            }
+        }
+        let function_body = Some(CreateFunctionBody::MultiStatement(result));
+
+        Ok(Statement::CreateFunction(CreateFunction {
+            or_replace,
+            temporary,
+            if_not_exists: false,
+            name,
+            args: Some(args),
+            return_type,
+            function_body,
+            language: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
             using: None,
             behavior: None,
             called_on_null: None,
@@ -15061,6 +15124,14 @@ impl<'a> Parser<'a> {
     fn parse_print(&mut self) -> Result<Statement, ParserError> {
         Ok(Statement::Print(PrintStatement {
             message: Box::new(self.parse_expr()?),
+        }))
+    }
+
+    /// Parse [Statement::Return]
+    fn parse_return(&mut self) -> Result<Statement, ParserError> {
+        let expr = self.parse_expr()?;
+        Ok(Statement::Return(ReturnStatement {
+            value: Some(ReturnStatementValue::Expr(expr)),
         }))
     }
 

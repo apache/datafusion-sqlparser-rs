@@ -1714,6 +1714,42 @@ impl<'a> Parser<'a> {
                 && self.peek_token_ref().token == Token::LBracket
             {
                 self.parse_multi_dim_subscript(&mut chain)?;
+            } else if self.dialect.supports_numeric_prefix() {
+                // When we get a Word or Number token while parsing a compound expression that
+                // starts with a dot (.), and using a dialect that supports identifiers with numeric
+                // prefixes, these tokens are part of qualified, unquoted identifiers and must be
+                // split up accordingly.
+                match self.peek_token_ref() {
+                    TokenWithSpan {
+                        token: Token::Word(w),
+                        span,
+                    } if w.value.starts_with(".") => {
+                        let ident = w.value[1..].to_string();
+                        let new_span = Span::new(
+                            Location::new(span.start.line, span.start.column + 1),
+                            span.end,
+                        );
+                        let expr = Expr::Identifier(Ident::with_span(new_span, ident));
+                        chain.push(AccessExpr::Dot(expr));
+                        self.advance_token();
+                    }
+                    TokenWithSpan {
+                        token: Token::Number(n, _),
+                        span,
+                    } if n.to_string().starts_with(".") => {
+                        let ident = n.to_string()[1..].to_string();
+                        let new_span = Span::new(
+                            Location::new(span.start.line, span.start.column + 1),
+                            span.end,
+                        );
+                        let expr = Expr::Identifier(Ident::with_span(new_span, ident));
+                        chain.push(AccessExpr::Dot(expr));
+                        self.advance_token();
+                    }
+                    _ => {
+                        break;
+                    }
+                }
             } else {
                 break;
             }

@@ -25,9 +25,9 @@ use matches::assert_matches;
 use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
-use sqlparser::parser::{ParserError, ParserOptions};
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use sqlparser::tokenizer::Span;
-use sqlparser::tokenizer::Token;
+use sqlparser::tokenizer::{Location, Token};
 use test_utils::*;
 
 #[macro_use]
@@ -1923,6 +1923,59 @@ fn parse_select_with_numeric_prefix_column_name() {
             );
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_qualified_identifiers_with_numeric_prefix_span() {
+    match Parser::new(&MySqlDialect {})
+        .try_with_sql("SELECT t.15to29 FROM my_table AS t")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(
+                        Span::new(Location::new(1, 8), Location::new(1, 9)),
+                        parts[0].span,
+                    );
+                    assert_eq!(
+                        Span::new(Location::new(1, 10), Location::new(1, 16)),
+                        parts[1].span,
+                    );
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    match Parser::new(&MySqlDialect {})
+        .try_with_sql("SELECT t.15e29 FROM my_table AS t")
+        .unwrap()
+        .parse_statement()
+        .unwrap()
+    {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(
+                        Span::new(Location::new(1, 8), Location::new(1, 9)),
+                        parts[0].span,
+                    );
+                    assert_eq!(
+                        Span::new(Location::new(1, 10), Location::new(1, 15)),
+                        parts[1].span,
+                    );
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
     }
 }
 

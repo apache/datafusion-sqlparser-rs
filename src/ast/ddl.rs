@@ -2272,6 +2272,13 @@ impl fmt::Display for CreateFunction {
         if let Some(CreateFunctionBody::AsAfterOptions(function_body)) = &self.function_body {
             write!(f, " AS {function_body}")?;
         }
+        if let Some(CreateFunctionBody::MultiStatement(statements)) = &self.function_body {
+            write!(
+                f,
+                " AS BEGIN {function_body} END",
+                function_body = display_separated(statements, "; ")
+            )?;
+        }
         Ok(())
     }
 }

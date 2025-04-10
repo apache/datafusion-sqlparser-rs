@@ -3610,6 +3610,7 @@ pub enum Statement {
     /// 1. [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction)
     /// 2. [PostgreSQL](https://www.postgresql.org/docs/15/sql-createfunction.html)
     /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
+    /// 4. [SQL Server](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql)
     CreateFunction(CreateFunction),
     /// CREATE TRIGGER
     ///
@@ -4049,6 +4050,16 @@ pub enum Statement {
         state: Box<Expr>,
         arguments: Vec<Expr>,
         options: Vec<RaisErrorOption>,
+    },
+    /// Return (SQL Server)
+    ///
+    /// for Functions:
+    /// RETURN
+    /// RETURN scalar_expression
+    /// RETURN select_statement
+    /// See: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
+    Return {
+        value: Option<Box<Expr>>,
     },
 }
 
@@ -5736,7 +5747,14 @@ impl fmt::Display for Statement {
                     write!(f, " WITH {}", display_comma_separated(options))?;
                 }
                 Ok(())
-            }
+            },
+            Statement::Return { value } => {
+                write!(f, "RETURN")?;
+                if let Some(value) = value {
+                    write!(f, " {value}")?;
+                }
+                Ok(())
+            },
 
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
@@ -8340,6 +8358,7 @@ impl fmt::Display for FunctionDeterminismSpecifier {
 ///
 /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
 /// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
+/// [SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -8368,6 +8387,22 @@ pub enum CreateFunctionBody {
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
     AsAfterOptions(Expr),
+    /// Function body with statements before the `RETURN` keyword.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION my_scalar_udf(a INT, b INT)
+    /// RETURNS INT
+    /// AS
+    /// BEGIN
+    ///     DECLARE c INT;
+    ///     SET c = a + b;
+    ///     RETURN c;
+    /// END;
+    /// ```
+    ///
+    /// [SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
+    MultiStatement(Vec<Statement>),
     /// Function body expression using the 'RETURN' keyword.
     ///
     /// Example:

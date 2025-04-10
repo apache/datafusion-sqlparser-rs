@@ -2201,6 +2201,8 @@ pub enum JoinOperator {
         constraint: JoinConstraint,
     },
     /// STRAIGHT_JOIN (non-standard)
+    ///
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/join.html>.
     StraightJoin(JoinConstraint),
 }
 

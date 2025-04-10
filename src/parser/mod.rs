@@ -4566,7 +4566,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
-            self.parse_create_function(or_replace, temporary)
+            self.parse_create_function(or_alter, or_replace, temporary)
         } else if self.parse_keyword(Keyword::TRIGGER) {
             self.parse_create_trigger(or_replace, false)
         } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
@@ -4875,6 +4875,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_create_function(
         &mut self,
+        or_alter: bool,
         or_replace: bool,
         temporary: bool,
     ) -> Result<Statement, ParserError> {
@@ -4887,7 +4888,7 @@ impl<'a> Parser<'a> {
         } else if dialect_of!(self is BigQueryDialect) {
             self.parse_bigquery_create_function(or_replace, temporary)
         } else if dialect_of!(self is MsSqlDialect) {
-            self.parse_mssql_create_function(or_replace, temporary)
+            self.parse_mssql_create_function(or_alter, or_replace, temporary)
         } else {
             self.prev_token();
             self.expected("an object type after CREATE", self.peek_token())
@@ -5002,6 +5003,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Statement::CreateFunction(CreateFunction {
+            or_alter: false,
             or_replace,
             temporary,
             name,
@@ -5035,6 +5037,7 @@ impl<'a> Parser<'a> {
         let using = self.parse_optional_create_function_using()?;
 
         Ok(Statement::CreateFunction(CreateFunction {
+            or_alter: false,
             or_replace,
             temporary,
             name,
@@ -5124,6 +5127,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::CreateFunction(CreateFunction {
+            or_alter: false,
             or_replace,
             temporary,
             if_not_exists,
@@ -5147,6 +5151,7 @@ impl<'a> Parser<'a> {
     /// [SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
     fn parse_mssql_create_function(
         &mut self,
+        or_alter: bool,
         or_replace: bool,
         temporary: bool,
     ) -> Result<Statement, ParserError> {
@@ -5179,6 +5184,7 @@ impl<'a> Parser<'a> {
         self.expect_keyword_is(Keyword::END)?;
 
         Ok(Statement::CreateFunction(CreateFunction {
+            or_alter,
             or_replace,
             temporary,
             if_not_exists: false,

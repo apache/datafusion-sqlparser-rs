@@ -3603,7 +3603,7 @@ pub enum Statement {
         managed_location: Option<String>,
     },
     /// ```sql
-    /// CREATE FUNCTION
+    /// CREATE [OR ALTER] FUNCTION
     /// ```
     ///
     /// Supported variants:

@@ -2733,6 +2733,15 @@ fn parse_create_brin() {
     }
 }
 
+
+#[test]
+fn parse_create_inherits() {
+    let sql = "CREATE TABLE child_table (child_column INT) INHERITS (parent_table);";
+    match pg().verified_stmt(sql) {
+        _ => unreachable!(),
+    }
+}
+
 #[test]
 fn parse_create_index_concurrently() {
     let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";

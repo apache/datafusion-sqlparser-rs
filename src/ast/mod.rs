@@ -23,7 +23,10 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use helpers::{attached_token::AttachedToken, stmt_data_loading::FileStagingCommand};
+use helpers::{
+    attached_token::AttachedToken,
+    stmt_data_loading::{FileStagingCommand, StageLoadSelectItemKind},
+};
 
 use core::ops::Deref;
 use core::{
@@ -92,7 +95,7 @@ pub use self::value::{
 };
 
 use crate::ast::helpers::key_value_options::KeyValueOptions;
-use crate::ast::helpers::stmt_data_loading::{StageLoadSelectItem, StageParamsObject};
+use crate::ast::helpers::stmt_data_loading::StageParamsObject;
 
 #[cfg(feature = "visitor")]
 pub use visitor::*;
@@ -2988,10 +2991,11 @@ pub enum Statement {
     CopyIntoSnowflake {
         kind: CopyIntoSnowflakeKind,
         into: ObjectName,
+        into_columns: Option<Vec<Ident>>,
         from_obj: Option<ObjectName>,
         from_obj_alias: Option<Ident>,
         stage_params: StageParamsObject,
-        from_transformations: Option<Vec<StageLoadSelectItem>>,
+        from_transformations: Option<Vec<StageLoadSelectItemKind>>,
         from_query: Option<Box<Query>>,
         files: Option<Vec<String>>,
         pattern: Option<String>,
@@ -5583,6 +5587,7 @@ impl fmt::Display for Statement {
             Statement::CopyIntoSnowflake {
                 kind,
                 into,
+                into_columns,
                 from_obj,
                 from_obj_alias,
                 stage_params,
@@ -5596,6 +5601,9 @@ impl fmt::Display for Statement {
                 partition,
             } => {
                 write!(f, "COPY INTO {}", into)?;
+                if let Some(into_columns) = into_columns {
+                    write!(f, " ({})", display_comma_separated(into_columns))?;
+                }
                 if let Some(from_transformations) = from_transformations {
                     // Data load with transformation
                     if let Some(from_stage) = from_obj {

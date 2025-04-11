@@ -182,6 +182,11 @@ pub struct CreateTable {
     /// BigQuery: Table options list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     pub options: Option<Vec<SqlOption>>,
+    /// Postgres `INHERITs` clause, which contains the list of tables from which
+    /// the new table inherits.
+    /// <https://www.postgresql.org/docs/current/ddl-inherit.html>
+    /// <https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-PARMS-INHERITS>
+    pub inherits: Option<Vec<ObjectName>>,
     /// SQLite "STRICT" clause.
     /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
     /// then strict typing rules apply to that table.
@@ -404,6 +409,9 @@ impl Display for CreateTable {
         }
         if let Some(order_by) = &self.order_by {
             write!(f, " ORDER BY {}", order_by)?;
+        }
+        if let Some(inherits) = &self.inherits {
+            write!(f, " INHERITS ({})", display_comma_separated(inherits))?;
         }
         if let Some(partition_by) = self.partition_by.as_ref() {
             write!(f, " PARTITION BY {partition_by}")?;

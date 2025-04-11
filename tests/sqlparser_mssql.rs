@@ -2053,3 +2053,20 @@ fn parse_drop_trigger() {
         }
     );
 }
+
+#[test]
+fn parse_print() {
+    let print_string_literal = "PRINT 'Hello, world!'";
+    let print_stmt = ms().verified_stmt(print_string_literal);
+    assert_eq!(
+        print_stmt,
+        Statement::Print(PrintStatement {
+            message: Box::new(Expr::Value(
+                (Value::SingleQuotedString("Hello, world!".to_string())).with_empty_span()
+            )),
+        })
+    );
+
+    let _ = ms().verified_stmt("PRINT N'Hello, ⛄️!'");
+    let _ = ms().verified_stmt("PRINT @my_variable");
+}

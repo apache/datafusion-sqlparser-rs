@@ -580,10 +580,12 @@ impl<'a> Parser<'a> {
                 // `BEGIN` is a nonstandard but common alias for the
                 // standard `START TRANSACTION` statement. It is supported
                 // by at least PostgreSQL and MySQL.
+                // `BEGIN` is also used for multi-statement blocks in SQL Server
                 Keyword::BEGIN => self.parse_begin(),
                 // `END` is a nonstandard but common alias for the
                 // standard `COMMIT TRANSACTION` statement. It is supported
                 // by PostgreSQL.
+                // `END` is also used for multi-statement blocks in SQL Server
                 Keyword::END => self.parse_end(),
                 Keyword::SAVEPOINT => self.parse_savepoint(),
                 Keyword::RELEASE => self.parse_release(),
@@ -617,6 +619,9 @@ impl<'a> Parser<'a> {
                 }
                 // `COMMENT` is snowflake specific https://docs.snowflake.com/en/sql-reference/sql/comment
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
+                Keyword::RETURN if dialect_of!(self is MsSqlDialect) => {
+                    self.parse_return()
+                },
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -4561,7 +4566,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
-            self.parse_create_function(or_replace, temporary)
+            self.parse_create_function(or_alter, or_replace, temporary)
         } else if self.parse_keyword(Keyword::TRIGGER) {
             self.parse_create_trigger(or_replace, false)
         } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
@@ -4870,6 +4875,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_create_function(
         &mut self,
+        or_alter: bool,
         or_replace: bool,
         temporary: bool,
     ) -> Result<Statement, ParserError> {
@@ -4881,6 +4887,8 @@ impl<'a> Parser<'a> {
             self.parse_create_macro(or_replace, temporary)
         } else if dialect_of!(self is BigQueryDialect) {
             self.parse_bigquery_create_function(or_replace, temporary)
+        } else if dialect_of!(self is MsSqlDialect) {
+            self.parse_mssql_create_function(or_alter, or_replace, temporary)
         } else {
             self.prev_token();
             self.expected("an object type after CREATE", self.peek_token())
@@ -4995,6 +5003,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Statement::CreateFunction(CreateFunction {
+            or_alter: false,
             or_replace,
             temporary,
             name,
@@ -5028,6 +5037,7 @@ impl<'a> Parser<'a> {
         let using = self.parse_optional_create_function_using()?;
 
         Ok(Statement::CreateFunction(CreateFunction {
+            or_alter: false,
             or_replace,
             temporary,
             name,
@@ -5117,6 +5127,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::CreateFunction(CreateFunction {
+            or_alter: false,
             or_replace,
             temporary,
             if_not_exists,
@@ -5128,6 +5139,63 @@ impl<'a> Parser<'a> {
             determinism_specifier,
             options,
             remote_connection,
+            using: None,
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+        }))
+    }
+
+    /// Parse `CREATE FUNCTION` for [SQL Server]
+    ///
+    /// [SQL Server]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
+    fn parse_mssql_create_function(
+        &mut self,
+        or_alter: bool,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+
+        let parse_function_param =
+            |parser: &mut Parser| -> Result<OperateFunctionArg, ParserError> {
+                let name = parser.parse_identifier()?;
+                let data_type = parser.parse_data_type()?;
+                Ok(OperateFunctionArg {
+                    mode: None,
+                    name: Some(name),
+                    data_type,
+                    default_expr: None,
+                })
+            };
+        self.expect_token(&Token::LParen)?;
+        let args = self.parse_comma_separated0(parse_function_param, Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
+
+        let return_type = if self.parse_keyword(Keyword::RETURNS) {
+            Some(self.parse_data_type()?)
+        } else {
+            None
+        };
+
+        self.expect_keyword_is(Keyword::AS)?;
+        self.expect_keyword_is(Keyword::BEGIN)?;
+        let function_body = Some(CreateFunctionBody::MultiStatement(self.parse_statements()?));
+        self.expect_keyword_is(Keyword::END)?;
+
+        Ok(Statement::CreateFunction(CreateFunction {
+            or_alter,
+            or_replace,
+            temporary,
+            if_not_exists: false,
+            name,
+            args: Some(args),
+            return_type,
+            function_body,
+            language: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
             using: None,
             behavior: None,
             called_on_null: None,
@@ -15019,6 +15087,13 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    fn parse_return(&mut self) -> Result<Statement, ParserError> {
+        let expr = self.parse_expr()?;
+        Ok(Statement::Return {
+            value: Some(Box::new(expr)),
+        })
     }
 
     /// Consume the parser and return its underlying token buffer

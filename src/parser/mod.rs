@@ -5317,9 +5317,13 @@ impl<'a> Parser<'a> {
         or_replace: bool,
         is_constraint: bool,
     ) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect) {
+        if !dialect_of!(self is PostgreSqlDialect | GenericDialect | MySqlDialect | MsSqlDialect) {
             self.prev_token();
             return self.expected("an object type after CREATE", self.peek_token());
+        }
+
+        if dialect_of!(self is MsSqlDialect) {
+            return self.parse_mssql_create_trigger(or_replace, is_constraint);
         }
 
         let name = self.parse_object_name(false)?;
@@ -5374,18 +5378,73 @@ impl<'a> Parser<'a> {
             trigger_object,
             include_each,
             condition,
-            exec_body,
+            exec_body: Some(exec_body),
+            statements: None,
             characteristics,
+        })
+    }
+
+    /// Parse `CREATE TRIGGER` for [MsSql]
+    ///
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql
+    pub fn parse_mssql_create_trigger(
+        &mut self,
+        or_replace: bool,
+        is_constraint: bool,
+    ) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_keyword_is(Keyword::ON)?;
+        let table_name = self.parse_object_name(false)?;
+        let period = self.parse_trigger_period()?;
+        let events = self.parse_comma_separated(Parser::parse_trigger_event)?;
+
+        self.expect_keyword_is(Keyword::AS)?;
+
+        let trigger_statements_body = if self.peek_keyword(Keyword::BEGIN) {
+            let begin_token = self.expect_keyword(Keyword::BEGIN)?;
+            let statements = self.parse_statement_list(&[Keyword::END])?;
+            let end_token = self.expect_keyword(Keyword::END)?;
+
+            BeginEndStatements {
+                begin_token: AttachedToken(begin_token),
+                statements,
+                end_token: AttachedToken(end_token),
+            }
+        } else {
+            BeginEndStatements {
+                begin_token: AttachedToken::empty(),
+                statements: vec![self.parse_statement()?],
+                end_token: AttachedToken::empty(),
+            }
+        };
+
+        Ok(Statement::CreateTrigger {
+            or_replace,
+            is_constraint,
+            name,
+            period,
+            events,
+            table_name,
+            referenced_table_name: None,
+            referencing: Vec::new(),
+            trigger_object: TriggerObject::Statement,
+            include_each: false,
+            condition: None,
+            exec_body: None,
+            statements: Some(trigger_statements_body),
+            characteristics: None,
         })
     }
 
     pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {
         Ok(
             match self.expect_one_of_keywords(&[
+                Keyword::FOR,
                 Keyword::BEFORE,
                 Keyword::AFTER,
                 Keyword::INSTEAD,
             ])? {
+                Keyword::FOR => TriggerPeriod::For,
                 Keyword::BEFORE => TriggerPeriod::Before,
                 Keyword::AFTER => TriggerPeriod::After,
                 Keyword::INSTEAD => self

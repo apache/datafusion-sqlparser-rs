@@ -110,6 +110,7 @@ impl fmt::Display for TriggerEvent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerPeriod {
+    For,
     After,
     Before,
     InsteadOf,
@@ -118,6 +119,7 @@ pub enum TriggerPeriod {
 impl fmt::Display for TriggerPeriod {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            TriggerPeriod::For => write!(f, "FOR"),
             TriggerPeriod::After => write!(f, "AFTER"),
             TriggerPeriod::Before => write!(f, "BEFORE"),
             TriggerPeriod::InsteadOf => write!(f, "INSTEAD OF"),

@@ -475,6 +475,12 @@ impl<'a> Parser<'a> {
                     if expecting_statement_delimiter && word.keyword == Keyword::END {
                         break;
                     }
+                    // Treat batch delimiter as an end of statement
+                    if expecting_statement_delimiter && dialect_of!(self is MsSqlDialect) {
+                        if let Some(Statement::Go { count: _ }) = stmts.last() {
+                            expecting_statement_delimiter = false;
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -617,6 +623,9 @@ impl<'a> Parser<'a> {
                 }
                 // `COMMENT` is snowflake specific https://docs.snowflake.com/en/sql-reference/sql/comment
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
+                Keyword::GO if dialect_of!(self is MsSqlDialect) => {
+                    self.parse_go()
+                },
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -15019,6 +15028,48 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    fn parse_go(&mut self) -> Result<Statement, ParserError> {
+        // previous token should be a newline (skipping non-newline whitespace)
+        // see also, `previous_token`
+        let mut look_back_count = 2;
+        loop {
+            let prev_token = self.token_at(self.index.saturating_sub(look_back_count));
+            match prev_token.token {
+                Token::Whitespace(ref w) => match w {
+                    Whitespace::Newline => break,
+                    _ => look_back_count += 1,
+                },
+                _ => self.expected("newline before GO", prev_token.clone())?,
+            };
+        }
+
+        let count = loop {
+            // using this peek function because we want to halt this statement parsing upon newline
+            let next_token = self.peek_token_no_skip();
+            match next_token.token {
+                Token::EOF => break None::<u64>,
+                Token::Whitespace(ref w) => match w {
+                    Whitespace::Newline => break None,
+                    _ => _ = self.next_token_no_skip(),
+                },
+                Token::Number(s, _) => {
+                    let value = Some(Self::parse::<u64>(s, next_token.span.start)?);
+                    self.advance_token();
+                    break value;
+                },
+                _ => self.expected("literal int or newline", next_token)?,
+            };
+        };
+
+        if self.peek_token().token == Token::SemiColon {
+            parser_err!("GO may not end with a semicolon", self.peek_token().span.start)?;
+        }
+
+        Ok(Statement::Go {
+            count,
+        })
     }
 
     /// Consume the parser and return its underlying token buffer

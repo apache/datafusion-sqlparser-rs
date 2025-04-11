@@ -2212,7 +2212,7 @@ fn parse_mssql_merge_with_output() {
 #[test]
 fn parse_create_trigger() {
     let create_trigger = "\
-        CREATE TRIGGER reminder1 \
+        CREATE OR ALTER TRIGGER reminder1 \
         ON Sales.Customer \
         AFTER INSERT, UPDATE \
         AS RAISERROR('Notify Customer Relations', 16, 10);\
@@ -2221,6 +2221,7 @@ fn parse_create_trigger() {
     assert_eq!(
         create_stmt,
         Statement::CreateTrigger {
+            or_alter: true,
             or_replace: false,
             is_constraint: false,
             name: ObjectName::from(vec![Ident::new("reminder1")]),

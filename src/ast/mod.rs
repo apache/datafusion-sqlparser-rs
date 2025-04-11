@@ -3736,6 +3736,10 @@ pub enum Statement {
     /// Postgres: <https://www.postgresql.org/docs/current/sql-createtrigger.html>
     /// SQL Server: <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql>
     CreateTrigger {
+        /// True if this is a `CREATE OR ALTER TRIGGER` statement
+        ///
+        /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql?view=sql-server-ver16#arguments)
+        or_alter: bool,
         /// The `OR REPLACE` clause is used to re-create the trigger if it already exists.
         ///
         /// Example:
@@ -4595,6 +4599,7 @@ impl fmt::Display for Statement {
             }
             Statement::CreateFunction(create_function) => create_function.fmt(f),
             Statement::CreateTrigger {
+                or_alter,
                 or_replace,
                 is_constraint,
                 name,
@@ -4612,7 +4617,8 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{is_constraint}TRIGGER {name} ",
+                    "CREATE {or_alter}{or_replace}{is_constraint}TRIGGER {name} ",
+                    or_alter = if *or_alter { "OR ALTER " } else { "" },
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     is_constraint = if *is_constraint { "CONSTRAINT " } else { "" },
                 )?;

@@ -2224,7 +2224,21 @@ fn parse_in_subquery() {
     assert_eq!(
         Expr::InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
-            subquery: Box::new(verified_query("SELECT segm FROM bar")),
+            subquery: verified_query("SELECT segm FROM bar").body,
+            negated: false,
+        },
+        select.selection.unwrap()
+    );
+}
+
+#[test]
+fn parse_in_union() {
+    let sql = "SELECT * FROM customers WHERE segment IN ((SELECT segm FROM bar) UNION (SELECT segm FROM bar2))";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        Expr::InSubquery {
+            expr: Box::new(Expr::Identifier(Ident::new("segment"))),
+            subquery: verified_query("(SELECT segm FROM bar) UNION (SELECT segm FROM bar2)").body,
             negated: false,
         },
         select.selection.unwrap()

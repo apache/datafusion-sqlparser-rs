@@ -350,6 +350,7 @@ impl Spanned for Statement {
             } => source.span(),
             Statement::CopyIntoSnowflake {
                 into: _,
+                into_columns: _,
                 from_obj: _,
                 from_obj_alias: _,
                 stage_params: _,

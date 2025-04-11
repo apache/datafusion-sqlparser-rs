@@ -20,7 +20,7 @@
 //! generic dialect is also tested (on the inputs it can handle).
 
 use sqlparser::ast::helpers::key_value_options::{KeyValueOption, KeyValueOptionType};
-use sqlparser::ast::helpers::stmt_data_loading::StageLoadSelectItem;
+use sqlparser::ast::helpers::stmt_data_loading::{StageLoadSelectItem, StageLoadSelectItemKind};
 use sqlparser::ast::*;
 use sqlparser::dialect::{Dialect, GenericDialect, SnowflakeDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
@@ -2256,7 +2256,7 @@ fn test_copy_into_with_files_and_pattern_and_verification() {
 fn test_copy_into_with_transformations() {
     let sql = concat!(
         "COPY INTO my_company.emp_basic FROM ",
-        "(SELECT t1.$1:st AS st, $1:index, t2.$1 FROM @schema.general_finished AS T) ",
+        "(SELECT t1.$1:st AS st, $1:index, t2.$1, 4, '5' AS const_str FROM @schema.general_finished AS T) ",
         "FILES = ('file1.json', 'file2.json') ",
         "PATTERN = '.*employees0[1-5].csv.gz' ",
         "VALIDATION_MODE = RETURN_7_ROWS"
@@ -2277,35 +2277,55 @@ fn test_copy_into_with_transformations() {
             );
             assert_eq!(
                 from_transformations.as_ref().unwrap()[0],
-                StageLoadSelectItem {
+                StageLoadSelectItemKind::StageLoadSelectItem(StageLoadSelectItem {
                     alias: Some(Ident::new("t1")),
                     file_col_num: 1,
                     element: Some(Ident::new("st")),
                     item_as: Some(Ident::new("st"))
-                }
+                })
             );
             assert_eq!(
                 from_transformations.as_ref().unwrap()[1],
-                StageLoadSelectItem {
+                StageLoadSelectItemKind::StageLoadSelectItem(StageLoadSelectItem {
                     alias: None,
                     file_col_num: 1,
                     element: Some(Ident::new("index")),
                     item_as: None
-                }
+                })
             );
             assert_eq!(
                 from_transformations.as_ref().unwrap()[2],
-                StageLoadSelectItem {
+                StageLoadSelectItemKind::StageLoadSelectItem(StageLoadSelectItem {
                     alias: Some(Ident::new("t2")),
                     file_col_num: 1,
                     element: None,
                     item_as: None
-                }
+                })
+            );
+            assert_eq!(
+                from_transformations.as_ref().unwrap()[3],
+                StageLoadSelectItemKind::SelectItem(SelectItem::UnnamedExpr(Expr::Value(
+                    Value::Number("4".parse().unwrap(), false).into()
+                )))
+            );
+            assert_eq!(
+                from_transformations.as_ref().unwrap()[4],
+                StageLoadSelectItemKind::SelectItem(SelectItem::ExprWithAlias {
+                    expr: Expr::Value(Value::SingleQuotedString("5".parse().unwrap()).into()),
+                    alias: Ident::new("const_str".to_string())
+                })
             );
         }
         _ => unreachable!(),
     }
     assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+
+    // Test optional AS keyword to denote an alias for the stage
+    let sql1 = concat!(
+        "COPY INTO my_company.emp_basic FROM ",
+        "(SELECT t1.$1:st AS st, $1:index, t2.$1, 4, '5' AS const_str FROM @schema.general_finished T) "
+    );
+    snowflake().parse_sql_statements(sql1).unwrap();
 }
 
 #[test]

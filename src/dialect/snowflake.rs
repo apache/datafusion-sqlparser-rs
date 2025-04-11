@@ -878,14 +878,10 @@ fn parse_select_items_for_data_load(
                 parser.parse_select_item()?,
             )),
         }
-        match parser.next_token().token {
-            Token::Comma => {
-                // continue
-            }
-            _ => {
-                parser.prev_token(); // need to move back
-                break;
-            }
+        if matches!(parser.peek_token_ref().token, Token::Comma) {
+            parser.advance_token();
+        } else {
+            break;
         }
     }
     Ok(Some(select_items))

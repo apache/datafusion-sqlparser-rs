@@ -7079,9 +7079,7 @@ impl<'a> Parser<'a> {
     fn parse_optional_create_table_config(
         &mut self,
     ) -> Result<CreateTableConfiguration, ParserError> {
-        let inherits = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
-            && self.parse_keyword(Keyword::INHERITS)
-        {
+        let inherits = if self.parse_keyword(Keyword::INHERITS) {
             Some(self.parse_parenthesized_qualified_column_list(IsOptional::Mandatory, false)?)
         } else {
             None

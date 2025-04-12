@@ -2761,9 +2761,11 @@ fn parse_create_table_with_inherits() {
 }
 
 #[test]
-#[should_panic]
 fn parse_create_table_with_empty_inherits_fails() {
-    pg().verified_stmt("CREATE TABLE child_table (child_column INT) INHERITS ()");
+    assert!(matches!(
+        pg().parse_sql_statements("CREATE TABLE child_table (child_column INT) INHERITS ()"),
+        Err(ParserError::ParserError(_))
+    ));
 }
 
 #[test]

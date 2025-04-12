@@ -7050,6 +7050,7 @@ impl<'a> Parser<'a> {
             .partition_by(create_table_config.partition_by)
             .cluster_by(create_table_config.cluster_by)
             .options(create_table_config.options)
+            .inherits(create_table_config.inherits)
             .primary_key(primary_key)
             .strict(strict)
             .build())
@@ -7070,13 +7071,20 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse configuration like partitioning, clustering information during the table creation.
+    /// Parse configuration like inheritance, partitioning, clustering information during the table creation.
     ///
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_2)
-    /// [PostgreSQL](https://www.postgresql.org/docs/current/ddl-partitioning.html)
+    /// [PostgreSQL Partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html)
+    /// [PostgreSQL Inheritance](https://www.postgresql.org/docs/current/ddl-inherit.html)
     fn parse_optional_create_table_config(
         &mut self,
     ) -> Result<CreateTableConfiguration, ParserError> {
+        let inherits = if self.parse_keyword(Keyword::INHERITS) {
+            Some(self.parse_parenthesized_qualified_column_list(IsOptional::Mandatory, false)?)
+        } else {
+            None
+        };
+
         let partition_by = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
             && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
         {
@@ -7105,6 +7113,7 @@ impl<'a> Parser<'a> {
             partition_by,
             cluster_by,
             options,
+            inherits,
         })
     }
 

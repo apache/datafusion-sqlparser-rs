@@ -581,6 +581,7 @@ impl Spanned for CreateTable {
             cluster_by: _,                      // todo, BigQuery specific
             clustered_by: _,                    // todo, Hive specific
             options: _,                         // todo, BigQuery specific
+            inherits: _,                        // todo, PostgreSQL specific
             strict: _,                          // bool
             copy_grants: _,                     // bool
             enable_schema_evolution: _,         // bool

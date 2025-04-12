@@ -2734,6 +2734,41 @@ fn parse_create_brin() {
 }
 
 #[test]
+fn parse_create_table_with_inherits() {
+    let single_inheritance_sql =
+        "CREATE TABLE child_table (child_column INT) INHERITS (public.parent_table)";
+    match pg().verified_stmt(single_inheritance_sql) {
+        Statement::CreateTable(CreateTable {
+            inherits: Some(inherits),
+            ..
+        }) => {
+            assert_eq_vec(&["public", "parent_table"], &inherits[0].0);
+        }
+        _ => unreachable!(),
+    }
+
+    let double_inheritance_sql = "CREATE TABLE child_table (child_column INT) INHERITS (public.parent_table, pg_catalog.pg_settings)";
+    match pg().verified_stmt(double_inheritance_sql) {
+        Statement::CreateTable(CreateTable {
+            inherits: Some(inherits),
+            ..
+        }) => {
+            assert_eq_vec(&["public", "parent_table"], &inherits[0].0);
+            assert_eq_vec(&["pg_catalog", "pg_settings"], &inherits[1].0);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_empty_inherits_fails() {
+    assert!(matches!(
+        pg().parse_sql_statements("CREATE TABLE child_table (child_column INT) INHERITS ()"),
+        Err(ParserError::ParserError(_))
+    ));
+}
+
+#[test]
 fn parse_create_index_concurrently() {
     let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
     match pg().verified_stmt(sql) {
@@ -5426,6 +5461,7 @@ fn parse_trigger_related_functions() {
             cluster_by: None,
             clustered_by: None,
             options: None,
+            inherits: None,
             strict: false,
             copy_grants: false,
             enable_schema_evolution: None,

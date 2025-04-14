@@ -2036,3 +2036,18 @@ fn parse_mssql_merge_with_output() {
         OUTPUT $action, deleted.ProductID INTO dsi.temp_products";
     ms_and_generic().verified_stmt(stmt);
 }
+
+#[test]
+fn parse_drop_trigger() {
+    let sql_drop_trigger = "DROP TRIGGER emp_stamp;";
+    let drop_stmt = ms().one_statement_parses_to(sql_drop_trigger, "");
+    assert_eq!(
+        drop_stmt,
+        Statement::DropTrigger {
+            if_exists: false,
+            trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+            table_name: None,
+            option: None,
+        }
+    );
+}

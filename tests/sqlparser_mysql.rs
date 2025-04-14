@@ -3716,3 +3716,9 @@ fn parse_straight_join() {
         "SELECT a.*, b.* FROM table_a AS a STRAIGHT_JOIN table_b AS b ON a.b_id = b.id",
     );
 }
+
+#[test]
+fn parse_straight_join_without_alias() {
+    mysql()
+        .verified_stmt("SELECT a.*, b.* FROM table_a STRAIGHT_JOIN table_b AS b ON a.b_id = b.id");
+}

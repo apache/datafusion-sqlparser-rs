@@ -2593,3 +2593,77 @@ fn parse_mssql_go_keyword() {
         "sql parser error: Expected: end of statement, found: x"
     );
 }
+
+#[test]
+fn test_mssql_if_and_go() {
+    let sql = r#"
+        IF 1 = 2
+            SELECT 3;
+        GO
+    "#;
+    let statements = ms().parse_sql_statements(sql).unwrap();
+    assert_eq!(2, statements.len());
+    assert_eq!(
+        statements[0],
+        Statement::If(IfStatement {
+            if_block: ConditionalStatementBlock {
+                start_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "IF".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::IF
+                    }
+                ))),
+                condition: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Value((number("1")).with_empty_span())),
+                    op: sqlparser::ast::BinaryOperator::Eq,
+                    right: Box::new(Expr::Value((number("2")).with_empty_span())),
+                }),
+                then_token: None,
+                conditional_statements: ConditionalStatements::Sequence {
+                    statements: vec![Statement::Query(Box::new(Query {
+                        with: None,
+                        limit_clause: None,
+                        fetch: None,
+                        locks: vec![],
+                        for_clause: None,
+                        order_by: None,
+                        settings: None,
+                        format_clause: None,
+                        pipe_operators: vec![],
+                        body: Box::new(SetExpr::Select(Box::new(Select {
+                            select_token: AttachedToken::empty(),
+                            distinct: None,
+                            top: None,
+                            top_before_distinct: false,
+                            projection: vec![SelectItem::UnnamedExpr(Expr::Value(
+                                (number("3")).with_empty_span()
+                            ))],
+                            exclude: None,
+                            into: None,
+                            from: vec![],
+                            lateral_views: vec![],
+                            prewhere: None,
+                            selection: None,
+                            group_by: GroupByExpr::Expressions(vec![], vec![]),
+                            cluster_by: vec![],
+                            distribute_by: vec![],
+                            sort_by: vec![],
+                            having: None,
+                            named_window: vec![],
+                            window_before_qualify: false,
+                            qualify: None,
+                            value_table_mode: None,
+                            connect_by: None,
+                            flavor: SelectFlavor::Standard,
+                        }))),
+                    }))],
+                },
+            },
+            elseif_blocks: vec![],
+            else_block: None,
+            end_token: None,
+        })
+    );
+    assert_eq!(statements[1], Statement::Go(GoStatement { count: None }));
+}

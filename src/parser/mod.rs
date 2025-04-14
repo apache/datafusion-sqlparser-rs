@@ -495,12 +495,6 @@ impl<'a> Parser<'a> {
                     if expecting_statement_delimiter && word.keyword == Keyword::END {
                         break;
                     }
-                    // Treat batch delimiter as an end of statement
-                    if expecting_statement_delimiter && dialect_of!(self is MsSqlDialect) {
-                        if let Some(Statement::Go(GoStatement { count: _ })) = stmts.last() {
-                            expecting_statement_delimiter = false;
-                        }
-                    }
                 }
                 _ => {}
             }
@@ -517,6 +511,8 @@ impl<'a> Parser<'a> {
                     // parsing the statement sequence consumes the statement delimiter, so it shouldn't be expected here
                     ConditionalStatements::Sequence { .. } => false,
                 },
+                // Treat batch delimiter as an end of statement, so no additional statement delimiter expected here
+                Statement::Go(_) => false,
                 _ => true,
             };
             stmts.push(statement);

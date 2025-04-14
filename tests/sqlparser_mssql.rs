@@ -23,7 +23,8 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::{Location, Span};
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Location, Span, TokenWithSpan};
 use test_utils::*;
 
 use sqlparser::ast::DataType::{Int, Text, Varbinary};
@@ -325,6 +326,89 @@ fn parse_create_function() {
             options: None,
             remote_connection: None,
         }),
+    );
+
+    let create_function_with_conditional = r#"
+        CREATE FUNCTION some_scalar_udf()
+        RETURNS INT
+        AS
+        BEGIN
+            IF 1=2
+            BEGIN
+                RETURN 1;
+            END
+
+            RETURN 0;
+        END
+    "#;
+    let create_stmt = ms().one_statement_parses_to(create_function_with_conditional, "");
+    assert_eq!(
+        create_stmt,
+        Statement::CreateFunction(CreateFunction {
+            or_alter: false,
+            or_replace: false,
+            temporary: false,
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident {
+                value: "some_scalar_udf".into(),
+                quote_style: None,
+                span: Span::empty(),
+            }]),
+            args: Some(vec![]),
+            return_type: Some(DataType::Int(None)),
+            function_body: Some(CreateFunctionBody::MultiStatement(vec![
+                Statement::If(IfStatement {
+                    if_block: ConditionalStatementBlock {
+                        start_token: AttachedToken(TokenWithSpan::wrap(
+                            sqlparser::tokenizer::Token::Word(sqlparser::tokenizer::Word {
+                                value: "IF".to_string(),
+                                quote_style: None,
+                                keyword: Keyword::IF
+                            })
+                        )),
+                        condition: Some(Expr::BinaryOp {
+                            left: Box::new(Expr::Value(
+                                Value::Number("1".to_string(), false).with_empty_span()
+                            )),
+                            op: sqlparser::ast::BinaryOperator::Eq,
+                            right: Box::new(Expr::Value(Value::Number("2".to_string(), false).with_empty_span())),
+                        }),
+                           then_token: None,
+                           conditional_statements: ConditionalStatements::BeginEnd {
+                            begin_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(sqlparser::tokenizer::Word {
+                                value: "BEGIN".to_string(),
+                                quote_style: None,
+                                keyword: Keyword::BEGIN
+                            }))),
+                            statements: vec![Statement::Return(ReturnStatement {
+                                value: Some(ReturnStatementValue::Expr(Expr::Value((number("1")).with_empty_span()))),
+                            })],
+                            end_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(sqlparser::tokenizer::Word {
+                                value: "END".to_string(),
+                                quote_style: None,
+                                keyword: Keyword::END
+                            }))),
+                        },
+                    },
+                    elseif_blocks: vec![],
+                    else_block: None,
+                    end_token: None,
+                }),
+                Statement::Return(ReturnStatement {
+                    value: Some(ReturnStatementValue::Expr(Expr::Value(
+                        (number("0")).with_empty_span()
+                    ))),
+                }),
+            ])),
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            using: None,
+            language: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        })
     );
 }
 

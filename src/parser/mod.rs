@@ -11712,6 +11712,11 @@ impl<'a> Parser<'a> {
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_TABLE_ALIAS`, otherwise they may be parsed as
         // a table alias.
+        let joins = self.parse_joins()?;
+        Ok(TableWithJoins { relation, joins })
+    }
+
+    fn parse_joins(&mut self) -> Result<Vec<Join>, ParserError> {
         let mut joins = vec![];
         loop {
             let global = self.parse_keyword(Keyword::GLOBAL);
@@ -11844,7 +11849,16 @@ impl<'a> Parser<'a> {
                     }
                     _ => break,
                 };
-                let relation = self.parse_table_factor()?;
+                let mut relation = self.parse_table_factor()?;
+
+                if self.peek_parens_less_nested_join() {
+                    let joins = self.parse_joins()?;
+                    relation = TableFactor::NestedJoin {
+                        table_with_joins: Box::new(TableWithJoins { relation, joins }),
+                        alias: None,
+                    };
+                }
+
                 let join_constraint = self.parse_join_constraint(natural)?;
                 Join {
                     relation,
@@ -11854,7 +11868,21 @@ impl<'a> Parser<'a> {
             };
             joins.push(join);
         }
-        Ok(TableWithJoins { relation, joins })
+        Ok(joins)
+    }
+
+    fn peek_parens_less_nested_join(&self) -> bool {
+        matches!(
+            self.peek_token_ref().token,
+            Token::Word(Word {
+                keyword: Keyword::JOIN
+                    | Keyword::INNER
+                    | Keyword::LEFT
+                    | Keyword::RIGHT
+                    | Keyword::FULL,
+                ..
+            })
+        )
     }
 
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`

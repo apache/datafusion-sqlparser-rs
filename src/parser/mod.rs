@@ -5062,22 +5062,7 @@ impl<'a> Parser<'a> {
         temporary: bool,
     ) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let name = self.parse_object_name(false)?;
-
-        let parse_function_param =
-            |parser: &mut Parser| -> Result<OperateFunctionArg, ParserError> {
-                let name = parser.parse_identifier()?;
-                let data_type = parser.parse_data_type()?;
-                Ok(OperateFunctionArg {
-                    mode: None,
-                    name: Some(name),
-                    data_type,
-                    default_expr: None,
-                })
-            };
-        self.expect_token(&Token::LParen)?;
-        let args = self.parse_comma_separated0(parse_function_param, Token::RParen)?;
-        self.expect_token(&Token::RParen)?;
+        let (name, args) = self.parse_create_function_name_and_params()?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
             Some(self.parse_data_type()?)
@@ -5152,22 +5137,7 @@ impl<'a> Parser<'a> {
         or_replace: bool,
         temporary: bool,
     ) -> Result<Statement, ParserError> {
-        let name = self.parse_object_name(false)?;
-
-        let parse_function_param =
-            |parser: &mut Parser| -> Result<OperateFunctionArg, ParserError> {
-                let name = parser.parse_identifier()?;
-                let data_type = parser.parse_data_type()?;
-                Ok(OperateFunctionArg {
-                    mode: None,
-                    name: Some(name),
-                    data_type,
-                    default_expr: None,
-                })
-            };
-        self.expect_token(&Token::LParen)?;
-        let args = self.parse_comma_separated0(parse_function_param, Token::RParen)?;
-        self.expect_token(&Token::RParen)?;
+        let (name, args) = self.parse_create_function_name_and_params()?;
 
         let return_type = if self.parse_keyword(Keyword::RETURNS) {
             Some(self.parse_data_type()?)
@@ -5205,6 +5175,27 @@ impl<'a> Parser<'a> {
             called_on_null: None,
             parallel: None,
         }))
+    }
+
+    fn parse_create_function_name_and_params(
+        &mut self,
+    ) -> Result<(ObjectName, Vec<OperateFunctionArg>), ParserError> {
+        let name = self.parse_object_name(false)?;
+        let parse_function_param =
+            |parser: &mut Parser| -> Result<OperateFunctionArg, ParserError> {
+                let name = parser.parse_identifier()?;
+                let data_type = parser.parse_data_type()?;
+                Ok(OperateFunctionArg {
+                    mode: None,
+                    name: Some(name),
+                    data_type,
+                    default_expr: None,
+                })
+            };
+        self.expect_token(&Token::LParen)?;
+        let args = self.parse_comma_separated0(parse_function_param, Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
+        Ok((name, args))
     }
 
     fn parse_function_arg(&mut self) -> Result<OperateFunctionArg, ParserError> {

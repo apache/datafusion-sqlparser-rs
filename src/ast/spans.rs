@@ -779,11 +779,9 @@ impl Spanned for ConditionalStatements {
             ConditionalStatements::Sequence { statements } => {
                 union_spans(statements.iter().map(|s| s.span()))
             }
-            ConditionalStatements::BeginEnd {
-                begin_token: AttachedToken(start),
-                statements: _,
-                end_token: AttachedToken(end),
-            } => union_spans([start.span, end.span].into_iter()),
+            ConditionalStatements::BeginEnd(bes) => {
+                union_spans([bes.begin_token.0.span, bes.end_token.0.span].into_iter())
+            }
         }
     }
 }

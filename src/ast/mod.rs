@@ -2292,18 +2292,14 @@ pub enum ConditionalStatements {
     /// SELECT 1; SELECT 2; SELECT 3; ...
     Sequence { statements: Vec<Statement> },
     /// BEGIN SELECT 1; SELECT 2; SELECT 3; ... END
-    BeginEnd {
-        begin_token: AttachedToken,
-        statements: Vec<Statement>,
-        end_token: AttachedToken,
-    },
+    BeginEnd(BeginEndStatements),
 }
 
 impl ConditionalStatements {
     pub fn statements(&self) -> &Vec<Statement> {
         match self {
             ConditionalStatements::Sequence { statements } => statements,
-            ConditionalStatements::BeginEnd { statements, .. } => statements,
+            ConditionalStatements::BeginEnd(bes) => &bes.statements,
         }
     }
 }
@@ -2317,12 +2313,34 @@ impl fmt::Display for ConditionalStatements {
                 }
                 Ok(())
             }
-            ConditionalStatements::BeginEnd { statements, .. } => {
-                write!(f, "BEGIN ")?;
-                format_statement_list(f, statements)?;
-                write!(f, " END")
-            }
+            ConditionalStatements::BeginEnd(bes) => write!(f, "{}", bes),
         }
+    }
+}
+
+/// A shared representation of `BEGIN`, multiple statements, and `END` tokens.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct BeginEndStatements {
+    pub begin_token: AttachedToken,
+    pub statements: Vec<Statement>,
+    pub end_token: AttachedToken,
+}
+
+impl fmt::Display for BeginEndStatements {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let BeginEndStatements {
+            begin_token: AttachedToken(begin_token),
+            statements,
+            end_token: AttachedToken(end_token),
+        } = self;
+
+        write!(f, "{begin_token} ")?;
+        if !statements.is_empty() {
+            format_statement_list(f, statements)?;
+        }
+        write!(f, " {end_token}")
     }
 }
 
@@ -8406,7 +8424,7 @@ pub enum CreateFunctionBody {
     /// ```
     ///
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
-    MultiStatement(Vec<Statement>),
+    AsBeginEnd(BeginEndStatements),
     /// Function body expression using the 'RETURN' keyword.
     ///
     /// Example:

@@ -4453,9 +4453,17 @@ impl<'a> Parser<'a> {
                     break;
                 }
             }
-
             values.push(self.parse_statement()?);
-            self.expect_token(&Token::SemiColon)?;
+
+            let semi_colon_expected = match values.last() {
+                Some(Statement::If(if_statement)) => if_statement.end_token.is_some(),
+                Some(_) => true,
+                None => false,
+            };
+
+            if semi_colon_expected {
+                self.expect_token(&Token::SemiColon)?;
+            }
         }
         Ok(values)
     }
@@ -5168,20 +5176,16 @@ impl<'a> Parser<'a> {
         };
 
         self.expect_keyword_is(Keyword::AS)?;
-        self.expect_keyword_is(Keyword::BEGIN)?;
-        let mut result = self.parse_statements()?;
-        // note: `parse_statements` will consume the `END` token & produce a Commit statement...
-        if let Some(Statement::Commit {
-            chain,
-            end,
-            modifier,
-        }) = result.last()
-        {
-            if *chain == false && *end == true && *modifier == None {
-                result = result[..result.len() - 1].to_vec();
-            }
-        }
-        let function_body = Some(CreateFunctionBody::MultiStatement(result));
+
+        let begin_token = self.expect_keyword(Keyword::BEGIN)?;
+        let statements = self.parse_statement_list(&[Keyword::END])?;
+        let end_token = self.expect_keyword(Keyword::END)?;
+
+        let function_body = Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+            begin_token: AttachedToken(begin_token),
+            statements,
+            end_token: AttachedToken(end_token),
+        }));
 
         Ok(Statement::CreateFunction(CreateFunction {
             or_alter,

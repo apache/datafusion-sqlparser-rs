@@ -190,7 +190,7 @@ fn parse_mssql_create_procedure() {
 
 #[test]
 fn parse_create_function() {
-    let return_expression_function = "CREATE FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) RETURNS INT AS BEGIN RETURN 1 END";
+    let return_expression_function = "CREATE FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) RETURNS INT AS BEGIN RETURN 1; END";
     assert_eq!(
         ms().verified_stmt(return_expression_function),
         sqlparser::ast::Statement::CreateFunction(CreateFunction {
@@ -229,11 +229,27 @@ fn parse_create_function() {
                 },
             ]),
             return_type: Some(DataType::Int(None)),
-            function_body: Some(CreateFunctionBody::MultiStatement(vec![
-                Statement::Return(ReturnStatement {
-                    value: Some(ReturnStatementValue::Expr(Expr::Value((number("1")).with_empty_span()))),
-                }),
-            ])),
+            function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "BEGIN".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::BEGIN
+                    }
+                ))),
+                statements: vec![Statement::Return(ReturnStatement {
+                    value: Some(ReturnStatementValue::Expr(Expr::Value(
+                        (number("1")).with_empty_span()
+                    ))),
+                }),],
+                end_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "END".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::END
+                    }
+                ))),
+            })),
             behavior: None,
             called_on_null: None,
             parallel: None,
@@ -251,7 +267,7 @@ fn parse_create_function() {
         AS \
         BEGIN \
             SET @foo = @foo + 1; \
-            RETURN @foo \
+            RETURN @foo; \
         END\
     ";
     assert_eq!(
@@ -292,31 +308,45 @@ fn parse_create_function() {
                 },
             ]),
             return_type: Some(DataType::Int(None)),
-            function_body: Some(CreateFunctionBody::MultiStatement(vec![
-                Statement::Set(Set::SingleAssignment {
-                    scope: None,
-                    hivevar: false,
-                    variable: ObjectName::from(vec!["@foo".into()]),
-                    values: vec![sqlparser::ast::Expr::BinaryOp {
-                        left: Box::new(sqlparser::ast::Expr::Identifier(Ident {
-                            value: "@foo".to_string(),
+            function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "BEGIN".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::BEGIN
+                    }
+                ))),
+                statements: vec![
+                    Statement::Set(Set::SingleAssignment {
+                        scope: None,
+                        hivevar: false,
+                        variable: ObjectName::from(vec!["@foo".into()]),
+                        values: vec![sqlparser::ast::Expr::BinaryOp {
+                            left: Box::new(sqlparser::ast::Expr::Identifier(Ident {
+                                value: "@foo".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            })),
+                            op: sqlparser::ast::BinaryOperator::Plus,
+                            right: Box::new(Expr::Value(number("1").with_empty_span())),
+                        }],
+                    }),
+                    Statement::Return(ReturnStatement {
+                        value: Some(ReturnStatementValue::Expr(Expr::Identifier(Ident {
+                            value: "@foo".into(),
                             quote_style: None,
                             span: Span::empty(),
-                        })),
-                        op: sqlparser::ast::BinaryOperator::Plus,
-                        right: Box::new(Expr::Value(
-                            (Value::Number("1".into(), false)).with_empty_span()
-                        )),
-                    }],
-                }),
-                Statement::Return(ReturnStatement {
-                    value: Some(ReturnStatementValue::Expr(Expr::Identifier(Ident {
-                        value: "@foo".into(),
+                        }))),
+                    }),
+                ],
+                end_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "END".to_string(),
                         quote_style: None,
-                        span: Span::empty(),
-                    }))),
-                }),
-            ])),
+                        keyword: Keyword::END
+                    }
+                ))),
+            })),
             behavior: None,
             called_on_null: None,
             parallel: None,
@@ -356,50 +386,76 @@ fn parse_create_function() {
             }]),
             args: Some(vec![]),
             return_type: Some(DataType::Int(None)),
-            function_body: Some(CreateFunctionBody::MultiStatement(vec![
-                Statement::If(IfStatement {
-                    if_block: ConditionalStatementBlock {
-                        start_token: AttachedToken(TokenWithSpan::wrap(
-                            sqlparser::tokenizer::Token::Word(sqlparser::tokenizer::Word {
-                                value: "IF".to_string(),
-                                quote_style: None,
-                                keyword: Keyword::IF
-                            })
-                        )),
-                        condition: Some(Expr::BinaryOp {
-                            left: Box::new(Expr::Value(
-                                Value::Number("1".to_string(), false).with_empty_span()
+            function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "BEGIN".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::BEGIN
+                    }
+                ))),
+                statements: vec![
+                    Statement::If(IfStatement {
+                        if_block: ConditionalStatementBlock {
+                            start_token: AttachedToken(TokenWithSpan::wrap(
+                                sqlparser::tokenizer::Token::Word(sqlparser::tokenizer::Word {
+                                    value: "IF".to_string(),
+                                    quote_style: None,
+                                    keyword: Keyword::IF
+                                })
                             )),
-                            op: sqlparser::ast::BinaryOperator::Eq,
-                            right: Box::new(Expr::Value(Value::Number("2".to_string(), false).with_empty_span())),
-                        }),
-                           then_token: None,
-                           conditional_statements: ConditionalStatements::BeginEnd {
-                            begin_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(sqlparser::tokenizer::Word {
-                                value: "BEGIN".to_string(),
-                                quote_style: None,
-                                keyword: Keyword::BEGIN
-                            }))),
-                            statements: vec![Statement::Return(ReturnStatement {
-                                value: Some(ReturnStatementValue::Expr(Expr::Value((number("1")).with_empty_span()))),
-                            })],
-                            end_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(sqlparser::tokenizer::Word {
-                                value: "END".to_string(),
-                                quote_style: None,
-                                keyword: Keyword::END
-                            }))),
+                            condition: Some(Expr::BinaryOp {
+                                left: Box::new(Expr::Value(number("1").with_empty_span())),
+                                op: sqlparser::ast::BinaryOperator::Eq,
+                                right: Box::new(Expr::Value(number("2").with_empty_span())),
+                            }),
+                            then_token: None,
+                            conditional_statements: ConditionalStatements::BeginEnd(
+                                BeginEndStatements {
+                                    begin_token: AttachedToken(TokenWithSpan::wrap(
+                                        sqlparser::tokenizer::Token::Word(
+                                            sqlparser::tokenizer::Word {
+                                                value: "BEGIN".to_string(),
+                                                quote_style: None,
+                                                keyword: Keyword::BEGIN
+                                            }
+                                        )
+                                    )),
+                                    statements: vec![Statement::Return(ReturnStatement {
+                                        value: Some(ReturnStatementValue::Expr(Expr::Value(
+                                            (number("1")).with_empty_span()
+                                        ))),
+                                    })],
+                                    end_token: AttachedToken(TokenWithSpan::wrap(
+                                        sqlparser::tokenizer::Token::Word(
+                                            sqlparser::tokenizer::Word {
+                                                value: "END".to_string(),
+                                                quote_style: None,
+                                                keyword: Keyword::END
+                                            }
+                                        )
+                                    )),
+                                }
+                            ),
                         },
-                    },
-                    elseif_blocks: vec![],
-                    else_block: None,
-                    end_token: None,
-                }),
-                Statement::Return(ReturnStatement {
-                    value: Some(ReturnStatementValue::Expr(Expr::Value(
-                        (number("0")).with_empty_span()
-                    ))),
-                }),
-            ])),
+                        elseif_blocks: vec![],
+                        else_block: None,
+                        end_token: None,
+                    }),
+                    Statement::Return(ReturnStatement {
+                        value: Some(ReturnStatementValue::Expr(Expr::Value(
+                            (number("0")).with_empty_span()
+                        ))),
+                    }),
+                ],
+                end_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "END".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::END
+                    }
+                ))),
+            })),
             behavior: None,
             called_on_null: None,
             parallel: None,
@@ -420,7 +476,7 @@ fn parse_mssql_create_function() {
         AS \
         BEGIN \
             SET @foo = @foo + 1; \
-            RETURN @foo \
+            RETURN @foo; \
         END\
     ";
     assert_eq!(
@@ -461,31 +517,45 @@ fn parse_mssql_create_function() {
                 },
             ]),
             return_type: Some(DataType::Int(None)),
-            function_body: Some(CreateFunctionBody::MultiStatement(vec![
-                Statement::Set(Set::SingleAssignment {
-                    scope: None,
-                    hivevar: false,
-                    variable: ObjectName::from(vec!["@foo".into()]),
-                    values: vec![sqlparser::ast::Expr::BinaryOp {
-                        left: Box::new(sqlparser::ast::Expr::Identifier(Ident {
-                            value: "@foo".to_string(),
+            function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "BEGIN".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::BEGIN
+                    }
+                ))),
+                statements: vec![
+                    Statement::Set(Set::SingleAssignment {
+                        scope: None,
+                        hivevar: false,
+                        variable: ObjectName::from(vec!["@foo".into()]),
+                        values: vec![sqlparser::ast::Expr::BinaryOp {
+                            left: Box::new(sqlparser::ast::Expr::Identifier(Ident {
+                                value: "@foo".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            })),
+                            op: sqlparser::ast::BinaryOperator::Plus,
+                            right: Box::new(Expr::Value(number("1").with_empty_span())),
+                        }],
+                    }),
+                    Statement::Return(ReturnStatement {
+                        value: Some(ReturnStatementValue::Expr(Expr::Identifier(Ident {
+                            value: "@foo".into(),
                             quote_style: None,
                             span: Span::empty(),
-                        })),
-                        op: sqlparser::ast::BinaryOperator::Plus,
-                        right: Box::new(Expr::Value(
-                            (Value::Number("1".into(), false)).with_empty_span()
-                        )),
-                    }],
-                }),
-                Statement::Return(ReturnStatement {
-                    value: Some(ReturnStatementValue::Expr(Expr::Identifier(Ident {
-                        value: "@foo".into(),
+                        }))),
+                    }),
+                ],
+                end_token: AttachedToken(TokenWithSpan::wrap(sqlparser::tokenizer::Token::Word(
+                    sqlparser::tokenizer::Word {
+                        value: "END".to_string(),
                         quote_style: None,
-                        span: Span::empty(),
-                    }))),
-                }),
-            ])),
+                        keyword: Keyword::END
+                    }
+                ))),
+            })),
             behavior: None,
             called_on_null: None,
             parallel: None,

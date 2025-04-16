@@ -15130,10 +15130,16 @@ impl<'a> Parser<'a> {
 
     /// Parse [Statement::Return]
     fn parse_return(&mut self) -> Result<Statement, ParserError> {
-        let expr = self.parse_expr()?;
-        Ok(Statement::Return(ReturnStatement {
-            value: Some(ReturnStatementValue::Expr(expr)),
-        }))
+        let current_index = self.index;
+        match self.parse_expr() {
+            Ok(expr) => Ok(Statement::Return(ReturnStatement {
+                value: Some(ReturnStatementValue::Expr(expr)),
+            })),
+            Err(_) => {
+                self.index = current_index;
+                Ok(Statement::Return(ReturnStatement { value: None }))
+            }
+        }
     }
 
     /// Consume the parser and return its underlying token buffer

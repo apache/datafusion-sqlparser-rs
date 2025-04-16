@@ -15029,3 +15029,8 @@ fn parse_set_time_zone_alias() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_return() {
+    all_dialects().verified_stmt("RETURN");
+}

@@ -2278,8 +2278,7 @@ impl fmt::Display for CreateFunction {
             write!(f, " AS {function_body}")?;
         }
         if let Some(CreateFunctionBody::AsBeginEnd(bes)) = &self.function_body {
-            write!(f, " AS")?;
-            write!(f, " {}", bes)?;
+            write!(f, " AS {bes}")?;
         }
         Ok(())
     }

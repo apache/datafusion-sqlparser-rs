@@ -23,8 +23,8 @@ use crate::tokenizer::Span;
 use super::{
     dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
     AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, AttachedToken,
-    CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef,
-    ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectBy,
+    BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
+    ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectBy,
     ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
     Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
     Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
@@ -779,9 +779,7 @@ impl Spanned for ConditionalStatements {
             ConditionalStatements::Sequence { statements } => {
                 union_spans(statements.iter().map(|s| s.span()))
             }
-            ConditionalStatements::BeginEnd(bes) => {
-                union_spans([bes.begin_token.0.span, bes.end_token.0.span].into_iter())
-            }
+            ConditionalStatements::BeginEnd(bes) => bes.span(),
         }
     }
 }
@@ -2277,6 +2275,12 @@ impl Spanned for TableObject {
             }
             TableObject::TableFunction(func) => func.span(),
         }
+    }
+}
+
+impl Spanned for BeginEndStatements {
+    fn span(&self) -> Span {
+        union_spans([self.begin_token.0.span, self.end_token.0.span].into_iter())
     }
 }
 

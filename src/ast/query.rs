@@ -1019,6 +1019,26 @@ impl fmt::Display for ExprWithAlias {
     }
 }
 
+/// An expression optionally followed by an alias and order by options.
+///
+/// Example:
+/// ```sql
+/// 42 AS myint ASC
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExprWithAliasAndOrderBy {
+    pub expr: ExprWithAlias,
+    pub order_by: OrderByOptions,
+}
+
+impl fmt::Display for ExprWithAliasAndOrderBy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}", self.expr, self.order_by)
+    }
+}
+
 /// Arguments to a table-valued function
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -2484,8 +2504,8 @@ pub enum PipeOperator {
     ///
     /// See more at https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#aggregate_pipe_operator
     Aggregate {
-        full_table_exprs: Vec<ExprWithAlias>,
-        group_by_exprs: Vec<ExprWithAlias>,
+        full_table_exprs: Vec<ExprWithAliasAndOrderBy>,
+        group_by_expr: Vec<ExprWithAliasAndOrderBy>,
     },
 }
 
@@ -2516,7 +2536,7 @@ impl fmt::Display for PipeOperator {
             }
             PipeOperator::Aggregate {
                 full_table_exprs,
-                group_by_exprs,
+                group_by_expr,
             } => {
                 write!(f, "AGGREGATE")?;
                 if !full_table_exprs.is_empty() {
@@ -2526,12 +2546,8 @@ impl fmt::Display for PipeOperator {
                         display_comma_separated(full_table_exprs.as_slice())
                     )?;
                 }
-                if !group_by_exprs.is_empty() {
-                    write!(
-                        f,
-                        " GROUP BY {}",
-                        display_comma_separated(group_by_exprs.as_slice())
-                    )?;
+                if !group_by_expr.is_empty() {
+                    write!(f, " GROUP BY {}", display_comma_separated(group_by_expr))?;
                 }
                 Ok(())
             }

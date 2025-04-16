@@ -1015,6 +1015,25 @@ impl<'a> Parser<'a> {
         self.parse_subexpr(self.dialect.prec_unknown())
     }
 
+    pub fn parse_expr_with_alias_and_order_by(
+        &mut self,
+    ) -> Result<ExprWithAliasAndOrderBy, ParserError> {
+        let expr = self.parse_expr()?;
+
+        fn validator(explicit: bool, kw: &Keyword, _parser: &mut Parser) -> bool {
+            explicit || !&[Keyword::ASC, Keyword::DESC, Keyword::GROUP].contains(kw)
+        }
+        let alias = self.parse_optional_alias_inner(None, validator)?;
+        let order_by = OrderByOptions {
+            asc: self.parse_asc_desc(),
+            nulls_first: None,
+        };
+        Ok(ExprWithAliasAndOrderBy {
+            expr: ExprWithAlias { expr, alias },
+            order_by,
+        })
+    }
+
     /// Parse tokens until the precedence changes.
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         let _guard = self.recursion_counter.try_decrease()?;
@@ -10391,27 +10410,25 @@ impl<'a> Parser<'a> {
                     pipe_operators.push(PipeOperator::Limit { expr, offset })
                 }
                 Keyword::AGGREGATE => {
-                    let full_table_exprs = self.parse_comma_separated0(
-                        |parser| {
-                            let expr = parser.parse_expr()?;
-                            let alias = parser.maybe_parse_select_item_alias()?;
-                            Ok(ExprWithAlias { expr, alias })
-                        },
-                        Token::make_keyword(keywords::GROUP),
-                    )?;
-
-                    let group_by_exprs = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
+                    let full_table_exprs = if self.peek_keyword(Keyword::GROUP) {
+                        vec![]
+                    } else {
                         self.parse_comma_separated(|parser| {
-                            let expr = parser.parse_expr()?;
-                            let alias = parser.maybe_parse_select_item_alias()?;
-                            Ok(ExprWithAlias { expr, alias })
+                            parser.parse_expr_with_alias_and_order_by()
+                        })?
+                    };
+
+                    let group_by_expr = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
+                        self.parse_comma_separated(|parser| {
+                            parser.parse_expr_with_alias_and_order_by()
                         })?
                     } else {
                         vec![]
                     };
+
                     pipe_operators.push(PipeOperator::Aggregate {
                         full_table_exprs,
-                        group_by_exprs,
+                        group_by_expr,
                     })
                 }
                 Keyword::ORDER => {

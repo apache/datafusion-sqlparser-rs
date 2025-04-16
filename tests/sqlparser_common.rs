@@ -14724,9 +14724,17 @@ fn parse_pipeline_operator() {
     );
     dialects
         .verified_stmt("SELECT * FROM users |> AGGREGATE GROUP BY EXTRACT(YEAR FROM o_orderdate)");
+    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE GROUP BY a, b");
+    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE SUM(c) GROUP BY a, b");
+    dialects.verified_stmt("SELECT * FROM users |> AGGREGATE SUM(c) ASC");
 
     // order by pipe operator
     dialects.verified_stmt("SELECT * FROM users |> ORDER BY id ASC");
     dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC");
     dialects.verified_stmt("SELECT * FROM users |> ORDER BY id DESC, name ASC");
+
+    // many pipes
+    dialects.verified_stmt(
+        "SELECT * FROM CustomerOrders |> AGGREGATE SUM(cost) AS total_cost GROUP BY customer_id, state, item_type |> EXTEND COUNT(*) OVER (PARTITION BY customer_id) AS num_orders |> WHERE num_orders > 1 |> AGGREGATE AVG(total_cost) AS average GROUP BY state DESC, item_type ASC",
+    );
 }

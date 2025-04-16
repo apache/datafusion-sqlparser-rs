@@ -2547,7 +2547,7 @@ pub enum PipeOperator {
     /// Syntax: `|> AGGREGATE <agg_expr> [[AS] alias], ...`
     ///
     /// Syntax:
-    /// ```
+    /// ```norust
     /// |> AGGREGATE [<agg_expr> [[AS] alias], ...]
     /// GROUP BY <grouping_expr> [AS alias], ...
     /// ```

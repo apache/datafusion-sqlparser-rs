@@ -1326,6 +1326,7 @@ fn parse_copy_to() {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             })),
             to: true,
             target: CopyTarget::File {
@@ -2994,6 +2995,7 @@ fn parse_array_subquery_expr() {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             })),
             filter: None,
             null_treatment: None,
@@ -4784,6 +4786,7 @@ fn test_simple_postgres_insert_with_alias() {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             })),
             assignments: vec![],
             partitioned: None,
@@ -4867,6 +4870,7 @@ fn test_simple_postgres_insert_with_alias() {
             insert_alias: None,
             settings: None,
             format_clause: None,
+            pipe_operators: vec![],
         })
     )
 }
@@ -4924,6 +4928,7 @@ fn test_simple_insert_with_quoted_alias() {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             })),
             assignments: vec![],
             partitioned: None,

@@ -23,7 +23,7 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::Span;
+use sqlparser::tokenizer::{Location, Span};
 use test_utils::*;
 
 use sqlparser::ast::DataType::{Int, Text, Varbinary};
@@ -31,7 +31,7 @@ use sqlparser::ast::DeclareAssignment::MsSqlAssignment;
 use sqlparser::ast::Value::SingleQuotedString;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{Parser, ParserError};
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -107,9 +107,7 @@ fn parse_create_procedure() {
             or_alter: true,
             body: vec![Statement::Query(Box::new(Query {
                 with: None,
-                limit: None,
-                limit_by: vec![],
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -1136,6 +1134,7 @@ fn parse_substring_in_select() {
                                 (number("1")).with_empty_span()
                             ))),
                             special: true,
+                            shorthand: false,
                         })],
                         into: None,
                         from: vec![TableWithJoins {
@@ -1162,9 +1161,7 @@ fn parse_substring_in_select() {
                         flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1256,19 +1253,17 @@ fn parse_mssql_declare() {
                     for_query: None
                 }]
             },
-            Statement::SetVariable {
-                local: false,
+            Statement::Set(Set::SingleAssignment {
+                scope: None,
                 hivevar: false,
-                variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("@bar")])),
-                value: vec![Expr::Value(
+                variable: ObjectName::from(vec![Ident::new("@bar")]),
+                values: vec![Expr::Value(
                     (Value::Number("2".parse().unwrap(), false)).with_empty_span()
                 )],
-            },
+            }),
             Statement::Query(Box::new(Query {
                 with: None,
-                limit: None,
-                limit_by: vec![],
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -1603,6 +1598,7 @@ fn parse_create_table_with_valid_options() {
                 cluster_by: None,
                 clustered_by: None,
                 options: None,
+                inherits: None,
                 strict: false,
                 iceberg: false,
                 copy_grants: false,
@@ -1773,6 +1769,7 @@ fn parse_create_table_with_identity_column() {
                 cluster_by: None,
                 clustered_by: None,
                 options: None,
+                inherits: None,
                 strict: false,
                 copy_grants: false,
                 enable_schema_evolution: None,
@@ -1867,6 +1864,104 @@ fn parse_mssql_set_session_value() {
 }
 
 #[test]
+fn parse_mssql_if_else() {
+    // Simple statements and blocks
+    ms().verified_stmt("IF 1 = 1 SELECT '1'; ELSE SELECT '2';");
+    ms().verified_stmt("IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2;");
+    ms().verified_stmt(
+        "IF DATENAME(weekday, GETDATE()) IN (N'Saturday', N'Sunday') SELECT 'Weekend'; ELSE SELECT 'Weekday';"
+    );
+    ms().verified_stmt(
+        "IF (SELECT COUNT(*) FROM a.b WHERE c LIKE 'x%') > 1 SELECT 'yes'; ELSE SELECT 'No';",
+    );
+
+    // Multiple statements
+    let stmts = ms()
+        .parse_sql_statements("DECLARE @A INT; IF 1=1 BEGIN SET @A = 1 END ELSE SET @A = 2")
+        .unwrap();
+    match &stmts[..] {
+        [Statement::Declare { .. }, Statement::If(stmt)] => {
+            assert_eq!(
+                stmt.to_string(),
+                "IF 1 = 1 BEGIN SET @A = 1; END ELSE SET @A = 2;"
+            );
+        }
+        _ => panic!("Unexpected statements: {:?}", stmts),
+    }
+}
+
+#[test]
+fn test_mssql_if_else_span() {
+    let sql = "IF 1 = 1 SELECT '1' ELSE SELECT '2'";
+    let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
+    assert_eq!(
+        parser.parse_statement().unwrap().span(),
+        Span::new(Location::new(1, 1), Location::new(1, sql.len() as u64 + 1))
+    );
+}
+
+#[test]
+fn test_mssql_if_else_multiline_span() {
+    let sql_line1 = "IF 1 = 1";
+    let sql_line2 = "SELECT '1'";
+    let sql_line3 = "ELSE SELECT '2'";
+    let sql = [sql_line1, sql_line2, sql_line3].join("\n");
+    let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(&sql).unwrap();
+    assert_eq!(
+        parser.parse_statement().unwrap().span(),
+        Span::new(
+            Location::new(1, 1),
+            Location::new(3, sql_line3.len() as u64 + 1)
+        )
+    );
+}
+
+#[test]
+fn test_mssql_if_statements_span() {
+    // Simple statements
+    let mut sql = "IF 1 = 1 SELECT '1' ELSE SELECT '2'";
+    let mut parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
+    match parser.parse_statement().unwrap() {
+        Statement::If(IfStatement {
+            if_block,
+            else_block: Some(else_block),
+            ..
+        }) => {
+            assert_eq!(
+                if_block.span(),
+                Span::new(Location::new(1, 1), Location::new(1, 20))
+            );
+            assert_eq!(
+                else_block.span(),
+                Span::new(Location::new(1, 21), Location::new(1, 36))
+            );
+        }
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Blocks
+    sql = "IF 1 = 1 BEGIN SET @A = 1; END ELSE BEGIN SET @A = 2 END";
+    parser = Parser::new(&MsSqlDialect {}).try_with_sql(sql).unwrap();
+    match parser.parse_statement().unwrap() {
+        Statement::If(IfStatement {
+            if_block,
+            else_block: Some(else_block),
+            ..
+        }) => {
+            assert_eq!(
+                if_block.span(),
+                Span::new(Location::new(1, 1), Location::new(1, 31))
+            );
+            assert_eq!(
+                else_block.span(),
+                Span::new(Location::new(1, 32), Location::new(1, 57))
+            );
+        }
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+}
+
+#[test]
 fn parse_mssql_varbinary_max_length() {
     let sql = "CREATE TABLE example (var_binary_col VARBINARY(MAX))";
 
@@ -1919,9 +2014,46 @@ fn parse_mssql_varbinary_max_length() {
     }
 }
 
+#[test]
+fn parse_mssql_table_identifier_with_default_schema() {
+    ms().verified_stmt("SELECT * FROM mydatabase..MyTable");
+}
+
 fn ms() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {})])
 }
+
 fn ms_and_generic() -> TestedDialects {
     TestedDialects::new(vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})])
+}
+
+#[test]
+fn parse_mssql_merge_with_output() {
+    let stmt = "MERGE dso.products AS t \
+        USING dsi.products AS \
+        s ON s.ProductID = t.ProductID \
+        WHEN MATCHED AND \
+        NOT (t.ProductName = s.ProductName OR (ISNULL(t.ProductName, s.ProductName) IS NULL)) \
+        THEN UPDATE SET t.ProductName = s.ProductName \
+        WHEN NOT MATCHED BY TARGET \
+        THEN INSERT (ProductID, ProductName) \
+        VALUES (s.ProductID, s.ProductName) \
+        WHEN NOT MATCHED BY SOURCE THEN DELETE \
+        OUTPUT $action, deleted.ProductID INTO dsi.temp_products";
+    ms_and_generic().verified_stmt(stmt);
+}
+
+#[test]
+fn parse_drop_trigger() {
+    let sql_drop_trigger = "DROP TRIGGER emp_stamp;";
+    let drop_stmt = ms().one_statement_parses_to(sql_drop_trigger, "");
+    assert_eq!(
+        drop_stmt,
+        Statement::DropTrigger {
+            if_exists: false,
+            trigger_name: ObjectName::from(vec![Ident::new("emp_stamp")]),
+            table_name: None,
+            option: None,
+        }
+    );
 }

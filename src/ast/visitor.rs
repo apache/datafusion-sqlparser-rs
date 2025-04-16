@@ -523,7 +523,7 @@ where
 /// // Remove all select limits in sub-queries
 /// visit_expressions_mut(&mut statements, |expr| {
 ///   if let Expr::Subquery(q) = expr {
-///      q.limit = None
+///      q.limit_clause = None;
 ///   }
 ///   ControlFlow::<()>::Continue(())
 /// });
@@ -647,7 +647,7 @@ where
 /// // Remove all select limits in outer statements (not in sub-queries)
 /// visit_statements_mut(&mut statements, |stmt| {
 ///   if let Statement::Query(q) = stmt {
-///      q.limit = None
+///      q.limit_clause = None;
 ///   }
 ///   ControlFlow::<()>::Continue(())
 /// });

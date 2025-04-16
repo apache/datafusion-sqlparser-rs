@@ -151,8 +151,18 @@ pub enum AlterTableOperation {
     },
     /// `DROP PRIMARY KEY`
     ///
-    /// Note: this is a MySQL-specific operation.
+    /// Note: this is a [MySQL]-specific operation.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
     DropPrimaryKey,
+    /// `DROP FOREIGN KEY <fk_symbol>`
+    ///
+    /// Note: this is a [MySQL]-specific operation.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    DropForeignKey {
+        name: Ident,
+    },
     /// `ENABLE ALWAYS RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -278,6 +288,16 @@ pub enum AlterTableOperation {
         equals: bool,
         algorithm: AlterTableAlgorithm,
     },
+
+    /// `LOCK [=] { DEFAULT | NONE | SHARED | EXCLUSIVE }`
+    ///
+    /// [MySQL]-specific table alter lock.
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+    Lock {
+        equals: bool,
+        lock: AlterTableLock,
+    },
     /// `AUTO_INCREMENT [=] <value>`
     ///
     /// [MySQL]-specific table option for raising current auto increment value.
@@ -352,6 +372,30 @@ impl fmt::Display for AlterTableAlgorithm {
             Self::Instant => "INSTANT",
             Self::Inplace => "INPLACE",
             Self::Copy => "COPY",
+        })
+    }
+}
+
+/// [MySQL] `ALTER TABLE` lock.
+///
+/// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AlterTableLock {
+    Default,
+    None,
+    Shared,
+    Exclusive,
+}
+
+impl fmt::Display for AlterTableLock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Self::Default => "DEFAULT",
+            Self::None => "NONE",
+            Self::Shared => "SHARED",
+            Self::Exclusive => "EXCLUSIVE",
         })
     }
 }
@@ -530,6 +574,7 @@ impl fmt::Display for AlterTableOperation {
                 )
             }
             AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
+            AlterTableOperation::DropForeignKey { name } => write!(f, "DROP FOREIGN KEY {name}"),
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,
@@ -681,6 +726,9 @@ impl fmt::Display for AlterTableOperation {
                     value
                 )
             }
+            AlterTableOperation::Lock { equals, lock } => {
+                write!(f, "LOCK {}{}", if *equals { "= " } else { "" }, lock)
+            }
         }
     }
 }
@@ -820,7 +868,7 @@ impl fmt::Display for AlterColumnOperation {
             AlterColumnOperation::SetDefault { value } => {
                 write!(f, "SET DEFAULT {value}")
             }
-            AlterColumnOperation::DropDefault {} => {
+            AlterColumnOperation::DropDefault => {
                 write!(f, "DROP DEFAULT")
             }
             AlterColumnOperation::SetDataType { data_type, using } => {
@@ -1228,9 +1276,9 @@ impl fmt::Display for IndexOption {
     }
 }
 
-/// [Postgres] unique index nulls handling option: `[ NULLS [ NOT ] DISTINCT ]`
+/// [PostgreSQL] unique index nulls handling option: `[ NULLS [ NOT ] DISTINCT ]`
 ///
-/// [Postgres]: https://www.postgresql.org/docs/17/sql-altertable.html
+/// [PostgreSQL]: https://www.postgresql.org/docs/17/sql-altertable.html
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -2127,15 +2175,15 @@ pub struct CreateFunction {
     ///
     /// IMMUTABLE | STABLE | VOLATILE
     ///
-    /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub behavior: Option<FunctionBehavior>,
     /// CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
     ///
-    /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub called_on_null: Option<FunctionCalledOnNull>,
     /// PARALLEL { UNSAFE | RESTRICTED | SAFE }
     ///
-    /// [Postgres](https://www.postgresql.org/docs/current/sql-createfunction.html)
+    /// [PostgreSQL](https://www.postgresql.org/docs/current/sql-createfunction.html)
     pub parallel: Option<FunctionParallel>,
     /// USING ... (Hive only)
     pub using: Option<CreateFunctionUsing>,

@@ -988,6 +988,7 @@ fn parse_create_schema_if_not_exists() {
         Statement::CreateSchema {
             if_not_exists: true,
             schema_name,
+            ..
         } => assert_eq!("schema_name", schema_name.to_string()),
         _ => unreachable!(),
     }
@@ -1319,9 +1320,7 @@ fn parse_copy_to() {
                     flavor: SelectFlavor::Standard,
                 }))),
                 order_by: None,
-                limit: None,
-                limit_by: vec![],
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -1433,81 +1432,77 @@ fn parse_set() {
     let stmt = pg_and_generic().verified_stmt("SET a = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
-            local: false,
+        Statement::Set(Set::SingleAssignment {
+            scope: None,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::Identifier(Ident {
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::Identifier(Ident {
                 value: "b".into(),
                 quote_style: None,
                 span: Span::empty(),
             })],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = 'b'");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
-            local: false,
+        Statement::Set(Set::SingleAssignment {
+            scope: None,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::Value(
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::Value(
                 (Value::SingleQuotedString("b".into())).with_empty_span()
             )],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = 0");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
-            local: false,
+        Statement::Set(Set::SingleAssignment {
+            scope: None,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::value(number("0"))],
-        }
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::value(number("0"))],
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = DEFAULT");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
-            local: false,
+        Statement::Set(Set::SingleAssignment {
+            scope: None,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::Identifier(Ident::new("DEFAULT"))],
-        }
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::Identifier(Ident::new("DEFAULT"))],
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET LOCAL a = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
-            local: true,
+        Statement::Set(Set::SingleAssignment {
+            scope: Some(ContextModifier::Local),
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![Ident::new("a")])),
-            value: vec![Expr::Identifier("b".into())],
-        }
+            variable: ObjectName::from(vec![Ident::new("a")]),
+            values: vec![Expr::Identifier("b".into())],
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a.b.c = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
-            local: false,
+        Statement::Set(Set::SingleAssignment {
+            scope: None,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![
-                Ident::new("a"),
-                Ident::new("b"),
-                Ident::new("c")
-            ])),
-            value: vec![Expr::Identifier(Ident {
+            variable: ObjectName::from(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
+            values: vec![Expr::Identifier(Ident {
                 value: "b".into(),
                 quote_style: None,
                 span: Span::empty(),
             })],
-        }
+        })
     );
 
     let stmt = pg_and_generic().one_statement_parses_to(
@@ -1516,22 +1511,21 @@ fn parse_set() {
     );
     assert_eq!(
         stmt,
-        Statement::SetVariable {
-            local: false,
+        Statement::Set(Set::SingleAssignment {
+            scope: None,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec![
+            variable: ObjectName::from(vec![
                 Ident::new("hive"),
                 Ident::new("tez"),
                 Ident::new("auto"),
                 Ident::new("reducer"),
                 Ident::new("parallelism")
-            ])),
-            value: vec![Expr::Value((Value::Boolean(false)).with_empty_span())],
-        }
+            ]),
+            values: vec![Expr::Value((Value::Boolean(false)).with_empty_span())],
+        })
     );
 
     pg_and_generic().one_statement_parses_to("SET a TO b", "SET a = b");
-    pg_and_generic().one_statement_parses_to("SET SESSION a = b", "SET a = b");
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET"),
@@ -1561,10 +1555,10 @@ fn parse_set_role() {
     let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
-        Statement::SetRole {
-            context_modifier: ContextModifier::Session,
+        Statement::Set(Set::SetRole {
+            context_modifier: Some(ContextModifier::Session),
             role_name: None,
-        }
+        })
     );
     assert_eq!(query, stmt.to_string());
 
@@ -1572,14 +1566,14 @@ fn parse_set_role() {
     let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
-        Statement::SetRole {
-            context_modifier: ContextModifier::Local,
+        Statement::Set(Set::SetRole {
+            context_modifier: Some(ContextModifier::Local),
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\"'),
                 span: Span::empty(),
             }),
-        }
+        })
     );
     assert_eq!(query, stmt.to_string());
 
@@ -1587,14 +1581,14 @@ fn parse_set_role() {
     let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
-        Statement::SetRole {
-            context_modifier: ContextModifier::None,
+        Statement::Set(Set::SetRole {
+            context_modifier: None,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\''),
                 span: Span::empty(),
             }),
-        }
+        })
     );
     assert_eq!(query, stmt.to_string());
 }
@@ -2741,6 +2735,41 @@ fn parse_create_brin() {
 }
 
 #[test]
+fn parse_create_table_with_inherits() {
+    let single_inheritance_sql =
+        "CREATE TABLE child_table (child_column INT) INHERITS (public.parent_table)";
+    match pg().verified_stmt(single_inheritance_sql) {
+        Statement::CreateTable(CreateTable {
+            inherits: Some(inherits),
+            ..
+        }) => {
+            assert_eq_vec(&["public", "parent_table"], &inherits[0].0);
+        }
+        _ => unreachable!(),
+    }
+
+    let double_inheritance_sql = "CREATE TABLE child_table (child_column INT) INHERITS (public.parent_table, pg_catalog.pg_settings)";
+    match pg().verified_stmt(double_inheritance_sql) {
+        Statement::CreateTable(CreateTable {
+            inherits: Some(inherits),
+            ..
+        }) => {
+            assert_eq_vec(&["public", "parent_table"], &inherits[0].0);
+            assert_eq_vec(&["pg_catalog", "pg_settings"], &inherits[1].0);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_empty_inherits_fails() {
+    assert!(matches!(
+        pg().parse_sql_statements("CREATE TABLE child_table (child_column INT) INHERITS ()"),
+        Err(ParserError::ParserError(_))
+    ));
+}
+
+#[test]
 fn parse_create_index_concurrently() {
     let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
     match pg().verified_stmt(sql) {
@@ -2960,9 +2989,7 @@ fn parse_array_subquery_expr() {
                     }))),
                 }),
                 order_by: None,
-                limit: None,
-                limit_by: vec![],
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -2984,16 +3011,16 @@ fn test_transaction_statement() {
     let statement = pg().verified_stmt("SET TRANSACTION SNAPSHOT '000003A1-1'");
     assert_eq!(
         statement,
-        Statement::SetTransaction {
+        Statement::Set(Set::SetTransaction {
             modes: vec![],
             snapshot: Some(Value::SingleQuotedString(String::from("000003A1-1"))),
             session: false
-        }
+        })
     );
     let statement = pg().verified_stmt("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE");
     assert_eq!(
         statement,
-        Statement::SetTransaction {
+        Statement::Set(Set::SetTransaction {
             modes: vec![
                 TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
                 TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
@@ -3001,7 +3028,7 @@ fn test_transaction_statement() {
             ],
             snapshot: None,
             session: true
-        }
+        })
     );
 }
 
@@ -4753,9 +4780,7 @@ fn test_simple_postgres_insert_with_alias() {
                     ]]
                 })),
                 order_by: None,
-                limit: None,
-                limit_by: vec![],
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -4827,9 +4852,7 @@ fn test_simple_postgres_insert_with_alias() {
                     ]]
                 })),
                 order_by: None,
-                limit: None,
-                limit_by: vec![],
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -4899,9 +4922,7 @@ fn test_simple_insert_with_quoted_alias() {
                     ]]
                 })),
                 order_by: None,
-                limit: None,
-                limit_by: vec![],
-                offset: None,
+                limit_clause: None,
                 fetch: None,
                 locks: vec![],
                 for_clause: None,
@@ -5445,6 +5466,7 @@ fn parse_trigger_related_functions() {
             cluster_by: None,
             clustered_by: None,
             options: None,
+            inherits: None,
             strict: false,
             copy_grants: false,
             enable_schema_evolution: None,

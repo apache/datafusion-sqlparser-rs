@@ -27,7 +27,12 @@ use crate::{
 
 use super::keywords;
 
-const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] = &[Keyword::USE, Keyword::IGNORE, Keyword::FORCE];
+const RESERVED_FOR_TABLE_ALIAS_MYSQL: &[Keyword] = &[
+    Keyword::USE,
+    Keyword::IGNORE,
+    Keyword::FORCE,
+    Keyword::STRAIGHT_JOIN,
+];
 
 /// A [`Dialect`] for [MySQL](https://www.mysql.com/)
 #[derive(Debug)]
@@ -139,6 +144,10 @@ impl Dialect for MySqlDialect {
     }
 
     fn supports_set_names(&self) -> bool {
+        true
+    }
+
+    fn supports_comma_separated_set_assignments(&self) -> bool {
         true
     }
 }

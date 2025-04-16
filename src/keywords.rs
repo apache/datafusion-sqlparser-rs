@@ -18,14 +18,14 @@
 //! This module defines
 //! 1) a list of constants for every keyword
 //! 2) an `ALL_KEYWORDS` array with every keyword in it
-//!     This is not a list of *reserved* keywords: some of these can be
-//!     parsed as identifiers if the parser decides so. This means that
-//!     new keywords can be added here without affecting the parse result.
+//!    This is not a list of *reserved* keywords: some of these can be
+//!    parsed as identifiers if the parser decides so. This means that
+//!    new keywords can be added here without affecting the parse result.
 //!
-//!     As a matter of fact, most of these keywords are not used at all
-//!     and could be removed.
+//!    As a matter of fact, most of these keywords are not used at all
+//!    and could be removed.
 //! 3) a `RESERVED_FOR_TABLE_ALIAS` array with keywords reserved in a
-//!     "table alias" context.
+//!    "table alias" context.
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -174,6 +174,7 @@ define_keywords!(
     CHANNEL,
     CHAR,
     CHARACTER,
+    CHARACTERISTICS,
     CHARACTERS,
     CHARACTER_LENGTH,
     CHARSET,
@@ -297,6 +298,7 @@ define_keywords!(
     ELEMENT,
     ELEMENTS,
     ELSE,
+    ELSEIF,
     EMPTY,
     ENABLE,
     ENABLE_SCHEMA_EVOLUTION,
@@ -411,6 +413,7 @@ define_keywords!(
     HOSTS,
     HOUR,
     HOURS,
+    HUGEINT,
     ICEBERG,
     ID,
     IDENTITY,
@@ -429,6 +432,7 @@ define_keywords!(
     INDEX,
     INDICATOR,
     INHERIT,
+    INHERITS,
     INITIALLY,
     INNER,
     INOUT,
@@ -533,6 +537,7 @@ define_keywords!(
     MEDIUMTEXT,
     MEMBER,
     MERGE,
+    MESSAGE,
     METADATA,
     METHOD,
     METRIC,
@@ -559,6 +564,7 @@ define_keywords!(
     MULTISET,
     MUTATION,
     NAME,
+    NAMES,
     NANOSECOND,
     NANOSECONDS,
     NATIONAL,
@@ -630,6 +636,7 @@ define_keywords!(
     ORGANIZATION,
     OUT,
     OUTER,
+    OUTPUT,
     OUTPUTFORMAT,
     OVER,
     OVERFLOW,
@@ -694,6 +701,7 @@ define_keywords!(
     QUARTER,
     QUERY,
     QUOTE,
+    RAISE,
     RAISERROR,
     RANGE,
     RANK,
@@ -735,6 +743,7 @@ define_keywords!(
     REPLICATION,
     RESET,
     RESOLVE,
+    RESOURCE,
     RESPECT,
     RESTART,
     RESTRICT,
@@ -796,6 +805,7 @@ define_keywords!(
     SETS,
     SETTINGS,
     SHARE,
+    SHARED,
     SHARING,
     SHOW,
     SIGNED,
@@ -833,10 +843,12 @@ define_keywords!(
     STORAGE_INTEGRATION,
     STORAGE_SERIALIZATION_POLICY,
     STORED,
+    STRAIGHT_JOIN,
     STRICT,
     STRING,
     STRUCT,
     SUBMULTISET,
+    SUBSTR,
     SUBSTRING,
     SUBSTRING_REGEX,
     SUCCEEDS,
@@ -870,6 +882,7 @@ define_keywords!(
     TIME,
     TIMESTAMP,
     TIMESTAMPTZ,
+    TIMESTAMP_NTZ,
     TIMETZ,
     TIMEZONE,
     TIMEZONE_ABBR,
@@ -900,7 +913,9 @@ define_keywords!(
     TRY_CONVERT,
     TUPLE,
     TYPE,
+    UBIGINT,
     UESCAPE,
+    UHUGEINT,
     UINT128,
     UINT16,
     UINT256,
@@ -934,6 +949,8 @@ define_keywords!(
     USER,
     USER_RESOURCES,
     USING,
+    USMALLINT,
+    UTINYINT,
     UUID,
     VACUUM,
     VALID,
@@ -1079,7 +1096,7 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::END,
 ];
 
-// Global list of reserved keywords alloweed after FROM.
+// Global list of reserved keywords allowed after FROM.
 // Parser should call Dialect::get_reserved_keyword_after_from
 // to allow for each dialect to customize the list.
 pub const RESERVED_FOR_TABLE_FACTOR: &[Keyword] = &[

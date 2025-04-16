@@ -97,6 +97,7 @@ pub struct CreateTableBuilder {
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub clustered_by: Option<ClusteredBy>,
     pub options: Option<Vec<SqlOption>>,
+    pub inherits: Option<Vec<ObjectName>>,
     pub strict: bool,
     pub copy_grants: bool,
     pub enable_schema_evolution: Option<bool>,
@@ -151,6 +152,7 @@ impl CreateTableBuilder {
             cluster_by: None,
             clustered_by: None,
             options: None,
+            inherits: None,
             strict: false,
             copy_grants: false,
             enable_schema_evolution: None,
@@ -331,6 +333,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn inherits(mut self, inherits: Option<Vec<ObjectName>>) -> Self {
+        self.inherits = inherits;
+        self
+    }
+
     pub fn strict(mut self, strict: bool) -> Self {
         self.strict = strict;
         self
@@ -451,6 +458,7 @@ impl CreateTableBuilder {
             cluster_by: self.cluster_by,
             clustered_by: self.clustered_by,
             options: self.options,
+            inherits: self.inherits,
             strict: self.strict,
             copy_grants: self.copy_grants,
             enable_schema_evolution: self.enable_schema_evolution,
@@ -512,6 +520,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 cluster_by,
                 clustered_by,
                 options,
+                inherits,
                 strict,
                 copy_grants,
                 enable_schema_evolution,
@@ -560,6 +569,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 cluster_by,
                 clustered_by,
                 options,
+                inherits,
                 strict,
                 iceberg,
                 copy_grants,
@@ -591,6 +601,7 @@ pub(crate) struct CreateTableConfiguration {
     pub partition_by: Option<Box<Expr>>,
     pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
     pub options: Option<Vec<SqlOption>>,
+    pub inherits: Option<Vec<ObjectName>>,
 }
 
 #[cfg(test)]

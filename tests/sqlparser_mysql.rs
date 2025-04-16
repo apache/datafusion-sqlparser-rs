@@ -617,12 +617,12 @@ fn parse_set_variables() {
     mysql_and_generic().verified_stmt("SET sql_mode = CONCAT(@@sql_mode, ',STRICT_TRANS_TABLES')");
     assert_eq!(
         mysql_and_generic().verified_stmt("SET LOCAL autocommit = 1"),
-        Statement::SetVariable {
-            local: true,
+        Statement::Set(Set::SingleAssignment {
+            scope: Some(ContextModifier::Local),
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName::from(vec!["autocommit".into()])),
-            value: vec![Expr::value(number("1"))],
-        }
+            variable: ObjectName::from(vec!["autocommit".into()]),
+            values: vec![Expr::value(number("1"))],
+        })
     );
 }
 
@@ -1107,9 +1107,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,
@@ -1162,9 +1160,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,
@@ -1211,9 +1207,7 @@ fn parse_escaped_backticks_with_escape() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,
@@ -1264,9 +1258,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,
@@ -1442,9 +1434,7 @@ fn parse_simple_insert() {
                         ]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1493,9 +1483,7 @@ fn parse_ignore_insert() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1544,9 +1532,7 @@ fn parse_priority_insert() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1592,9 +1578,7 @@ fn parse_priority_insert() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1642,9 +1626,7 @@ fn parse_insert_as() {
                         )]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1707,9 +1689,7 @@ fn parse_insert_as() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1759,9 +1739,7 @@ fn parse_replace_insert() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1802,9 +1780,7 @@ fn parse_empty_row_insert() {
                         rows: vec![vec![], vec![]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1869,9 +1845,7 @@ fn parse_insert_with_on_duplicate_update() {
                         ]]
                     })),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -1962,6 +1936,128 @@ fn parse_select_with_numeric_prefix_column_name() {
             );
         }
         _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_qualified_identifiers_with_numeric_prefix() {
+    // Case 1: Qualified column name that starts with digits.
+    match mysql().verified_stmt("SELECT t.15to29 FROM my_table AS t") {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(&[Ident::new("t"), Ident::new("15to29")], &parts[..]);
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 2: Qualified column name that starts with digits and on its own represents a number.
+    match mysql().verified_stmt("SELECT t.15e29 FROM my_table AS t") {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(&[Ident::new("t"), Ident::new("15e29")], &parts[..]);
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 3: Unqualified, the same token is parsed as a number.
+    match mysql()
+        .parse_sql_statements("SELECT 15e29 FROM my_table")
+        .unwrap()
+        .pop()
+    {
+        Some(Statement::Query(q)) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::Value(ValueWithSpan { value, .. }))) => {
+                    assert_eq!(&number("15e29"), value);
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 4: Quoted simple identifier.
+    match mysql().verified_stmt("SELECT `15e29` FROM my_table") {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::Identifier(name))) => {
+                    assert_eq!(&Ident::with_quote('`', "15e29"), name);
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 5: Quoted compound identifier.
+    match mysql().verified_stmt("SELECT t.`15e29` FROM my_table AS t") {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(
+                        &[Ident::new("t"), Ident::with_quote('`', "15e29")],
+                        &parts[..]
+                    );
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 6: Multi-level compound identifiers.
+    match mysql().verified_stmt("SELECT 1db.1table.1column") {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(
+                        &[
+                            Ident::new("1db"),
+                            Ident::new("1table"),
+                            Ident::new("1column")
+                        ],
+                        &parts[..]
+                    );
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
+    }
+
+    // Case 7: Multi-level compound quoted identifiers.
+    match mysql().verified_stmt("SELECT `1`.`2`.`3`") {
+        Statement::Query(q) => match *q.body {
+            SetExpr::Select(s) => match s.projection.last() {
+                Some(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))) => {
+                    assert_eq!(
+                        &[
+                            Ident::with_quote('`', "1"),
+                            Ident::with_quote('`', "2"),
+                            Ident::with_quote('`', "3")
+                        ],
+                        &parts[..]
+                    );
+                }
+                proj => panic!("Unexpected projection: {:?}", proj),
+            },
+            body => panic!("Unexpected statement body: {:?}", body),
+        },
+        stmt => panic!("Unexpected statement: {:?}", stmt),
     }
 }
 
@@ -2287,6 +2383,16 @@ fn parse_alter_table_drop_primary_key() {
 }
 
 #[test]
+fn parse_alter_table_drop_foreign_key() {
+    assert_matches!(
+        alter_table_op(
+            mysql_and_generic().verified_stmt("ALTER TABLE tab DROP FOREIGN KEY foo_ibfk_1")
+        ),
+        AlterTableOperation::DropForeignKey { name } if name.value == "foo_ibfk_1"
+    );
+}
+
+#[test]
 fn parse_alter_table_change_column() {
     let expected_name = ObjectName::from(vec![Ident::new("orders")]);
     let expected_operation = AlterTableOperation::ChangeColumn {
@@ -2484,6 +2590,52 @@ fn parse_alter_table_with_algorithm() {
 }
 
 #[test]
+fn parse_alter_table_with_lock() {
+    let sql = "ALTER TABLE tab LOCK = SHARED";
+    let expected_operation = AlterTableOperation::Lock {
+        equals: true,
+        lock: AlterTableLock::Shared,
+    };
+    let operation = alter_table_op(mysql_and_generic().verified_stmt(sql));
+    assert_eq!(expected_operation, operation);
+
+    let sql =
+        "ALTER TABLE users DROP COLUMN password_digest, LOCK = EXCLUSIVE, RENAME COLUMN name TO username";
+    let stmt = mysql_and_generic().verified_stmt(sql);
+    match stmt {
+        Statement::AlterTable { operations, .. } => {
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::DropColumn {
+                        column_name: Ident::new("password_digest"),
+                        if_exists: false,
+                        drop_behavior: None,
+                    },
+                    AlterTableOperation::Lock {
+                        equals: true,
+                        lock: AlterTableLock::Exclusive,
+                    },
+                    AlterTableOperation::RenameColumn {
+                        old_column_name: Ident::new("name"),
+                        new_column_name: Ident::new("username")
+                    },
+                ]
+            )
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK DEFAULT");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK SHARED");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK NONE");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK EXCLUSIVE");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK = DEFAULT");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK = SHARED");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK = NONE");
+    mysql_and_generic().verified_stmt("ALTER TABLE `users` LOCK = EXCLUSIVE");
+}
+
+#[test]
 fn parse_alter_table_auto_increment() {
     let sql = "ALTER TABLE tab AUTO_INCREMENT = 42";
     let expected_operation = AlterTableOperation::AutoIncrement {
@@ -2573,6 +2725,7 @@ fn parse_substring_in_select() {
                                 (number("1")).with_empty_span()
                             ))),
                             special: true,
+                            shorthand: false,
                         })],
                         into: None,
                         from: vec![TableWithJoins {
@@ -2599,9 +2752,7 @@ fn parse_substring_in_select() {
                         flavor: SelectFlavor::Standard,
                     }))),
                     order_by: None,
-                    limit: None,
-                    limit_by: vec![],
-                    offset: None,
+                    limit_clause: None,
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
@@ -2709,19 +2860,19 @@ fn parse_set_names() {
     let stmt = mysql_and_generic().verified_stmt("SET NAMES utf8mb4");
     assert_eq!(
         stmt,
-        Statement::SetNames {
+        Statement::Set(Set::SetNames {
             charset_name: "utf8mb4".into(),
             collation_name: None,
-        }
+        })
     );
 
     let stmt = mysql_and_generic().verified_stmt("SET NAMES utf8mb4 COLLATE bogus");
     assert_eq!(
         stmt,
-        Statement::SetNames {
+        Statement::Set(Set::SetNames {
             charset_name: "utf8mb4".into(),
             collation_name: Some("bogus".to_string()),
-        }
+        })
     );
 
     let stmt = mysql_and_generic()
@@ -2729,22 +2880,20 @@ fn parse_set_names() {
         .unwrap();
     assert_eq!(
         stmt,
-        vec![Statement::SetNames {
+        vec![Statement::Set(Set::SetNames {
             charset_name: "utf8mb4".into(),
             collation_name: Some("bogus".to_string()),
-        }]
+        })]
     );
 
     let stmt = mysql_and_generic().verified_stmt("SET NAMES DEFAULT");
-    assert_eq!(stmt, Statement::SetNamesDefault {});
+    assert_eq!(stmt, Statement::Set(Set::SetNamesDefault {}));
 }
 
 #[test]
 fn parse_limit_my_sql_syntax() {
-    mysql_and_generic().one_statement_parses_to(
-        "SELECT id, fname, lname FROM customer LIMIT 5, 10",
-        "SELECT id, fname, lname FROM customer LIMIT 10 OFFSET 5",
-    );
+    mysql_and_generic().verified_stmt("SELECT id, fname, lname FROM customer LIMIT 10 OFFSET 5");
+    mysql_and_generic().verified_stmt("SELECT id, fname, lname FROM customer LIMIT 5, 10");
     mysql_and_generic().verified_stmt("SELECT * FROM user LIMIT ? OFFSET ?");
 }
 
@@ -2907,9 +3056,7 @@ fn parse_hex_string_introducer() {
                 flavor: SelectFlavor::Standard,
             }))),
             order_by: None,
-            limit: None,
-            limit_by: vec![],
-            offset: None,
+            limit_clause: None,
             fetch: None,
             locks: vec![],
             for_clause: None,
@@ -3443,4 +3590,147 @@ fn parse_cast_integers() {
     mysql()
         .run_parser_method("CAST(foo AS UNSIGNED INTEGER(3))", |p| p.parse_expr())
         .expect_err("CAST doesn't allow display width");
+}
+
+#[test]
+fn parse_match_against_with_alias() {
+    let sql = "SELECT tbl.ProjectID FROM surveys.tbl1 AS tbl WHERE MATCH (tbl.ReferenceID) AGAINST ('AAA' IN BOOLEAN MODE)";
+    match mysql().verified_stmt(sql) {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => match select.selection {
+                Some(Expr::MatchAgainst {
+                    columns,
+                    match_value,
+                    opt_search_modifier,
+                }) => {
+                    assert_eq!(
+                        columns,
+                        vec![ObjectName::from(vec![
+                            Ident::new("tbl"),
+                            Ident::new("ReferenceID")
+                        ])]
+                    );
+                    assert_eq!(match_value, Value::SingleQuotedString("AAA".to_owned()));
+                    assert_eq!(opt_search_modifier, Some(SearchModifier::InBooleanMode));
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_variable_assignment_using_colon_equal() {
+    let sql_select = "SELECT @price := price, @tax := price * 0.1 FROM products WHERE id = 1";
+    let stmt = mysql().verified_stmt(sql_select);
+    match stmt {
+        Statement::Query(query) => {
+            let select = query.body.as_select().unwrap();
+
+            assert_eq!(
+                select.projection,
+                vec![
+                    SelectItem::UnnamedExpr(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "@price".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })),
+                        op: BinaryOperator::Assignment,
+                        right: Box::new(Expr::Identifier(Ident {
+                            value: "price".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })),
+                    }),
+                    SelectItem::UnnamedExpr(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "@tax".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })),
+                        op: BinaryOperator::Assignment,
+                        right: Box::new(Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident {
+                                value: "price".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            })),
+                            op: BinaryOperator::Multiply,
+                            right: Box::new(Expr::Value(
+                                (test_utils::number("0.1")).with_empty_span()
+                            )),
+                        }),
+                    }),
+                ]
+            );
+
+            assert_eq!(
+                select.selection,
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident {
+                        value: "id".to_string(),
+                        quote_style: None,
+                        span: Span::empty(),
+                    })),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value((test_utils::number("1")).with_empty_span())),
+                })
+            );
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+
+    let sql_update =
+        "UPDATE products SET price = @new_price := price * 1.1 WHERE category = 'Books'";
+    let stmt = mysql().verified_stmt(sql_update);
+
+    match stmt {
+        Statement::Update { assignments, .. } => {
+            assert_eq!(
+                assignments,
+                vec![Assignment {
+                    target: AssignmentTarget::ColumnName(ObjectName(vec![
+                        ObjectNamePart::Identifier(Ident {
+                            value: "price".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })
+                    ])),
+                    value: Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "@new_price".to_string(),
+                            quote_style: None,
+                            span: Span::empty(),
+                        })),
+                        op: BinaryOperator::Assignment,
+                        right: Box::new(Expr::BinaryOp {
+                            left: Box::new(Expr::Identifier(Ident {
+                                value: "price".to_string(),
+                                quote_style: None,
+                                span: Span::empty(),
+                            })),
+                            op: BinaryOperator::Multiply,
+                            right: Box::new(Expr::Value(
+                                (test_utils::number("1.1")).with_empty_span()
+                            )),
+                        }),
+                    },
+                }]
+            )
+        }
+        _ => panic!("Unexpected statement {stmt}"),
+    }
+}
+
+#[test]
+fn parse_straight_join() {
+    mysql().verified_stmt(
+        "SELECT a.*, b.* FROM table_a AS a STRAIGHT_JOIN table_b AS b ON a.b_id = b.id",
+    );
+    // Without table alias
+    mysql()
+        .verified_stmt("SELECT a.*, b.* FROM table_a STRAIGHT_JOIN table_b AS b ON a.b_id = b.id");
 }

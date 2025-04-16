@@ -321,6 +321,9 @@ pub enum BinaryOperator {
     /// `~=` Same as? (PostgreSQL/Redshift geometric operator)
     /// See <https://www.postgresql.org/docs/9.5/functions-geometry.html>
     TildeEq,
+    /// ':=' Assignment Operator
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/assignment-operators.html#operator_assign-value>
+    Assignment,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -394,6 +397,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::QuestionDoublePipe => f.write_str("?||"),
             BinaryOperator::At => f.write_str("@"),
             BinaryOperator::TildeEq => f.write_str("~="),
+            BinaryOperator::Assignment => f.write_str(":="),
         }
     }
 }

@@ -353,6 +353,32 @@ fn test_duckdb_load_extension() {
 }
 
 #[test]
+fn test_duckdb_specific_int_types() {
+    let duckdb_dtypes = vec![
+        ("UTINYINT", DataType::UTinyInt),
+        ("USMALLINT", DataType::USmallInt),
+        ("UBIGINT", DataType::UBigInt),
+        ("UHUGEINT", DataType::UHugeInt),
+        ("HUGEINT", DataType::HugeInt),
+    ];
+    for (dtype_string, data_type) in duckdb_dtypes {
+        let sql = format!("SELECT 123::{}", dtype_string);
+        let select = duckdb().verified_only_select(&sql);
+        assert_eq!(
+            &Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(Expr::Value(
+                    Value::Number("123".parse().unwrap(), false).with_empty_span()
+                )),
+                data_type: data_type.clone(),
+                format: None,
+            },
+            expr_from_projection(&select.projection[0])
+        );
+    }
+}
+
+#[test]
 fn test_duckdb_struct_literal() {
     //struct literal syntax https://duckdb.org/docs/sql/data_types/struct#creating-structs
     //syntax: {'field_name': expr1[, ... ]}
@@ -730,6 +756,7 @@ fn test_duckdb_union_datatype() {
             cluster_by: Default::default(),
             clustered_by: Default::default(),
             options: Default::default(),
+            inherits: Default::default(),
             strict: Default::default(),
             copy_grants: Default::default(),
             enable_schema_evolution: Default::default(),

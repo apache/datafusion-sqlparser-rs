@@ -399,6 +399,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports multiple `SET` statements
+    /// in a single statement.
+    ///
+    /// ```sql
+    /// SET variable = expression [, variable = expression];
+    /// ```
+    fn supports_comma_separated_set_assignments(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports an `EXCEPT` clause following a
     /// wildcard in a select list.
     ///
@@ -624,7 +634,8 @@ pub trait Dialect: Debug + Any {
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(p!(Between)),
             Token::Word(w) if w.keyword == Keyword::DIV => Ok(p!(MulDivModOp)),
             Token::Period => Ok(p!(Period)),
-            Token::Eq
+            Token::Assignment
+            | Token::Eq
             | Token::Lt
             | Token::LtEq
             | Token::Neq
@@ -998,7 +1009,7 @@ pub trait Dialect: Debug + Any {
     /// Returns true if the dialect supports `SET NAMES <charset_name> [COLLATE <collation_name>]`.
     ///
     /// - [MySQL](https://dev.mysql.com/doc/refman/8.4/en/set-names.html)
-    /// - [Postgres](https://www.postgresql.org/docs/17/sql-set.html)
+    /// - [PostgreSQL](https://www.postgresql.org/docs/17/sql-set.html)
     ///
     /// Note: Postgres doesn't support the `COLLATE` clause, but we permissively parse it anyway.
     fn supports_set_names(&self) -> bool {

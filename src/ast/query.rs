@@ -43,14 +43,8 @@ pub struct Query {
     pub body: Box<SetExpr>,
     /// ORDER BY
     pub order_by: Option<OrderBy>,
-    /// `LIMIT { <N> | ALL }`
-    pub limit: Option<Expr>,
-
-    /// `LIMIT { <N> } BY { <expr>,<expr>,... } }`
-    pub limit_by: Vec<Expr>,
-
-    /// `OFFSET <N> [ { ROW | ROWS } ]`
-    pub offset: Option<Offset>,
+    /// `LIMIT ... OFFSET ... | LIMIT <offset>, <limit>`
+    pub limit_clause: Option<LimitClause>,
     /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
     pub fetch: Option<Fetch>,
     /// `FOR { UPDATE | SHARE } [ OF table_name ] [ SKIP LOCKED | NOWAIT ]`
@@ -82,14 +76,9 @@ impl fmt::Display for Query {
         if let Some(ref order_by) = self.order_by {
             write!(f, " {order_by}")?;
         }
-        if let Some(ref limit) = self.limit {
-            write!(f, " LIMIT {limit}")?;
-        }
-        if let Some(ref offset) = self.offset {
-            write!(f, " {offset}")?;
-        }
-        if !self.limit_by.is_empty() {
-            write!(f, " BY {}", display_separated(&self.limit_by, ", "))?;
+
+        if let Some(ref limit_clause) = self.limit_clause {
+            limit_clause.fmt(f)?;
         }
         if let Some(ref settings) = self.settings {
             write!(f, " SETTINGS {}", display_comma_separated(settings))?;
@@ -162,6 +151,7 @@ pub enum SetExpr {
     Values(Values),
     Insert(Statement),
     Update(Statement),
+    Delete(Statement),
     Table(Box<Table>),
 }
 
@@ -184,6 +174,7 @@ impl fmt::Display for SetExpr {
             SetExpr::Values(v) => write!(f, "{v}"),
             SetExpr::Insert(v) => write!(f, "{v}"),
             SetExpr::Update(v) => write!(f, "{v}"),
+            SetExpr::Delete(v) => write!(f, "{v}"),
             SetExpr::Table(t) => write!(f, "{t}"),
             SetExpr::SetOperation {
                 left,
@@ -2192,6 +2183,9 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             ),
+            JoinOperator::StraightJoin(constraint) => {
+                write!(f, " STRAIGHT_JOIN {}{}", self.relation, suffix(constraint))
+            }
         }
     }
 }
@@ -2232,6 +2226,10 @@ pub enum JoinOperator {
         match_condition: Expr,
         constraint: JoinConstraint,
     },
+    /// STRAIGHT_JOIN (non-standard)
+    ///
+    /// See <https://dev.mysql.com/doc/refman/8.4/en/join.html>.
+    StraightJoin(JoinConstraint),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -2395,6 +2393,58 @@ impl fmt::Display for OrderByOptions {
             None => (),
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum LimitClause {
+    /// Standard SQL syntax
+    ///
+    /// `LIMIT <limit> [BY <expr>,<expr>,...] [OFFSET <offset>]`
+    LimitOffset {
+        /// `LIMIT { <N> | ALL }`
+        limit: Option<Expr>,
+        /// `OFFSET <N> [ { ROW | ROWS } ]`
+        offset: Option<Offset>,
+        /// `BY { <expr>,<expr>,... } }`
+        ///
+        /// [ClickHouse](https://clickhouse.com/docs/sql-reference/statements/select/limit-by)
+        limit_by: Vec<Expr>,
+    },
+    /// [MySQL]-specific syntax; the order of expressions is reversed.
+    ///
+    /// `LIMIT <offset>, <limit>`
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/select.html
+    OffsetCommaLimit { offset: Expr, limit: Expr },
+}
+
+impl fmt::Display for LimitClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LimitClause::LimitOffset {
+                limit,
+                limit_by,
+                offset,
+            } => {
+                if let Some(ref limit) = limit {
+                    write!(f, " LIMIT {limit}")?;
+                }
+                if let Some(ref offset) = offset {
+                    write!(f, " {offset}")?;
+                }
+                if !limit_by.is_empty() {
+                    debug_assert!(limit.is_some());
+                    write!(f, " BY {}", display_separated(limit_by, ", "))?;
+                }
+                Ok(())
+            }
+            LimitClause::OffsetCommaLimit { offset, limit } => {
+                write!(f, " LIMIT {}, {}", offset, limit)
+            }
+        }
     }
 }
 

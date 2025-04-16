@@ -944,6 +944,12 @@ fn parse_limit_by() {
     clickhouse_and_generic().verified_stmt(
         r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset, toStartOfDay(created_at)"#,
     );
+    clickhouse_and_generic().parse_sql_statements(
+        r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC BY asset, toStartOfDay(created_at)"#,
+    ).expect_err("BY without LIMIT");
+    clickhouse_and_generic()
+        .parse_sql_statements("SELECT * FROM T OFFSET 5 BY foo")
+        .expect_err("BY with OFFSET but without LIMIT");
 }
 
 #[test]
@@ -1107,7 +1113,14 @@ fn parse_select_order_by_with_fill_interpolate() {
         },
         select.order_by.expect("ORDER BY expected")
     );
-    assert_eq!(Some(Expr::value(number("2"))), select.limit);
+    assert_eq!(
+        select.limit_clause,
+        Some(LimitClause::LimitOffset {
+            limit: Some(Expr::value(number("2"))),
+            offset: None,
+            limit_by: vec![]
+        })
+    );
 }
 
 #[test]

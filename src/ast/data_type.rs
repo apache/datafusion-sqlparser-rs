@@ -36,7 +36,7 @@ pub enum EnumMember {
     Name(String),
     /// ClickHouse allows to specify an integer value for each enum value.
     ///
-    /// [clickhouse](https://clickhouse.com/docs/en/sql-reference/data-types/enum)
+    /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/data-types/enum)
     NamedValue(String, Expr),
 }
 
@@ -45,292 +45,317 @@ pub enum EnumMember {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DataType {
-    /// Table type in [postgresql]. e.g. CREATE FUNCTION RETURNS TABLE(...)
+    /// Table type in [PostgreSQL], e.g. CREATE FUNCTION RETURNS TABLE(...).
     ///
-    /// [postgresql]: https://www.postgresql.org/docs/15/sql-createfunction.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
     Table(Vec<ColumnDef>),
-    /// Fixed-length character type e.g. CHARACTER(10)
+    /// Fixed-length character type, e.g. CHARACTER(10).
     Character(Option<CharacterLength>),
-    /// Fixed-length char type e.g. CHAR(10)
+    /// Fixed-length char type, e.g. CHAR(10).
     Char(Option<CharacterLength>),
-    /// Character varying type e.g. CHARACTER VARYING(10)
+    /// Character varying type, e.g. CHARACTER VARYING(10).
     CharacterVarying(Option<CharacterLength>),
-    /// Char varying type e.g. CHAR VARYING(10)
+    /// Char varying type, e.g. CHAR VARYING(10).
     CharVarying(Option<CharacterLength>),
-    /// Variable-length character type e.g. VARCHAR(10)
+    /// Variable-length character type, e.g. VARCHAR(10).
     Varchar(Option<CharacterLength>),
-    /// Variable-length character type e.g. NVARCHAR(10)
+    /// Variable-length character type, e.g. NVARCHAR(10).
     Nvarchar(Option<CharacterLength>),
-    /// Uuid type
+    /// Uuid type.
     Uuid,
-    /// Large character object with optional length e.g. CHARACTER LARGE OBJECT, CHARACTER LARGE OBJECT(1000), [standard]
+    /// Large character object with optional length,
+    /// e.g. CHARACTER LARGE OBJECT, CHARACTER LARGE OBJECT(1000), [SQL Standard].
     ///
-    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
     CharacterLargeObject(Option<u64>),
-    /// Large character object with optional length e.g. CHAR LARGE OBJECT, CHAR LARGE OBJECT(1000), [standard]
+    /// Large character object with optional length,
+    /// e.g. CHAR LARGE OBJECT, CHAR LARGE OBJECT(1000), [SQL Standard].
     ///
-    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
     CharLargeObject(Option<u64>),
-    /// Large character object with optional length e.g. CLOB, CLOB(1000), [standard]
+    /// Large character object with optional length,
+    /// e.g. CLOB, CLOB(1000), [SQL Standard].
     ///
-    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
     /// [Oracle]: https://docs.oracle.com/javadb/10.10.1.2/ref/rrefclob.html
     Clob(Option<u64>),
-    /// Fixed-length binary type with optional length e.g.  [standard], [MS SQL Server]
+    /// Fixed-length binary type with optional length,
+    /// see [SQL Standard], [MS SQL Server].
     ///
-    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
     /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/data-types/binary-and-varbinary-transact-sql?view=sql-server-ver16
     Binary(Option<u64>),
-    /// Variable-length binary with optional length type e.g. [standard], [MS SQL Server]
+    /// Variable-length binary with optional length type,
+    /// see [SQL Standard], [MS SQL Server].
     ///
-    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
     /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/data-types/binary-and-varbinary-transact-sql?view=sql-server-ver16
     Varbinary(Option<BinaryLength>),
-    /// Large binary object with optional length e.g. BLOB, BLOB(1000), [standard], [Oracle]
+    /// Large binary object with optional length,
+    /// see [SQL Standard], [Oracle].
     ///
-    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-large-object-string-type
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-large-object-string-type
     /// [Oracle]: https://docs.oracle.com/javadb/10.8.3.0/ref/rrefblob.html
     Blob(Option<u64>),
-    /// [MySQL] blob with up to 2**8 bytes
+    /// [MySQL] blob with up to 2**8 bytes.
     ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
     TinyBlob,
-    /// [MySQL] blob with up to 2**24 bytes
+    /// [MySQL] blob with up to 2**24 bytes.
     ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
     MediumBlob,
-    /// [MySQL] blob with up to 2**32 bytes
+    /// [MySQL] blob with up to 2**32 bytes.
     ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
     LongBlob,
     /// Variable-length binary data with optional length.
     ///
-    /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#bytes_type
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#bytes_type
     Bytes(Option<u64>),
-    /// Numeric type with optional precision and scale e.g. NUMERIC(10,2), [standard][1]
+    /// Numeric type with optional precision and scale, e.g. NUMERIC(10,2), [SQL Standard][1].
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
     Numeric(ExactNumberInfo),
-    /// Decimal type with optional precision and scale e.g. DECIMAL(10,2), [standard][1]
+    /// Decimal type with optional precision and scale, e.g. DECIMAL(10,2), [SQL Standard][1].
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
     Decimal(ExactNumberInfo),
-    /// [BigNumeric] type used in BigQuery
+    /// [BigNumeric] type used in BigQuery.
     ///
     /// [BigNumeric]: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#bignumeric_literals
     BigNumeric(ExactNumberInfo),
-    /// This is alias for `BigNumeric` type used in BigQuery
+    /// This is alias for `BigNumeric` type used in BigQuery.
     ///
     /// [BigDecimal]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#decimal_types
     BigDecimal(ExactNumberInfo),
-    /// Dec type with optional precision and scale e.g. DEC(10,2), [standard][1]
+    /// Dec type with optional precision and scale, e.g. DEC(10,2), [SQL Standard][1].
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
     Dec(ExactNumberInfo),
-    /// Floating point with optional precision e.g. FLOAT(8)
+    /// Floating point with optional precision, e.g. FLOAT(8).
     Float(Option<u64>),
-    /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
+    /// Tiny integer with optional display width, e.g. TINYINT or TINYINT(3).
     TinyInt(Option<u64>),
-    /// Unsigned tiny integer with optional display width e.g. TINYINT UNSIGNED or TINYINT(3) UNSIGNED
+    /// Unsigned tiny integer with optional display width,
+    /// e.g. TINYINT UNSIGNED or TINYINT(3) UNSIGNED.
     TinyIntUnsigned(Option<u64>),
-    /// Int2 as alias for SmallInt in [postgresql]
-    /// Note: Int2 mean 2 bytes in postgres (not 2 bits)
-    /// Int2 with optional display width e.g. INT2 or INT2(5)
+    /// Unsigned tiny integer, e.g. UTINYINT
+    UTinyInt,
+    /// Int2 is an alias for SmallInt in [PostgreSQL].
+    /// Note: Int2 means 2 bytes in PostgreSQL (not 2 bits).
+    /// Int2 with optional display width, e.g. INT2 or INT2(5).
     ///
-    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
     Int2(Option<u64>),
-    /// Unsigned Int2 with optional display width e.g. INT2 UNSIGNED or INT2(5) UNSIGNED
+    /// Unsigned Int2 with optional display width, e.g. INT2 UNSIGNED or INT2(5) UNSIGNED.
     Int2Unsigned(Option<u64>),
-    /// Small integer with optional display width e.g. SMALLINT or SMALLINT(5)
+    /// Small integer with optional display width, e.g. SMALLINT or SMALLINT(5).
     SmallInt(Option<u64>),
-    /// Unsigned small integer with optional display width e.g. SMALLINT UNSIGNED or SMALLINT(5) UNSIGNED
+    /// Unsigned small integer with optional display width,
+    /// e.g. SMALLINT UNSIGNED or SMALLINT(5) UNSIGNED.
     SmallIntUnsigned(Option<u64>),
-    /// MySQL medium integer ([1]) with optional display width e.g. MEDIUMINT or MEDIUMINT(5)
+    /// Unsigned small integer, e.g. USMALLINT.
+    USmallInt,
+    /// MySQL medium integer ([1]) with optional display width,
+    /// e.g. MEDIUMINT or MEDIUMINT(5).
     ///
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
     MediumInt(Option<u64>),
-    /// Unsigned medium integer ([1]) with optional display width e.g. MEDIUMINT UNSIGNED or MEDIUMINT(5) UNSIGNED
+    /// Unsigned medium integer ([1]) with optional display width,
+    /// e.g. MEDIUMINT UNSIGNED or MEDIUMINT(5) UNSIGNED.
     ///
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
     MediumIntUnsigned(Option<u64>),
-    /// Int with optional display width e.g. INT or INT(11)
+    /// Int with optional display width, e.g. INT or INT(11).
     Int(Option<u64>),
-    /// Int4 as alias for Integer in [postgresql]
-    /// Note: Int4 mean 4 bytes in postgres (not 4 bits)
-    /// Int4 with optional display width e.g. Int4 or Int4(11)
+    /// Int4 is an alias for Integer in [PostgreSQL].
+    /// Note: Int4 means 4 bytes in PostgreSQL (not 4 bits).
+    /// Int4 with optional display width, e.g. Int4 or Int4(11).
     ///
-    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
     Int4(Option<u64>),
-    /// Int8 as alias for Bigint in [postgresql] and integer type in [clickhouse]
-    /// Note: Int8 mean 8 bytes in [postgresql] (not 8 bits)
-    /// Int8 with optional display width e.g. INT8 or INT8(11)
-    /// Note: Int8 mean 8 bits in [clickhouse]
+    /// Int8 is an alias for BigInt in [PostgreSQL] and Integer type in [ClickHouse].
+    /// Int8 with optional display width, e.g. INT8 or INT8(11).
+    /// Note: Int8 means 8 bytes in [PostgreSQL], but 8 bits in [ClickHouse].
     ///
-    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     Int8(Option<u64>),
-    /// Integer type in [clickhouse]
-    /// Note: Int16 mean 16 bits in [clickhouse]
+    /// Integer type in [ClickHouse].
+    /// Note: Int16 means 16 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     Int16,
-    /// Integer type in [clickhouse]
-    /// Note: Int16 mean 32 bits in [clickhouse]
+    /// Integer type in [ClickHouse].
+    /// Note: Int32 means 32 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     Int32,
-    /// Integer type in [bigquery], [clickhouse]
+    /// Integer type in [BigQuery], [ClickHouse].
     ///
-    /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#integer_types
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#integer_types
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     Int64,
-    /// Integer type in [clickhouse]
-    /// Note: Int128 mean 128 bits in [clickhouse]
+    /// Integer type in [ClickHouse].
+    /// Note: Int128 means 128 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     Int128,
-    /// Integer type in [clickhouse]
-    /// Note: Int256 mean 256 bits in [clickhouse]
+    /// Integer type in [ClickHouse].
+    /// Note: Int256 means 256 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     Int256,
-    /// Integer with optional display width e.g. INTEGER or INTEGER(11)
+    /// Integer with optional display width, e.g. INTEGER or INTEGER(11).
     Integer(Option<u64>),
-    /// Unsigned int with optional display width e.g. INT UNSIGNED or INT(11) UNSIGNED
+    /// Unsigned int with optional display width, e.g. INT UNSIGNED or INT(11) UNSIGNED.
     IntUnsigned(Option<u64>),
-    /// Unsigned int4 with optional display width e.g. INT4 UNSIGNED or INT4(11) UNSIGNED
+    /// Unsigned int4 with optional display width, e.g. INT4 UNSIGNED or INT4(11) UNSIGNED.
     Int4Unsigned(Option<u64>),
-    /// Unsigned integer with optional display width e.g. INTEGER UNSIGNED or INTEGER(11) UNSIGNED
+    /// Unsigned integer with optional display width, e.g. INTEGER UNSIGNED or INTEGER(11) UNSIGNED.
     IntegerUnsigned(Option<u64>),
-    /// Unsigned integer type in [clickhouse]
-    /// Note: UInt8 mean 8 bits in [clickhouse]
+    /// 128-bit integer type, e.g. HUGEINT.
+    HugeInt,
+    /// Unsigned 128-bit integer type, e.g. UHUGEINT.
+    UHugeInt,
+    /// Unsigned integer type in [ClickHouse].
+    /// Note: UInt8 means 8 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     UInt8,
-    /// Unsigned integer type in [clickhouse]
-    /// Note: UInt16 mean 16 bits in [clickhouse]
+    /// Unsigned integer type in [ClickHouse].
+    /// Note: UInt16 means 16 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     UInt16,
-    /// Unsigned integer type in [clickhouse]
-    /// Note: UInt32 mean 32 bits in [clickhouse]
+    /// Unsigned integer type in [ClickHouse].
+    /// Note: UInt32 means 32 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     UInt32,
-    /// Unsigned integer type in [clickhouse]
-    /// Note: UInt64 mean 64 bits in [clickhouse]
+    /// Unsigned integer type in [ClickHouse].
+    /// Note: UInt64 means 64 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     UInt64,
-    /// Unsigned integer type in [clickhouse]
-    /// Note: UInt128 mean 128 bits in [clickhouse]
+    /// Unsigned integer type in [ClickHouse].
+    /// Note: UInt128 means 128 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     UInt128,
-    /// Unsigned integer type in [clickhouse]
-    /// Note: UInt256 mean 256 bits in [clickhouse]
+    /// Unsigned integer type in [ClickHouse].
+    /// Note: UInt256 means 256 bits in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
     UInt256,
-    /// Big integer with optional display width e.g. BIGINT or BIGINT(20)
+    /// Big integer with optional display width, e.g. BIGINT or BIGINT(20).
     BigInt(Option<u64>),
-    /// Unsigned big integer with optional display width e.g. BIGINT UNSIGNED or BIGINT(20) UNSIGNED
+    /// Unsigned big integer with optional display width, e.g. BIGINT UNSIGNED or BIGINT(20) UNSIGNED.
     BigIntUnsigned(Option<u64>),
-    /// Unsigned Int8 with optional display width e.g. INT8 UNSIGNED or INT8(11) UNSIGNED
+    /// Unsigned big integer, e.g. UBIGINT.
+    UBigInt,
+    /// Unsigned Int8 with optional display width, e.g. INT8 UNSIGNED or INT8(11) UNSIGNED.
     Int8Unsigned(Option<u64>),
-    /// Signed integer as used in [MySQL CAST] target types, without optional `INTEGER` suffix:
-    /// `SIGNED`
+    /// Signed integer as used in [MySQL CAST] target types, without optional `INTEGER` suffix,
+    /// e.g. `SIGNED`
     ///
     /// [MySQL CAST]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html
     Signed,
-    /// Signed integer as used in [MySQL CAST] target types, with optional `INTEGER` suffix:
-    /// `SIGNED INTEGER`
+    /// Signed integer as used in [MySQL CAST] target types, with optional `INTEGER` suffix,
+    /// e.g. `SIGNED INTEGER`
     ///
     /// [MySQL CAST]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html
     SignedInteger,
-    /// Signed integer as used in [MySQL CAST] target types, without optional `INTEGER` suffix:
-    /// `SIGNED`
+    /// Signed integer as used in [MySQL CAST] target types, without optional `INTEGER` suffix,
+    /// e.g. `SIGNED`
     ///
     /// [MySQL CAST]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html
     Unsigned,
-    /// Unsigned integer as used in [MySQL CAST] target types, with optional `INTEGER` suffix:
-    /// `UNSIGNED INTEGER`
+    /// Unsigned integer as used in [MySQL CAST] target types, with optional `INTEGER` suffix,
+    /// e.g. `UNSIGNED INTEGER`.
     ///
     /// [MySQL CAST]: https://dev.mysql.com/doc/refman/8.4/en/cast-functions.html
     UnsignedInteger,
-    /// Float4 as alias for Real in [postgresql]
+    /// Float4 is an alias for Real in [PostgreSQL].
     ///
-    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
     Float4,
-    /// Floating point in [clickhouse]
+    /// Floating point in [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/float
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/float
     Float32,
-    /// Floating point in [bigquery]
+    /// Floating point in [BigQuery].
     ///
-    /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#floating_point_types
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/float
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#floating_point_types
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/float
     Float64,
-    /// Floating point e.g. REAL
+    /// Floating point, e.g. REAL.
     Real,
-    /// Float8 as alias for Double in [postgresql]
+    /// Float8 is an alias for Double in [PostgreSQL].
     ///
-    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
     Float8,
     /// Double
     Double(ExactNumberInfo),
-    /// Double PRECISION e.g. [standard], [postgresql]
+    /// Double Precision, see [SQL Standard], [PostgreSQL].
     ///
-    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#approximate-numeric-type
-    /// [postgresql]: https://www.postgresql.org/docs/current/datatype-numeric.html
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#approximate-numeric-type
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype-numeric.html
     DoublePrecision,
-    /// Bool as alias for Boolean in [postgresql]
+    /// Bool is an alias for Boolean, see [PostgreSQL].
     ///
-    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
     Bool,
-    /// Boolean
+    /// Boolean type.
     Boolean,
-    /// Date
+    /// Date type.
     Date,
-    /// Date32 with the same range as Datetime64
+    /// Date32 with the same range as Datetime64.
     ///
     /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/date32
     Date32,
-    /// Time with optional time precision and time zone information e.g. [standard][1].
+    /// Time with optional time precision and time zone information, see [SQL Standard][1].
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     Time(Option<u64>, TimezoneInfo),
-    /// Datetime with optional time precision e.g. [MySQL][1].
+    /// Datetime with optional time precision, see [MySQL][1].
     ///
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/datetime.html
     Datetime(Option<u64>),
-    /// Datetime with time precision and optional timezone e.g. [ClickHouse][1].
+    /// Datetime with time precision and optional timezone, see [ClickHouse][1].
     ///
     /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/datetime64
     Datetime64(u64, Option<String>),
-    /// Timestamp with optional time precision and time zone information e.g. [standard][1].
+    /// Timestamp with optional time precision and time zone information, see [SQL Standard][1].
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     Timestamp(Option<u64>, TimezoneInfo),
-    /// Interval
+    /// Databricks timestamp without time zone. See [1].
+    ///
+    /// [1]: https://docs.databricks.com/aws/en/sql/language-manual/data-types/timestamp-ntz-type
+    TimestampNtz,
+    /// Interval type.
     Interval,
-    /// JSON type
+    /// JSON type.
     JSON,
-    /// Binary JSON type
+    /// Binary JSON type.
     JSONB,
-    /// Regclass used in postgresql serial
+    /// Regclass used in [PostgreSQL] serial.
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
     Regclass,
-    /// Text
+    /// Text type.
     Text,
-    /// [MySQL] text with up to 2**8 bytes
+    /// [MySQL] text with up to 2**8 bytes.
     ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
     TinyText,
-    /// [MySQL] text with up to 2**24 bytes
+    /// [MySQL] text with up to 2**24 bytes.
     ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
     MediumText,
-    /// [MySQL] text with up to 2**32 bytes
+    /// [MySQL] text with up to 2**32 bytes.
     ///
     /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/blob.html
     LongText,
@@ -340,75 +365,76 @@ pub enum DataType {
     ///
     /// [1]: https://clickhouse.com/docs/en/sql-reference/data-types/fixedstring
     FixedString(u64),
-    /// Bytea
-    Bytea,
-    /// Bit string, e.g. [Postgres], [MySQL], or [MSSQL]
+    /// Bytea type, see [PostgreSQL].
     ///
-    /// [Postgres]: https://www.postgresql.org/docs/current/datatype-bit.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype-bit.html
+    Bytea,
+    /// Bit string, see [PostgreSQL], [MySQL], or [MSSQL].
+    ///
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype-bit.html
     /// [MySQL]: https://dev.mysql.com/doc/refman/9.1/en/bit-type.html
     /// [MSSQL]: https://learn.microsoft.com/en-us/sql/t-sql/data-types/bit-transact-sql?view=sql-server-ver16
     Bit(Option<u64>),
-    /// `BIT VARYING(n)`: Variable-length bit string e.g. [Postgres]
+    /// `BIT VARYING(n)`: Variable-length bit string, see [PostgreSQL].
     ///
-    /// [Postgres]: https://www.postgresql.org/docs/current/datatype-bit.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype-bit.html
     BitVarying(Option<u64>),
-    /// `VARBIT(n)`: Variable-length bit string. [Postgres] alias for `BIT VARYING`
+    /// `VARBIT(n)`: Variable-length bit string. [PostgreSQL] alias for `BIT VARYING`.
     ///
-    /// [Postgres]: https://www.postgresql.org/docs/current/datatype.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/datatype.html
     VarBit(Option<u64>),
-    ///
-    /// Custom type such as enums
+    /// Custom types.
     Custom(ObjectName, Vec<String>),
-    /// Arrays
+    /// Arrays.
     Array(ArrayElemTypeDef),
-    /// Map
+    /// Map, see [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/map
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/map
     Map(Box<DataType>, Box<DataType>),
-    /// Tuple
+    /// Tuple, see [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/tuple
     Tuple(Vec<StructField>),
-    /// Nested
+    /// Nested type, see [ClickHouse].
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nested-data-structures/nested
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nested-data-structures/nested
     Nested(Vec<ColumnDef>),
-    /// Enums
+    /// Enum type.
     Enum(Vec<EnumMember>, Option<u8>),
-    /// Set
+    /// Set type.
     Set(Vec<String>),
-    /// Struct
+    /// Struct type, see [Hive], [BigQuery].
     ///
-    /// [hive]: https://docs.cloudera.com/cdw-runtime/cloud/impala-sql-reference/topics/impala-struct.html
-    /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+    /// [Hive]: https://docs.cloudera.com/cdw-runtime/cloud/impala-sql-reference/topics/impala-struct.html
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct(Vec<StructField>, StructBracketKind),
-    /// Union
+    /// Union type, see [DuckDB].
     ///
-    /// [duckdb]: https://duckdb.org/docs/sql/data_types/union.html
+    /// [DuckDB]: https://duckdb.org/docs/sql/data_types/union.html
     Union(Vec<UnionField>),
     /// Nullable - special marker NULL represents in ClickHouse as a data type.
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nullable
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/nullable
     Nullable(Box<DataType>),
     /// LowCardinality - changes the internal representation of other data types to be dictionary-encoded.
     ///
-    /// [clickhouse]: https://clickhouse.com/docs/en/sql-reference/data-types/lowcardinality
+    /// [ClickHouse]: https://clickhouse.com/docs/en/sql-reference/data-types/lowcardinality
     LowCardinality(Box<DataType>),
     /// No type specified - only used with
     /// [`SQLiteDialect`](crate::dialect::SQLiteDialect), from statements such
     /// as `CREATE TABLE t1 (a)`.
     Unspecified,
-    /// Trigger data type, returned by functions associated with triggers
+    /// Trigger data type, returned by functions associated with triggers, see [PostgreSQL].
     ///
-    /// [postgresql]: https://www.postgresql.org/docs/current/plpgsql-trigger.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/current/plpgsql-trigger.html
     Trigger,
-    /// Any data type, used in BigQuery UDF definitions for templated parameters
+    /// Any data type, used in BigQuery UDF definitions for templated parameters, see [BigQuery].
     ///
-    /// [bigquery]: https://cloud.google.com/bigquery/docs/user-defined-functions#templated-sql-udf-parameters
+    /// [BigQuery]: https://cloud.google.com/bigquery/docs/user-defined-functions#templated-sql-udf-parameters
     AnyType,
-    /// geometric type
+    /// Geometric type, see [PostgreSQL].
     ///
-    /// [Postgres]: https://www.postgresql.org/docs/9.5/functions-geometry.html
+    /// [PostgreSQL]: https://www.postgresql.org/docs/9.5/functions-geometry.html
     GeometricType(GeometricTypeKind),
 }
 
@@ -499,6 +525,9 @@ impl fmt::Display for DataType {
             DataType::Int256 => {
                 write!(f, "Int256")
             }
+            DataType::HugeInt => {
+                write!(f, "HUGEINT")
+            }
             DataType::Int4Unsigned(zerofill) => {
                 format_type_with_optional_length(f, "INT4", zerofill, true)
             }
@@ -516,6 +545,18 @@ impl fmt::Display for DataType {
             }
             DataType::Int8Unsigned(zerofill) => {
                 format_type_with_optional_length(f, "INT8", zerofill, true)
+            }
+            DataType::UTinyInt => {
+                write!(f, "UTINYINT")
+            }
+            DataType::USmallInt => {
+                write!(f, "USMALLINT")
+            }
+            DataType::UBigInt => {
+                write!(f, "UBIGINT")
+            }
+            DataType::UHugeInt => {
+                write!(f, "UHUGEINT")
             }
             DataType::UInt8 => {
                 write!(f, "UInt8")
@@ -567,6 +608,7 @@ impl fmt::Display for DataType {
             DataType::Timestamp(precision, timezone_info) => {
                 format_datetime_precision_and_tz(f, "TIMESTAMP", precision, timezone_info)
             }
+            DataType::TimestampNtz => write!(f, "TIMESTAMP_NTZ"),
             DataType::Datetime64(precision, timezone) => {
                 format_clickhouse_datetime_precision_and_timezone(
                     f,
@@ -777,19 +819,19 @@ pub enum StructBracketKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TimezoneInfo {
-    /// No information about time zone. E.g., TIMESTAMP
+    /// No information about time zone, e.g. TIMESTAMP
     None,
-    /// Temporal type 'WITH TIME ZONE'. E.g., TIMESTAMP WITH TIME ZONE, [standard], [Oracle]
+    /// Temporal type 'WITH TIME ZONE', e.g. TIMESTAMP WITH TIME ZONE, [SQL Standard], [Oracle]
     ///
-    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     /// [Oracle]: https://docs.oracle.com/en/database/oracle/oracle-database/12.2/nlspg/datetime-data-types-and-time-zone-support.html#GUID-3F1C388E-C651-43D5-ADBC-1A49E5C2CA05
     WithTimeZone,
-    /// Temporal type 'WITHOUT TIME ZONE'. E.g., TIME WITHOUT TIME ZONE, [standard], [Postgresql]
+    /// Temporal type 'WITHOUT TIME ZONE', e.g. TIME WITHOUT TIME ZONE, [SQL Standard], [Postgresql]
     ///
-    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    /// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     /// [Postgresql]: https://www.postgresql.org/docs/current/datatype-datetime.html
     WithoutTimeZone,
-    /// Postgresql specific `WITH TIME ZONE` formatting, for both TIME and TIMESTAMP. E.g., TIMETZ, [Postgresql]
+    /// Postgresql specific `WITH TIME ZONE` formatting, for both TIME and TIMESTAMP, e.g. TIMETZ, [Postgresql]
     ///
     /// [Postgresql]: https://www.postgresql.org/docs/current/datatype-datetime.html
     Tz,
@@ -818,18 +860,18 @@ impl fmt::Display for TimezoneInfo {
 }
 
 /// Additional information for `NUMERIC`, `DECIMAL`, and `DEC` data types
-/// following the 2016 [standard].
+/// following the 2016 [SQL Standard].
 ///
-/// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
+/// [SQL Standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ExactNumberInfo {
-    /// No additional information e.g. `DECIMAL`
+    /// No additional information, e.g. `DECIMAL`
     None,
-    /// Only precision information e.g. `DECIMAL(10)`
+    /// Only precision information, e.g. `DECIMAL(10)`
     Precision(u64),
-    /// Precision and scale information e.g. `DECIMAL(10,2)`
+    /// Precision and scale information, e.g. `DECIMAL(10,2)`
     PrecisionAndScale(u64, u64),
 }
 
@@ -883,7 +925,7 @@ impl fmt::Display for CharacterLength {
     }
 }
 
-/// Possible units for characters, initially based on 2016 ANSI [standard][1].
+/// Possible units for characters, initially based on 2016 ANSI [SQL Standard][1].
 ///
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#char-length-units
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -956,7 +998,7 @@ pub enum ArrayElemTypeDef {
 /// Represents different types of geometric shapes which are commonly used in
 /// PostgreSQL/Redshift for spatial operations and geometry-related computations.
 ///
-/// [Postgres]: https://www.postgresql.org/docs/9.5/functions-geometry.html
+/// [PostgreSQL]: https://www.postgresql.org/docs/9.5/functions-geometry.html
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

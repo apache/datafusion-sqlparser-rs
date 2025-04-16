@@ -15130,15 +15130,11 @@ impl<'a> Parser<'a> {
 
     /// Parse [Statement::Return]
     fn parse_return(&mut self) -> Result<Statement, ParserError> {
-        let current_index = self.index;
-        match self.parse_expr() {
-            Ok(expr) => Ok(Statement::Return(ReturnStatement {
+        match self.maybe_parse(|p| p.parse_expr())? {
+            Some(expr) => Ok(Statement::Return(ReturnStatement {
                 value: Some(ReturnStatementValue::Expr(expr)),
             })),
-            Err(_) => {
-                self.index = current_index;
-                Ok(Statement::Return(ReturnStatement { value: None }))
-            }
+            None => Ok(Statement::Return(ReturnStatement { value: None })),
         }
     }
 

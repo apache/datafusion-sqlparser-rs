@@ -2318,7 +2318,14 @@ impl fmt::Display for ConditionalStatements {
     }
 }
 
-/// A shared representation of `BEGIN`, multiple statements, and `END` tokens.
+/// Represents a list of statements enclosed within `BEGIN` and `END` keywords.
+/// Example:
+/// ```sql
+/// BEGIN
+///     SELECT 1;
+///     SELECT 2;
+/// END
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -9273,17 +9280,10 @@ impl fmt::Display for PrintStatement {
     }
 }
 
-/// Return (MsSql)
+/// Represents a `Return` statement.
 ///
-/// for Functions:
-/// RETURN scalar_expression
-///
-/// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql>
-///
-/// for Triggers:
-/// RETURN
-///
-/// See <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql>
+/// [MsSql triggers](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql)
+/// [MsSql functions](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

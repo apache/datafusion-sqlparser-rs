@@ -2536,6 +2536,11 @@ fn parse_mssql_go_keyword() {
     assert_eq!(stmts.len(), 2);
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(5) }));
 
+    let go_statement_delimiter = "SELECT 1\nGO";
+    let stmts = ms().parse_sql_statements(go_statement_delimiter).unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
     let bare_go = "GO";
     let stmts = ms().parse_sql_statements(bare_go).unwrap();
     assert_eq!(stmts.len(), 1);
@@ -2569,15 +2574,22 @@ fn parse_mssql_go_keyword() {
     assert_eq!(stmts.len(), 2);
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
 
-    let actually_column_alias = "SELECT NULL AS GO";
-    let stmt = ms().verified_only_select(actually_column_alias);
-    assert_eq!(
-        only(stmt.projection),
-        SelectItem::ExprWithAlias {
-            expr: Expr::Value(Value::Null.with_empty_span()),
-            alias: Ident::new("GO"),
+    let actually_column_alias = "SELECT NULL GO";
+    let stmts = ms().parse_sql_statements(actually_column_alias).unwrap();
+    assert_eq!(stmts.len(), 1);
+    match &stmts[0] {
+        Statement::Query(query) => {
+            let select = query.body.as_select().unwrap();
+            assert_eq!(
+                only(select.clone().projection),
+                SelectItem::ExprWithAlias {
+                    expr: Expr::Value(Value::Null.with_empty_span()),
+                    alias: Ident::new("GO"),
+                }
+            );
         }
-    );
+        _ => panic!("Expected Query statement"),
+    }
 
     let invalid_go_position = "SELECT 1; GO";
     let err = ms().parse_sql_statements(invalid_go_position);
@@ -2590,7 +2602,7 @@ fn parse_mssql_go_keyword() {
     let err = ms().parse_sql_statements(invalid_go_count);
     assert_eq!(
         err.unwrap_err().to_string(),
-        "sql parser error: Expected: end of statement, found: x"
+        "sql parser error: Expected: literal int or newline, found: x"
     );
 }
 

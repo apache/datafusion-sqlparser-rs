@@ -495,6 +495,10 @@ impl<'a> Parser<'a> {
                     if expecting_statement_delimiter && word.keyword == Keyword::END {
                         break;
                     }
+
+                    if expecting_statement_delimiter && word.keyword == Keyword::GO {
+                        expecting_statement_delimiter = false;
+                    }
                 }
                 _ => {}
             }

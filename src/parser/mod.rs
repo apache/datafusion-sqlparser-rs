@@ -17366,6 +17366,12 @@ impl<'a> Parser<'a> {
             match prev_token.token {
                 Token::Whitespace(ref w) => match w {
                     Whitespace::Newline => break,
+                    Whitespace::SingleLineComment { comment, prefix: _ } => {
+                        if comment.ends_with('\n') {
+                            break;
+                        }
+                        look_back_count += 1;
+                    }
                     _ => look_back_count += 1,
                 },
                 _ => {

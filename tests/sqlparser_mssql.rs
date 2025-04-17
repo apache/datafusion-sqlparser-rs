@@ -2569,6 +2569,20 @@ fn parse_mssql_go_keyword() {
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(5) }));
     assert_eq!(stmts[3], Statement::Go(GoStatement { count: None }));
 
+    let single_line_comment_preceding_go = "USE some_database; -- okay\nGO";
+    let stmts = ms()
+        .parse_sql_statements(single_line_comment_preceding_go)
+        .unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
+    let multi_line_comment_preceding_go = "USE some_database; /* okay */\nGO";
+    let stmts = ms()
+        .parse_sql_statements(multi_line_comment_preceding_go)
+        .unwrap();
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
     let comment_following_go = "USE some_database;\nGO -- okay";
     let stmts = ms().parse_sql_statements(comment_following_go).unwrap();
     assert_eq!(stmts.len(), 2);

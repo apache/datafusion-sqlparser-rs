@@ -4104,6 +4104,7 @@ fn parse_create_function() {
     assert_eq!(
         pg_and_generic().verified_stmt(sql),
         Statement::CreateFunction(CreateFunction {
+            or_alter: false,
             or_replace: false,
             temporary: false,
             name: ObjectName::from(vec![Ident::new("add")]),
@@ -5485,6 +5486,7 @@ fn parse_trigger_related_functions() {
     assert_eq!(
         create_function,
         Statement::CreateFunction(CreateFunction {
+            or_alter: false,
             or_replace: false,
             temporary: false,
             if_not_exists: false,

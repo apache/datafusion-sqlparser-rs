@@ -116,7 +116,17 @@ impl Dialect for MsSqlDialect {
         true
     }
 
-    fn is_column_alias(&self, kw: &Keyword, _parser: &mut Parser) -> bool {
+    fn is_column_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
+        // if we find maybe whitespace then a newline looking backward, then `GO` ISN'T a column alias
+        // if we can't find a newline then we assume that `GO` IS a column alias
+        if kw == &Keyword::GO
+            && parser
+                .expect_previously_only_whitespace_until_newline()
+                .is_ok()
+        {
+            return false;
+        }
+
         !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw) && !RESERVED_FOR_COLUMN_ALIAS.contains(kw)
     }
 

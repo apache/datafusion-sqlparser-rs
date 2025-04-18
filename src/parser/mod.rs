@@ -475,6 +475,10 @@ impl<'a> Parser<'a> {
                     if expecting_statement_delimiter && word.keyword == Keyword::END {
                         break;
                     }
+
+                    if expecting_statement_delimiter && word.keyword == Keyword::GO {
+                        expecting_statement_delimiter = false;
+                    }
                 }
                 _ => {}
             }
@@ -484,8 +488,18 @@ impl<'a> Parser<'a> {
             }
 
             let statement = self.parse_statement()?;
+            expecting_statement_delimiter = match &statement {
+                Statement::If(s) => match &s.if_block.conditional_statements {
+                    // the `END` keyword doesn't need to be followed by a statement delimiter, so it shouldn't be expected here
+                    ConditionalStatements::BeginEnd { .. } => false,
+                    // parsing the statement sequence consumes the statement delimiter, so it shouldn't be expected here
+                    ConditionalStatements::Sequence { .. } => false,
+                },
+                // Treat batch delimiter as an end of statement, so no additional statement delimiter expected here
+                Statement::Go(_) => false,
+                _ => true,
+            };
             stmts.push(statement);
-            expecting_statement_delimiter = true;
         }
         Ok(stmts)
     }
@@ -618,6 +632,7 @@ impl<'a> Parser<'a> {
                 // `COMMENT` is snowflake specific https://docs.snowflake.com/en/sql-reference/sql/comment
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
                 Keyword::PRINT => self.parse_print(),
+                Keyword::GO => self.parse_go(),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -4053,6 +4068,44 @@ impl<'a> Parser<'a> {
             format!("Expected: {expected}, found: {found}"),
             found.span.start
         )
+    }
+
+    /// Look backwards in the token stream and expect that there was only whitespace tokens until the previous newline
+    pub fn expect_previously_only_whitespace_until_newline(&mut self) -> Result<(), ParserError> {
+        let mut look_back_count = 2;
+        loop {
+            let prev_index = self.index.saturating_sub(look_back_count);
+            if prev_index == 0 {
+                break;
+            }
+            let prev_token = self.token_at(prev_index);
+            match prev_token.token {
+                Token::Whitespace(ref w) => match w {
+                    Whitespace::Newline => break,
+                    // special consideration required for single line comments since that string includes the newline
+                    Whitespace::SingleLineComment { comment, prefix: _ } => {
+                        if comment.ends_with('\n') {
+                            break;
+                        }
+                        look_back_count += 1;
+                    }
+                    _ => look_back_count += 1,
+                },
+                _ => {
+                    let current_token = self.get_current_token();
+                    if prev_token == current_token {
+                        // if we are at the start of the statement, we can skip this check
+                        break;
+                    }
+
+                    self.expected(
+                        &format!("newline before current token ({})", current_token),
+                        prev_token.clone(),
+                    )?
+                }
+            };
+        }
+        Ok(())
     }
 
     /// If the current token is the `expected` keyword, consume it and returns
@@ -15062,6 +15115,38 @@ impl<'a> Parser<'a> {
         Ok(Statement::Print(PrintStatement {
             message: Box::new(self.parse_expr()?),
         }))
+    }
+
+    /// Parse [Statement::Go]
+    fn parse_go(&mut self) -> Result<Statement, ParserError> {
+        self.expect_previously_only_whitespace_until_newline()?;
+
+        let count = loop {
+            // using this peek function because we want to halt this statement parsing upon newline
+            let next_token = self.peek_token_no_skip();
+            match next_token.token {
+                Token::EOF => break None::<u64>,
+                Token::Whitespace(ref w) => match w {
+                    Whitespace::Newline => break None,
+                    _ => _ = self.next_token_no_skip(),
+                },
+                Token::Number(s, _) => {
+                    let value = Some(Self::parse::<u64>(s, next_token.span.start)?);
+                    self.advance_token();
+                    break value;
+                }
+                _ => self.expected("literal int or newline", next_token)?,
+            };
+        };
+
+        if self.peek_token().token == Token::SemiColon {
+            parser_err!(
+                "GO may not end with a semicolon",
+                self.peek_token().span.start
+            )?;
+        }
+
+        Ok(Statement::Go(GoStatement { count }))
     }
 
     /// Consume the parser and return its underlying token buffer

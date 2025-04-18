@@ -4238,6 +4238,44 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Look backwards in the token stream and expect that there was only whitespace tokens until the previous newline
+    pub fn expect_previously_only_whitespace_until_newline(&mut self) -> Result<(), ParserError> {
+        let mut look_back_count = 2;
+        loop {
+            let prev_index = self.index.saturating_sub(look_back_count);
+            if prev_index == 0 {
+                break;
+            }
+            let prev_token = self.token_at(prev_index);
+            match prev_token.token {
+                Token::Whitespace(ref w) => match w {
+                    Whitespace::Newline => break,
+                    // special consideration required for single line comments since that string includes the newline
+                    Whitespace::SingleLineComment { comment, prefix: _ } => {
+                        if comment.ends_with('\n') {
+                            break;
+                        }
+                        look_back_count += 1;
+                    }
+                    _ => look_back_count += 1,
+                },
+                _ => {
+                    let current_token = self.get_current_token();
+                    if prev_token == current_token {
+                        // if we are at the start of the statement, we can skip this check
+                        break;
+                    }
+
+                    self.expected(
+                        &format!("newline before current token ({})", current_token),
+                        prev_token.clone(),
+                    )?
+                }
+            };
+        }
+        Ok(())
+    }
+
     /// If the current token is the `expected` keyword, consume it and returns
     /// true. Otherwise, no tokens are consumed and returns false.
     #[must_use]
@@ -17354,36 +17392,7 @@ impl<'a> Parser<'a> {
 
     /// Parse [Statement::Go]
     fn parse_go(&mut self) -> Result<Statement, ParserError> {
-        // previous token should be a newline (skipping non-newline whitespace)
-        // see also, `previous_token`
-        let mut look_back_count = 2;
-        loop {
-            let prev_index = self.index.saturating_sub(look_back_count);
-            if prev_index == 0 {
-                break;
-            }
-            let prev_token = self.token_at(prev_index);
-            match prev_token.token {
-                Token::Whitespace(ref w) => match w {
-                    Whitespace::Newline => break,
-                    Whitespace::SingleLineComment { comment, prefix: _ } => {
-                        if comment.ends_with('\n') {
-                            break;
-                        }
-                        look_back_count += 1;
-                    }
-                    _ => look_back_count += 1,
-                },
-                _ => {
-                    if prev_token == self.get_current_token() {
-                        // if we are at the start of the statement, we can skip this check
-                        break;
-                    }
-
-                    self.expected("newline before GO", prev_token.clone())?
-                }
-            };
-        }
+        self.expect_previously_only_whitespace_until_newline()?;
 
         let count = loop {
             // using this peek function because we want to halt this statement parsing upon newline

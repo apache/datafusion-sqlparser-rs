@@ -11760,6 +11760,11 @@ fn test_xmltable() {
     all_dialects().verified_only_select(
         "SELECT X.* FROM T1, XMLTABLE('$CUSTLIST/customers/customerinfo' COLUMNS \"Cid\" BIGINT PATH '@Cid', \"Info\" XML PATH 'document{.}', \"History\" XML PATH 'NULL') AS X"
     );
+
+    // Example from PostgreSQL with XMLNAMESPACES
+    all_dialects().verified_only_select(
+        "SELECT xmltable.* FROM XMLTABLE(XMLNAMESPACES('http://example.com/myns' AS x, 'http://example.com/b' AS \"B\"), '/x:example/x:item' PASSING (SELECT data FROM xmldata) COLUMNS foo INT PATH '@foo', bar INT PATH '@B:bar')"
+    );
 }
 
 #[test]

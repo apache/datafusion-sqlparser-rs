@@ -990,6 +990,7 @@ define_keywords!(
     WORK,
     WRITE,
     XML,
+    XMLNAMESPACES,
     XMLTABLE,
     XOR,
     YEAR,

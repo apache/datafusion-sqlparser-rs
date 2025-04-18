@@ -81,8 +81,8 @@ pub use self::query::{
     TableSampleBucket, TableSampleKind, TableSampleMethod, TableSampleModifier,
     TableSampleQuantity, TableSampleSeed, TableSampleSeedModifier, TableSampleUnit, TableVersion,
     TableWithJoins, Top, TopQuantity, UpdateTableFromKind, ValueTableMode, Values,
-    WildcardAdditionalOptions, With, WithFill, XmlPassingArgument, XmlPassingClause,
-    XmlTableColumn, XmlTableColumnOption,
+    WildcardAdditionalOptions, With, WithFill, XmlNamespaceDefinition, XmlPassingArgument,
+    XmlPassingClause, XmlTableColumn, XmlTableColumnOption,
 };
 
 pub use self::trigger::{

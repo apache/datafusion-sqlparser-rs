@@ -1291,7 +1291,8 @@ pub enum TableFactor {
     /// );
     /// ````
     XmlTable {
-        // TODO: Add XMLNAMESPACES clause support
+        /// Optional XMLNAMESPACES clause (empty if not present)
+        namespaces: Vec<XmlNamespaceDefinition>,
         /// The row-generating XPath expression.
         row_expression: Expr,
         /// The PASSING clause specifying the document expression.
@@ -1971,10 +1972,19 @@ impl fmt::Display for TableFactor {
                 passing,
                 columns,
                 alias,
+                namespaces,
             } => {
+                write!(f, "XMLTABLE(")?;
+                if !namespaces.is_empty() {
+                    write!(
+                        f,
+                        "XMLNAMESPACES({}), ",
+                        display_comma_separated(namespaces)
+                    )?;
+                }
                 write!(
                     f,
-                    "XMLTABLE({row_expression}{passing} COLUMNS {columns})",
+                    "{row_expression}{passing} COLUMNS {columns})",
                     columns = display_comma_separated(columns)
                 )?;
                 if let Some(alias) = alias {
@@ -3237,5 +3247,24 @@ impl fmt::Display for XmlPassingClause {
             write!(f, " PASSING {}", display_comma_separated(&self.arguments))?;
         }
         Ok(())
+    }
+}
+
+/// Represents a single XML namespace definition in the XMLNAMESPACES clause.
+///
+/// `namespace_uri AS namespace_name`
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct XmlNamespaceDefinition {
+    /// The namespace URI (a text expression).
+    pub uri: Expr,
+    /// The alias for the namespace (a simple identifier).
+    pub name: Ident,
+}
+
+impl fmt::Display for XmlNamespaceDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} AS {}", self.uri, self.name)
     }
 }

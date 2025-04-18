@@ -12345,6 +12345,15 @@ impl<'a> Parser<'a> {
 
     fn parse_xml_table_factor(&mut self) -> Result<TableFactor, ParserError> {
         self.expect_token(&Token::LParen)?;
+        let namespaces = if self.parse_keyword(Keyword::XMLNAMESPACES) {
+            self.expect_token(&Token::LParen)?;
+            let namespaces = self.parse_comma_separated(Parser::parse_xml_namespace_definition)?;
+            self.expect_token(&Token::RParen)?;
+            self.expect_token(&Token::Comma)?;
+            namespaces
+        } else {
+            vec![]
+        };
         let row_expression = self.parse_expr()?;
         let passing = self.parse_xml_passing_clause()?;
         self.expect_keyword_is(Keyword::COLUMNS)?;
@@ -12352,11 +12361,19 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
         let alias = self.maybe_parse_table_alias()?;
         Ok(TableFactor::XmlTable {
+            namespaces,
             row_expression,
             passing,
             columns,
             alias,
         })
+    }
+
+    fn parse_xml_namespace_definition(&mut self) -> Result<XmlNamespaceDefinition, ParserError> {
+        let uri = self.parse_expr()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        let name = self.parse_identifier()?;
+        Ok(XmlNamespaceDefinition { uri, name })
     }
 
     fn parse_xml_table_column(&mut self) -> Result<XmlTableColumn, ParserError> {

@@ -11642,6 +11642,20 @@ fn parse_connect_by() {
 
 #[test]
 fn test_selective_aggregation() {
+    let testing_dialects = all_dialects_where(|d| d.supports_filter_during_aggregation());
+    let expected_dialects: Vec<Box<dyn Dialect>> = vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(DatabricksDialect {}),
+        Box::new(HiveDialect {}),
+        Box::new(SQLiteDialect {}),
+        Box::new(DuckDbDialect {}),
+        Box::new(GenericDialect {}),
+    ];
+    assert_eq!(testing_dialects.dialects.len(), expected_dialects.len());
+    expected_dialects
+        .into_iter()
+        .for_each(|d| assert!(d.supports_filter_during_aggregation()));
+
     let sql = concat!(
         "SELECT ",
         "ARRAY_AGG(name) FILTER (WHERE name IS NOT NULL), ",
@@ -11649,9 +11663,7 @@ fn test_selective_aggregation() {
         "FROM region"
     );
     assert_eq!(
-        all_dialects_where(|d| d.supports_filter_during_aggregation())
-            .verified_only_select(sql)
-            .projection,
+        testing_dialects.verified_only_select(sql).projection,
         vec![
             SelectItem::UnnamedExpr(Expr::Function(Function {
                 name: ObjectName::from(vec![Ident::new("ARRAY_AGG")]),

@@ -23,7 +23,7 @@ use crate::ast::{
 use crate::dialect::Dialect;
 use crate::keywords::{self, Keyword};
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::{Token, Whitespace};
+use crate::tokenizer::Token;
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
 
@@ -129,26 +129,14 @@ impl Dialect for MsSqlDialect {
     }
 
     fn is_column_alias(&self, kw: &Keyword, parser: &mut Parser) -> bool {
-        // if:
-        // - keyword is `GO`, and
-        // - looking backwards there's only (any) whitespace preceded by a newline
-        // then: `GO` iSN'T a column alias
-        if kw == &Keyword::GO {
-            let mut look_back_count = 2;
-            loop {
-                let prev_index = parser.index().saturating_sub(look_back_count);
-                if prev_index == 0 {
-                    break;
-                }
-                let prev_token = parser.token_at(prev_index);
-                match prev_token.token {
-                    Token::Whitespace(ref w) => match w {
-                        Whitespace::Newline => return false,
-                        _ => look_back_count += 1,
-                    },
-                    _ => break,
-                };
-            }
+        // if we find maybe whitespace then a newline looking backward, then `GO` ISN'T a column alias
+        // if we can't find a newline then we assume that `GO` IS a column alias
+        if kw == &Keyword::GO
+            && parser
+                .expect_previously_only_whitespace_until_newline()
+                .is_ok()
+        {
+            return false;
         }
 
         !keywords::RESERVED_FOR_COLUMN_ALIAS.contains(kw) && !RESERVED_FOR_COLUMN_ALIAS.contains(kw)

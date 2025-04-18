@@ -1909,6 +1909,7 @@ impl Spanned for TableFactor {
                     .chain(alias.as_ref().map(|alias| alias.span())),
             ),
             TableFactor::JsonTable { .. } => Span::empty(),
+            TableFactor::XmlTable { .. } => Span::empty(),
             TableFactor::Pivot {
                 table,
                 aggregate_functions,

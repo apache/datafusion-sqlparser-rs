@@ -2280,7 +2280,16 @@ impl Spanned for TableObject {
 
 impl Spanned for BeginEndStatements {
     fn span(&self) -> Span {
-        union_spans([self.begin_token.0.span, self.end_token.0.span].into_iter())
+        let BeginEndStatements {
+            begin_token,
+            statements,
+            end_token,
+        } = self;
+        union_spans(
+            core::iter::once(begin_token.0.span)
+                .chain(statements.iter().map(|i| i.span()))
+                .chain(core::iter::once(end_token.0.span)),
+        )
     }
 }
 

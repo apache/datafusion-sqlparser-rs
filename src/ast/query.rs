@@ -3142,8 +3142,8 @@ pub enum XmlTableColumnOption {
         path: Option<Expr>,
         /// Default value if path does not match
         default: Option<Expr>,
-        // TODO: Add NULL ON EMPTY / ERROR handling if needed later
-        // TODO: Add NOT NULL / NULL constraints
+        /// Whether the column is nullable (NULL=true, NOT NULL=false)
+        nullable: bool,
     },
     /// The FOR ORDINALITY marker
     ForOrdinality,
@@ -3179,6 +3179,7 @@ impl fmt::Display for XmlTableColumn {
                 r#type,
                 path,
                 default,
+                nullable,
             } => {
                 write!(f, " {}", r#type)?;
                 if let Some(p) = path {
@@ -3186,6 +3187,9 @@ impl fmt::Display for XmlTableColumn {
                 }
                 if let Some(d) = default {
                     write!(f, " DEFAULT {}", d)?;
+                }
+                if !*nullable {
+                    write!(f, " NOT NULL")?;
                 }
                 Ok(())
             }

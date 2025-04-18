@@ -12378,12 +12378,17 @@ impl<'a> Parser<'a> {
                 default = Some(self.parse_expr()?);
             }
 
-            // TODO: Parse NOT NULL/NULL constraints
+            let not_null = self.parse_keywords(&[Keyword::NOT, Keyword::NULL]);
+            if !not_null {
+                // NULL is the default but can be specified explicitly
+                let _ = self.parse_keyword(Keyword::NULL);
+            }
 
             XmlTableColumnOption::NamedInfo {
                 r#type,
                 path,
                 default,
+                nullable: !not_null,
             }
         };
         Ok(XmlTableColumn { name, option })

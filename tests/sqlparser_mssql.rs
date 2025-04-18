@@ -1566,7 +1566,7 @@ fn test_mssql_cursor() {
         CLOSE Employee_Cursor; \
         DEALLOCATE Employee_Cursor\
     ";
-    let _ = ms().statements_parse_to(full_cursor_usage, "");
+    let _ = ms().multiple_statements_parse_to(full_cursor_usage, 6, "");
 }
 
 #[test]
@@ -2527,28 +2527,27 @@ DECLARE @Y AS NVARCHAR(MAX)='y'
 #[test]
 fn parse_mssql_go_keyword() {
     let single_go_keyword = "USE some_database;\nGO";
-    let stmts = ms().parse_sql_statements(single_go_keyword).unwrap();
-    assert_eq!(stmts.len(), 2);
-    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }),);
+    let stmts = ms().multiple_statements_parse_to(single_go_keyword, 2, "USE some_database\nGO");
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
 
     let go_with_count = "SELECT 1;\nGO 5";
-    let stmts = ms().parse_sql_statements(go_with_count).unwrap();
-    assert_eq!(stmts.len(), 2);
+    let stmts = ms().multiple_statements_parse_to(go_with_count, 2, "SELECT 1\nGO 5");
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(5) }));
 
     let go_statement_delimiter = "SELECT 1\nGO";
-    let stmts = ms().parse_sql_statements(go_statement_delimiter).unwrap();
-    assert_eq!(stmts.len(), 2);
+    let stmts = ms().multiple_statements_parse_to(go_statement_delimiter, 2, "SELECT 1; \nGO");
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
 
     let bare_go = "GO";
-    let stmts = ms().parse_sql_statements(bare_go).unwrap();
-    assert_eq!(stmts.len(), 1);
-    assert_eq!(stmts[0], Statement::Go(GoStatement { count: None }));
+    let stmt = ms().one_statement_parses_to(bare_go, "GO");
+    assert_eq!(stmt, Statement::Go(GoStatement { count: None }));
 
     let go_then_statements = "/* whitespace */ GO\nRAISERROR('This is a test', 16, 1);";
-    let stmts = ms().parse_sql_statements(go_then_statements).unwrap();
-    assert_eq!(stmts.len(), 2);
+    let stmts = ms().multiple_statements_parse_to(
+        go_then_statements,
+        2,
+        "GO\nRAISERROR('This is a test', 16, 1)",
+    );
     assert_eq!(stmts[0], Statement::Go(GoStatement { count: None }));
     assert_eq!(
         stmts[1],
@@ -2564,41 +2563,45 @@ fn parse_mssql_go_keyword() {
     );
 
     let multiple_gos = "SELECT 1;\nGO 5\nSELECT 2;\n  GO";
-    let stmts = ms().parse_sql_statements(multiple_gos).unwrap();
-    assert_eq!(stmts.len(), 4);
+    let stmts = ms().multiple_statements_parse_to(multiple_gos, 4, "SELECT 1\nGO 5\nSELECT 2\nGO");
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(5) }));
     assert_eq!(stmts[3], Statement::Go(GoStatement { count: None }));
 
     let single_line_comment_preceding_go = "USE some_database; -- okay\nGO";
-    let stmts = ms()
-        .parse_sql_statements(single_line_comment_preceding_go)
-        .unwrap();
-    assert_eq!(stmts.len(), 2);
+    let stmts = ms().multiple_statements_parse_to(
+        single_line_comment_preceding_go,
+        2,
+        "USE some_database\nGO",
+    );
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
 
     let multi_line_comment_preceding_go = "USE some_database; /* okay */\nGO";
-    let stmts = ms()
-        .parse_sql_statements(multi_line_comment_preceding_go)
-        .unwrap();
-    assert_eq!(stmts.len(), 2);
+    let stmts = ms().multiple_statements_parse_to(
+        multi_line_comment_preceding_go,
+        2,
+        "USE some_database\nGO",
+    );
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
 
     let single_line_comment_following_go = "USE some_database;\nGO -- okay";
-    let stmts = ms().parse_sql_statements(single_line_comment_following_go).unwrap();
-    assert_eq!(stmts.len(), 2);
+    let stmts = ms().multiple_statements_parse_to(
+        single_line_comment_following_go,
+        2,
+        "USE some_database\nGO",
+    );
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
 
     let multi_line_comment_following = "USE some_database;\nGO/* okay */42";
-    let stmts = ms()
-        .parse_sql_statements(multi_line_comment_following)
-        .unwrap();
-    assert_eq!(stmts.len(), 2);
+    let stmts = ms().multiple_statements_parse_to(
+        multi_line_comment_following,
+        2,
+        "USE some_database\nGO 42",
+    );
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(42) }));
 
     let actually_column_alias = "SELECT NULL GO";
-    let stmts = ms().parse_sql_statements(actually_column_alias).unwrap();
-    assert_eq!(stmts.len(), 1);
-    match &stmts[0] {
+    let stmt = ms().one_statement_parses_to(actually_column_alias, "SELECT NULL AS GO");
+    match &stmt {
         Statement::Query(query) => {
             let select = query.body.as_select().unwrap();
             assert_eq!(

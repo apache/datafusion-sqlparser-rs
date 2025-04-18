@@ -4054,6 +4054,12 @@ pub enum Statement {
         arguments: Vec<Expr>,
         options: Vec<RaisErrorOption>,
     },
+    /// ```sql
+    /// PRINT msg_str | @local_variable | string_expr
+    /// ```
+    ///
+    /// See: <https://learn.microsoft.com/en-us/sql/t-sql/statements/print-transact-sql>
+    Print(PrintStatement),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5745,7 +5751,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-
+            Statement::Print(s) => write!(f, "{s}"),
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
         }
@@ -9209,6 +9215,19 @@ pub enum CopyIntoSnowflakeKind {
     /// Unloads data from a table or query to external files
     /// See: <https://docs.snowflake.com/en/sql-reference/sql/copy-into-location>
     Location,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct PrintStatement {
+    pub message: Box<Expr>,
+}
+
+impl fmt::Display for PrintStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "PRINT {}", self.message)
+    }
 }
 
 #[cfg(test)]

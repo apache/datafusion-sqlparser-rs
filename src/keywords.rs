@@ -686,6 +686,7 @@ define_keywords!(
     PRESERVE,
     PREWHERE,
     PRIMARY,
+    PRINT,
     PRIOR,
     PRIVILEGES,
     PROCEDURE,

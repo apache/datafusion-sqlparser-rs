@@ -617,6 +617,7 @@ impl<'a> Parser<'a> {
                 }
                 // `COMMENT` is snowflake specific https://docs.snowflake.com/en/sql-reference/sql/comment
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
+                Keyword::PRINT => self.parse_print(),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -15054,6 +15055,13 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    /// Parse [Statement::Print]
+    fn parse_print(&mut self) -> Result<Statement, ParserError> {
+        Ok(Statement::Print(PrintStatement {
+            message: Box::new(self.parse_expr()?),
+        }))
     }
 
     /// Consume the parser and return its underlying token buffer

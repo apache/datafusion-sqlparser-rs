@@ -188,6 +188,92 @@ fn parse_mssql_create_procedure() {
 }
 
 #[test]
+fn parse_create_function() {
+    let return_expression_function = "CREATE FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) RETURNS INT AS BEGIN RETURN 1; END";
+    assert_eq!(
+        ms().verified_stmt(return_expression_function),
+        sqlparser::ast::Statement::CreateFunction(CreateFunction {
+            or_alter: false,
+            or_replace: false,
+            temporary: false,
+            if_not_exists: false,
+            name: ObjectName::from(vec![Ident::new("some_scalar_udf")]),
+            args: Some(vec![
+                OperateFunctionArg {
+                    mode: None,
+                    name: Some(Ident::new("@foo")),
+                    data_type: DataType::Int(None),
+                    default_expr: None,
+                },
+                OperateFunctionArg {
+                    mode: None,
+                    name: Some(Ident::new("@bar")),
+                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                        length: 256,
+                        unit: None
+                    })),
+                    default_expr: None,
+                },
+            ]),
+            return_type: Some(DataType::Int(None)),
+            function_body: Some(CreateFunctionBody::AsBeginEnd(BeginEndStatements {
+                begin_token: AttachedToken::empty(),
+                statements: vec![Statement::Return(ReturnStatement {
+                    value: Some(ReturnStatementValue::Expr(Expr::Value(
+                        (number("1")).with_empty_span()
+                    ))),
+                }),],
+                end_token: AttachedToken::empty(),
+            })),
+            behavior: None,
+            called_on_null: None,
+            parallel: None,
+            using: None,
+            language: None,
+            determinism_specifier: None,
+            options: None,
+            remote_connection: None,
+        }),
+    );
+
+    let multi_statement_function = "\
+        CREATE FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS INT \
+        AS \
+        BEGIN \
+            SET @foo = @foo + 1; \
+            RETURN @foo; \
+        END\
+    ";
+    let _ = ms().verified_stmt(multi_statement_function);
+
+    let create_function_with_conditional = "\
+        CREATE FUNCTION some_scalar_udf() \
+        RETURNS INT \
+        AS \
+        BEGIN \
+            IF 1 = 2 \
+            BEGIN \
+                RETURN 1; \
+            END; \
+            RETURN 0; \
+        END\
+    ";
+    let _ = ms().verified_stmt(create_function_with_conditional);
+
+    let create_or_alter_function = "\
+        CREATE OR ALTER FUNCTION some_scalar_udf(@foo INT, @bar VARCHAR(256)) \
+        RETURNS INT \
+        AS \
+        BEGIN \
+            SET @foo = @foo + 1; \
+            RETURN @foo; \
+        END\
+    ";
+    let _ = ms().verified_stmt(create_or_alter_function);
+}
+
+#[test]
 fn parse_mssql_apply_join() {
     let _ = ms_and_generic().verified_only_select(
         "SELECT * FROM sys.dm_exec_query_stats AS deqs \
@@ -2037,6 +2123,95 @@ fn parse_mssql_merge_with_output() {
         WHEN NOT MATCHED BY SOURCE THEN DELETE \
         OUTPUT $action, deleted.ProductID INTO dsi.temp_products";
     ms_and_generic().verified_stmt(stmt);
+}
+
+#[test]
+fn parse_create_trigger() {
+    let create_trigger = "\
+        CREATE OR ALTER TRIGGER reminder1 \
+        ON Sales.Customer \
+        AFTER INSERT, UPDATE \
+        AS RAISERROR('Notify Customer Relations', 16, 10);\
+    ";
+    let create_stmt = ms().verified_stmt(create_trigger);
+    assert_eq!(
+        create_stmt,
+        Statement::CreateTrigger {
+            or_alter: true,
+            or_replace: false,
+            is_constraint: false,
+            name: ObjectName::from(vec![Ident::new("reminder1")]),
+            period: TriggerPeriod::After,
+            events: vec![TriggerEvent::Insert, TriggerEvent::Update(vec![]),],
+            table_name: ObjectName::from(vec![Ident::new("Sales"), Ident::new("Customer")]),
+            referenced_table_name: None,
+            referencing: vec![],
+            trigger_object: TriggerObject::Statement,
+            include_each: false,
+            condition: None,
+            exec_body: None,
+            statements: Some(BeginEndStatements {
+                begin_token: AttachedToken::empty(),
+                statements: vec![Statement::RaisError {
+                    message: Box::new(Expr::Value(
+                        (Value::SingleQuotedString("Notify Customer Relations".to_string()))
+                            .with_empty_span()
+                    )),
+                    severity: Box::new(Expr::Value(
+                        (Value::Number("16".parse().unwrap(), false)).with_empty_span()
+                    )),
+                    state: Box::new(Expr::Value(
+                        (Value::Number("10".parse().unwrap(), false)).with_empty_span()
+                    )),
+                    arguments: vec![],
+                    options: vec![],
+                }],
+                end_token: AttachedToken::empty(),
+            }),
+            characteristics: None,
+        }
+    );
+
+    let multi_statement_trigger = "\
+        CREATE TRIGGER some_trigger ON some_table FOR INSERT \
+        AS \
+        BEGIN \
+            DECLARE @var INT; \
+            RAISERROR('Trigger fired', 10, 1); \
+        END\
+    ";
+    let _ = ms().verified_stmt(multi_statement_trigger);
+
+    let create_trigger_with_return = "\
+        CREATE TRIGGER some_trigger ON some_table FOR INSERT \
+        AS \
+        BEGIN \
+            RETURN; \
+        END\
+    ";
+    let _ = ms().verified_stmt(create_trigger_with_return);
+
+    let create_trigger_with_return = "\
+        CREATE TRIGGER some_trigger ON some_table FOR INSERT \
+        AS \
+        BEGIN \
+            RETURN; \
+        END\
+    ";
+    let _ = ms().verified_stmt(create_trigger_with_return);
+
+    let create_trigger_with_conditional = "\
+        CREATE TRIGGER some_trigger ON some_table FOR INSERT \
+        AS \
+        BEGIN \
+            IF 1 = 2 \
+            BEGIN \
+                RAISERROR('Trigger fired', 10, 1); \
+            END; \
+            RETURN; \
+        END\
+    ";
+    let _ = ms().verified_stmt(create_trigger_with_conditional);
 }
 
 #[test]

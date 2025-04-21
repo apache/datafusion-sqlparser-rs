@@ -4122,6 +4122,26 @@ impl<'a> Parser<'a> {
             })
     }
 
+    /// Return nth previous token, possibly whitespace
+    /// (or [`Token::EOF`] when before the beginning of the stream).
+    pub fn peek_prev_nth_token_no_skip(&self, n: usize) -> TokenWithSpan {
+        // 0 = next token, -1 = current token, -2 = previous token
+        let peek_index = self.index.saturating_sub(1).saturating_sub(n);
+        if peek_index == 0 {
+            return TokenWithSpan {
+                token: Token::EOF,
+                span: Span::empty(),
+            };
+        }
+        self.tokens
+            .get(peek_index)
+            .cloned()
+            .unwrap_or(TokenWithSpan {
+                token: Token::EOF,
+                span: Span::empty(),
+            })
+    }
+
     /// Return true if the next tokens exactly `expected`
     ///
     /// Does not advance the current token.
@@ -4238,16 +4258,15 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Look backwards in the token stream and expect that there was only whitespace tokens until the previous newline
-    pub fn expect_previously_only_whitespace_until_newline(&mut self) -> Result<(), ParserError> {
-        let mut look_back_count = 2;
+    /// Look backwards in the token stream and expect that there was only whitespace tokens until the previous newline or beginning of string
+    pub(crate) fn expect_previously_only_whitespace_until_newline(
+        &mut self,
+    ) -> Result<(), ParserError> {
+        let mut look_back_count = 1;
         loop {
-            let prev_index = self.index.saturating_sub(look_back_count);
-            if prev_index == 0 {
-                break;
-            }
-            let prev_token = self.token_at(prev_index);
+            let prev_token = self.peek_prev_nth_token_no_skip(look_back_count);
             match prev_token.token {
+                Token::EOF => break,
                 Token::Whitespace(ref w) => match w {
                     Whitespace::Newline => break,
                     // special consideration required for single line comments since that string includes the newline
@@ -4259,18 +4278,13 @@ impl<'a> Parser<'a> {
                     }
                     _ => look_back_count += 1,
                 },
-                _ => {
-                    let current_token = self.get_current_token();
-                    if prev_token == current_token {
-                        // if we are at the start of the statement, we can skip this check
-                        break;
-                    }
-
-                    self.expected(
-                        &format!("newline before current token ({})", current_token),
-                        prev_token.clone(),
-                    )?
-                }
+                _ => self.expected(
+                    &format!(
+                        "newline before current token ({})",
+                        self.get_current_token()
+                    ),
+                    prev_token.clone(),
+                )?,
             };
         }
         Ok(())
@@ -17737,6 +17751,31 @@ mod tests {
                 ]
             ))
         })
+    }
+
+    #[test]
+    fn test_peek_prev_nth_token_no_skip() {
+        all_dialects().run_parser_method(
+            "SELECT 1;\n-- a comment\nRAISERROR('test', 16, 0);",
+            |parser| {
+                parser.index = 1;
+                assert_eq!(parser.peek_prev_nth_token_no_skip(0), Token::EOF);
+                assert_eq!(parser.index, 1);
+                parser.index = 7;
+                assert_eq!(
+                    parser.token_at(parser.index - 1).token,
+                    Token::Word(Word {
+                        value: "RAISERROR".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::RAISERROR,
+                    })
+                );
+                assert_eq!(
+                    parser.peek_prev_nth_token_no_skip(2),
+                    Token::Whitespace(Whitespace::Newline)
+                );
+            },
+        );
     }
 
     #[cfg(test)]

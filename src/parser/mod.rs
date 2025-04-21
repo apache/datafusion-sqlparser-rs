@@ -5130,11 +5130,8 @@ impl<'a> Parser<'a> {
     ) -> Result<Statement, ParserError> {
         let (name, args) = self.parse_create_function_name_and_params()?;
 
-        let return_type = if self.parse_keyword(Keyword::RETURNS) {
-            Some(self.parse_data_type()?)
-        } else {
-            return parser_err!("Expected RETURNS keyword", self.peek_token().span.start);
-        };
+        self.expect_keyword(Keyword::RETURNS)?;
+        let return_type = Some(self.parse_data_type()?);
 
         self.expect_keyword_is(Keyword::AS)?;
 

@@ -17406,6 +17406,16 @@ impl<'a> Parser<'a> {
 
     /// Parse [Statement::Go]
     fn parse_go(&mut self) -> Result<Statement, ParserError> {
+        // disambiguate between GO as batch delimiter & GO as identifier (etc)
+        // compare:
+        // ```sql
+        // select 1 go
+        // ```
+        // vs
+        // ```sql
+        // select 1
+        // go
+        // ```
         self.expect_previously_only_whitespace_until_newline()?;
 
         let count = loop {

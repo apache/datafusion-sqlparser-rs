@@ -4454,16 +4454,7 @@ impl<'a> Parser<'a> {
                 }
             }
             values.push(self.parse_statement()?);
-
-            let semi_colon_expected = match values.last() {
-                Some(Statement::If(if_statement)) => if_statement.end_token.is_some(),
-                Some(_) => true,
-                None => false,
-            };
-
-            if semi_colon_expected {
-                self.expect_token(&Token::SemiColon)?;
-            }
+            self.expect_token(&Token::SemiColon)?;
         }
         Ok(values)
     }

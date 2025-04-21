@@ -169,8 +169,10 @@ impl MsSqlDialect {
             }
         };
 
+        let mut prior_statement_ended_with_semi_colon = false;
         while let Token::SemiColon = parser.peek_token_ref().token {
             parser.advance_token();
+            prior_statement_ended_with_semi_colon = true;
         }
 
         let mut else_block = None;
@@ -201,6 +203,8 @@ impl MsSqlDialect {
                     },
                 });
             }
+        } else if prior_statement_ended_with_semi_colon {
+            parser.prev_token();
         }
 
         Ok(Statement::If(IfStatement {

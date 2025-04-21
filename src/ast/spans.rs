@@ -384,6 +384,7 @@ impl Spanned for Statement {
             ),
             Statement::Delete(delete) => delete.span(),
             Statement::CreateView {
+                or_alter: _,
                 or_replace: _,
                 materialized: _,
                 name,

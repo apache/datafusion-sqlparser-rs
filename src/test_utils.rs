@@ -152,7 +152,7 @@ impl TestedDialects {
     /// 2. re-serializing the result of parsing `sql` produces the same
     ///    `canonical` sql string
     ///
-    /// For multiple statements, use [`multiple_statements_parse_to`].
+    /// For multiple statements, use [`statements_parse_to`].
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
         let mut statements = self.parse_sql_statements(sql).expect(sql);
         assert_eq!(statements.len(), 1);
@@ -169,7 +169,7 @@ impl TestedDialects {
     }
 
     /// The same as [`one_statement_parses_to`] but it works for a multiple statements
-    pub fn multiple_statements_parse_to(
+    pub fn statements_parse_to(
         &self,
         sql: &str,
         statement_count: usize,

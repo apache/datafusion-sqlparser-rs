@@ -10508,6 +10508,48 @@ impl<'a> Parser<'a> {
             }
             rewrite_projection
         } else {
+            // `align` not found, validate `range_fn`, report an error if it contains `fill`.
+
+            let align_fill_validate = |expr: &Expr| {
+                rewrite_calculation_expr(expr, true, &mut |e: &Expr| match e {
+                    Expr::Function(func) => {
+                        if let Some(name) = func.name.0.first() {
+                            if name.value.as_str() == "range_fn" {
+                                let FunctionArguments::List(args) = &func.args else {
+                                    unreachable!()
+                                };
+
+                                if let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Expr::Value(Value::SingleQuotedString(value)),
+                                ))) = args.args.get(2)
+                                {
+                                    if !value.is_empty() {
+                                        return Err(ParserError::ParserError(
+                                            "ALIGN argument cannot be omitted in the range select query".into(),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                        Ok(None)
+                    }
+                    _ => Ok(None),
+                })
+            };
+
+            projection
+                .iter()
+                .map(|select_item| {
+                    match select_item {
+                        SelectItem::UnnamedExpr(expr) => {
+                            align_fill_validate(expr)?;
+                        }
+                        _ => {}
+                    }
+                    Ok(())
+                })
+                .collect::<Result<Vec<()>, ParserError>>()?;
+
             projection
         };
 

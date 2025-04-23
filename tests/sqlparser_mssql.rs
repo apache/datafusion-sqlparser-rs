@@ -2587,6 +2587,12 @@ fn parse_mssql_go_keyword() {
         ms().statements_parse_to(multi_line_comment_following, 2, "USE some_database\nGO 42");
     assert_eq!(stmts[1], Statement::Go(GoStatement { count: Some(42) }));
 
+    let cte_following_go =
+        "USE some_database;\nGO\n;WITH cte AS (\nSELECT 1 x\n)\nSELECT * FROM cte;";
+    let stmts = ms().parse_sql_statements(cte_following_go).unwrap();
+    assert_eq!(stmts.len(), 3);
+    assert_eq!(stmts[1], Statement::Go(GoStatement { count: None }));
+
     let actually_column_alias = "SELECT NULL GO";
     let stmt = ms().one_statement_parses_to(actually_column_alias, "SELECT NULL AS GO");
     match &stmt {
@@ -2615,6 +2621,13 @@ fn parse_mssql_go_keyword() {
     assert_eq!(
         err.unwrap_err().to_string(),
         "sql parser error: Expected: literal int or newline, found: x"
+    );
+
+    let invalid_go_delimiter = "SELECT 1\nGO;";
+    let err = ms().parse_sql_statements(invalid_go_delimiter);
+    assert_eq!(
+        err.unwrap_err().to_string(),
+        "sql parser error: Expected: literal int or newline, found: ;"
     );
 }
 

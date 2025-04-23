@@ -17436,11 +17436,27 @@ impl<'a> Parser<'a> {
             };
         };
 
-        if self.peek_token().token == Token::SemiColon {
-            parser_err!(
-                "GO may not end with a semicolon",
-                self.peek_token().span.start
-            )?;
+        loop {
+            let next_token = self.peek_token_no_skip();
+            match next_token.token {
+                Token::EOF => break,
+                Token::Whitespace(ref w) => match w {
+                    Whitespace::Newline => break,
+                    Whitespace::SingleLineComment { comment, prefix: _ } => {
+                        if comment.ends_with('\n') {
+                            break;
+                        }
+                        _ = self.next_token_no_skip();
+                    }
+                    _ => _ = self.next_token_no_skip(),
+                },
+                _ => {
+                    parser_err!(
+                        "GO must be followed by a newline or EOF",
+                        self.peek_token().span.start
+                    )?;
+                }
+            };
         }
 
         Ok(Statement::Go(GoStatement { count }))

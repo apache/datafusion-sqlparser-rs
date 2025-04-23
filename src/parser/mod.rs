@@ -4124,22 +4124,13 @@ impl<'a> Parser<'a> {
 
     /// Return nth previous token, possibly whitespace
     /// (or [`Token::EOF`] when before the beginning of the stream).
-    pub fn peek_prev_nth_token_no_skip(&self, n: usize) -> TokenWithSpan {
+    pub(crate) fn peek_prev_nth_token_no_skip_ref(&self, n: usize) -> &TokenWithSpan {
         // 0 = next token, -1 = current token, -2 = previous token
         let peek_index = self.index.saturating_sub(1).saturating_sub(n);
         if peek_index == 0 {
-            return TokenWithSpan {
-                token: Token::EOF,
-                span: Span::empty(),
-            };
+            return &EOF_TOKEN;
         }
-        self.tokens
-            .get(peek_index)
-            .cloned()
-            .unwrap_or(TokenWithSpan {
-                token: Token::EOF,
-                span: Span::empty(),
-            })
+        self.tokens.get(peek_index).unwrap_or(&EOF_TOKEN)
     }
 
     /// Return true if the next tokens exactly `expected`
@@ -4264,7 +4255,7 @@ impl<'a> Parser<'a> {
     ) -> Result<(), ParserError> {
         let mut look_back_count = 1;
         loop {
-            let prev_token = self.peek_prev_nth_token_no_skip(look_back_count);
+            let prev_token = self.peek_prev_nth_token_no_skip_ref(look_back_count);
             match prev_token.token {
                 Token::EOF => break,
                 Token::Whitespace(ref w) => match w {
@@ -17780,12 +17771,12 @@ mod tests {
     }
 
     #[test]
-    fn test_peek_prev_nth_token_no_skip() {
+    fn test_peek_prev_nth_token_no_skip_ref() {
         all_dialects().run_parser_method(
             "SELECT 1;\n-- a comment\nRAISERROR('test', 16, 0);",
             |parser| {
                 parser.index = 1;
-                assert_eq!(parser.peek_prev_nth_token_no_skip(0), Token::EOF);
+                assert_eq!(parser.peek_prev_nth_token_no_skip_ref(0), &Token::EOF);
                 assert_eq!(parser.index, 1);
                 parser.index = 7;
                 assert_eq!(
@@ -17797,8 +17788,8 @@ mod tests {
                     })
                 );
                 assert_eq!(
-                    parser.peek_prev_nth_token_no_skip(2),
-                    Token::Whitespace(Whitespace::Newline)
+                    parser.peek_prev_nth_token_no_skip_ref(2),
+                    &Token::Whitespace(Whitespace::Newline)
                 );
             },
         );

@@ -11992,6 +11992,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::Function { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::JsonTable { alias, .. }
+                        | TableFactor::XmlTable { alias, .. }
                         | TableFactor::OpenJsonTable { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::Pivot { alias, .. }
@@ -12107,6 +12108,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword_with_tokens(Keyword::OPENJSON, &[Token::LParen]) {
             self.prev_token();
             self.parse_open_json_table_factor()
+        } else if self.parse_keyword_with_tokens(Keyword::XMLTABLE, &[Token::LParen]) {
+            self.prev_token();
+            self.parse_xml_table_factor()
         } else {
             let name = self.parse_object_name(true)?;
 
@@ -12337,6 +12341,99 @@ impl<'a> Parser<'a> {
             columns,
             alias,
         })
+    }
+
+    fn parse_xml_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let namespaces = if self.parse_keyword(Keyword::XMLNAMESPACES) {
+            self.expect_token(&Token::LParen)?;
+            let namespaces = self.parse_comma_separated(Parser::parse_xml_namespace_definition)?;
+            self.expect_token(&Token::RParen)?;
+            self.expect_token(&Token::Comma)?;
+            namespaces
+        } else {
+            vec![]
+        };
+        let row_expression = self.parse_expr()?;
+        let passing = self.parse_xml_passing_clause()?;
+        self.expect_keyword_is(Keyword::COLUMNS)?;
+        let columns = self.parse_comma_separated(Parser::parse_xml_table_column)?;
+        self.expect_token(&Token::RParen)?;
+        let alias = self.maybe_parse_table_alias()?;
+        Ok(TableFactor::XmlTable {
+            namespaces,
+            row_expression,
+            passing,
+            columns,
+            alias,
+        })
+    }
+
+    fn parse_xml_namespace_definition(&mut self) -> Result<XmlNamespaceDefinition, ParserError> {
+        let uri = self.parse_expr()?;
+        self.expect_keyword_is(Keyword::AS)?;
+        let name = self.parse_identifier()?;
+        Ok(XmlNamespaceDefinition { uri, name })
+    }
+
+    fn parse_xml_table_column(&mut self) -> Result<XmlTableColumn, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let option = if self.parse_keyword(Keyword::FOR) {
+            self.expect_keyword(Keyword::ORDINALITY)?;
+            XmlTableColumnOption::ForOrdinality
+        } else {
+            let r#type = self.parse_data_type()?;
+            let mut path = None;
+            let mut default = None;
+
+            if self.parse_keyword(Keyword::PATH) {
+                path = Some(self.parse_expr()?);
+            }
+
+            if self.parse_keyword(Keyword::DEFAULT) {
+                default = Some(self.parse_expr()?);
+            }
+
+            let not_null = self.parse_keywords(&[Keyword::NOT, Keyword::NULL]);
+            if !not_null {
+                // NULL is the default but can be specified explicitly
+                let _ = self.parse_keyword(Keyword::NULL);
+            }
+
+            XmlTableColumnOption::NamedInfo {
+                r#type,
+                path,
+                default,
+                nullable: !not_null,
+            }
+        };
+        Ok(XmlTableColumn { name, option })
+    }
+
+    fn parse_xml_passing_clause(&mut self) -> Result<XmlPassingClause, ParserError> {
+        let mut arguments = vec![];
+        if self.parse_keyword(Keyword::PASSING) {
+            loop {
+                let by_value =
+                    self.parse_keyword(Keyword::BY) && self.expect_keyword(Keyword::VALUE).is_ok();
+                let expr = self.parse_expr()?;
+                let alias = if self.parse_keyword(Keyword::AS) {
+                    Some(self.parse_identifier()?)
+                } else {
+                    None
+                };
+                arguments.push(XmlPassingArgument {
+                    expr,
+                    alias,
+                    by_value,
+                });
+                if !self.consume_token(&Token::Comma) {
+                    break;
+                }
+            }
+        }
+        Ok(XmlPassingClause { arguments })
     }
 
     fn parse_match_recognize(&mut self, table: TableFactor) -> Result<TableFactor, ParserError> {

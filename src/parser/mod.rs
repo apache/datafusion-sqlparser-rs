@@ -4548,7 +4548,7 @@ impl<'a> Parser<'a> {
             self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
-            self.parse_create_view(or_replace, temporary, create_view_params)
+            self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy()
         } else if self.parse_keyword(Keyword::EXTERNAL) {
@@ -5512,6 +5512,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_create_view(
         &mut self,
+        or_alter: bool,
         or_replace: bool,
         temporary: bool,
         create_view_params: Option<CreateViewParams>,
@@ -5576,6 +5577,7 @@ impl<'a> Parser<'a> {
             ]);
 
         Ok(Statement::CreateView {
+            or_alter,
             name,
             columns,
             query,

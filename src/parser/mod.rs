@@ -508,17 +508,8 @@ impl<'a> Parser<'a> {
             }
 
             let statement = self.parse_statement()?;
-            expecting_statement_delimiter = match &statement {
-                Statement::If(s) => match &s.if_block.conditional_statements {
-                    // the `END` keyword doesn't need to be followed by a statement delimiter, so it shouldn't be expected here
-                    ConditionalStatements::BeginEnd { .. } => false,
-                    // parsing the statement sequence consumes the statement delimiter, so it shouldn't be expected here
-                    ConditionalStatements::Sequence { .. } => false,
-                },
-                // Treat batch delimiter as an end of statement, so no additional statement delimiter expected here
-                Statement::Go(_) => false,
-                _ => true,
-            };
+            // Treat batch delimiter as an end of statement, so no additional statement delimiter expected here
+            expecting_statement_delimiter = !matches!(statement, Statement::Go(_));
             stmts.push(statement);
         }
         Ok(stmts)

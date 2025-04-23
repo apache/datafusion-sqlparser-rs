@@ -2613,7 +2613,7 @@ fn parse_mssql_go_keyword() {
     let err = ms().parse_sql_statements(invalid_go_position);
     assert_eq!(
         err.unwrap_err().to_string(),
-        "sql parser error: Expected: newline before current token (GO), found: ;"
+        "sql parser error: GO may only be preceded by whitespace on a line"
     );
 
     let invalid_go_count = "SELECT 1\nGO x";

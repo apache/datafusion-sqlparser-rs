@@ -4250,35 +4250,26 @@ impl<'a> Parser<'a> {
     }
 
     /// Look backwards in the token stream and expect that there was only whitespace tokens until the previous newline or beginning of string
-    pub(crate) fn expect_previously_only_whitespace_until_newline(
-        &mut self,
-    ) -> Result<(), ParserError> {
+    pub(crate) fn prev_only_whitespace_until_newline(&mut self) -> bool {
         let mut look_back_count = 1;
         loop {
             let prev_token = self.peek_prev_nth_token_no_skip_ref(look_back_count);
             match prev_token.token {
-                Token::EOF => break,
+                Token::EOF => break true,
                 Token::Whitespace(ref w) => match w {
-                    Whitespace::Newline => break,
+                    Whitespace::Newline => break true,
                     // special consideration required for single line comments since that string includes the newline
                     Whitespace::SingleLineComment { comment, prefix: _ } => {
                         if comment.ends_with('\n') {
-                            break;
+                            break true;
                         }
                         look_back_count += 1;
                     }
                     _ => look_back_count += 1,
                 },
-                _ => self.expected(
-                    &format!(
-                        "newline before current token ({})",
-                        self.get_current_token()
-                    ),
-                    prev_token.clone(),
-                )?,
+                _ => break false,
             };
         }
-        Ok(())
     }
 
     /// If the current token is the `expected` keyword, consume it and returns
@@ -17407,7 +17398,12 @@ impl<'a> Parser<'a> {
         // select 1
         // go
         // ```
-        self.expect_previously_only_whitespace_until_newline()?;
+        if !self.prev_only_whitespace_until_newline() {
+            parser_err!(
+                "GO may only be preceded by whitespace on a line",
+                self.peek_token().span.start
+            )?;
+        }
 
         let count = loop {
             // using this peek function because we want to halt this statement parsing upon newline

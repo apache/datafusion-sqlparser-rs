@@ -2293,18 +2293,14 @@ pub enum ConditionalStatements {
     /// SELECT 1; SELECT 2; SELECT 3; ...
     Sequence { statements: Vec<Statement> },
     /// BEGIN SELECT 1; SELECT 2; SELECT 3; ... END
-    BeginEnd {
-        begin_token: AttachedToken,
-        statements: Vec<Statement>,
-        end_token: AttachedToken,
-    },
+    BeginEnd(BeginEndStatements),
 }
 
 impl ConditionalStatements {
     pub fn statements(&self) -> &Vec<Statement> {
         match self {
             ConditionalStatements::Sequence { statements } => statements,
-            ConditionalStatements::BeginEnd { statements, .. } => statements,
+            ConditionalStatements::BeginEnd(bes) => &bes.statements,
         }
     }
 }
@@ -2318,12 +2314,41 @@ impl fmt::Display for ConditionalStatements {
                 }
                 Ok(())
             }
-            ConditionalStatements::BeginEnd { statements, .. } => {
-                write!(f, "BEGIN ")?;
-                format_statement_list(f, statements)?;
-                write!(f, " END")
-            }
+            ConditionalStatements::BeginEnd(bes) => write!(f, "{}", bes),
         }
+    }
+}
+
+/// Represents a list of statements enclosed within `BEGIN` and `END` keywords.
+/// Example:
+/// ```sql
+/// BEGIN
+///     SELECT 1;
+///     SELECT 2;
+/// END
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct BeginEndStatements {
+    pub begin_token: AttachedToken,
+    pub statements: Vec<Statement>,
+    pub end_token: AttachedToken,
+}
+
+impl fmt::Display for BeginEndStatements {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let BeginEndStatements {
+            begin_token: AttachedToken(begin_token),
+            statements,
+            end_token: AttachedToken(end_token),
+        } = self;
+
+        write!(f, "{begin_token} ")?;
+        if !statements.is_empty() {
+            format_statement_list(f, statements)?;
+        }
+        write!(f, " {end_token}")
     }
 }
 
@@ -3615,6 +3640,7 @@ pub enum Statement {
     /// 1. [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction)
     /// 2. [PostgreSQL](https://www.postgresql.org/docs/15/sql-createfunction.html)
     /// 3. [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement)
+    /// 4. [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql)
     CreateFunction(CreateFunction),
     /// CREATE TRIGGER
     ///
@@ -4061,6 +4087,12 @@ pub enum Statement {
     ///
     /// See: <https://learn.microsoft.com/en-us/sql/t-sql/statements/print-transact-sql>
     Print(PrintStatement),
+    /// ```sql
+    /// RETURN [ expression ]
+    /// ```
+    ///
+    /// See [ReturnStatement]
+    Return(ReturnStatement),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5753,6 +5785,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Print(s) => write!(f, "{s}"),
+            Statement::Return(r) => write!(f, "{r}"),
             Statement::List(command) => write!(f, "LIST {command}"),
             Statement::Remove(command) => write!(f, "REMOVE {command}"),
         }
@@ -8355,6 +8388,7 @@ impl fmt::Display for FunctionDeterminismSpecifier {
 ///
 /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
 /// [PostgreSQL]: https://www.postgresql.org/docs/15/sql-createfunction.html
+/// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -8383,6 +8417,22 @@ pub enum CreateFunctionBody {
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11
     AsAfterOptions(Expr),
+    /// Function body with statements before the `RETURN` keyword.
+    ///
+    /// Example:
+    /// ```sql
+    /// CREATE FUNCTION my_scalar_udf(a INT, b INT)
+    /// RETURNS INT
+    /// AS
+    /// BEGIN
+    ///     DECLARE c INT;
+    ///     SET c = a + b;
+    ///     RETURN c;
+    /// END
+    /// ```
+    ///
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql
+    AsBeginEnd(BeginEndStatements),
     /// Function body expression using the 'RETURN' keyword.
     ///
     /// Example:
@@ -9229,6 +9279,34 @@ impl fmt::Display for PrintStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "PRINT {}", self.message)
     }
+}
+
+/// Represents a `Return` statement.
+///
+/// [MsSql triggers](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql)
+/// [MsSql functions](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ReturnStatement {
+    pub value: Option<ReturnStatementValue>,
+}
+
+impl fmt::Display for ReturnStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.value {
+            Some(ReturnStatementValue::Expr(expr)) => write!(f, "RETURN {}", expr),
+            None => write!(f, "RETURN"),
+        }
+    }
+}
+
+/// Variants of a `RETURN` statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ReturnStatementValue {
+    Expr(Expr),
 }
 
 #[cfg(test)]

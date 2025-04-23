@@ -15079,3 +15079,11 @@ fn parse_set_time_zone_alias() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_return() {
+    let stmt = all_dialects().verified_stmt("RETURN");
+    assert_eq!(stmt, Statement::Return(ReturnStatement { value: None }));
+
+    let _ = all_dialects().verified_stmt("RETURN 1");
+}

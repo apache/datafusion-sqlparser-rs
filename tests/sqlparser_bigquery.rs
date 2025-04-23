@@ -2134,6 +2134,7 @@ fn test_bigquery_create_function() {
     assert_eq!(
         stmt,
         Statement::CreateFunction(CreateFunction {
+            or_alter: false,
             or_replace: true,
             temporary: true,
             if_not_exists: false,

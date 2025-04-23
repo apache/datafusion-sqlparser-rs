@@ -23,8 +23,8 @@ use crate::tokenizer::Span;
 use super::{
     dcl::SecondaryRoles, value::ValueWithSpan, AccessExpr, AlterColumnOperation,
     AlterIndexOperation, AlterTableOperation, Array, Assignment, AssignmentTarget, AttachedToken,
-    CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption, ColumnOptionDef,
-    ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectBy,
+    BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef, ColumnOption,
+    ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements, ConflictTarget, ConnectBy,
     ConstraintCharacteristics, CopySource, CreateIndex, CreateTable, CreateTableOptions, Cte,
     Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr, ExprWithAlias, Fetch, FromTable,
     Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList,
@@ -520,6 +520,7 @@ impl Spanned for Statement {
             Statement::RenameTable { .. } => Span::empty(),
             Statement::RaisError { .. } => Span::empty(),
             Statement::Print { .. } => Span::empty(),
+            Statement::Return { .. } => Span::empty(),
             Statement::List(..) | Statement::Remove(..) => Span::empty(),
         }
     }
@@ -778,11 +779,7 @@ impl Spanned for ConditionalStatements {
             ConditionalStatements::Sequence { statements } => {
                 union_spans(statements.iter().map(|s| s.span()))
             }
-            ConditionalStatements::BeginEnd {
-                begin_token: AttachedToken(start),
-                statements: _,
-                end_token: AttachedToken(end),
-            } => union_spans([start.span, end.span].into_iter()),
+            ConditionalStatements::BeginEnd(bes) => bes.span(),
         }
     }
 }
@@ -2279,6 +2276,21 @@ impl Spanned for TableObject {
             }
             TableObject::TableFunction(func) => func.span(),
         }
+    }
+}
+
+impl Spanned for BeginEndStatements {
+    fn span(&self) -> Span {
+        let BeginEndStatements {
+            begin_token,
+            statements,
+            end_token,
+        } = self;
+        union_spans(
+            core::iter::once(begin_token.0.span)
+                .chain(statements.iter().map(|i| i.span()))
+                .chain(core::iter::once(end_token.0.span)),
+        )
     }
 }
 

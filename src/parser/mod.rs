@@ -647,7 +647,10 @@ impl<'a> Parser<'a> {
                 Keyword::COMMENT if self.dialect.supports_comment_on() => self.parse_comment(),
                 Keyword::PRINT => self.parse_print(),
                 Keyword::RETURN => self.parse_return(),
-                Keyword::GO => self.parse_go(),
+                Keyword::GO => {
+                    self.prev_token();
+                    self.parse_go()
+                }
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -16429,6 +16432,8 @@ impl<'a> Parser<'a> {
 
     /// Parse [Statement::Go]
     fn parse_go(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword_is(Keyword::GO)?;
+
         // disambiguate between GO as batch delimiter & GO as identifier (etc)
         // compare:
         // ```sql

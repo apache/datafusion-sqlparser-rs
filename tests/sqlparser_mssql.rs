@@ -1387,6 +1387,10 @@ fn parse_mssql_declare() {
         ],
         ast
     );
+
+    let declare_cursor_for_select =
+        "DECLARE vend_cursor CURSOR FOR SELECT * FROM Purchasing.Vendor";
+    let _ = ms().verified_stmt(declare_cursor_for_select);
 }
 
 #[test]

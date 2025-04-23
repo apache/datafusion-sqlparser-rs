@@ -6446,7 +6446,7 @@ impl<'a> Parser<'a> {
     /// DECLARE
     // {
     //   { @local_variable [AS] data_type [ = value ] }
-    //   | { @cursor_variable_name CURSOR }
+    //   | { @cursor_variable_name CURSOR [ FOR ] }
     // } [ ,...n ]
     /// ```
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/declare-local-variable-transact-sql?view=sql-server-ver16
@@ -6462,14 +6462,19 @@ impl<'a> Parser<'a> {
     /// ```text
     // {
     //   { @local_variable [AS] data_type [ = value ] }
-    //   | { @cursor_variable_name CURSOR }
+    //   | { @cursor_variable_name CURSOR [ FOR ]}
     // } [ ,...n ]
     /// ```
     /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/declare-local-variable-transact-sql?view=sql-server-ver16
     pub fn parse_mssql_declare_stmt(&mut self) -> Result<Declare, ParserError> {
         let name = {
             let ident = self.parse_identifier()?;
-            if !ident.value.starts_with('@') {
+            if !ident.value.starts_with('@')
+                && !matches!(
+                    self.peek_token().token,
+                    Token::Word(w) if w.keyword == Keyword::CURSOR
+                )
+            {
                 Err(ParserError::TokenizerError(
                     "Invalid MsSql variable declaration.".to_string(),
                 ))
@@ -6493,7 +6498,14 @@ impl<'a> Parser<'a> {
             _ => (None, Some(self.parse_data_type()?)),
         };
 
-        let assignment = self.parse_mssql_variable_declaration_expression()?;
+        let (for_query, assignment) = if self.peek_keyword(Keyword::FOR) {
+            self.next_token();
+            let query = Some(self.parse_query()?);
+            (query, None)
+        } else {
+            let assignment = self.parse_mssql_variable_declaration_expression()?;
+            (None, assignment)
+        };
 
         Ok(Declare {
             names: vec![name],
@@ -6504,7 +6516,7 @@ impl<'a> Parser<'a> {
             sensitive: None,
             scroll: None,
             hold: None,
-            for_query: None,
+            for_query,
         })
     }
 

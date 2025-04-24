@@ -2472,10 +2472,11 @@ impl fmt::Display for DeclareAssignment {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DeclareType {
-    /// Cursor variable type. e.g. [Snowflake] [PostgreSQL]
+    /// Cursor variable type. e.g. [Snowflake] [PostgreSQL] [MsSql]
     ///
     /// [Snowflake]: https://docs.snowflake.com/en/developer-guide/snowflake-scripting/cursors#declaring-a-cursor
     /// [PostgreSQL]: https://www.postgresql.org/docs/current/plpgsql-cursors.html
+    /// [MsSql]: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/declare-cursor-transact-sql
     Cursor,
 
     /// Result set variable type. [Snowflake]

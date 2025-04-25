@@ -1405,10 +1405,38 @@ fn test_mssql_cursor() {
         \
         FETCH NEXT FROM Employee_Cursor; \
         \
+        WHILE @@FETCH_STATUS = 0 \
+        BEGIN \
+            FETCH NEXT FROM Employee_Cursor; \
+        END; \
+        \
         CLOSE Employee_Cursor; \
         DEALLOCATE Employee_Cursor\
     ";
-    let _ = ms().statements_parse_to(full_cursor_usage, 5, "");
+    let _ = ms().statements_parse_to(full_cursor_usage, 6, "");
+}
+
+#[test]
+fn test_mssql_while_statement() {
+    let while_single_statement = "WHILE 1 = 0 PRINT 'Hello World';";
+    let _ = ms().verified_stmt(while_single_statement);
+
+    let while_begin_end = "\
+        WHILE @@FETCH_STATUS = 0 \
+        BEGIN \
+            FETCH NEXT FROM Employee_Cursor; \
+        END\
+    ";
+    let _ = ms().verified_stmt(while_begin_end);
+
+    let while_begin_end_multiple_statements = "\
+        WHILE @@FETCH_STATUS = 0 \
+        BEGIN \
+            FETCH NEXT FROM Employee_Cursor; \
+            PRINT 'Hello World'; \
+        END\
+    ";
+    let _ = ms().verified_stmt(while_begin_end_multiple_statements);
 }
 
 #[test]

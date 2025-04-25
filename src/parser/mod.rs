@@ -536,6 +536,10 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     self.parse_if_stmt()
                 }
+                Keyword::WHILE => {
+                    self.prev_token();
+                    self.parse_while()
+                }
                 Keyword::RAISE => {
                     self.prev_token();
                     self.parse_raise_stmt()
@@ -704,8 +708,18 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    /// Parse a `WHILE` statement.
+    ///
+    /// See [Statement::While]
+    fn parse_while(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword_is(Keyword::WHILE)?;
+        let while_block = self.parse_conditional_statement_block(&[Keyword::END])?;
+
+        Ok(Statement::While(WhileStatement { while_block }))
+    }
+
     /// Parses an expression and associated list of statements
-    /// belonging to a conditional statement like `IF` or `WHEN`.
+    /// belonging to a conditional statement like `IF` or `WHEN` or `WHILE`.
     ///
     /// Example:
     /// ```sql
@@ -720,6 +734,10 @@ impl<'a> Parser<'a> {
 
         let condition = match &start_token.token {
             Token::Word(w) if w.keyword == Keyword::ELSE => None,
+            Token::Word(w) if w.keyword == Keyword::WHILE => {
+                let expr = self.parse_expr()?;
+                Some(expr)
+            }
             _ => {
                 let expr = self.parse_expr()?;
                 then_token = Some(AttachedToken(self.expect_keyword(Keyword::THEN)?));
@@ -727,13 +745,25 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let statements = self.parse_statement_list(terminal_keywords)?;
+        let conditional_statements = if self.peek_keyword(Keyword::BEGIN) {
+            let begin_token = self.expect_keyword(Keyword::BEGIN)?;
+            let statements = self.parse_statement_list(terminal_keywords)?;
+            let end_token = self.expect_keyword(Keyword::END)?;
+            ConditionalStatements::BeginEnd(BeginEndStatements {
+                begin_token: AttachedToken(begin_token),
+                statements,
+                end_token: AttachedToken(end_token),
+            })
+        } else {
+            let statements = self.parse_statement_list(terminal_keywords)?;
+            ConditionalStatements::Sequence { statements }
+        };
 
         Ok(ConditionalStatementBlock {
             start_token: AttachedToken(start_token),
             condition,
             then_token,
-            conditional_statements: ConditionalStatements::Sequence { statements },
+            conditional_statements,
         })
     }
 
@@ -4456,6 +4486,9 @@ impl<'a> Parser<'a> {
                 if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
                     break;
                 }
+            }
+            if let Token::EOF = self.peek_nth_token_ref(0).token {
+                break;
             }
             values.push(self.parse_statement()?);
             self.expect_token(&Token::SemiColon)?;

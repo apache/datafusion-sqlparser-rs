@@ -2226,7 +2226,33 @@ impl fmt::Display for IfStatement {
     }
 }
 
-/// A block within a [Statement::Case] or [Statement::If]-like statement
+/// A `WHILE` statement.
+///
+/// Example:
+/// ```sql
+/// WHILE @@FETCH_STATUS = 0
+/// BEGIN
+///    FETCH NEXT FROM c1 INTO @var1, @var2;
+/// END
+/// ```
+///
+/// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/while-transact-sql)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct WhileStatement {
+    pub while_block: ConditionalStatementBlock,
+}
+
+impl fmt::Display for WhileStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let WhileStatement { while_block } = self;
+        write!(f, "{while_block}")?;
+        Ok(())
+    }
+}
+
+/// A block within a [Statement::Case] or [Statement::If] or [Statement::While]-like statement
 ///
 /// Example 1:
 /// ```sql
@@ -2241,6 +2267,14 @@ impl fmt::Display for IfStatement {
 /// Example 3:
 /// ```sql
 /// ELSE SELECT 1; SELECT 2;
+/// ```
+///
+/// Example 4:
+/// ```sql
+/// WHILE @@FETCH_STATUS = 0
+/// BEGIN
+///    FETCH NEXT FROM c1 INTO @var1, @var2;
+/// END
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -2981,6 +3015,8 @@ pub enum Statement {
     Case(CaseStatement),
     /// An `IF` statement.
     If(IfStatement),
+    /// A `WHILE` statement.
+    While(WhileStatement),
     /// A `RAISE` statement.
     Raise(RaiseStatement),
     /// ```sql
@@ -4343,6 +4379,9 @@ impl fmt::Display for Statement {
                 write!(f, "{stmt}")
             }
             Statement::If(stmt) => {
+                write!(f, "{stmt}")
+            }
+            Statement::While(stmt) => {
                 write!(f, "{stmt}")
             }
             Statement::Raise(stmt) => {

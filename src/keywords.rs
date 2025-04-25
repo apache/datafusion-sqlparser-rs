@@ -981,6 +981,7 @@ define_keywords!(
     WHEN,
     WHENEVER,
     WHERE,
+    WHILE,
     WIDTH_BUCKET,
     WINDOW,
     WITH,

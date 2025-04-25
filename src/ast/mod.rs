@@ -3032,6 +3032,14 @@ pub enum Statement {
         partition: Option<Box<Expr>>,
     },
     /// ```sql
+    /// OPEN cursor_name
+    /// ```
+    /// Opens a cursor.
+    Open {
+        /// Cursor name
+        cursor_name: Ident,
+    },
+    /// ```sql
     /// CLOSE
     /// ```
     /// Closes the portal underlying an open cursor.
@@ -3403,6 +3411,10 @@ pub enum Statement {
         /// Cursor name
         name: Ident,
         direction: FetchDirection,
+        /// Differentiate between dialects that fetch `FROM` vs fetch `IN`
+        ///
+        /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/fetch-transact-sql)
+        from_or_in: AttachedToken,
         /// Optional, It's possible to fetch rows form cursor to the table
         into: Option<ObjectName>,
     },
@@ -4225,11 +4237,25 @@ impl fmt::Display for Statement {
             Statement::Fetch {
                 name,
                 direction,
+                from_or_in,
                 into,
             } => {
                 write!(f, "FETCH {direction} ")?;
 
-                write!(f, "IN {name}")?;
+                match &from_or_in.0.token {
+                    Token::Word(w) => match w.keyword {
+                        Keyword::FROM => {
+                            write!(f, "FROM {name}")?;
+                        }
+                        Keyword::IN => {
+                            write!(f, "IN {name}")?;
+                        }
+                        _ => unreachable!(),
+                    },
+                    _ => {
+                        unreachable!()
+                    }
+                }
 
                 if let Some(into) = into {
                     write!(f, " INTO {into}")?;
@@ -4488,6 +4514,11 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Delete(delete) => write!(f, "{delete}"),
+            Statement::Open { cursor_name } => {
+                write!(f, "OPEN {cursor_name}")?;
+
+                Ok(())
+            }
             Statement::Close { cursor } => {
                 write!(f, "CLOSE {cursor}")?;
 

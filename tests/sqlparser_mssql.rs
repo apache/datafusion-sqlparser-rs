@@ -1394,6 +1394,24 @@ fn parse_mssql_declare() {
 }
 
 #[test]
+fn test_mssql_cursor() {
+    let full_cursor_usage = "\
+        DECLARE Employee_Cursor CURSOR FOR \
+        SELECT LastName, FirstName \
+        FROM AdventureWorks2022.HumanResources.vEmployee \
+        WHERE LastName LIKE 'B%'; \
+        \
+        OPEN Employee_Cursor; \
+        \
+        FETCH NEXT FROM Employee_Cursor; \
+        \
+        CLOSE Employee_Cursor; \
+        DEALLOCATE Employee_Cursor\
+    ";
+    let _ = ms().statements_parse_to(full_cursor_usage, 5, "");
+}
+
+#[test]
 fn test_parse_raiserror() {
     let sql = r#"RAISERROR('This is a test', 16, 1)"#;
     let s = ms().verified_stmt(sql);

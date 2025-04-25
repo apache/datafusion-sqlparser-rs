@@ -570,6 +570,10 @@ impl<'a> Parser<'a> {
                 Keyword::ALTER => self.parse_alter(),
                 Keyword::CALL => self.parse_call(),
                 Keyword::COPY => self.parse_copy(),
+                Keyword::OPEN => {
+                    self.prev_token();
+                    self.parse_open()
+                }
                 Keyword::CLOSE => self.parse_close(),
                 Keyword::SET => self.parse_set(),
                 Keyword::SHOW => self.parse_show(),
@@ -6609,7 +6613,13 @@ impl<'a> Parser<'a> {
             }
         };
 
-        self.expect_one_of_keywords(&[Keyword::FROM, Keyword::IN])?;
+        let from_or_in_token = if self.peek_keyword(Keyword::FROM) {
+            self.expect_keyword(Keyword::FROM)?
+        } else if self.peek_keyword(Keyword::IN) {
+            self.expect_keyword(Keyword::IN)?
+        } else {
+            return parser_err!("Expected FROM or IN", self.peek_token().span.start);
+        };
 
         let name = self.parse_identifier()?;
 
@@ -6622,6 +6632,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Fetch {
             name,
             direction,
+            from_or_in: AttachedToken(from_or_in_token),
             into,
         })
     }
@@ -8732,6 +8743,14 @@ impl<'a> Parser<'a> {
             options,
             legacy_options,
             values,
+        })
+    }
+
+    /// Parse [Statement::Open]
+    fn parse_open(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::OPEN)?;
+        Ok(Statement::Open {
+            cursor_name: self.parse_identifier()?,
         })
     }
 

@@ -364,6 +364,7 @@ impl Spanned for Statement {
                 from_query: _,
                 partition: _,
             } => Span::empty(),
+            Statement::Open { cursor_name } => cursor_name.span,
             Statement::Close { cursor } => match cursor {
                 CloseCursor::All => Span::empty(),
                 CloseCursor::Specific { name } => name.span,

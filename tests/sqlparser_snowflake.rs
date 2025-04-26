@@ -3983,3 +3983,38 @@ fn test_nested_join_without_parentheses() {
         }],
     );
 }
+
+#[test]
+fn parse_connect_by_root_operator() {
+    let sql = "SELECT CONNECT_BY_ROOT name AS root_name FROM Tbl1";
+
+    match snowflake().verified_stmt(sql) {
+        Statement::Query(query) => {
+            assert_eq!(
+                query.body.as_select().unwrap().projection[0],
+                SelectItem::ExprWithAlias {
+                    expr: Expr::Prefixed {
+                        prefix: Ident::new("CONNECT_BY_ROOT"),
+                        value: Box::new(Expr::Identifier(Ident::new("name")))
+                    },
+                    alias: Ident::new("root_name"),
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "SELECT CONNECT_BY_ROOT name FROM Tbl2";
+    match snowflake().verified_stmt(sql) {
+        Statement::Query(query) => {
+            assert_eq!(
+                query.body.as_select().unwrap().projection[0],
+                SelectItem::UnnamedExpr(Expr::Prefixed {
+                    prefix: Ident::new("CONNECT_BY_ROOT"),
+                    value: Box::new(Expr::Identifier(Ident::new("name")))
+                })
+            );
+        }
+        _ => unreachable!(),
+    }
+}

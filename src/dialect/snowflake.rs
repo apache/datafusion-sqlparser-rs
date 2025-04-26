@@ -44,6 +44,7 @@ use alloc::{format, vec};
 use super::keywords::RESERVED_FOR_IDENTIFIER;
 use sqlparser::ast::StorageSerializationPolicy;
 
+const RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR: [Keyword; 1] = [Keyword::CONNECT_BY_ROOT];
 /// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
 #[derive(Debug, Default)]
 pub struct SnowflakeDialect;
@@ -345,6 +346,11 @@ impl Dialect for SnowflakeDialect {
     /// See: <https://docs.snowflake.com/en/sql-reference/constructs/group-by>
     fn supports_group_by_expr(&self) -> bool {
         true
+    }
+
+    /// See: <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>
+    fn get_reserved_keywords_for_select_item_operator(&self) -> &[Keyword] {
+        &RESERVED_KEYWORDS_FOR_SELECT_ITEM_OPERATOR
     }
 }
 

@@ -930,12 +930,14 @@ pub enum Expr {
     Nested(Box<Expr>),
     /// A literal value, such as string, number, date or NULL
     Value(ValueWithSpan),
+    /// Prefixed expression, e.g. introducer strings, projection prefix
     /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
-    IntroducedString {
-        introducer: String,
+    /// <https://docs.snowflake.com/en/sql-reference/constructs/connect-by>
+    Prefixed {
+        prefix: Ident,
         /// The value of the constant.
         /// Hint: you can unwrap the string value using `value.into_string()`.
-        value: Value,
+        value: Box<Expr>,
     },
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
@@ -1655,7 +1657,7 @@ impl fmt::Display for Expr {
             Expr::Collate { expr, collation } => write!(f, "{expr} COLLATE {collation}"),
             Expr::Nested(ast) => write!(f, "({ast})"),
             Expr::Value(v) => write!(f, "{v}"),
-            Expr::IntroducedString { introducer, value } => write!(f, "{introducer} {value}"),
+            Expr::Prefixed { prefix, value } => write!(f, "{prefix} {value}"),
             Expr::TypedString { data_type, value } => {
                 write!(f, "{data_type}")?;
                 write!(f, " {value}")

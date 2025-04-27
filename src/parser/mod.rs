@@ -6051,6 +6051,8 @@ impl<'a> Parser<'a> {
             return self.parse_drop_policy();
         } else if self.parse_keyword(Keyword::CONNECTOR) {
             return self.parse_drop_connector();
+        } else if self.parse_keyword(Keyword::DOMAIN) {
+            return self.parse_drop_domain();
         } else if self.parse_keyword(Keyword::PROCEDURE) {
             return self.parse_drop_procedure();
         } else if self.parse_keyword(Keyword::SECRET) {
@@ -6144,6 +6146,20 @@ impl<'a> Parser<'a> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_identifier()?;
         Ok(Statement::DropConnector { if_exists, name })
+    }
+
+    /// ```sql
+    /// DROP DOMAIN [ IF EXISTS ] name [ CASCADE | RESTRICT ]
+    /// ```
+    fn parse_drop_domain(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parse_object_name(false)?;
+        let drop_behavior = self.parse_optional_drop_behavior();
+        Ok(Statement::DropDomain {
+            if_exists,
+            name,
+            drop_behavior,
+        })
     }
 
     /// ```sql

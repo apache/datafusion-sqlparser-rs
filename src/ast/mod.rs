@@ -3319,6 +3319,18 @@ pub enum Statement {
         drop_behavior: Option<DropBehavior>,
     },
     /// ```sql
+    /// DROP DOMAIN
+    /// ```
+    /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-dropdomain.html)
+    ///
+    /// DROP DOMAIN [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
+    ///
+    DropDomain {
+        if_exists: bool,
+        name: ObjectName,
+        drop_behavior: Option<DropBehavior>,
+    },
+    /// ```sql
     /// DROP PROCEDURE
     /// ```
     DropProcedure {
@@ -5086,6 +5098,21 @@ impl fmt::Display for Statement {
                     "DROP FUNCTION{} {}",
                     if *if_exists { " IF EXISTS" } else { "" },
                     display_comma_separated(func_desc),
+                )?;
+                if let Some(op) = drop_behavior {
+                    write!(f, " {op}")?;
+                }
+                Ok(())
+            }
+            Statement::DropDomain {
+                if_exists,
+                name,
+                drop_behavior,
+            } => {
+                write!(
+                    f,
+                    "DROP DOMAIN{} {name}",
+                    if *if_exists { " IF EXISTS" } else { "" },
                 )?;
                 if let Some(op) = drop_behavior {
                     write!(f, " {op}")?;

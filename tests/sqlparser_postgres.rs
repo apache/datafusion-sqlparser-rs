@@ -5093,7 +5093,7 @@ fn parse_create_domain() {
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
                 op: BinaryOperator::Gt,
-                right: Box::new(Expr::Value(Value::Number("0".to_string(), false).into())),
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
     };
@@ -5114,7 +5114,7 @@ fn parse_create_domain_with_collation() {
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
                 op: BinaryOperator::Gt,
-                right: Box::new(Expr::Value(Value::Number("0".to_string(), false).into())),
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
     };
@@ -5129,13 +5129,13 @@ fn parse_create_domain_with_default() {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
         data_type: DataType::Integer(None),
         collation: None,
-        default: Some(Expr::Value(Value::Number("1".to_string(), false).into())),
+        default: Some(Expr::Value(test_utils::number("1").into())),
         constraints: vec![TableConstraint::Check {
             name: None,
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
                 op: BinaryOperator::Gt,
-                right: Box::new(Expr::Value(Value::Number("0".to_string(), false).into())),
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
     };
@@ -5150,13 +5150,13 @@ fn parse_create_domain_with_default_and_collation() {
         name: ObjectName::from(vec![Ident::new("my_domain")]),
         data_type: DataType::Integer(None),
         collation: Some(Ident::with_quote('"', "en_US")),
-        default: Some(Expr::Value(Value::Number("1".to_string(), false).into())),
+        default: Some(Expr::Value(test_utils::number("1").into())),
         constraints: vec![TableConstraint::Check {
             name: None,
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
                 op: BinaryOperator::Gt,
-                right: Box::new(Expr::Value(Value::Number("0".to_string(), false).into())),
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
     };
@@ -5177,7 +5177,7 @@ fn parse_create_domain_with_named_constraint() {
             expr: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("VALUE"))),
                 op: BinaryOperator::Gt,
-                right: Box::new(Expr::Value(Value::Number("0".to_string(), false).into())),
+                right: Box::new(Expr::Value(test_utils::number("0").into())),
             }),
         }],
     };

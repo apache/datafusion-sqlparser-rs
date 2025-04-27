@@ -5199,12 +5199,22 @@ impl<'a> Parser<'a> {
 
         // parse: [ argname ] argtype
         let mut name = None;
+        let next_token = self.peek_token();
         let mut data_type = self.parse_data_type()?;
-        if let DataType::Custom(n, _) = &data_type {
-            // the first token is actually a name
-            match n.0[0].clone() {
-                ObjectNamePart::Identifier(ident) => name = Some(ident),
-            }
+
+        // It may appear that the first token can be converted into a known
+        // type, but this could also be a collision as some types are only
+        // present in some dialects and therefore some type reserved keywords
+        // may be freely used as argument names in other dialects.
+
+        // To check whether the first token is a name or a type, we need to
+        // peek the next token, which if it is another type keyword, then the
+        // first token is a name and not a type in itself.
+        let potential_tokens = [Token::Eq, Token::RParen, Token::Comma];
+        if !self.peek_keyword(Keyword::DEFAULT)
+            && !potential_tokens.contains(&self.peek_token().token)
+        {
+            name = Some(Ident::new(next_token.to_string()));
             data_type = self.parse_data_type()?;
         }
 

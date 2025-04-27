@@ -286,6 +286,7 @@ define_keywords!(
     DISTRIBUTE,
     DIV,
     DO,
+    DOMAIN,
     DOUBLE,
     DOW,
     DOY,

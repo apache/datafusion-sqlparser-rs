@@ -4555,6 +4555,8 @@ impl<'a> Parser<'a> {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_alter, or_replace, temporary)
+        } else if self.parse_keyword(Keyword::DOMAIN) {
+            self.parse_create_domain()
         } else if self.parse_keyword(Keyword::TRIGGER) {
             self.parse_create_trigger(or_replace, false)
         } else if self.parse_keywords(&[Keyword::CONSTRAINT, Keyword::TRIGGER]) {
@@ -5892,6 +5894,47 @@ impl<'a> Parser<'a> {
             }
         };
         Ok(owner)
+    }
+
+    /// ```sql
+    ///     CREATE DOMAIN name [ AS ] data_type
+    ///             [ COLLATE collation ]
+    ///             [ DEFAULT expression ]
+    ///             [ domain_constraint [ ... ] ]
+    ///     
+    ///         where domain_constraint is:
+    ///     
+    ///         [ CONSTRAINT constraint_name ]
+    ///         { NOT NULL | NULL | CHECK (expression) }
+    /// ```
+    ///
+    /// [PostgreSQL Documentation](https://www.postgresql.org/docs/current/sql-createdomain.html)
+    pub fn parse_create_domain(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name(false)?;
+        self.expect_keyword_is(Keyword::AS)?;
+        let data_type = self.parse_data_type()?;
+        let collation = if self.parse_keyword(Keyword::COLLATE) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+        let default = if self.parse_keyword(Keyword::DEFAULT) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        let mut constraints = Vec::new();
+        while let Some(constraint) = self.parse_optional_table_constraint()? {
+            constraints.push(constraint);
+        }
+
+        Ok(Statement::CreateDomain {
+            name,
+            data_type,
+            collation,
+            default,
+            constraints,
+        })
     }
 
     /// ```sql

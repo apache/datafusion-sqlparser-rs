@@ -14026,10 +14026,10 @@ impl<'a> Parser<'a> {
                 .maybe_parse_select_item_alias()
                 .map(|alias| match alias {
                     Some(alias) => SelectItem::ExprWithAlias {
-                        expr: prefixed_expr(expr, prefix),
+                        expr: maybe_prefixed_expr(expr, prefix),
                         alias,
                     },
-                    None => SelectItem::UnnamedExpr(prefixed_expr(expr, prefix)),
+                    None => SelectItem::UnnamedExpr(maybe_prefixed_expr(expr, prefix)),
                 }),
         }
     }
@@ -15391,7 +15391,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-fn prefixed_expr(expr: Expr, prefix: Option<Ident>) -> Expr {
+fn maybe_prefixed_expr(expr: Expr, prefix: Option<Ident>) -> Expr {
     if let Some(prefix) = prefix {
         Expr::Prefixed {
             prefix,

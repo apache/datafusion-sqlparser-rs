@@ -4017,4 +4017,11 @@ fn parse_connect_by_root_operator() {
         }
         _ => unreachable!(),
     }
+
+    let sql = "SELECT CONNECT_BY_ROOT FROM Tbl2";
+    let res = snowflake().parse_sql_statements(sql);
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "sql parser error: Expected an expression, found: FROM"
+    );
 }

@@ -10653,7 +10653,11 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            let pipe_operators = self.parse_pipe_operators()?;
+            let pipe_operators = if self.dialect.supports_pipe_operator() {
+                self.parse_pipe_operators()?
+            } else {
+                Vec::new()
+            };
 
             Ok(Query {
                 with,

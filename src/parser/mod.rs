@@ -10748,7 +10748,9 @@ impl<'a> Parser<'a> {
                     pipe_operators.push(PipeOperator::OrderBy { exprs })
                 }
                 unhandled => {
-                    unreachable!("`expect_one_of_keywords` further up allowed unhandled keyword: {unhandled:?}");
+                    return Err(ParserError::ParserError(format!(
+                    "`expect_one_of_keywords` further up allowed unhandled keyword: {unhandled:?}"
+                )))
                 }
             }
         }

@@ -7844,6 +7844,7 @@ fn parse_create_view() {
     let sql = "CREATE VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
         Statement::CreateView {
+            or_alter,
             name,
             columns,
             query,
@@ -7858,6 +7859,7 @@ fn parse_create_view() {
             to,
             params,
         } => {
+            assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -7874,6 +7876,8 @@ fn parse_create_view() {
         }
         _ => unreachable!(),
     }
+
+    let _ = verified_stmt("CREATE OR ALTER VIEW v AS SELECT 1");
 }
 
 #[test]
@@ -7908,6 +7912,7 @@ fn parse_create_view_with_columns() {
     // match all_dialects().verified_stmt(sql) {
     match all_dialects_except(|d| d.is::<ClickHouseDialect>()).verified_stmt(sql) {
         Statement::CreateView {
+            or_alter,
             name,
             columns,
             or_replace,
@@ -7922,6 +7927,7 @@ fn parse_create_view_with_columns() {
             to,
             params,
         } => {
+            assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
             assert_eq!(
                 columns,
@@ -7955,6 +7961,7 @@ fn parse_create_view_temporary() {
     let sql = "CREATE TEMPORARY VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
         Statement::CreateView {
+            or_alter,
             name,
             columns,
             query,
@@ -7969,6 +7976,7 @@ fn parse_create_view_temporary() {
             to,
             params,
         } => {
+            assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -7992,6 +8000,7 @@ fn parse_create_or_replace_view() {
     let sql = "CREATE OR REPLACE VIEW v AS SELECT 1";
     match verified_stmt(sql) {
         Statement::CreateView {
+            or_alter,
             name,
             columns,
             or_replace,
@@ -8006,6 +8015,7 @@ fn parse_create_or_replace_view() {
             to,
             params,
         } => {
+            assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
             assert_eq!(options, CreateTableOptions::None);
@@ -8033,6 +8043,7 @@ fn parse_create_or_replace_materialized_view() {
     let sql = "CREATE OR REPLACE MATERIALIZED VIEW v AS SELECT 1";
     match verified_stmt(sql) {
         Statement::CreateView {
+            or_alter,
             name,
             columns,
             or_replace,
@@ -8047,6 +8058,7 @@ fn parse_create_or_replace_materialized_view() {
             to,
             params,
         } => {
+            assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
             assert_eq!(options, CreateTableOptions::None);
@@ -8070,6 +8082,7 @@ fn parse_create_materialized_view() {
     let sql = "CREATE MATERIALIZED VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
         Statement::CreateView {
+            or_alter,
             name,
             or_replace,
             columns,
@@ -8084,6 +8097,7 @@ fn parse_create_materialized_view() {
             to,
             params,
         } => {
+            assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -8107,6 +8121,7 @@ fn parse_create_materialized_view_with_cluster_by() {
     let sql = "CREATE MATERIALIZED VIEW myschema.myview CLUSTER BY (foo) AS SELECT foo FROM bar";
     match verified_stmt(sql) {
         Statement::CreateView {
+            or_alter,
             name,
             or_replace,
             columns,
@@ -8121,6 +8136,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             to,
             params,
         } => {
+            assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -11648,6 +11664,20 @@ fn parse_connect_by() {
 
 #[test]
 fn test_selective_aggregation() {
+    let testing_dialects = all_dialects_where(|d| d.supports_filter_during_aggregation());
+    let expected_dialects: Vec<Box<dyn Dialect>> = vec![
+        Box::new(PostgreSqlDialect {}),
+        Box::new(DatabricksDialect {}),
+        Box::new(HiveDialect {}),
+        Box::new(SQLiteDialect {}),
+        Box::new(DuckDbDialect {}),
+        Box::new(GenericDialect {}),
+    ];
+    assert_eq!(testing_dialects.dialects.len(), expected_dialects.len());
+    expected_dialects
+        .into_iter()
+        .for_each(|d| assert!(d.supports_filter_during_aggregation()));
+
     let sql = concat!(
         "SELECT ",
         "ARRAY_AGG(name) FILTER (WHERE name IS NOT NULL), ",
@@ -11655,9 +11685,7 @@ fn test_selective_aggregation() {
         "FROM region"
     );
     assert_eq!(
-        all_dialects_where(|d| d.supports_filter_during_aggregation())
-            .verified_only_select(sql)
-            .projection,
+        testing_dialects.verified_only_select(sql).projection,
         vec![
             SelectItem::UnnamedExpr(Expr::Function(Function {
                 name: ObjectName::from(vec![Ident::new("ARRAY_AGG")]),
@@ -11732,6 +11760,44 @@ fn test_group_by_grouping_sets() {
             ])],
             vec![]
         )
+    );
+}
+
+#[test]
+fn test_xmltable() {
+    all_dialects()
+        .verified_only_select("SELECT * FROM XMLTABLE('/root' PASSING data COLUMNS element TEXT)");
+
+    // Minimal meaningful working example: returns a single row with a single column named y containing the value z
+    all_dialects().verified_only_select(
+        "SELECT y FROM XMLTABLE('/X' PASSING '<X><y>z</y></X>' COLUMNS y TEXT)",
+    );
+
+    // Test using subqueries
+    all_dialects().verified_only_select("SELECT y FROM XMLTABLE((SELECT '/X') PASSING (SELECT CAST('<X><y>z</y></X>' AS xml)) COLUMNS y TEXT PATH (SELECT 'y'))");
+
+    // NOT NULL
+    all_dialects().verified_only_select(
+        "SELECT y FROM XMLTABLE('/X' PASSING '<X></X>' COLUMNS y TEXT NOT NULL)",
+    );
+
+    all_dialects().verified_only_select("SELECT * FROM XMLTABLE('/root/row' PASSING xmldata COLUMNS id INT PATH '@id', name TEXT PATH 'name/text()', value FLOAT PATH 'value')");
+
+    all_dialects().verified_only_select("SELECT * FROM XMLTABLE('//ROWS/ROW' PASSING data COLUMNS row_num FOR ORDINALITY, id INT PATH '@id', name TEXT PATH 'NAME' DEFAULT 'unnamed')");
+
+    // Example from https://www.postgresql.org/docs/15/functions-xml.html#FUNCTIONS-XML-PROCESSING
+    all_dialects().verified_only_select(
+        "SELECT xmltable.* FROM xmldata, XMLTABLE('//ROWS/ROW' PASSING data COLUMNS id INT PATH '@id', ordinality FOR ORDINALITY, \"COUNTRY_NAME\" TEXT, country_id TEXT PATH 'COUNTRY_ID', size_sq_km FLOAT PATH 'SIZE[@unit = \"sq_km\"]', size_other TEXT PATH 'concat(SIZE[@unit!=\"sq_km\"], \" \", SIZE[@unit!=\"sq_km\"]/@unit)', premier_name TEXT PATH 'PREMIER_NAME' DEFAULT 'not specified')"
+    );
+
+    // Example from DB2 docs without explicit PASSING clause: https://www.ibm.com/docs/en/db2/12.1.0?topic=xquery-simple-column-name-passing-xmlexists-xmlquery-xmltable
+    all_dialects().verified_only_select(
+        "SELECT X.* FROM T1, XMLTABLE('$CUSTLIST/customers/customerinfo' COLUMNS \"Cid\" BIGINT PATH '@Cid', \"Info\" XML PATH 'document{.}', \"History\" XML PATH 'NULL') AS X"
+    );
+
+    // Example from PostgreSQL with XMLNAMESPACES
+    all_dialects().verified_only_select(
+        "SELECT xmltable.* FROM XMLTABLE(XMLNAMESPACES('http://example.com/myns' AS x, 'http://example.com/b' AS \"B\"), '/x:example/x:item' PASSING (SELECT data FROM xmldata) COLUMNS foo INT PATH '@foo', bar INT PATH '@B:bar')"
     );
 }
 
@@ -15111,4 +15177,12 @@ fn parse_set_time_zone_alias() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_return() {
+    let stmt = all_dialects().verified_stmt("RETURN");
+    assert_eq!(stmt, Statement::Return(ReturnStatement { value: None }));
+
+    let _ = all_dialects().verified_stmt("RETURN 1");
 }

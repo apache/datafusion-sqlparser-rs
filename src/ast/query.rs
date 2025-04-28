@@ -1297,6 +1297,37 @@ pub enum TableFactor {
         symbols: Vec<SymbolDefinition>,
         alias: Option<TableAlias>,
     },
+    /// The `XMLTABLE` table-valued function.
+    /// Part of the SQL standard, supported by PostgreSQL, Oracle, and DB2.
+    ///
+    /// <https://www.postgresql.org/docs/15/functions-xml.html#FUNCTIONS-XML-PROCESSING>
+    ///
+    /// ```sql
+    /// SELECT xmltable.*
+    /// FROM xmldata,
+    /// XMLTABLE('//ROWS/ROW'
+    ///     PASSING data
+    ///     COLUMNS id int PATH '@id',
+    ///     ordinality FOR ORDINALITY,
+    ///     "COUNTRY_NAME" text,
+    ///     country_id text PATH 'COUNTRY_ID',
+    ///     size_sq_km float PATH 'SIZE[@unit = "sq_km"]',
+    ///     size_other text PATH 'concat(SIZE[@unit!="sq_km"], " ", SIZE[@unit!="sq_km"]/@unit)',
+    ///     premier_name text PATH 'PREMIER_NAME' DEFAULT 'not specified'
+    /// );
+    /// ````
+    XmlTable {
+        /// Optional XMLNAMESPACES clause (empty if not present)
+        namespaces: Vec<XmlNamespaceDefinition>,
+        /// The row-generating XPath expression.
+        row_expression: Expr,
+        /// The PASSING clause specifying the document expression.
+        passing: XmlPassingClause,
+        /// The columns to be extracted from each generated row.
+        columns: Vec<XmlTableColumn>,
+        /// The alias for the table.
+        alias: Option<TableAlias>,
+    },
 }
 
 /// The table sample modifier options
@@ -1959,6 +1990,31 @@ impl fmt::Display for TableFactor {
                 write!(f, "DEFINE {})", display_comma_separated(symbols))?;
                 if alias.is_some() {
                     write!(f, " AS {}", alias.as_ref().unwrap())?;
+                }
+                Ok(())
+            }
+            TableFactor::XmlTable {
+                row_expression,
+                passing,
+                columns,
+                alias,
+                namespaces,
+            } => {
+                write!(f, "XMLTABLE(")?;
+                if !namespaces.is_empty() {
+                    write!(
+                        f,
+                        "XMLNAMESPACES({}), ",
+                        display_comma_separated(namespaces)
+                    )?;
+                }
+                write!(
+                    f,
+                    "{row_expression}{passing} COLUMNS {columns})",
+                    columns = display_comma_separated(columns)
+                )?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {alias}")?;
                 }
                 Ok(())
             }
@@ -3236,4 +3292,134 @@ pub enum UpdateTableFromKind {
     /// Update Statement where the 'FROM' clause is after the 'SET' keyword (Which is the standard way)
     /// For Example: `UPDATE SET t1.name='aaa' FROM t1`
     AfterSet(Vec<TableWithJoins>),
+}
+
+/// Defines the options for an XmlTable column: Named or ForOrdinality
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum XmlTableColumnOption {
+    /// A named column with a type, optional path, and default value.
+    NamedInfo {
+        /// The type of the column to be extracted.
+        r#type: DataType,
+        /// The path to the column to be extracted. If None, defaults to the column name.
+        path: Option<Expr>,
+        /// Default value if path does not match
+        default: Option<Expr>,
+        /// Whether the column is nullable (NULL=true, NOT NULL=false)
+        nullable: bool,
+    },
+    /// The FOR ORDINALITY marker
+    ForOrdinality,
+}
+
+/// A single column definition in XMLTABLE
+///
+/// ```sql
+/// COLUMNS
+///     id int PATH '@id',
+///     ordinality FOR ORDINALITY,
+///     "COUNTRY_NAME" text,
+///     country_id text PATH 'COUNTRY_ID',
+///     size_sq_km float PATH 'SIZE[@unit = "sq_km"]',
+///     size_other text PATH 'concat(SIZE[@unit!="sq_km"], " ", SIZE[@unit!="sq_km"]/@unit)',
+///     premier_name text PATH 'PREMIER_NAME' DEFAULT 'not specified'
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct XmlTableColumn {
+    /// The name of the column.
+    pub name: Ident,
+    /// Column options: type/path/default or FOR ORDINALITY
+    pub option: XmlTableColumnOption,
+}
+
+impl fmt::Display for XmlTableColumn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        match &self.option {
+            XmlTableColumnOption::NamedInfo {
+                r#type,
+                path,
+                default,
+                nullable,
+            } => {
+                write!(f, " {}", r#type)?;
+                if let Some(p) = path {
+                    write!(f, " PATH {}", p)?;
+                }
+                if let Some(d) = default {
+                    write!(f, " DEFAULT {}", d)?;
+                }
+                if !*nullable {
+                    write!(f, " NOT NULL")?;
+                }
+                Ok(())
+            }
+            XmlTableColumnOption::ForOrdinality => {
+                write!(f, " FOR ORDINALITY")
+            }
+        }
+    }
+}
+
+/// Argument passed in the XMLTABLE PASSING clause
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct XmlPassingArgument {
+    pub expr: Expr,
+    pub alias: Option<Ident>,
+    pub by_value: bool, // True if BY VALUE is specified
+}
+
+impl fmt::Display for XmlPassingArgument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.by_value {
+            write!(f, "BY VALUE ")?;
+        }
+        write!(f, "{}", self.expr)?;
+        if let Some(alias) = &self.alias {
+            write!(f, " AS {}", alias)?;
+        }
+        Ok(())
+    }
+}
+
+/// The PASSING clause for XMLTABLE
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct XmlPassingClause {
+    pub arguments: Vec<XmlPassingArgument>,
+}
+
+impl fmt::Display for XmlPassingClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.arguments.is_empty() {
+            write!(f, " PASSING {}", display_comma_separated(&self.arguments))?;
+        }
+        Ok(())
+    }
+}
+
+/// Represents a single XML namespace definition in the XMLNAMESPACES clause.
+///
+/// `namespace_uri AS namespace_name`
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct XmlNamespaceDefinition {
+    /// The namespace URI (a text expression).
+    pub uri: Expr,
+    /// The alias for the namespace (a simple identifier).
+    pub name: Ident,
+}
+
+impl fmt::Display for XmlNamespaceDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} AS {}", self.uri, self.name)
+    }
 }

@@ -28,7 +28,8 @@ def print_pulls(repo_name, title, pulls):
         print()
         for (pull, commit) in pulls:
             url = "https://github.com/{}/pull/{}".format(repo_name, pull.number)
-            print("- {} [#{}]({}) ({})".format(pull.title, pull.number, url, commit.author.login))
+            author = f"({commit.author.login})" if commit.author else ''
+            print("- {} [#{}]({}) {}".format(pull.title, pull.number, url, author))
         print()
 
 

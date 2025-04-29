@@ -3447,10 +3447,7 @@ pub enum Statement {
         /// Cursor name
         name: Ident,
         direction: FetchDirection,
-        /// Differentiate between dialects that fetch `FROM` vs fetch `IN`
-        ///
-        /// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/fetch-transact-sql)
-        from_or_in: AttachedToken,
+        position: FetchPosition,
         /// Optional, It's possible to fetch rows form cursor to the table
         into: Option<ObjectName>,
     },
@@ -4273,25 +4270,10 @@ impl fmt::Display for Statement {
             Statement::Fetch {
                 name,
                 direction,
-                from_or_in,
+                position,
                 into,
             } => {
-                write!(f, "FETCH {direction} ")?;
-
-                match &from_or_in.0.token {
-                    Token::Word(w) => match w.keyword {
-                        Keyword::FROM => {
-                            write!(f, "FROM {name}")?;
-                        }
-                        Keyword::IN => {
-                            write!(f, "IN {name}")?;
-                        }
-                        _ => unreachable!(),
-                    },
-                    _ => {
-                        unreachable!()
-                    }
-                }
+                write!(f, "FETCH {direction} {position} {name}")?;
 
                 if let Some(into) = into {
                     write!(f, " INTO {into}")?;
@@ -6226,6 +6208,28 @@ impl fmt::Display for FetchDirection {
                 }
             }
             FetchDirection::BackwardAll => f.write_str("BACKWARD ALL")?,
+        };
+
+        Ok(())
+    }
+}
+
+/// The "position" for a FETCH statement.
+///
+/// [MsSql](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/fetch-transact-sql)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FetchPosition {
+    From,
+    In,
+}
+
+impl fmt::Display for FetchPosition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FetchPosition::From => f.write_str("FROM")?,
+            FetchPosition::In => f.write_str("IN")?,
         };
 
         Ok(())

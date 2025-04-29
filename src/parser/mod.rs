@@ -6646,10 +6646,12 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let from_or_in_token = if self.peek_keyword(Keyword::FROM) {
-            self.expect_keyword(Keyword::FROM)?
+        let position = if self.peek_keyword(Keyword::FROM) {
+            self.expect_keyword(Keyword::FROM)?;
+            FetchPosition::From
         } else if self.peek_keyword(Keyword::IN) {
-            self.expect_keyword(Keyword::IN)?
+            self.expect_keyword(Keyword::IN)?;
+            FetchPosition::In
         } else {
             return parser_err!("Expected FROM or IN", self.peek_token().span.start);
         };
@@ -6665,7 +6667,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Fetch {
             name,
             direction,
-            from_or_in: AttachedToken(from_or_in_token),
+            position,
             into,
         })
     }

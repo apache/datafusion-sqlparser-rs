@@ -23,7 +23,8 @@
 mod test_utils;
 
 use helpers::attached_token::AttachedToken;
-use sqlparser::tokenizer::{Location, Span};
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Word};
 use test_utils::*;
 
 use sqlparser::ast::DataType::{Int, Text, Varbinary};
@@ -1419,7 +1420,40 @@ fn test_mssql_cursor() {
 #[test]
 fn test_mssql_while_statement() {
     let while_single_statement = "WHILE 1 = 0 PRINT 'Hello World';";
-    let _ = ms().verified_stmt(while_single_statement);
+    let stmt = ms().verified_stmt(while_single_statement);
+    assert_eq!(
+        stmt,
+        Statement::While(sqlparser::ast::WhileStatement {
+            while_block: ConditionalStatementBlock {
+                start_token: AttachedToken(TokenWithSpan {
+                    token: Token::Word(Word {
+                        value: "WHILE".to_string(),
+                        quote_style: None,
+                        keyword: Keyword::WHILE
+                    }),
+                    span: Span::empty()
+                }),
+                condition: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Value(
+                        (Value::Number("1".parse().unwrap(), false)).with_empty_span()
+                    )),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(
+                        (Value::Number("0".parse().unwrap(), false)).with_empty_span()
+                    )),
+                }),
+                then_token: None,
+                conditional_statements: ConditionalStatements::Sequence {
+                    statements: vec![Statement::Print(PrintStatement {
+                        message: Box::new(Expr::Value(
+                            (Value::SingleQuotedString("Hello World".to_string()))
+                                .with_empty_span()
+                        )),
+                    }),],
+                }
+            }
+        })
+    );
 
     let while_begin_end = "\
         WHILE @@FETCH_STATUS = 0 \

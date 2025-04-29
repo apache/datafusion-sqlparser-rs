@@ -8784,9 +8784,9 @@ impl<'a> Parser<'a> {
     /// Parse [Statement::Open]
     fn parse_open(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::OPEN)?;
-        Ok(Statement::Open {
+        Ok(Statement::Open(OpenStatement {
             cursor_name: self.parse_identifier()?,
-        })
+        }))
     }
 
     pub fn parse_close(&mut self) -> Result<Statement, ParserError> {

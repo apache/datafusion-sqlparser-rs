@@ -3071,10 +3071,7 @@ pub enum Statement {
     /// OPEN cursor_name
     /// ```
     /// Opens a cursor.
-    Open {
-        /// Cursor name
-        cursor_name: Ident,
-    },
+    Open(OpenStatement),
     /// ```sql
     /// CLOSE
     /// ```
@@ -4535,11 +4532,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Delete(delete) => write!(f, "{delete}"),
-            Statement::Open { cursor_name } => {
-                write!(f, "OPEN {cursor_name}")?;
-
-                Ok(())
-            }
+            Statement::Open(open) => write!(f, "{open}"),
             Statement::Close { cursor } => {
                 write!(f, "CLOSE {cursor}")?;
 
@@ -9388,6 +9381,21 @@ impl fmt::Display for ReturnStatement {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ReturnStatementValue {
     Expr(Expr),
+}
+
+/// Represents an `OPEN` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct OpenStatement {
+    /// Cursor name
+    pub cursor_name: Ident,
+}
+
+impl fmt::Display for OpenStatement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "OPEN {}", self.cursor_name)
+    }
 }
 
 #[cfg(test)]

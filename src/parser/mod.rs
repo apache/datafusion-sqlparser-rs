@@ -4482,14 +4482,16 @@ impl<'a> Parser<'a> {
     ) -> Result<Vec<Statement>, ParserError> {
         let mut values = vec![];
         loop {
-            if let Token::Word(w) = &self.peek_nth_token_ref(0).token {
-                if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
-                    break;
+            match &self.peek_nth_token_ref(0).token {
+                Token::EOF => break,
+                Token::Word(w) => {
+                    if w.quote_style.is_none() && terminal_keywords.contains(&w.keyword) {
+                        break;
+                    }
                 }
+                _ => {}
             }
-            if let Token::EOF = self.peek_nth_token_ref(0).token {
-                break;
-            }
+
             values.push(self.parse_statement()?);
             self.expect_token(&Token::SemiColon)?;
         }

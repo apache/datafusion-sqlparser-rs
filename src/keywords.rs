@@ -1065,6 +1065,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::SAMPLE,
     Keyword::TABLESAMPLE,
     Keyword::FROM,
+    // Reserved for SQL Server cursors
+    Keyword::OPEN,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

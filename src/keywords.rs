@@ -207,6 +207,7 @@ define_keywords!(
     CONNECT,
     CONNECTION,
     CONNECTOR,
+    CONNECT_BY_ROOT,
     CONSTRAINT,
     CONTAINS,
     CONTINUE,

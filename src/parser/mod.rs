@@ -1388,9 +1388,9 @@ impl<'a> Parser<'a> {
             | Token::HexStringLiteral(_)
                 if w.value.starts_with('_') =>
             {
-                Ok(Expr::IntroducedString {
-                    introducer: w.value.clone(),
-                    value: self.parse_introduced_string_value()?,
+                Ok(Expr::Prefixed {
+                    prefix: w.clone().into_ident(w_span),
+                    value: self.parse_introduced_string_expr()?.into(),
                 })
             }
             // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
@@ -1399,9 +1399,9 @@ impl<'a> Parser<'a> {
             | Token::HexStringLiteral(_)
                 if w.value.starts_with('_') =>
             {
-                Ok(Expr::IntroducedString {
-                    introducer: w.value.clone(),
-                    value: self.parse_introduced_string_value()?,
+                Ok(Expr::Prefixed {
+                    prefix: w.clone().into_ident(w_span),
+                    value: self.parse_introduced_string_expr()?.into(),
                 })
             }
             Token::Arrow if self.dialect.supports_lambda_functions() => {
@@ -9035,13 +9035,19 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_introduced_string_value(&mut self) -> Result<Value, ParserError> {
+    fn parse_introduced_string_expr(&mut self) -> Result<Expr, ParserError> {
         let next_token = self.next_token();
         let span = next_token.span;
         match next_token.token {
-            Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
-            Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
-            Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
+            Token::SingleQuotedString(ref s) => Ok(Expr::Value(
+                Value::SingleQuotedString(s.to_string()).with_span(span),
+            )),
+            Token::DoubleQuotedString(ref s) => Ok(Expr::Value(
+                Value::DoubleQuotedString(s.to_string()).with_span(span),
+            )),
+            Token::HexStringLiteral(ref s) => Ok(Expr::Value(
+                Value::HexStringLiteral(s.to_string()).with_span(span),
+            )),
             unexpected => self.expected(
                 "a string value",
                 TokenWithSpan {
@@ -13968,6 +13974,13 @@ impl<'a> Parser<'a> {
 
     /// Parse a comma-delimited list of projections after SELECT
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
+        let prefix = self
+            .parse_one_of_keywords(
+                self.dialect
+                    .get_reserved_keywords_for_select_item_operator(),
+            )
+            .map(|keyword| Ident::new(format!("{:?}", keyword)));
+
         match self.parse_wildcard_expr()? {
             Expr::QualifiedWildcard(prefix, token) => Ok(SelectItem::QualifiedWildcard(
                 SelectItemQualifiedWildcardKind::ObjectName(prefix),
@@ -14012,8 +14025,11 @@ impl<'a> Parser<'a> {
             expr => self
                 .maybe_parse_select_item_alias()
                 .map(|alias| match alias {
-                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
-                    None => SelectItem::UnnamedExpr(expr),
+                    Some(alias) => SelectItem::ExprWithAlias {
+                        expr: maybe_prefixed_expr(expr, prefix),
+                        alias,
+                    },
+                    None => SelectItem::UnnamedExpr(maybe_prefixed_expr(expr, prefix)),
                 }),
         }
     }
@@ -15372,6 +15388,17 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+}
+
+fn maybe_prefixed_expr(expr: Expr, prefix: Option<Ident>) -> Expr {
+    if let Some(prefix) = prefix {
+        Expr::Prefixed {
+            prefix,
+            value: Box::new(expr),
+        }
+    } else {
+        expr
     }
 }
 

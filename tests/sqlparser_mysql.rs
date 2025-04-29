@@ -3020,9 +3020,12 @@ fn parse_hex_string_introducer() {
                 distinct: None,
                 top: None,
                 top_before_distinct: false,
-                projection: vec![SelectItem::UnnamedExpr(Expr::IntroducedString {
-                    introducer: "_latin1".to_string(),
-                    value: Value::HexStringLiteral("4D7953514C".to_string())
+                projection: vec![SelectItem::UnnamedExpr(Expr::Prefixed {
+                    prefix: Ident::from("_latin1"),
+                    value: Expr::Value(
+                        Value::HexStringLiteral("4D7953514C".to_string()).with_empty_span()
+                    )
+                    .into(),
                 })],
                 from: vec![],
                 lateral_views: vec![],

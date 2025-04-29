@@ -1543,7 +1543,7 @@ impl Spanned for Expr {
                             .map(|items| union_spans(items.iter().map(|i| i.span()))),
                     ),
             ),
-            Expr::IntroducedString { value, .. } => value.span(),
+            Expr::Prefixed { value, .. } => value.span(),
             Expr::Case {
                 operand,
                 conditions,

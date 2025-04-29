@@ -223,7 +223,7 @@ fn parse_create_function() {
                     value: Some(ReturnStatementValue::Expr(Expr::Value(
                         (number("1")).with_empty_span()
                     ))),
-                }),],
+                })],
                 end_token: AttachedToken::empty(),
             })),
             behavior: None,
@@ -1449,7 +1449,7 @@ fn test_mssql_while_statement() {
                             (Value::SingleQuotedString("Hello World".to_string()))
                                 .with_empty_span()
                         )),
-                    }),],
+                    })],
                 }
             }
         })

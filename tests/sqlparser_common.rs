@@ -15103,3 +15103,15 @@ fn parse_return() {
 
     let _ = all_dialects().verified_stmt("RETURN 1");
 }
+
+#[test]
+fn test_open() {
+    let open_cursor = "OPEN Employee_Cursor";
+    let stmt = all_dialects().verified_stmt(open_cursor);
+    assert_eq!(
+        stmt,
+        Statement::Open(OpenStatement {
+            cursor_name: Ident::new("Employee_Cursor"),
+        })
+    );
+}

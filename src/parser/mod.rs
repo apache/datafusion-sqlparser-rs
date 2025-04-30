@@ -5210,12 +5210,9 @@ impl<'a> Parser<'a> {
         // To check whether the first token is a name or a type, we need to
         // peek the next token, which if it is another type keyword, then the
         // first token is a name and not a type in itself.
-        let potential_tokens = [Token::Eq, Token::RParen, Token::Comma];
-        if !self.peek_keyword(Keyword::DEFAULT)
-            && !potential_tokens.contains(&self.peek_token().token)
-        {
+        if let Some(next_data_type) = self.maybe_parse(|parser| parser.parse_data_type())? {
             name = Some(Ident::new(next_token.to_string()));
-            data_type = self.parse_data_type()?;
+            data_type = next_data_type;
         }
 
         let default_expr = if self.parse_keyword(Keyword::DEFAULT) || self.consume_token(&Token::Eq)

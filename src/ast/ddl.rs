@@ -2170,28 +2170,33 @@ impl fmt::Display for ClusteredBy {
 /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createdomain.html)
 pub struct CreateDomain {
     /// The name of the domain to be created.
-    name: ObjectName,
+    pub name: ObjectName,
     /// The data type of the domain.
-    data_type: DataType,
+    pub data_type: DataType,
     /// The collation of the domain.
-    collation: Option<Ident>,
+    pub collation: Option<Ident>,
     /// The default value of the domain.
-    default: Option<Expr>,
+    pub default: Option<Expr>,
     /// The constraints of the domain.
-    constraints: Vec<TableConstraint>,
+    pub constraints: Vec<TableConstraint>,
 }
 
 impl fmt::Display for CreateDomain {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "CREATE DOMAIN {name} AS {data_type}")?;
-        if let Some(collation) = collation {
+        write!(
+            f,
+            "CREATE DOMAIN {name} AS {data_type}",
+            name = self.name,
+            data_type = self.data_type
+        )?;
+        if let Some(collation) = &self.collation {
             write!(f, " COLLATE {collation}")?;
         }
-        if let Some(default) = default {
+        if let Some(default) = &self.default {
             write!(f, " DEFAULT {default}")?;
         }
-        if !constraints.is_empty() {
-            write!(f, " {}", display_separated(constraints, " "))?;
+        if !self.constraints.is_empty() {
+            write!(f, " {}", display_separated(&self.constraints, " "))?;
         }
         Ok(())
     }

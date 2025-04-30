@@ -4244,7 +4244,7 @@ fn parse_drop_domain() {
     let sql = "DROP DOMAIN IF EXISTS jpeg_domain";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropDomain {
+        Statement::DropDomain(DropDomain {
             if_exists: true,
             name: ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
@@ -4252,13 +4252,13 @@ fn parse_drop_domain() {
                 span: Span::empty(),
             }]),
             drop_behavior: None
-        }
+        })
     );
 
     let sql = "DROP DOMAIN jpeg_domain";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropDomain {
+        Statement::DropDomain(DropDomain {
             if_exists: false,
             name: ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
@@ -4266,13 +4266,13 @@ fn parse_drop_domain() {
                 span: Span::empty(),
             }]),
             drop_behavior: None
-        }
+        })
     );
 
     let sql = "DROP DOMAIN IF EXISTS jpeg_domain CASCADE";
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropDomain {
+        Statement::DropDomain(DropDomain {
             if_exists: true,
             name: ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
@@ -4280,14 +4280,14 @@ fn parse_drop_domain() {
                 span: Span::empty(),
             }]),
             drop_behavior: Some(DropBehavior::Cascade)
-        }
+        })
     );
 
     let sql = "DROP DOMAIN IF EXISTS jpeg_domain RESTRICT";
 
     assert_eq!(
         pg().verified_stmt(sql),
-        Statement::DropDomain {
+        Statement::DropDomain(DropDomain {
             if_exists: true,
             name: ObjectName::from(vec![Ident {
                 value: "jpeg_domain".to_string(),
@@ -4295,7 +4295,7 @@ fn parse_drop_domain() {
                 span: Span::empty(),
             }]),
             drop_behavior: Some(DropBehavior::Restrict)
-        }
+        })
     );
 }
 

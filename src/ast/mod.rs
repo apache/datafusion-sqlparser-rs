@@ -3325,11 +3325,7 @@ pub enum Statement {
     ///
     /// DROP DOMAIN [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
     ///
-    DropDomain {
-        if_exists: bool,
-        name: ObjectName,
-        drop_behavior: Option<DropBehavior>,
-    },
+    DropDomain(DropDomain),
     /// ```sql
     /// DROP PROCEDURE
     /// ```
@@ -5104,11 +5100,11 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::DropDomain {
+            Statement::DropDomain(DropDomain {
                 if_exists,
                 name,
                 drop_behavior,
-            } => {
+            }) => {
                 write!(
                     f,
                     "DROP DOMAIN{} {name}",
@@ -6852,6 +6848,19 @@ impl fmt::Display for CloseCursor {
             CloseCursor::Specific { name } => write!(f, "{name}"),
         }
     }
+}
+
+/// A Drop Domain statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct DropDomain {
+    /// Whether to drop the domain if it exists
+    pub if_exists: bool,
+    /// The name of the domain to drop
+    pub name: ObjectName,
+    /// The behavior to apply when dropping the domain
+    pub drop_behavior: Option<DropBehavior>,
 }
 
 /// A function call

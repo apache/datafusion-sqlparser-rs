@@ -6155,11 +6155,11 @@ impl<'a> Parser<'a> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parse_object_name(false)?;
         let drop_behavior = self.parse_optional_drop_behavior();
-        Ok(Statement::DropDomain {
+        Ok(Statement::DropDomain(DropDomain {
             if_exists,
             name,
             drop_behavior,
-        })
+        }))
     }
 
     /// ```sql

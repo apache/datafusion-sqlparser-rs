@@ -254,7 +254,7 @@ impl MsSqlDialect {
         } else {
             BeginEndStatements {
                 begin_token: AttachedToken::empty(),
-                statements: vec![parser.parse_statement()?],
+                statements: parser.parse_statements()?,
                 end_token: AttachedToken::empty(),
             }
         };

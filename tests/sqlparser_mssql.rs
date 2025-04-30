@@ -2256,6 +2256,14 @@ fn parse_create_trigger() {
         }
     );
 
+    let multi_statement_as_trigger = "\
+        CREATE TRIGGER some_trigger ON some_table FOR INSERT \
+        AS \
+        DECLARE @var INT; \
+        RAISERROR('Trigger fired', 10, 1);\
+    ";
+    let _ = ms().verified_stmt(multi_statement_as_trigger);
+
     let multi_statement_trigger = "\
         CREATE TRIGGER some_trigger ON some_table FOR INSERT \
         AS \

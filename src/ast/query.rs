@@ -2549,7 +2549,7 @@ impl fmt::Display for OffsetRows {
 ///    GROUP BY item;
 /// ```
 ///
-/// See https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#pipe_syntax
+/// See <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#pipe_syntax>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -2558,45 +2558,45 @@ pub enum PipeOperator {
     ///
     /// Syntax: `|> LIMIT <n> [OFFSET <m>]`
     ///
-    /// See more at https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#limit_pipe_operator
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#limit_pipe_operator>
     Limit { expr: Expr, offset: Option<Expr> },
     /// Filters the results of the input table.
     ///
     /// Syntax: `|> WHERE <condition>`
     ///
-    /// See more at https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#where_pipe_operator
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#where_pipe_operator>
     Where { expr: Expr },
-    /// ORDER BY <expr> [ASC|DESC], ...
+    /// `ORDER BY <expr> [ASC|DESC], ...`
     OrderBy { exprs: Vec<OrderByExpr> },
     /// Produces a new table with the listed columns, similar to the outermost SELECT clause in a table subquery in standard syntax.
     ///
     /// Syntax `|> SELECT <expr> [[AS] alias], ...`
     ///
-    /// See more at https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#select_pipe_operator
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#select_pipe_operator>
     Select { exprs: Vec<SelectItem> },
     /// Propagates the existing table and adds computed columns, similar to SELECT *, new_column in standard syntax.
     ///
     /// Syntax: `|> EXTEND <expr> [[AS] alias], ...`
     ///
-    /// See more at https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#extend_pipe_operator
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#extend_pipe_operator>
     Extend { exprs: Vec<SelectItem> },
     /// Replaces the value of a column in the current table, similar to SELECT * REPLACE (expression AS column) in standard syntax.
     ///
     /// Syntax: `|> SET <column> = <expression>, ...`
     ///
-    /// See more at https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#set_pipe_operator
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#set_pipe_operator>
     Set { assignments: Vec<Assignment> },
     /// Removes listed columns from the current table, similar to SELECT * EXCEPT (column) in standard syntax.
     ///
     /// Syntax: `|> DROP <column>, ...`
     ///
-    /// See more at https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#drop_pipe_operator
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#drop_pipe_operator>
     Drop { columns: Vec<Ident> },
     /// Introduces a table alias for the input table, similar to applying the AS alias clause on a table subquery in standard syntax.
     ///
     /// Syntax: `|> AS <alias>`
     ///
-    /// See more at https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#as_pipe_operator
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#as_pipe_operator>
     As { alias: Ident },
     /// Performs aggregation on data across grouped rows or an entire table.
     ///
@@ -2608,7 +2608,7 @@ pub enum PipeOperator {
     /// GROUP BY <grouping_expr> [AS alias], ...
     /// ```
     ///
-    /// See more at https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#aggregate_pipe_operator
+    /// See more at <https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax#aggregate_pipe_operator>
     Aggregate {
         full_table_exprs: Vec<ExprWithAliasAndOrderBy>,
         group_by_expr: Vec<ExprWithAliasAndOrderBy>,

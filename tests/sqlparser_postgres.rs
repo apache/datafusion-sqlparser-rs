@@ -4859,6 +4859,7 @@ fn test_simple_postgres_insert_with_alias() {
                 for_clause: None,
                 settings: None,
                 format_clause: None,
+                pipe_operators: vec![],
             })),
             assignments: vec![],
             partitioned: None,
@@ -4871,7 +4872,6 @@ fn test_simple_postgres_insert_with_alias() {
             insert_alias: None,
             settings: None,
             format_clause: None,
-            pipe_operators: vec![],
         })
     )
 }

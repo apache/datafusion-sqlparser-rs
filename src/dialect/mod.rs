@@ -527,7 +527,7 @@ pub trait Dialect: Debug + Any {
     /// |> limit 1
     /// ```
     ///
-    /// See https://cloud.google.com/bigquery/docs/pipe-syntax-guide#basic_syntax
+    /// See <https://cloud.google.com/bigquery/docs/pipe-syntax-guide#basic_syntax>
     fn supports_pipe_operator(&self) -> bool {
         false
     }

@@ -15104,6 +15104,7 @@ fn parse_pipeline_operator() {
     );
 }
 
+#[test]
 fn parse_multiple_set_statements() -> Result<(), ParserError> {
     let dialects = all_dialects_where(|d| d.supports_comma_separated_set_assignments());
     let stmt = dialects.verified_stmt("SET @a = 1, b = 2");
